@@ -21,3 +21,4 @@ glob = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 kamadak-exif = "0.6"
+roxmltree = "0.21"

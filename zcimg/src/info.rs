@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::InfoArgs;
 use crate::batch;
-use crate::metadata::{self, ParsedCicp, ParsedExif, ParsedIcc};
+use crate::metadata::{self, ParsedCicp, ParsedExif, ParsedIcc, ParsedXmp};
 
 /// Run the `info` subcommand.
 pub fn run(args: InfoArgs) -> anyhow::Result<()> {
@@ -54,7 +54,7 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
     let warnings = info.warnings.clone();
 
     // Optionally parse metadata for rich display
-    let (parsed_exif, parsed_icc, parsed_cicp, xmp_text) = if parse_metadata {
+    let (parsed_exif, parsed_icc, parsed_cicp, parsed_xmp) = if parse_metadata {
         let exif = info.exif.as_deref().and_then(metadata::parse_exif);
         let icc = info.icc_profile.as_deref().and_then(metadata::parse_icc);
         let cicp = info.cicp.as_ref().map(metadata::parse_cicp);
@@ -92,7 +92,7 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
         parsed_exif,
         parsed_icc,
         parsed_cicp,
-        xmp_text,
+        parsed_xmp,
     })
 }
 
@@ -125,7 +125,7 @@ struct ImageInfoDisplay {
     #[serde(skip_serializing_if = "Option::is_none")]
     parsed_cicp: Option<ParsedCicp>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    xmp_text: Option<String>,
+    parsed_xmp: Option<ParsedXmp>,
 }
 
 #[derive(Debug, Serialize)]
@@ -184,6 +184,7 @@ fn print_info(info: &ImageInfoDisplay) {
                 } else {
                     println!("    ICC profile: {} bytes", size);
                 }
+                println!("      {}", icc.note);
                 println!(
                     "      Color space: {}, PCS: {}, Class: {}",
                     icc.color_space, icc.pcs, icc.profile_class
@@ -216,15 +217,15 @@ fn print_info(info: &ImageInfoDisplay) {
 
         // XMP
         if let Some(size) = info.xmp_size {
-            if let Some(ref xmp) = info.xmp_text {
-                let lines: Vec<&str> = xmp.lines().collect();
-                let display_count = lines.len().min(20);
-                println!("    XMP ({} bytes, {} lines):", size, lines.len());
-                for line in &lines[..display_count] {
+            if let Some(ref xmp) = info.parsed_xmp {
+                println!(
+                    "    XMP ({} properties, {} bytes):",
+                    xmp.properties.len(),
+                    size
+                );
+                let tree = metadata::format_xmp_tree(xmp);
+                for line in tree.lines() {
                     println!("      {}", line);
-                }
-                if lines.len() > 20 {
-                    println!("      ... ({} more lines)", lines.len() - 20);
                 }
             } else {
                 println!("    XMP:         {} bytes", size);
@@ -235,6 +236,7 @@ fn print_info(info: &ImageInfoDisplay) {
         if let Some(ref cicp) = info.cicp {
             if let Some(ref parsed) = info.parsed_cicp {
                 println!("    CICP:        {}", parsed.summary);
+                println!("      {}", parsed.note);
                 if let Some(ref formula) = parsed.transfer_formula {
                     println!("      Transfer function:");
                     for line in formula.lines() {
