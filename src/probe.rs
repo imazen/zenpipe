@@ -31,6 +31,8 @@ pub struct ProbeResult {
     pub frame_count: Option<u32>,
     /// Bits per channel (e.g., 8 for typical images, 16 for HDR).
     pub bit_depth: Option<u8>,
+    /// Whether the image contains an HDR gain map (ISO 21496-1).
+    pub has_gain_map: Option<bool>,
     /// Number of bytes examined from the input.
     pub bytes_examined: usize,
 }
@@ -51,6 +53,9 @@ impl ProbeResult {
         }
         if let Some(depth) = self.bit_depth {
             ii = ii.with_bit_depth(depth);
+        }
+        if self.has_gain_map == Some(true) {
+            ii = ii.with_gain_map(true);
         }
         Some(ii)
     }
@@ -75,6 +80,7 @@ impl ProbeResult {
                 has_animation: None,
                 frame_count: None,
                 bit_depth: None,
+                has_gain_map: None,
                 bytes_examined: 0,
             },
         }
@@ -95,6 +101,7 @@ fn probe_png(data: &[u8]) -> ProbeResult {
         has_animation: None,
         frame_count: None,
         bit_depth: None,
+        has_gain_map: None,
         bytes_examined: data.len().min(33),
     };
 
@@ -141,6 +148,7 @@ fn probe_gif(data: &[u8]) -> ProbeResult {
         has_animation: None,
         frame_count: None,
         bit_depth: None,
+        has_gain_map: None,
         bytes_examined: data.len().min(13),
     };
 
@@ -182,6 +190,7 @@ fn probe_webp(data: &[u8]) -> ProbeResult {
         has_animation: None,
         frame_count: None,
         bit_depth: None,
+        has_gain_map: None,
         bytes_examined: data.len().min(30),
     };
 
@@ -282,6 +291,7 @@ fn probe_jpeg(data: &[u8]) -> ProbeResult {
         has_animation: Some(false),
         frame_count: Some(1),
         bit_depth: None,
+        has_gain_map: None,
         bytes_examined: 0,
     };
 
@@ -399,6 +409,7 @@ fn probe_avif(data: &[u8]) -> ProbeResult {
         has_animation: None,
         frame_count: None,
         bit_depth: None,
+        has_gain_map: None,
         bytes_examined: 0,
     };
 
@@ -407,6 +418,12 @@ fn probe_avif(data: &[u8]) -> ProbeResult {
         // `meta` is a FullBox — skip 4 bytes of version/flags
         if meta_data.len() >= 4 {
             let inner = &meta_data[4..];
+
+            // Check for gain map (tmap box indicates tone-mapped derived item)
+            if find_box(inner, b"tmap").is_some() {
+                result.has_gain_map = Some(true);
+            }
+
             // Find `iprp` inside `meta`
             if let Some((iprp_data, _)) = find_box(inner, b"iprp") {
                 // Find `ipco` inside `iprp`
@@ -532,6 +549,7 @@ fn probe_jxl(data: &[u8]) -> ProbeResult {
             has_animation: None,
             frame_count: None,
             bit_depth: None,
+            has_gain_map: None,
             bytes_examined: data.len().min(12),
         }
     }
@@ -548,6 +566,7 @@ fn probe_jxl_with_crate(data: &[u8]) -> ProbeResult {
             has_animation: Some(info.has_animation),
             frame_count: None,
             bit_depth: info.bit_depth,
+            has_gain_map: None,
             bytes_examined: data.len(),
         },
         Err(_) => {
@@ -560,6 +579,7 @@ fn probe_jxl_with_crate(data: &[u8]) -> ProbeResult {
                 has_animation: None,
                 frame_count: None,
                 bit_depth: None,
+                has_gain_map: None,
                 bytes_examined: data.len(),
             }
         }
@@ -891,6 +911,7 @@ mod tests {
             has_animation: Some(false),
             frame_count: None,
             bit_depth: Some(8),
+            has_gain_map: None,
             bytes_examined: 33,
         };
 
@@ -911,6 +932,7 @@ mod tests {
             has_animation: None,
             frame_count: None,
             bit_depth: None,
+            has_gain_map: None,
             bytes_examined: 2,
         };
 

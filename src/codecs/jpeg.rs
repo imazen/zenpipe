@@ -39,6 +39,10 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
         ii = ii.with_exif(exif.clone());
     }
     if let Some(ref xmp) = info.xmp {
+        // Detect UltraHDR gain map from XMP hdrgm namespace
+        if xmp.contains("hdrgm:Version") || xmp.contains("hdrgm:GainMapMax") {
+            ii = ii.with_gain_map(true);
+        }
         ii = ii.with_xmp(xmp.as_bytes().to_vec());
     }
     ii
@@ -117,6 +121,12 @@ pub(crate) fn decode(
         ii = ii.with_exif(exif);
     }
     if let Some(xmp) = xmp {
+        // Detect UltraHDR gain map from XMP hdrgm namespace
+        if let Ok(xmp_str) = core::str::from_utf8(&xmp) {
+            if xmp_str.contains("hdrgm:Version") || xmp_str.contains("hdrgm:GainMapMax") {
+                ii = ii.with_gain_map(true);
+            }
+        }
         ii = ii.with_xmp(xmp);
     }
 
