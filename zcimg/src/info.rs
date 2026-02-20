@@ -49,6 +49,8 @@ fn inspect_file(path: &Path) -> anyhow::Result<ImageInfoDisplay> {
     // Try full probe (requires codec feature)
     let info = zencodecs::from_bytes(&data)?;
 
+    let warnings = info.warnings.clone();
+
     Ok(ImageInfoDisplay {
         path: path.display().to_string(),
         format: format!("{:?}", info.format),
@@ -73,6 +75,7 @@ fn inspect_file(path: &Path) -> anyhow::Result<ImageInfoDisplay> {
             full_range: c.full_range,
         }),
         file_size,
+        warnings,
     })
 }
 
@@ -96,6 +99,8 @@ struct ImageInfoDisplay {
     xmp_size: Option<usize>,
     cicp: Option<CicpDisplay>,
     file_size: u64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -165,4 +170,11 @@ fn print_info(info: &ImageInfoDisplay) {
     }
 
     println!("  File size:    {}", batch::format_size(info.file_size));
+
+    if !info.warnings.is_empty() {
+        println!("  Warnings:");
+        for w in &info.warnings {
+            println!("    - {w}");
+        }
+    }
 }
