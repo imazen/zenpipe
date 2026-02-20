@@ -5,6 +5,7 @@
 
 mod batch;
 mod info;
+mod metadata;
 mod output;
 mod process;
 
@@ -150,6 +151,10 @@ pub struct InfoArgs {
     /// Output as JSON.
     #[arg(long)]
     pub json: bool,
+
+    /// Parse and display full metadata (EXIF tags, ICC profile info, XMP, CICP names).
+    #[arg(long, short = 'm')]
+    pub metadata: bool,
 }
 
 /// Target image format.
@@ -240,12 +245,12 @@ impl ProcessArgs {
             if parts.len() != 2 {
                 anyhow::bail!("--size must be WxH (e.g., 800x600), got: {}", size);
             }
-            let w: u32 = parts[0].parse().map_err(|_| {
-                anyhow::anyhow!("invalid width in --size: {}", parts[0])
-            })?;
-            let h: u32 = parts[1].parse().map_err(|_| {
-                anyhow::anyhow!("invalid height in --size: {}", parts[1])
-            })?;
+            let w: u32 = parts[0]
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid width in --size: {}", parts[0]))?;
+            let h: u32 = parts[1]
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid height in --size: {}", parts[1]))?;
             return Ok(Some((w, h)));
         }
 

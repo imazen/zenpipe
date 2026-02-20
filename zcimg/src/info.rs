@@ -3,8 +3,10 @@
 use std::path::Path;
 
 use serde::Serialize;
-use crate::batch;
+
 use crate::InfoArgs;
+use crate::batch;
+use crate::metadata::{self, ParsedCicp, ParsedExif, ParsedIcc};
 
 /// Run the `info` subcommand.
 pub fn run(args: InfoArgs) -> anyhow::Result<()> {
@@ -24,7 +26,7 @@ pub fn run(args: InfoArgs) -> anyhow::Result<()> {
             println!("{}:", path.display());
         }
 
-        match inspect_file(path) {
+        match inspect_file(path, args.metadata) {
             Ok(info) => {
                 if args.json {
                     println!("{}", serde_json::to_string_pretty(&info)?);
@@ -42,7 +44,7 @@ pub fn run(args: InfoArgs) -> anyhow::Result<()> {
 }
 
 /// Probe a single file and return structured info.
-fn inspect_file(path: &Path) -> anyhow::Result<ImageInfoDisplay> {
+fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDisplay> {
     let data = std::fs::read(path)?;
     let file_size = data.len() as u64;
 
@@ -50,6 +52,17 @@ fn inspect_file(path: &Path) -> anyhow::Result<ImageInfoDisplay> {
     let info = zencodecs::from_bytes(&data)?;
 
     let warnings = info.warnings.clone();
+
+    // Optionally parse metadata for rich display
+    let (parsed_exif, parsed_icc, parsed_cicp, xmp_text) = if parse_metadata {
+        let exif = info.exif.as_deref().and_then(metadata::parse_exif);
+        let icc = info.icc_profile.as_deref().and_then(metadata::parse_icc);
+        let cicp = info.cicp.as_ref().map(metadata::parse_cicp);
+        let xmp = info.xmp.as_deref().and_then(metadata::parse_xmp);
+        (exif, icc, cicp, xmp)
+    } else {
+        (None, None, None, None)
+    };
 
     Ok(ImageInfoDisplay {
         path: path.display().to_string(),
@@ -76,6 +89,10 @@ fn inspect_file(path: &Path) -> anyhow::Result<ImageInfoDisplay> {
         }),
         file_size,
         warnings,
+        parsed_exif,
+        parsed_icc,
+        parsed_cicp,
+        xmp_text,
     })
 }
 
@@ -101,6 +118,14 @@ struct ImageInfoDisplay {
     file_size: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parsed_exif: Option<ParsedExif>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parsed_icc: Option<ParsedIcc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parsed_cicp: Option<ParsedCicp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xmp_text: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -141,7 +166,7 @@ fn print_info(info: &ImageInfoDisplay) {
         println!();
     }
 
-    // Metadata
+    // Metadata section
     let has_meta = info.icc_profile_size.is_some()
         || info.exif_size.is_some()
         || info.xmp_size.is_some()
@@ -149,23 +174,68 @@ fn print_info(info: &ImageInfoDisplay) {
 
     if has_meta {
         println!("  Metadata:");
+
+        // ICC
         if let Some(size) = info.icc_profile_size {
-            println!("    ICC profile: {} bytes", size);
+            if let Some(ref icc) = info.parsed_icc {
+                // Rich ICC display
+                if let Some(ref desc) = icc.description {
+                    println!("    ICC profile: {} ({} bytes)", desc, size);
+                } else {
+                    println!("    ICC profile: {} bytes", size);
+                }
+                println!(
+                    "      Color space: {}, PCS: {}, Class: {}",
+                    icc.color_space, icc.pcs, icc.profile_class
+                );
+                println!("      Version: {}", icc.version);
+            } else {
+                println!("    ICC profile: {} bytes", size);
+            }
         }
+
+        // EXIF
         if let Some(size) = info.exif_size {
-            println!("    EXIF:        {} bytes", size);
+            if let Some(ref exif) = info.parsed_exif {
+                println!("    EXIF ({} tags, {} bytes):", exif.total_tags, size);
+                for (key, value) in &exif.fields {
+                    println!("      {}: {}", key, value);
+                }
+            } else {
+                println!("    EXIF:        {} bytes", size);
+            }
         }
+
+        // XMP
         if let Some(size) = info.xmp_size {
-            println!("    XMP:         {} bytes", size);
+            if let Some(ref xmp) = info.xmp_text {
+                let lines: Vec<&str> = xmp.lines().collect();
+                let display_count = lines.len().min(20);
+                println!("    XMP ({} bytes, {} lines):", size, lines.len());
+                for line in &lines[..display_count] {
+                    println!("      {}", line);
+                }
+                if lines.len() > 20 {
+                    println!("      ... ({} more lines)", lines.len() - 20);
+                }
+            } else {
+                println!("    XMP:         {} bytes", size);
+            }
         }
+
+        // CICP
         if let Some(ref cicp) = info.cicp {
-            println!(
-                "    CICP:        {}/{}/{} ({})",
-                cicp.color_primaries,
-                cicp.transfer_characteristics,
-                cicp.matrix_coefficients,
-                if cicp.full_range { "full" } else { "limited" }
-            );
+            if let Some(ref parsed) = info.parsed_cicp {
+                println!("    CICP:        {}", parsed.summary);
+            } else {
+                println!(
+                    "    CICP:        {}/{}/{} ({})",
+                    cicp.color_primaries,
+                    cicp.transfer_characteristics,
+                    cicp.matrix_coefficients,
+                    if cicp.full_range { "full" } else { "limited" }
+                );
+            }
         }
     }
 
