@@ -87,6 +87,7 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
             matrix_coefficients: c.matrix_coefficients,
             full_range: c.full_range,
         }),
+        has_gain_map: info.has_gain_map,
         file_size,
         warnings,
         parsed_exif,
@@ -115,6 +116,7 @@ struct ImageInfoDisplay {
     exif_size: Option<usize>,
     xmp_size: Option<usize>,
     cicp: Option<CicpDisplay>,
+    has_gain_map: bool,
     file_size: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     warnings: Vec<String>,
@@ -164,6 +166,10 @@ fn print_info(info: &ImageInfoDisplay) {
             print!(" ({} frames)", count);
         }
         println!();
+    }
+
+    if info.has_gain_map {
+        println!("  Gain map:     yes (HDR)");
     }
 
     // Metadata section

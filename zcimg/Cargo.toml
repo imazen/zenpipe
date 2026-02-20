@@ -11,7 +11,7 @@ name = "zcimg"
 path = "src/main.rs"
 
 [dependencies]
-zencodecs = { path = "..", features = ["all", "std"] }
+zencodecs = { path = "..", features = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "std"] }
 zencodec-types = { path = "../../zencodec-types" }
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
 rayon = "1.10"
