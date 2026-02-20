@@ -96,12 +96,31 @@ pub(crate) fn decode(
     ))
 }
 
+/// Pre-flight memory check for GIF encoding (4 bytes/pixel for RGBA).
+fn check_gif_memory_limit(
+    w: u32,
+    h: u32,
+    limits: Option<&Limits>,
+) -> Result<(), CodecError> {
+    if let Some(lim) = limits {
+        if let Some(max_mem) = lim.max_memory_bytes {
+            let estimated = w as u64 * h as u64 * 4;
+            if estimated > max_mem {
+                return Err(CodecError::LimitExceeded(alloc::format!(
+                    "memory {estimated} bytes exceeds limit {max_mem}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Encode RGB8 pixels to GIF (single frame).
 pub(crate) fn encode_rgb8(
     img: ImgRef<Rgb<u8>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
-    _stop: Option<&dyn Stop>,
+    limits: Option<&Limits>,
+    stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let width: u16 = (img.width() as u32)
         .try_into()
@@ -109,6 +128,8 @@ pub(crate) fn encode_rgb8(
     let height: u16 = (img.height() as u32)
         .try_into()
         .map_err(|_| CodecError::InvalidInput("height exceeds GIF maximum (65535)".into()))?;
+
+    check_gif_memory_limit(width as u32, height as u32, limits)?;
 
     let (buf, _, _) = img.to_contiguous_buf();
     let rgba_bytes: alloc::vec::Vec<u8> = buf.iter().flat_map(|p| [p.r, p.g, p.b, 255u8]).collect();
@@ -119,7 +140,8 @@ pub(crate) fn encode_rgb8(
         .and_then(|c| c.gif_encoder.as_ref())
         .map(|c| c.as_ref().clone())
         .unwrap_or_else(default_encoder_config);
-    let gif_limits = zengif::Limits::default();
+    let gif_limits = to_gif_limits(limits);
+    let stop = crate::limits::stop_or_default(stop);
 
     let gif_data = zengif::encode_gif(
         alloc::vec![frame],
@@ -127,7 +149,7 @@ pub(crate) fn encode_rgb8(
         height,
         config,
         gif_limits,
-        &enough::Unstoppable,
+        stop,
     )
     .map_err(|e| CodecError::from_codec(ImageFormat::Gif, e))?;
 
@@ -138,8 +160,8 @@ pub(crate) fn encode_rgb8(
 pub(crate) fn encode_rgba8(
     img: ImgRef<Rgba<u8>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
-    _stop: Option<&dyn Stop>,
+    limits: Option<&Limits>,
+    stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let width: u16 = (img.width() as u32)
         .try_into()
@@ -147,6 +169,8 @@ pub(crate) fn encode_rgba8(
     let height: u16 = (img.height() as u32)
         .try_into()
         .map_err(|_| CodecError::InvalidInput("height exceeds GIF maximum (65535)".into()))?;
+
+    check_gif_memory_limit(width as u32, height as u32, limits)?;
 
     let (buf, _, _) = img.to_contiguous_buf();
     let rgba_bytes: &[u8] = bytemuck::cast_slice(buf.as_ref());
@@ -157,7 +181,8 @@ pub(crate) fn encode_rgba8(
         .and_then(|c| c.gif_encoder.as_ref())
         .map(|c| c.as_ref().clone())
         .unwrap_or_else(default_encoder_config);
-    let gif_limits = zengif::Limits::default();
+    let gif_limits = to_gif_limits(limits);
+    let stop = crate::limits::stop_or_default(stop);
 
     let gif_data = zengif::encode_gif(
         alloc::vec![frame],
@@ -165,7 +190,7 @@ pub(crate) fn encode_rgba8(
         height,
         config,
         gif_limits,
-        &enough::Unstoppable,
+        stop,
     )
     .map_err(|e| CodecError::from_codec(ImageFormat::Gif, e))?;
 
@@ -185,11 +210,14 @@ fn build_gif_encoding(codec_config: Option<&CodecConfig>) -> zengif::GifEncoderC
 pub(crate) fn encode_gray8(
     img: ImgRef<Gray<u8>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let enc = build_gif_encoding(codec_config);
     let mut job = enc.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }
@@ -202,11 +230,14 @@ pub(crate) fn encode_gray8(
 pub(crate) fn encode_rgb_f32(
     img: ImgRef<Rgb<f32>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let enc = build_gif_encoding(codec_config);
     let mut job = enc.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }
@@ -219,11 +250,14 @@ pub(crate) fn encode_rgb_f32(
 pub(crate) fn encode_rgba_f32(
     img: ImgRef<Rgba<f32>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let enc = build_gif_encoding(codec_config);
     let mut job = enc.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }
@@ -236,11 +270,14 @@ pub(crate) fn encode_rgba_f32(
 pub(crate) fn encode_gray_f32(
     img: ImgRef<Gray<f32>>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput, CodecError> {
     let enc = build_gif_encoding(codec_config);
     let mut job = enc.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }

@@ -31,11 +31,15 @@ pub(crate) fn decode(
     if let Some(cfg) = codec_config.and_then(|c| c.webp_decoder.as_ref()) {
         *dec.inner_mut() = cfg.as_ref().clone();
     }
-    // WebpDecoderConfig has inherent with_limits
+    // Set limits on both config (native limits) and job (pre-flight checks)
     if let Some(lim) = limits {
-        dec = dec.with_limits(to_resource_limits(lim));
+        let rl = to_resource_limits(lim);
+        dec = dec.with_limits(rl);
     }
     let mut job = dec.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }
@@ -56,11 +60,15 @@ pub(crate) fn decode_into_rgba8(
     if let Some(cfg) = codec_config.and_then(|c| c.webp_decoder.as_ref()) {
         *dec.inner_mut() = cfg.as_ref().clone();
     }
-    // WebpDecoderConfig has inherent with_limits
+    // Set limits on both config (native limits) and job (pre-flight checks)
     if let Some(lim) = limits {
-        dec = dec.with_limits(to_resource_limits(lim));
+        let rl = to_resource_limits(lim);
+        dec = dec.with_limits(rl);
     }
     let mut job = dec.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(to_resource_limits(lim));
+    }
     if let Some(s) = stop {
         job = job.with_stop(s);
     }
