@@ -94,16 +94,57 @@ fn decode_info_format(
     codec_config: Option<&crate::config::CodecConfig>,
 ) -> Result<ImageInfo, CodecError> {
     match format {
+        // JPEG needs codec support for DctScale dimension transforms
         #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => crate::codecs::jpeg::decode_info(data, codec_config),
+        ImageFormat::Jpeg => {
+            if data.len() > PROBE_CAP {
+                if let Ok(info) =
+                    crate::codecs::jpeg::decode_info(&data[..PROBE_CAP], codec_config)
+                {
+                    return Ok(info);
+                }
+            }
+            crate::codecs::jpeg::decode_info(data, codec_config)
+        }
 
         // Other codecs: decode_info == probe (no dimension transforms)
         _ => probe_format_full(data, format),
     }
 }
 
-/// Dispatch to format-specific full probe (requires codec feature).
+/// Maximum bytes to pass to codec probes on the initial attempt.
+///
+/// Codec probes only need file headers and metadata markers, not pixel data.
+/// Capping the input avoids scanning megabytes of entropy-coded data in large
+/// files. If the probe fails with capped data (e.g., a JPEG with a very large
+/// ICC profile pushing SOF past the cap), we retry with the full data.
+///
+/// Per-format header sizes (typical):
+/// - PNG: IHDR at byte 8, iCCP/tEXt before IDAT — usually <10KB
+/// - GIF: header is 13 bytes, global color table <1KB
+/// - WebP: VP8X at byte 12, metadata chunks — usually <10KB
+/// - JPEG: all metadata markers before SOS — usually <100KB, rarely >256KB
+/// - AVIF: ftyp+meta boxes — usually <20KB
+/// - JXL: frame header — usually <4KB
+///
+/// 256KB handles >99.9% of real-world files on the first attempt.
+const PROBE_CAP: usize = 256 * 1024;
+
+/// Dispatch to format-specific codec probe.
+///
+/// Tries with capped input first to avoid scanning pixel data in large files.
+/// Falls back to full data if the capped probe fails.
 fn probe_format_full(data: &[u8], format: ImageFormat) -> Result<ImageInfo, CodecError> {
+    if data.len() > PROBE_CAP {
+        if let Ok(info) = probe_codec(&data[..PROBE_CAP], format) {
+            return Ok(info);
+        }
+    }
+    probe_codec(data, format)
+}
+
+/// Dispatch to the format-specific codec probe (requires codec feature).
+fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo, CodecError> {
     match format {
         #[cfg(feature = "jpeg")]
         ImageFormat::Jpeg => crate::codecs::jpeg::probe(data),

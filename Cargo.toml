@@ -11,7 +11,7 @@ repository = "https://github.com/imazen/zencodecs"
 
 [dependencies]
 # Core (always available)
-enough = "0.3"
+enough = "0.4"
 whereat = "0.1"
 thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }

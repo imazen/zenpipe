@@ -13,10 +13,33 @@ use crate::{
 use zencodec_types::{Decoder, Encoder, PixelSlice, PixelSliceMut};
 
 /// Probe JPEG metadata without decoding pixels.
+///
+/// Uses `Permissive` strictness so we can extract dimensions and metadata from
+/// structurally damaged files that would fail a full decode.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo, CodecError> {
-    zenjpeg::JpegDecoderConfig::new()
-        .probe_header(data)
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
+    let info = zenjpeg::decoder::DecodeConfig::new()
+        .permissive()
+        .read_info(data)
+        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?;
+    Ok(jpeg_info_to_image_info(&info))
+}
+
+/// Convert zenjpeg's `JpegInfo` to zencodec-types `ImageInfo`.
+fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
+    let mut ii = ImageInfo::new(info.dimensions.width, info.dimensions.height, ImageFormat::Jpeg);
+    if let Some(ref icc) = info.icc_profile {
+        ii = ii.with_icc_profile(icc.clone());
+    }
+    if let Some(ref exif) = info.exif {
+        if let Some(orient) = zenjpeg::lossless::parse_exif_orientation(exif) {
+            ii = ii.with_orientation(zencodec_types::Orientation::from_exif(orient as u16));
+        }
+        ii = ii.with_exif(exif.clone());
+    }
+    if let Some(ref xmp) = info.xmp {
+        ii = ii.with_xmp(xmp.as_bytes().to_vec());
+    }
+    ii
 }
 
 /// Build a zenjpeg Decoder from codec config and limits.

@@ -49,6 +49,9 @@ impl ProbeResult {
         if let Some(count) = self.frame_count {
             ii = ii.with_frame_count(count);
         }
+        if let Some(depth) = self.bit_depth {
+            ii = ii.with_bit_depth(depth);
+        }
         Some(ii)
     }
 
