@@ -120,10 +120,7 @@ impl BatchSummary {
     }
 
     pub fn total_output_size(&self) -> u64 {
-        self.results
-            .iter()
-            .filter_map(|r| r.output_size)
-            .sum()
+        self.results.iter().filter_map(|r| r.output_size).sum()
     }
 
     pub fn success_count(&self) -> usize {
@@ -178,8 +175,7 @@ impl BatchSummary {
                 );
             } else if let Some(out_size) = r.output_size {
                 let change = if r.input_size > 0 {
-                    let pct =
-                        (out_size as f64 - r.input_size as f64) / r.input_size as f64 * 100.0;
+                    let pct = (out_size as f64 - r.input_size as f64) / r.input_size as f64 * 100.0;
                     format!("{:+.1}%", pct)
                 } else {
                     "N/A".to_string()
@@ -225,7 +221,10 @@ impl BatchSummary {
     /// Write results as CSV.
     pub fn write_csv(&self, path: &Path) -> anyhow::Result<()> {
         let mut f = std::fs::File::create(path)?;
-        writeln!(f, "input,input_size,output,output_size,change_pct,duration_ms,status")?;
+        writeln!(
+            f,
+            "input,input_size,output,output_size,change_pct,duration_ms,status"
+        )?;
         for r in &self.results {
             let status = if r.error.is_some() {
                 "error"

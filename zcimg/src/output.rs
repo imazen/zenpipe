@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use zencodecs::ImageFormat;
 
 /// Resolved output configuration.
@@ -101,10 +101,7 @@ impl OutputConfig {
     fn output_extension(&self, input: &Path) -> String {
         if let Some(fmt) = self.target_format {
             // Use the primary extension for the target format
-            fmt.extensions()
-                .first()
-                .unwrap_or(&"bin")
-                .to_string()
+            fmt.extensions().first().unwrap_or(&"bin").to_string()
         } else {
             // Keep original extension
             input

@@ -60,8 +60,7 @@ pub fn run(args: ProcessArgs) -> anyhow::Result<()> {
         if let Some(ref err) = result.error {
             eprintln!("error: {}: {}", files[0].display(), err);
         } else if !result.skipped && !args.dry_run {
-            if let (Some(out_size), Some(out_path)) = (result.output_size, &result.output_path)
-            {
+            if let (Some(out_size), Some(out_path)) = (result.output_size, &result.output_path) {
                 let change = if result.input_size > 0 {
                     let pct = (out_size as f64 - result.input_size as f64)
                         / result.input_size as f64
@@ -83,9 +82,7 @@ pub fn run(args: ProcessArgs) -> anyhow::Result<()> {
         summary.lock().unwrap().push(result);
     } else {
         // Batch — use rayon + progress bar
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(jobs)
-            .build()?;
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(jobs).build()?;
 
         let pb = ProgressBar::new(files.len() as u64);
         pb.set_style(
@@ -170,8 +167,7 @@ fn process_inner(
     output_config: &OutputConfig,
     input_count: usize,
 ) -> anyhow::Result<(std::path::PathBuf, u64, bool)> {
-    let data = std::fs::read(input)
-        .with_context(|| format!("reading {}", input.display()))?;
+    let data = std::fs::read(input).with_context(|| format!("reading {}", input.display()))?;
 
     let input_size = data.len() as u64;
 
