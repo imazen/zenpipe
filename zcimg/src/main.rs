@@ -152,6 +152,10 @@ pub struct InfoArgs {
     #[arg(long)]
     pub json: bool,
 
+    /// Output one compact JSON object per line (for batch processing). Implies --metadata.
+    #[arg(long)]
+    pub jsonl: bool,
+
     /// Parse and display full metadata (EXIF tags, ICC profile info, XMP, CICP names).
     #[arg(long, short = 'm')]
     pub metadata: bool,

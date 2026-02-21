@@ -17,18 +17,22 @@ pub fn run(args: InfoArgs) -> anyhow::Result<()> {
     }
 
     let multi = files.len() > 1;
+    // --jsonl implies metadata parsing for enrichment use
+    let parse_metadata = args.metadata || args.jsonl;
 
     for (i, path) in files.iter().enumerate() {
-        if multi && !args.json {
+        if multi && !args.json && !args.jsonl {
             if i > 0 {
                 println!();
             }
             println!("{}:", path.display());
         }
 
-        match inspect_file(path, args.metadata) {
+        match inspect_file(path, parse_metadata) {
             Ok(info) => {
-                if args.json {
+                if args.jsonl {
+                    println!("{}", serde_json::to_string(&info)?);
+                } else if args.json {
                     println!("{}", serde_json::to_string_pretty(&info)?);
                 } else {
                     print_info(&info);
