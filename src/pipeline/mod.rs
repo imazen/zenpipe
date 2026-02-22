@@ -372,17 +372,19 @@ impl<'a> Pipeline<'a> {
             let resized = if let Some(ref plan) = layout_plan {
                 let source = decoded.into_gray8();
                 let (buf, w, h) = source.as_ref().to_contiguous_buf();
-                let bytes: Vec<u8> = buf.iter().map(|g| g.value()).collect();
+                // Zero-copy: Gray<u8> is repr(C) with a single u8, as_bytes is no-op
+                let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
                 let result = zenresize::execute_layout(
-                    &bytes,
+                    bytes,
                     w as u32,
                     h as u32,
                     plan,
                     PixelFormat::Srgb8(PixelLayout::Gray),
                     self.filter,
                 );
+                // Zero-copy: reinterpret Vec<u8> as Vec<Gray<u8>> (same layout)
                 let gray_pixels: Vec<rgb::Gray<u8>> =
-                    result.into_iter().map(rgb::Gray::new).collect();
+                    bytemuck::allocation::cast_vec(result);
                 imgref::ImgVec::new(gray_pixels, output_width as usize, output_height as usize)
             } else {
                 decoded.into_gray8()
@@ -408,27 +410,19 @@ impl<'a> Pipeline<'a> {
             let resized = if let Some(ref plan) = layout_plan {
                 let source = decoded.into_rgba8();
                 let (buf, w, h) = source.as_ref().to_contiguous_buf();
-                let bytes: Vec<u8> = buf
-                    .iter()
-                    .flat_map(|p| [p.r, p.g, p.b, p.a])
-                    .collect();
+                // Zero-copy: Rgba<u8> is repr(C) [r,g,b,a], as_bytes is no-op
+                let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
                 let result = zenresize::execute_layout(
-                    &bytes,
+                    bytes,
                     w as u32,
                     h as u32,
                     plan,
                     PixelFormat::Srgb8(PixelLayout::Rgba),
                     self.filter,
                 );
-                let rgba_pixels: Vec<rgb::Rgba<u8>> = result
-                    .chunks_exact(4)
-                    .map(|c| rgb::Rgba {
-                        r: c[0],
-                        g: c[1],
-                        b: c[2],
-                        a: c[3],
-                    })
-                    .collect();
+                // Zero-copy: reinterpret Vec<u8> as Vec<Rgba<u8>> (same layout)
+                let rgba_pixels: Vec<rgb::Rgba<u8>> =
+                    bytemuck::allocation::cast_vec(result);
                 imgref::ImgVec::new(rgba_pixels, output_width as usize, output_height as usize)
             } else {
                 decoded.into_rgba8()
@@ -454,26 +448,19 @@ impl<'a> Pipeline<'a> {
             let resized = if let Some(ref plan) = layout_plan {
                 let source = decoded.into_rgb8();
                 let (buf, w, h) = source.as_ref().to_contiguous_buf();
-                let bytes: Vec<u8> = buf
-                    .iter()
-                    .flat_map(|p| [p.r, p.g, p.b])
-                    .collect();
+                // Zero-copy: Rgb<u8> is repr(C) [r,g,b], as_bytes is no-op
+                let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
                 let result = zenresize::execute_layout(
-                    &bytes,
+                    bytes,
                     w as u32,
                     h as u32,
                     plan,
                     PixelFormat::Srgb8(PixelLayout::Rgb),
                     self.filter,
                 );
-                let rgb_pixels: Vec<rgb::Rgb<u8>> = result
-                    .chunks_exact(3)
-                    .map(|c| rgb::Rgb {
-                        r: c[0],
-                        g: c[1],
-                        b: c[2],
-                    })
-                    .collect();
+                // Zero-copy: reinterpret Vec<u8> as Vec<Rgb<u8>> (same layout)
+                let rgb_pixels: Vec<rgb::Rgb<u8>> =
+                    bytemuck::allocation::cast_vec(result);
                 imgref::ImgVec::new(rgb_pixels, output_width as usize, output_height as usize)
             } else {
                 decoded.into_rgb8()
