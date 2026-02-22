@@ -17,20 +17,20 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec-types = { path = "/home/lilith/work/zencodec-types/.claude/worktrees/cleanup-phase1" }
+zencodec-types = { path = "../zencodec-types" }
 linear-srgb = { version = "0.5.5", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { path = "/home/lilith/work/zenjpeg/.claude/worktrees/cleanup-phase1/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
-zenwebp = { path = "/home/lilith/work/zenwebp/.claude/worktrees/cleanup-phase1", optional = true }
-zengif = { path = "/home/lilith/work/zengif/.claude/worktrees/cleanup-phase1", optional = true }
-zenavif = { path = "/home/lilith/work/zenavif/.claude/worktrees/cleanup-phase1", optional = true }
-# Deferred from cleanup-phase1 (actively being edited):
-# zenpng = { path = "/home/lilith/work/zenpng", optional = true }
-# zenjxl = { path = "/home/lilith/work/zenjxl", optional = true, default-features = false }
+zenjpeg = { path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
+zenwebp = { path = "../zenwebp", optional = true }
+zengif = { path = "../zengif", optional = true }
+zenavif = { path = "../zenavif", optional = true }
+# Deferred from cleanup-phase1 (need DecodeRowSink API update):
+# zenpng = { path = "../zenpng", optional = true }
+# zenjxl = { path = "../zenjxl", optional = true, default-features = false }
 
 # Pipeline (optional, feature-gated)
-zenresize = { path = "/home/lilith/work/zenresize", optional = true, default-features = false, features = ["std", "layout"] }
+zenresize = { path = "../zenresize", optional = true, default-features = false, features = ["std", "layout"] }
 
 # Color management (optional)
 # moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
