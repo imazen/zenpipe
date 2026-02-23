@@ -2,7 +2,7 @@
 
 use crate::config::CodecConfig;
 use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
-use crate::{CodecError, CodecRegistry, ImageFormat, ImageMetadata, Limits, Stop};
+use crate::{CodecError, CodecRegistry, ImageFormat, MetadataView, Limits, Stop};
 
 pub use zencodec_types::EncodeOutput;
 
@@ -27,7 +27,7 @@ pub struct EncodeRequest<'a> {
     lossless: bool,
     limits: Option<&'a Limits>,
     stop: Option<&'a dyn Stop>,
-    metadata: Option<&'a ImageMetadata<'a>>,
+    metadata: Option<&'a MetadataView<'a>>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
 }
@@ -98,7 +98,7 @@ impl<'a> EncodeRequest<'a> {
     /// Not all formats support all metadata types. Unsupported metadata
     /// is silently ignored — GIF ignores all metadata, AVIF encode only
     /// supports EXIF, etc.
-    pub fn with_metadata(mut self, metadata: &'a ImageMetadata<'a>) -> Self {
+    pub fn with_metadata(mut self, metadata: &'a MetadataView<'a>) -> Self {
         self.metadata = Some(metadata);
         self
     }
@@ -1030,7 +1030,7 @@ mod tests {
 
     #[test]
     fn metadata_builder() {
-        let meta = ImageMetadata::none()
+        let meta = MetadataView::none()
             .with_icc(b"fake_icc")
             .with_exif(b"fake_exif")
             .with_xmp(b"fake_xmp");

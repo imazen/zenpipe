@@ -5,7 +5,7 @@ use crate::limits::to_resource_limits;
 use crate::pixel::{ImgRef, Rgb, Rgba};
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
-    ImageFormat, ImageInfo, ImageMetadata, Limits, Stop,
+    ImageFormat, ImageInfo, MetadataView, Limits, Stop,
 };
 use zencodec_types::{Decoder, Encoder, PixelSlice};
 
@@ -52,7 +52,7 @@ fn build_encoding(codec_config: Option<&CodecConfig>) -> zenpng::PngEncoderConfi
 /// Encode RGB8 pixels to PNG.
 pub(crate) fn encode_rgb8(
     img: ImgRef<Rgb<u8>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -76,7 +76,7 @@ pub(crate) fn encode_rgb8(
 /// Encode RGBA8 pixels to PNG.
 pub(crate) fn encode_rgba8(
     img: ImgRef<Rgba<u8>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -100,7 +100,7 @@ pub(crate) fn encode_rgba8(
 /// Encode Gray8 pixels to PNG.
 pub(crate) fn encode_gray8(
     img: ImgRef<crate::pixel::Gray<u8>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -124,7 +124,7 @@ pub(crate) fn encode_gray8(
 /// Encode linear RGB f32 pixels to PNG.
 pub(crate) fn encode_rgb_f32(
     img: ImgRef<Rgb<f32>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -148,7 +148,7 @@ pub(crate) fn encode_rgb_f32(
 /// Encode linear RGBA f32 pixels to PNG.
 pub(crate) fn encode_rgba_f32(
     img: ImgRef<Rgba<f32>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -172,7 +172,7 @@ pub(crate) fn encode_rgba_f32(
 /// Encode linear grayscale f32 pixels to PNG.
 pub(crate) fn encode_gray_f32(
     img: ImgRef<crate::pixel::Gray<f32>>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,

@@ -9,7 +9,7 @@ use crate::limits::to_resource_limits;
 use crate::pixel::{Bgra, ImgRef, Rgb, Rgba};
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
-    ImageFormat, ImageInfo, ImageMetadata, Limits, Stop,
+    ImageFormat, ImageInfo, MetadataView, Limits, Stop,
 };
 use zencodec_types::{Decoder, Encoder, PixelSlice, PixelSliceMut};
 
@@ -107,7 +107,7 @@ pub(crate) fn encode_rgb8(
     img: ImgRef<Rgb<u8>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -133,7 +133,7 @@ pub(crate) fn encode_rgba8(
     img: ImgRef<Rgba<u8>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -159,7 +159,7 @@ pub(crate) fn encode_gray8(
     img: ImgRef<crate::pixel::Gray<u8>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -185,7 +185,7 @@ pub(crate) fn encode_rgb_f32(
     img: ImgRef<Rgb<f32>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -211,7 +211,7 @@ pub(crate) fn encode_rgba_f32(
     img: ImgRef<Rgba<f32>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -237,7 +237,7 @@ pub(crate) fn encode_gray_f32(
     img: ImgRef<crate::pixel::Gray<f32>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -265,7 +265,7 @@ pub(crate) fn encode_bgra8(
     img: ImgRef<Bgra<u8>>,
     quality: Option<f32>,
     lossless: bool,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -320,8 +320,8 @@ pub(crate) fn encode_bgra8(
     Ok(EncodeOutput::new(webp_data, ImageFormat::WebP))
 }
 
-/// Convert zencodecs ImageMetadata to zenwebp ImageMetadata.
-fn to_webp_metadata<'a>(metadata: Option<&'a ImageMetadata<'a>>) -> zenwebp::ImageMetadata<'a> {
+/// Convert zencodecs MetadataView to zenwebp ImageMetadata.
+fn to_webp_metadata<'a>(metadata: Option<&'a MetadataView<'a>>) -> zenwebp::ImageMetadata<'a> {
     let mut webp_meta = zenwebp::ImageMetadata::new();
     if let Some(meta) = metadata {
         if let Some(icc) = meta.icc_profile {

@@ -4,7 +4,7 @@ use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
 use crate::pixel::{Bgra, ImgRef, Rgb, Rgba};
 use crate::{
-    CodecError, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat, ImageMetadata, Limits, Stop,
+    CodecError, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat, MetadataView, Limits, Stop,
 };
 use zencodec_types::{Encoder, PixelSlice};
 
@@ -30,7 +30,7 @@ fn build_encoding(quality: Option<f32>) -> zenjxl::JxlEncoderConfig {
 pub(crate) fn encode_rgb8(
     img: ImgRef<Rgb<u8>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -55,7 +55,7 @@ pub(crate) fn encode_rgb8(
 pub(crate) fn encode_rgba8(
     img: ImgRef<Rgba<u8>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -80,7 +80,7 @@ pub(crate) fn encode_rgba8(
 pub(crate) fn encode_gray8(
     img: ImgRef<crate::pixel::Gray<u8>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -105,7 +105,7 @@ pub(crate) fn encode_gray8(
 pub(crate) fn encode_rgb_f32(
     img: ImgRef<Rgb<f32>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -130,7 +130,7 @@ pub(crate) fn encode_rgb_f32(
 pub(crate) fn encode_rgba_f32(
     img: ImgRef<Rgba<f32>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -155,7 +155,7 @@ pub(crate) fn encode_rgba_f32(
 pub(crate) fn encode_gray_f32(
     img: ImgRef<crate::pixel::Gray<f32>>,
     quality: Option<f32>,
-    metadata: Option<&ImageMetadata<'_>>,
+    metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -180,7 +180,7 @@ pub(crate) fn encode_gray_f32(
 pub(crate) fn encode_bgra8(
     img: ImgRef<Bgra<u8>>,
     quality: Option<f32>,
-    _metadata: Option<&ImageMetadata<'_>>,
+    _metadata: Option<&MetadataView<'_>>,
     _codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
     _stop: Option<&dyn Stop>,

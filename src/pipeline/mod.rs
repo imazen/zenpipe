@@ -119,8 +119,8 @@ impl OwnedMetadata {
         }
     }
 
-    fn as_metadata(&self) -> zencodec_types::ImageMetadata<'_> {
-        let mut m = zencodec_types::ImageMetadata::none();
+    fn as_metadata(&self) -> zencodec_types::MetadataView<'_> {
+        let mut m = zencodec_types::MetadataView::none();
         if let Some(ref icc) = self.icc_profile {
             m = m.with_icc(icc);
         }
@@ -496,7 +496,7 @@ impl<'a> Pipeline<'a> {
     fn build_encode_request<'b>(
         &self,
         format: ImageFormat,
-        metadata: &'b zencodec_types::ImageMetadata<'b>,
+        metadata: &'b zencodec_types::MetadataView<'b>,
     ) -> crate::EncodeRequest<'b>
     where
         'a: 'b,
@@ -528,7 +528,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgb<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::ImageMetadata<'_>,
+        metadata: &zencodec_types::MetadataView<'_>,
     ) -> Result<zencodec_types::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata).encode_rgb8(img)
     }
@@ -537,7 +537,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgba<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::ImageMetadata<'_>,
+        metadata: &zencodec_types::MetadataView<'_>,
     ) -> Result<zencodec_types::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata)
             .encode_rgba8(img)
@@ -547,7 +547,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Gray<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::ImageMetadata<'_>,
+        metadata: &zencodec_types::MetadataView<'_>,
     ) -> Result<zencodec_types::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata)
             .encode_gray8(img)
