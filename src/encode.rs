@@ -2,7 +2,7 @@
 
 use crate::config::CodecConfig;
 use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
-use crate::{CodecError, CodecRegistry, ImageFormat, MetadataView, Limits, Stop};
+use crate::{CodecError, CodecRegistry, ImageFormat, Limits, MetadataView, Stop};
 
 pub use zencodec_types::EncodeOutput;
 

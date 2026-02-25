@@ -9,7 +9,7 @@ use crate::limits::to_resource_limits;
 use crate::pixel::{Bgra, ImgRef, Rgb, Rgba};
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
-    ImageFormat, ImageInfo, MetadataView, Limits, Stop,
+    ImageFormat, ImageInfo, Limits, MetadataView, Stop,
 };
 use zencodec_types::{Decoder, Encoder, PixelSlice, PixelSliceMut};
 

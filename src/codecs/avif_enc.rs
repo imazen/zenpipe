@@ -4,7 +4,7 @@ use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
 use crate::pixel::{ImgRef, Rgb, Rgba};
 use crate::{
-    CodecError, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat, MetadataView, Limits, Stop,
+    CodecError, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat, Limits, MetadataView, Stop,
 };
 use zencodec_types::{Encoder, PixelSlice};
 
