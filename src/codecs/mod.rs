@@ -26,3 +26,6 @@ pub(crate) mod jxl_dec;
 
 #[cfg(feature = "jxl-encode")]
 pub(crate) mod jxl_enc;
+
+#[cfg(feature = "heic-decode")]
+pub(crate) mod heic;

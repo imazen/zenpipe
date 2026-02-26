@@ -28,6 +28,7 @@ zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
 # Deferred from cleanup-phase1 (need DecodeRowSink API update):
 # zenpng = { path = "../zenpng", optional = true }
 zenjxl = { path = "../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
+heic-decoder = { path = "../heic/heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }
 
 # Pipeline (optional, feature-gated)
 zenresize = { path = "../zenresize", optional = true, default-features = false, features = ["std", "layout"] }
@@ -54,6 +55,7 @@ avif-decode = ["dep:zenavif"]
 avif-encode = ["dep:zenavif", "zenavif/encode"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
+heic-decode = ["dep:heic-decoder"]
 
 # Pipeline
 pipeline = ["dep:zenresize"]
@@ -62,7 +64,7 @@ pipeline = ["dep:zenresize"]
 moxcms = []  # Disabled for now
 
 # All codecs (cleanup-phase1: png deferred)
-all = ["jpeg", "webp", "gif", "gif-quantizr", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode"]
+all = ["jpeg", "webp", "gif", "gif-quantizr", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode"]
 
 [[example]]
 name = "metadata_roundtrip"

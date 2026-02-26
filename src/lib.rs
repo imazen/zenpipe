@@ -135,3 +135,6 @@ pub use zenjxl::{JxlDecodeJob, JxlDecoderConfig};
 
 #[cfg(feature = "jxl-encode")]
 pub use zenjxl::{JxlEncodeJob, JxlEncoderConfig};
+
+#[cfg(feature = "heic-decode")]
+pub use heic_decoder::{HeicDecodeJob, HeicDecoderConfig};

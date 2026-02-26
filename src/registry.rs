@@ -14,6 +14,7 @@ impl FormatSet {
     const PNG: u8 = 1 << 3;
     const AVIF: u8 = 1 << 4;
     const JXL: u8 = 1 << 5;
+    const HEIC: u8 = 1 << 6;
 
     #[allow(unused_mut)]
     fn all_compiled() -> Self {
@@ -51,6 +52,10 @@ impl FormatSet {
         {
             bits |= Self::JXL;
         }
+        #[cfg(feature = "heic-decode")]
+        {
+            bits |= Self::HEIC;
+        }
 
         FormatSet(bits)
     }
@@ -79,6 +84,7 @@ impl FormatSet {
             ImageFormat::Png => Self::PNG,
             ImageFormat::Avif => Self::AVIF,
             ImageFormat::Jxl => Self::JXL,
+            ImageFormat::Heic => Self::HEIC,
             _ => return false,
         };
         (self.0 & bit) != 0
@@ -92,6 +98,7 @@ impl FormatSet {
             ImageFormat::Png => Self::PNG,
             ImageFormat::Avif => Self::AVIF,
             ImageFormat::Jxl => Self::JXL,
+            ImageFormat::Heic => Self::HEIC,
             _ => return,
         };
         self.0 |= bit;
@@ -105,19 +112,21 @@ impl FormatSet {
             ImageFormat::Png => Self::PNG,
             ImageFormat::Avif => Self::AVIF,
             ImageFormat::Jxl => Self::JXL,
+            ImageFormat::Heic => Self::HEIC,
             _ => return,
         };
         self.0 &= !bit;
     }
 
     fn iter(self) -> impl Iterator<Item = ImageFormat> {
-        const ALL_FORMATS: [ImageFormat; 6] = [
+        const ALL_FORMATS: [ImageFormat; 7] = [
             ImageFormat::Jpeg,
             ImageFormat::WebP,
             ImageFormat::Gif,
             ImageFormat::Png,
             ImageFormat::Avif,
             ImageFormat::Jxl,
+            ImageFormat::Heic,
         ];
 
         ALL_FORMATS.into_iter().filter(move |&f| self.contains(f))
@@ -212,6 +221,11 @@ impl CodecRegistry {
             ImageFormat::Jxl => true,
             #[cfg(not(feature = "jxl-decode"))]
             ImageFormat::Jxl => false,
+
+            #[cfg(feature = "heic-decode")]
+            ImageFormat::Heic => true,
+            #[cfg(not(feature = "heic-decode"))]
+            ImageFormat::Heic => false,
 
             _ => false,
         }

@@ -189,6 +189,11 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo, CodecError
         #[cfg(not(feature = "jxl-decode"))]
         ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
 
+        #[cfg(feature = "heic-decode")]
+        ImageFormat::Heic => crate::codecs::heic::probe(data),
+        #[cfg(not(feature = "heic-decode"))]
+        ImageFormat::Heic => Err(CodecError::UnsupportedFormat(format)),
+
         _ => Err(CodecError::UnsupportedFormat(format)),
     }
 }

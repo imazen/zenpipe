@@ -481,6 +481,11 @@ impl<'a> DecodeRequest<'a> {
             #[cfg(not(feature = "jxl-decode"))]
             ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
 
+            #[cfg(feature = "heic-decode")]
+            ImageFormat::Heic => self.decode_heic(),
+            #[cfg(not(feature = "heic-decode"))]
+            ImageFormat::Heic => Err(CodecError::UnsupportedFormat(format)),
+
             _ => Err(CodecError::UnsupportedFormat(format)),
         }
     }
@@ -513,6 +518,11 @@ impl<'a> DecodeRequest<'a> {
     #[cfg(feature = "jxl-decode")]
     fn decode_jxl(self) -> Result<DecodeOutput, CodecError> {
         crate::codecs::jxl_dec::decode(self.data, self.limits, self.stop)
+    }
+
+    #[cfg(feature = "heic-decode")]
+    fn decode_heic(self) -> Result<DecodeOutput, CodecError> {
+        crate::codecs::heic::decode(self.data, self.limits, self.stop)
     }
 }
 
