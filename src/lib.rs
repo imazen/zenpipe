@@ -110,10 +110,10 @@ pub use pixel::PixelData;
 pub use probe::ProbeResult;
 pub use registry::CodecRegistry;
 pub use zencodec_types::ImageFormat;
-#[deprecated(note = "renamed to MetadataView")]
-#[allow(deprecated)]
-pub use zencodec_types::ImageMetadata;
 pub use zencodec_types::MetadataView;
+/// Backwards-compatible alias for [`MetadataView`].
+#[deprecated(note = "renamed to MetadataView")]
+pub type ImageMetadata<'a> = MetadataView<'a>;
 
 // zencodec-types trait re-exports
 pub use zencodec_types::{DecodeJob, DecoderConfig, EncodeJob, EncoderConfig};

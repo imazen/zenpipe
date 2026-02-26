@@ -22,9 +22,9 @@ linear-srgb = { version = "0.5.5", default-features = false }
 
 # Codecs (all optional, feature-gated)
 zenjpeg = { path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
-zenwebp = { path = "../zenwebp", optional = true }
-zengif = { path = "../zengif", optional = true }
-zenavif = { path = "../zenavif", optional = true }
+zenwebp = { path = "../zenwebp", optional = true, features = ["zencodec"] }
+zengif = { path = "../zengif", optional = true, features = ["zencodec"] }
+zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
 # Deferred from cleanup-phase1 (need DecodeRowSink API update):
 # zenpng = { path = "../zenpng", optional = true }
 # zenjxl = { path = "../zenjxl", optional = true, default-features = false }
