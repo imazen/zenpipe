@@ -284,7 +284,7 @@ fn build_metadata<'a>(
     if args.preserve_icc {
         // Keep only ICC
         let mut meta = ImageMetadata::none();
-        if let Some(ref icc) = info.icc_profile {
+        if let Some(ref icc) = info.source_color.icc_profile {
             meta = meta.with_icc(icc);
         }
         return Some(meta);
@@ -293,17 +293,17 @@ fn build_metadata<'a>(
     let mut meta = ImageMetadata::none();
 
     if !args.strip_icc {
-        if let Some(ref icc) = info.icc_profile {
+        if let Some(ref icc) = info.source_color.icc_profile {
             meta = meta.with_icc(icc);
         }
     }
     if !args.strip_exif {
-        if let Some(ref exif) = info.exif {
+        if let Some(ref exif) = info.embedded_metadata.exif {
             meta = meta.with_exif(exif);
         }
     }
     if !args.strip_xmp {
-        if let Some(ref xmp) = info.xmp {
+        if let Some(ref xmp) = info.embedded_metadata.xmp {
             meta = meta.with_xmp(xmp);
         }
     }

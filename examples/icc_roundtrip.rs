@@ -17,6 +17,7 @@ fn main() {
 
     let original_icc = decoded
         .info()
+        .source_color
         .icc_profile
         .as_deref()
         .expect("no ICC profile in test JPEG");
@@ -52,7 +53,7 @@ fn main() {
     let step1 = DecodeRequest::new(&current_data)
         .decode()
         .expect("decode failed");
-    let step1_icc = step1.info().icc_profile.as_deref().unwrap_or(&[]);
+    let step1_icc = step1.info().source_color.icc_profile.as_deref().unwrap_or(&[]);
     let match_str = if step1_icc == prev_icc {
         "MATCH"
     } else {
@@ -87,7 +88,7 @@ fn main() {
             .decode()
             .expect("decode failed");
 
-        let new_icc = re_decoded.info().icc_profile.as_deref().unwrap_or(&[]);
+        let new_icc = re_decoded.info().source_color.icc_profile.as_deref().unwrap_or(&[]);
         let match_str = if new_icc == prev_icc {
             "MATCH"
         } else {

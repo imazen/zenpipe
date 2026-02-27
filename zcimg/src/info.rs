@@ -59,10 +59,10 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
 
     // Optionally parse metadata for rich display
     let (parsed_exif, parsed_icc, parsed_cicp, parsed_xmp) = if parse_metadata {
-        let exif = info.exif.as_deref().and_then(metadata::parse_exif);
-        let icc = info.icc_profile.as_deref().and_then(metadata::parse_icc);
-        let cicp = info.cicp.as_ref().map(metadata::parse_cicp);
-        let xmp = info.xmp.as_deref().and_then(metadata::parse_xmp);
+        let exif = info.embedded_metadata.exif.as_deref().and_then(metadata::parse_exif);
+        let icc = info.source_color.icc_profile.as_deref().and_then(metadata::parse_icc);
+        let cicp = info.source_color.cicp.as_ref().map(metadata::parse_cicp);
+        let xmp = info.embedded_metadata.xmp.as_deref().and_then(metadata::parse_xmp);
         (exif, icc, cicp, xmp)
     } else {
         (None, None, None, None)
@@ -79,13 +79,13 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
         has_alpha: info.has_alpha,
         has_animation: info.has_animation,
         frame_count: info.frame_count,
-        bit_depth: info.bit_depth,
-        channel_count: info.channel_count,
+        bit_depth: info.source_color.bit_depth,
+        channel_count: info.source_color.channel_count,
         orientation: info.orientation.exif_value() as u8,
-        icc_profile_size: info.icc_profile.as_ref().map(|p| p.len()),
-        exif_size: info.exif.as_ref().map(|e| e.len()),
-        xmp_size: info.xmp.as_ref().map(|x| x.len()),
-        cicp: info.cicp.map(|c| CicpDisplay {
+        icc_profile_size: info.source_color.icc_profile.as_ref().map(|p| p.len()),
+        exif_size: info.embedded_metadata.exif.as_ref().map(|e| e.len()),
+        xmp_size: info.embedded_metadata.xmp.as_ref().map(|x| x.len()),
+        cicp: info.source_color.cicp.map(|c| CicpDisplay {
             color_primaries: c.color_primaries,
             transfer_characteristics: c.transfer_characteristics,
             matrix_coefficients: c.matrix_coefficients,
