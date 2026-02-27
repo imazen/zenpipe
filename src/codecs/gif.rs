@@ -8,9 +8,10 @@ extern crate std;
 use crate::config::CodecConfig;
 use crate::pixel::{Gray, ImgRef, ImgVec, Rgb, Rgba};
 use crate::{
-    CodecError, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat,
-    ImageInfo, Limits, PixelData, Stop,
+    CodecError, DecodeOutput, EncodeJob, EncodeOutput, EncoderConfig, ImageFormat,
+    ImageInfo, Limits, Stop,
 };
+use zencodec_types::{PixelBuffer, PixelDescriptor};
 use zencodec_types::{EncodeGray8, EncodeGrayF32, EncodeRgbF32, EncodeRgbaF32, PixelSlice};
 
 /// Create a default GIF encoder config with the best available quantizer.
@@ -87,8 +88,9 @@ pub(crate) fn decode(
         frame_count += 1;
     }
 
-    Ok(DecodeOutput::from_pixel_data(
-        PixelData::Rgba8(img),
+    let buf = PixelBuffer::from_imgvec(img).with_descriptor(PixelDescriptor::RGBA8_SRGB);
+    Ok(DecodeOutput::new(
+        buf.into(),
         ImageInfo::new(width as u32, height as u32, ImageFormat::Gif)
             .with_alpha(true)
             .with_animation(frame_count > 1)

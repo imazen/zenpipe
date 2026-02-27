@@ -8,10 +8,11 @@ use crate::limits::to_resource_limits;
 use crate::pixel::{Bgra, ImgRef, ImgVec, Rgb, Rgba};
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
-    ImageFormat, ImageInfo, Limits, MetadataView, PixelData, Stop,
+    ImageFormat, ImageInfo, Limits, MetadataView, Stop,
 };
+use zencodec_types::{PixelBuffer, PixelDescriptor};
 use zencodec_types::{
-    Decode, EncodeGray8, EncodeGrayF32, EncodeRgb8, EncodeRgbF32, EncodeRgba8, EncodeRgbaF32,
+    EncodeGray8, EncodeGrayF32, EncodeRgb8, EncodeRgbF32, EncodeRgba8, EncodeRgbaF32,
     PixelSlice, PixelSliceMut,
 };
 
@@ -137,7 +138,8 @@ pub(crate) fn decode(
         ii = ii.with_xmp(xmp);
     }
 
-    let mut output = DecodeOutput::from_pixel_data(PixelData::Rgb8(img), ii);
+    let buf = PixelBuffer::from_imgvec(img).with_descriptor(PixelDescriptor::RGB8_SRGB);
+    let mut output = DecodeOutput::new(buf.into(), ii);
     if let Some(extras) = jpeg_extras {
         output = output.with_extras(extras);
     }
