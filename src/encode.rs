@@ -1,8 +1,14 @@
 //! Image encoding.
+//!
+//! Uses [`dispatch::DynEncoder`](crate::dispatch::DynEncoder) for format dispatch.
+//! Each codec implements `DynEncoder` once; pixel format negotiation is handled
+//! by [`zenpixels::adapt::adapt_for_encode`].
 
 use crate::config::CodecConfig;
+use crate::dispatch::EncodeParams;
 use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
 use crate::{CodecError, CodecRegistry, ImageFormat, Limits, MetadataView, Stop};
+use zencodec_types::PixelDescriptor;
 
 pub use zencodec_types::EncodeOutput;
 
@@ -135,6 +141,10 @@ impl<'a> EncodeRequest<'a> {
         self
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // UltraHDR encode (JPEG-specific, bypasses dispatch)
+    // ═══════════════════════════════════════════════════════════════════
+
     /// Encode linear f32 RGB pixels to UltraHDR JPEG.
     ///
     /// Takes HDR content in linear f32 RGB and produces a backward-compatible
@@ -191,76 +201,80 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Typed encode methods — thin wrappers over dispatch
+    // ═══════════════════════════════════════════════════════════════════
+
     /// Encode RGB8 pixels.
     pub fn encode_rgb8(self, img: ImgRef<Rgb<u8>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-        let has_alpha = false;
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_rgb8(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Rgb<u8>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::RGB8_SRGB,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            false,
+        )
     }
 
     /// Encode RGBA8 pixels.
     pub fn encode_rgba8(self, img: ImgRef<Rgba<u8>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-
         let has_alpha = img.pixels().any(|p| p.a < 255);
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_rgba8(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Rgba<u8>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::RGBA8_SRGB,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            has_alpha,
+        )
     }
 
     /// Encode BGRA8 pixels (native byte order, zero-copy for codecs that support it).
     pub fn encode_bgra8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-
         let has_alpha = img.pixels().any(|p| p.a < 255);
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_bgra8(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Bgra<u8>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::BGRA8_SRGB,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            has_alpha,
+        )
     }
 
     /// Encode BGRX8 pixels (opaque BGRA — padding byte is ignored).
     pub fn encode_bgrx8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-        let has_alpha = false;
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_bgrx8(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Bgra<u8>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::BGRX8_SRGB,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            false,
+        )
     }
 
     /// Encode Gray8 pixels.
     pub fn encode_gray8(self, img: ImgRef<Gray<u8>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-        let has_alpha = false;
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_gray8(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Gray<u8>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::GRAY8_SRGB,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            false,
+        )
     }
 
     /// Encode linear RGB f32 pixels.
@@ -268,16 +282,16 @@ impl<'a> EncodeRequest<'a> {
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
     pub fn encode_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-        let has_alpha = false;
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_rgb_f32(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Rgb<f32>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::RGBF32_LINEAR,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            false,
+        )
     }
 
     /// Encode linear RGBA f32 pixels.
@@ -285,17 +299,17 @@ impl<'a> EncodeRequest<'a> {
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
     pub fn encode_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput, CodecError> {
-        let default_registry = CodecRegistry::all();
-        let registry = self.registry.unwrap_or(&default_registry);
-
         let has_alpha = img.pixels().any(|p| p.a < 1.0);
-
-        let format = match self.format {
-            Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
-        };
-
-        self.validate_and_dispatch_rgba_f32(format, img, registry)
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Rgba<f32>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::RGBAF32_LINEAR,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            has_alpha,
+        )
     }
 
     /// Encode linear grayscale f32 pixels.
@@ -303,24 +317,41 @@ impl<'a> EncodeRequest<'a> {
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
     pub fn encode_gray_f32(self, img: ImgRef<Gray<f32>>) -> Result<EncodeOutput, CodecError> {
+        let data: &[u8] = bytemuck::cast_slice(img.buf());
+        let stride = img.stride() * core::mem::size_of::<Gray<f32>>();
+        self.encode_dispatch(
+            data,
+            PixelDescriptor::GRAYF32_LINEAR,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            false,
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Core dispatch
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Common encode path: resolve format → validate → build encoder →
+    /// negotiate pixel format via zenpixels → encode.
+    fn encode_dispatch(
+        self,
+        data: &[u8],
+        descriptor: PixelDescriptor,
+        width: u32,
+        height: u32,
+        stride: usize,
+        has_alpha: bool,
+    ) -> Result<EncodeOutput, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
-        let has_alpha = false;
 
         let format = match self.format {
             Some(f) => f,
             None => self.auto_select_format(has_alpha, registry)?,
         };
 
-        self.validate_and_dispatch_gray_f32(format, img, registry)
-    }
-
-    fn validate_and_dispatch_rgb8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgb<u8>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
         if !registry.can_encode(format) {
             return Err(CodecError::DisabledFormat(format));
         }
@@ -330,133 +361,42 @@ impl<'a> EncodeRequest<'a> {
                 detail: "lossless encoding not supported",
             });
         }
-        self.encode_format_rgb8(format, img)
-    }
 
-    fn validate_and_dispatch_rgba8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgba<u8>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_rgba8(format, img)
-    }
+        let params = EncodeParams {
+            quality: self.quality,
+            effort: self.effort,
+            lossless: self.lossless,
+            metadata: self.metadata,
+            codec_config: self.codec_config,
+            limits: self.limits,
+            stop: self.stop,
+        };
 
-    fn validate_and_dispatch_bgra8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Bgra<u8>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_bgra8(format, img)
-    }
+        let encoder = crate::dispatch::build_encoder(format, params)?;
 
-    fn validate_and_dispatch_bgrx8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Bgra<u8>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_bgrx8(format, img)
-    }
+        // Use zenpixels to negotiate the cheapest pixel format conversion.
+        // Returns Cow::Borrowed (zero-copy) when the input already matches
+        // one of the encoder's supported formats.
+        let adapted = zenpixels::adapt::adapt_for_encode(
+            data,
+            descriptor,
+            width,
+            height,
+            stride,
+            encoder.supported_descriptors(),
+        )
+        .map_err(|e| CodecError::InvalidInput(alloc::format!("pixel format negotiation: {e}")))?;
 
-    fn validate_and_dispatch_gray8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Gray<u8>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_gray8(format, img)
-    }
+        // Adapted data is always packed (stride = width * bpp).
+        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
 
-    fn validate_and_dispatch_rgb_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgb<f32>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_rgb_f32(format, img)
-    }
-
-    fn validate_and_dispatch_rgba_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgba<f32>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_rgba_f32(format, img)
-    }
-
-    fn validate_and_dispatch_gray_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Gray<f32>>,
-        registry: &CodecRegistry,
-    ) -> Result<EncodeOutput, CodecError> {
-        if !registry.can_encode(format) {
-            return Err(CodecError::DisabledFormat(format));
-        }
-        if self.lossless && !format.supports_lossless() {
-            return Err(CodecError::UnsupportedOperation {
-                format,
-                detail: "lossless encoding not supported",
-            });
-        }
-        self.encode_format_gray_f32(format, img)
+        encoder.encode_pixels(
+            &adapted.data,
+            adapted.descriptor,
+            adapted.width,
+            adapted.rows,
+            adapted_stride,
+        )
     }
 
     fn auto_select_format(
@@ -494,564 +434,6 @@ impl<'a> EncodeRequest<'a> {
         }
 
         Err(CodecError::NoSuitableEncoder)
-    }
-
-    fn encode_format_rgb8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgb<u8>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_rgb8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_rgb8(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_rgb8(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_rgb8(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_rgb8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_rgb8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
-    }
-
-    fn encode_format_rgba8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgba<u8>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_rgba8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_rgba8(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_rgba8(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_rgba8(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_rgba8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_rgba8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
-    }
-
-    fn encode_format_bgra8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Bgra<u8>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_bgra8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_bgra8(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_bgra8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            // Codecs without native BGRA: swizzle to RGBA and delegate.
-            _ => {
-                let (buf, w, h) = img.to_contiguous_buf();
-                let rgba: alloc::vec::Vec<Rgba<u8>> = buf
-                    .iter()
-                    .map(|p| Rgba {
-                        r: p.r,
-                        g: p.g,
-                        b: p.b,
-                        a: p.a,
-                    })
-                    .collect();
-                let rgba_img = imgref::ImgVec::new(rgba, w, h);
-                self.encode_format_rgba8(format, rgba_img.as_ref())
-            }
-        }
-    }
-
-    fn encode_format_bgrx8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Bgra<u8>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_bgrx8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            // Codecs without native BGRX: swizzle to RGB and delegate.
-            _ => {
-                let (buf, w, h) = img.to_contiguous_buf();
-                let rgb: alloc::vec::Vec<Rgb<u8>> = buf
-                    .iter()
-                    .map(|p| Rgb {
-                        r: p.r,
-                        g: p.g,
-                        b: p.b,
-                    })
-                    .collect();
-                let rgb_img = imgref::ImgVec::new(rgb, w, h);
-                self.encode_format_rgb8(format, rgb_img.as_ref())
-            }
-        }
-    }
-
-    fn encode_format_gray8(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Gray<u8>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_gray8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_gray8(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_gray8(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_gray8(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_gray8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_gray8(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
-    }
-
-    fn encode_format_rgb_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgb<f32>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_rgb_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_rgb_f32(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_rgb_f32(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_rgb_f32(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_rgb_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_rgb_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
-    }
-
-    fn encode_format_rgba_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Rgba<f32>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_rgba_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_rgba_f32(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_rgba_f32(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_rgba_f32(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_rgba_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_rgba_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
-    }
-
-    fn encode_format_gray_f32(
-        self,
-        format: ImageFormat,
-        img: ImgRef<Gray<f32>>,
-    ) -> Result<EncodeOutput, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::encode_gray_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::encode_gray_f32(
-                img,
-                self.quality,
-                self.lossless,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => {
-                crate::codecs::gif::encode_gray_f32(img, self.codec_config, self.limits, self.stop)
-            }
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::encode_gray_f32(
-                img,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "avif-encode")]
-            ImageFormat::Avif => crate::codecs::avif_enc::encode_gray_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "avif-encode"))]
-            ImageFormat::Avif => Err(CodecError::UnsupportedFormat(format)),
-
-            #[cfg(feature = "jxl-encode")]
-            ImageFormat::Jxl => crate::codecs::jxl_enc::encode_gray_f32(
-                img,
-                self.quality,
-                self.metadata,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(not(feature = "jxl-encode"))]
-            ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
-
-            _ => Err(CodecError::UnsupportedFormat(format)),
-        }
     }
 }
 

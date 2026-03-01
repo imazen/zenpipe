@@ -87,6 +87,7 @@ extern crate alloc;
 mod codecs;
 pub mod config;
 mod decode;
+pub(crate) mod dispatch;
 mod encode;
 mod error;
 mod info;

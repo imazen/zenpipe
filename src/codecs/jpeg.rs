@@ -10,6 +10,7 @@ use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
     ImageFormat, ImageInfo, Limits, MetadataView, Stop,
 };
+use alloc::boxed::Box;
 use zencodec_types::{
     EncodeGray8, EncodeGrayF32, EncodeRgb8, EncodeRgbF32, EncodeRgba8, EncodeRgbaF32, PixelSlice,
     PixelSliceMut,
@@ -476,6 +477,179 @@ pub(crate) fn encode_gray_f32(
         .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
         .encode_gray_f32(PixelSlice::from(img))
         .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DynEncoder implementation
+// ═══════════════════════════════════════════════════════════════════════
+
+use crate::dispatch::{DynEncoder, EncodeParams};
+
+/// Supported pixel descriptors for JPEG encoding (in preference order).
+static JPEG_SUPPORTED: &[PixelDescriptor] = &[
+    PixelDescriptor::RGB8_SRGB,
+    PixelDescriptor::GRAY8_SRGB,
+    PixelDescriptor::RGBA8_SRGB,
+    PixelDescriptor::BGRA8_SRGB,
+    PixelDescriptor::BGRX8_SRGB,
+    PixelDescriptor::RGBF32_LINEAR,
+    PixelDescriptor::RGBAF32_LINEAR,
+    PixelDescriptor::GRAYF32_LINEAR,
+];
+
+pub(crate) struct JpegDynEncoder<'a> {
+    quality: Option<f32>,
+    metadata: Option<&'a MetadataView<'a>>,
+    codec_config: Option<&'a CodecConfig>,
+    limits: Option<&'a Limits>,
+    stop: Option<&'a dyn Stop>,
+}
+
+pub(crate) fn build_dyn_encoder(params: EncodeParams<'_>) -> JpegDynEncoder<'_> {
+    JpegDynEncoder {
+        quality: params.quality,
+        metadata: params.metadata,
+        codec_config: params.codec_config,
+        limits: params.limits,
+        stop: params.stop,
+    }
+}
+
+impl DynEncoder for JpegDynEncoder<'_> {
+    fn format(&self) -> ImageFormat {
+        ImageFormat::Jpeg
+    }
+
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
+        JPEG_SUPPORTED
+    }
+
+    fn encode_pixels(
+        self: Box<Self>,
+        data: &[u8],
+        descriptor: PixelDescriptor,
+        width: u32,
+        height: u32,
+        stride: usize,
+    ) -> Result<EncodeOutput, CodecError> {
+        let w = width as usize;
+        let h = height as usize;
+
+        match descriptor.pixel_format() {
+            Some(zencodec_types::PixelFormat::Rgb8) => {
+                let pixels: &[Rgb<u8>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 3);
+                encode_rgb8(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::Rgba8) => {
+                let pixels: &[Rgba<u8>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
+                encode_rgba8(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::Bgra8) => {
+                let pixels: &[Bgra<u8>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
+                // Check descriptor alpha to distinguish BGRA vs BGRX
+                if descriptor.alpha == Some(zencodec_types::AlphaMode::Undefined) {
+                    encode_bgrx8(
+                        img,
+                        self.quality,
+                        self.metadata,
+                        self.codec_config,
+                        self.limits,
+                        self.stop,
+                    )
+                } else {
+                    encode_bgra8(
+                        img,
+                        self.quality,
+                        self.metadata,
+                        self.codec_config,
+                        self.limits,
+                        self.stop,
+                    )
+                }
+            }
+            Some(zencodec_types::PixelFormat::Bgrx8) => {
+                let pixels: &[Bgra<u8>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
+                encode_bgrx8(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::Gray8) => {
+                let pixels: &[crate::pixel::Gray<u8>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride);
+                encode_gray8(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::RgbF32) => {
+                let pixels: &[Rgb<f32>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 12);
+                encode_rgb_f32(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::RgbaF32) => {
+                let pixels: &[Rgba<f32>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 16);
+                encode_rgba_f32(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            Some(zencodec_types::PixelFormat::GrayF32) => {
+                let pixels: &[crate::pixel::Gray<f32>] = bytemuck::cast_slice(data);
+                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
+                encode_gray_f32(
+                    img,
+                    self.quality,
+                    self.metadata,
+                    self.codec_config,
+                    self.limits,
+                    self.stop,
+                )
+            }
+            _ => Err(CodecError::InvalidInput(alloc::format!(
+                "JPEG encoder does not support pixel format: {}",
+                descriptor
+            ))),
+        }
+    }
 }
 
 /// Decode UltraHDR JPEG to linear f32 RGBA HDR pixels.
