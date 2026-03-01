@@ -431,6 +431,42 @@ impl<'a> DecodeRequest<'a> {
         Ok(info)
     }
 
+    /// Decode UltraHDR JPEG to linear f32 RGBA HDR pixels.
+    ///
+    /// Extracts the gain map from an UltraHDR JPEG and reconstructs HDR content.
+    /// Returns linear f32 RGBA pixels. Fails if the image is not an UltraHDR JPEG.
+    ///
+    /// `display_boost` controls the HDR headroom: 1.0 = SDR, 4.0 = typical HDR display.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn decode_hdr(self, display_boost: f32) -> Result<DecodeOutput, CodecError> {
+        let default_registry = CodecRegistry::all();
+        let registry = self.registry.unwrap_or(&default_registry);
+
+        let format = match self.format {
+            Some(f) => f,
+            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+        };
+
+        if format != ImageFormat::Jpeg {
+            return Err(CodecError::UnsupportedOperation {
+                format,
+                detail: "UltraHDR decode only supported for JPEG",
+            });
+        }
+
+        if !registry.can_decode(format) {
+            return Err(CodecError::DisabledFormat(format));
+        }
+
+        crate::codecs::jpeg::decode_hdr(
+            self.data,
+            display_boost,
+            self.codec_config,
+            self.limits,
+            self.stop,
+        )
+    }
+
     /// Decode the image to pixels.
     pub fn decode(self) -> Result<DecodeOutput, CodecError> {
         let default_registry = CodecRegistry::all();

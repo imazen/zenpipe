@@ -30,6 +30,9 @@ pub struct EncodeRequest<'a> {
     metadata: Option<&'a MetadataView<'a>>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
+    /// Quality for UltraHDR gain map JPEG (0-100). Only used by `encode_ultrahdr_*`.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    gainmap_quality: Option<f32>,
 }
 
 impl<'a> EncodeRequest<'a> {
@@ -45,6 +48,8 @@ impl<'a> EncodeRequest<'a> {
             metadata: None,
             registry: None,
             codec_config: None,
+            #[cfg(feature = "jpeg-ultrahdr")]
+            gainmap_quality: None,
         }
     }
 
@@ -60,6 +65,8 @@ impl<'a> EncodeRequest<'a> {
             metadata: None,
             registry: None,
             codec_config: None,
+            #[cfg(feature = "jpeg-ultrahdr")]
+            gainmap_quality: None,
         }
     }
 
@@ -116,6 +123,72 @@ impl<'a> EncodeRequest<'a> {
     pub fn with_codec_config(mut self, config: &'a CodecConfig) -> Self {
         self.codec_config = Some(config);
         self
+    }
+
+    /// Set the quality for the UltraHDR gain map JPEG (0-100).
+    ///
+    /// Only used by `encode_ultrahdr_rgb_f32` / `encode_ultrahdr_rgba_f32`.
+    /// Defaults to 75.0 if not set.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn with_gainmap_quality(mut self, quality: f32) -> Self {
+        self.gainmap_quality = Some(quality);
+        self
+    }
+
+    /// Encode linear f32 RGB pixels to UltraHDR JPEG.
+    ///
+    /// Takes HDR content in linear f32 RGB and produces a backward-compatible
+    /// UltraHDR JPEG with embedded gain map. The `quality` setting controls
+    /// the SDR base JPEG quality.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn encode_ultrahdr_rgb_f32(
+        self,
+        img: ImgRef<Rgb<f32>>,
+    ) -> Result<EncodeOutput, CodecError> {
+        let default_registry = CodecRegistry::all();
+        let registry = self.registry.unwrap_or(&default_registry);
+
+        if !registry.can_encode(ImageFormat::Jpeg) {
+            return Err(CodecError::DisabledFormat(ImageFormat::Jpeg));
+        }
+
+        crate::codecs::jpeg::encode_ultrahdr_rgb_f32(
+            img,
+            self.quality,
+            self.gainmap_quality,
+            self.metadata,
+            self.codec_config,
+            self.limits,
+            self.stop,
+        )
+    }
+
+    /// Encode linear f32 RGBA pixels to UltraHDR JPEG.
+    ///
+    /// Takes HDR content in linear f32 RGBA and produces a backward-compatible
+    /// UltraHDR JPEG with embedded gain map. Alpha is discarded.
+    /// The `quality` setting controls the SDR base JPEG quality.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn encode_ultrahdr_rgba_f32(
+        self,
+        img: ImgRef<Rgba<f32>>,
+    ) -> Result<EncodeOutput, CodecError> {
+        let default_registry = CodecRegistry::all();
+        let registry = self.registry.unwrap_or(&default_registry);
+
+        if !registry.can_encode(ImageFormat::Jpeg) {
+            return Err(CodecError::DisabledFormat(ImageFormat::Jpeg));
+        }
+
+        crate::codecs::jpeg::encode_ultrahdr_rgba_f32(
+            img,
+            self.quality,
+            self.gainmap_quality,
+            self.metadata,
+            self.codec_config,
+            self.limits,
+            self.stop,
+        )
     }
 
     /// Encode RGB8 pixels.

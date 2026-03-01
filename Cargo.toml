@@ -45,6 +45,7 @@ std = []
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
+jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-quantizr = ["gif", "zengif/quantizr"]
@@ -64,7 +65,7 @@ pipeline = ["dep:zenresize"]
 moxcms = []  # Disabled for now
 
 # All codecs (cleanup-phase1: png deferred)
-all = ["jpeg", "webp", "gif", "gif-quantizr", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-quantizr", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode"]
 
 [[example]]
 name = "metadata_roundtrip"

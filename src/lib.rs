@@ -129,6 +129,9 @@ pub use zengif::{GifDecodeJob, GifDecoderConfig, GifEncodeJob, GifEncoderConfig}
 #[cfg(feature = "jpeg")]
 pub use zenjpeg::{JpegDecodeJob, JpegDecoderConfig, JpegEncodeJob, JpegEncoderConfig};
 
+#[cfg(feature = "jpeg-ultrahdr")]
+pub use zenjpeg::ultrahdr::{UltraHdrExtras, GainMap, GainMapMetadata};
+
 #[cfg(feature = "jxl-decode")]
 pub use zenjxl::{JxlDecodeJob, JxlDecoderConfig};
 
