@@ -712,9 +712,11 @@ mod tests {
     fn generate_sample_svgs() {
         use crate::constraint::CanvasColor;
         use crate::plan::{Align, OutputLimits, Region, RegionCoord};
-        let out = "/mnt/v/output/zenlayout/svg";
+        let out = std::env::var("OUTPUT_DIR")
+            .map(|d| format!("{d}/zenlayout/svg"))
+            .unwrap_or_else(|_| "/mnt/v/output/zenlayout/svg".to_string());
         let doc = concat!(env!("CARGO_MANIFEST_DIR"), "/doc/svg");
-        std::fs::create_dir_all(out).unwrap();
+        std::fs::create_dir_all(&out).unwrap();
         std::fs::create_dir_all(doc).unwrap();
 
         let cases: Vec<(&str, String)> = vec![
