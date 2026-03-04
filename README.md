@@ -1,75 +1,114 @@
 # zencodecs
 
-Unified image codec abstraction for Rust.
-
-Dispatch layer over format-specific encoders and decoders:
+Unified image codec dispatch for Rust. Thin layer over format-specific encoders and decoders:
 [zenjpeg](https://github.com/imazen/zenjpeg),
 [zenwebp](https://github.com/imazen/zenwebp),
 [zengif](https://github.com/imazen/zengif),
 [zenavif](https://github.com/imazen/zenavif),
-[png](https://crates.io/crates/png),
-and [ravif](https://crates.io/crates/ravif).
-Optional color management via [moxcms](https://crates.io/crates/moxcms).
+[zenpng](https://github.com/imazen/zenpng),
+[zenjxl](https://github.com/imazen/zenjxl),
+and [heic-decoder](https://github.com/nicksrandall/heic-decoder-rs).
 
 ## Usage
 
 ```rust
-use zencodecs::{ImageFormat, DecodeRequest, EncodeRequest, PixelLayout};
+use zencodecs::{ImageFormat, DecodeRequest, EncodeRequest, PixelBufferConvertExt};
+use zencodecs::pixel::{ImgVec, Rgba};
 
-// Detect format and decode
+// Detect format from magic bytes and decode
 let data: &[u8] = todo!(); // your image bytes
-let decoded = DecodeRequest::new(data)
-    .with_output_layout(PixelLayout::Rgba8)
-    .decode()?;
+let decoded = DecodeRequest::new(data).decode()?;
+println!("{}x{}", decoded.width(), decoded.height());
 
-// Re-encode as WebP
+// Convert to RGBA8 for processing
+let rgba = decoded.into_buffer().to_rgba8();
+
+// Encode as WebP from typed pixel data
+let pixels = ImgVec::new(vec![Rgba { r: 0u8, g: 0, b: 0, a: 255 }; 100*100], 100, 100);
 let webp = EncodeRequest::new(ImageFormat::WebP)
     .with_quality(85.0)
-    .encode(&decoded.pixels, decoded.width, decoded.height, PixelLayout::Rgba8)?;
+    .encode_rgba8(pixels.as_ref())?;
+println!("Encoded {} bytes", webp.len());
+# Ok::<(), zencodecs::CodecError>(())
+```
 
-// Auto-select best format
-let output = EncodeRequest::auto()
-    .with_quality(80.0)
-    .encode(&decoded.pixels, decoded.width, decoded.height, PixelLayout::Rgba8)?;
-println!("Auto-selected: {:?}", output.format);
+### Typed Encode Methods
+
+Each encode method takes a typed `ImgRef<P>`:
+
+```rust
+req.encode_rgb8(img)       // ImgRef<Rgb<u8>>
+req.encode_rgba8(img)      // ImgRef<Rgba<u8>>
+req.encode_bgra8(img)      // ImgRef<Bgra<u8>>
+req.encode_bgrx8(img)      // ImgRef<Bgra<u8>> — alpha ignored
+req.encode_gray8(img)      // ImgRef<Gray<u8>>
+req.encode_rgb_f32(img)    // ImgRef<Rgb<f32>> — linear light
+req.encode_rgba_f32(img)   // ImgRef<Rgba<f32>> — linear light
+req.encode_gray_f32(img)   // ImgRef<Gray<f32>> — linear light
+```
+
+The dispatch layer handles pixel format conversion to whatever the codec needs natively.
+
+### Probing
+
+```rust
+use zencodecs::from_bytes;
+
+let info = from_bytes(data)?;
+println!("{:?} {}x{}", info.format, info.width, info.height);
+# Ok::<(), zencodecs::CodecError>(())
 ```
 
 ### Runtime Codec Control
 
 ```rust
-use zencodecs::CodecRegistry;
+use zencodecs::{CodecRegistry, ImageFormat, DecodeRequest};
 
-// Only allow JPEG and WebP for this request
 let registry = CodecRegistry::none()
     .with_decode(ImageFormat::Jpeg, true)
-    .with_decode(ImageFormat::WebP, true)
-    .with_encode(ImageFormat::WebP, true);
+    .with_decode(ImageFormat::WebP, true);
 
 let decoded = DecodeRequest::new(data)
     .with_registry(&registry)
     .decode()?;
-```
-
-### Animation
-
-```rust
-let mut decoder = DecodeRequest::new(gif_data)
-    .build()?;
-
-while let Some(frame) = decoder.next_frame()? {
-    process_frame(&frame.pixels, frame.delay_ms);
-}
+# Ok::<(), zencodecs::CodecError>(())
 ```
 
 ### Format-Specific Config
 
 ```rust
-// Use zenjpeg's native config for fine-grained control
-let jpeg_config = zencodecs::jpeg::EncoderConfig::ycbcr(92, Default::default());
-let output = EncodeRequest::new(ImageFormat::Jpeg)
-    .with_jpeg_config(&jpeg_config)
-    .encode(&pixels, w, h, PixelLayout::Rgba8)?;
+use zencodecs::{EncodeRequest, ImageFormat};
+use zencodecs::config::CodecConfig;
+
+let config = CodecConfig::default();
+// .with_jpeg_encoder(...)
+// .with_avif_speed(...)
+// etc.
+
+let request = EncodeRequest::new(ImageFormat::Jpeg)
+    .with_codec_config(&config)
+    .with_quality(92.0);
 ```
+
+### Cooperative Cancellation and Limits
+
+```rust
+use zencodecs::{DecodeRequest, Limits};
+
+let limits = Limits {
+    max_width: Some(4096),
+    max_height: Some(4096),
+    max_pixels: Some(16_000_000),
+    max_memory_bytes: Some(256_000_000),
+};
+
+let decoded = DecodeRequest::new(data)
+    .with_limits(&limits)
+    .decode()?;
+# Ok::<(), zencodecs::CodecError>(())
+```
+
+Stop tokens (`enough::Stop`) are forwarded to codecs that support cooperative cancellation.
 
 ## Features
 
@@ -77,7 +116,7 @@ Every codec is feature-gated. Enable only what you need:
 
 ```toml
 [dependencies]
-zencodecs = { version = "0.1", default-features = false, features = ["jpeg", "webp"] }
+zencodecs = { version = "0.1", features = ["jpeg", "webp", "png"] }
 ```
 
 | Feature | Codec | Decode | Encode |
@@ -85,29 +124,31 @@ zencodecs = { version = "0.1", default-features = false, features = ["jpeg", "we
 | `jpeg` | zenjpeg | Yes | Yes |
 | `webp` | zenwebp | Yes | Yes |
 | `gif` | zengif | Yes | Yes |
-| `png` | png | Yes | Yes |
+| `png` | zenpng | Yes | Yes |
 | `avif-decode` | zenavif | Yes | No |
-| `avif-encode` | ravif | No | Yes |
-| `moxcms` | moxcms | Color management |
+| `avif-encode` | zenavif + ravif | No | Yes |
+| `jxl-decode` | zenjxl | Yes | No |
+| `jxl-encode` | zenjxl | No | Yes |
+| `heic-decode` | heic-decoder | Yes | No |
+| `all` | Everything above | | |
 
-Default features: `jpeg`, `webp`, `gif`, `png`, `avif-decode`.
+Default features: `jpeg`, `webp`, `gif`, `gif-quantizr`.
 
-## Capabilities
+## What This Crate Does
 
-- **Format detection** from magic bytes or file extension
-- **Image probing** — dimensions, alpha, animation, ICC profile without full decode
-- **Runtime codec registry** — enable/disable codecs per-request
-- **Streaming decode/encode** — delegates to codec when supported, buffers when not
-- **Animation** — frame iteration for GIF and animated WebP
-- **Auto-selection** — pick optimal encoder based on image stats and allowed formats
-- **Color management** — optional sRGB conversion via moxcms
-- **Format-specific configs** — re-exports codec config types for fine-grained control
+- Format detection from magic bytes
+- Image probing (dimensions, format, color info) without full decode
+- Typed pixel buffer encode/decode with automatic format negotiation
+- Runtime codec registry for per-request codec control
+- Resource limits and cooperative cancellation forwarded to codecs
+- Format-specific codec configuration via `CodecConfig`
 
-## Non-Goals
+## What This Crate Does Not Do
 
-- Image processing (resize, crop, sharpen) — use `zenimage`
-- Compositing or blending
-- Format conversion heuristics beyond simple auto-selection
+- Image processing (resize, crop, rotate)
+- Streaming or incremental decode
+- Animation (first frame only for animated formats)
+- Color management (ICC profile application)
 
 ## License
 
