@@ -24,13 +24,11 @@ impl Instructions {
         // ---- 1. Source orientation (autorotate + srotate + sflip) ----
         let mut src_orient = Orientation::Identity;
 
-        if self.autorotate.unwrap_or(true) {
-            if let Some(exif_val) = exif {
-                if let Some(o) = Orientation::from_exif(exif_val) {
+        if self.autorotate.unwrap_or(true)
+            && let Some(exif_val) = exif
+                && let Some(o) = Orientation::from_exif(exif_val) {
                     src_orient = src_orient.compose(o);
                 }
-            }
-        }
 
         if let Some(srotate) = self.srotate {
             src_orient = src_orient.compose(rotation_to_orient(srotate));

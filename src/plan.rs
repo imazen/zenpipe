@@ -1519,8 +1519,8 @@ pub fn compute_layout_sequential(
     // If post_orientation swaps axes, swap the constraint's target dimensions
     // so the output matches: constrain→rotate90 = "resize then rotate."
     let swapped_constraint;
-    if post_orientation.swaps_axes() {
-        if let Some(c) = constraint {
+    if post_orientation.swaps_axes()
+        && let Some(c) = constraint {
             swapped_constraint = Constraint {
                 mode: c.mode,
                 width: c.height,
@@ -1531,7 +1531,6 @@ pub fn compute_layout_sequential(
             };
             constraint = Some(&swapped_constraint);
         }
-    }
     // Fuse post-orientation into pre-orientation (for source transform).
     orientation = orientation.compose(post_orientation);
 

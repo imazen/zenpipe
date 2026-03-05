@@ -1441,11 +1441,10 @@ fn all_rotations_with_crop_on_nonsquare() {
             // This may fail if crop exceeds rotated dims; compare_expect_mismatch handles gracefully
             let immediate = immediate_eval(&src, &[r.clone(), crop(cx, cy, cw, ch)]);
             let fused = fused_eval(&src, &[r.clone(), crop(cx, cy, cw, ch)]);
-            if let Ok(f) = fused {
-                if immediate.width == f.width && immediate.height == f.height {
+            if let Ok(f) = fused
+                && immediate.width == f.width && immediate.height == f.height {
                     assert_eq!(immediate.pixels, f.pixels, "mismatch: {name}");
                 }
-            }
         }
     }
 }

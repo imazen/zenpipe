@@ -163,8 +163,8 @@ fn build_steps(ideal: &IdealLayout, plan: &LayoutPlan) -> Vec<Step> {
 
     // Step 4: Trim (only show when no Crop step — otherwise Trim is an
     // implementation detail of decoder negotiation that repeats the crop info)
-    if layout.source_crop.is_none() {
-        if let Some(trim) = &plan.trim {
+    if layout.source_crop.is_none()
+        && let Some(trim) = &plan.trim {
             let decoder_dims = Size::new(trim.x + trim.width, trim.y + trim.height);
             let trim_size = Size::new(trim.width, trim.height);
             steps.push(Step {
@@ -186,7 +186,6 @@ fn build_steps(ideal: &IdealLayout, plan: &LayoutPlan) -> Vec<Step> {
                 show_extension: None,
             });
         }
-    }
 
     // Step 5: Resize (if not identity)
     if !plan.resize_is_identity {
