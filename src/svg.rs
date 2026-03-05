@@ -164,28 +164,29 @@ fn build_steps(ideal: &IdealLayout, plan: &LayoutPlan) -> Vec<Step> {
     // Step 4: Trim (only show when no Crop step — otherwise Trim is an
     // implementation detail of decoder negotiation that repeats the crop info)
     if layout.source_crop.is_none()
-        && let Some(trim) = &plan.trim {
-            let decoder_dims = Size::new(trim.x + trim.width, trim.y + trim.height);
-            let trim_size = Size::new(trim.width, trim.height);
-            steps.push(Step {
-                label: String::from("Trim"),
-                outer: decoder_dims,
-                outer_role: OuterRole::ImageDiscard,
-                inner: Some(InnerRect {
-                    x: trim.x as i32,
-                    y: trim.y as i32,
-                    w: trim.width,
-                    h: trim.height,
-                }),
-                content_dims: trim_size,
-                annotation: if trim.x == 0 && trim.y == 0 {
-                    format!("from {}×{} decode", decoder_dims.width, decoder_dims.height)
-                } else {
-                    format!("offset ({},{}) in decode", trim.x, trim.y)
-                },
-                show_extension: None,
-            });
-        }
+        && let Some(trim) = &plan.trim
+    {
+        let decoder_dims = Size::new(trim.x + trim.width, trim.y + trim.height);
+        let trim_size = Size::new(trim.width, trim.height);
+        steps.push(Step {
+            label: String::from("Trim"),
+            outer: decoder_dims,
+            outer_role: OuterRole::ImageDiscard,
+            inner: Some(InnerRect {
+                x: trim.x as i32,
+                y: trim.y as i32,
+                w: trim.width,
+                h: trim.height,
+            }),
+            content_dims: trim_size,
+            annotation: if trim.x == 0 && trim.y == 0 {
+                format!("from {}×{} decode", decoder_dims.width, decoder_dims.height)
+            } else {
+                format!("offset ({},{}) in decode", trim.x, trim.y)
+            },
+            show_extension: None,
+        });
+    }
 
     // Step 5: Resize (if not identity)
     if !plan.resize_is_identity {
@@ -711,15 +712,15 @@ mod tests {
     fn generate_sample_svgs() {
         use crate::constraint::CanvasColor;
         use crate::plan::{Align, OutputLimits, Region, RegionCoord};
-        let out = std::env::var("ZENLAYOUT_OUTPUT_DIR")
-            .unwrap_or_else(|_| {
-                std::env::var("OUTPUT_DIR")
-                    .map(|d| format!("{d}/zenlayout/svg"))
-                    .unwrap_or_else(|_| {
-                        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/output/svg");
-                        target.to_string_lossy().into_owned()
-                    })
-            });
+        let out = std::env::var("ZENLAYOUT_OUTPUT_DIR").unwrap_or_else(|_| {
+            std::env::var("OUTPUT_DIR")
+                .map(|d| format!("{d}/zenlayout/svg"))
+                .unwrap_or_else(|_| {
+                    let target =
+                        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/output/svg");
+                    target.to_string_lossy().into_owned()
+                })
+        });
         let doc = concat!(env!("CARGO_MANIFEST_DIR"), "/doc/svg");
         std::fs::create_dir_all(&out).unwrap();
         std::fs::create_dir_all(doc).unwrap();

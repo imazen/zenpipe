@@ -1664,12 +1664,12 @@ mod tests {
                             }
                             if let Some(crop) = &layout.source_crop
                                 && crop.x > 0
-                                    && crop.y > 0
-                                    && crop.x + crop.width < sw
-                                    && crop.y + crop.height < sh
-                                {
-                                    failures.push(format!("{tag}: crop on all 4 sides: {crop:?}"));
-                                }
+                                && crop.y > 0
+                                && crop.x + crop.width < sw
+                                && crop.y + crop.height < sh
+                            {
+                                failures.push(format!("{tag}: crop on all 4 sides: {crop:?}"));
+                            }
                         }
                         WithinCrop => {
                             if rw > tw || rh > th {

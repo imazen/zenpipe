@@ -1520,17 +1520,18 @@ pub fn compute_layout_sequential(
     // so the output matches: constrain→rotate90 = "resize then rotate."
     let swapped_constraint;
     if post_orientation.swaps_axes()
-        && let Some(c) = constraint {
-            swapped_constraint = Constraint {
-                mode: c.mode,
-                width: c.height,
-                height: c.width,
-                gravity: c.gravity,
-                canvas_color: c.canvas_color,
-                source_crop: c.source_crop,
-            };
-            constraint = Some(&swapped_constraint);
-        }
+        && let Some(c) = constraint
+    {
+        swapped_constraint = Constraint {
+            mode: c.mode,
+            width: c.height,
+            height: c.width,
+            gravity: c.gravity,
+            canvas_color: c.canvas_color,
+            source_crop: c.source_crop,
+        };
+        constraint = Some(&swapped_constraint);
+    }
     // Fuse post-orientation into pre-orientation (for source transform).
     orientation = orientation.compose(post_orientation);
 
