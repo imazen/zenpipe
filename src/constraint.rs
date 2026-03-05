@@ -58,7 +58,10 @@ pub enum ConstraintMode {
     FitPad,
 
     /// Like [`FitPad`](Self::FitPad), but never upscales.
-    /// Images smaller than target are centered on the canvas without scaling.
+    /// When the source fits within the target on both axes, the image passes
+    /// through at its original size (identity — no scaling, no padding, no
+    /// canvas expansion). When the source exceeds the target on either axis,
+    /// it is downscaled to fit inside the target and centered on the canvas.
     WithinPad,
 
     /// Crop to target aspect ratio without any scaling.
@@ -190,6 +193,7 @@ impl CanvasColor {
 /// Pixel coordinates use **origin + size** convention: `(x, y, width, height)`.
 /// This differs from [`Region`](crate::Region) which uses edge coordinates
 /// `(left, top, right, bottom)`.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SourceCrop {
     /// Absolute pixel coordinates.
@@ -360,6 +364,7 @@ impl Rect {
 /// assert_eq!(layout.canvas, Size::new(400, 300));
 /// assert!(layout.needs_padding());
 /// ```
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constraint {
     /// How the image is fitted to the target dimensions.

@@ -8,6 +8,7 @@ use crate::CanvasColor;
 /// How to fit the image into the target dimensions.
 ///
 /// Maps to the RIAPI `mode` parameter.
+#[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum FitMode {
     /// Scale proportionally to fit within target box.
@@ -28,6 +29,7 @@ pub enum FitMode {
 /// Whether to upscale, downscale, or both.
 ///
 /// Maps to the RIAPI `scale` parameter.
+#[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ScaleMode {
     /// Never upscale. Default.
@@ -41,6 +43,7 @@ pub enum ScaleMode {
 }
 
 /// 1D anchor position along an axis.
+#[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Anchor1D {
     /// Near edge (left or top).

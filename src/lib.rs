@@ -1,6 +1,6 @@
 //! Image layout computation with constraint modes, orientation, and decoder negotiation.
 //!
-//! Pure geometry — no pixel operations, no allocations, `no_std` compatible.
+//! Pure geometry — no pixel operations, minimal allocations, `no_std` compatible.
 //!
 //! # Modules
 //!

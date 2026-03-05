@@ -310,6 +310,7 @@ fn immediate_eval(source: &Grid, commands: &[Command]) -> Grid {
                     Rotation::Rotate90 => Orientation::Rotate90,
                     Rotation::Rotate180 => Orientation::Rotate180,
                     Rotation::Rotate270 => Orientation::Rotate270,
+                    _ => unreachable!(),
                 };
                 current = current.apply_orientation(o);
             }
@@ -317,6 +318,7 @@ fn immediate_eval(source: &Grid, commands: &[Command]) -> Grid {
                 let o = match axis {
                     FlipAxis::Horizontal => Orientation::FlipH,
                     FlipAxis::Vertical => Orientation::FlipV,
+                    _ => unreachable!(),
                 };
                 current = current.apply_orientation(o);
             }

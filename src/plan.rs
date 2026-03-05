@@ -29,6 +29,7 @@ use crate::constraint::{
 use crate::orientation::Orientation;
 
 /// Rotation amount for manual rotation commands.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Rotation {
     /// 90 degrees clockwise.
@@ -40,6 +41,7 @@ pub enum Rotation {
 }
 
 /// Axis for manual flip commands.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FlipAxis {
     /// Flip left-right.
@@ -458,6 +460,7 @@ impl LayoutPlan {
 ///     Extend:   816x608  --  round up, replicate edges, content_size=(801,601)
 ///     Distort:  800x608  --  round to nearest, slight stretch
 /// ```
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Align {
     /// Round canvas down to nearest multiple per axis. Loses up to `n-1`
@@ -497,6 +500,7 @@ impl Align {
 ///
 /// Describes the relationship between luma and chroma plane dimensions.
 /// Use [`Subsampling::mcu_align()`] to get the [`Align`] needed for JPEG encoding.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Subsampling {
     /// 4:4:4 — no subsampling. Chroma same size as luma. MCU = 8×8.

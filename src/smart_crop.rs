@@ -39,7 +39,7 @@ use crate::Rect;
 /// Typically produced by face detection, object detection, or manual annotation.
 /// The `weight` field controls priority when regions compete for crop position
 /// (e.g., confidence from a detector, or user-assigned importance).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FocusRect {
     /// Left edge as percentage of image width (0.0–100.0).
     pub x1: f32,
@@ -58,6 +58,7 @@ pub struct FocusRect {
 /// Typically a saliency map from a neural network, but could be any
 /// importance signal (e.g., depth map, user-painted mask).
 /// Values should be in \[0.0, 1.0\] where 1.0 = most important.
+#[derive(Debug, Clone)]
 pub struct HeatMap {
     /// Importance values in \[0.0, 1.0\], row-major order.
     pub data: Vec<f32>,
@@ -68,7 +69,7 @@ pub struct HeatMap {
 }
 
 /// Target aspect ratio as integer width:height.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AspectRatio {
     pub w: u32,
     pub h: u32,
@@ -82,7 +83,8 @@ pub const LANDSCAPE_16_9: AspectRatio = AspectRatio { w: 16, h: 9 };
 pub const LANDSCAPE_4_3: AspectRatio = AspectRatio { w: 4, h: 3 };
 
 /// Crop strategy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CropMode {
     /// Largest crop at target ratio. Removes minimum content.
     Minimal,
@@ -126,6 +128,7 @@ impl Default for CropConfig {
 /// ML detectors, manual annotation, or programmatic generation.
 /// Call [`compute_crops`](SmartCropInput::compute_crops) to generate
 /// crop candidates for multiple aspect ratios from a single set of inputs.
+#[derive(Debug, Clone)]
 pub struct SmartCropInput {
     /// Weighted regions of interest (faces, objects, etc.).
     pub focus_regions: Vec<FocusRect>,

@@ -10,15 +10,12 @@
   - Region, rotation, and orientation SVG examples
   - Improved visual language with size variation
 - Layout pipeline examples with SVG diagrams (`doc/layout-examples.md`)
-- `#[non_exhaustive]` + `Default` on all public structs (`DecoderRequest`, `DecoderOffer`, `LayoutPlan`, etc.)
-- `min_precise_decode_size` field on `DecoderRequest`
+- `#[non_exhaustive]` on all public structs; `Default` on most (excludes `DecoderRequest`, `DecoderOffer`, `LayoutPlan`)
 - Decoder hint promotion to first-class RIAPI fields
 - AGPL-3.0-or-later license file
 - Comprehensive CI: 6-platform matrix, i686 cross-compilation, WASM, Codecov
 
 ### Changed
-- Removed `decoder.min_precise_scaling_ratio` and `jpeg_idct_downscale_linear`
-- Removed decoder prescaling hints from `DecoderRequest`
 - Edition 2024, MSRV 1.89
 
 ## 0.1.0
