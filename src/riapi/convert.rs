@@ -22,6 +22,9 @@ impl Instructions {
         source_h: u32,
         exif: Option<u8>,
     ) -> Result<Pipeline, LayoutError> {
+        // Validate float fields for NaN/Inf.
+        self.validate_floats()?;
+
         // ---- 1. Source orientation (autorotate + srotate + sflip) ----
         let mut src_orient = Orientation::Identity;
 

@@ -1787,6 +1787,14 @@ fn resolve_region(
     source_h: u32,
     constraint: Option<&Constraint>,
 ) -> Result<Layout, LayoutError> {
+    // Validate region coords for NaN/Inf.
+    if !reg.left.percent.is_finite()
+        || !reg.top.percent.is_finite()
+        || !reg.right.percent.is_finite()
+        || !reg.bottom.percent.is_finite()
+    {
+        return Err(LayoutError::NonFiniteFloat);
+    }
     let (left, top, right, bottom) = reg.resolve(source_w, source_h);
 
     let vw = right - left;

@@ -455,11 +455,39 @@ impl Constraint {
         self
     }
 
+    /// Check all float parameters for NaN/Inf.
+    fn validate_floats(&self) -> Result<(), LayoutError> {
+        if let Gravity::Percentage(x, y) = self.gravity
+            && (!x.is_finite() || !y.is_finite())
+        {
+            return Err(LayoutError::NonFiniteFloat);
+        }
+        if let CanvasColor::Linear { r, g, b, a } = self.canvas_color
+            && (!r.is_finite() || !g.is_finite() || !b.is_finite() || !a.is_finite())
+        {
+            return Err(LayoutError::NonFiniteFloat);
+        }
+        if let Some(SourceCrop::Percent {
+            x,
+            y,
+            width,
+            height,
+        }) = self.source_crop
+            && (!x.is_finite() || !y.is_finite() || !width.is_finite() || !height.is_finite())
+        {
+            return Err(LayoutError::NonFiniteFloat);
+        }
+        Ok(())
+    }
+
     /// Compute the layout for a source image of the given dimensions.
     pub fn compute(&self, source_w: u32, source_h: u32) -> Result<Layout, LayoutError> {
         if source_w == 0 || source_h == 0 {
             return Err(LayoutError::ZeroSourceDimension);
         }
+
+        // Validate float parameters.
+        self.validate_floats()?;
 
         // Step 1: Apply explicit source crop.
         let (user_crop, sw, sh) = match &self.source_crop {
@@ -809,6 +837,8 @@ pub enum LayoutError {
     ZeroTargetDimension,
     /// Region viewport has zero or negative width or height.
     ZeroRegionDimension,
+    /// A float parameter contains NaN or infinity.
+    NonFiniteFloat,
 }
 
 impl core::fmt::Display for LayoutError {
@@ -818,6 +848,9 @@ impl core::fmt::Display for LayoutError {
             Self::ZeroTargetDimension => f.write_str("target width or height is zero"),
             Self::ZeroRegionDimension => {
                 f.write_str("region viewport has zero or negative width or height")
+            }
+            Self::NonFiniteFloat => {
+                f.write_str("a float parameter contains NaN or infinity")
             }
         }
     }
@@ -2145,6 +2178,45 @@ mod tests {
             .compute(1000, 500)
             .unwrap();
         assert_eq!(l_pct.placement, l_center.placement);
+    }
+
+    // ── NaN/Inf rejection ──────────────────────────────────────────────
+
+    #[test]
+    fn nan_gravity_rejected() {
+        let r = Constraint::new(ConstraintMode::FitPad, 400, 300)
+            .gravity(Gravity::Percentage(f32::NAN, 0.5))
+            .compute(1000, 500);
+        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+    }
+
+    #[test]
+    fn inf_gravity_rejected() {
+        let r = Constraint::new(ConstraintMode::FitPad, 400, 300)
+            .gravity(Gravity::Percentage(f32::INFINITY, 0.5))
+            .compute(1000, 500);
+        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+    }
+
+    #[test]
+    fn nan_source_crop_rejected() {
+        let r = Constraint::new(ConstraintMode::Fit, 400, 300)
+            .source_crop(SourceCrop::percent(f32::NAN, 0.0, 0.5, 0.5))
+            .compute(1000, 500);
+        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+    }
+
+    #[test]
+    fn nan_canvas_color_rejected() {
+        let r = Constraint::new(ConstraintMode::FitPad, 400, 300)
+            .canvas_color(CanvasColor::Linear {
+                r: f32::NAN,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+            .compute(1000, 500);
+        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
     }
 
     // ========================================================================

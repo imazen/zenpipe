@@ -139,4 +139,48 @@ impl Instructions {
     pub fn extras(&self) -> &BTreeMap<String, String> {
         &self.extras
     }
+
+    /// Check all float fields for NaN/Inf.
+    pub(crate) fn validate_floats(&self) -> Result<(), crate::LayoutError> {
+        let check = |v: f64| -> Result<(), crate::LayoutError> {
+            if v.is_finite() {
+                Ok(())
+            } else {
+                Err(crate::LayoutError::NonFiniteFloat)
+            }
+        };
+
+        if let Some(z) = self.zoom {
+            check(z)?;
+        }
+        if let Some([x, y]) = self.c_gravity {
+            check(x)?;
+            check(y)?;
+        }
+        if let Some([a, b, c, d]) = self.crop {
+            check(a)?;
+            check(b)?;
+            check(c)?;
+            check(d)?;
+        }
+        if let Some(v) = self.cropxunits {
+            check(v)?;
+        }
+        if let Some(v) = self.cropyunits {
+            check(v)?;
+        }
+        if let Some((ax, ay)) = &self.anchor {
+            if let Anchor1D::Percent(p) = ax
+                && !p.is_finite()
+            {
+                return Err(crate::LayoutError::NonFiniteFloat);
+            }
+            if let Anchor1D::Percent(p) = ay
+                && !p.is_finite()
+            {
+                return Err(crate::LayoutError::NonFiniteFloat);
+            }
+        }
+        Ok(())
+    }
 }

@@ -327,13 +327,13 @@ fn parse_i32(s: &str) -> Option<i32> {
 }
 
 fn parse_f64(s: &str) -> Option<f64> {
-    s.trim().parse::<f64>().ok()
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 /// Parse DPR/zoom value, stripping trailing "x" suffix.
 fn parse_dpr(s: &str) -> Option<f64> {
     let s = s.trim().trim_end_matches('x').trim_end_matches('X');
-    s.parse::<f64>().ok().filter(|&v| v > 0.0)
+    s.parse::<f64>().ok().filter(|&v| v > 0.0 && v.is_finite())
 }
 
 fn parse_bool(s: &str) -> Option<bool> {
@@ -413,8 +413,8 @@ fn parse_anchor(s: &str) -> Option<(Anchor1D, Anchor1D)> {
 fn parse_gravity(s: &str) -> Option<[f64; 2]> {
     let parts: Vec<&str> = s.split(',').collect();
     if parts.len() == 2 {
-        let x: f64 = parts[0].trim().parse().ok()?;
-        let y: f64 = parts[1].trim().parse().ok()?;
+        let x = parse_f64(parts[0])?;
+        let y = parse_f64(parts[1])?;
         Some([x, y])
     } else {
         None
@@ -427,10 +427,10 @@ fn parse_crop_strict(s: &str) -> Option<[f64; 4]> {
     if parts.len() != 4 {
         return None;
     }
-    let x1: f64 = parts[0].trim().parse().ok()?;
-    let y1: f64 = parts[1].trim().parse().ok()?;
-    let x2: f64 = parts[2].trim().parse().ok()?;
-    let y2: f64 = parts[3].trim().parse().ok()?;
+    let x1 = parse_f64(parts[0])?;
+    let y1 = parse_f64(parts[1])?;
+    let x2 = parse_f64(parts[2])?;
+    let y2 = parse_f64(parts[3])?;
     Some([x1, y1, x2, y2])
 }
 
@@ -441,11 +441,18 @@ fn parse_crop_lenient(s: &str) -> Option<[f64; 4]> {
     if parts.len() != 4 {
         return None;
     }
+    let parse_or_zero = |s: &str| -> f64 {
+        s.trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .unwrap_or(0.0)
+    };
     let vals: [f64; 4] = [
-        parts[0].trim().parse().unwrap_or(0.0),
-        parts[1].trim().parse().unwrap_or(0.0),
-        parts[2].trim().parse().unwrap_or(0.0),
-        parts[3].trim().parse().unwrap_or(0.0),
+        parse_or_zero(parts[0]),
+        parse_or_zero(parts[1]),
+        parse_or_zero(parts[2]),
+        parse_or_zero(parts[3]),
     ];
     Some(vals)
 }
