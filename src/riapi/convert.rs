@@ -130,6 +130,46 @@ impl Instructions {
             pipeline = pipeline.crop(crop);
         }
 
+        // For Crop+UpscaleCanvas mixed case: clip overflowing dimension.
+        // When one source dim exceeds target and the other doesn't, we crop
+        // the excess to target and let PadWithin handle the smaller dimension.
+        if mode == FitMode::Crop
+            && scale == ScaleMode::UpscaleCanvas
+            && let (Some(tw_i), Some(th_i)) = (target_w, target_h)
+        {
+            let tw = tw_i as u32;
+            let th = th_i as u32;
+            let mixed = (eff_w > tw) != (eff_h > th); // exactly one exceeds
+            if mixed {
+                let clip_w = eff_w.min(tw);
+                let clip_h = eff_h.min(th);
+                // Use percent-based crop with gravity to clip the excess dimension
+                let fx = if eff_w > clip_w {
+                    match gravity {
+                        Gravity::Center => (eff_w - clip_w) as f32 / (2.0 * eff_w as f32),
+                        Gravity::Percentage(x, _) => {
+                            (eff_w - clip_w) as f32 * x / eff_w as f32
+                        }
+                    }
+                } else {
+                    0.0
+                };
+                let fy = if eff_h > clip_h {
+                    match gravity {
+                        Gravity::Center => (eff_h - clip_h) as f32 / (2.0 * eff_h as f32),
+                        Gravity::Percentage(_, y) => {
+                            (eff_h - clip_h) as f32 * y / eff_h as f32
+                        }
+                    }
+                } else {
+                    0.0
+                };
+                let fw = clip_w as f32 / eff_w as f32;
+                let fh = clip_h as f32 / eff_h as f32;
+                pipeline = pipeline.crop(SourceCrop::percent(fx, fy, fw, fh));
+            }
+        }
+
         // Apply constraint (if we have target dimensions)
         if let Some(cm) = constraint_mode {
             let constraint = match (target_w, target_h) {
@@ -288,13 +328,59 @@ fn map_mode_scale(
         return None;
     }
 
-    // For Stretch + DownscaleOnly: only apply if source exceeds target in at least one dimension
-    if mode == FitMode::Stretch && scale == ScaleMode::DownscaleOnly {
-        let tw = target_w.unwrap_or(i32::MAX) as u32;
-        let th = target_h.unwrap_or(i32::MAX) as u32;
-        if source_w <= tw && source_h <= th {
-            return None; // Source fits, no distortion needed
+    let tw = target_w.unwrap_or(i32::MAX) as u32;
+    let th = target_h.unwrap_or(i32::MAX) as u32;
+    let source_fits = source_w <= tw && source_h <= th;
+    let source_exceeds = source_w > tw || source_h > th;
+
+    // UpscaleOnly: only operate when source fits within target in both dims.
+    // Otherwise identity (skip).
+    if scale == ScaleMode::UpscaleOnly && mode != FitMode::AspectCrop {
+        if !source_fits {
+            return None; // Source exceeds target on at least one dim → identity
         }
+        // Source fits → apply the "Both" variant (upscale to target)
+        return match mode {
+            FitMode::Max => Some(ConstraintMode::Fit),
+            FitMode::Pad => Some(ConstraintMode::FitPad),
+            FitMode::Crop => Some(ConstraintMode::FitCrop),
+            FitMode::Stretch => Some(ConstraintMode::Distort),
+            FitMode::AspectCrop => unreachable!(),
+        };
+    }
+
+    // UpscaleCanvas: never upscale the image, but always provide target canvas.
+    if scale == ScaleMode::UpscaleCanvas && mode != FitMode::AspectCrop {
+        return match mode {
+            // Max/Pad: downscale to fit if needed, always pad to target canvas.
+            FitMode::Max | FitMode::Pad => Some(ConstraintMode::PadWithin),
+
+            // Crop: if source exceeds both dims, crop+downscale normally.
+            // Otherwise PadWithin (mixed case gets a pre-crop in to_pipeline).
+            FitMode::Crop => {
+                if source_w >= tw && source_h >= th {
+                    Some(ConstraintMode::WithinCrop)
+                } else {
+                    Some(ConstraintMode::PadWithin)
+                }
+            }
+
+            // Stretch: distort if source exceeds, otherwise pad without upscale.
+            FitMode::Stretch => {
+                if source_exceeds {
+                    Some(ConstraintMode::Distort)
+                } else {
+                    Some(ConstraintMode::PadWithin)
+                }
+            }
+
+            FitMode::AspectCrop => unreachable!(),
+        };
+    }
+
+    // DownscaleOnly + Stretch: only distort when source exceeds target
+    if mode == FitMode::Stretch && scale == ScaleMode::DownscaleOnly && source_fits {
+        return None;
     }
 
     match (mode, scale) {
@@ -304,30 +390,22 @@ fn map_mode_scale(
         // Max (proportional fit, no padding)
         (FitMode::Max, ScaleMode::DownscaleOnly) => Some(ConstraintMode::Within),
         (FitMode::Max, ScaleMode::Both) => Some(ConstraintMode::Fit),
-        (FitMode::Max, ScaleMode::UpscaleOnly | ScaleMode::UpscaleCanvas) => {
-            // Phase 2: UpscaleOnly/UpscaleCanvas for Max
-            // For now, treat UpscaleOnly as Within and UpscaleCanvas as Within
-            Some(ConstraintMode::Within)
-        }
 
         // Pad (proportional fit + pad to exact target)
         (FitMode::Pad, ScaleMode::DownscaleOnly) => Some(ConstraintMode::WithinPad),
         (FitMode::Pad, ScaleMode::Both) => Some(ConstraintMode::FitPad),
-        (FitMode::Pad, ScaleMode::UpscaleOnly | ScaleMode::UpscaleCanvas) => {
-            // Phase 2: for now treat as WithinPad
-            Some(ConstraintMode::WithinPad)
-        }
 
         // Crop (proportional fill + crop overflow)
         (FitMode::Crop, ScaleMode::DownscaleOnly) => Some(ConstraintMode::WithinCrop),
         (FitMode::Crop, ScaleMode::Both) => Some(ConstraintMode::FitCrop),
-        (FitMode::Crop, ScaleMode::UpscaleOnly | ScaleMode::UpscaleCanvas) => {
-            // Phase 2: for now treat as WithinCrop
-            Some(ConstraintMode::WithinCrop)
-        }
 
         // Stretch (distort to exact target)
-        (FitMode::Stretch, _) => Some(ConstraintMode::Distort),
+        (FitMode::Stretch, ScaleMode::DownscaleOnly | ScaleMode::Both) => {
+            Some(ConstraintMode::Distort)
+        }
+
+        // UpscaleOnly/UpscaleCanvas handled above
+        (_, ScaleMode::UpscaleOnly | ScaleMode::UpscaleCanvas) => unreachable!(),
     }
 }
 
@@ -574,5 +652,164 @@ mod tests {
         let (ideal, _) = pipeline.plan().unwrap();
         // c.gravity should override anchor → center crop
         assert_eq!(ideal.layout.resize_to, Size::new(400, 300));
+    }
+
+    // ---- UpscaleOnly tests ----
+
+    #[test]
+    fn upscale_only_max_small_source() {
+        // Source 200x100, target 800x600: source fits → upscale (Fit)
+        let resize = query_to_resize("w=800&h=600&mode=max&scale=up", 200, 100);
+        // 200x100 (2:1) fit 800x600 → 800x400
+        assert_eq!(resize, Size::new(800, 400));
+    }
+
+    #[test]
+    fn upscale_only_max_large_source() {
+        // Source 1000x500, target 800x600: source exceeds → identity
+        let resize = query_to_resize("w=800&h=600&mode=max&scale=up", 1000, 500);
+        assert_eq!(resize, Size::new(1000, 500));
+    }
+
+    #[test]
+    fn upscale_only_pad_small_source() {
+        // Source 200x100, target 800x600: upscale + pad
+        let resize = query_to_resize("w=800&h=600&mode=pad&scale=up", 200, 100);
+        // 200x100 (2:1) fit 800x600 → 800x400 resize, 800x600 canvas
+        assert_eq!(resize, Size::new(800, 400));
+        let canvas = query_to_canvas("w=800&h=600&mode=pad&scale=up", 200, 100);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn upscale_only_pad_large_source() {
+        // Source 1000x500, target 800x600: source exceeds → identity
+        let resize = query_to_resize("w=800&h=600&mode=pad&scale=up", 1000, 500);
+        assert_eq!(resize, Size::new(1000, 500));
+    }
+
+    #[test]
+    fn upscale_only_crop_small_source() {
+        // Source 200x100, target 800x600: upscale + crop (FitCrop)
+        let resize = query_to_resize("w=400&h=300&mode=crop&scale=up", 200, 100);
+        // 200x100 (2:1) fill 400x300 (4:3): h-limited → 600x300, crop to 400x300
+        assert_eq!(resize, Size::new(400, 300));
+    }
+
+    #[test]
+    fn upscale_only_crop_large_source() {
+        // Source 1000x500, target 400x300: source exceeds → identity
+        let resize = query_to_resize("w=400&h=300&mode=crop&scale=up", 1000, 500);
+        assert_eq!(resize, Size::new(1000, 500));
+    }
+
+    #[test]
+    fn upscale_only_stretch_small_source() {
+        // Source 200x100, target 800x600: distort to target
+        let resize = query_to_resize("w=800&h=600&mode=stretch&scale=up", 200, 100);
+        assert_eq!(resize, Size::new(800, 600));
+    }
+
+    #[test]
+    fn upscale_only_stretch_large_source() {
+        // Source 1000x500, target 800x600: source exceeds → identity
+        let resize = query_to_resize("w=800&h=600&mode=stretch&scale=up", 1000, 500);
+        assert_eq!(resize, Size::new(1000, 500));
+    }
+
+    // ---- UpscaleCanvas tests ----
+
+    #[test]
+    fn canvas_max_small_source() {
+        // Source 200x100, target 800x600: no upscale, pad to canvas
+        let resize = query_to_resize("w=800&h=600&mode=max&scale=canvas", 200, 100);
+        assert_eq!(resize, Size::new(200, 100));
+        let canvas = query_to_canvas("w=800&h=600&mode=max&scale=canvas", 200, 100);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_max_large_source() {
+        // Source 1000x500, target 800x600: downscale to fit, pad to canvas
+        let resize = query_to_resize("w=800&h=600&mode=max&scale=canvas", 1000, 500);
+        assert_eq!(resize, Size::new(800, 400));
+        let canvas = query_to_canvas("w=800&h=600&mode=max&scale=canvas", 1000, 500);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_pad_small_source() {
+        // Source 200x100, target 800x600: no upscale, pad to canvas
+        let resize = query_to_resize("w=800&h=600&mode=pad&scale=canvas", 200, 100);
+        assert_eq!(resize, Size::new(200, 100));
+        let canvas = query_to_canvas("w=800&h=600&mode=pad&scale=canvas", 200, 100);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_pad_large_source() {
+        // Source 1000x500, target 800x600: downscale + pad
+        let resize = query_to_resize("w=800&h=600&mode=pad&scale=canvas", 1000, 500);
+        assert_eq!(resize, Size::new(800, 400));
+        let canvas = query_to_canvas("w=800&h=600&mode=pad&scale=canvas", 1000, 500);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_stretch_small_source() {
+        // Source 200x100, target 800x600: no distort, pad to canvas
+        let resize = query_to_resize("w=800&h=600&mode=stretch&scale=canvas", 200, 100);
+        assert_eq!(resize, Size::new(200, 100));
+        let canvas = query_to_canvas("w=800&h=600&mode=stretch&scale=canvas", 200, 100);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_stretch_large_source() {
+        // Source 1000x500, target 800x600: distort to target
+        let resize = query_to_resize("w=800&h=600&mode=stretch&scale=canvas", 1000, 500);
+        assert_eq!(resize, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_crop_small_source() {
+        // Source 200x100, target 800x600: no scale, pad to canvas
+        let resize = query_to_resize("w=800&h=600&mode=crop&scale=canvas", 200, 100);
+        assert_eq!(resize, Size::new(200, 100));
+        let canvas = query_to_canvas("w=800&h=600&mode=crop&scale=canvas", 200, 100);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_crop_large_source() {
+        // Source 1000x500, target 800x600: both exceed → WithinCrop
+        // 1000x500 into 800x600: crop to 4:3 = 750x500, wait no...
+        // WithinCrop: both dims exceed target → crop to aspect + downscale
+        // 1000x500 → crop to 4:3: width=667, height=500 → downscale to 800x600?
+        // Actually: crop to 800x600 aspect (4:3) from 1000x500 (2:1)
+        // source is wider → crop width to 500*4/3=667. Downscale to 800x600.
+        let resize = query_to_resize("w=800&h=600&mode=crop&scale=canvas", 1000, 500);
+        // 1000x500 fits within 800x600? No, 1000>800. But 500<600. So mixed.
+        // Mixed case: clip width to 800, keep height 500. Pad to 800x600.
+        assert_eq!(resize, Size::new(800, 500));
+        let canvas = query_to_canvas("w=800&h=600&mode=crop&scale=canvas", 1000, 500);
+        assert_eq!(canvas, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_crop_both_exceed() {
+        // Source 1200x900, target 800x600: both exceed → WithinCrop → exactly target
+        let resize = query_to_resize("w=800&h=600&mode=crop&scale=canvas", 1200, 900);
+        assert_eq!(resize, Size::new(800, 600));
+    }
+
+    #[test]
+    fn canvas_crop_mixed_height_exceeds() {
+        // Source 400x1000, target 800x600: width fits, height exceeds
+        // Clip height to 600 → 400x600. PadWithin: 400x600 fits within 800x600 → pad
+        let resize = query_to_resize("w=800&h=600&mode=crop&scale=canvas", 400, 1000);
+        assert_eq!(resize, Size::new(400, 600));
+        let canvas = query_to_canvas("w=800&h=600&mode=crop&scale=canvas", 400, 1000);
+        assert_eq!(canvas, Size::new(800, 600));
     }
 }

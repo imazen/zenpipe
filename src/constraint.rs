@@ -66,6 +66,16 @@ pub enum ConstraintMode {
     /// it is downscaled to fit inside the target and centered on the canvas.
     WithinPad,
 
+    /// Like [`WithinPad`](Self::WithinPad), but **always pads to target canvas**.
+    ///
+    /// Never upscales. Downscales to fit if the source exceeds target on either
+    /// axis. The canvas is always the target dimensions, even when the image is
+    /// smaller — the image is centered (or gravity-positioned) on the canvas.
+    ///
+    /// Compare with `WithinPad`, which returns identity (no canvas, no padding)
+    /// when the source fits within the target.
+    PadWithin,
+
     /// Crop to target aspect ratio without any scaling.
     AspectCrop,
 }
@@ -473,7 +483,7 @@ impl Constraint {
         use ConstraintMode::*;
         let single_axis = self.width.is_none() || self.height.is_none();
         if single_axis {
-            let no_upscale = matches!(self.mode, Within | WithinCrop | WithinPad);
+            let no_upscale = matches!(self.mode, Within | WithinCrop | WithinPad | PadWithin);
             let (rw, rh) = if self.mode == AspectCrop {
                 // AspectCrop = crop only, no scaling. Single-axis means
                 // source and target aspect ratios match → no crop → use source.
@@ -484,7 +494,7 @@ impl Constraint {
                 (tw, th)
             };
             let (canvas, placement) = match self.mode {
-                FitPad | WithinPad => {
+                FitPad | WithinPad | PadWithin => {
                     let (px, py) = gravity_offset(tw, th, rw, rh, &self.gravity);
                     ((tw, th), (px, py))
                 }
@@ -648,6 +658,25 @@ impl Constraint {
                         placement: (px, py),
                         canvas_color: self.canvas_color,
                     }
+                }
+            }
+
+            PadWithin => {
+                // Like WithinPad, but always pads to target canvas.
+                // Used by UpscaleCanvas scale mode.
+                let (rw, rh) = if sw <= tw && sh <= th {
+                    (sw, sh) // No upscale
+                } else {
+                    fit_inside(sw, sh, tw, th) // Downscale to fit
+                };
+                let (px, py) = gravity_offset(tw, th, rw, rh, &self.gravity);
+                Layout {
+                    source: Size::new(source_w, source_h),
+                    source_crop: user_crop,
+                    resize_to: Size::new(rw, rh),
+                    canvas: Size::new(tw, th),
+                    placement: (px, py),
+                    canvas_color: self.canvas_color,
                 }
             }
 
@@ -1758,6 +1787,34 @@ mod tests {
                                 ));
                             }
                         }
+                        PadWithin => {
+                            // Canvas is always target dimensions
+                            if (cw, ch) != (tw, th) {
+                                failures.push(format!(
+                                    "{tag}: canvas ({cw},{ch}) != target ({tw},{th})"
+                                ));
+                            }
+                            // Never upscales
+                            if rw > sw || rh > sh {
+                                failures.push(format!(
+                                    "{tag}: upscaled: resize ({rw},{rh}) > source ({sw},{sh})"
+                                ));
+                            }
+                            // resize_to fits within target
+                            if rw > tw || rh > th {
+                                failures.push(format!(
+                                    "{tag}: resize_to ({rw},{rh}) exceeds target ({tw},{th})"
+                                ));
+                            }
+                            if layout.source_crop.is_some() {
+                                failures.push(format!("{tag}: unexpected source_crop"));
+                            }
+                            if px as u32 + rw > cw || py as u32 + rh > ch {
+                                failures.push(format!(
+                                    "{tag}: placement overflow: ({px},{py})+({rw},{rh})>({cw},{ch})"
+                                ));
+                            }
+                        }
                         AspectCrop => {
                             if let Some(crop) = &layout.source_crop {
                                 if (rw, rh) != (crop.width, crop.height) {
@@ -2439,6 +2496,17 @@ mod tests {
                     Step::Pad,
                 ],
 
+                // PadWithin = downscale to fit if needed, always pad to target canvas.
+                // Matches imageflow's Pad+UpscaleCanvas / Max+UpscaleCanvas:
+                // Seq 1: skip_unless(Either(Greater)), scale_to_inner
+                // Seq 2: pad (always)
+                CM::PadWithin => vec![
+                    Step::SkipUnless(Cond::Either(Ordering::Greater)),
+                    Step::ScaleToInner,
+                    Step::BeginSequence,
+                    Step::Pad,
+                ],
+
                 // AspectCrop → crop_aspect (always)
                 CM::AspectCrop => vec![Step::CropAspect],
             }
@@ -2650,6 +2718,19 @@ mod tests {
         for &(tw, th) in &TARGETS {
             for &(sw, sh) in &sources {
                 parity_check(ConstraintMode::WithinPad, sw, sh, tw, th);
+                count += 1;
+            }
+        }
+        assert!(count > 500, "Expected >500 combinations, got {count}");
+    }
+
+    #[test]
+    fn parity_pad_within() {
+        let sources = parity_source_sizes();
+        let mut count = 0u64;
+        for &(tw, th) in &TARGETS {
+            for &(sw, sh) in &sources {
+                parity_check(ConstraintMode::PadWithin, sw, sh, tw, th);
                 count += 1;
             }
         }
