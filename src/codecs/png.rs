@@ -4,6 +4,10 @@ use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 use alloc::boxed::Box;
+use zencodec_types::{
+    Decode as _, DecodeJob as _, DecoderConfig as _, EncodeJob as _, Encoder as _,
+    EncoderConfig as _,
+};
 
 /// Probe PNG metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo, CodecError> {
@@ -40,8 +44,6 @@ fn build_encoding(
     effort: Option<u32>,
     codec_config: Option<&CodecConfig>,
 ) -> zenpng::PngEncoderConfig {
-    use zencodec_types::EncoderConfig;
-
     let mut enc = zenpng::PngEncoderConfig::new();
     if let Some(cfg) = codec_config {
         if let Some(compression) = cfg.png_compression {
@@ -86,7 +88,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
             if let Some(s) = params.stop {
                 job = job.with_stop(s);
             }
-            use zencodec_types::Encoder as _;
             job.encoder()
                 .map_err(|e| CodecError::from_codec(ImageFormat::Png, e))?
                 .encode(pixels)

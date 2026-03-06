@@ -5,6 +5,7 @@ use crate::ImageFormat;
 use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
 use alloc::boxed::Box;
+use zencodec_types::{EncodeJob as _, Encoder as _, EncoderConfig as _};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Trait-based encoder dispatch
@@ -36,7 +37,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
             if let Some(s) = params.stop {
                 job = job.with_stop(s);
             }
-            use zencodec_types::Encoder as _;
             job.encoder()
                 .map_err(|e| CodecError::from_codec(ImageFormat::Avif, e))?
                 .encode(pixels)
@@ -55,8 +55,6 @@ fn build_encoding(
     effort: Option<u32>,
     codec_config: Option<&CodecConfig>,
 ) -> zenavif::AvifEncoderConfig {
-    use zencodec_types::EncoderConfig;
-
     let mut enc = zenavif::AvifEncoderConfig::new();
 
     // Format-specific overrides from codec_config take priority

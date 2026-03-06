@@ -1,0 +1,20 @@
+# png.checksums — v1
+
+## roundtrip gray8
+~ shy-kelp-c3986f6fe9:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip gray_f32
+~ busy-bow-1545e8a623:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ drawn-cave-022f2dec51:sea  x86_64-avx512  @015f64b  auto-accepted vs busy-bow-1545e8a623:sea score=99.0 maxΔ=[1,1,1]
+
+## roundtrip rgb8
+~ quiet-petal-7bc7ba2ff9:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb_f32
+~ quiet-petal-7bc7ba2ff9:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgba_f32
+~ quiet-petal-7bc7ba2ff9:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgba8
+~ quiet-petal-7bc7ba2ff9:sea  x86_64-avx512  @fb84dea  auto-accepted
