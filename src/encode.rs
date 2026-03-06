@@ -1,8 +1,8 @@
 //! Image encoding.
 //!
-//! Uses [`dispatch::DynEncoder`](crate::dispatch::DynEncoder) for format dispatch.
-//! Each codec implements `DynEncoder` once; pixel format negotiation is handled
-//! by [`zenpixels::adapt::adapt_for_encode`].
+//! Uses [`dispatch::build_encoder`](crate::dispatch::build_encoder) for format dispatch.
+//! Each codec's `Encoder` trait impl handles pixel format dispatch internally;
+//! pixel format negotiation is handled by [`zenpixels::adapt::adapt_for_encode`].
 
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
@@ -372,7 +372,7 @@ impl<'a> EncodeRequest<'a> {
             stop: self.stop,
         };
 
-        let encoder = crate::dispatch::build_encoder(format, params)?;
+        let built = crate::dispatch::build_encoder(format, params)?;
 
         // Use zenpixels to negotiate the cheapest pixel format conversion.
         // Returns Cow::Borrowed (zero-copy) when the input already matches
@@ -383,20 +383,23 @@ impl<'a> EncodeRequest<'a> {
             width,
             height,
             stride,
-            encoder.supported_descriptors(),
+            built.supported,
         )
         .map_err(|e| CodecError::InvalidInput(alloc::format!("pixel format negotiation: {e}")))?;
 
         // Adapted data is always packed (stride = width * bpp).
         let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
 
-        encoder.encode_pixels(
+        let pixel_slice = zenpixels::PixelSlice::new(
             &adapted.data,
-            adapted.descriptor,
             adapted.width,
             adapted.rows,
             adapted_stride,
+            adapted.descriptor,
         )
+        .map_err(|e| CodecError::InvalidInput(alloc::format!("pixel slice: {e}")))?;
+
+        (built.encoder)(pixel_slice)
     }
 
     fn auto_select_format(

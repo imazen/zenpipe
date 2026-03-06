@@ -5,16 +5,15 @@
 
 use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
-use crate::pixel::{Bgra, ImgRef, ImgVec, Rgb, Rgba};
+use crate::pixel::{ImgVec, Rgb, Rgba};
 use crate::{
-    CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncodeOutput, EncoderConfig,
-    ImageFormat, ImageInfo, Limits, MetadataView, Stop,
+    CodecError, DecodeJob, DecodeOutput, DecoderConfig, EncodeJob, EncoderConfig, ImageFormat,
+    ImageInfo, Limits, Stop,
 };
+#[cfg(feature = "jpeg-ultrahdr")]
+use crate::{EncodeOutput, MetadataView, pixel::ImgRef};
 use alloc::boxed::Box;
-use zencodec_types::{
-    EncodeGray8, EncodeGrayF32, EncodeRgb8, EncodeRgbF32, EncodeRgba8, EncodeRgbaF32,
-};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
 
 /// Probe JPEG metadata without decoding pixels.
 ///
@@ -246,251 +245,11 @@ fn build_encoding(
     }
 }
 
-/// Encode RGB8 pixels to JPEG.
-pub(crate) fn encode_rgb8(
-    img: ImgRef<Rgb<u8>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_rgb8(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Encode RGBA8 pixels to JPEG (alpha is discarded).
-pub(crate) fn encode_rgba8(
-    img: ImgRef<Rgba<u8>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_rgba8(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Encode BGRA8 pixels to JPEG (native BGRA path, alpha discarded).
-pub(crate) fn encode_bgra8(
-    img: ImgRef<Bgra<u8>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let config = if let Some(cfg) = codec_config.and_then(|c| c.jpeg_encoder.as_ref()) {
-        cfg.as_ref().clone()
-    } else {
-        let quality = quality.unwrap_or(85.0).clamp(0.0, 100.0) as u8;
-        zenjpeg::encoder::EncoderConfig::ycbcr(
-            quality,
-            zenjpeg::encoder::ChromaSubsampling::Quarter,
-        )
-    };
-
-    let width = img.width() as u32;
-    let height = img.height() as u32;
-    let (buf, _, _) = img.to_contiguous_buf();
-    let bytes: &[u8] = bytemuck::cast_slice(buf.as_ref());
-
-    let mut request = config.request();
-    request = apply_metadata(request, metadata);
-    if let Some(s) = stop {
-        request = request.stop(s);
-    }
-
-    let jpeg_data = request
-        .encode_bytes(
-            bytes,
-            width,
-            height,
-            zenjpeg::encoder::PixelLayout::Bgra8Srgb,
-        )
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?;
-
-    Ok(EncodeOutput::new(jpeg_data, ImageFormat::Jpeg))
-}
-
-/// Encode BGRX8 pixels to JPEG (native BGRX path, padding byte ignored).
-pub(crate) fn encode_bgrx8(
-    img: ImgRef<Bgra<u8>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let config = if let Some(cfg) = codec_config.and_then(|c| c.jpeg_encoder.as_ref()) {
-        cfg.as_ref().clone()
-    } else {
-        let quality = quality.unwrap_or(85.0).clamp(0.0, 100.0) as u8;
-        zenjpeg::encoder::EncoderConfig::ycbcr(
-            quality,
-            zenjpeg::encoder::ChromaSubsampling::Quarter,
-        )
-    };
-
-    let width = img.width() as u32;
-    let height = img.height() as u32;
-    let (buf, _, _) = img.to_contiguous_buf();
-    let bytes: &[u8] = bytemuck::cast_slice(buf.as_ref());
-
-    let mut request = config.request();
-    request = apply_metadata(request, metadata);
-    if let Some(s) = stop {
-        request = request.stop(s);
-    }
-
-    let jpeg_data = request
-        .encode_bytes(
-            bytes,
-            width,
-            height,
-            zenjpeg::encoder::PixelLayout::Bgrx8Srgb,
-        )
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?;
-
-    Ok(EncodeOutput::new(jpeg_data, ImageFormat::Jpeg))
-}
-
-/// Encode Gray8 pixels to JPEG.
-pub(crate) fn encode_gray8(
-    img: ImgRef<crate::pixel::Gray<u8>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_gray8(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Encode linear RGB f32 pixels to JPEG.
-pub(crate) fn encode_rgb_f32(
-    img: ImgRef<Rgb<f32>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_rgb_f32(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Encode linear RGBA f32 pixels to JPEG (alpha discarded).
-pub(crate) fn encode_rgba_f32(
-    img: ImgRef<Rgba<f32>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_rgba_f32(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Encode linear grayscale f32 pixels to JPEG.
-pub(crate) fn encode_gray_f32(
-    img: ImgRef<crate::pixel::Gray<f32>>,
-    quality: Option<f32>,
-    metadata: Option<&MetadataView<'_>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<EncodeOutput, CodecError> {
-    let enc = build_encoding(quality, codec_config);
-    let mut job = enc.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(meta) = metadata {
-        job = job.with_metadata(meta);
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.encoder()
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .encode_gray_f32(PixelSlice::from(img))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
 // ═══════════════════════════════════════════════════════════════════════
-// DynEncoder implementation
+// Trait-based encoder dispatch
 // ═══════════════════════════════════════════════════════════════════════
 
-use crate::dispatch::{DynEncoder, EncodeParams};
+use crate::dispatch::{BuiltEncoder, EncodeParams};
 
 /// Supported pixel descriptors for JPEG encoding (in preference order).
 static JPEG_SUPPORTED: &[PixelDescriptor] = &[
@@ -504,158 +263,27 @@ static JPEG_SUPPORTED: &[PixelDescriptor] = &[
     PixelDescriptor::GRAYF32_LINEAR,
 ];
 
-pub(crate) struct JpegDynEncoder<'a> {
-    quality: Option<f32>,
-    metadata: Option<&'a MetadataView<'a>>,
-    codec_config: Option<&'a CodecConfig>,
-    limits: Option<&'a Limits>,
-    stop: Option<&'a dyn Stop>,
-}
-
-pub(crate) fn build_dyn_encoder(params: EncodeParams<'_>) -> JpegDynEncoder<'_> {
-    JpegDynEncoder {
-        quality: params.quality,
-        metadata: params.metadata,
-        codec_config: params.codec_config,
-        limits: params.limits,
-        stop: params.stop,
-    }
-}
-
-impl DynEncoder for JpegDynEncoder<'_> {
-    fn format(&self) -> ImageFormat {
-        ImageFormat::Jpeg
-    }
-
-    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
-        JPEG_SUPPORTED
-    }
-
-    fn encode_pixels(
-        self: Box<Self>,
-        data: &[u8],
-        descriptor: PixelDescriptor,
-        width: u32,
-        height: u32,
-        stride: usize,
-    ) -> Result<EncodeOutput, CodecError> {
-        let w = width as usize;
-        let h = height as usize;
-
-        match descriptor.pixel_format() {
-            zenpixels::PixelFormat::Rgb8 => {
-                let pixels: &[Rgb<u8>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 3);
-                encode_rgb8(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
+pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
+    BuiltEncoder {
+        encoder: Box::new(move |pixels| {
+            let enc = build_encoding(params.quality, params.codec_config);
+            let mut job = enc.job();
+            if let Some(lim) = params.limits {
+                job = job.with_limits(to_resource_limits(lim));
             }
-            zenpixels::PixelFormat::Rgba8 => {
-                let pixels: &[Rgba<u8>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
-                encode_rgba8(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
+            if let Some(meta) = params.metadata {
+                job = job.with_metadata(meta);
             }
-            zenpixels::PixelFormat::Bgra8 => {
-                let pixels: &[Bgra<u8>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
-                // Check descriptor alpha to distinguish BGRA vs BGRX
-                if descriptor.alpha == Some(zenpixels::AlphaMode::Undefined) {
-                    encode_bgrx8(
-                        img,
-                        self.quality,
-                        self.metadata,
-                        self.codec_config,
-                        self.limits,
-                        self.stop,
-                    )
-                } else {
-                    encode_bgra8(
-                        img,
-                        self.quality,
-                        self.metadata,
-                        self.codec_config,
-                        self.limits,
-                        self.stop,
-                    )
-                }
+            if let Some(s) = params.stop {
+                job = job.with_stop(s);
             }
-            zenpixels::PixelFormat::Bgrx8 => {
-                let pixels: &[Bgra<u8>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
-                encode_bgrx8(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
-            }
-            zenpixels::PixelFormat::Gray8 => {
-                let pixels: &[crate::pixel::Gray<u8>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride);
-                encode_gray8(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
-            }
-            zenpixels::PixelFormat::RgbF32 => {
-                let pixels: &[Rgb<f32>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 12);
-                encode_rgb_f32(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
-            }
-            zenpixels::PixelFormat::RgbaF32 => {
-                let pixels: &[Rgba<f32>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 16);
-                encode_rgba_f32(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
-            }
-            zenpixels::PixelFormat::GrayF32 => {
-                let pixels: &[crate::pixel::Gray<f32>] = bytemuck::cast_slice(data);
-                let img = imgref::ImgRef::new_stride(pixels, w, h, stride / 4);
-                encode_gray_f32(
-                    img,
-                    self.quality,
-                    self.metadata,
-                    self.codec_config,
-                    self.limits,
-                    self.stop,
-                )
-            }
-            _ => Err(CodecError::InvalidInput(alloc::format!(
-                "JPEG encoder does not support pixel format: {}",
-                descriptor
-            ))),
-        }
+            use zencodec_types::Encoder as _;
+            job.encoder()
+                .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
+                .encode(pixels)
+                .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
+        }),
+        supported: JPEG_SUPPORTED,
     }
 }
 
@@ -892,23 +520,4 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?;
 
     Ok(EncodeOutput::new(jpeg_data, ImageFormat::Jpeg))
-}
-
-/// Apply zencodecs MetadataView to a zenjpeg EncodeRequest.
-fn apply_metadata<'a>(
-    mut request: zenjpeg::encoder::EncodeRequest<'a>,
-    metadata: Option<&'a MetadataView<'a>>,
-) -> zenjpeg::encoder::EncodeRequest<'a> {
-    if let Some(meta) = metadata {
-        if let Some(icc) = meta.icc_profile {
-            request = request.icc_profile(icc);
-        }
-        if let Some(exif) = meta.exif {
-            request = request.exif(zenjpeg::encoder::Exif::raw(exif.to_vec()));
-        }
-        if let Some(xmp) = meta.xmp {
-            request = request.xmp(xmp);
-        }
-    }
-    request
 }
