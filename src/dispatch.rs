@@ -33,10 +33,9 @@ pub(crate) struct BuiltEncoder<'a> {
 
 /// Build a type-erased encoder for the specified format.
 ///
-/// Each codec arm creates a closure that:
-/// 1. Builds the codec-specific config from quality/effort/lossless/codec_config
-/// 2. Creates the encode job and applies limits/metadata/stop
-/// 3. Calls `Encoder::encode(pixels)` via the trait
+/// Each codec arm delegates to its `build_trait_encoder` which builds
+/// the codec-specific config, creates the encode job, and returns
+/// a closure that calls `Encoder::encode(pixels)` via the trait.
 pub(crate) fn build_encoder<'a>(
     format: ImageFormat,
     params: EncodeParams<'a>,

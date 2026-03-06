@@ -13,7 +13,9 @@ use crate::{
 use crate::{EncodeOutput, MetadataView, pixel::ImgRef};
 use alloc::boxed::Box;
 use zencodec_types::{Decode, DecodeJob as _, DecoderConfig as _};
-use zenpixels::{PixelDescriptor, PixelSliceMut};
+#[cfg(feature = "jpeg-ultrahdr")]
+use zenpixels::PixelDescriptor;
+use zenpixels::PixelSliceMut;
 
 /// Probe JPEG metadata without decoding pixels.
 ///
@@ -208,21 +210,6 @@ fn build_encoding(
 
 use crate::dispatch::{BuiltEncoder, EncodeParams};
 
-/// Supported pixel descriptors for JPEG encoding (in preference order).
-static JPEG_SUPPORTED: &[PixelDescriptor] = &[
-    PixelDescriptor::RGB8_SRGB,
-    PixelDescriptor::GRAY8_SRGB,
-    PixelDescriptor::RGBA8_SRGB,
-    PixelDescriptor::BGRA8_SRGB,
-    PixelDescriptor::BGRX8_SRGB,
-    PixelDescriptor::RGB16_SRGB,
-    PixelDescriptor::RGBA16_SRGB,
-    PixelDescriptor::GRAY16_SRGB,
-    PixelDescriptor::RGBF32_LINEAR,
-    PixelDescriptor::RGBAF32_LINEAR,
-    PixelDescriptor::GRAYF32_LINEAR,
-];
-
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -243,7 +230,7 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
                 .encode(pixels)
                 .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
         }),
-        supported: JPEG_SUPPORTED,
+        supported: zenjpeg::JpegEncoderConfig::supported_descriptors(),
     }
 }
 

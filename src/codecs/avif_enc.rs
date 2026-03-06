@@ -12,70 +12,6 @@ use zencodec_types::{EncodeJob as _, Encoder as _, EncoderConfig as _};
 // ═══════════════════════════════════════════════════════════════════════
 
 use crate::dispatch::{BuiltEncoder, EncodeParams};
-use zenpixels::PixelDescriptor;
-
-static AVIF_SUPPORTED: &[PixelDescriptor] = &[
-    // SDR
-    PixelDescriptor::RGB8_SRGB,
-    PixelDescriptor::RGBA8_SRGB,
-    PixelDescriptor::GRAY8_SRGB,
-    PixelDescriptor::RGBF32_LINEAR,
-    PixelDescriptor::RGBAF32_LINEAR,
-    PixelDescriptor::GRAYF32_LINEAR,
-    // f32 PQ BT.2020 (HDR)
-    PixelDescriptor::RGBF32_LINEAR
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    PixelDescriptor::RGBAF32_LINEAR
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    // f32 HLG BT.2020 (HDR)
-    PixelDescriptor::RGBF32_LINEAR
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    PixelDescriptor::RGBAF32_LINEAR
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    // 16-bit sRGB
-    PixelDescriptor::RGB16_SRGB,
-    PixelDescriptor::RGBA16_SRGB,
-    // 16-bit PQ BT.2020
-    PixelDescriptor::RGB16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    PixelDescriptor::RGBA16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    // 16-bit HLG BT.2020
-    PixelDescriptor::RGB16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    PixelDescriptor::RGBA16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
-    // 16-bit Display P3 sRGB transfer
-    PixelDescriptor::RGB16_SRGB.with_primaries(zenpixels::ColorPrimaries::DisplayP3),
-    PixelDescriptor::RGBA16_SRGB.with_primaries(zenpixels::ColorPrimaries::DisplayP3),
-    // 16-bit PQ BT.2020 narrow range (broadcast HDR10)
-    PixelDescriptor::RGB16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020)
-        .with_signal_range(zenpixels::SignalRange::Narrow),
-    PixelDescriptor::RGBA16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020)
-        .with_signal_range(zenpixels::SignalRange::Narrow),
-    // 16-bit HLG BT.2020 narrow range (broadcast HLG)
-    PixelDescriptor::RGB16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020)
-        .with_signal_range(zenpixels::SignalRange::Narrow),
-    PixelDescriptor::RGBA16_SRGB
-        .with_transfer(zenpixels::TransferFunction::Hlg)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020)
-        .with_signal_range(zenpixels::SignalRange::Narrow),
-];
-
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -95,7 +31,7 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
                 .encode(pixels)
                 .map_err(|e| CodecError::from_codec(ImageFormat::Avif, e))
         }),
-        supported: AVIF_SUPPORTED,
+        supported: zenavif::AvifEncoderConfig::supported_descriptors(),
     }
 }
 

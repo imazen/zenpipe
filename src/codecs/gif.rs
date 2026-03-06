@@ -7,7 +7,6 @@ use crate::{
 };
 use alloc::boxed::Box;
 use zencodec_types::{Decode, DecodeJob as _, DecoderConfig as _};
-use zenpixels::PixelDescriptor;
 
 /// Probe GIF metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo, CodecError> {
@@ -51,15 +50,6 @@ fn build_gif_encoding(codec_config: Option<&CodecConfig>) -> zengif::GifEncoderC
 
 use crate::dispatch::{BuiltEncoder, EncodeParams};
 
-static GIF_SUPPORTED: &[PixelDescriptor] = &[
-    PixelDescriptor::RGBA8_SRGB,
-    PixelDescriptor::RGB8_SRGB,
-    PixelDescriptor::GRAY8_SRGB,
-    PixelDescriptor::RGBF32_LINEAR,
-    PixelDescriptor::RGBAF32_LINEAR,
-    PixelDescriptor::GRAYF32_LINEAR,
-];
-
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -77,6 +67,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
                 .encode(pixels)
                 .map_err(|e| CodecError::from_codec(ImageFormat::Gif, e))
         }),
-        supported: GIF_SUPPORTED,
+        supported: zengif::GifEncoderConfig::supported_descriptors(),
     }
 }

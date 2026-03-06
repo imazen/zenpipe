@@ -63,21 +63,6 @@ fn build_encoding(
 // ═══════════════════════════════════════════════════════════════════════
 
 use crate::dispatch::{BuiltEncoder, EncodeParams};
-use zenpixels::PixelDescriptor;
-
-static PNG_SUPPORTED: &[PixelDescriptor] = &[
-    PixelDescriptor::RGB8_SRGB,
-    PixelDescriptor::RGBA8_SRGB,
-    PixelDescriptor::GRAY8_SRGB,
-    PixelDescriptor::BGRA8_SRGB,
-    PixelDescriptor::RGB16_SRGB,
-    PixelDescriptor::RGBA16_SRGB,
-    PixelDescriptor::GRAY16_SRGB,
-    PixelDescriptor::RGBF32_LINEAR,
-    PixelDescriptor::RGBAF32_LINEAR,
-    PixelDescriptor::GRAYF32_LINEAR,
-];
-
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -97,6 +82,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
                 .encode(pixels)
                 .map_err(|e| CodecError::from_codec(ImageFormat::Png, e))
         }),
-        supported: PNG_SUPPORTED,
+        supported: zenpng::PngEncoderConfig::supported_descriptors(),
     }
 }

@@ -27,18 +27,6 @@ fn build_encoding(quality: Option<f32>, effort: Option<u32>) -> zenjxl::JxlEncod
 // ═══════════════════════════════════════════════════════════════════════
 
 use crate::dispatch::{BuiltEncoder, EncodeParams};
-use zenpixels::PixelDescriptor;
-
-static JXL_SUPPORTED: &[PixelDescriptor] = &[
-    PixelDescriptor::RGB8_SRGB,
-    PixelDescriptor::RGBA8_SRGB,
-    PixelDescriptor::GRAY8_SRGB,
-    PixelDescriptor::BGRA8_SRGB,
-    PixelDescriptor::RGBF32_LINEAR,
-    PixelDescriptor::RGBAF32_LINEAR,
-    PixelDescriptor::GRAYF32_LINEAR,
-];
-
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -59,6 +47,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
                 .encode(pixels)
                 .map_err(|e| CodecError::from_codec(ImageFormat::Jxl, e))
         }),
-        supported: JXL_SUPPORTED,
+        supported: zenjxl::JxlEncoderConfig::supported_descriptors(),
     }
 }
