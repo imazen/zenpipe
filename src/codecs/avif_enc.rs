@@ -22,6 +22,20 @@ static AVIF_SUPPORTED: &[PixelDescriptor] = &[
     PixelDescriptor::RGBF32_LINEAR,
     PixelDescriptor::RGBAF32_LINEAR,
     PixelDescriptor::GRAYF32_LINEAR,
+    // f32 PQ BT.2020 (HDR)
+    PixelDescriptor::RGBF32_LINEAR
+        .with_transfer(zenpixels::TransferFunction::Pq)
+        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
+    PixelDescriptor::RGBAF32_LINEAR
+        .with_transfer(zenpixels::TransferFunction::Pq)
+        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
+    // f32 HLG BT.2020 (HDR)
+    PixelDescriptor::RGBF32_LINEAR
+        .with_transfer(zenpixels::TransferFunction::Hlg)
+        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
+    PixelDescriptor::RGBAF32_LINEAR
+        .with_transfer(zenpixels::TransferFunction::Hlg)
+        .with_primaries(zenpixels::ColorPrimaries::Bt2020),
     // 16-bit sRGB
     PixelDescriptor::RGB16_SRGB,
     PixelDescriptor::RGBA16_SRGB,
