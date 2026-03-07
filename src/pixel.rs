@@ -2,4 +2,5 @@
 //!
 //! Uses `imgref::ImgVec` for 2D pixel data with typed pixels from the `rgb` crate.
 
-pub use zencodec_types::{Bgra, Gray, Img, ImgRef, ImgRefMut, ImgVec, Rgb, Rgba};
+pub use imgref::{Img, ImgRef, ImgRefMut, ImgVec};
+pub use rgb::{Bgra, Gray, Rgb, Rgba};

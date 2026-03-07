@@ -1,7 +1,7 @@
 //! AVIF encode adapter using zenavif via trait interface.
 
 use crate::config::CodecConfig;
-use zencodec_types::EncoderConfig as _;
+use zc::encode::EncoderConfig as _;
 
 // ═══════════════════════════════════════════════════════════════════════
 // Trait-based encoder dispatch

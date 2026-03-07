@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use zencodec_types::Cicp;
+use zc::Cicp;
 
 // --- EXIF ---
 

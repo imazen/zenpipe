@@ -17,7 +17,7 @@ pub struct Limits {
     ///
     /// Defaults to [`ThreadingPolicy::Unlimited`]. Use [`ThreadingPolicy::SingleThread`]
     /// for deterministic output or constrained environments.
-    pub threading: zencodec_types::ThreadingPolicy,
+    pub threading: zc::ThreadingPolicy,
 }
 
 impl Default for Limits {
@@ -27,7 +27,7 @@ impl Default for Limits {
             max_height: None,
             max_pixels: None,
             max_memory_bytes: None,
-            threading: zencodec_types::ThreadingPolicy::Unlimited,
+            threading: zc::ThreadingPolicy::Unlimited,
         }
     }
 }
@@ -103,9 +103,9 @@ pub(crate) fn stop_or_default(stop: Option<&dyn Stop>) -> &dyn Stop {
     stop.unwrap_or(&enough::Unstoppable)
 }
 
-/// Convert zencodecs [`Limits`] to zencodec-types [`ResourceLimits`](zencodec_types::ResourceLimits).
-pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec_types::ResourceLimits {
-    let mut rl = zencodec_types::ResourceLimits::none();
+/// Convert zencodecs [`Limits`] to zencodec-types [`ResourceLimits`](zc::ResourceLimits).
+pub(crate) fn to_resource_limits(limits: &Limits) -> zc::ResourceLimits {
+    let mut rl = zc::ResourceLimits::none();
     if let Some(max_w) = limits.max_width {
         rl = rl.with_max_width(max_w.min(u32::MAX as u64) as u32);
     }
@@ -127,7 +127,7 @@ pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec_types::ResourceLim
 /// Codecs periodically call `stop.check()` and return `CodecError::Cancelled`
 /// if the operation should be cancelled. Use `enough::Unstoppable` when you
 /// don't need cancellation (zero-cost).
-pub use zencodec_types::Stop;
+pub use enough::Stop;
 
 #[cfg(test)]
 mod tests {

@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 /// Uses `EncoderConfig` trait methods — quality→distance mapping
 /// is handled by zenjxl's `with_generic_quality()`.
 fn build_encoding(quality: Option<f32>, effort: Option<u32>) -> zenjxl::JxlEncoderConfig {
-    use zencodec_types::EncoderConfig;
+    use zc::encode::EncoderConfig;
 
     let mut enc = zenjxl::JxlEncoderConfig::default();
     if let Some(q) = quality {
@@ -41,7 +41,7 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
             if let Some(s) = params.stop {
                 job = job.with_stop(s);
             }
-            use zencodec_types::Encoder as _;
+            use zc::encode::Encoder as _;
             job.encoder()
                 .map_err(|e| CodecError::from_codec(ImageFormat::Jxl, e))?
                 .encode(pixels)
