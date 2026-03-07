@@ -258,7 +258,14 @@ impl<'a> EncodeRequest<'a> {
         };
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Rgba<u8>>();
-        self.encode_dispatch(data, descriptor, img.width() as u32, img.height() as u32, stride, !ignore_alpha)
+        self.encode_dispatch(
+            data,
+            descriptor,
+            img.width() as u32,
+            img.height() as u32,
+            stride,
+            !ignore_alpha,
+        )
     }
 
     /// Encode BGRA8 pixels (native byte order, zero-copy for codecs that support it).
@@ -525,7 +532,15 @@ mod tests {
     #[test]
     fn encode_srgba8_imgref_opaque() {
         let img = imgref::ImgVec::new(
-            vec![Rgba { r: 128u8, g: 64, b: 32, a: 255 }; 10 * 10],
+            vec![
+                Rgba {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                    a: 255
+                };
+                10 * 10
+            ],
             10,
             10,
         );
@@ -539,7 +554,15 @@ mod tests {
     #[test]
     fn encode_srgba8_imgref_straight() {
         let img = imgref::ImgVec::new(
-            vec![Rgba { r: 128u8, g: 64, b: 32, a: 200 }; 10 * 10],
+            vec![
+                Rgba {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                    a: 200
+                };
+                10 * 10
+            ],
             10,
             10,
         );
@@ -549,5 +572,42 @@ mod tests {
             .encode_srgba8_imgref(img.as_ref(), false)
             .unwrap();
         assert!(!output.data().is_empty());
+    }
+
+    /// Zero generics — `&dyn AnyEncoder` is fully codec-agnostic.
+    #[test]
+    fn any_encoder_dyn_dispatch() {
+        use crate::AnyEncoder;
+        use zencodec_types::EncoderConfig as _;
+
+        // This function has NO generic parameters
+        fn encode_with(config: &dyn AnyEncoder, img: imgref::ImgRef<Rgba<u8>>) -> EncodeOutput {
+            config.encode_srgba8_imgref(img, true).unwrap()
+        }
+
+        let img = imgref::ImgVec::new(
+            vec![
+                Rgba {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                    a: 255
+                };
+                10 * 10
+            ],
+            10,
+            10,
+        );
+
+        let jpeg = zenjpeg::JpegEncoderConfig::new().with_generic_quality(75.0);
+        let webp = zenwebp::WebpEncoderConfig::lossy();
+
+        let jpeg_out = encode_with(&jpeg, img.as_ref());
+        let webp_out = encode_with(&webp, img.as_ref());
+
+        assert_eq!(jpeg_out.format(), ImageFormat::Jpeg);
+        assert_eq!(webp_out.format(), ImageFormat::WebP);
+        assert!(!jpeg_out.data().is_empty());
+        assert!(!webp_out.data().is_empty());
     }
 }

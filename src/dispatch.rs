@@ -36,7 +36,10 @@ pub(crate) struct BuiltEncoder<'a> {
 /// The closure receives `EncodeParams` and returns the concrete `EncoderConfig`.
 /// Config construction happens inside the returned closure so the config's
 /// lifetime doesn't escape the function.
-pub(crate) fn build_from_config<'a, C, F>(build_config: F, params: EncodeParams<'a>) -> BuiltEncoder<'a>
+pub(crate) fn build_from_config<'a, C, F>(
+    build_config: F,
+    params: EncodeParams<'a>,
+) -> BuiltEncoder<'a>
 where
     C: zencodec_types::EncoderConfig + 'a,
     F: FnOnce(&EncodeParams<'a>) -> C + 'a,
@@ -63,6 +66,129 @@ where
                 .map_err(|e| CodecError::from_codec_boxed(format, e))
         }),
         supported: C::supported_descriptors(),
+    }
+}
+
+// ===========================================================================
+// Object-safe encoder config — zero-generics codec-agnostic encoding
+// ===========================================================================
+
+/// Object-safe encoder configuration.
+///
+/// Blanket-implemented for all [`EncoderConfig`](zencodec_types::EncoderConfig)
+/// types whose encoder implements [`Encoder`](zencodec_types::Encoder).
+/// Enables fully codec-agnostic code with no generic parameters:
+///
+/// ```rust,ignore
+/// fn save(enc: &dyn AnyEncoder, img: ImgRef<Rgba<u8>>) -> Result<Vec<u8>, CodecError> {
+///     let output = enc.encode_srgba8_imgref(img, true)?;
+///     Ok(output.into_data())
+/// }
+///
+/// let jpeg = JpegEncoderConfig::new().with_generic_quality(85.0);
+/// let webp = WebpEncoderConfig::lossy();
+/// save(&jpeg, img.as_ref())?;
+/// save(&webp, img.as_ref())?;
+/// ```
+pub trait AnyEncoder: Send + Sync {
+    /// The image format this encoder produces.
+    fn format(&self) -> ImageFormat;
+
+    /// Pixel formats this encoder accepts natively.
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+
+    /// Encode type-erased pixels.
+    fn encode_pixels(
+        &self,
+        pixels: PixelSlice<'_>,
+        metadata: Option<&MetadataView<'_>>,
+        limits: Option<&Limits>,
+        stop: Option<&dyn Stop>,
+    ) -> Result<EncodeOutput, CodecError>;
+
+    /// Encode sRGB RGBA8 pixels from an `ImgRef`.
+    ///
+    /// `ignore_alpha = true` treats alpha as padding (codecs may use RGB paths).
+    /// `ignore_alpha = false` preserves straight alpha.
+    fn encode_srgba8_imgref(
+        &self,
+        img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
+        ignore_alpha: bool,
+    ) -> Result<EncodeOutput, CodecError> {
+        let typed: PixelSlice<'_, rgb::Rgba<u8>> = PixelSlice::from(img);
+        let pixels: PixelSlice<'_> = if ignore_alpha {
+            typed
+                .with_descriptor(
+                    PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Undefined)),
+                )
+                .erase()
+        } else {
+            typed.erase()
+        };
+        self.encode_pixels(pixels, None, None, None)
+    }
+}
+
+impl<C> AnyEncoder for C
+where
+    C: zencodec_types::EncoderConfig,
+    for<'a> <C::Job<'a> as zencodec_types::EncodeJob<'a>>::Enc: zencodec_types::Encoder,
+{
+    fn format(&self) -> ImageFormat {
+        C::format()
+    }
+
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
+        C::supported_descriptors()
+    }
+
+    fn encode_pixels(
+        &self,
+        pixels: PixelSlice<'_>,
+        metadata: Option<&MetadataView<'_>>,
+        limits: Option<&Limits>,
+        stop: Option<&dyn Stop>,
+    ) -> Result<EncodeOutput, CodecError> {
+        use zencodec_types::{EncodeJob as _, Encoder as _};
+
+        // Negotiate pixel format — convert input to something the encoder supports
+        let pixel_data = pixels.contiguous_bytes();
+        let adapted = zenpixels_convert::adapt::adapt_for_encode(
+            &pixel_data,
+            pixels.descriptor(),
+            pixels.width(),
+            pixels.rows(),
+            pixels.width() as usize * pixels.descriptor().bytes_per_pixel(),
+            C::supported_descriptors(),
+        )
+        .map_err(|e| CodecError::InvalidInput(alloc::format!("pixel format negotiation: {e}")))?;
+
+        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
+        let adapted_pixels = PixelSlice::new(
+            &adapted.data,
+            adapted.width,
+            adapted.rows,
+            adapted_stride,
+            adapted.descriptor,
+        )
+        .map_err(|e| CodecError::InvalidInput(alloc::format!("pixel slice: {e}")))?;
+
+        let mut job = self.job();
+        if let Some(m) = metadata {
+            job = job.with_metadata(m);
+        }
+        if let Some(l) = limits {
+            job = job.with_limits(crate::limits::to_resource_limits(l));
+        }
+        if let Some(s) = stop {
+            job = job.with_stop(s);
+        }
+        let format = C::format();
+        let enc = job
+            .encoder()
+            .map_err(|e| CodecError::from_codec(format, e))?;
+        enc.encode(adapted_pixels)
+            .map_err(|e| CodecError::from_codec(format, e))
     }
 }
 

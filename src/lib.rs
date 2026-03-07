@@ -87,7 +87,7 @@ extern crate alloc;
 mod codecs;
 pub mod config;
 mod decode;
-pub(crate) mod dispatch;
+mod dispatch;
 mod encode;
 mod error;
 mod info;
@@ -100,6 +100,7 @@ mod registry;
 
 // Re-exports
 pub use decode::{DecodeOutput, DecodeRequest};
+pub use dispatch::AnyEncoder;
 pub use encode::{EncodeOutput, EncodeRequest};
 pub use error::CodecError;
 pub use info::ImageInfo;
