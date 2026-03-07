@@ -1,6 +1,6 @@
 //! Image decoding.
 
-pub use zencodec_types::DecodeOutput;
+pub use zc::decode::DecodeOutput;
 
 use crate::config::CodecConfig;
 use crate::{CodecError, CodecRegistry, ImageFormat, ImageInfo, Limits, Stop};
@@ -78,13 +78,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + copy for other codecs.
     pub fn decode_into_rgb8(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgb<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgb<u8>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -95,30 +95,18 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_rgb8_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgb<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgb<u8>>,
     ) -> Result<ImageInfo, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::decode_into_rgb8(
-                self.data,
-                dst,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            // Other codecs: fall back to decode + copy
-            _ => {
-                let output = self.decode_format(format)?;
-                let info = output.info().clone();
-                let src = output.into_rgb8();
-                let mut dst = dst;
-                for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
-                    let n = src_row.len().min(dst_row.len());
-                    dst_row[..n].copy_from_slice(&src_row[..n]);
-                }
-                Ok(info)
-            }
+        use zenpixels_convert::PixelBufferConvertExt as _;
+        let output = self.decode_format(format)?;
+        let info = output.info().clone();
+        let src = output.into_buffer().to_rgb8();
+        let mut dst = dst;
+        for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
+            let n = src_row.len().min(dst_row.len());
+            dst_row[..n].copy_from_slice(&src_row[..n]);
         }
+        Ok(info)
     }
 
     /// Decode directly into a caller-provided RGBA8 buffer.
@@ -127,13 +115,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + copy for other codecs.
     pub fn decode_into_rgba8(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgba<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgba<u8>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -144,38 +132,18 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_rgba8_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgba<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgba<u8>>,
     ) -> Result<ImageInfo, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::decode_into_rgba8(
-                self.data,
-                dst,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::decode_into_rgba8(
-                self.data,
-                dst,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            // Other codecs: fall back to decode + copy
-            _ => {
-                let output = self.decode_format(format)?;
-                let info = output.info().clone();
-                let src = output.into_rgba8();
-                let mut dst = dst;
-                for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
-                    let n = src_row.len().min(dst_row.len());
-                    dst_row[..n].copy_from_slice(&src_row[..n]);
-                }
-                Ok(info)
-            }
+        use zenpixels_convert::PixelBufferConvertExt as _;
+        let output = self.decode_format(format)?;
+        let info = output.info().clone();
+        let src = output.into_buffer().to_rgba8();
+        let mut dst = dst;
+        for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
+            let n = src_row.len().min(dst_row.len());
+            dst_row[..n].copy_from_slice(&src_row[..n]);
         }
+        Ok(info)
     }
 
     /// Decode directly into a caller-provided Gray8 buffer.
@@ -184,13 +152,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + copy for other codecs.
     pub fn decode_into_gray8(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Gray<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Gray<u8>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -201,30 +169,18 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_gray8_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Gray<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Gray<u8>>,
     ) -> Result<ImageInfo, CodecError> {
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::decode_into_gray8(
-                self.data,
-                dst,
-                self.codec_config,
-                self.limits,
-                self.stop,
-            ),
-            // Other codecs: fall back to decode + copy
-            _ => {
-                let output = self.decode_format(format)?;
-                let info = output.info().clone();
-                let src = output.into_gray8();
-                let mut dst = dst;
-                for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
-                    let n = src_row.len().min(dst_row.len());
-                    dst_row[..n].copy_from_slice(&src_row[..n]);
-                }
-                Ok(info)
-            }
+        use zenpixels_convert::PixelBufferConvertExt as _;
+        let output = self.decode_format(format)?;
+        let info = output.info().clone();
+        let src = output.into_buffer().to_gray8();
+        let mut dst = dst;
+        for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
+            let n = src_row.len().min(dst_row.len());
+            dst_row[..n].copy_from_slice(&src_row[..n]);
         }
+        Ok(info)
     }
 
     /// Decode directly into a caller-provided BGRA8 buffer.
@@ -232,13 +188,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + swizzle + copy for codecs without native BGRA support.
     pub fn decode_into_bgra8(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Bgra<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -249,12 +205,12 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_bgra8_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Bgra<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>,
     ) -> Result<ImageInfo, CodecError> {
-        // All codecs: fall back to decode + convert + copy
+        use zenpixels_convert::PixelBufferConvertExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
-        let src = output.into_bgra8();
+        let src = output.into_buffer().to_bgra8();
         let mut dst = dst;
         for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
             let n = src_row.len().min(dst_row.len());
@@ -268,13 +224,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + swizzle + copy for codecs without native BGRX support.
     pub fn decode_into_bgrx8(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Bgra<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -285,16 +241,16 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_bgrx8_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Bgra<u8>>,
+        dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>,
     ) -> Result<ImageInfo, CodecError> {
-        // All codecs: fall back to decode + convert to RGB + swizzle + copy
+        use zenpixels_convert::PixelBufferConvertExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
-        let src = output.into_rgb8();
+        let src = output.into_buffer().to_rgb8();
         let mut dst = dst;
         for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
             for (s, d) in src_row.iter().zip(dst_row.iter_mut()) {
-                *d = zencodec_types::Bgra {
+                *d = rgb::Bgra {
                     b: s.b,
                     g: s.g,
                     r: s.r,
@@ -311,13 +267,13 @@ impl<'a> DecodeRequest<'a> {
     /// linearization + copy.
     pub fn decode_into_rgb_f32(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgb<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgb<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -328,17 +284,17 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_rgb_f32_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgb<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgb<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         use linear_srgb::default::srgb_u8_to_linear;
-        // All codecs: fall back to decode + sRGB linearize + copy
+        use zenpixels_convert::PixelBufferConvertExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
-        let src = output.into_rgb8();
+        let src = output.into_buffer().to_rgb8();
         let mut dst = dst;
         for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
             for (s, d) in src_row.iter().zip(dst_row.iter_mut()) {
-                *d = zencodec_types::Rgb {
+                *d = rgb::Rgb {
                     r: srgb_u8_to_linear(s.r),
                     g: srgb_u8_to_linear(s.g),
                     b: srgb_u8_to_linear(s.b),
@@ -354,13 +310,13 @@ impl<'a> DecodeRequest<'a> {
     /// Falls back to decode + sRGB linearization + copy.
     pub fn decode_into_rgba_f32(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgba<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgba<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -371,17 +327,17 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_rgba_f32_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Rgba<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Rgba<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         use linear_srgb::default::srgb_u8_to_linear;
-        // All codecs: fall back to decode + sRGB linearize + copy
+        use zenpixels_convert::PixelBufferConvertExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
-        let src = output.into_rgba8();
+        let src = output.into_buffer().to_rgba8();
         let mut dst = dst;
         for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
             for (s, d) in src_row.iter().zip(dst_row.iter_mut()) {
-                *d = zencodec_types::Rgba {
+                *d = rgb::Rgba {
                     r: srgb_u8_to_linear(s.r),
                     g: srgb_u8_to_linear(s.g),
                     b: srgb_u8_to_linear(s.b),
@@ -398,13 +354,13 @@ impl<'a> DecodeRequest<'a> {
     /// linearization + copy.
     pub fn decode_into_gray_f32(
         self,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Gray<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Gray<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
         if !registry.can_decode(format) {
             return Err(CodecError::DisabledFormat(format));
@@ -415,17 +371,17 @@ impl<'a> DecodeRequest<'a> {
     fn decode_into_gray_f32_format(
         self,
         format: ImageFormat,
-        dst: imgref::ImgRefMut<'_, zencodec_types::Gray<f32>>,
+        dst: imgref::ImgRefMut<'_, rgb::Gray<f32>>,
     ) -> Result<ImageInfo, CodecError> {
         use linear_srgb::default::srgb_u8_to_linear;
-        // All codecs: fall back to decode + sRGB linearize + copy
+        use zenpixels_convert::PixelBufferConvertExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
-        let src = output.into_gray8();
+        let src = output.into_buffer().to_gray8();
         let mut dst = dst;
         for (src_row, dst_row) in src.as_imgref().rows().zip(dst.rows_mut()) {
             for (s, d) in src_row.iter().zip(dst_row.iter_mut()) {
-                *d = zencodec_types::Gray::new(srgb_u8_to_linear(s.value()));
+                *d = rgb::Gray::new(srgb_u8_to_linear(s.value()));
             }
         }
         Ok(info)
@@ -444,7 +400,7 @@ impl<'a> DecodeRequest<'a> {
 
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
 
         if format != ImageFormat::Jpeg {
@@ -474,7 +430,7 @@ impl<'a> DecodeRequest<'a> {
 
         let format = match self.format {
             Some(f) => f,
-            None => ImageFormat::detect(self.data).ok_or(CodecError::UnrecognizedFormat)?,
+            None => crate::info::detect_format(self.data).ok_or(CodecError::UnrecognizedFormat)?,
         };
 
         if !registry.can_decode(format) {

@@ -1,0 +1,16 @@
+# webp.checksums — v1
+
+## roundtrip rgb_f32
+~ mint-hull-805fbfd008:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb8
+~ mint-hull-805fbfd008:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip bgra8
+~ mint-hull-805fbfd008:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgba8
+~ mint-hull-805fbfd008:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip gray8
+~ open-mound-845dcdaa0b:sea  x86_64-avx512  @fb84dea  auto-accepted

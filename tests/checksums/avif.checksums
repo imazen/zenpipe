@@ -1,0 +1,19 @@
+# avif.checksums — v1
+
+## roundtrip gray8
+~ able-vale-a1c657102b:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb8
+~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip bgra8
+~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgba8
+~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgba_f32
+~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb_f32
+~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted

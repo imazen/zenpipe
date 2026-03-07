@@ -26,7 +26,7 @@ mod quality;
 
 use alloc::vec::Vec;
 
-use zencodec_types::ImageFormat;
+use zc::ImageFormat;
 use zenresize::{Filter, PixelDescriptor};
 
 use crate::config::CodecConfig;
@@ -100,10 +100,10 @@ struct OwnedMetadata {
     icc_profile: Option<Vec<u8>>,
     exif: Option<Vec<u8>>,
     xmp: Option<Vec<u8>>,
-    cicp: Option<zencodec_types::Cicp>,
-    content_light_level: Option<zencodec_types::ContentLightLevel>,
-    mastering_display: Option<zencodec_types::MasteringDisplay>,
-    orientation: zencodec_types::Orientation,
+    cicp: Option<zc::Cicp>,
+    content_light_level: Option<zc::ContentLightLevel>,
+    mastering_display: Option<zc::MasteringDisplay>,
+    orientation: zc::Orientation,
 }
 
 impl OwnedMetadata {
@@ -115,12 +115,12 @@ impl OwnedMetadata {
             cicp: None,
             content_light_level: None,
             mastering_display: None,
-            orientation: zencodec_types::Orientation::Normal,
+            orientation: zc::Orientation::Normal,
         }
     }
 
-    fn as_metadata(&self) -> zencodec_types::MetadataView<'_> {
-        let mut m = zencodec_types::MetadataView::none();
+    fn as_metadata(&self) -> zc::MetadataView<'_> {
+        let mut m = zc::MetadataView::none();
         if let Some(ref icc) = self.icc_profile {
             m = m.with_icc(icc);
         }
@@ -302,7 +302,7 @@ impl<'a> Pipeline<'a> {
         let orientation = if self.auto_orient {
             decoded.info().orientation
         } else {
-            zencodec_types::Orientation::Normal
+            zc::Orientation::Normal
         };
 
         // 4. Determine working pixel format based on source
@@ -370,7 +370,10 @@ impl<'a> Pipeline<'a> {
         if is_grayscale && !has_alpha {
             // Gray path
             let resized = if let Some(ref plan) = layout_plan {
-                let source = decoded.into_gray8();
+                let source = {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_gray8()
+                };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
                 // Zero-copy: Gray<u8> is repr(C) with a single u8, as_bytes is no-op
                 let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
@@ -387,7 +390,10 @@ impl<'a> Pipeline<'a> {
                 zenpixels::PixelBuffer::from_pixels(gray_pixels, output_width, output_height)
                     .expect("resize output size mismatch")
             } else {
-                decoded.into_gray8()
+                {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_gray8()
+                }
             };
 
             // Encode
@@ -404,7 +410,10 @@ impl<'a> Pipeline<'a> {
         } else if has_alpha {
             // RGBA path
             let resized = if let Some(ref plan) = layout_plan {
-                let source = decoded.into_rgba8();
+                let source = {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_rgba8()
+                };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
                 // Zero-copy: Rgba<u8> is repr(C) [r,g,b,a], as_bytes is no-op
                 let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
@@ -421,7 +430,10 @@ impl<'a> Pipeline<'a> {
                 zenpixels::PixelBuffer::from_pixels(rgba_pixels, output_width, output_height)
                     .expect("resize output size mismatch")
             } else {
-                decoded.into_rgba8()
+                {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_rgba8()
+                }
             };
 
             // Encode
@@ -438,7 +450,10 @@ impl<'a> Pipeline<'a> {
         } else {
             // RGB path
             let resized = if let Some(ref plan) = layout_plan {
-                let source = decoded.into_rgb8();
+                let source = {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_rgb8()
+                };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
                 // Zero-copy: Rgb<u8> is repr(C) [r,g,b], as_bytes is no-op
                 let bytes: &[u8] = rgb::ComponentBytes::as_bytes(&*buf);
@@ -455,7 +470,10 @@ impl<'a> Pipeline<'a> {
                 zenpixels::PixelBuffer::from_pixels(rgb_pixels, output_width, output_height)
                     .expect("resize output size mismatch")
             } else {
-                decoded.into_rgb8()
+                {
+                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    decoded.into_buffer().to_rgb8()
+                }
             };
 
             // Encode
@@ -475,7 +493,7 @@ impl<'a> Pipeline<'a> {
     /// Extract owned copies of metadata bytes, filtered by the metadata policy.
     ///
     /// This produces owned data so `decoded` can be consumed afterwards.
-    fn extract_metadata(&self, decoded: &zencodec_types::DecodeOutput) -> OwnedMetadata {
+    fn extract_metadata(&self, decoded: &zc::decode::DecodeOutput) -> OwnedMetadata {
         let meta = decoded.metadata();
         match self.metadata_policy {
             MetadataPolicy::Preserve => OwnedMetadata {
@@ -499,7 +517,7 @@ impl<'a> Pipeline<'a> {
     fn build_encode_request<'b>(
         &self,
         format: ImageFormat,
-        metadata: &'b zencodec_types::MetadataView<'b>,
+        metadata: &'b zc::MetadataView<'b>,
     ) -> crate::EncodeRequest<'b>
     where
         'a: 'b,
@@ -531,8 +549,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgb<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::MetadataView<'_>,
-    ) -> Result<zencodec_types::EncodeOutput, CodecError> {
+        metadata: &zc::MetadataView<'_>,
+    ) -> Result<zc::encode::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata).encode_rgb8(img)
     }
 
@@ -540,8 +558,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgba<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::MetadataView<'_>,
-    ) -> Result<zencodec_types::EncodeOutput, CodecError> {
+        metadata: &zc::MetadataView<'_>,
+    ) -> Result<zc::encode::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata)
             .encode_rgba8(img)
     }
@@ -550,8 +568,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Gray<u8>>,
         format: ImageFormat,
-        metadata: &zencodec_types::MetadataView<'_>,
-    ) -> Result<zencodec_types::EncodeOutput, CodecError> {
+        metadata: &zc::MetadataView<'_>,
+    ) -> Result<zc::encode::EncodeOutput, CodecError> {
         self.build_encode_request(format, metadata)
             .encode_gray8(img)
     }

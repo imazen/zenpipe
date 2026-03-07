@@ -1,0 +1,16 @@
+# jpeg.checksums — v1
+
+## roundtrip gray8
+~ brute-cliff-8e1b56491c:sea  x86_64-avx512  @3f7639a  auto-accepted vs rude-osprey-a36cebcb96:sea score=97.6 maxΔ=[1,1,1]
+
+## roundtrip rgb_f32
+~ quick-stork-9ac2502e45:sea  x86_64-avx512  @3f7639a  auto-accepted vs naval-cub-710462c5eb:sea score=97.4 maxΔ=[1,1,1]
+
+## roundtrip rgb8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]
+
+## roundtrip bgra8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]
+
+## roundtrip rgba8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]

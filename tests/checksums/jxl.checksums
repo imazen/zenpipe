@@ -1,0 +1,13 @@
+# jxl.checksums — v1
+
+## roundtrip gray_f32
+~ prior-oat-82d46319f2:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip gray8
+~ cute-toad-67d702ef7e:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb_f32
+~ core-peach-a311cb7912:sea  x86_64-avx512  @fb84dea  auto-accepted
+
+## roundtrip rgb8
+~ core-peach-a311cb7912:sea  x86_64-avx512  @fb84dea  auto-accepted

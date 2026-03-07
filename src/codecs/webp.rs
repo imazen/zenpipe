@@ -6,10 +6,8 @@ use alloc::borrow::Cow;
 
 use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
-use crate::pixel::Rgba;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 use zc::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
-use zenpixels::PixelSliceMut;
 
 /// Probe WebP metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo, CodecError> {
@@ -44,36 +42,6 @@ pub(crate) fn decode(
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| CodecError::from_codec(ImageFormat::WebP, e))?
         .decode()
-        .map_err(|e| CodecError::from_codec(ImageFormat::WebP, e))
-}
-
-/// Decode WebP directly into a caller-provided RGBA8 buffer.
-pub(crate) fn decode_into_rgba8(
-    data: &[u8],
-    dst: imgref::ImgRefMut<'_, Rgba<u8>>,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<ImageInfo, CodecError> {
-    let mut dec = zenwebp::WebpDecoderConfig::new();
-    if let Some(cfg) = codec_config.and_then(|c| c.webp_decoder.as_ref()) {
-        *dec.inner_mut() = cfg.as_ref().clone();
-    }
-    // Set limits on both config (native limits) and job (pre-flight checks)
-    if let Some(lim) = limits {
-        let rl = to_resource_limits(lim);
-        dec = dec.with_limits(rl);
-    }
-    let mut job = dec.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| CodecError::from_codec(ImageFormat::WebP, e))?
-        .decode_into(data, PixelSliceMut::from(dst))
         .map_err(|e| CodecError::from_codec(ImageFormat::WebP, e))
 }
 

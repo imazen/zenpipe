@@ -1,8 +1,13 @@
 //! Image metadata probing without full decode.
 
-pub use zencodec_types::ImageInfo;
+pub use zc::ImageInfo;
 
 use crate::{CodecError, CodecRegistry, ImageFormat};
+
+/// Detect image format from magic bytes using the common format registry.
+pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
+    zc::ImageFormatRegistry::common().detect(data)
+}
 
 /// Probe partial image data for metadata without decoding pixels.
 ///
@@ -13,7 +18,7 @@ use crate::{CodecError, CodecRegistry, ImageFormat};
 /// Uses pure byte parsing — no codec crate dependencies. Works even if a
 /// codec feature isn't compiled in.
 pub fn probe(data: &[u8]) -> Result<crate::ProbeResult, CodecError> {
-    let format = ImageFormat::detect(data).ok_or(CodecError::UnrecognizedFormat)?;
+    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
     Ok(crate::ProbeResult::for_format(data, format))
 }
 
@@ -24,7 +29,7 @@ pub fn probe_with_registry(
     data: &[u8],
     registry: &CodecRegistry,
 ) -> Result<crate::ProbeResult, CodecError> {
-    let format = ImageFormat::detect(data).ok_or(CodecError::UnrecognizedFormat)?;
+    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
     if !registry.can_decode(format) {
         return Err(CodecError::DisabledFormat(format));
     }
@@ -53,7 +58,7 @@ pub fn from_bytes_with_registry(
     data: &[u8],
     registry: &CodecRegistry,
 ) -> Result<ImageInfo, CodecError> {
-    let format = ImageFormat::detect(data).ok_or(CodecError::UnrecognizedFormat)?;
+    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
 
     if !registry.can_decode(format) {
         return Err(CodecError::DisabledFormat(format));
@@ -83,7 +88,7 @@ pub fn decode_info_with_config(
     data: &[u8],
     codec_config: Option<&crate::config::CodecConfig>,
 ) -> Result<ImageInfo, CodecError> {
-    let format = ImageFormat::detect(data).ok_or(CodecError::UnrecognizedFormat)?;
+    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
     decode_info_format(data, format, codec_config)
 }
 

@@ -7,14 +7,10 @@ use alloc::borrow::Cow;
 
 use crate::config::CodecConfig;
 use crate::limits::to_resource_limits;
-use crate::pixel::{Rgb, Rgba};
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 #[cfg(feature = "jpeg-ultrahdr")]
 use crate::{EncodeOutput, MetadataView, pixel::ImgRef};
 use zc::decode::{Decode, DecodeJob as _, DecoderConfig as _};
-#[cfg(feature = "jpeg-ultrahdr")]
-use zenpixels::PixelDescriptor;
-use zenpixels::PixelSliceMut;
 
 /// Probe JPEG metadata without decoding pixels.
 ///
@@ -110,73 +106,8 @@ pub(crate) fn decode_info(
 ) -> Result<ImageInfo, CodecError> {
     // Use probe_full which returns complete metadata
     zenjpeg::JpegDecoderConfig::new()
+        .job()
         .probe_full(data)
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Decode JPEG directly into a caller-provided RGB8 buffer.
-pub(crate) fn decode_into_rgb8(
-    data: &[u8],
-    dst: imgref::ImgRefMut<'_, Rgb<u8>>,
-    _codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<ImageInfo, CodecError> {
-    let dec = zenjpeg::JpegDecoderConfig::new();
-    let mut job = dec.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .decode_into(PixelSliceMut::from(dst))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Decode JPEG directly into a caller-provided RGBA8 buffer.
-pub(crate) fn decode_into_rgba8(
-    data: &[u8],
-    dst: imgref::ImgRefMut<'_, Rgba<u8>>,
-    _codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<ImageInfo, CodecError> {
-    let dec = zenjpeg::JpegDecoderConfig::new();
-    let mut job = dec.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .decode_into(PixelSliceMut::from(dst))
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
-}
-
-/// Decode JPEG directly into a caller-provided Gray8 buffer.
-pub(crate) fn decode_into_gray8(
-    data: &[u8],
-    dst: imgref::ImgRefMut<'_, crate::pixel::Gray<u8>>,
-    _codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<ImageInfo, CodecError> {
-    let dec = zenjpeg::JpegDecoderConfig::new();
-    let mut job = dec.job();
-    if let Some(lim) = limits {
-        job = job.with_limits(to_resource_limits(lim));
-    }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))?
-        .decode_into(PixelSliceMut::from(dst))
         .map_err(|e| CodecError::from_codec(ImageFormat::Jpeg, e))
 }
 

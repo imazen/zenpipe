@@ -10,6 +10,25 @@
 use crate::ImageFormat;
 use crate::info::ImageInfo;
 
+#[cfg(test)]
+/// Minimum bytes needed for a useful probe (format-specific).
+///
+/// Returns the minimum number of leading bytes that typically contain
+/// enough header data to extract dimensions and basic metadata.
+/// JPEG needs more because SOF can follow large EXIF/APP segments.
+fn min_probe_bytes(format: ImageFormat) -> usize {
+    match format {
+        ImageFormat::Png => 33,    // 8 sig + 25 IHDR
+        ImageFormat::Gif => 13,    // 6 header + 7 LSD
+        ImageFormat::WebP => 30,   // RIFF(12) + chunk header + VP8X dims
+        ImageFormat::Jpeg => 2048, // SOF can follow large EXIF/APP segments
+        ImageFormat::Avif => 512,  // ISOBMFF box traversal (ftyp + meta)
+        ImageFormat::Jxl => 256,   // codestream header or container + jxlc
+        ImageFormat::Heic => 512,  // ISOBMFF like AVIF
+        _ => 256,                  // conservative default
+    }
+}
+
 /// Result of probing partial image data.
 ///
 /// All fields except `format` are `Option`, since partial data may not contain
@@ -985,7 +1004,7 @@ mod tests {
         }
 
         // With min_probe_bytes: dimensions should be present
-        let min = format.min_probe_bytes();
+        let min = min_probe_bytes(format);
         if encoded.len() >= min {
             let result = ProbeResult::for_format(&encoded[..min], format);
             assert_eq!(result.format, format);
@@ -1224,12 +1243,12 @@ mod tests {
 
     #[test]
     fn min_probe_bytes_values() {
-        assert_eq!(ImageFormat::Png.min_probe_bytes(), 33);
-        assert_eq!(ImageFormat::Gif.min_probe_bytes(), 13);
-        assert_eq!(ImageFormat::WebP.min_probe_bytes(), 30);
-        assert_eq!(ImageFormat::Jpeg.min_probe_bytes(), 2048);
-        assert_eq!(ImageFormat::Avif.min_probe_bytes(), 512);
-        assert_eq!(ImageFormat::Jxl.min_probe_bytes(), 256);
+        assert_eq!(min_probe_bytes(ImageFormat::Png), 33);
+        assert_eq!(min_probe_bytes(ImageFormat::Gif), 13);
+        assert_eq!(min_probe_bytes(ImageFormat::WebP), 30);
+        assert_eq!(min_probe_bytes(ImageFormat::Jpeg), 2048);
+        assert_eq!(min_probe_bytes(ImageFormat::Avif), 512);
+        assert_eq!(min_probe_bytes(ImageFormat::Jxl), 256);
         assert_eq!(ImageFormat::RECOMMENDED_PROBE_BYTES, 4096);
     }
 }
