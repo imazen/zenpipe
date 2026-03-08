@@ -233,6 +233,21 @@ pub(crate) fn build_encoder<'a>(
         #[cfg(not(feature = "jxl-encode"))]
         ImageFormat::Jxl => Err(CodecError::UnsupportedFormat(format)),
 
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Pnm => Ok(crate::codecs::pnm::build_trait_encoder(params)),
+        #[cfg(not(feature = "bitmaps"))]
+        ImageFormat::Pnm => Err(CodecError::UnsupportedFormat(format)),
+
+        #[cfg(feature = "bitmaps-bmp")]
+        ImageFormat::Bmp => Ok(crate::codecs::bmp::build_trait_encoder(params)),
+        #[cfg(not(feature = "bitmaps-bmp"))]
+        ImageFormat::Bmp => Err(CodecError::UnsupportedFormat(format)),
+
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Farbfeld => Ok(crate::codecs::farbfeld::build_trait_encoder(params)),
+        #[cfg(not(feature = "bitmaps"))]
+        ImageFormat::Farbfeld => Err(CodecError::UnsupportedFormat(format)),
+
         _ => Err(CodecError::UnsupportedFormat(format)),
     }
 }

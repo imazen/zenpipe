@@ -306,6 +306,23 @@ impl<'a> DecodeRequest<'a> {
             #[cfg(not(feature = "heic-decode"))]
             ImageFormat::Heic => Err(CodecError::UnsupportedFormat(format)),
 
+            #[cfg(feature = "bitmaps")]
+            ImageFormat::Pnm => crate::codecs::pnm::decode(self.data, self.limits, self.stop),
+            #[cfg(not(feature = "bitmaps"))]
+            ImageFormat::Pnm => Err(CodecError::UnsupportedFormat(format)),
+
+            #[cfg(feature = "bitmaps-bmp")]
+            ImageFormat::Bmp => crate::codecs::bmp::decode(self.data, self.limits, self.stop),
+            #[cfg(not(feature = "bitmaps-bmp"))]
+            ImageFormat::Bmp => Err(CodecError::UnsupportedFormat(format)),
+
+            #[cfg(feature = "bitmaps")]
+            ImageFormat::Farbfeld => {
+                crate::codecs::farbfeld::decode(self.data, self.limits, self.stop)
+            }
+            #[cfg(not(feature = "bitmaps"))]
+            ImageFormat::Farbfeld => Err(CodecError::UnsupportedFormat(format)),
+
             _ => Err(CodecError::UnsupportedFormat(format)),
         }
     }

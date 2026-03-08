@@ -30,6 +30,7 @@ zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
 zenpng = { path = "../zenpng", optional = true, features = ["zencodec"] }
 zenjxl = { path = "../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
 heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }
+zenbitmaps = { path = "../zenbitmaps", optional = true, features = ["zencodec"] }
 
 # Pipeline (optional, feature-gated)
 zenresize = { path = "../zenresize", optional = true, default-features = false, features = ["std", "layout"] }
@@ -43,7 +44,7 @@ zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
 
 [features]
-default = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "heic-decode"]
+default = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "heic-decode", "bitmaps-bmp"]
 std = []
 
 # Individual codec features
@@ -59,6 +60,8 @@ avif-encode = ["dep:zenavif", "zenavif/encode"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
 heic-decode = ["dep:heic-decoder"]
+bitmaps = ["dep:zenbitmaps"]
+bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]
 
 # Pipeline
 pipeline = ["dep:zenresize"]
@@ -67,7 +70,7 @@ pipeline = ["dep:zenresize"]
 moxcms = []  # Disabled for now
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp"]
 
 [[example]]
 name = "metadata_roundtrip"

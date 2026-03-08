@@ -4,13 +4,13 @@ use crate::ImageFormat;
 
 /// Set of image formats represented as bitflags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct FormatSet(u8);
+struct FormatSet(u16);
 
 impl FormatSet {
     const EMPTY: Self = FormatSet(0);
 
     /// Map format to bit position. Returns None for unknown formats.
-    const fn bit(format: ImageFormat) -> Option<u8> {
+    const fn bit(format: ImageFormat) -> Option<u16> {
         match format {
             ImageFormat::Jpeg => Some(1 << 0),
             ImageFormat::WebP => Some(1 << 1),
@@ -19,13 +19,16 @@ impl FormatSet {
             ImageFormat::Avif => Some(1 << 4),
             ImageFormat::Jxl => Some(1 << 5),
             ImageFormat::Heic => Some(1 << 6),
+            ImageFormat::Pnm => Some(1 << 7),
+            ImageFormat::Bmp => Some(1 << 8),
+            ImageFormat::Farbfeld => Some(1 << 9),
             _ => None,
         }
     }
 
     #[allow(unused_mut)]
     fn all_compiled() -> Self {
-        let mut bits = 0u8;
+        let mut bits = 0u16;
         #[cfg(feature = "jpeg")]
         {
             bits |= 1 << 0;
@@ -41,6 +44,15 @@ impl FormatSet {
         #[cfg(feature = "png")]
         {
             bits |= 1 << 3;
+        }
+        #[cfg(feature = "bitmaps")]
+        {
+            bits |= 1 << 7; // Pnm
+            bits |= 1 << 9; // Farbfeld
+        }
+        #[cfg(feature = "bitmaps-bmp")]
+        {
+            bits |= 1 << 8; // Bmp
         }
         FormatSet(bits)
     }
@@ -94,7 +106,7 @@ impl FormatSet {
     }
 
     fn iter(self) -> impl Iterator<Item = ImageFormat> {
-        const ALL_FORMATS: [ImageFormat; 7] = [
+        const ALL_FORMATS: [ImageFormat; 10] = [
             ImageFormat::Jpeg,
             ImageFormat::WebP,
             ImageFormat::Gif,
@@ -102,6 +114,9 @@ impl FormatSet {
             ImageFormat::Avif,
             ImageFormat::Jxl,
             ImageFormat::Heic,
+            ImageFormat::Pnm,
+            ImageFormat::Bmp,
+            ImageFormat::Farbfeld,
         ];
         ALL_FORMATS.into_iter().filter(move |&f| self.contains(f))
     }

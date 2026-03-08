@@ -29,3 +29,12 @@ pub(crate) mod jxl_enc;
 
 #[cfg(feature = "heic-decode")]
 pub(crate) mod heic;
+
+#[cfg(feature = "bitmaps")]
+pub(crate) mod pnm;
+
+#[cfg(feature = "bitmaps-bmp")]
+pub(crate) mod bmp;
+
+#[cfg(feature = "bitmaps")]
+pub(crate) mod farbfeld;

@@ -140,3 +140,12 @@ pub use zenjxl::{JxlEncodeJob, JxlEncoderConfig};
 
 #[cfg(feature = "heic-decode")]
 pub use heic_decoder::{HeicDecodeJob, HeicDecoderConfig};
+
+#[cfg(feature = "bitmaps")]
+pub use zenbitmaps::{
+    FarbfeldDecodeJob, FarbfeldDecoderConfig, FarbfeldEncodeJob, FarbfeldEncoderConfig,
+    PnmDecodeJob, PnmDecoderConfig, PnmEncodeJob, PnmEncoderConfig,
+};
+
+#[cfg(feature = "bitmaps-bmp")]
+pub use zenbitmaps::{BmpDecodeJob, BmpDecoderConfig, BmpEncodeJob, BmpEncoderConfig};
