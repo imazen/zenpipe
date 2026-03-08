@@ -246,7 +246,7 @@ fn encode_and_measure(
         Codec::Avif(q) => {
             let config = zenavif::AvifEncoderConfig::new()
                 .with_generic_quality(*q)
-                .with_generic_effort(10); // fastest for calibration
+                .with_generic_effort(0); // fastest (speed 10); effort 0 = least effort = fastest
             encode_rgb8_with_config(&config, source)
         }
         #[cfg(feature = "jxl-encode")]
