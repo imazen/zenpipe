@@ -46,7 +46,7 @@ fast-ssim2 = { path = "../fast-ssim2/ssimulacra2", features = ["imgref"] }
 rayon = "1"
 
 [features]
-default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "heic-decode", "bitmaps-bmp"]
+default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "heic-decode", "bitmaps-bmp"]
 std = []
 
 # Individual codec features
