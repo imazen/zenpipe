@@ -27,8 +27,8 @@ extern crate bytemuck;
 
 /// Quality levels to sweep. Denser at the high end where users care most.
 const QUALITY_LEVELS: &[f32] = &[
-    5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 72.0,
-    75.0, 78.0, 80.0, 82.0, 85.0, 87.0, 90.0, 92.0, 95.0, 97.0, 99.0,
+    5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 72.0, 75.0,
+    78.0, 80.0, 82.0, 85.0, 87.0, 90.0, 92.0, 95.0, 97.0, 99.0,
 ];
 
 /// A single measurement: one image at one quality for one codec.
@@ -119,8 +119,13 @@ fn main() {
         start.elapsed().as_secs_f64()
     );
 
-    // Run codecs
+    // Run codecs — libjpeg-turbo first as the reference anchor
     let codecs: Vec<(&str, Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>)> = vec![
+        (
+            "libjpeg-turbo",
+            Box::new(|q| Some(Codec::LibjpegTurbo(q)))
+                as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+        ),
         #[cfg(feature = "jpeg")]
         (
             "jpeg",
@@ -178,10 +183,14 @@ fn main() {
                     measurements.lock().unwrap().push(m);
                 }
 
-                let count =
-                    done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let count = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 if count % 100 == 0 {
-                    eprint!("\r  {}/{} ({:.0}%)", count, total, count as f64 / total as f64 * 100.0);
+                    eprint!(
+                        "\r  {}/{} ({:.0}%)",
+                        count,
+                        total,
+                        count as f64 / total as f64 * 100.0
+                    );
                 }
             }
         });
@@ -197,17 +206,19 @@ fn main() {
     }
 
     // Write summary CSV (median SSIM2 per codec per quality level)
-    write_summary_csv(&output_dir, &codecs.iter().map(|(n, _)| *n).collect::<Vec<_>>());
-
-    eprintln!(
-        "\nTotal time: {:.1}s",
-        start.elapsed().as_secs_f64()
+    write_summary_csv(
+        &output_dir,
+        &codecs.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
     );
+
+    eprintln!("\nTotal time: {:.1}s", start.elapsed().as_secs_f64());
     eprintln!("Results in: {}", output_dir.display());
 }
 
 /// Codec variants for encoding.
 enum Codec {
+    /// libjpeg-turbo baseline (reference anchor)
+    LibjpegTurbo(f32),
     #[cfg(feature = "jpeg")]
     Jpeg(f32),
     #[cfg(feature = "webp")]
@@ -232,6 +243,7 @@ fn encode_and_measure(
 
     // Encode using the codec's with_generic_quality
     let encoded = match codec {
+        Codec::LibjpegTurbo(q) => encode_with_libjpeg_turbo(source, *q as i32),
         #[cfg(feature = "jpeg")]
         Codec::Jpeg(q) => {
             let config = zenjpeg::JpegEncoderConfig::new().with_generic_quality(*q);
@@ -267,8 +279,14 @@ fn encode_and_measure(
     let file_size = encoded.len();
 
     // Decode back to RGB8
-    let decoded = DecodeRequest::new(&encoded).decode().ok()?;
-    let decoded_rgb = decode_output_to_rgb8(&decoded)?;
+    // Use libjpeg-turbo's own decoder for libjpeg-turbo codec (pure roundtrip),
+    // otherwise use zencodecs' format-matched decoder.
+    let decoded_rgb = if matches!(codec, Codec::LibjpegTurbo(_)) {
+        decode_with_libjpeg_turbo(&encoded)?
+    } else {
+        let decoded = DecodeRequest::new(&encoded).decode().ok()?;
+        decode_output_to_rgb8(&decoded)?
+    };
 
     // Measure SSIM2 using precomputed reference
     let ssim2 = measure_ssim2_with_ref(ssim2_ref, decoded_rgb.as_ref())?;
@@ -284,6 +302,54 @@ fn encode_and_measure(
     })
 }
 
+/// Encode RGB8 pixels using libjpeg-turbo directly.
+fn encode_with_libjpeg_turbo(img: ImgRef<[u8; 3]>, quality: i32) -> Result<Vec<u8>, String> {
+    let w = img.width();
+    let h = img.height();
+    // Flatten [u8; 3] pixels into contiguous &[u8]
+    let pixels: Vec<u8> = img
+        .pixels()
+        .flat_map(|p| {
+            let [r, g, b] = p;
+            [r, g, b]
+        })
+        .collect();
+    let tj_image = turbojpeg::Image {
+        pixels: pixels.as_slice(),
+        width: w,
+        pitch: w * 3,
+        height: h,
+        format: turbojpeg::PixelFormat::RGB,
+    };
+    let mut compressor = turbojpeg::Compressor::new().map_err(|e| format!("{e}"))?;
+    compressor
+        .set_quality(quality.clamp(1, 100))
+        .map_err(|e| format!("{e}"))?;
+    compressor
+        .set_subsamp(turbojpeg::Subsamp::Sub2x2)
+        .map_err(|e| format!("{e}"))?;
+    compressor
+        .compress_to_vec(tj_image)
+        .map_err(|e| format!("{e}"))
+}
+
+/// Decode JPEG bytes using libjpeg-turbo and return RGB8 ImgVec.
+fn decode_with_libjpeg_turbo(data: &[u8]) -> Option<ImgVec<[u8; 3]>> {
+    let image = turbojpeg::decompress(data, turbojpeg::PixelFormat::RGB).ok()?;
+    let w = image.width;
+    let h = image.height;
+    let pitch = image.pitch;
+    let mut rgb_data = Vec::with_capacity(w * h);
+    for y in 0..h {
+        let row_start = y * pitch;
+        for x in 0..w {
+            let i = row_start + x * 3;
+            rgb_data.push([image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]]);
+        }
+    }
+    Some(ImgVec::new(rgb_data, w, h))
+}
+
 /// Encode RGB8 pixels using a concrete EncoderConfig.
 fn encode_rgb8_with_config<C>(config: &C, img: ImgRef<[u8; 3]>) -> Result<Vec<u8>, String>
 where
@@ -292,7 +358,11 @@ where
     // Convert [u8; 3] to rgb::Rgb<u8>
     let pixels: Vec<rgb::Rgb<u8>> = img
         .pixels()
-        .map(|p| rgb::Rgb { r: p[0], g: p[1], b: p[2] })
+        .map(|p| rgb::Rgb {
+            r: p[0],
+            g: p[1],
+            b: p[2],
+        })
         .collect();
     let rgba_pixels: Vec<rgb::Rgba<u8>> = pixels
         .iter()
@@ -325,18 +395,12 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
     match (channel_type, bpp) {
         (ChannelType::U8, 3) => {
             // RGB8
-            let data: Vec<[u8; 3]> = bytes
-                .chunks_exact(3)
-                .map(|c| [c[0], c[1], c[2]])
-                .collect();
+            let data: Vec<[u8; 3]> = bytes.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
         (ChannelType::U8, 4) => {
             // RGBA8 -> RGB8 (drop alpha)
-            let data: Vec<[u8; 3]> = bytes
-                .chunks_exact(4)
-                .map(|c| [c[0], c[1], c[2]])
-                .collect();
+            let data: Vec<[u8; 3]> = bytes.chunks_exact(4).map(|c| [c[0], c[1], c[2]]).collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
         (ChannelType::U8, 1) => {
@@ -412,7 +476,11 @@ fn measure_ssim2_with_ref(
 fn write_codec_csv(output_dir: &Path, codec: &str, measurements: &[Measurement]) {
     let path = output_dir.join(format!("{}_quality_sweep.csv", codec));
     let mut f = fs::File::create(&path).expect("create csv");
-    writeln!(f, "codec,image,generic_quality,ssim2,file_size,width,height,bpp").unwrap();
+    writeln!(
+        f,
+        "codec,image,generic_quality,ssim2,file_size,width,height,bpp"
+    )
+    .unwrap();
 
     let mut sorted = measurements.to_vec();
     sorted.sort_by(|a, b| {
@@ -443,7 +511,12 @@ fn write_summary_csv(output_dir: &Path, codec_names: &[&str]) {
     // Header
     write!(f, "generic_quality").unwrap();
     for codec in codec_names {
-        write!(f, ",{}_median_ssim2,{}_p25_ssim2,{}_p75_ssim2,{}_median_bpp", codec, codec, codec, codec).unwrap();
+        write!(
+            f,
+            ",{}_median_ssim2,{}_p25_ssim2,{}_p75_ssim2,{}_median_bpp",
+            codec, codec, codec, codec
+        )
+        .unwrap();
     }
     writeln!(f).unwrap();
 
@@ -458,7 +531,12 @@ fn write_summary_csv(output_dir: &Path, codec_names: &[&str]) {
             } else {
                 (f64::NAN, f64::NAN, f64::NAN, f64::NAN)
             };
-            write!(f, ",{:.4},{:.4},{:.4},{:.4}", median_ssim2, p25, p75, median_bpp).unwrap();
+            write!(
+                f,
+                ",{:.4},{:.4},{:.4},{:.4}",
+                median_ssim2, p25, p75, median_bpp
+            )
+            .unwrap();
         }
         writeln!(f).unwrap();
     }

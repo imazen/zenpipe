@@ -44,6 +44,7 @@ zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
 fast-ssim2 = { path = "../fast-ssim2/ssimulacra2", features = ["imgref"] }
 rayon = "1"
+turbojpeg = "1.4"
 
 [features]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "heic-decode", "bitmaps-bmp"]

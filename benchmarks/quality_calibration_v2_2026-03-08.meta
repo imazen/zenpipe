@@ -1,0 +1,15 @@
+# Quality Calibration Sweep v2 - 2026-03-08
+#
+# Corpus: CID22-512 (209 images, 512x512)
+# Quality levels: 26 (Q5..Q99)
+# Codecs: libjpeg-turbo (baseline anchor), jpeg (jpegli), webp (zenwebp), avif (zenavif speed 10), jxl (zenjxl)
+# Metric: SSIMULACRA2 via fast-ssim2
+# Total measurements: 27,170 (5434 per codec, 26 JXL failures)
+# Total time: 323s
+# Command: cargo run --release --no-default-features --features calibrate --example quality_calibrate -- --corpus ~/work/codec-corpus/CID22/CID22-512/training --output /mnt/v/output/quality-calibrate-v2
+#
+# libjpeg-turbo config: quality 1-100 direct, 4:2:0 subsampling, no optimization
+# jpegli: quality direct passthrough via with_generic_quality
+# webp: quality direct passthrough via with_generic_quality
+# avif: quality direct passthrough, effort=0 (speed 10, fastest)
+# jxl: quality mapped via piecewise linear (Q90-100→d0-1, Q70-90→d1-2, Q0-70→d2-9)
