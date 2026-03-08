@@ -13,6 +13,14 @@ pub struct Limits {
     pub max_pixels: Option<u64>,
     /// Maximum memory allocation in bytes.
     pub max_memory_bytes: Option<u64>,
+    /// Maximum input data size in bytes (decode only).
+    pub max_input_bytes: Option<u64>,
+    /// Maximum encoded output size in bytes (encode only).
+    pub max_output_bytes: Option<u64>,
+    /// Maximum number of animation frames.
+    pub max_frames: Option<u32>,
+    /// Maximum total animation duration in milliseconds.
+    pub max_duration_ms: Option<u64>,
     /// Threading policy for codec operations.
     ///
     /// Defaults to [`ThreadingPolicy::Unlimited`]. Use [`ThreadingPolicy::SingleThread`]
@@ -27,6 +35,10 @@ impl Default for Limits {
             max_height: None,
             max_pixels: None,
             max_memory_bytes: None,
+            max_input_bytes: None,
+            max_output_bytes: None,
+            max_frames: None,
+            max_duration_ms: None,
             threading: zc::ThreadingPolicy::Unlimited,
         }
     }
@@ -36,6 +48,60 @@ impl Limits {
     /// Create a new Limits with no restrictions.
     pub fn none() -> Self {
         Self::default()
+    }
+
+    /// Set maximum image width in pixels.
+    pub fn with_max_width(mut self, max: u64) -> Self {
+        self.max_width = Some(max);
+        self
+    }
+
+    /// Set maximum image height in pixels.
+    pub fn with_max_height(mut self, max: u64) -> Self {
+        self.max_height = Some(max);
+        self
+    }
+
+    /// Set maximum total pixels (width x height).
+    pub fn with_max_pixels(mut self, max: u64) -> Self {
+        self.max_pixels = Some(max);
+        self
+    }
+
+    /// Set maximum memory allocation in bytes.
+    pub fn with_max_memory_bytes(mut self, max: u64) -> Self {
+        self.max_memory_bytes = Some(max);
+        self
+    }
+
+    /// Set maximum input data size in bytes (decode only).
+    pub fn with_max_input_bytes(mut self, max: u64) -> Self {
+        self.max_input_bytes = Some(max);
+        self
+    }
+
+    /// Set maximum encoded output size in bytes (encode only).
+    pub fn with_max_output_bytes(mut self, max: u64) -> Self {
+        self.max_output_bytes = Some(max);
+        self
+    }
+
+    /// Set maximum number of animation frames.
+    pub fn with_max_frames(mut self, max: u32) -> Self {
+        self.max_frames = Some(max);
+        self
+    }
+
+    /// Set maximum total animation duration in milliseconds.
+    pub fn with_max_duration_ms(mut self, max: u64) -> Self {
+        self.max_duration_ms = Some(max);
+        self
+    }
+
+    /// Set threading policy for codec operations.
+    pub fn with_threading(mut self, policy: zc::ThreadingPolicy) -> Self {
+        self.threading = policy;
+        self
     }
 
     /// Check if dimensions are within limits.
@@ -118,6 +184,18 @@ pub(crate) fn to_resource_limits(limits: &Limits) -> zc::ResourceLimits {
     if let Some(max_mem) = limits.max_memory_bytes {
         rl = rl.with_max_memory(max_mem);
     }
+    if let Some(max_in) = limits.max_input_bytes {
+        rl = rl.with_max_input_bytes(max_in);
+    }
+    if let Some(max_out) = limits.max_output_bytes {
+        rl = rl.with_max_output(max_out);
+    }
+    if let Some(max_fr) = limits.max_frames {
+        rl = rl.with_max_frames(max_fr);
+    }
+    if let Some(max_dur) = limits.max_duration_ms {
+        rl = rl.with_max_duration(max_dur);
+    }
     rl = rl.with_threading(limits.threading);
     rl
 }
@@ -163,5 +241,48 @@ mod tests {
 
         assert!(limits.check_memory(500_000).is_ok());
         assert!(limits.check_memory(2_000_000).is_err());
+    }
+
+    #[test]
+    fn to_resource_limits_forwards_all_fields() {
+        let limits = Limits {
+            max_width: Some(1920),
+            max_height: Some(1080),
+            max_pixels: Some(2_073_600),
+            max_memory_bytes: Some(512_000_000),
+            max_input_bytes: Some(10_000_000),
+            max_output_bytes: Some(5_000_000),
+            max_frames: Some(100),
+            max_duration_ms: Some(30_000),
+            threading: zc::ThreadingPolicy::SingleThread,
+        };
+
+        let rl = to_resource_limits(&limits);
+
+        assert_eq!(rl.max_width, Some(1920));
+        assert_eq!(rl.max_height, Some(1080));
+        assert_eq!(rl.max_pixels, Some(2_073_600));
+        assert_eq!(rl.max_memory_bytes, Some(512_000_000));
+        assert_eq!(rl.max_input_bytes, Some(10_000_000));
+        assert_eq!(rl.max_output_bytes, Some(5_000_000));
+        assert_eq!(rl.max_frames, Some(100));
+        assert_eq!(rl.max_duration_ms, Some(30_000));
+        assert_eq!(rl.threading, zc::ThreadingPolicy::SingleThread);
+    }
+
+    #[test]
+    fn to_resource_limits_none_fields_stay_none() {
+        let limits = Limits::none();
+        let rl = to_resource_limits(&limits);
+
+        assert_eq!(rl.max_width, None);
+        assert_eq!(rl.max_height, None);
+        assert_eq!(rl.max_pixels, None);
+        assert_eq!(rl.max_memory_bytes, None);
+        assert_eq!(rl.max_input_bytes, None);
+        assert_eq!(rl.max_output_bytes, None);
+        assert_eq!(rl.max_frames, None);
+        assert_eq!(rl.max_duration_ms, None);
+        assert_eq!(rl.threading, zc::ThreadingPolicy::Unlimited);
     }
 }
