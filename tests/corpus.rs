@@ -632,7 +632,7 @@ fn corpus_imageflow_probe() {
     for path in &files {
         let data = std::fs::read(path).unwrap();
         // Probe should always work for known formats
-        if zencodecs::probe(&data).is_ok() {
+        if zencodecs::from_bytes(&data).is_ok() {
             probed += 1;
         }
         // Decode may fail for some edge cases — that's OK

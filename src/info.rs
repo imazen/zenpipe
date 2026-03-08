@@ -9,40 +9,6 @@ pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
     zc::ImageFormatRegistry::common().detect(data)
 }
 
-/// Probe partial image data for metadata without decoding pixels.
-///
-/// Unlike [`from_bytes`], this works with truncated data (e.g., first N bytes
-/// from an HTTP range request). Missing dimensions result in `None` fields
-/// rather than an error. All compiled-in codecs are attempted.
-///
-/// Uses pure byte parsing — no codec crate dependencies. Works even if a
-/// codec feature isn't compiled in.
-pub fn probe(data: &[u8]) -> Result<crate::ProbeResult, CodecError> {
-    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
-    Ok(crate::ProbeResult::for_format(data, format))
-}
-
-/// Probe partial image data with a specific registry.
-///
-/// Only formats enabled in the registry will be accepted.
-pub fn probe_with_registry(
-    data: &[u8],
-    registry: &CodecRegistry,
-) -> Result<crate::ProbeResult, CodecError> {
-    let format = detect_format(data).ok_or(CodecError::UnrecognizedFormat)?;
-    if !registry.can_decode(format) {
-        return Err(CodecError::DisabledFormat(format));
-    }
-    Ok(crate::ProbeResult::for_format(data, format))
-}
-
-/// Probe partial image data for a known format (skips auto-detection).
-///
-/// Never fails — insufficient data results in `None` fields.
-pub fn probe_format(data: &[u8], format: ImageFormat) -> crate::ProbeResult {
-    crate::ProbeResult::for_format(data, format)
-}
-
 /// Probe image metadata without decoding pixels.
 ///
 /// Uses format auto-detection and dispatches to the appropriate codec's probe.

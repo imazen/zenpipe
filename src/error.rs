@@ -102,17 +102,4 @@ impl CodecError {
             caller: core::panic::Location::caller(),
         }
     }
-
-    /// Wrap a pre-boxed codec error, capturing the caller's location.
-    #[track_caller]
-    pub(crate) fn from_codec_boxed(
-        format: ImageFormat,
-        source: alloc::boxed::Box<dyn core::error::Error + Send + Sync>,
-    ) -> Self {
-        CodecError::Codec {
-            format,
-            source,
-            caller: core::panic::Location::caller(),
-        }
-    }
 }

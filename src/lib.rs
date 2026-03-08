@@ -95,7 +95,6 @@ mod limits;
 #[cfg(feature = "pipeline")]
 pub mod pipeline;
 pub mod pixel;
-mod probe;
 mod registry;
 
 // Re-exports
@@ -106,9 +105,7 @@ pub use error::CodecError;
 pub use info::ImageInfo;
 pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
-pub use info::{probe, probe_format, probe_with_registry};
 pub use limits::{Limits, Stop};
-pub use probe::ProbeResult;
 pub use registry::CodecRegistry;
 pub use zc::ImageFormat;
 pub use zc::MetadataView;

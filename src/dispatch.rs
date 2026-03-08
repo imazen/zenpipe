@@ -47,7 +47,7 @@ where
 {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
-            use zc::encode::EncodeJob as _;
+            use zc::encode::{EncodeJob as _, Encoder as _};
             let config = build_config(&params);
             let mut job = config.job();
             if let Some(lim) = params.limits {
@@ -60,10 +60,11 @@ where
                 job = job.with_stop(s);
             }
             let format = C::format();
-            job.dyn_encoder()
-                .map_err(|e| CodecError::from_codec_boxed(format, e))?
-                .encode(pixels)
-                .map_err(|e| CodecError::from_codec_boxed(format, e))
+            let enc = job
+                .encoder()
+                .map_err(|e| CodecError::from_codec(format, e))?;
+            enc.encode(pixels)
+                .map_err(|e| CodecError::from_codec(format, e))
         }),
         supported: C::supported_descriptors(),
     }
