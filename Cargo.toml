@@ -1,0 +1,20 @@
+[package]
+name = "zenfilters"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+license = "AGPL-3.0-or-later"
+description = "Photo filter operations on planar Oklab f32 data with SIMD acceleration"
+repository = "https://github.com/imazen/zenfilters"
+keywords = ["image", "filter", "oklab", "simd", "photo"]
+categories = ["multimedia::images", "graphics"]
+
+[dependencies]
+archmage = { version = "0.9", features = ["avx512"] }
+magetypes = "0.9"
+zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar"] }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert" }
+
+[dev-dependencies]
+zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["buffer", "planar", "rgb"] }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer", "planar"] }
