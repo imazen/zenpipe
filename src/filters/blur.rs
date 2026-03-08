@@ -37,23 +37,23 @@ impl Filter for Blur {
         let mut tmp = ctx.take_f32(n);
 
         // Blur L
-        gaussian_blur_plane(&planes.l, &mut tmp, w, h, &kernel);
+        gaussian_blur_plane(&planes.l, &mut tmp, w, h, &kernel, ctx);
         core::mem::swap(&mut planes.l, &mut tmp);
 
         // Blur a
         tmp.fill(0.0);
-        gaussian_blur_plane(&planes.a, &mut tmp, w, h, &kernel);
+        gaussian_blur_plane(&planes.a, &mut tmp, w, h, &kernel, ctx);
         core::mem::swap(&mut planes.a, &mut tmp);
 
         // Blur b
         tmp.fill(0.0);
-        gaussian_blur_plane(&planes.b, &mut tmp, w, h, &kernel);
+        gaussian_blur_plane(&planes.b, &mut tmp, w, h, &kernel, ctx);
         core::mem::swap(&mut planes.b, &mut tmp);
 
         // Blur alpha if present
         if let Some(alpha) = &mut planes.alpha {
             tmp.fill(0.0);
-            gaussian_blur_plane(alpha, &mut tmp, w, h, &kernel);
+            gaussian_blur_plane(alpha, &mut tmp, w, h, &kernel, ctx);
             core::mem::swap(alpha, &mut tmp);
             ctx.return_f32(tmp);
         } else {

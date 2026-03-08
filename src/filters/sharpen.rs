@@ -38,6 +38,7 @@ impl Filter for Sharpen {
             planes.width,
             planes.height,
             &kernel,
+            ctx,
         );
 
         let mut dst = ctx.take_f32(planes.pixel_count());

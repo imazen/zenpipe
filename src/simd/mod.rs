@@ -1,4 +1,5 @@
 use crate::blur::GaussianKernel;
+use crate::context::FilterContext;
 
 mod scalar;
 use scalar::*;
@@ -30,9 +31,10 @@ pub(crate) fn gaussian_blur_plane_dispatch(
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
     archmage::incant!(
-        gaussian_blur_plane_impl(src, dst, width, height, kernel),
+        gaussian_blur_plane_impl(src, dst, width, height, kernel, ctx),
         [v3]
     );
 }

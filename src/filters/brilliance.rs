@@ -48,7 +48,14 @@ impl Filter for Brilliance {
         }
         let kernel = GaussianKernel::new(self.sigma);
         let mut avg_l = ctx.take_f32(planes.pixel_count());
-        gaussian_blur_plane(&planes.l, &mut avg_l, planes.width, planes.height, &kernel);
+        gaussian_blur_plane(
+            &planes.l,
+            &mut avg_l,
+            planes.width,
+            planes.height,
+            &kernel,
+            ctx,
+        );
 
         let mut dst = ctx.take_f32(planes.pixel_count());
         simd::brilliance_apply(

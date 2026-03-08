@@ -1,6 +1,7 @@
 use archmage::prelude::*;
 
 use crate::blur::{self, GaussianKernel};
+use crate::context::FilterContext;
 
 pub(super) fn scale_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], factor: f32) {
     for v in plane.iter_mut() {
@@ -33,8 +34,9 @@ pub(super) fn gaussian_blur_plane_impl_scalar(
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
-    blur::gaussian_blur_plane_scalar(src, dst, width, height, kernel);
+    blur::gaussian_blur_plane_scalar(src, dst, width, height, kernel, ctx);
 }
 
 pub(super) fn brilliance_apply_impl_scalar(

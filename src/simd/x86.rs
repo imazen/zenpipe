@@ -2,6 +2,7 @@ use archmage::prelude::*;
 use magetypes::simd::f32x8;
 
 use crate::blur::GaussianKernel;
+use crate::context::FilterContext;
 
 #[arcane]
 pub(super) fn scale_plane_impl_v3(token: X64V3Token, plane: &mut [f32], factor: f32) {
@@ -91,8 +92,9 @@ pub(super) fn gaussian_blur_plane_impl_v3(
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
-    gaussian_blur_plane_simd(token, src, dst, width, height, kernel);
+    gaussian_blur_plane_simd(token, src, dst, width, height, kernel, ctx);
 }
 
 #[rite]
@@ -103,12 +105,13 @@ fn gaussian_blur_plane_simd(
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
     let w = width as usize;
     let h = height as usize;
     let radius = kernel.radius;
 
-    let mut h_buf = vec![0.0f32; w * h];
+    let mut h_buf = ctx.take_f32(w * h);
     let mut padded = Vec::with_capacity(w + 2 * radius);
 
     // Horizontal pass
@@ -177,6 +180,8 @@ fn gaussian_blur_plane_simd(
             *v = sum;
         }
     }
+
+    ctx.return_f32(h_buf);
 }
 
 #[arcane]

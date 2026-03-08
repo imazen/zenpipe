@@ -43,18 +43,22 @@ fn pad_row(src: &[f32], radius: usize, padded: &mut Vec<f32>) {
     padded.extend(core::iter::repeat_n(edge_r, radius));
 }
 
+use crate::context::FilterContext;
+
 /// Separable Gaussian blur on a single f32 plane.
 ///
 /// Performs horizontal then vertical pass. The result is written to `dst`.
 /// `src` and `dst` must both be `width * height` elements.
+/// `ctx` provides pooled scratch buffers for the intermediate horizontal pass.
 pub fn gaussian_blur_plane(
     src: &[f32],
     dst: &mut [f32],
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
-    crate::simd::gaussian_blur_plane_dispatch(src, dst, width, height, kernel);
+    crate::simd::gaussian_blur_plane_dispatch(src, dst, width, height, kernel, ctx);
 }
 
 /// Scalar implementation of separable Gaussian blur.
@@ -64,13 +68,14 @@ pub(crate) fn gaussian_blur_plane_scalar(
     width: u32,
     height: u32,
     kernel: &GaussianKernel,
+    ctx: &mut FilterContext,
 ) {
     let w = width as usize;
     let h = height as usize;
     let radius = kernel.radius;
 
     // Temp buffer for horizontal pass output
-    let mut h_buf = vec![0.0f32; w * h];
+    let mut h_buf = ctx.take_f32(w * h);
     let mut padded = Vec::with_capacity(w + 2 * radius);
 
     // Horizontal pass
@@ -98,6 +103,8 @@ pub(crate) fn gaussian_blur_plane_scalar(
             dst[y * w + x] = sum;
         }
     }
+
+    ctx.return_f32(h_buf);
 }
 
 #[cfg(test)]
@@ -111,7 +118,7 @@ mod tests {
         let src = vec![0.5f32; (w * h) as usize];
         let mut dst = vec![0.0f32; (w * h) as usize];
         let kernel = GaussianKernel::new(3.0);
-        gaussian_blur_plane(&src, &mut dst, w, h, &kernel);
+        gaussian_blur_plane(&src, &mut dst, w, h, &kernel, &mut FilterContext::new());
         for &v in &dst {
             assert!(
                 (v - 0.5).abs() < 0.01,
