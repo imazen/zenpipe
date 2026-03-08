@@ -42,9 +42,11 @@ zenresize = { path = "../zenresize", optional = true, default-features = false, 
 png = "0.18"
 zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
+fast-ssim2 = { path = "../fast-ssim2/ssimulacra2", features = ["imgref"] }
+rayon = "1"
 
 [features]
-default = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "heic-decode", "bitmaps-bmp"]
+default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "heic-decode", "bitmaps-bmp"]
 std = []
 
 # Individual codec features
@@ -52,9 +54,11 @@ jpeg = ["dep:zenjpeg"]
 jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
+gif-zenquant = ["gif", "zengif/zenquant"]
 gif-quantizr = ["gif", "zengif/quantizr"]
 gif-imagequant = ["gif", "zengif/imagequant"]
 png = ["dep:zenpng"]
+png-zenquant = ["png", "zenpng/quantize"]
 avif-decode = ["dep:zenavif"]
 avif-encode = ["dep:zenavif", "zenavif/encode"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
@@ -70,7 +74,10 @@ pipeline = ["dep:zenresize"]
 moxcms = []  # Disabled for now
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp"]
+
+# Calibration harness (all lossy encoders)
+calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
 
 [[example]]
 name = "metadata_roundtrip"
@@ -95,6 +102,10 @@ required-features = ["std"]
 [[example]]
 name = "heaptrack_zencodec_traits"
 required-features = ["std"]
+
+[[example]]
+name = "quality_calibrate"
+required-features = ["calibrate"]
 
 [patch.crates-io]
 zenpixels = { path = "../zenpixels/zenpixels" }
