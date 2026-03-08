@@ -89,6 +89,10 @@ required-features = ["std"]
 name = "bench_wasm"
 required-features = ["std"]
 
+[[example]]
+name = "heaptrack_zencodec_traits"
+required-features = ["std"]
+
 [patch.crates-io]
 zenpixels = { path = "../zenpixels/zenpixels" }
 zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
