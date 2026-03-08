@@ -1,5 +1,6 @@
 use crate::blur::GaussianKernel;
 use crate::context::FilterContext;
+use zenpixels_convert::gamut::GamutMatrix;
 
 mod scalar;
 use scalar::*;
@@ -57,6 +58,42 @@ pub(crate) fn brilliance_apply(
             shadow_strength,
             highlight_strength
         ),
+        [v3]
+    );
+}
+
+/// Dispatch: scatter interleaved linear RGB f32 to planar Oklab.
+///
+/// Alpha is handled separately by the caller (it's just a copy).
+pub(crate) fn scatter_oklab(
+    src: &[f32],
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    channels: u32,
+    m1: &GamutMatrix,
+    inv_white: f32,
+) {
+    archmage::incant!(
+        scatter_oklab_impl(src, l, a, b, channels, m1, inv_white),
+        [v3]
+    );
+}
+
+/// Dispatch: gather planar Oklab to interleaved linear RGB f32.
+///
+/// Alpha is handled separately by the caller.
+pub(crate) fn gather_oklab(
+    l: &[f32],
+    a: &[f32],
+    b: &[f32],
+    dst: &mut [f32],
+    channels: u32,
+    m1_inv: &GamutMatrix,
+    reference_white: f32,
+) {
+    archmage::incant!(
+        gather_oklab_impl(l, a, b, dst, channels, m1_inv, reference_white),
         [v3]
     );
 }

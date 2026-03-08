@@ -2,6 +2,8 @@ use archmage::prelude::*;
 
 use crate::blur::{self, GaussianKernel};
 use crate::context::FilterContext;
+use zenpixels_convert::gamut::GamutMatrix;
+use zenpixels_convert::oklab;
 
 pub(super) fn scale_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], factor: f32) {
     for v in plane.iter_mut() {
@@ -58,5 +60,52 @@ pub(super) fn brilliance_apply_impl_scalar(
             1.0 - (ratio - 1.0).min(1.0) * highlight_str * amount
         };
         dst_l[i] = l * c;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn scatter_oklab_impl_scalar(
+    _token: ScalarToken,
+    src: &[f32],
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    channels: u32,
+    m1: &GamutMatrix,
+    inv_white: f32,
+) {
+    let n = l.len();
+    let ch = channels as usize;
+    for i in 0..n {
+        let base = i * ch;
+        let r = src[base] * inv_white;
+        let g = src[base + 1] * inv_white;
+        let bv = src[base + 2] * inv_white;
+        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        l[i] = ol;
+        a[i] = oa;
+        b[i] = ob;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn gather_oklab_impl_scalar(
+    _token: ScalarToken,
+    l: &[f32],
+    a: &[f32],
+    b: &[f32],
+    dst: &mut [f32],
+    channels: u32,
+    m1_inv: &GamutMatrix,
+    reference_white: f32,
+) {
+    let n = l.len();
+    let ch = channels as usize;
+    for i in 0..n {
+        let [r, g, bv] = oklab::oklab_to_rgb(l[i], a[i], b[i], m1_inv);
+        let base = i * ch;
+        dst[base] = (r * reference_white).max(0.0);
+        dst[base + 1] = (g * reference_white).max(0.0);
+        dst[base + 2] = (bv * reference_white).max(0.0);
     }
 }

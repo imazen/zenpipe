@@ -1,6 +1,6 @@
 use crate::planes::OklabPlanes;
+use crate::simd;
 use zenpixels_convert::gamut::GamutMatrix;
-use zenpixels_convert::oklab;
 
 /// Convert interleaved linear RGB f32 to planar Oklab.
 ///
@@ -25,21 +25,23 @@ pub fn scatter_to_oklab(
 
     let inv_white = 1.0 / reference_white;
 
-    for i in 0..n {
-        let base = i * ch;
-        let r = src[base] * inv_white;
-        let g = src[base + 1] * inv_white;
-        let b = src[base + 2] * inv_white;
+    // SIMD dispatch handles the RGB→Oklab conversion
+    simd::scatter_oklab(
+        src,
+        &mut planes.l,
+        &mut planes.a,
+        &mut planes.b,
+        channels,
+        m1,
+        inv_white,
+    );
 
-        let [l, a, ob] = oklab::rgb_to_oklab(r, g, b, m1);
-        planes.l[i] = l;
-        planes.a[i] = a;
-        planes.b[i] = ob;
-
-        if ch == 4
-            && let Some(alpha) = &mut planes.alpha
-        {
-            alpha[i] = src[base + 3];
+    // Alpha is a straight copy — handle separately
+    if ch == 4
+        && let Some(alpha) = &mut planes.alpha
+    {
+        for i in 0..n {
+            alpha[i] = src[i * ch + 3];
         }
     }
 }
@@ -65,15 +67,21 @@ pub fn gather_from_oklab(
     debug_assert!(ch == 3 || ch == 4);
     debug_assert!(dst.len() >= n * ch);
 
-    for i in 0..n {
-        let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], m1_inv);
-        let base = i * ch;
-        dst[base] = (r * reference_white).max(0.0);
-        dst[base + 1] = (g * reference_white).max(0.0);
-        dst[base + 2] = (b * reference_white).max(0.0);
+    // SIMD dispatch handles the Oklab→RGB conversion
+    simd::gather_oklab(
+        &planes.l,
+        &planes.a,
+        &planes.b,
+        dst,
+        channels,
+        m1_inv,
+        reference_white,
+    );
 
-        if ch == 4 {
-            dst[base + 3] = planes.alpha.as_ref().map_or(1.0, |alpha| alpha[i]);
+    // Alpha is a straight copy
+    if ch == 4 {
+        for i in 0..n {
+            dst[i * ch + 3] = planes.alpha.as_ref().map_or(1.0, |alpha| alpha[i]);
         }
     }
 }
@@ -82,6 +90,7 @@ pub fn gather_from_oklab(
 mod tests {
     use super::*;
     use zenpixels::ColorPrimaries;
+    use zenpixels_convert::oklab;
 
     fn make_test_rgb(width: u32, height: u32) -> Vec<f32> {
         let n = (width as usize) * (height as usize);
@@ -212,5 +221,26 @@ mod tests {
                 dst[c]
             );
         }
+    }
+
+    /// Test that non-8-aligned pixel counts work correctly (SIMD tail handling).
+    #[test]
+    fn non_aligned_pixel_count() {
+        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+
+        // 13 pixels — not a multiple of 8
+        let src = make_test_rgb(13, 1);
+        let mut planes = OklabPlanes::new(13, 1);
+        scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+
+        let mut dst = vec![0.0f32; src.len()];
+        gather_from_oklab(&planes, &mut dst, 3, &m1_inv, 1.0);
+
+        let mut max_err = 0.0f32;
+        for i in 0..src.len() {
+            max_err = max_err.max((src[i] - dst[i]).abs());
+        }
+        assert!(max_err < 1e-3, "non-aligned roundtrip max error: {max_err}");
     }
 }

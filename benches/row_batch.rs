@@ -314,6 +314,71 @@ fn bench_row_converter_overhead(c: &mut Criterion) {
     group.finish();
 }
 
+// ─── Scatter/gather isolation ────────────────────────────────────────
+
+fn bench_scatter_gather(c: &mut Criterion) {
+    use zenpixels::ColorPrimaries;
+    use zenpixels_convert::oklab;
+
+    let mut group = c.benchmark_group("scatter_gather");
+
+    for &(w, h) in &[(256, 256), (512, 512), (1024, 1024), (2048, 2048)] {
+        let n = (w as usize) * (h as usize);
+        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+
+        // Create linear f32 RGB test data
+        let mut src = vec![0.0f32; n * 3];
+        for i in 0..n {
+            let t = i as f32 / n as f32;
+            src[i * 3] = t * 0.8 + 0.1;
+            src[i * 3 + 1] = (1.0 - t) * 0.7 + 0.15;
+            src[i * 3 + 2] = t * 0.5 + 0.2;
+        }
+
+        // Scatter only
+        group.bench_with_input(
+            BenchmarkId::new("scatter", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                b.iter(|| {
+                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+                });
+            },
+        );
+
+        // Gather only
+        group.bench_with_input(
+            BenchmarkId::new("gather", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+                let mut dst = vec![0.0f32; n * 3];
+                b.iter(|| {
+                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, &m1_inv, 1.0);
+                });
+            },
+        );
+
+        // Full roundtrip (scatter + gather, no pipeline)
+        group.bench_with_input(
+            BenchmarkId::new("roundtrip", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                let mut dst = vec![0.0f32; n * 3];
+                b.iter(|| {
+                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, &m1_inv, 1.0);
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 // ─── Allocation overhead measurement ────────────────────────────────
 
 fn bench_allocation_overhead(c: &mut Criterion) {
@@ -365,6 +430,7 @@ criterion_group!(
     bench_srgb_color_matrix,
     bench_srgb_sharpen,
     bench_srgb_blur,
+    bench_scatter_gather,
     bench_oklab_pipeline,
     bench_row_converter_overhead,
     bench_allocation_overhead,
