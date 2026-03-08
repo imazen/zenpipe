@@ -1,11 +1,19 @@
+/// Maximum supported kernel radius. Sigma 50 → radius 150 → 301 weights.
+/// This covers any realistic blur sigma.
+const MAX_KERNEL_SIZE: usize = 512;
+
 /// Precomputed separable Gaussian kernel.
 ///
 /// The kernel is symmetric with `2 * radius + 1` pre-normalized weights
 /// that sum to 1.0. Used by clarity, brilliance, and sharpen filters.
+///
+/// Weights are stored inline (no heap allocation) to avoid per-apply allocs.
 #[derive(Clone, Debug)]
 pub struct GaussianKernel {
-    /// Pre-normalized weights. Length = `2 * radius + 1`.
-    pub weights: Vec<f32>,
+    /// Pre-normalized weights. Only `[0..len]` are valid.
+    weights_buf: [f32; MAX_KERNEL_SIZE],
+    /// Number of valid weights (`2 * radius + 1`).
+    len: usize,
     /// Kernel radius in pixels.
     pub radius: usize,
 }
@@ -14,22 +22,40 @@ impl GaussianKernel {
     /// Create a Gaussian kernel for the given sigma.
     ///
     /// Radius is `ceil(3 * sigma)`. Weights are pre-normalized to sum to 1.0.
+    ///
+    /// # Panics
+    /// Panics if the kernel size exceeds the maximum (sigma > ~85).
     pub fn new(sigma: f32) -> Self {
         let radius = (sigma * 3.0).ceil() as usize;
+        let len = radius * 2 + 1;
+        assert!(
+            len <= MAX_KERNEL_SIZE,
+            "kernel too large: sigma={sigma}, size={len} > {MAX_KERNEL_SIZE}"
+        );
         let sigma2 = 2.0 * sigma * sigma;
-        let mut weights = Vec::with_capacity(radius * 2 + 1);
+        let mut weights_buf = [0.0f32; MAX_KERNEL_SIZE];
         let mut sum = 0.0f32;
-        for i in 0..=(radius * 2) {
+        for (i, wt) in weights_buf.iter_mut().enumerate().take(len) {
             let x = i as f32 - radius as f32;
             let w = (-x * x / sigma2).exp();
-            weights.push(w);
+            *wt = w;
             sum += w;
         }
         let inv_sum = 1.0 / sum;
-        for w in &mut weights {
+        for w in &mut weights_buf[..len] {
             *w *= inv_sum;
         }
-        Self { weights, radius }
+        Self {
+            weights_buf,
+            len,
+            radius,
+        }
+    }
+
+    /// The kernel weights slice.
+    #[inline]
+    pub fn weights(&self) -> &[f32] {
+        &self.weights_buf[..self.len]
     }
 }
 
@@ -76,7 +102,7 @@ pub(crate) fn gaussian_blur_plane_scalar(
 
     // Temp buffer for horizontal pass output
     let mut h_buf = ctx.take_f32(w * h);
-    let mut padded = Vec::with_capacity(w + 2 * radius);
+    let mut padded = ctx.take_f32(w + 2 * radius);
 
     // Horizontal pass
     for y in 0..h {
@@ -85,7 +111,7 @@ pub(crate) fn gaussian_blur_plane_scalar(
         let out_row = &mut h_buf[y * w..(y + 1) * w];
         for x in 0..w {
             let mut sum = 0.0f32;
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 sum += padded[x + k] * weight;
             }
             out_row[x] = sum;
@@ -96,7 +122,7 @@ pub(crate) fn gaussian_blur_plane_scalar(
     for y in 0..h {
         for x in 0..w {
             let mut sum = 0.0f32;
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 sum += h_buf[sy * w + x] * weight;
             }
@@ -104,6 +130,7 @@ pub(crate) fn gaussian_blur_plane_scalar(
         }
     }
 
+    ctx.return_f32(padded);
     ctx.return_f32(h_buf);
 }
 
@@ -130,7 +157,7 @@ mod tests {
     #[test]
     fn kernel_weights_sum_to_one() {
         let kernel = GaussianKernel::new(5.0);
-        let sum: f32 = kernel.weights.iter().sum();
+        let sum: f32 = kernel.weights().iter().sum();
         assert!((sum - 1.0).abs() < 1e-5, "weights sum = {sum}");
     }
 
@@ -140,6 +167,6 @@ mod tests {
         let kernel = GaussianKernel::new(0.01);
         assert_eq!(kernel.radius, 1);
         // Center weight should dominate
-        assert!(kernel.weights[1] > 0.99);
+        assert!(kernel.weights()[1] > 0.99);
     }
 }

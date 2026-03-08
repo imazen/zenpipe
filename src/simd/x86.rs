@@ -116,7 +116,7 @@ fn gaussian_blur_plane_simd(
     let radius = kernel.radius;
 
     let mut h_buf = ctx.take_f32(w * h);
-    let mut padded = Vec::with_capacity(w + 2 * radius);
+    let mut padded = ctx.take_f32(w + 2 * radius);
 
     // Horizontal pass
     for y in 0..h {
@@ -135,7 +135,7 @@ fn gaussian_blur_plane_simd(
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
             let mut acc = f32x8::zero(token);
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 let wv = f32x8::splat(token, weight);
                 let src_chunk: &[f32; 8] = padded[x + k..x + k + 8].try_into().unwrap();
                 let vals = f32x8::load(token, src_chunk);
@@ -148,7 +148,7 @@ fn gaussian_blur_plane_simd(
         for (xi, v) in out_tail.iter_mut().enumerate() {
             let x = x_start + xi;
             let mut sum = 0.0f32;
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 sum += padded[x + k] * weight;
             }
             *v = sum;
@@ -163,7 +163,7 @@ fn gaussian_blur_plane_simd(
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
             let mut acc = f32x8::zero(token);
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 let wv = f32x8::splat(token, weight);
                 let src_chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
@@ -177,7 +177,7 @@ fn gaussian_blur_plane_simd(
         for (xi, v) in out_tail.iter_mut().enumerate() {
             let x = x_start + xi;
             let mut sum = 0.0f32;
-            for (k, &weight) in kernel.weights.iter().enumerate() {
+            for (k, &weight) in kernel.weights().iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 sum += h_buf[sy * w + x] * weight;
             }
@@ -185,6 +185,7 @@ fn gaussian_blur_plane_simd(
         }
     }
 
+    ctx.return_f32(padded);
     ctx.return_f32(h_buf);
 }
 

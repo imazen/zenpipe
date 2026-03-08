@@ -59,10 +59,10 @@ impl Filter for Bilateral {
                 let mut sb = 0.0f32;
                 let mut wsum = 0.0f32;
 
-                for (dy, &wy) in kernel.weights.iter().enumerate() {
+                for (dy, &wy) in kernel.weights().iter().enumerate() {
                     let sy = (y as isize + dy as isize - radius as isize).clamp(0, h as isize - 1)
                         as usize;
-                    for (kx, &wx) in kernel.weights.iter().enumerate() {
+                    for (kx, &wx) in kernel.weights().iter().enumerate() {
                         let sx = (x as isize + kx as isize - radius as isize)
                             .clamp(0, w as isize - 1) as usize;
                         let sidx = sy * w + sx;

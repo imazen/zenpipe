@@ -9,8 +9,6 @@
 //!
 //! Requires the `buffer` feature.
 
-use alloc::vec;
-
 use zenpixels::buffer::PixelBuffer;
 use zenpixels::{
     AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelDescriptor, TransferFunction,
@@ -130,15 +128,9 @@ pub fn apply_to_buffer(
     let has_alpha = desc.has_alpha();
     let channels = if has_alpha { 4u32 } else { 3u32 };
 
-    // Step 1: Convert to linear f32 RGB(A) with correct primaries
+    // Step 1-3: Convert to linear f32, then scatter to planar Oklab
     let linear_desc = linear_f32_descriptor(has_alpha, primaries);
-    let linear_bytes = convert_buffer_bytes(input, linear_desc)?;
-    let linear_f32: &[f32] = bytemuck::cast_slice(&linear_bytes);
-
-    // Step 2: Determine reference white from transfer function
     let reference_white = desc.transfer().reference_white_nits();
-
-    // Step 3: Scatter to planar Oklab
     let m1 = zenpixels_convert::oklab::rgb_to_lms_matrix(primaries)
         .ok_or(ConvenienceError::UnsupportedPrimaries(primaries))?;
     let m1_inv = zenpixels_convert::oklab::lms_to_rgb_matrix(primaries)
@@ -149,7 +141,13 @@ pub fn apply_to_buffer(
     } else {
         OklabPlanes::from_ctx(ctx, width, height)
     };
-    scatter_to_oklab(linear_f32, &mut planes, channels, &m1, reference_white);
+
+    {
+        let linear_bytes = convert_buffer_bytes_pooled(input, linear_desc, ctx)?;
+        let linear_f32: &[f32] = bytemuck::cast_slice(&linear_bytes);
+        scatter_to_oklab(linear_f32, &mut planes, channels, &m1, reference_white);
+        ctx.return_u8(linear_bytes);
+    }
 
     // Step 4: Apply filters
     pipeline.apply_planar(&mut planes, ctx);
@@ -164,18 +162,19 @@ pub fn apply_to_buffer(
 
     // Step 6-7: Build output PixelBuffer and optionally convert back
     let color_ctx = input.color_context().cloned();
-    let result = {
-        let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
 
-        if convert_back && desc != linear_desc {
-            let converter = RowConverter::new(linear_desc, desc)?;
-            let dst_bpp = desc.bytes_per_pixel();
-            let dst_stride = (width as usize) * dst_bpp;
-            let total = dst_stride * height as usize;
-            let mut final_bytes = ctx.take_u8(total);
-            let src_bpp = linear_desc.bytes_per_pixel();
-            let src_stride = (width as usize) * src_bpp;
+    if convert_back && desc != linear_desc {
+        let converter = RowConverter::new(linear_desc, desc)?;
+        let dst_bpp = desc.bytes_per_pixel();
+        let dst_stride = (width as usize) * dst_bpp;
+        let total = dst_stride * height as usize;
+        // Pool the final output buffer — it gets consumed by PixelBuffer::from_vec
+        let mut final_bytes = ctx.take_u8(total);
+        let src_bpp = linear_desc.bytes_per_pixel();
+        let src_stride = (width as usize) * src_bpp;
 
+        {
+            let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
             for y in 0..height {
                 let src_start = y as usize * src_stride;
                 let src_end = src_start + src_stride;
@@ -187,59 +186,66 @@ pub fn apply_to_buffer(
                     width,
                 );
             }
-
-            // final_bytes is consumed by from_vec, can't return to pool
-            let mut final_buf =
-                PixelBuffer::from_vec(final_bytes, width, height, desc).map_err(|_| {
-                    ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
-                })?;
-            if let Some(cc) = &color_ctx {
-                final_buf = final_buf.with_color_context(alloc::sync::Arc::clone(cc));
-            }
-            Ok(final_buf)
-        } else {
-            let mut output_buf =
-                PixelBuffer::from_vec(output_bytes.to_vec(), width, height, linear_desc).map_err(
-                    |_| {
-                        ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
-                    },
-                )?;
-            if let Some(cc) = &color_ctx {
-                output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
-            }
-            Ok(output_buf)
         }
-    };
 
-    // Return the gather buffer to the pool
-    ctx.return_f32(output_f32);
-
-    result
+        // Return gather buffer to pool, build output from final_bytes
+        ctx.return_f32(output_f32);
+        let mut final_buf =
+            PixelBuffer::from_vec(final_bytes, width, height, desc).map_err(|_| {
+                ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
+            })?;
+        if let Some(cc) = &color_ctx {
+            final_buf = final_buf.with_color_context(alloc::sync::Arc::clone(cc));
+        }
+        Ok(final_buf)
+    } else {
+        // No conversion — output is linear f32 RGB(A).
+        // The output PixelBuffer must own its data, so this allocation is the
+        // return value (not a reusable scratch buffer).
+        let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
+        let mut output_buf =
+            PixelBuffer::from_vec(output_bytes.to_vec(), width, height, linear_desc).map_err(
+                |_| ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed),
+            )?;
+        ctx.return_f32(output_f32);
+        if let Some(cc) = &color_ctx {
+            output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
+        }
+        Ok(output_buf)
+    }
 }
 
-/// Convert a PixelBuffer to the target descriptor, returning raw bytes.
-fn convert_buffer_bytes(
+/// Convert a PixelBuffer to the target descriptor using a pooled output buffer.
+fn convert_buffer_bytes_pooled(
     input: &PixelBuffer,
     target: PixelDescriptor,
+    ctx: &mut FilterContext,
 ) -> Result<alloc::vec::Vec<u8>, zenpixels_convert::ConvertError> {
     let desc = input.descriptor();
-    if desc == target {
-        return Ok(input.copy_to_contiguous_bytes());
-    }
-    let converter = RowConverter::new(desc, target)?;
     let width = input.width();
     let height = input.height();
     let dst_bpp = target.bytes_per_pixel();
     let dst_stride = (width as usize) * dst_bpp;
     let total = dst_stride * height as usize;
-    let mut output = vec![0u8; total];
+    let mut output = ctx.take_u8(total);
 
-    let src_slice = input.as_slice();
-    for y in 0..height {
-        let src_row = src_slice.row(y);
-        let dst_start = y as usize * dst_stride;
-        let dst_end = dst_start + dst_stride;
-        converter.convert_row(src_row, &mut output[dst_start..dst_end], width);
+    if desc == target {
+        // Direct copy from input into pooled buffer
+        let src_slice = input.as_slice();
+        for y in 0..height {
+            let src_row = src_slice.row(y);
+            let dst_start = y as usize * dst_stride;
+            output[dst_start..dst_start + src_row.len()].copy_from_slice(src_row);
+        }
+    } else {
+        let converter = RowConverter::new(desc, target)?;
+        let src_slice = input.as_slice();
+        for y in 0..height {
+            let src_row = src_slice.row(y);
+            let dst_start = y as usize * dst_stride;
+            let dst_end = dst_start + dst_stride;
+            converter.convert_row(src_row, &mut output[dst_start..dst_end], width);
+        }
     }
     Ok(output)
 }
