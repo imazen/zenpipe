@@ -35,11 +35,12 @@ pub(crate) fn decode(
         .map_err(|e| CodecError::from_codec(ImageFormat::Png, e))
 }
 
-/// Build a PngEncoderConfig from effort/codec_config.
+/// Build a PngEncoderConfig from quality/effort/codec_config.
 ///
 /// Uses `EncoderConfig` trait methods for generic params, with
 /// codec_config taking priority for format-specific overrides.
 fn build_encoding(
+    quality: Option<f32>,
     effort: Option<u32>,
     codec_config: Option<&CodecConfig>,
 ) -> zenpng::PngEncoderConfig {
@@ -54,6 +55,9 @@ fn build_encoding(
     } else if let Some(effort) = effort {
         enc = enc.with_generic_effort(effort as i32);
     }
+    if let Some(q) = quality {
+        enc = enc.with_generic_quality(q);
+    }
     enc
 }
 
@@ -64,5 +68,5 @@ fn build_encoding(
 use crate::dispatch::{BuiltEncoder, EncodeParams, build_from_config};
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
-    build_from_config(|p| build_encoding(p.effort, p.codec_config), params)
+    build_from_config(|p| build_encoding(p.quality, p.effort, p.codec_config), params)
 }
