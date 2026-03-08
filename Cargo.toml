@@ -43,7 +43,7 @@ zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
 
 [features]
-default = ["jpeg", "webp", "gif", "gif-quantizr", "avif-decode", "avif-encode", "heic-decode"]
+default = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "heic-decode"]
 std = []
 
 # Individual codec features
