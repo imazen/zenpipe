@@ -15,7 +15,7 @@ std = ["zenresize/std", "linear-srgb/std", "garb/std"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", default-features = false }
+zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
 # sRGB ↔ linear conversion (slice-based, stateless)
 linear-srgb = { path = "../linear-srgb", default-features = false }
 # Premultiply/unpremultiply, swizzle (slice-based, stateless)

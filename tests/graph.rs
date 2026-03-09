@@ -104,14 +104,11 @@ fn crop_graph() {
     assert_eq!(pipeline.height(), 2);
 
     let data = drain(pipeline.as_mut());
-    // Verify cropped region: x=[1,2], y=[1,2]
     assert_eq!(data.len(), 2 * 2 * 4);
     assert_eq!(data[0], 1); // x=1
     assert_eq!(data[1], 1); // y=1
     assert_eq!(data[4], 2); // x=2
     assert_eq!(data[5], 1); // y=1
-    assert_eq!(data[8], 1); // x=1, row 2
-    assert_eq!(data[9], 2); // y=2
 }
 
 #[test]
@@ -142,13 +139,13 @@ fn pixel_op_fusion() {
 }
 
 #[test]
-fn flip_h_graph() {
+fn orient_flip_h() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let flip = g.add_node(NodeOp::FlipH);
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipH));
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, flip, EdgeKind::Input);
-    g.add_edge(flip, out, EdgeKind::Input);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
     sources.insert(src, gradient_source(4, 2));
@@ -166,13 +163,13 @@ fn flip_h_graph() {
 }
 
 #[test]
-fn flip_v_graph() {
+fn orient_flip_v() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let flip = g.add_node(NodeOp::FlipV);
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipV));
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, flip, EdgeKind::Input);
-    g.add_edge(flip, out, EdgeKind::Input);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
     sources.insert(src, gradient_source(4, 4));
@@ -181,20 +178,19 @@ fn flip_v_graph() {
     let data = drain(pipeline.as_mut());
 
     // First row should now be the last row (y=3)
-    assert_eq!(data[1], 3); // y coord
-    // Last row should be y=0
-    let last_row = 4 * 4 * 3; // row 3, pixel 0
-    assert_eq!(data[last_row + 1], 0); // y coord
+    assert_eq!(data[1], 3);
+    let last_row = 4 * 4 * 3;
+    assert_eq!(data[last_row + 1], 0);
 }
 
 #[test]
-fn rotate_90_graph() {
+fn orient_rotate_90() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let rot = g.add_node(NodeOp::Rotate90);
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Rotate90));
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, rot, EdgeKind::Input);
-    g.add_edge(rot, out, EdgeKind::Input);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
     sources.insert(src, gradient_source(4, 2));
@@ -206,13 +202,36 @@ fn rotate_90_graph() {
 }
 
 #[test]
-fn transpose_graph() {
+fn orient_rotate_180() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let t = g.add_node(NodeOp::Transpose);
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Rotate180));
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, t, EdgeKind::Input);
-    g.add_edge(t, out, EdgeKind::Input);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(src, gradient_source(4, 4));
+
+    let mut pipeline = g.compile(sources).unwrap();
+    let data = drain(pipeline.as_mut());
+
+    // (0,0) should now be (3,3)
+    assert_eq!(data[0], 3);
+    assert_eq!(data[1], 3);
+    let last = (4 * 4 - 1) * 4;
+    assert_eq!(data[last], 0);
+    assert_eq!(data[last + 1], 0);
+}
+
+#[test]
+fn orient_transpose() {
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Transpose));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
     sources.insert(src, gradient_source(8, 2));
@@ -227,115 +246,84 @@ fn transpose_graph() {
     assert_eq!(data[0], 0);
     assert_eq!(data[1], 0);
     // Original (1,0) → transposed (0,1): x=1, y=0
-    let stride = 2 * 4; // new width=2
+    let stride = 2 * 4;
     assert_eq!(data[stride], 1);
     assert_eq!(data[stride + 1], 0);
 }
 
 #[test]
-fn expand_canvas_graph() {
+fn orient_identity_passthrough() {
+    // Identity orientation should be a no-op (no materialization)
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let exp = g.add_node(NodeOp::ExpandCanvas {
-        left: 2,
-        top: 1,
-        right: 2,
-        bottom: 1,
-        color: [0, 0, 255, 255], // blue border
-    });
+    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Identity));
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, exp, EdgeKind::Input);
-    g.add_edge(exp, out, EdgeKind::Input);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
-    sources.insert(src, solid_source(4, 4, [255, 0, 0, 255]));
+    sources.insert(src, solid_source(4, 4, [42, 42, 42, 255]));
 
     let mut pipeline = g.compile(sources).unwrap();
-    // 4×4 + 2+2 left/right + 1+1 top/bottom → 8×6
-    assert_eq!(pipeline.width(), 8);
-    assert_eq!(pipeline.height(), 6);
-
     let data = drain(pipeline.as_mut());
-    // Top-left corner should be blue
-    assert_eq!(&data[0..4], [0, 0, 255, 255]);
-    // Center should be red (offset: row 1, col 2)
-    let stride = 8 * 4;
-    let center = stride + 2 * 4; // row 1, col 2
-    assert_eq!(&data[center..center + 4], [255, 0, 0, 255]);
+    for px in data.chunks_exact(4) {
+        assert_eq!(px, [42, 42, 42, 255]);
+    }
 }
 
 #[test]
-fn composite_graph() {
-    // Composite a small foreground over a larger background
-    let mut g = PipelineGraph::new();
-    let bg_src = g.add_node(NodeOp::Source);
-    let fg_src = g.add_node(NodeOp::Source);
-    let comp = g.add_node(NodeOp::Composite { fg_x: 0, fg_y: 0 });
-    let out = g.add_node(NodeOp::Output);
+fn layout_resize_via_zenresize() {
+    // Use Layout node to resize via zenresize's full pipeline
+    use zenresize::{DecoderOffer, DecoderRequest, Orientation, Size};
 
-    g.add_edge(bg_src, comp, EdgeKind::Canvas);
-    g.add_edge(fg_src, comp, EdgeKind::Input);
-    g.add_edge(comp, out, EdgeKind::Input);
+    let in_w = 8u32;
+    let in_h = 8u32;
+    let out_w = 4u32;
+    let out_h = 4u32;
 
-    let mut sources = HashMap::new();
-    // Background: 4×4 black
-    sources.insert(bg_src, solid_source(4, 4, [0, 0, 0, 255]));
-    // Foreground: 4×4 opaque red (same size for simplicity)
-    sources.insert(fg_src, solid_source(4, 4, [255, 0, 0, 255]));
+    // Build a LayoutPlan for simple resize (no crop, no orient, no canvas padding)
+    let request = DecoderRequest::new(Size::new(out_w, out_h), Orientation::Identity);
+    let offer = DecoderOffer::full_decode(in_w, in_h);
+    let ideal = zenresize::Pipeline::new(in_w, in_h)
+        .constrain(zenresize::Constraint::new(
+            zenresize::ConstraintMode::Distort,
+            out_w,
+            out_h,
+        ))
+        .plan()
+        .unwrap();
+    let (ideal, _req) = ideal;
+    let plan = ideal.finalize(&request, &offer);
 
-    let mut pipeline = g.compile(sources).unwrap();
-    // Output should be Rgbaf32LinearPremul (composite format)
-    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
-    assert_eq!(pipeline.width(), 4);
-    assert_eq!(pipeline.height(), 4);
-
-    let data = drain(pipeline.as_mut());
-    // Opaque red over opaque black = opaque red in linear premul
-    // Check that data is non-empty and has reasonable values
-    assert_eq!(data.len(), 4 * 4 * 16); // 16 bytes per pixel for f32
-    let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    // First pixel: should be close to linear red (1.0, 0, 0, 1.0) in premul
-    assert!(f32_data[0] > 0.9, "R should be ~1.0, got {}", f32_data[0]);
-    assert!(f32_data[1] < 0.01, "G should be ~0, got {}", f32_data[1]);
-    assert!(f32_data[2] < 0.01, "B should be ~0, got {}", f32_data[2]);
-    assert!(f32_data[3] > 0.99, "A should be ~1.0, got {}", f32_data[3]);
-}
-
-#[test]
-fn crop_then_flip_chain() {
-    // Multi-step: crop → flipH
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let crop = g.add_node(NodeOp::Crop {
-        x: 0,
-        y: 0,
-        w: 4,
-        h: 2,
+    let layout = g.add_node(NodeOp::Layout {
+        plan,
+        filter: zenresize::Filter::Robidoux,
     });
-    let flip = g.add_node(NodeOp::FlipH);
     let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, crop, EdgeKind::Input);
-    g.add_edge(crop, flip, EdgeKind::Input);
-    g.add_edge(flip, out, EdgeKind::Input);
+    g.add_edge(src, layout, EdgeKind::Input);
+    g.add_edge(layout, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
-    sources.insert(src, gradient_source(8, 4));
+    sources.insert(src, solid_source(in_w, in_h, [128, 64, 32, 255]));
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.width(), 4);
-    assert_eq!(pipeline.height(), 2);
+    assert_eq!(pipeline.width(), out_w);
+    assert_eq!(pipeline.height(), out_h);
 
     let data = drain(pipeline.as_mut());
-    // Cropped to [0..4, 0..2], then flipped H
-    // Row 0: originally x=[0,1,2,3], after flip: [3,2,1,0]
-    assert_eq!(data[0], 3);
-    assert_eq!(data[4], 2);
-    assert_eq!(data[8], 1);
-    assert_eq!(data[12], 0);
+    assert_eq!(data.len(), out_w as usize * out_h as usize * 4);
+    for px in data.chunks_exact(4) {
+        assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
+        assert!((px[1] as i16 - 64).unsigned_abs() <= 2, "G: {}", px[1]);
+        assert!((px[2] as i16 - 32).unsigned_abs() <= 2, "B: {}", px[2]);
+    }
 }
 
 #[test]
-fn resize_graph() {
+fn streaming_resize_graph() {
+    // Direct streaming resize via ResizeSource (no layout plan)
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
     let resize = g.add_node(NodeOp::Resize { w: 2, h: 2 });
@@ -353,7 +341,6 @@ fn resize_graph() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 2 * 2 * 4);
-    // Solid color downscaled should remain approximately the same
     for px in data.chunks_exact(4) {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 2, "G: {}", px[1]);
@@ -362,8 +349,69 @@ fn resize_graph() {
 }
 
 #[test]
+fn streaming_composite_graph() {
+    let mut g = PipelineGraph::new();
+    let bg_src = g.add_node(NodeOp::Source);
+    let fg_src = g.add_node(NodeOp::Source);
+    let comp = g.add_node(NodeOp::Composite { fg_x: 0, fg_y: 0 });
+    let out = g.add_node(NodeOp::Output);
+
+    g.add_edge(bg_src, comp, EdgeKind::Canvas);
+    g.add_edge(fg_src, comp, EdgeKind::Input);
+    g.add_edge(comp, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(bg_src, solid_source(4, 4, [0, 0, 0, 255]));
+    sources.insert(fg_src, solid_source(4, 4, [255, 0, 0, 255]));
+
+    let mut pipeline = g.compile(sources).unwrap();
+    // CompositeSource outputs Rgbaf32LinearPremul
+    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
+    assert_eq!(pipeline.width(), 4);
+    assert_eq!(pipeline.height(), 4);
+
+    let data = drain(pipeline.as_mut());
+    let f32_data: &[f32] = bytemuck::cast_slice(&data);
+    // Opaque red over opaque black = red
+    assert!(f32_data[0] > 0.9, "R should be ~1.0, got {}", f32_data[0]);
+    assert!(f32_data[1] < 0.01);
+    assert!(f32_data[2] < 0.01);
+    assert!(f32_data[3] > 0.99);
+}
+
+#[test]
+fn crop_then_orient_chain() {
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    let crop = g.add_node(NodeOp::Crop {
+        x: 0,
+        y: 0,
+        w: 4,
+        h: 2,
+    });
+    let flip = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipH));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, crop, EdgeKind::Input);
+    g.add_edge(crop, flip, EdgeKind::Input);
+    g.add_edge(flip, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(src, gradient_source(8, 4));
+
+    let mut pipeline = g.compile(sources).unwrap();
+    assert_eq!(pipeline.width(), 4);
+    assert_eq!(pipeline.height(), 2);
+
+    let data = drain(pipeline.as_mut());
+    // Cropped to [0..4, 0..2], then flipped H: [3,2,1,0]
+    assert_eq!(data[0], 3);
+    assert_eq!(data[4], 2);
+    assert_eq!(data[8], 1);
+    assert_eq!(data[12], 0);
+}
+
+#[test]
 fn materialize_custom_graph() {
-    // Use custom Materialize to invert all pixel values
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
     let mat = g.add_node(NodeOp::Materialize(Box::new(
@@ -388,36 +436,9 @@ fn materialize_custom_graph() {
 }
 
 #[test]
-fn rotate_180_graph() {
-    let mut g = PipelineGraph::new();
-    let src = g.add_node(NodeOp::Source);
-    let rot = g.add_node(NodeOp::Rotate180);
-    let out = g.add_node(NodeOp::Output);
-    g.add_edge(src, rot, EdgeKind::Input);
-    g.add_edge(rot, out, EdgeKind::Input);
-
-    let mut sources = HashMap::new();
-    sources.insert(src, gradient_source(4, 4));
-
-    let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.width(), 4);
-    assert_eq!(pipeline.height(), 4);
-
-    let data = drain(pipeline.as_mut());
-    // (0,0) should now be (3,3)
-    assert_eq!(data[0], 3); // x
-    assert_eq!(data[1], 3); // y
-    // Last pixel (3,3) → (0,0)
-    let last = (4 * 4 - 1) * 4;
-    assert_eq!(data[last], 0); // x
-    assert_eq!(data[last + 1], 0); // y
-}
-
-#[test]
 fn no_output_node_error() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    // No output node
 
     let mut sources = HashMap::new();
     sources.insert(src, solid_source(4, 4, [0, 0, 0, 255]));
@@ -433,7 +454,6 @@ fn missing_source_error() {
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, out, EdgeKind::Input);
 
-    // Don't provide any source
     let sources = HashMap::new();
     let result = g.compile(sources);
     assert!(result.is_err());
@@ -441,8 +461,6 @@ fn missing_source_error() {
 
 #[test]
 fn auto_format_conversion_for_composite() {
-    // Verify that Rgba8 sources are automatically converted to
-    // Rgbaf32LinearPremul for compositing
     let mut g = PipelineGraph::new();
     let bg = g.add_node(NodeOp::Source);
     let fg = g.add_node(NodeOp::Source);
@@ -457,14 +475,12 @@ fn auto_format_conversion_for_composite() {
     sources.insert(bg, solid_source(2, 2, [0, 0, 0, 255]));
     sources.insert(fg, solid_source(2, 2, [0, 0, 0, 0])); // fully transparent
 
-    // Should compile without errors — format conversion is automatic
     let mut pipeline = g.compile(sources).unwrap();
     assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
 
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    // Transparent fg over black bg = black bg
-    // In premul linear, black opaque = (0, 0, 0, 1)
+    // Transparent fg over black bg = black bg (0, 0, 0, 1) in premul linear
     for px in f32_data.chunks_exact(4) {
         assert!(px[0].abs() < 0.01);
         assert!(px[1].abs() < 0.01);

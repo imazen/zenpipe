@@ -6,35 +6,34 @@
 //!
 //! # Design
 //!
+//! - **Delegates to zen crates**: zenresize handles crop + orient + resize + canvas
+//!   in a single optimized call via [`LayoutPlan`]. No reimplemented geometry.
 //! - **No estimate phase**: dimensions propagate naturally through `Source::width()`/`height()`
-//!   during compilation. Each node queries its upstream source's dimensions at construction time.
-//! - **No expand phase**: zen crates handle internal optimization (zenresize handles
-//!   sRGB→linear→premul internally, zenlayout computes layouts). The graph compiler just wires
-//!   sources together.
-//! - **Automatic format conversion**: the compiler inserts `SrgbToLinearPremul` /
-//!   `UnpremulLinearToSrgb` where required (e.g., before composite, before resize).
+//!   during compilation.
+//! - **No expand phase**: zen crates handle internal optimization.
+//! - **Automatic format conversion**: inserts `SrgbToLinearPremul` /
+//!   `UnpremulLinearToSrgb` where required (e.g., before streaming composite).
 //! - **Op fusion**: adjacent [`PixelTransform`](NodeOp::PixelTransform) nodes are fused into
-//!   a single [`TransformSource`](crate::sources::TransformSource) — one pass, no intermediate
-//!   buffers between fused ops.
+//!   a single [`TransformSource`](crate::sources::TransformSource).
 //!
 //! # Example
 //!
 //! ```ignore
+//! use zenresize::{Filter, LayoutPlan, Orientation, Size};
+//!
 //! let mut g = PipelineGraph::new();
 //! let src = g.add_node(NodeOp::Source);
-//! let crop = g.add_node(NodeOp::Crop { x: 10, y: 10, w: 200, h: 200 });
-//! let resize = g.add_node(NodeOp::Resize { w: 100, h: 100 });
+//! // Single node handles crop + orient + resize + canvas via zenresize
+//! let layout = g.add_node(NodeOp::Layout {
+//!     plan: my_layout_plan,
+//!     filter: Filter::Robidoux,
+//! });
 //! let out = g.add_node(NodeOp::Output);
 //!
-//! g.add_edge(src, crop, EdgeKind::Input);
-//! g.add_edge(crop, resize, EdgeKind::Input);
-//! g.add_edge(resize, out, EdgeKind::Input);
-//!
-//! let mut sources = HashMap::new();
-//! sources.insert(src, my_decoder_source);
+//! g.add_edge(src, layout, EdgeKind::Input);
+//! g.add_edge(layout, out, EdgeKind::Input);
 //!
 //! let pipeline = g.compile(sources)?;
-//! // pipeline is a Box<dyn Source> — drain into a sink/encoder
 //! ```
 
 use alloc::boxed::Box;
@@ -46,7 +45,7 @@ use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 use crate::sources::{
-    CompositeSource, CropSource, FlipHSource, MaterializedSource, ResizeSource, TransformSource,
+    CompositeSource, CropSource, MaterializedSource, ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -71,21 +70,48 @@ pub enum NodeOp {
     /// External source provided by the caller via the `sources` map.
     Source,
 
-    // === Streamable geometry ===
-    /// Crop to a rectangle. Streamed via [`CropSource`].
+    // === Layout: crop + orient + resize + canvas via zenresize ===
+    /// Execute a [`LayoutPlan`] — handles crop, orientation, resize, and canvas
+    /// placement in a single optimized zenresize call.
+    ///
+    /// Input must be `Rgba8`. Materializes upstream, applies the full
+    /// trim → orient → resize → canvas pipeline, then re-streams.
+    Layout {
+        plan: zenresize::LayoutPlan,
+        filter: zenresize::Filter,
+    },
+
+    /// Execute a [`LayoutPlan`] with background compositing.
+    ///
+    /// - `Input` edge = foreground image
+    /// - `Canvas` edge = background image (composited under the resized foreground)
+    ///
+    /// Both inputs must be `Rgba8`. Delegates to
+    /// [`zenresize::execute_layout_with_background`].
+    LayoutComposite {
+        plan: zenresize::LayoutPlan,
+        filter: zenresize::Filter,
+    },
+
+    // === Streaming geometry ===
+    /// Crop to a rectangle. Streamed via [`CropSource`] — no materialization.
     Crop { x: u32, y: u32, w: u32, h: u32 },
 
     /// Resize to target dimensions. Streamed via [`ResizeSource`].
-    /// Input must be `Rgba8` (inserted automatically if needed).
+    /// Input must be `Rgba8` (converted automatically if needed).
     Resize { w: u32, h: u32 },
+
+    /// Apply an orientation transform (any of the 8 EXIF orientations).
+    /// Delegates to [`zenresize::orient_image`]. Materializes.
+    Orient(zenresize::Orientation),
 
     // === Per-pixel ops (fusible into TransformSource) ===
     /// A per-pixel operation. Adjacent `PixelTransform` nodes are fused
     /// into a single [`TransformSource`] — one pass, no intermediate buffers.
     PixelTransform(Box<dyn PixelOp>),
 
-    // === Multi-input ===
-    /// Porter-Duff source-over composite.
+    // === Multi-input (streaming) ===
+    /// Porter-Duff source-over composite (streaming).
     ///
     /// - `Canvas` edge = background
     /// - `Input` edge = foreground (placed at `fg_x, fg_y`)
@@ -93,32 +119,10 @@ pub enum NodeOp {
     /// Both inputs are automatically converted to `Rgbaf32LinearPremul`.
     Composite { fg_x: u32, fg_y: u32 },
 
-    // === Geometry requiring materialization ===
-    /// Flip horizontal — streaming, no materialization.
-    FlipH,
-    /// Flip vertical — requires materialization.
-    FlipV,
-    /// Rotate 90° clockwise — requires materialization.
-    Rotate90,
-    /// Rotate 180° — requires materialization.
-    Rotate180,
-    /// Rotate 270° clockwise — requires materialization.
-    Rotate270,
-    /// Transpose (swap x/y) — requires materialization.
-    Transpose,
-
-    /// Expand canvas with padding. Fill color is `Rgba8`.
-    ExpandCanvas {
-        left: u32,
-        top: u32,
-        right: u32,
-        bottom: u32,
-        color: [u8; 4],
-    },
-
+    // === Barriers ===
     /// Custom materialization barrier — drain upstream, transform, re-stream.
     ///
-    /// The closure receives `(data, width, height, format)` and may mutate all of them.
+    /// The closure receives `(data, width, height, format)` and may mutate all.
     Materialize(MaterializeTransform),
 
     /// Terminal output node. `compile()` returns the Source feeding this node.
@@ -174,7 +178,6 @@ impl PipelineGraph {
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
     ) -> Result<Box<dyn Source>, PipeError> {
-        // Find the output node
         let output_id = self
             .nodes
             .iter()
@@ -184,7 +187,6 @@ impl PipelineGraph {
         self.compile_node(output_id, &mut sources)
     }
 
-    /// Find the upstream node connected to `node_id` via an edge of the given kind.
     fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> Result<NodeId, PipeError> {
         for e in &self.edges {
             if e.to == node_id && e.kind == kind {
@@ -196,17 +198,14 @@ impl PipelineGraph {
         )))
     }
 
-    /// Count how many output edges a node has.
     fn output_count(&self, node_id: NodeId) -> usize {
         self.edges.iter().filter(|e| e.from == node_id).count()
     }
 
-    /// Peek at a node's operation without taking it.
     fn peek_op(&self, id: NodeId) -> Option<&NodeOp> {
         self.nodes[id].op.as_ref()
     }
 
-    /// Take a node's operation (consumes it — can only be called once per node).
     fn take_op(&mut self, id: NodeId) -> Result<NodeOp, PipeError> {
         self.nodes[id]
             .op
@@ -214,7 +213,6 @@ impl PipelineGraph {
             .ok_or_else(|| PipeError::Op(alloc::format!("node {id} already compiled")))
     }
 
-    /// Recursively compile a node into a Source.
     fn compile_node(
         &mut self,
         node_id: NodeId,
@@ -230,6 +228,93 @@ impl PipelineGraph {
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 self.compile_node(input_id, sources)
+            }
+
+            NodeOp::Layout { plan, filter } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
+                let in_w = upstream.width();
+                let in_h = upstream.height();
+                let canvas_w = plan.canvas.width;
+                let canvas_h = plan.canvas.height;
+                Ok(Box::new(MaterializedSource::from_source_with_transform(
+                    upstream,
+                    move |data, w, h, _fmt| {
+                        let out = zenresize::execute_layout(
+                            data,
+                            in_w,
+                            in_h,
+                            &plan,
+                            zenresize::PixelDescriptor::RGBA8_SRGB,
+                            filter,
+                        );
+                        *data = out;
+                        *w = canvas_w;
+                        *h = canvas_h;
+                    },
+                )?))
+            }
+
+            NodeOp::LayoutComposite { plan, filter } => {
+                let fg_id = self.find_input(node_id, EdgeKind::Input)?;
+                let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
+                let fg_upstream = self.compile_node(fg_id, sources)?;
+                let bg_upstream = self.compile_node(bg_id, sources)?;
+                let fg_upstream = ensure_format(fg_upstream, PixelFormat::Rgba8);
+                let bg_upstream = ensure_format(bg_upstream, PixelFormat::Rgba8);
+
+                // Materialize both to get pixel data
+                let mut fg_mat = MaterializedSource::from_source(fg_upstream)?;
+                let bg_mat = MaterializedSource::from_source(bg_upstream)?;
+
+                // Collect foreground pixels
+                let fg_w = fg_mat.width();
+                let fg_h = fg_mat.height();
+                let mut fg_data = Vec::new();
+                while let Some(strip) = fg_mat.next()? {
+                    fg_data.extend_from_slice(strip.data);
+                }
+
+                // Collect background pixels and build SliceBackground
+                let bg_w = bg_mat.width();
+                let bg_h = bg_mat.height();
+                let mut bg_data_u8 = Vec::new();
+                let mut bg_src = bg_mat;
+                while let Some(strip) = bg_src.next()? {
+                    bg_data_u8.extend_from_slice(strip.data);
+                }
+
+                // Convert background to premultiplied linear f32 for SliceBackground
+                let bg_pixels = bg_w as usize * bg_h as usize;
+                let mut bg_f32 = alloc::vec![0.0f32; bg_pixels * 4];
+                linear_srgb::default::srgb_u8_to_linear_rgba_slice(&bg_data_u8, &mut bg_f32);
+                garb::bytes::premultiply_alpha_f32(bytemuck::cast_slice_mut(&mut bg_f32))
+                    .expect("aligned");
+
+                let row_len = bg_w as usize * 4;
+                let background = zenresize::SliceBackground::new(&bg_f32, row_len);
+
+                let canvas_w = plan.canvas.width;
+                let canvas_h = plan.canvas.height;
+
+                let result = zenresize::execute_layout_with_background(
+                    &fg_data,
+                    fg_w,
+                    fg_h,
+                    &plan,
+                    zenresize::PixelDescriptor::RGBA8_SRGB,
+                    filter,
+                    background,
+                )
+                .map_err(|e| PipeError::Op(e.to_string()))?;
+
+                Ok(Box::new(MaterializedSource::from_data(
+                    result,
+                    canvas_w,
+                    canvas_h,
+                    PixelFormat::Rgba8,
+                )))
             }
 
             NodeOp::Crop { x, y, w, h } => {
@@ -248,9 +333,29 @@ impl PipelineGraph {
                 Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
             }
 
+            NodeOp::Orient(orientation) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                if orientation.is_identity() {
+                    return Ok(upstream);
+                }
+                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
+                let in_w = upstream.width();
+                let in_h = upstream.height();
+                Ok(Box::new(MaterializedSource::from_source_with_transform(
+                    upstream,
+                    move |data, w, h, _fmt| {
+                        let (result, new_w, new_h) =
+                            zenresize::orient_image(data, in_w, in_h, orientation, 4);
+                        *data = result;
+                        *w = new_w;
+                        *h = new_h;
+                    },
+                )?))
+            }
+
             NodeOp::PixelTransform(pixel_op) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                // Collect chain of adjacent PixelTransform nodes for fusion
                 let (upstream_id, mut ops) = self.collect_pixel_op_chain(input_id);
                 ops.push(pixel_op);
                 let upstream = self.compile_node(upstream_id, sources)?;
@@ -271,78 +376,6 @@ impl PipelineGraph {
                 Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
-            NodeOp::FlipH => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(FlipHSource::new(upstream)))
-            }
-
-            NodeOp::FlipV => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    |data, w, h, fmt| flip_vertical(data, *w, *h, *fmt),
-                )?))
-            }
-
-            NodeOp::Rotate90 => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    |data, w, h, fmt| rotate_90(data, w, h, *fmt),
-                )?))
-            }
-
-            NodeOp::Rotate180 => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    |data, w, h, fmt| {
-                        flip_horizontal(data, *w, *h, *fmt);
-                        flip_vertical(data, *w, *h, *fmt);
-                    },
-                )?))
-            }
-
-            NodeOp::Rotate270 => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    |data, w, h, fmt| rotate_270(data, w, h, *fmt),
-                )?))
-            }
-
-            NodeOp::Transpose => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    |data, w, h, fmt| transpose(data, w, h, *fmt),
-                )?))
-            }
-
-            NodeOp::ExpandCanvas {
-                left,
-                top,
-                right,
-                bottom,
-                color,
-            } => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    move |data, w, h, _fmt| {
-                        expand_canvas(data, w, h, left, top, right, bottom, color);
-                    },
-                )?))
-            }
-
             NodeOp::Materialize(transform_fn) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
@@ -356,8 +389,6 @@ impl PipelineGraph {
 
     /// Walk backward through consecutive PixelTransform nodes with single outputs,
     /// collecting their ops in upstream-first order.
-    ///
-    /// Returns `(first_non_pixel_upstream_id, collected_ops)`.
     fn collect_pixel_op_chain(&mut self, node_id: NodeId) -> (NodeId, Vec<Box<dyn PixelOp>>) {
         let is_pixel = matches!(self.peek_op(node_id), Some(NodeOp::PixelTransform(_)));
         let single_output = self.output_count(node_id) <= 1;
@@ -418,144 +449,4 @@ fn ensure_format(source: Box<dyn Source>, target: PixelFormat) -> Box<dyn Source
             ensure_format(intermediate, target)
         }
     }
-}
-
-// =============================================================================
-// Geometry transforms for materialized buffers
-// =============================================================================
-
-fn flip_horizontal(data: &mut [u8], width: u32, height: u32, fmt: PixelFormat) {
-    let bpp = fmt.bytes_per_pixel();
-    let stride = width as usize * bpp;
-    let w = width as usize;
-    for y in 0..height as usize {
-        let row = &mut data[y * stride..(y + 1) * stride];
-        for x in 0..w / 2 {
-            let a = x * bpp;
-            let b = (w - 1 - x) * bpp;
-            for c in 0..bpp {
-                row.swap(a + c, b + c);
-            }
-        }
-    }
-}
-
-fn flip_vertical(data: &mut [u8], width: u32, height: u32, fmt: PixelFormat) {
-    let stride = width as usize * fmt.bytes_per_pixel();
-    let h = height as usize;
-    for y in 0..h / 2 {
-        let top = y * stride;
-        let bot = (h - 1 - y) * stride;
-        // Swap rows using split_at_mut
-        let (first, second) = data.split_at_mut(bot);
-        first[top..top + stride].swap_with_slice(&mut second[..stride]);
-    }
-}
-
-fn rotate_90(data: &mut alloc::vec::Vec<u8>, w: &mut u32, h: &mut u32, fmt: PixelFormat) {
-    let bpp = fmt.bytes_per_pixel();
-    let old_w = *w as usize;
-    let old_h = *h as usize;
-    let mut out = alloc::vec![0u8; data.len()];
-    let new_w = old_h;
-    let new_stride = new_w * bpp;
-
-    for y in 0..old_h {
-        for x in 0..old_w {
-            let src = y * old_w * bpp + x * bpp;
-            // 90° CW: (x, y) → (h-1-y, x) in new coords, where new_w=old_h
-            let dst_x = old_h - 1 - y;
-            let dst_y = x;
-            let dst = dst_y * new_stride + dst_x * bpp;
-            out[dst..dst + bpp].copy_from_slice(&data[src..src + bpp]);
-        }
-    }
-
-    *data = out;
-    *w = old_h as u32;
-    *h = old_w as u32;
-}
-
-fn rotate_270(data: &mut alloc::vec::Vec<u8>, w: &mut u32, h: &mut u32, fmt: PixelFormat) {
-    let bpp = fmt.bytes_per_pixel();
-    let old_w = *w as usize;
-    let old_h = *h as usize;
-    let mut out = alloc::vec![0u8; data.len()];
-    let new_w = old_h;
-    let new_stride = new_w * bpp;
-
-    for y in 0..old_h {
-        for x in 0..old_w {
-            let src = y * old_w * bpp + x * bpp;
-            // 270° CW: (x, y) → (y, w-1-x) in new coords
-            let dst_x = y;
-            let dst_y = old_w - 1 - x;
-            let dst = dst_y * new_stride + dst_x * bpp;
-            out[dst..dst + bpp].copy_from_slice(&data[src..src + bpp]);
-        }
-    }
-
-    *data = out;
-    *w = old_h as u32;
-    *h = old_w as u32;
-}
-
-fn transpose(data: &mut alloc::vec::Vec<u8>, w: &mut u32, h: &mut u32, fmt: PixelFormat) {
-    let bpp = fmt.bytes_per_pixel();
-    let old_w = *w as usize;
-    let old_h = *h as usize;
-    let mut out = alloc::vec![0u8; data.len()];
-    let new_w = old_h;
-    let new_stride = new_w * bpp;
-
-    for y in 0..old_h {
-        for x in 0..old_w {
-            let src = y * old_w * bpp + x * bpp;
-            let dst = x * new_stride + y * bpp;
-            out[dst..dst + bpp].copy_from_slice(&data[src..src + bpp]);
-        }
-    }
-
-    *data = out;
-    *w = old_h as u32;
-    *h = old_w as u32;
-}
-
-#[allow(clippy::too_many_arguments)]
-fn expand_canvas(
-    data: &mut alloc::vec::Vec<u8>,
-    w: &mut u32,
-    h: &mut u32,
-    left: u32,
-    top: u32,
-    right: u32,
-    bottom: u32,
-    color: [u8; 4],
-) {
-    let old_w = *w as usize;
-    let old_h = *h as usize;
-    let new_w = old_w + left as usize + right as usize;
-    let new_h = old_h + top as usize + bottom as usize;
-    let bpp = 4usize; // Rgba8
-    let new_stride = new_w * bpp;
-    let old_stride = old_w * bpp;
-
-    let mut out = alloc::vec![0u8; new_w * new_h * bpp];
-
-    // Fill entire output with background color
-    for px in out.chunks_exact_mut(bpp) {
-        px.copy_from_slice(&color);
-    }
-
-    // Copy source pixels at offset (left, top)
-    for y in 0..old_h {
-        let src_start = y * old_stride;
-        let dst_start = (y + top as usize) * new_stride + left as usize * bpp;
-        out[dst_start..dst_start + old_stride]
-            .copy_from_slice(&data[src_start..src_start + old_stride]);
-    }
-
-    *data = out;
-    *w = new_w as u32;
-    *h = new_h as u32;
 }
