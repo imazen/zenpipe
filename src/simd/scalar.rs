@@ -109,3 +109,48 @@ pub(super) fn gather_oklab_impl_scalar(
         dst[base + 2] = (bv * reference_white).max(0.0);
     }
 }
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn scatter_srgb_u8_to_oklab_impl_scalar(
+    _token: ScalarToken,
+    src: &[u8],
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    channels: u32,
+    m1: &GamutMatrix,
+) {
+    let n = l.len();
+    let ch = channels as usize;
+    for i in 0..n {
+        let base = i * ch;
+        let r = linear_srgb::default::srgb_u8_to_linear(src[base]);
+        let g = linear_srgb::default::srgb_u8_to_linear(src[base + 1]);
+        let bv = linear_srgb::default::srgb_u8_to_linear(src[base + 2]);
+        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        l[i] = ol;
+        a[i] = oa;
+        b[i] = ob;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn gather_oklab_to_srgb_u8_impl_scalar(
+    _token: ScalarToken,
+    l: &[f32],
+    a: &[f32],
+    b: &[f32],
+    dst: &mut [u8],
+    channels: u32,
+    m1_inv: &GamutMatrix,
+) {
+    let n = l.len();
+    let ch = channels as usize;
+    for i in 0..n {
+        let [r, g, bv] = oklab::oklab_to_rgb(l[i], a[i], b[i], m1_inv);
+        let base = i * ch;
+        dst[base] = linear_srgb::default::linear_to_srgb_u8(r);
+        dst[base + 1] = linear_srgb::default::linear_to_srgb_u8(g);
+        dst[base + 2] = linear_srgb::default::linear_to_srgb_u8(bv);
+    }
+}

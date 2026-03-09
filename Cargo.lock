@@ -287,6 +287,16 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 [[package]]
 name = "linear-srgb"
 version = "0.6.2"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "magetypes",
+ "num-traits",
+]
+
+[[package]]
+name = "linear-srgb"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad4cadc069dae2158d5f87814de8958b88985b7bd1afe36f3bc9c1f607418fd5"
 dependencies = [
@@ -624,6 +634,7 @@ dependencies = [
  "archmage",
  "bytemuck",
  "criterion",
+ "linear-srgb 0.6.2",
  "magetypes",
  "rgb",
  "zenpixels",
@@ -644,7 +655,7 @@ name = "zenpixels-convert"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "linear-srgb",
+ "linear-srgb 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rgb",
  "zenpixels",
 ]

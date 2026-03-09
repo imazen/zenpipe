@@ -97,3 +97,41 @@ pub(crate) fn gather_oklab(
         [v3]
     );
 }
+
+/// Dispatch: scatter interleaved sRGB u8 to planar Oklab (fused path).
+///
+/// Fuses sRGB→linear LUT with RGB→Oklab conversion in one SIMD pass,
+/// eliminating the intermediate linear f32 buffer.
+/// Alpha is handled separately by the caller.
+pub(crate) fn scatter_srgb_u8_to_oklab(
+    src: &[u8],
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    channels: u32,
+    m1: &GamutMatrix,
+) {
+    archmage::incant!(
+        scatter_srgb_u8_to_oklab_impl(src, l, a, b, channels, m1),
+        [v3]
+    );
+}
+
+/// Dispatch: gather planar Oklab to interleaved sRGB u8 (fused path).
+///
+/// Fuses Oklab→RGB conversion with linear→sRGB LUT in one SIMD pass,
+/// eliminating the intermediate linear f32 buffer.
+/// Alpha is handled separately by the caller.
+pub(crate) fn gather_oklab_to_srgb_u8(
+    l: &[f32],
+    a: &[f32],
+    b: &[f32],
+    dst: &mut [u8],
+    channels: u32,
+    m1_inv: &GamutMatrix,
+) {
+    archmage::incant!(
+        gather_oklab_to_srgb_u8_impl(l, a, b, dst, channels, m1_inv),
+        [v3]
+    );
+}

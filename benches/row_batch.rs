@@ -375,6 +375,54 @@ fn bench_scatter_gather(c: &mut Criterion) {
                 });
             },
         );
+
+        // Fused sRGB u8 → Oklab scatter
+        let mut src_u8 = vec![0u8; n * 3];
+        for i in 0..n {
+            let t = i as f32 / n as f32;
+            src_u8[i * 3] = (t * 200.0 + 30.0) as u8;
+            src_u8[i * 3 + 1] = ((1.0 - t) * 180.0 + 40.0) as u8;
+            src_u8[i * 3 + 2] = (t * 100.0 + 80.0) as u8;
+        }
+
+        group.bench_with_input(
+            BenchmarkId::new("fused_scatter_u8", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                b.iter(|| {
+                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
+                });
+            },
+        );
+
+        // Fused Oklab → sRGB u8 gather
+        group.bench_with_input(
+            BenchmarkId::new("fused_gather_u8", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
+                let mut dst_u8 = vec![0u8; n * 3];
+                b.iter(|| {
+                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, &m1_inv);
+                });
+            },
+        );
+
+        // Fused u8 roundtrip
+        group.bench_with_input(
+            BenchmarkId::new("fused_roundtrip_u8", format!("{w}x{h}")),
+            &(w, h),
+            |b, &(w, h)| {
+                let mut planes = zenfilters::OklabPlanes::new(w, h);
+                let mut dst_u8 = vec![0u8; n * 3];
+                b.iter(|| {
+                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
+                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, &m1_inv);
+                });
+            },
+        );
     }
     group.finish();
 }

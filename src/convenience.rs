@@ -18,7 +18,9 @@ use zenpixels_convert::RowConverter;
 use crate::context::FilterContext;
 use crate::pipeline::{Pipeline, PipelineError};
 use crate::planes::OklabPlanes;
-use crate::scatter_gather::{gather_from_oklab, scatter_to_oklab};
+use crate::scatter_gather::{
+    gather_from_oklab, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab, scatter_to_oklab,
+};
 
 /// Error type for convenience layer operations.
 #[derive(Debug)]
@@ -142,7 +144,20 @@ pub fn apply_to_buffer(
         OklabPlanes::from_ctx(ctx, width, height)
     };
 
-    {
+    // Detect if we can use the fused sRGB u8 path (eliminates intermediate
+    // linear f32 buffer — ~48MB savings at 2048² RGB).
+    let use_fused = desc.channel_type() == ChannelType::U8
+        && desc.transfer() == TransferFunction::Srgb
+        && matches!(desc.layout(), ChannelLayout::Rgb | ChannelLayout::Rgba);
+
+    // Step 1-3: Scatter to planar Oklab
+    if use_fused {
+        // Fused path: sRGB u8 → Oklab in one pass (LUT + M1 + cbrt + M2)
+        let input_bytes = copy_input_bytes_pooled(input, ctx);
+        scatter_srgb_u8_to_oklab(&input_bytes, &mut planes, channels, &m1);
+        ctx.return_u8(input_bytes);
+    } else {
+        // General path: convert to linear f32, then scatter
         let linear_bytes = convert_buffer_bytes_pooled(input, linear_desc, ctx)?;
         let linear_f32: &[f32] = bytemuck::cast_slice(&linear_bytes);
         scatter_to_oklab(linear_f32, &mut planes, channels, &m1, reference_white);
@@ -152,66 +167,78 @@ pub fn apply_to_buffer(
     // Step 4: Apply filters
     pipeline.apply_planar(&mut planes, ctx);
 
-    // Step 5: Gather back to interleaved linear RGB
-    let n = (width as usize) * (height as usize) * (channels as usize);
-    let mut output_f32 = ctx.take_f32(n);
-    gather_from_oklab(&planes, &mut output_f32, channels, &m1_inv, reference_white);
-
-    // Return planes to the pool
-    planes.return_to_ctx(ctx);
-
-    // Step 6-7: Build output PixelBuffer and optionally convert back
+    // Step 5-7: Gather and build output
     let color_ctx = input.color_context().cloned();
 
-    if convert_back && desc != linear_desc {
-        let converter = RowConverter::new(linear_desc, desc)?;
-        let dst_bpp = desc.bytes_per_pixel();
-        let dst_stride = (width as usize) * dst_bpp;
-        let total = dst_stride * height as usize;
-        // Pool the final output buffer — it gets consumed by PixelBuffer::from_vec
-        let mut final_bytes = ctx.take_u8(total);
-        let src_bpp = linear_desc.bytes_per_pixel();
-        let src_stride = (width as usize) * src_bpp;
+    if use_fused && convert_back {
+        // Fused path: Oklab → sRGB u8 in one pass (M2⁻¹ + cube + M1⁻¹ + LUT)
+        let total = (width as usize) * (height as usize) * (channels as usize);
+        let mut output_bytes = ctx.take_u8(total);
+        gather_oklab_to_srgb_u8(&planes, &mut output_bytes, channels, &m1_inv);
+        planes.return_to_ctx(ctx);
 
-        {
-            let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
-            for y in 0..height {
-                let src_start = y as usize * src_stride;
-                let src_end = src_start + src_stride;
-                let dst_start = y as usize * dst_stride;
-                let dst_end = dst_start + dst_stride;
-                converter.convert_row(
-                    &output_bytes[src_start..src_end],
-                    &mut final_bytes[dst_start..dst_end],
-                    width,
-                );
-            }
-        }
-
-        // Return gather buffer to pool, build output from final_bytes
-        ctx.return_f32(output_f32);
-        let mut final_buf =
-            PixelBuffer::from_vec(final_bytes, width, height, desc).map_err(|_| {
+        let mut output_buf =
+            PixelBuffer::from_vec(output_bytes, width, height, desc).map_err(|_| {
                 ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
             })?;
-        if let Some(cc) = &color_ctx {
-            final_buf = final_buf.with_color_context(alloc::sync::Arc::clone(cc));
-        }
-        Ok(final_buf)
-    } else {
-        // No conversion — output is linear f32 RGB(A).
-        // The output PixelBuffer must own its data, so this allocation is the
-        // return value (not a reusable scratch buffer).
-        let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
-        let mut output_buf =
-            PixelBuffer::from_vec(output_bytes.to_vec(), width, height, linear_desc).map_err(
-                |_| ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed),
-            )?;
-        ctx.return_f32(output_f32);
         if let Some(cc) = &color_ctx {
             output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
         }
         Ok(output_buf)
+    } else {
+        // General path: gather to linear f32, then optionally convert back
+        let n = (width as usize) * (height as usize) * (channels as usize);
+        let mut output_f32 = ctx.take_f32(n);
+        gather_from_oklab(&planes, &mut output_f32, channels, &m1_inv, reference_white);
+        planes.return_to_ctx(ctx);
+
+        if convert_back && desc != linear_desc {
+            let converter = RowConverter::new(linear_desc, desc)?;
+            let dst_bpp = desc.bytes_per_pixel();
+            let dst_stride = (width as usize) * dst_bpp;
+            let total = dst_stride * height as usize;
+            let mut final_bytes = ctx.take_u8(total);
+            let src_bpp = linear_desc.bytes_per_pixel();
+            let src_stride = (width as usize) * src_bpp;
+
+            {
+                let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
+                for y in 0..height {
+                    let src_start = y as usize * src_stride;
+                    let src_end = src_start + src_stride;
+                    let dst_start = y as usize * dst_stride;
+                    let dst_end = dst_start + dst_stride;
+                    converter.convert_row(
+                        &output_bytes[src_start..src_end],
+                        &mut final_bytes[dst_start..dst_end],
+                        width,
+                    );
+                }
+            }
+
+            ctx.return_f32(output_f32);
+            let mut final_buf =
+                PixelBuffer::from_vec(final_bytes, width, height, desc).map_err(|_| {
+                    ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
+                })?;
+            if let Some(cc) = &color_ctx {
+                final_buf = final_buf.with_color_context(alloc::sync::Arc::clone(cc));
+            }
+            Ok(final_buf)
+        } else {
+            let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
+            let mut output_buf =
+                PixelBuffer::from_vec(output_bytes.to_vec(), width, height, linear_desc).map_err(
+                    |_| {
+                        ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
+                    },
+                )?;
+            ctx.return_f32(output_f32);
+            if let Some(cc) = &color_ctx {
+                output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
+            }
+            Ok(output_buf)
+        }
     }
 }
 
@@ -248,6 +275,25 @@ fn convert_buffer_bytes_pooled(
         }
     }
     Ok(output)
+}
+
+/// Copy raw bytes from a PixelBuffer into a pooled contiguous buffer.
+///
+/// Used by the fused sRGB u8 path to avoid the RowConverter entirely.
+fn copy_input_bytes_pooled(input: &PixelBuffer, ctx: &mut FilterContext) -> alloc::vec::Vec<u8> {
+    let width = input.width();
+    let height = input.height();
+    let bpp = input.descriptor().bytes_per_pixel();
+    let stride = (width as usize) * bpp;
+    let total = stride * height as usize;
+    let mut buf = ctx.take_u8(total);
+    let src_slice = input.as_slice();
+    for y in 0..height {
+        let src_row = src_slice.row(y);
+        let dst_start = y as usize * stride;
+        buf[dst_start..dst_start + src_row.len()].copy_from_slice(src_row);
+    }
+    buf
 }
 
 /// Extension trait for [`Pipeline`] that adds buffer convenience methods.
