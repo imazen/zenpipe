@@ -1,0 +1,224 @@
+use alloc::boxed::Box;
+use alloc::format;
+use alloc::string::ToString;
+
+use crate::Source;
+use crate::error::PipeError;
+use crate::format::PixelFormat;
+use crate::strip::{StripBuf, StripRef};
+
+/// Streaming resize source wrapping [`zenresize::StreamingResize`].
+///
+/// Pulls strips from upstream, feeds rows into the resizer's ring buffer,
+/// and accumulates output rows into output strips. The resize kernel's
+/// ring buffer means only ~21 input rows (Lanczos3 worst case) are held
+/// in memory at any time.
+///
+/// # Format requirements
+///
+/// Upstream must produce [`Rgba8`](PixelFormat::Rgba8). The resizer
+/// handles sRGB→linear→premul conversion internally. Output is also
+/// [`Rgba8`](PixelFormat::Rgba8).
+pub struct ResizeSource {
+    upstream: Box<dyn Source>,
+    resizer: zenresize::StreamingResize,
+    out_width: u32,
+    out_height: u32,
+    strip_height: u32,
+    buf: StripBuf,
+    y: u32,
+    input_exhausted: bool,
+    finished: bool,
+    /// Leftover rows from the last upstream strip that haven't been pushed yet.
+    pending_strip: Option<PendingStrip>,
+}
+
+/// Tracks remaining rows from an upstream strip.
+struct PendingStrip {
+    data: alloc::vec::Vec<u8>,
+    stride: usize,
+    total_rows: u32,
+    next_row: u32,
+}
+
+impl PendingStrip {
+    fn row(&self, r: u32) -> &[u8] {
+        let start = r as usize * self.stride;
+        &self.data[start..start + self.stride]
+    }
+
+    fn remaining(&self) -> u32 {
+        self.total_rows - self.next_row
+    }
+}
+
+impl ResizeSource {
+    /// Create a streaming resize source.
+    ///
+    /// `config` must have matching `in_width`/`in_height` to the upstream source.
+    /// `strip_height` controls the output strip batch size.
+    pub fn new(
+        upstream: Box<dyn Source>,
+        config: &zenresize::ResizeConfig,
+        strip_height: u32,
+    ) -> Result<Self, PipeError> {
+        if upstream.format() != PixelFormat::Rgba8 {
+            return Err(PipeError::FormatMismatch {
+                expected: PixelFormat::Rgba8,
+                got: upstream.format(),
+            });
+        }
+        if upstream.width() != config.in_width || upstream.height() != config.in_height {
+            return Err(PipeError::DimensionMismatch(format!(
+                "upstream {}x{} != config {}x{}",
+                upstream.width(),
+                upstream.height(),
+                config.in_width,
+                config.in_height,
+            )));
+        }
+
+        let out_w = config.out_width;
+        let out_h = config.out_height;
+        let sh = strip_height.min(out_h);
+        let resizer = zenresize::StreamingResize::new(config);
+
+        Ok(Self {
+            upstream,
+            resizer,
+            out_width: out_w,
+            out_height: out_h,
+            strip_height: sh,
+            buf: StripBuf::new(out_w, sh, PixelFormat::Rgba8),
+            y: 0,
+            input_exhausted: false,
+            finished: false,
+            pending_strip: None,
+        })
+    }
+
+    /// Push one input row from the pending strip or upstream.
+    /// Returns Ok(true) if a row was pushed, Ok(false) if input exhausted.
+    fn push_one_row(&mut self) -> Result<bool, PipeError> {
+        // Try pending strip first
+        if let Some(ref mut pending) = self.pending_strip {
+            if pending.remaining() > 0 {
+                let row = pending.row(pending.next_row);
+                self.resizer
+                    .push_row(row)
+                    .map_err(|e| PipeError::Resize(e.to_string()))?;
+                pending.next_row += 1;
+                if pending.remaining() == 0 {
+                    self.pending_strip = None;
+                }
+                return Ok(true);
+            }
+            self.pending_strip = None;
+        }
+
+        // Pull from upstream
+        if self.input_exhausted {
+            return Ok(false);
+        }
+
+        let strip = self
+            .upstream
+            .next()
+            .map_err(|e| PipeError::Op(e.to_string()))?;
+        let Some(strip) = strip else {
+            self.input_exhausted = true;
+            return Ok(false);
+        };
+
+        // Save the strip and push first row
+        let mut pending = PendingStrip {
+            data: strip.data.to_vec(),
+            stride: strip.stride,
+            total_rows: strip.height,
+            next_row: 0,
+        };
+
+        let row = pending.row(0);
+        self.resizer
+            .push_row(row)
+            .map_err(|e| PipeError::Resize(e.to_string()))?;
+        pending.next_row = 1;
+
+        if pending.remaining() > 0 {
+            self.pending_strip = Some(pending);
+        }
+
+        Ok(true)
+    }
+
+    /// Drain available output rows into the buffer.
+    fn drain_output(&mut self) {
+        while self.buf.rows_filled() < self.strip_height {
+            if let Some(row) = self.resizer.next_output_row() {
+                self.buf.push_row(row);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+impl Source for ResizeSource {
+    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+        if self.y >= self.out_height {
+            return Ok(None);
+        }
+
+        let rows_wanted = self.strip_height.min(self.out_height - self.y);
+        self.buf
+            .reconfigure(self.out_width, rows_wanted, PixelFormat::Rgba8);
+        self.buf.reset(self.y);
+
+        // Feed input rows and drain output until we have enough
+        loop {
+            self.drain_output();
+            if self.buf.rows_filled() >= rows_wanted {
+                break;
+            }
+
+            if self.input_exhausted && !self.finished {
+                // Signal end-of-input and drain remaining
+                self.resizer.finish();
+                self.finished = true;
+                self.drain_output();
+                break;
+            }
+
+            if self.finished {
+                break;
+            }
+
+            // Push more input
+            let pushed = self.push_one_row()?;
+            if !pushed {
+                // Input exhausted — finish and drain
+                self.resizer.finish();
+                self.finished = true;
+                self.drain_output();
+                break;
+            }
+        }
+
+        if self.buf.rows_filled() == 0 {
+            return Ok(None);
+        }
+
+        self.y += self.buf.rows_filled();
+        Ok(Some(self.buf.as_ref()))
+    }
+
+    fn width(&self) -> u32 {
+        self.out_width
+    }
+    fn height(&self) -> u32 {
+        self.out_height
+    }
+    fn format(&self) -> PixelFormat {
+        PixelFormat::Rgba8
+    }
+}

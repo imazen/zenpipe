@@ -1,0 +1,26 @@
+[package]
+name = "zenpipe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "AGPL-3.0-or-later"
+description = "Streaming pixel pipeline — zero-materialization graph execution over zen crates"
+repository = "https://github.com/imazen/zenpipe"
+keywords = ["image", "pipeline", "streaming", "scanline"]
+categories = ["graphics", "multimedia::images"]
+
+[features]
+default = ["std"]
+std = ["zenresize/std", "linear-srgb/std", "garb/std"]
+
+[dependencies]
+# Streaming resize (V-first, row push/pull, ring buffer)
+zenresize = { path = "../zenresize", default-features = false }
+# sRGB ↔ linear conversion (slice-based, stateless)
+linear-srgb = { path = "../linear-srgb", default-features = false }
+# Premultiply/unpremultiply, swizzle (slice-based, stateless)
+garb = { version = "0.2.1", default-features = false, features = ["experimental"] }
+# f32 ↔ u8 reinterpretation
+bytemuck = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
