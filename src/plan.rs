@@ -28,6 +28,7 @@ use crate::constraint::{
 };
 use crate::float_math::F64Ext;
 use crate::orientation::Orientation;
+use whereat::{At, at};
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
@@ -1157,7 +1158,8 @@ impl Pipeline {
     ///
     /// Processes the pipeline in fixed order: orient → crop/region → constrain → pad → limits.
     /// For sequential command evaluation, use [`compute_layout_sequential()`] directly.
-    pub fn plan(self) -> Result<(IdealLayout, DecoderRequest), LayoutError> {
+    #[track_caller]
+    pub fn plan(self) -> Result<(IdealLayout, DecoderRequest), At<LayoutError>> {
         let (crop, region) = match self.source_region {
             Some(SourceRegion::Crop(c)) => (Some(c), None),
             Some(SourceRegion::Region(r)) => (None, Some(r)),
@@ -1352,12 +1354,13 @@ fn scale_rect_outward(rect: Rect, scale_x: f64, scale_y: f64, max_w: u32, max_h:
 /// later duplicates are ignored.
 ///
 /// For a friendlier API, see [`Pipeline`].
+#[track_caller]
 pub fn compute_layout(
     commands: &[Command],
     source_w: u32,
     source_h: u32,
     limits: Option<&OutputLimits>,
-) -> Result<(IdealLayout, DecoderRequest), LayoutError> {
+) -> Result<(IdealLayout, DecoderRequest), At<LayoutError>> {
     let mut orientation = Orientation::Identity;
     let mut crop: Option<&SourceCrop> = None;
     let mut region: Option<Region> = None;
@@ -1433,12 +1436,13 @@ pub fn compute_layout(
 /// - Limits are applied once at the end
 ///
 /// For a friendlier builder API, see [`Pipeline`].
+#[track_caller]
 pub fn compute_layout_sequential(
     commands: &[Command],
     source_w: u32,
     source_h: u32,
     limits: Option<&OutputLimits>,
-) -> Result<(IdealLayout, DecoderRequest), LayoutError> {
+) -> Result<(IdealLayout, DecoderRequest), At<LayoutError>> {
     // Phase 1: Partition commands into pre-constrain and post-constrain groups.
     let mut orientation = Orientation::Identity;
     let mut pre_regions: Vec<Region> = Vec::new();
@@ -1541,7 +1545,7 @@ pub fn compute_layout_sequential(
     orientation = orientation.compose(post_orientation);
 
     if source_w == 0 || source_h == 0 {
-        return Err(LayoutError::ZeroSourceDimension);
+        return Err(at!(LayoutError::ZeroSourceDimension));
     }
 
     // Phase 2: Compose pre-constrain regions into a single effective region.
@@ -1688,6 +1692,7 @@ fn compose_regions(outer: Region, inner: Region, source_w: u32, source_h: u32) -
 
 /// Core layout computation shared by [`compute_layout()`] and [`Pipeline::plan()`].
 #[allow(clippy::too_many_arguments)]
+#[track_caller]
 fn plan_from_parts(
     source_w: u32,
     source_h: u32,
@@ -1697,9 +1702,9 @@ fn plan_from_parts(
     constraint: Option<&Constraint>,
     padding: Option<Padding>,
     limits: Option<&OutputLimits>,
-) -> Result<(IdealLayout, DecoderRequest), LayoutError> {
+) -> Result<(IdealLayout, DecoderRequest), At<LayoutError>> {
     if source_w == 0 || source_h == 0 {
-        return Err(LayoutError::ZeroSourceDimension);
+        return Err(at!(LayoutError::ZeroSourceDimension));
     }
 
     // 1. Transform source dimensions to post-orientation space.
@@ -1784,26 +1789,27 @@ fn plan_from_parts(
 /// 3. Source crop (the overlap rect)
 /// 4. Placement (where source content sits within the viewport)
 /// 5. If a constraint is present, it operates on the overlap (effective source)
+#[track_caller]
 fn resolve_region(
     reg: Region,
     source_w: u32,
     source_h: u32,
     constraint: Option<&Constraint>,
-) -> Result<Layout, LayoutError> {
+) -> Result<Layout, At<LayoutError>> {
     // Validate region coords for NaN/Inf.
     if !reg.left.percent.is_finite()
         || !reg.top.percent.is_finite()
         || !reg.right.percent.is_finite()
         || !reg.bottom.percent.is_finite()
     {
-        return Err(LayoutError::NonFiniteFloat);
+        return Err(at!(LayoutError::NonFiniteFloat));
     }
     let (left, top, right, bottom) = reg.resolve(source_w, source_h);
 
     let vw = right - left;
     let vh = bottom - top;
     if vw <= 0 || vh <= 0 {
-        return Err(LayoutError::ZeroRegionDimension);
+        return Err(at!(LayoutError::ZeroRegionDimension));
     }
     let vw = vw as u32;
     let vh = vh as u32;

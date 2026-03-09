@@ -6,6 +6,7 @@ use crate::constraint::{
 use crate::float_math::F64Ext;
 use crate::orientation::Orientation;
 use crate::plan::Pipeline;
+use whereat::At;
 
 use super::instructions::{Anchor1D, FitMode, Instructions, ScaleMode};
 
@@ -16,12 +17,13 @@ impl Instructions {
     /// `exif`: EXIF orientation tag (1–8), if known.
     ///
     /// Returns `Err` only if the resulting layout is invalid (e.g. zero dimensions).
+    #[track_caller]
     pub fn to_pipeline(
         &self,
         source_w: u32,
         source_h: u32,
         exif: Option<u8>,
-    ) -> Result<Pipeline, LayoutError> {
+    ) -> Result<Pipeline, At<LayoutError>> {
         // Validate float fields for NaN/Inf.
         self.validate_floats()?;
 

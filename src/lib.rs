@@ -16,6 +16,8 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+whereat::define_at_crate_info!();
+
 mod float_math;
 
 pub mod constraint;
@@ -40,3 +42,4 @@ pub use plan::{
     OutputLimits, Padding, Pipeline, PlaneLayout, Region, RegionCoord, Rotation, Subsampling,
     compute_layout,
 };
+pub use whereat::{At, ResultAtExt};

@@ -19,6 +19,7 @@
 //! ```
 
 use crate::float_math::F64Ext;
+use whereat::{At, at};
 
 /// How to fit a source image into target dimensions.
 ///
@@ -456,16 +457,17 @@ impl Constraint {
     }
 
     /// Check all float parameters for NaN/Inf.
-    fn validate_floats(&self) -> Result<(), LayoutError> {
+    #[track_caller]
+    fn validate_floats(&self) -> Result<(), At<LayoutError>> {
         if let Gravity::Percentage(x, y) = self.gravity
             && (!x.is_finite() || !y.is_finite())
         {
-            return Err(LayoutError::NonFiniteFloat);
+            return Err(at!(LayoutError::NonFiniteFloat));
         }
         if let CanvasColor::Linear { r, g, b, a } = self.canvas_color
             && (!r.is_finite() || !g.is_finite() || !b.is_finite() || !a.is_finite())
         {
-            return Err(LayoutError::NonFiniteFloat);
+            return Err(at!(LayoutError::NonFiniteFloat));
         }
         if let Some(SourceCrop::Percent {
             x,
@@ -475,15 +477,16 @@ impl Constraint {
         }) = self.source_crop
             && (!x.is_finite() || !y.is_finite() || !width.is_finite() || !height.is_finite())
         {
-            return Err(LayoutError::NonFiniteFloat);
+            return Err(at!(LayoutError::NonFiniteFloat));
         }
         Ok(())
     }
 
     /// Compute the layout for a source image of the given dimensions.
-    pub fn compute(&self, source_w: u32, source_h: u32) -> Result<Layout, LayoutError> {
+    #[track_caller]
+    pub fn compute(&self, source_w: u32, source_h: u32) -> Result<Layout, At<LayoutError>> {
         if source_w == 0 || source_h == 0 {
-            return Err(LayoutError::ZeroSourceDimension);
+            return Err(at!(LayoutError::ZeroSourceDimension));
         }
 
         // Validate float parameters.
@@ -730,16 +733,17 @@ impl Constraint {
     ///
     /// When only one dimension is specified, crop/pad modes become equivalent
     /// to fit — the derived dimension matches the source aspect ratio exactly.
-    fn resolve_target(&self, sw: u32, sh: u32) -> Result<(u32, u32), LayoutError> {
+    #[track_caller]
+    fn resolve_target(&self, sw: u32, sh: u32) -> Result<(u32, u32), At<LayoutError>> {
         match (self.width, self.height) {
-            (Some(w), Some(h)) if w == 0 || h == 0 => Err(LayoutError::ZeroTargetDimension),
+            (Some(w), Some(h)) if w == 0 || h == 0 => Err(at!(LayoutError::ZeroTargetDimension)),
             (Some(w), Some(h)) => Ok((w, h)),
-            (Some(0), None) => Err(LayoutError::ZeroTargetDimension),
+            (Some(0), None) => Err(at!(LayoutError::ZeroTargetDimension)),
             (Some(w), None) => {
                 let h = (sh as f64 * w as f64 / sw as f64).round_().max(1.0) as u32;
                 Ok((w, h))
             }
-            (None, Some(0)) => Err(LayoutError::ZeroTargetDimension),
+            (None, Some(0)) => Err(at!(LayoutError::ZeroTargetDimension)),
             (None, Some(h)) => {
                 let w = (sw as f64 * h as f64 / sh as f64).round_().max(1.0) as u32;
                 Ok((w, h))
@@ -1446,7 +1450,7 @@ mod tests {
     fn zero_source_errors() {
         assert_eq!(
             Constraint::new(ConstraintMode::Fit, 100, 100).compute(0, 100),
-            Err(LayoutError::ZeroSourceDimension)
+            Err(At::wrap(LayoutError::ZeroSourceDimension))
         );
     }
 
@@ -1454,7 +1458,7 @@ mod tests {
     fn zero_target_errors() {
         assert_eq!(
             Constraint::new(ConstraintMode::Fit, 0, 100).compute(100, 100),
-            Err(LayoutError::ZeroTargetDimension)
+            Err(At::wrap(LayoutError::ZeroTargetDimension))
         );
     }
 
@@ -2190,7 +2194,7 @@ mod tests {
         let r = Constraint::new(ConstraintMode::FitPad, 400, 300)
             .gravity(Gravity::Percentage(f32::NAN, 0.5))
             .compute(1000, 500);
-        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+        assert_eq!(r, Err(At::wrap(LayoutError::NonFiniteFloat)));
     }
 
     #[test]
@@ -2198,7 +2202,7 @@ mod tests {
         let r = Constraint::new(ConstraintMode::FitPad, 400, 300)
             .gravity(Gravity::Percentage(f32::INFINITY, 0.5))
             .compute(1000, 500);
-        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+        assert_eq!(r, Err(At::wrap(LayoutError::NonFiniteFloat)));
     }
 
     #[test]
@@ -2206,7 +2210,7 @@ mod tests {
         let r = Constraint::new(ConstraintMode::Fit, 400, 300)
             .source_crop(SourceCrop::percent(f32::NAN, 0.0, 0.5, 0.5))
             .compute(1000, 500);
-        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+        assert_eq!(r, Err(At::wrap(LayoutError::NonFiniteFloat)));
     }
 
     #[test]
@@ -2219,7 +2223,7 @@ mod tests {
                 a: 1.0,
             })
             .compute(1000, 500);
-        assert_eq!(r, Err(LayoutError::NonFiniteFloat));
+        assert_eq!(r, Err(At::wrap(LayoutError::NonFiniteFloat)));
     }
 
     // ========================================================================

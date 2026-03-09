@@ -360,7 +360,7 @@ fn immediate_eval(source: &Grid, commands: &[Command]) -> Grid {
 
 /// Fused-mode: compute a single Layout via compute_layout_sequential,
 /// apply it in one pass to the original source.
-fn fused_eval(source: &Grid, commands: &[Command]) -> Result<Grid, LayoutError> {
+fn fused_eval(source: &Grid, commands: &[Command]) -> Result<Grid, At<LayoutError>> {
     let (ideal, _request) = compute_layout_sequential(commands, source.width, source.height, None)?;
 
     // Apply orientation to source first (layout expects oriented source)

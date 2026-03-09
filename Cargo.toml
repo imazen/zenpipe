@@ -16,3 +16,6 @@ alloc = []
 svg = ["std"]
 riapi = ["alloc"]
 smart-crop = ["alloc"]
+
+[dependencies]
+whereat = { path = "/home/lilith/work/whereat", default-features = false }

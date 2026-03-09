@@ -141,12 +141,13 @@ impl Instructions {
     }
 
     /// Check all float fields for NaN/Inf.
-    pub(crate) fn validate_floats(&self) -> Result<(), crate::LayoutError> {
-        let check = |v: f64| -> Result<(), crate::LayoutError> {
+    #[track_caller]
+    pub(crate) fn validate_floats(&self) -> Result<(), whereat::At<crate::LayoutError>> {
+        let check = |v: f64| -> Result<(), whereat::At<crate::LayoutError>> {
             if v.is_finite() {
                 Ok(())
             } else {
-                Err(crate::LayoutError::NonFiniteFloat)
+                Err(whereat::at!(crate::LayoutError::NonFiniteFloat))
             }
         };
 
@@ -173,12 +174,12 @@ impl Instructions {
             if let Anchor1D::Percent(p) = ax
                 && !p.is_finite()
             {
-                return Err(crate::LayoutError::NonFiniteFloat);
+                return Err(whereat::at!(crate::LayoutError::NonFiniteFloat));
             }
             if let Anchor1D::Percent(p) = ay
                 && !p.is_finite()
             {
-                return Err(crate::LayoutError::NonFiniteFloat);
+                return Err(whereat::at!(crate::LayoutError::NonFiniteFloat));
             }
         }
         Ok(())
