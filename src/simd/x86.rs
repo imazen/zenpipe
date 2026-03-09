@@ -337,10 +337,10 @@ fn scatter_oklab_simd(
         let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
         let lms_s = m1_20.mul_add(r, m1_21.mul_add(g, m1_22 * b));
 
-        // Cube root (SIMD, ~3 ULP precision)
-        let l_ = lms_l.cbrt_midp();
-        let m_ = lms_m.cbrt_midp();
-        let s_ = lms_s.cbrt_midp();
+        // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
+        let l_ = lms_l.cbrt_lowp();
+        let m_ = lms_m.cbrt_lowp();
+        let s_ = lms_s.cbrt_lowp();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
         let ok_l = m2_00.mul_add(l_, m2_01.mul_add(m_, m2_02 * s_));
@@ -557,10 +557,10 @@ fn scatter_srgb_u8_to_oklab_rite(
         let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
         let lms_s = m1_20.mul_add(r, m1_21.mul_add(g, m1_22 * b));
 
-        // Cube root (SIMD, ~3 ULP precision)
-        let l_ = lms_l.cbrt_midp();
-        let m_ = lms_m.cbrt_midp();
-        let s_ = lms_s.cbrt_midp();
+        // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
+        let l_ = lms_l.cbrt_lowp();
+        let m_ = lms_m.cbrt_lowp();
+        let s_ = lms_s.cbrt_lowp();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
         let ok_l = m2_00.mul_add(l_, m2_01.mul_add(m_, m2_02 * s_));

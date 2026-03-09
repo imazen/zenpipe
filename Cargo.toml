@@ -15,10 +15,10 @@ buffer = ["zenpixels/buffer", "zenpixels-convert/buffer"]
 srgb-filters = ["buffer", "dep:rgb"]
 
 [dependencies]
-archmage = { version = "0.9", features = ["avx512"] }
+archmage = { version = "0.9.4", features = ["avx512"] }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
 linear-srgb = { version = "0.6", path = "../linear-srgb" }
-magetypes = "0.9"
+magetypes = "0.9.4"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
 zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar"] }
 zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert" }
