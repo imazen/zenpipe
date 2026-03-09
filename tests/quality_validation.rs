@@ -36,11 +36,7 @@ impl zenfilters::Filter for PerPixelDehaze {
         zenfilters::ChannelAccess::L_AND_CHROMA
     }
 
-    fn apply(
-        &self,
-        planes: &mut zenfilters::OklabPlanes,
-        _ctx: &mut zenfilters::FilterContext,
-    ) {
+    fn apply(&self, planes: &mut zenfilters::OklabPlanes, _ctx: &mut zenfilters::FilterContext) {
         let cf = self.contrast_factor;
         let offset = 0.5 * (1.0 - cf);
         for v in planes.l.iter_mut() {
@@ -1210,7 +1206,10 @@ fn fused_adjust_matches_standalone_on_real_images() {
         pipeline.push({
             let dc = 1.0 + adj.dehaze * 0.3;
             let dc_chroma = 1.0 + adj.dehaze * 0.2;
-            Box::new(PerPixelDehaze { contrast_factor: dc, chroma_factor: dc_chroma })
+            Box::new(PerPixelDehaze {
+                contrast_factor: dc,
+                chroma_factor: dc_chroma,
+            })
         });
         pipeline.push({
             let mut f = Temperature::default();
@@ -1329,13 +1328,11 @@ fn no_filter_produces_nan_or_inf() {
 
     for (name, filter) in extreme_filters {
         let result = apply_zenfilter(&img, filter);
-        let has_bad = result.as_raw().iter().any(|&v| v == u8::MAX && false); // u8 can't be NaN
-        // The real check: verify the pipeline didn't panic and produced valid output
+        // Verify the pipeline didn't panic and produced valid output
         assert!(
             result.as_raw().len() == img.as_raw().len(),
             "{name}: output size mismatch"
         );
-        assert!(!has_bad, "{name}: produced bad pixels");
         eprintln!("  {name}: OK (brightness={:.1})", avg_brightness(&result));
     }
 }

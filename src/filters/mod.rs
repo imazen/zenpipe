@@ -32,7 +32,10 @@ mod white_point;
 pub use adaptive_sharpen::AdaptiveSharpen;
 pub use alpha::Alpha;
 pub use auto_exposure::AutoExposure;
-pub use auto_tune::{ImageFeatures, TunedParams};
+pub use auto_tune::{
+    ImageFeatures, LINEAR_MODEL_INPUTS, LINEAR_MODEL_OUTPUTS, LinearModel, TunedParams,
+    rule_based_tune,
+};
 pub use bilateral::Bilateral;
 pub use black_point::BlackPoint;
 pub use blur::Blur;

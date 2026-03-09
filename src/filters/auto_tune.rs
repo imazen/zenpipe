@@ -225,6 +225,191 @@ impl Default for TunedParams {
     }
 }
 
+// ─── Rule-based tuner ───────────────────────────────────────────────
+
+#[allow(dead_code)]
+impl ImageFeatures {
+    /// Shorthand accessors for named percentiles.
+    fn p1(&self) -> f32 {
+        self.l_percentiles[0]
+    }
+    fn p5(&self) -> f32 {
+        self.l_percentiles[1]
+    }
+    fn p50(&self) -> f32 {
+        self.l_percentiles[3]
+    }
+    fn p95(&self) -> f32 {
+        self.l_percentiles[5]
+    }
+    fn p99(&self) -> f32 {
+        self.l_percentiles[6]
+    }
+    fn mean_l(&self) -> f32 {
+        self.channel_stats[0]
+    }
+    fn std_l(&self) -> f32 {
+        self.channel_stats[1]
+    }
+    fn mean_a(&self) -> f32 {
+        self.channel_stats[2]
+    }
+    fn mean_b(&self) -> f32 {
+        self.channel_stats[4]
+    }
+}
+
+/// Rule-based auto-tuner: pure heuristics, no learned weights.
+///
+/// Analyzes image features and produces coherent filter parameters.
+/// This is what camera ISPs actually ship — well-tuned statistics,
+/// not neural networks.
+///
+/// The rules are designed to be conservative: they correct obvious
+/// problems without imposing a "look." Suitable as a default fallback
+/// when no trained model is available.
+pub fn rule_based_tune(features: &ImageFeatures) -> TunedParams {
+    let mut params = TunedParams::default();
+
+    // ── Exposure correction ─────────────────────────────────────
+    // Target: median L near 0.5. Correct if off by more than 0.1.
+    let median = features.p50();
+    let exposure_error = 0.5 - median;
+    if exposure_error.abs() > 0.1 {
+        // Convert L-domain error to EV stops: L scales as 2^(stops/3)
+        // factor = target/current, stops = 3 * log2(factor)
+        let factor = 0.5 / median.max(0.05);
+        let stops = 3.0 * factor.log2();
+        params.exposure = stops.clamp(-2.0, 2.0) * 0.6; // conservative: 60% correction
+    }
+
+    // ── Highlight recovery ──────────────────────────────────────
+    // If top 5% of pixels are compressed (p99 ≈ p95), highlights are clipped.
+    // Compare headroom to overall dynamic range — a uniform distribution
+    // naturally has p99-p95 ≈ 4% of its range.
+    let highlight_headroom = features.p99() - features.p95();
+    let expected_headroom = features.dynamic_range * 0.04; // 4% of range
+    if features.p95() > 0.75 && highlight_headroom < expected_headroom * 0.5 {
+        // More clipping → stronger recovery
+        let deficit = (expected_headroom * 0.5 - highlight_headroom).max(0.0);
+        params.highlight_recovery = (deficit / expected_headroom.max(0.01)) * 0.8;
+        params.highlight_recovery = params.highlight_recovery.clamp(0.0, 0.8);
+    }
+
+    // ── Shadow lift ─────────────────────────────────────────────
+    // If bottom 5% of pixels are crushed (p5 near p1), shadows are clipped.
+    let shadow_headroom = features.p5() - features.p1();
+    let expected_shadow = features.dynamic_range * 0.04;
+    if features.p5() < 0.15 && shadow_headroom < expected_shadow * 0.5 {
+        let deficit = (expected_shadow * 0.5 - shadow_headroom).max(0.0);
+        params.shadow_lift = (deficit / expected_shadow.max(0.01)) * 0.7;
+        params.shadow_lift = params.shadow_lift.clamp(0.0, 0.7);
+    }
+
+    // ── Contrast ────────────────────────────────────────────────
+    // If dynamic range is low (flat image), add some contrast.
+    // If DR is already high, leave it alone.
+    if features.dynamic_range < 0.5 && features.std_l() < 0.2 {
+        params.contrast = (0.5 - features.dynamic_range) * 0.3;
+        params.contrast = params.contrast.clamp(0.0, 0.2);
+    }
+
+    // ── Color cast correction ───────────────────────────────────
+    // Gray world assumption: mean(a) and mean(b) should be near zero.
+    // Large offsets indicate a color cast.
+    let cast_a = features.mean_a();
+    let cast_b = features.mean_b();
+    if cast_b.abs() > 0.02 {
+        // b axis ≈ warm/cool → temperature
+        params.temperature = -cast_b * 2.0; // correct toward neutral
+        params.temperature = params.temperature.clamp(-0.3, 0.3);
+    }
+    if cast_a.abs() > 0.02 {
+        // a axis ≈ green/magenta → tint
+        params.tint = -cast_a * 2.0;
+        params.tint = params.tint.clamp(-0.3, 0.3);
+    }
+
+    // ── Vibrance ────────────────────────────────────────────────
+    // Always a small amount — universally flattering.
+    params.vibrance = 0.15;
+
+    // ── Clarity ─────────────────────────────────────────────────
+    // Small constant amount for texture enhancement.
+    params.clarity = 0.15;
+
+    // ── Adaptive sharpening ─────────────────────────────────────
+    params.sharpen = 0.3;
+
+    // ── Gamut expand ────────────────────────────────────────────
+    // Subtle P3-like expansion.
+    params.gamut_expand = 0.3;
+
+    params
+}
+
+// ─── Linear model ───────────────────────────────────────────────────
+
+/// Number of input features for the linear model.
+pub const LINEAR_MODEL_INPUTS: usize = 142;
+/// Number of output parameters.
+pub const LINEAR_MODEL_OUTPUTS: usize = 18;
+
+/// Weights for a linear model: output = features * weights + bias.
+///
+/// `weights` is [INPUTS × OUTPUTS] row-major: weights[i * OUTPUTS + j]
+/// maps input feature i to output parameter j.
+///
+/// These can be trained offline with least-squares regression on
+/// (ImageFeatures, expert_params) pairs. Total: 2574 floats (~10KB).
+pub struct LinearModel {
+    /// Weight matrix, row-major [142 × 18].
+    pub weights: [f32; LINEAR_MODEL_INPUTS * LINEAR_MODEL_OUTPUTS],
+    /// Bias vector [18].
+    pub bias: [f32; LINEAR_MODEL_OUTPUTS],
+}
+
+impl LinearModel {
+    /// Run inference: multiply feature vector by weight matrix, add bias.
+    pub fn predict(&self, features: &ImageFeatures) -> TunedParams {
+        let input = features.to_tensor();
+        assert_eq!(input.len(), LINEAR_MODEL_INPUTS);
+
+        let mut output = [0.0f32; LINEAR_MODEL_OUTPUTS];
+
+        // Matrix multiply: output[j] = sum(input[i] * weights[i*O + j]) + bias[j]
+        for (j, out) in output.iter_mut().enumerate() {
+            let mut sum = self.bias[j];
+            for (i, &inp) in input.iter().enumerate() {
+                sum += inp * self.weights[i * LINEAR_MODEL_OUTPUTS + j];
+            }
+            *out = sum;
+        }
+
+        // Map output array to TunedParams with clamping
+        TunedParams {
+            exposure: output[0].clamp(-3.0, 3.0),
+            contrast: output[1].clamp(-1.0, 1.0),
+            highlights: output[2].clamp(-1.0, 1.0),
+            shadows: output[3].clamp(-1.0, 1.0),
+            saturation: output[4].clamp(0.0, 3.0),
+            vibrance: output[5].clamp(-1.0, 1.0),
+            temperature: output[6].clamp(-1.0, 1.0),
+            tint: output[7].clamp(-1.0, 1.0),
+            black_point: output[8].clamp(0.0, 0.2),
+            white_point: output[9].clamp(0.5, 1.0),
+            sigmoid_contrast: output[10].clamp(0.5, 3.0),
+            sigmoid_skew: output[11].clamp(0.1, 0.9),
+            clarity: output[12].clamp(0.0, 1.0),
+            sharpen: output[13].clamp(0.0, 2.0),
+            highlight_recovery: output[14].clamp(0.0, 1.0),
+            shadow_lift: output[15].clamp(0.0, 1.0),
+            local_tonemap: output[16].clamp(0.0, 1.0),
+            gamut_expand: output[17].clamp(0.0, 1.0),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,6 +462,138 @@ mod tests {
         let params = TunedParams::default();
         assert!((params.exposure).abs() < 1e-6);
         assert!((params.contrast).abs() < 1e-6);
+        assert!((params.saturation - 1.0).abs() < 1e-6);
+        assert!((params.sigmoid_contrast - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn rule_based_brightens_dark_image() {
+        let mut planes = OklabPlanes::new(64, 64);
+        for v in &mut planes.l {
+            *v = 0.15; // very dark
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        assert!(
+            params.exposure > 0.3,
+            "should boost exposure for dark image: {}",
+            params.exposure
+        );
+    }
+
+    #[test]
+    fn rule_based_darkens_bright_image() {
+        let mut planes = OklabPlanes::new(64, 64);
+        for v in &mut planes.l {
+            *v = 0.85; // very bright
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        assert!(
+            params.exposure < -0.3,
+            "should reduce exposure for bright image: {}",
+            params.exposure
+        );
+    }
+
+    #[test]
+    fn rule_based_recovers_clipped_highlights() {
+        let mut planes = OklabPlanes::new(100, 1);
+        for i in 0..80 {
+            planes.l[i] = 0.3 + (i as f32 / 80.0) * 0.5;
+        }
+        // 20% hard-clipped at 0.98
+        for i in 80..100 {
+            planes.l[i] = 0.98;
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        assert!(
+            params.highlight_recovery > 0.1,
+            "should recover clipped highlights: {}",
+            params.highlight_recovery
+        );
+    }
+
+    #[test]
+    fn rule_based_lifts_crushed_shadows() {
+        let mut planes = OklabPlanes::new(100, 1);
+        // 30% crushed at 0.02
+        for i in 0..30 {
+            planes.l[i] = 0.02;
+        }
+        for i in 30..100 {
+            planes.l[i] = 0.5;
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        assert!(
+            params.shadow_lift > 0.1,
+            "should lift crushed shadows: {}",
+            params.shadow_lift
+        );
+    }
+
+    #[test]
+    fn rule_based_corrects_color_cast() {
+        let mut planes = OklabPlanes::new(64, 64);
+        for v in &mut planes.l {
+            *v = 0.5;
+        }
+        // Strong warm cast (high b = warm)
+        for v in &mut planes.b {
+            *v = 0.08;
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        assert!(
+            params.temperature < -0.05,
+            "should correct warm cast: {}",
+            params.temperature
+        );
+    }
+
+    #[test]
+    fn rule_based_leaves_good_image_alone() {
+        let mut planes = OklabPlanes::new(100, 1);
+        // Well-exposed, full range, no cast
+        for i in 0..100 {
+            planes.l[i] = 0.1 + (i as f32 / 100.0) * 0.8; // 0.1-0.9
+        }
+        let features = ImageFeatures::extract(&planes);
+        let params = rule_based_tune(&features);
+        // Exposure correction should be small
+        assert!(
+            params.exposure.abs() < 0.5,
+            "good image should need little exposure correction: {}",
+            params.exposure
+        );
+        // No highlight/shadow recovery needed
+        assert!(
+            params.highlight_recovery < 0.2,
+            "good image shouldn't need highlight recovery: {}",
+            params.highlight_recovery
+        );
+    }
+
+    #[test]
+    fn linear_model_identity_weights() {
+        // Zero weights + identity bias should produce default-ish params
+        let model = LinearModel {
+            weights: [0.0; LINEAR_MODEL_INPUTS * LINEAR_MODEL_OUTPUTS],
+            bias: [
+                0.0, 0.0, 0.0, 0.0, // exposure, contrast, highlights, shadows
+                1.0, 0.0, 0.0, 0.0, // saturation, vibrance, temperature, tint
+                0.0, 1.0, // black_point, white_point
+                1.0, 0.5, // sigmoid_contrast, sigmoid_skew
+                0.0, 0.0, // clarity, sharpen
+                0.0, 0.0, // highlight_recovery, shadow_lift
+                0.0, 0.0, // local_tonemap, gamut_expand
+            ],
+        };
+        let planes = OklabPlanes::new(16, 16);
+        let features = ImageFeatures::extract(&planes);
+        let params = model.predict(&features);
         assert!((params.saturation - 1.0).abs() < 1e-6);
         assert!((params.sigmoid_contrast - 1.0).abs() < 1e-6);
     }
