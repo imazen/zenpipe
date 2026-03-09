@@ -46,7 +46,8 @@ use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 use crate::sources::{
-    CompositeSource, CropSource, FlipHSource, MaterializedSource, ResizeSource, TransformSource,
+    CompositeSource, CropSource, ExpandCanvasSource, FlipHSource, MaterializedSource,
+    ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -316,57 +317,22 @@ impl PipelineGraph {
                     source = Box::new(ResizeSource::new(source, &config, 16)?);
                 }
 
-                // Step 4: Canvas expansion (if needed)
+                // Step 4: Canvas expansion (streaming)
                 if needs_canvas {
-                    let canvas_w = plan.canvas.width;
-                    let canvas_h = plan.canvas.height;
                     let (px, py) = plan.placement;
                     let bg = match plan.canvas_color {
                         zenresize::CanvasColor::Transparent => [0u8, 0, 0, 0],
                         zenresize::CanvasColor::Srgb { r, g, b, a } => [r, g, b, a],
-                        // Linear case handled by fallback above
                         _ => [0, 0, 0, 0],
                     };
-                    source = Box::new(MaterializedSource::from_source_with_transform(
+                    source = Box::new(ExpandCanvasSource::new(
                         source,
-                        move |data, w, h, _fmt| {
-                            let src_w = *w as usize;
-                            let src_h = *h as usize;
-                            let stride = canvas_w as usize * 4;
-                            let mut canvas = alloc::vec![0u8; stride * canvas_h as usize];
-
-                            for chunk in canvas.chunks_exact_mut(4) {
-                                chunk.copy_from_slice(&bg);
-                            }
-
-                            for row in 0..src_h {
-                                let dst_y = py as i64 + row as i64;
-                                if dst_y < 0 || dst_y >= canvas_h as i64 {
-                                    continue;
-                                }
-                                let dst_y = dst_y as usize;
-                                let src_x_start =
-                                    if px < 0 { (-px) as usize } else { 0 };
-                                let dst_x_start =
-                                    if px >= 0 { px as usize } else { 0 };
-                                let copy_w = src_w
-                                    .saturating_sub(src_x_start)
-                                    .min(canvas_w as usize - dst_x_start);
-                                if copy_w > 0 {
-                                    let src_off = row * src_w * 4 + src_x_start * 4;
-                                    let dst_off = dst_y * stride + dst_x_start * 4;
-                                    canvas[dst_off..dst_off + copy_w * 4]
-                                        .copy_from_slice(
-                                            &data[src_off..src_off + copy_w * 4],
-                                        );
-                                }
-                            }
-
-                            *data = canvas;
-                            *w = canvas_w;
-                            *h = canvas_h;
-                        },
-                    )?);
+                        plan.canvas.width,
+                        plan.canvas.height,
+                        px,
+                        py,
+                        bg,
+                    ));
                 }
 
                 Ok(source)
