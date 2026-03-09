@@ -1,6 +1,7 @@
 mod adaptive_sharpen;
 mod alpha;
 mod auto_exposure;
+mod auto_tune;
 mod bilateral;
 mod black_point;
 mod blur;
@@ -31,6 +32,7 @@ mod white_point;
 pub use adaptive_sharpen::AdaptiveSharpen;
 pub use alpha::Alpha;
 pub use auto_exposure::AutoExposure;
+pub use auto_tune::{ImageFeatures, TunedParams};
 pub use bilateral::Bilateral;
 pub use black_point::BlackPoint;
 pub use blur::Blur;
