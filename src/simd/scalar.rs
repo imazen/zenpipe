@@ -17,6 +17,19 @@ pub(super) fn offset_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], o
     }
 }
 
+pub(super) fn power_contrast_plane_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    exp: f32,
+    scale: f32,
+) {
+    for v in plane.iter_mut() {
+        if *v > 0.0 {
+            *v = v.powf(exp) * scale;
+        }
+    }
+}
+
 pub(super) fn unsharp_fuse_impl_scalar(
     _token: ScalarToken,
     src: &[f32],
@@ -226,7 +239,8 @@ pub(super) fn fused_adjust_impl_scalar(
     bp: f32,
     inv_range: f32,
     wp_exp: f32,
-    contrast_factor: f32,
+    contrast_exp: f32,
+    contrast_scale: f32,
     shadows: f32,
     highlights: f32,
     dehaze_contrast: f32,
@@ -243,7 +257,9 @@ pub(super) fn fused_adjust_impl_scalar(
         let mut lv = *v;
         lv = ((lv - bp) * inv_range).max(0.0);
         lv *= wp_exp;
-        lv = lv * contrast_factor + 0.5 * (1.0 - contrast_factor);
+        if lv > 0.0 {
+            lv = lv.powf(contrast_exp) * contrast_scale;
+        }
         let sm = (1.0 - lv * 2.0).max(0.0);
         lv += sm * sm * shadows * 0.5;
         let hm = ((lv - 0.5) * 2.0).clamp(0.0, 1.0);

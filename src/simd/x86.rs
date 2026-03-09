@@ -46,6 +46,35 @@ fn offset_plane_simd(token: X64V3Token, plane: &mut [f32], offset: f32) {
 }
 
 #[arcane]
+pub(super) fn power_contrast_plane_impl_v3(
+    token: X64V3Token,
+    plane: &mut [f32],
+    exp: f32,
+    scale: f32,
+) {
+    power_contrast_plane_simd(token, plane, exp, scale);
+}
+
+#[rite]
+fn power_contrast_plane_simd(token: X64V3Token, plane: &mut [f32], exp: f32, scale: f32) {
+    let scale_v = f32x8::splat(token, scale);
+    let zero_v = f32x8::zero(token);
+
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let v = f32x8::load(token, &*chunk);
+        // pow_midp handles v=0 correctly (returns 0)
+        let powered = v.max(zero_v).pow_midp(exp);
+        (powered * scale_v).store(chunk);
+    }
+    for v in tail {
+        if *v > 0.0 {
+            *v = v.powf(exp) * scale;
+        }
+    }
+}
+
+#[arcane]
 pub(super) fn unsharp_fuse_impl_v3(
     token: X64V3Token,
     src: &[f32],
@@ -854,7 +883,8 @@ pub(super) fn fused_adjust_impl_v3(
     bp: f32,
     inv_range: f32,
     wp_exp: f32,
-    contrast_factor: f32,
+    contrast_exp: f32,
+    contrast_scale: f32,
     shadows: f32,
     highlights: f32,
     dehaze_contrast: f32,
@@ -872,7 +902,8 @@ pub(super) fn fused_adjust_impl_v3(
         bp,
         inv_range,
         wp_exp,
-        contrast_factor,
+        contrast_exp,
+        contrast_scale,
         shadows,
         highlights,
         dehaze_contrast,
@@ -899,7 +930,8 @@ fn fused_adjust_l_rite(
     bp: f32,
     inv_range: f32,
     wp_exp: f32,
-    contrast_factor: f32,
+    contrast_exp: f32,
+    contrast_scale: f32,
     shadows: f32,
     highlights: f32,
     dehaze_contrast: f32,
@@ -908,8 +940,7 @@ fn fused_adjust_l_rite(
     let inv_range_v = f32x8::splat(token, inv_range);
     let zero_v = f32x8::zero(token);
     let wp_exp_v = f32x8::splat(token, wp_exp);
-    let cf_v = f32x8::splat(token, contrast_factor);
-    let cf_offset = f32x8::splat(token, 0.5 * (1.0 - contrast_factor));
+    let cs_v = f32x8::splat(token, contrast_scale);
     let shadows_half = f32x8::splat(token, shadows * 0.5);
     let highlights_half = f32x8::splat(token, highlights * 0.5);
     let one_v = f32x8::splat(token, 1.0);
@@ -925,8 +956,8 @@ fn fused_adjust_l_rite(
         v = ((v - bp_v) * inv_range_v).max(zero_v);
         // 2+3. White point * exposure (combined multiply)
         v *= wp_exp_v;
-        // 4. Contrast: v * factor + 0.5 * (1 - factor)
-        v = v.mul_add(cf_v, cf_offset);
+        // 4. Contrast: power curve v^exp * scale, pivot at middle grey
+        v = v.max(zero_v).pow_midp(contrast_exp) * cs_v;
         // 5. Shadows: mask = max(1 - v*2, 0), v += mask² * shadows*0.5
         let sm = (one_v - v * two_v).max(zero_v);
         v = (sm * sm).mul_add(shadows_half, v);
@@ -941,7 +972,9 @@ fn fused_adjust_l_rite(
         let mut lv = *v;
         lv = ((lv - bp) * inv_range).max(0.0);
         lv *= wp_exp;
-        lv = lv * contrast_factor + 0.5 * (1.0 - contrast_factor);
+        if lv > 0.0 {
+            lv = lv.powf(contrast_exp) * contrast_scale;
+        }
         let sm = (1.0 - lv * 2.0).max(0.0);
         lv += sm * sm * shadows * 0.5;
         let hm = ((lv - 0.5) * 2.0).clamp(0.0, 1.0);

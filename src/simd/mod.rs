@@ -20,6 +20,11 @@ pub(crate) fn offset_plane(plane: &mut [f32], offset: f32) {
     archmage::incant!(offset_plane_impl(plane, offset), [v3]);
 }
 
+/// Dispatch: power-curve contrast on a plane: `v = v^exp * scale` (v > 0).
+pub(crate) fn power_contrast_plane(plane: &mut [f32], exp: f32, scale: f32) {
+    archmage::incant!(power_contrast_plane_impl(plane, exp, scale), [v3]);
+}
+
 /// Dispatch: unsharp mask fuse: dst[i] = (src[i] + (src[i] - blurred[i]) * amount).max(0)
 pub(crate) fn unsharp_fuse(src: &[f32], blurred: &[f32], dst: &mut [f32], amount: f32) {
     archmage::incant!(unsharp_fuse_impl(src, blurred, dst, amount), [v3]);
@@ -165,7 +170,8 @@ pub(crate) fn fused_adjust(
     bp: f32,
     inv_range: f32,
     wp_exp: f32,
-    contrast_factor: f32,
+    contrast_exp: f32,
+    contrast_scale: f32,
     shadows: f32,
     highlights: f32,
     dehaze_contrast: f32,
@@ -185,7 +191,8 @@ pub(crate) fn fused_adjust(
             bp,
             inv_range,
             wp_exp,
-            contrast_factor,
+            contrast_exp,
+            contrast_scale,
             shadows,
             highlights,
             dehaze_contrast,
