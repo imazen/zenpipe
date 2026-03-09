@@ -38,6 +38,9 @@ pub mod ops;
 pub mod sources;
 mod strip;
 
+#[cfg(feature = "codec")]
+pub mod codec;
+
 pub use error::PipeError;
 pub use format::PixelFormat;
 pub use strip::{StripBuf, StripRef};

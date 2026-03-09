@@ -12,6 +12,7 @@ categories = ["graphics", "multimedia::images"]
 [features]
 default = ["std"]
 std = ["zenresize/std", "linear-srgb/std", "garb/std"]
+codec = ["zencodec", "zenpixels"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
@@ -24,5 +25,9 @@ garb = { version = "0.2.1", default-features = false, features = ["experimental"
 bytemuck = { version = "1", features = ["derive"] }
 # no_std-compatible HashMap for graph compilation
 hashbrown = "0.15"
+# Codec trait abstraction (optional — for decoder/encoder integration)
+zencodec = { path = "../zencodec", default-features = false, optional = true }
+# Pixel format types (optional — used by codec bridge)
+zenpixels = { path = "../zenpixels/zenpixels", default-features = false, optional = true }
 
 [dev-dependencies]
