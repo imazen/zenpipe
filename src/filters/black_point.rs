@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Black point adjustment on Oklab L channel.
 ///
@@ -24,9 +25,7 @@ impl Filter for BlackPoint {
         let bp = self.level;
         let range = (1.0 - bp).max(0.01);
         let inv_range = 1.0 / range;
-        for v in &mut planes.l {
-            *v = ((*v - bp) * inv_range).max(0.0);
-        }
+        simd::black_point_plane(&mut planes.l, bp, inv_range);
     }
 }
 

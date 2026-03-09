@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// White point adjustment on Oklab L channel.
 ///
@@ -23,9 +24,7 @@ impl Filter for WhitePoint {
             return;
         }
         let inv = 1.0 / self.level.max(0.01);
-        for v in &mut planes.l {
-            *v *= inv;
-        }
+        simd::scale_plane(&mut planes.l, inv);
     }
 }
 

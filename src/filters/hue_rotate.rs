@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Hue rotation in Oklab a/b plane.
 ///
@@ -24,14 +25,7 @@ impl Filter for HueRotate {
         }
         let cos_r = rad.cos();
         let sin_r = rad.sin();
-
-        let n = planes.pixel_count();
-        for i in 0..n {
-            let a = planes.a[i];
-            let b = planes.b[i];
-            planes.a[i] = a * cos_r - b * sin_r;
-            planes.b[i] = a * sin_r + b * cos_r;
-        }
+        simd::hue_rotate(&mut planes.a, &mut planes.b, cos_r, sin_r);
     }
 }
 

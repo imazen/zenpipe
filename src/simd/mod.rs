@@ -135,3 +135,66 @@ pub(crate) fn gather_oklab_to_srgb_u8(
         [v3]
     );
 }
+
+/// Dispatch: black point remap on a single plane.
+pub(crate) fn black_point_plane(plane: &mut [f32], bp: f32, inv_range: f32) {
+    archmage::incant!(black_point_plane_impl(plane, bp, inv_range), [v3]);
+}
+
+/// Dispatch: 2D hue rotation on a/b planes.
+pub(crate) fn hue_rotate(a: &mut [f32], b: &mut [f32], cos_r: f32, sin_r: f32) {
+    archmage::incant!(hue_rotate_impl(a, b, cos_r, sin_r), [v3]);
+}
+
+/// Dispatch: highlights and shadows recovery on L plane.
+pub(crate) fn highlights_shadows(plane: &mut [f32], shadows: f32, highlights: f32) {
+    archmage::incant!(highlights_shadows_impl(plane, shadows, highlights), [v3]);
+}
+
+/// Dispatch: vibrance (smart saturation) on a/b planes.
+pub(crate) fn vibrance(a: &mut [f32], b: &mut [f32], amount: f32, protection: f32) {
+    archmage::incant!(vibrance_impl(a, b, amount, protection), [v3]);
+}
+
+/// Dispatch: fused per-pixel adjustment (L pass + AB pass).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn fused_adjust(
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+    wp_exp: f32,
+    contrast_factor: f32,
+    shadows: f32,
+    highlights: f32,
+    dehaze_contrast: f32,
+    dehaze_chroma: f32,
+    temp_offset: f32,
+    tint_offset: f32,
+    sat: f32,
+    vib_amount: f32,
+    vib_protection: f32,
+) {
+    archmage::incant!(
+        fused_adjust_impl(
+            l,
+            a,
+            b,
+            bp,
+            inv_range,
+            wp_exp,
+            contrast_factor,
+            shadows,
+            highlights,
+            dehaze_contrast,
+            dehaze_chroma,
+            temp_offset,
+            tint_offset,
+            sat,
+            vib_amount,
+            vib_protection
+        ),
+        [v3]
+    );
+}

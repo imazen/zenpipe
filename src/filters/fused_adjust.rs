@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Fused per-pixel adjustment: applies all per-pixel operations in a single
 /// pass over the data, avoiding repeated traversal.
@@ -84,90 +85,37 @@ impl Filter for FusedAdjust {
             return;
         }
 
-        // Pre-compute constants
-        let exposure_factor = 2.0f32.powf(self.exposure);
-        let contrast_factor = (1.0 + self.contrast).max(0.01);
+        // Pre-compute constants for SIMD dispatch
         let bp = self.black_point;
+        let range = (1.0 - bp).max(0.01);
+        let inv_range = 1.0 / range;
         let wp_inv = 1.0 / self.white_point.max(0.01);
+        let exposure_factor = 2.0f32.powf(self.exposure);
+        let wp_exp = wp_inv * exposure_factor;
+        let contrast_factor = (1.0 + self.contrast).max(0.01);
         let dehaze_contrast = 1.0 + self.dehaze * 0.3;
         let dehaze_chroma = 1.0 + self.dehaze * 0.2;
         let temp_offset = self.temperature * 0.08;
         let tint_offset = self.tint * 0.08;
-        let sat = self.saturation;
-        let vib_amount = self.vibrance;
-        let vib_protection = self.vibrance_protection;
-        const MAX_CHROMA: f32 = 0.4;
 
-        let n = planes.pixel_count();
-        for i in 0..n {
-            let mut l = planes.l[i];
-            let mut a = planes.a[i];
-            let mut b = planes.b[i];
-
-            // 1. Black/white point
-            if bp.abs() > 1e-6 {
-                let range = (1.0 - bp).max(0.01);
-                l = ((l - bp) / range).max(0.0);
-            }
-            if (self.white_point - 1.0).abs() > 1e-6 {
-                l *= wp_inv;
-            }
-
-            // 2. Exposure
-            if self.exposure.abs() > 1e-6 {
-                l *= exposure_factor;
-            }
-
-            // 3. Contrast
-            if self.contrast.abs() > 1e-6 {
-                l = 0.5 + (l - 0.5) * contrast_factor;
-            }
-
-            // 4. Highlights/shadows
-            if self.shadows.abs() > 1e-6 {
-                let mask = (1.0 - l * 2.0).max(0.0);
-                l += mask * mask * self.shadows * 0.5;
-            }
-            if self.highlights.abs() > 1e-6 {
-                let mask = ((l - 0.5) * 2.0).clamp(0.0, 1.0);
-                l -= mask * mask * self.highlights * 0.5;
-            }
-
-            // 5. Dehaze
-            if self.dehaze.abs() > 1e-6 {
-                l = 0.5 + (l - 0.5) * dehaze_contrast;
-                a *= dehaze_chroma;
-                b *= dehaze_chroma;
-            }
-
-            // 6. Temperature/tint
-            if self.temperature.abs() > 1e-6 {
-                b += temp_offset;
-            }
-            if self.tint.abs() > 1e-6 {
-                a += tint_offset;
-            }
-
-            // 7. Saturation
-            if (sat - 1.0).abs() > 1e-6 {
-                a *= sat;
-                b *= sat;
-            }
-
-            // 8. Vibrance
-            if vib_amount.abs() > 1e-6 {
-                let chroma = (a * a + b * b).sqrt();
-                let normalized = (chroma / MAX_CHROMA).min(1.0);
-                let pf = (1.0 - normalized).powf(vib_protection);
-                let scale = 1.0 + vib_amount * pf;
-                a *= scale;
-                b *= scale;
-            }
-
-            planes.l[i] = l;
-            planes.a[i] = a;
-            planes.b[i] = b;
-        }
+        simd::fused_adjust(
+            &mut planes.l,
+            &mut planes.a,
+            &mut planes.b,
+            bp,
+            inv_range,
+            wp_exp,
+            contrast_factor,
+            self.shadows,
+            self.highlights,
+            dehaze_contrast,
+            dehaze_chroma,
+            temp_offset,
+            tint_offset,
+            self.saturation,
+            self.vibrance,
+            self.vibrance_protection,
+        );
     }
 }
 

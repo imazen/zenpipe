@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Smart saturation that protects already-saturated colors.
 ///
@@ -34,21 +35,7 @@ impl Filter for Vibrance {
         if self.amount.abs() < 1e-6 {
             return;
         }
-        const MAX_CHROMA: f32 = 0.4;
-        let amount = self.amount;
-        let protection = self.protection;
-
-        let n = planes.pixel_count();
-        for i in 0..n {
-            let a = planes.a[i];
-            let b = planes.b[i];
-            let chroma = (a * a + b * b).sqrt();
-            let normalized = (chroma / MAX_CHROMA).min(1.0);
-            let protection_factor = (1.0 - normalized).powf(protection);
-            let scale = 1.0 + amount * protection_factor;
-            planes.a[i] = a * scale;
-            planes.b[i] = b * scale;
-        }
+        simd::vibrance(&mut planes.a, &mut planes.b, self.amount, self.protection);
     }
 }
 

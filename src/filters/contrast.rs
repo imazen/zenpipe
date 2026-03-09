@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Contrast adjustment via S-curve on Oklab L channel.
 ///
@@ -24,9 +25,9 @@ impl Filter for Contrast {
         // S-curve: L' = 0.5 + (L - 0.5) * (1 + amount)
         // Clamped to not go fully flat at -1.0
         let factor = (1.0 + self.amount).max(0.01);
-        for v in &mut planes.l {
-            *v = 0.5 + (*v - 0.5) * factor;
-        }
+        // L' = 0.5 + (L - 0.5) * factor = L * factor + 0.5 * (1 - factor)
+        simd::scale_plane(&mut planes.l, factor);
+        simd::offset_plane(&mut planes.l, 0.5 * (1.0 - factor));
     }
 }
 

@@ -154,3 +154,118 @@ pub(super) fn gather_oklab_to_srgb_u8_impl_scalar(
         dst[base + 2] = linear_srgb::default::linear_to_srgb_u8(bv);
     }
 }
+
+pub(super) fn black_point_plane_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+) {
+    for v in plane.iter_mut() {
+        *v = ((*v - bp) * inv_range).max(0.0);
+    }
+}
+
+pub(super) fn hue_rotate_impl_scalar(
+    _token: ScalarToken,
+    a: &mut [f32],
+    b: &mut [f32],
+    cos_r: f32,
+    sin_r: f32,
+) {
+    for (a_val, b_val) in a.iter_mut().zip(b.iter_mut()) {
+        let a_orig = *a_val;
+        let b_orig = *b_val;
+        *a_val = a_orig * cos_r - b_orig * sin_r;
+        *b_val = a_orig * sin_r + b_orig * cos_r;
+    }
+}
+
+pub(super) fn highlights_shadows_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    shadows: f32,
+    highlights: f32,
+) {
+    for v in plane.iter_mut() {
+        let l = *v;
+        let sm = (1.0 - l * 2.0).max(0.0);
+        let mut l_new = l + sm * sm * shadows * 0.5;
+        let hm = ((l_new - 0.5) * 2.0).clamp(0.0, 1.0);
+        l_new -= hm * hm * highlights * 0.5;
+        *v = l_new;
+    }
+}
+
+pub(super) fn vibrance_impl_scalar(
+    _token: ScalarToken,
+    a: &mut [f32],
+    b: &mut [f32],
+    amount: f32,
+    protection: f32,
+) {
+    const MAX_CHROMA: f32 = 0.4;
+    for (a_val, b_val) in a.iter_mut().zip(b.iter_mut()) {
+        let av = *a_val;
+        let bv = *b_val;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(protection);
+        let scale = 1.0 + amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn fused_adjust_impl_scalar(
+    _token: ScalarToken,
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+    wp_exp: f32,
+    contrast_factor: f32,
+    shadows: f32,
+    highlights: f32,
+    dehaze_contrast: f32,
+    dehaze_chroma: f32,
+    temp_offset: f32,
+    tint_offset: f32,
+    sat: f32,
+    vib_amount: f32,
+    vib_protection: f32,
+) {
+    // L pass
+    for v in l.iter_mut() {
+        let mut lv = *v;
+        lv = ((lv - bp) * inv_range).max(0.0);
+        lv *= wp_exp;
+        lv = lv * contrast_factor + 0.5 * (1.0 - contrast_factor);
+        let sm = (1.0 - lv * 2.0).max(0.0);
+        lv += sm * sm * shadows * 0.5;
+        let hm = ((lv - 0.5) * 2.0).clamp(0.0, 1.0);
+        lv -= hm * hm * highlights * 0.5;
+        lv = lv * dehaze_contrast + 0.5 * (1.0 - dehaze_contrast);
+        *v = lv;
+    }
+    // AB pass
+    const MAX_CHROMA: f32 = 0.4;
+    for (a_val, b_val) in a.iter_mut().zip(b.iter_mut()) {
+        let mut av = *a_val;
+        let mut bv = *b_val;
+        av *= dehaze_chroma;
+        bv *= dehaze_chroma;
+        bv += temp_offset;
+        av += tint_offset;
+        av *= sat;
+        bv *= sat;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(vib_protection);
+        let scale = 1.0 + vib_amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}

@@ -691,3 +691,323 @@ fn gather_oklab_to_srgb_u8_rite(
         dst[base + 2] = linear_srgb::default::linear_to_srgb_u8(bv);
     }
 }
+
+// ============================================================================
+// Per-pixel filter SIMD: replaces scalar for-loops in filters
+// ============================================================================
+
+#[arcane]
+pub(super) fn black_point_plane_impl_v3(
+    token: X64V3Token,
+    plane: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+) {
+    black_point_plane_rite(token, plane, bp, inv_range);
+}
+
+#[rite]
+fn black_point_plane_rite(token: X64V3Token, plane: &mut [f32], bp: f32, inv_range: f32) {
+    let bp_v = f32x8::splat(token, bp);
+    let inv_range_v = f32x8::splat(token, inv_range);
+    let zero_v = f32x8::zero(token);
+
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let v = f32x8::load(token, &*chunk);
+        ((v - bp_v) * inv_range_v).max(zero_v).store(chunk);
+    }
+    for v in tail {
+        *v = ((*v - bp) * inv_range).max(0.0);
+    }
+}
+
+#[arcane]
+pub(super) fn hue_rotate_impl_v3(
+    token: X64V3Token,
+    a: &mut [f32],
+    b: &mut [f32],
+    cos_r: f32,
+    sin_r: f32,
+) {
+    hue_rotate_rite(token, a, b, cos_r, sin_r);
+}
+
+#[rite]
+fn hue_rotate_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], cos_r: f32, sin_r: f32) {
+    let cos_v = f32x8::splat(token, cos_r);
+    let sin_v = f32x8::splat(token, sin_r);
+    let neg_sin_v = f32x8::splat(token, -sin_r);
+
+    let (a_chunks, a_tail) = f32x8::partition_slice_mut(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_mut(token, b);
+
+    for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
+        let av = f32x8::load(token, &*ac);
+        let bv = f32x8::load(token, &*bc);
+        // a' = a*cos - b*sin, b' = a*sin + b*cos
+        cos_v.mul_add(av, neg_sin_v * bv).store(ac);
+        sin_v.mul_add(av, cos_v * bv).store(bc);
+    }
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let a_orig = *a_val;
+        let b_orig = *b_val;
+        *a_val = a_orig * cos_r - b_orig * sin_r;
+        *b_val = a_orig * sin_r + b_orig * cos_r;
+    }
+}
+
+#[arcane]
+pub(super) fn highlights_shadows_impl_v3(
+    token: X64V3Token,
+    plane: &mut [f32],
+    shadows: f32,
+    highlights: f32,
+) {
+    highlights_shadows_rite(token, plane, shadows, highlights);
+}
+
+#[rite]
+fn highlights_shadows_rite(token: X64V3Token, plane: &mut [f32], shadows: f32, highlights: f32) {
+    let shadows_half = f32x8::splat(token, shadows * 0.5);
+    let highlights_half = f32x8::splat(token, highlights * 0.5);
+    let one_v = f32x8::splat(token, 1.0);
+    let two_v = f32x8::splat(token, 2.0);
+    let half_v = f32x8::splat(token, 0.5);
+    let zero_v = f32x8::zero(token);
+
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let mut l = f32x8::load(token, &*chunk);
+        // Shadows: mask = max(1 - l*2, 0), l += mask² * shadows * 0.5
+        let sm = (one_v - l * two_v).max(zero_v);
+        l = (sm * sm).mul_add(shadows_half, l);
+        // Highlights: mask = clamp((l-0.5)*2, 0, 1), l -= mask² * highlights * 0.5
+        let hm = ((l - half_v) * two_v).max(zero_v).min(one_v);
+        l -= hm * hm * highlights_half;
+        l.store(chunk);
+    }
+    for v in tail {
+        let l = *v;
+        let sm = (1.0 - l * 2.0).max(0.0);
+        let mut l_new = l + sm * sm * shadows * 0.5;
+        let hm = ((l_new - 0.5) * 2.0).clamp(0.0, 1.0);
+        l_new -= hm * hm * highlights * 0.5;
+        *v = l_new;
+    }
+}
+
+#[arcane]
+pub(super) fn vibrance_impl_v3(
+    token: X64V3Token,
+    a: &mut [f32],
+    b: &mut [f32],
+    amount: f32,
+    protection: f32,
+) {
+    vibrance_rite(token, a, b, amount, protection);
+}
+
+#[rite]
+fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, protection: f32) {
+    const MAX_CHROMA: f32 = 0.4;
+    let amount_v = f32x8::splat(token, amount);
+    let inv_max_chroma_v = f32x8::splat(token, 1.0 / MAX_CHROMA);
+    let one_v = f32x8::splat(token, 1.0);
+
+    let (a_chunks, a_tail) = f32x8::partition_slice_mut(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_mut(token, b);
+
+    for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
+        let av = f32x8::load(token, &*ac);
+        let bv = f32x8::load(token, &*bc);
+        // chroma = sqrt(a² + b²)
+        let chroma = (av * av + bv * bv).sqrt();
+        // normalized = min(chroma / MAX_CHROMA, 1.0)
+        let normalized = (chroma * inv_max_chroma_v).min(one_v);
+        // protection_factor = (1 - normalized)^protection
+        let pf = (one_v - normalized).pow_midp(protection);
+        // scale = 1 + amount * pf
+        let scale = amount_v.mul_add(pf, one_v);
+        (av * scale).store(ac);
+        (bv * scale).store(bc);
+    }
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let av = *a_val;
+        let bv = *b_val;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(protection);
+        let scale = 1.0 + amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[arcane]
+pub(super) fn fused_adjust_impl_v3(
+    token: X64V3Token,
+    l: &mut [f32],
+    a: &mut [f32],
+    b: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+    wp_exp: f32,
+    contrast_factor: f32,
+    shadows: f32,
+    highlights: f32,
+    dehaze_contrast: f32,
+    dehaze_chroma: f32,
+    temp_offset: f32,
+    tint_offset: f32,
+    sat: f32,
+    vib_amount: f32,
+    vib_protection: f32,
+) {
+    fused_adjust_l_rite(
+        token,
+        l,
+        bp,
+        inv_range,
+        wp_exp,
+        contrast_factor,
+        shadows,
+        highlights,
+        dehaze_contrast,
+    );
+    fused_adjust_ab_rite(
+        token,
+        a,
+        b,
+        dehaze_chroma,
+        temp_offset,
+        tint_offset,
+        sat,
+        vib_amount,
+        vib_protection,
+    );
+}
+
+#[rite]
+#[allow(clippy::too_many_arguments)]
+fn fused_adjust_l_rite(
+    token: X64V3Token,
+    l: &mut [f32],
+    bp: f32,
+    inv_range: f32,
+    wp_exp: f32,
+    contrast_factor: f32,
+    shadows: f32,
+    highlights: f32,
+    dehaze_contrast: f32,
+) {
+    let bp_v = f32x8::splat(token, bp);
+    let inv_range_v = f32x8::splat(token, inv_range);
+    let zero_v = f32x8::zero(token);
+    let wp_exp_v = f32x8::splat(token, wp_exp);
+    let cf_v = f32x8::splat(token, contrast_factor);
+    let cf_offset = f32x8::splat(token, 0.5 * (1.0 - contrast_factor));
+    let shadows_half = f32x8::splat(token, shadows * 0.5);
+    let highlights_half = f32x8::splat(token, highlights * 0.5);
+    let one_v = f32x8::splat(token, 1.0);
+    let two_v = f32x8::splat(token, 2.0);
+    let half_v = f32x8::splat(token, 0.5);
+    let dc_v = f32x8::splat(token, dehaze_contrast);
+    let dc_offset = f32x8::splat(token, 0.5 * (1.0 - dehaze_contrast));
+
+    let (chunks, tail) = f32x8::partition_slice_mut(token, l);
+    for chunk in chunks {
+        let mut v = f32x8::load(token, &*chunk);
+        // 1. Black point: (v - bp) * inv_range, clamped to 0
+        v = ((v - bp_v) * inv_range_v).max(zero_v);
+        // 2+3. White point * exposure (combined multiply)
+        v *= wp_exp_v;
+        // 4. Contrast: v * factor + 0.5 * (1 - factor)
+        v = v.mul_add(cf_v, cf_offset);
+        // 5. Shadows: mask = max(1 - v*2, 0), v += mask² * shadows*0.5
+        let sm = (one_v - v * two_v).max(zero_v);
+        v = (sm * sm).mul_add(shadows_half, v);
+        // 6. Highlights: mask = clamp((v-0.5)*2, 0, 1), v -= mask² * highlights*0.5
+        let hm = ((v - half_v) * two_v).max(zero_v).min(one_v);
+        v -= hm * hm * highlights_half;
+        // 7. Dehaze L: v * dc + 0.5 * (1 - dc)
+        v = v.mul_add(dc_v, dc_offset);
+        v.store(chunk);
+    }
+    for v in tail {
+        let mut lv = *v;
+        lv = ((lv - bp) * inv_range).max(0.0);
+        lv *= wp_exp;
+        lv = lv * contrast_factor + 0.5 * (1.0 - contrast_factor);
+        let sm = (1.0 - lv * 2.0).max(0.0);
+        lv += sm * sm * shadows * 0.5;
+        let hm = ((lv - 0.5) * 2.0).clamp(0.0, 1.0);
+        lv -= hm * hm * highlights * 0.5;
+        lv = lv * dehaze_contrast + 0.5 * (1.0 - dehaze_contrast);
+        *v = lv;
+    }
+}
+
+#[rite]
+#[allow(clippy::too_many_arguments)]
+fn fused_adjust_ab_rite(
+    token: X64V3Token,
+    a: &mut [f32],
+    b: &mut [f32],
+    dehaze_chroma: f32,
+    temp_offset: f32,
+    tint_offset: f32,
+    sat: f32,
+    vib_amount: f32,
+    vib_protection: f32,
+) {
+    const MAX_CHROMA: f32 = 0.4;
+    let dc_v = f32x8::splat(token, dehaze_chroma);
+    let temp_v = f32x8::splat(token, temp_offset);
+    let tint_v = f32x8::splat(token, tint_offset);
+    let sat_v = f32x8::splat(token, sat);
+    let vib_v = f32x8::splat(token, vib_amount);
+    let inv_mc = f32x8::splat(token, 1.0 / MAX_CHROMA);
+    let one_v = f32x8::splat(token, 1.0);
+
+    let (a_chunks, a_tail) = f32x8::partition_slice_mut(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_mut(token, b);
+
+    for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
+        let mut av = f32x8::load(token, &*ac);
+        let mut bv = f32x8::load(token, &*bc);
+        // Dehaze chroma
+        av *= dc_v;
+        bv *= dc_v;
+        // Temperature (b) + tint (a)
+        bv += temp_v;
+        av += tint_v;
+        // Saturation
+        av *= sat_v;
+        bv *= sat_v;
+        // Vibrance
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma * inv_mc).min(one_v);
+        let pf = (one_v - normalized).pow_midp(vib_protection);
+        let scale = vib_v.mul_add(pf, one_v);
+        (av * scale).store(ac);
+        (bv * scale).store(bc);
+    }
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let mut av = *a_val;
+        let mut bv = *b_val;
+        av *= dehaze_chroma;
+        bv *= dehaze_chroma;
+        bv += temp_offset;
+        av += tint_offset;
+        av *= sat;
+        bv *= sat;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(vib_protection);
+        let scale = 1.0 + vib_amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}

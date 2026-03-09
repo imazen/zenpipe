@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Dehaze: global contrast + saturation enhancement.
 ///
@@ -27,15 +28,11 @@ impl Filter for Dehaze {
         // Boost chroma
         let chroma_factor = 1.0 + s * 0.2;
 
-        for v in &mut planes.l {
-            *v = 0.5 + (*v - 0.5) * contrast_factor;
-        }
-        for v in &mut planes.a {
-            *v *= chroma_factor;
-        }
-        for v in &mut planes.b {
-            *v *= chroma_factor;
-        }
+        // L' = 0.5 + (L - 0.5) * cf = L * cf + 0.5 * (1 - cf)
+        simd::scale_plane(&mut planes.l, contrast_factor);
+        simd::offset_plane(&mut planes.l, 0.5 * (1.0 - contrast_factor));
+        simd::scale_plane(&mut planes.a, chroma_factor);
+        simd::scale_plane(&mut planes.b, chroma_factor);
     }
 }
 

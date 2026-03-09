@@ -2,6 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::simd;
 
 /// Highlights and shadows recovery in Oklab L channel.
 ///
@@ -24,19 +25,7 @@ impl Filter for HighlightsShadows {
         if self.highlights.abs() < 1e-6 && self.shadows.abs() < 1e-6 {
             return;
         }
-        for v in &mut planes.l {
-            let l = *v;
-            // Shadows: affect dark regions (L < 0.5) smoothly
-            if self.shadows.abs() > 1e-6 {
-                let shadow_mask = (1.0 - l * 2.0).max(0.0); // 1.0 at black, 0.0 at L=0.5+
-                *v += shadow_mask * shadow_mask * self.shadows * 0.5;
-            }
-            // Highlights: affect bright regions (L > 0.5) smoothly
-            if self.highlights.abs() > 1e-6 {
-                let highlight_mask = ((l - 0.5) * 2.0).clamp(0.0, 1.0); // 0.0 at L=0.5, 1.0 at white
-                *v -= highlight_mask * highlight_mask * self.highlights * 0.5;
-            }
-        }
+        simd::highlights_shadows(&mut planes.l, self.shadows, self.highlights);
     }
 }
 
