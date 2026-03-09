@@ -434,8 +434,8 @@ impl PipelineBufferExt for Pipeline {
 mod tests {
     use super::*;
     use crate::PipelineConfig;
-    use crate::gamut_map::GamutMapping;
     use crate::filters;
+    use crate::gamut_map::GamutMapping;
 
     fn make_srgb_u8_buffer(width: u32, height: u32) -> PixelBuffer {
         let n = (width as usize) * (height as usize);

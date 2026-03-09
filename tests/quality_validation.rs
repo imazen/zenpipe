@@ -33,7 +33,10 @@ fn corpus_dir() -> &'static str {
             return d;
         }
         let candidates = [
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../codec-corpus/CID22/CID22-512/training/"),
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../codec-corpus/CID22/CID22-512/training/"
+            ),
             "/home/lilith/work/codec-corpus/CID22/CID22-512/training/",
         ];
         for c in candidates {
@@ -51,24 +54,24 @@ fn corpus_dir() -> &'static str {
 /// - Neutral cityscape, neutral skyline, textured textile
 /// - High-key pastel, mixed outdoor scene
 const TEST_IMAGES: &[&str] = &[
-    "1028637.png",               // dark, saturated cocktail glasses
-    "1545529.png",               // low-key wine/cheese still life
-    "pexels-photo-2908983.png",  // bright sky with clouds
-    "pexels-photo-6096399.png",  // portrait, dark skin
-    "pexels-photo-7114620.png",  // portrait, light skin, warm
-    "2471234.png",               // abstract vivid paint swirls
-    "1722183.png",               // neutral cityscape with detail
-    "pexels-photo-1130297.png",  // neutral urban, fine detail
-    "5398956.png",               // high-key pastel indoor
-    "2600340.png",               // mixed outdoor scene
+    "1028637.png",              // dark, saturated cocktail glasses
+    "1545529.png",              // low-key wine/cheese still life
+    "pexels-photo-2908983.png", // bright sky with clouds
+    "pexels-photo-6096399.png", // portrait, dark skin
+    "pexels-photo-7114620.png", // portrait, light skin, warm
+    "2471234.png",              // abstract vivid paint swirls
+    "1722183.png",              // neutral cityscape with detail
+    "pexels-photo-1130297.png", // neutral urban, fine detail
+    "5398956.png",              // high-key pastel indoor
+    "2600340.png",              // mixed outdoor scene
 ];
 
 /// Subset for faster CI runs (4 images covering key categories).
 const FAST_IMAGES: &[&str] = &[
-    "1028637.png",               // dark, saturated
-    "pexels-photo-2908983.png",  // bright, gradients
-    "pexels-photo-6096399.png",  // portrait, skin tones
-    "1722183.png",               // neutral, detail
+    "1028637.png",              // dark, saturated
+    "pexels-photo-2908983.png", // bright, gradients
+    "pexels-photo-6096399.png", // portrait, skin tones
+    "1722183.png",              // neutral, detail
 ];
 
 // ─── Prerequisites ──────────────────────────────────────────────────
@@ -428,8 +431,7 @@ fn mean_hue_shift(original: &RgbImage, processed: &RgbImage) -> f64 {
 
         // Simple chromatic estimate: deviation from gray
         let omean = (or + og + ob) / 3.0;
-        let ochroma =
-            ((or - omean).powi(2) + (og - omean).powi(2) + (ob - omean).powi(2)).sqrt();
+        let ochroma = ((or - omean).powi(2) + (og - omean).powi(2) + (ob - omean).powi(2)).sqrt();
         if ochroma < 0.05 {
             continue; // achromatic, skip
         }
@@ -439,8 +441,7 @@ fn mean_hue_shift(original: &RgbImage, processed: &RgbImage) -> f64 {
         let pb = proc_px[2] as f64 / 255.0;
 
         let pmean = (pr + pg + pb) / 3.0;
-        let pchroma =
-            ((pr - pmean).powi(2) + (pg - pmean).powi(2) + (pb - pmean).powi(2)).sqrt();
+        let pchroma = ((pr - pmean).powi(2) + (pg - pmean).powi(2) + (pb - pmean).powi(2)).sqrt();
         if pchroma < 0.05 {
             continue; // processed pixel is achromatic
         }
@@ -613,10 +614,7 @@ fn blur_vs_vips() {
     // Our blur operates in Oklab (all channels), vips in sRGB.
     // Oklab blur avoids darkening at color boundaries that sRGB blur produces.
     // On dark saturated content the approaches diverge more (min ~48).
-    assert!(
-        min > 40.0,
-        "blur sigma=3: min zensim {min:.1} too low"
-    );
+    assert!(min > 40.0, "blur sigma=3: min zensim {min:.1} too low");
 }
 
 // ─── Sharpen comparison ─────────────────────────────────────────────
@@ -641,10 +639,7 @@ fn sharpen_vs_vips() {
 
     eprintln!("sharpen sigma=1: min_zensim={min:.1} avg_zensim={avg:.1}");
     // Both sharpen in luminance (Oklab L vs CIELab L). Should be close.
-    assert!(
-        min > 60.0,
-        "sharpen: min zensim {min:.1} too low"
-    );
+    assert!(min > 60.0, "sharpen: min zensim {min:.1} too low");
 }
 
 // ─── Saturation comparison ──────────────────────────────────────────
@@ -669,10 +664,7 @@ fn saturation_boost_vs_vips() {
     eprintln!("saturation 1.5: min_zensim={min:.1} avg_zensim={avg:.1}");
     // Oklab chroma vs CIELCh chroma — different color spaces, similar concept.
     // Dark saturated images diverge more (Oklab handles near-black chroma better).
-    assert!(
-        min > 45.0,
-        "saturation 1.5: min zensim {min:.1} too low"
-    );
+    assert!(min > 45.0, "saturation 1.5: min zensim {min:.1} too low");
 }
 
 // ─── Grayscale comparison ───────────────────────────────────────────
@@ -712,10 +704,7 @@ fn grayscale_vs_vips() {
 
     // Oklab L ≈ perceptual brightness, vips uses Rec.601 or similar.
     // Both should produce similar grayscale. Expect close match.
-    assert!(
-        min > 70.0,
-        "grayscale: min zensim {min:.1} too low"
-    );
+    assert!(min > 70.0, "grayscale: min zensim {min:.1} too low");
 }
 
 // ─── Artifact detection tests ───────────────────────────────────────
@@ -781,7 +770,10 @@ fn saturation_boost_preserves_hue() {
         let result = apply_zenfilter(&img, Box::new(sat));
 
         let shift = mean_hue_shift(&img, &result);
-        eprintln!("  saturation 1.5 hue shift on {img_name}: {shift:.4} rad ({:.1}°)", shift.to_degrees());
+        eprintln!(
+            "  saturation 1.5 hue shift on {img_name}: {shift:.4} rad ({:.1}°)",
+            shift.to_degrees()
+        );
 
         // Saturation boost should not shift hue significantly
         assert!(
@@ -1150,8 +1142,7 @@ fn fused_adjust_matches_standalone_on_real_images() {
         let (w, h) = img.dimensions();
         let input_bytes: Vec<u8> = img.as_raw().clone();
         let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-        let input_buf =
-            zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+        let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
 
         let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
         pipeline.push({
@@ -1400,7 +1391,11 @@ fn full_comparison_summary() {
             let zen_result = zen_fn(&img);
 
             let input_path = corpus_path(img_name);
-            let output_path = PathBuf::from(format!("/tmp/vips_summary_{}_{}", name.replace(' ', "_"), img_name));
+            let output_path = PathBuf::from(format!(
+                "/tmp/vips_summary_{}_{}",
+                name.replace(' ', "_"),
+                img_name
+            ));
 
             if !vips_fn(&input_path, &output_path) {
                 continue;
@@ -1418,7 +1413,10 @@ fn full_comparison_summary() {
         }
 
         if scores.is_empty() {
-            eprintln!("║  {:<16} │  {:>10}  │  {:>10}  │  {:>8}  ║", name, "N/A", "N/A", "N/A");
+            eprintln!(
+                "║  {:<16} │  {:>10}  │  {:>10}  │  {:>8}  ║",
+                name, "N/A", "N/A", "N/A"
+            );
             continue;
         }
 
@@ -1450,50 +1448,54 @@ fn generate_visual_comparison() {
     let output_dir = Path::new("/mnt/v/output/zenfilters/quality");
     std::fs::create_dir_all(output_dir).unwrap();
 
-    let ops: Vec<(&str, Box<dyn Fn(&RgbImage) -> RgbImage>, Box<dyn Fn(&Path, &Path) -> bool>)> =
-        vec![
-            (
-                "exposure_p1",
-                Box::new(|img| {
-                    let mut e = Exposure::default();
-                    e.stops = 1.0;
-                    apply_zenfilter(img, Box::new(e))
-                }),
-                Box::new(|i, o| vips_exposure(i, o, 1.0)),
-            ),
-            (
-                "contrast_p50",
-                Box::new(|img| {
-                    let mut c = Contrast::default();
-                    c.amount = 0.5;
-                    apply_zenfilter(img, Box::new(c))
-                }),
-                Box::new(|i, o| vips_contrast_lab(i, o, 0.5)),
-            ),
-            (
-                "saturation_1_5",
-                Box::new(|img| {
-                    let mut s = Saturation::default();
-                    s.factor = 1.5;
-                    apply_zenfilter(img, Box::new(s))
-                }),
-                Box::new(|i, o| vips_saturation_lch(i, o, 1.5)),
-            ),
-            (
-                "blur_s3",
-                Box::new(|img| {
-                    let mut b = Blur::default();
-                    b.sigma = 3.0;
-                    apply_zenfilter(img, Box::new(b))
-                }),
-                Box::new(|i, o| vips_gaussblur(i, o, 3.0)),
-            ),
-        ];
+    let ops: Vec<(
+        &str,
+        Box<dyn Fn(&RgbImage) -> RgbImage>,
+        Box<dyn Fn(&Path, &Path) -> bool>,
+    )> = vec![
+        (
+            "exposure_p1",
+            Box::new(|img| {
+                let mut e = Exposure::default();
+                e.stops = 1.0;
+                apply_zenfilter(img, Box::new(e))
+            }),
+            Box::new(|i, o| vips_exposure(i, o, 1.0)),
+        ),
+        (
+            "contrast_p50",
+            Box::new(|img| {
+                let mut c = Contrast::default();
+                c.amount = 0.5;
+                apply_zenfilter(img, Box::new(c))
+            }),
+            Box::new(|i, o| vips_contrast_lab(i, o, 0.5)),
+        ),
+        (
+            "saturation_1_5",
+            Box::new(|img| {
+                let mut s = Saturation::default();
+                s.factor = 1.5;
+                apply_zenfilter(img, Box::new(s))
+            }),
+            Box::new(|i, o| vips_saturation_lch(i, o, 1.5)),
+        ),
+        (
+            "blur_s3",
+            Box::new(|img| {
+                let mut b = Blur::default();
+                b.sigma = 3.0;
+                apply_zenfilter(img, Box::new(b))
+            }),
+            Box::new(|i, o| vips_gaussblur(i, o, 3.0)),
+        ),
+    ];
 
     for &img_name in FAST_IMAGES {
         let label = img_name.trim_end_matches(".png");
         let img = load_corpus_image(img_name);
-        img.save(output_dir.join(format!("original_{label}.png"))).unwrap();
+        img.save(output_dir.join(format!("original_{label}.png")))
+            .unwrap();
 
         for (op_name, zen_fn, vips_fn) in &ops {
             let zen_result = zen_fn(&img);
@@ -1508,5 +1510,8 @@ fn generate_visual_comparison() {
         }
     }
 
-    eprintln!("\nVisual comparison images saved to {}", output_dir.display());
+    eprintln!(
+        "\nVisual comparison images saved to {}",
+        output_dir.display()
+    );
 }

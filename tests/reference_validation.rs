@@ -994,9 +994,7 @@ fn oklab_conversion_vs_palette_full_sweep() {
 
     let n = total_colors as f64;
     eprintln!("Tested {total_colors} colors");
-    eprintln!(
-        "Max errors:  L={max_l_err:.6}, a={max_a_err:.6}, b={max_b_err:.6}"
-    );
+    eprintln!("Max errors:  L={max_l_err:.6}, a={max_a_err:.6}, b={max_b_err:.6}");
     eprintln!(
         "Mean errors: L={:.8}, a={:.8}, b={:.8}",
         sum_l_err / n,

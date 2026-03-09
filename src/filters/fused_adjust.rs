@@ -146,19 +146,40 @@ mod tests {
     /// Apply standalone filters in the exact same order as FusedAdjust.
     fn apply_standalone_chain(planes: &mut OklabPlanes, adj: &FusedAdjust) {
         let mut ctx = FilterContext::new();
-        BlackPoint { level: adj.black_point }.apply(planes, &mut ctx);
-        WhitePoint { level: adj.white_point }.apply(planes, &mut ctx);
-        Exposure { stops: adj.exposure }.apply(planes, &mut ctx);
-        Contrast { amount: adj.contrast }.apply(planes, &mut ctx);
+        BlackPoint {
+            level: adj.black_point,
+        }
+        .apply(planes, &mut ctx);
+        WhitePoint {
+            level: adj.white_point,
+        }
+        .apply(planes, &mut ctx);
+        Exposure {
+            stops: adj.exposure,
+        }
+        .apply(planes, &mut ctx);
+        Contrast {
+            amount: adj.contrast,
+        }
+        .apply(planes, &mut ctx);
         HighlightsShadows {
             highlights: adj.highlights,
             shadows: adj.shadows,
         }
         .apply(planes, &mut ctx);
-        Dehaze { strength: adj.dehaze }.apply(planes, &mut ctx);
-        Temperature { shift: adj.temperature }.apply(planes, &mut ctx);
+        Dehaze {
+            strength: adj.dehaze,
+        }
+        .apply(planes, &mut ctx);
+        Temperature {
+            shift: adj.temperature,
+        }
+        .apply(planes, &mut ctx);
         Tint { shift: adj.tint }.apply(planes, &mut ctx);
-        Saturation { factor: adj.saturation }.apply(planes, &mut ctx);
+        Saturation {
+            factor: adj.saturation,
+        }
+        .apply(planes, &mut ctx);
         Vibrance {
             amount: adj.vibrance,
             protection: adj.vibrance_protection,

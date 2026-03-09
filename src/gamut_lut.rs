@@ -83,13 +83,7 @@ impl GamutBoundaryLut {
     ///
     /// `knee` is the fraction of max chroma where compression starts (0.0-1.0).
     /// Typical value: 0.9 (start compressing at 90% of gamut boundary).
-    pub(crate) fn compress_planes(
-        &self,
-        l: &[f32],
-        a: &mut [f32],
-        b: &mut [f32],
-        knee: f32,
-    ) {
+    pub(crate) fn compress_planes(&self, l: &[f32], a: &mut [f32], b: &mut [f32], knee: f32) {
         let n = l.len();
         debug_assert!(a.len() == n && b.len() == n);
 
