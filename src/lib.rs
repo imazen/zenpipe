@@ -33,6 +33,7 @@ extern crate alloc;
 
 mod error;
 mod format;
+pub mod graph;
 pub mod ops;
 pub mod sources;
 mod strip;

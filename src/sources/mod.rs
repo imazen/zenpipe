@@ -1,6 +1,7 @@
 mod callback;
 mod composite;
 mod crop;
+mod flip;
 mod materialize;
 mod resize;
 mod transform;
@@ -8,6 +9,7 @@ mod transform;
 pub use callback::CallbackSource;
 pub use composite::CompositeSource;
 pub use crop::CropSource;
+pub use flip::FlipHSource;
 pub use materialize::MaterializedSource;
 pub use resize::ResizeSource;
 pub use transform::TransformSource;

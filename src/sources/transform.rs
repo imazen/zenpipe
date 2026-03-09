@@ -51,6 +51,22 @@ impl TransformSource {
         self.ops.push(Box::new(op));
         self
     }
+
+    /// Append a boxed per-pixel operation to the fused chain.
+    ///
+    /// Like [`push`](Self::push) but accepts a pre-boxed trait object.
+    pub fn push_boxed(mut self, op: Box<dyn PixelOp>) -> Self {
+        assert_eq!(
+            op.input_format(),
+            self.output_format,
+            "op input format {:?} doesn't match chain output {:?}",
+            op.input_format(),
+            self.output_format,
+        );
+        self.output_format = op.output_format();
+        self.ops.push(op);
+        self
+    }
 }
 
 impl Source for TransformSource {

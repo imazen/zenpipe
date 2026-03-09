@@ -22,5 +22,7 @@ linear-srgb = { path = "../linear-srgb", default-features = false }
 garb = { version = "0.2.1", default-features = false, features = ["experimental"] }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
+# no_std-compatible HashMap for graph compilation
+hashbrown = "0.15"
 
 [dev-dependencies]
