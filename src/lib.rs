@@ -56,6 +56,7 @@ mod blur;
 mod context;
 mod filter;
 pub mod filters;
+mod gamut_lut;
 mod gamut_map;
 mod pipeline;
 mod planes;

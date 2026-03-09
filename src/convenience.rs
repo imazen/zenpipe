@@ -434,6 +434,7 @@ impl PipelineBufferExt for Pipeline {
 mod tests {
     use super::*;
     use crate::PipelineConfig;
+    use crate::gamut_map::GamutMapping;
     use crate::filters;
 
     fn make_srgb_u8_buffer(width: u32, height: u32) -> PixelBuffer {
@@ -483,6 +484,7 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig {
             primaries: ColorPrimaries::Bt709,
             reference_white: 1.0,
+            gamut_mapping: GamutMapping::Clip,
         })
         .unwrap();
 
@@ -529,6 +531,7 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig {
             primaries: ColorPrimaries::DisplayP3,
             reference_white: 1.0,
+            gamut_mapping: GamutMapping::Clip,
         })
         .unwrap();
 
@@ -640,6 +643,7 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig {
             primaries: ColorPrimaries::Bt2020,
             reference_white: 203.0,
+            gamut_mapping: GamutMapping::Clip,
         })
         .unwrap();
 

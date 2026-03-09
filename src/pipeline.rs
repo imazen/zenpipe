@@ -5,6 +5,8 @@ use zenpixels_convert::oklab;
 
 use crate::context::FilterContext;
 use crate::filter::Filter;
+use crate::gamut_lut::GamutBoundaryLut;
+use crate::gamut_map::GamutMapping;
 use crate::planes::OklabPlanes;
 use crate::scatter_gather::{gather_from_oklab, scatter_to_oklab};
 
@@ -28,6 +30,8 @@ pub struct PipelineConfig {
     /// Reference white luminance for HDR normalization.
     /// Use 1.0 for SDR, 203.0 for PQ (ITU-R BT.2408).
     pub reference_white: f32,
+    /// Gamut mapping strategy applied after filters, before gather.
+    pub gamut_mapping: GamutMapping,
 }
 
 impl Default for PipelineConfig {
@@ -35,6 +39,7 @@ impl Default for PipelineConfig {
         Self {
             primaries: ColorPrimaries::Bt709,
             reference_white: 1.0,
+            gamut_mapping: GamutMapping::Clip,
         }
     }
 }
@@ -72,6 +77,7 @@ pub struct Pipeline {
     filters: Vec<Box<dyn Filter>>,
     m1: GamutMatrix,
     m1_inv: GamutMatrix,
+    gamut_lut: Option<GamutBoundaryLut>,
 }
 
 impl Pipeline {
@@ -83,11 +89,17 @@ impl Pipeline {
         let m1_inv = oklab::lms_to_rgb_matrix(config.primaries)
             .ok_or_else(|| at!(PipelineError::UnsupportedPrimaries(config.primaries)))?;
 
+        let gamut_lut = match config.gamut_mapping {
+            GamutMapping::SoftCompress { .. } => Some(GamutBoundaryLut::new(&m1_inv)),
+            _ => None,
+        };
+
         Ok(Self {
             config,
             filters: Vec::new(),
             m1,
             m1_inv,
+            gamut_lut,
         })
     }
 
@@ -236,6 +248,13 @@ impl Pipeline {
         for filter in &self.filters {
             filter.apply(planes, ctx);
         }
+
+        // Apply gamut mapping after all filters
+        if let (GamutMapping::SoftCompress { knee }, Some(lut)) =
+            (self.config.gamut_mapping, &self.gamut_lut)
+        {
+            lut.compress_planes(&planes.l, &mut planes.a, &mut planes.b, knee);
+        }
     }
 }
 
@@ -263,6 +282,7 @@ mod tests {
         let result = Pipeline::new(PipelineConfig {
             primaries: ColorPrimaries::Unknown,
             reference_white: 1.0,
+            gamut_mapping: GamutMapping::Clip,
         });
         assert!(result.is_err());
     }
