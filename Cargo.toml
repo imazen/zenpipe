@@ -11,7 +11,7 @@ categories = ["multimedia::images", "graphics"]
 
 [features]
 default = []
-buffer = ["zenpixels/buffer", "zenpixels-convert/buffer"]
+buffer = []
 srgb-filters = ["buffer", "dep:rgb"]
 
 [dependencies]
@@ -30,8 +30,8 @@ image = "0.25"
 imageproc = "0.26"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 zensim = { version = "0.2", path = "../zensim/zensim", default-features = false }
-zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["buffer", "planar", "rgb"] }
-zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer", "planar"] }
+zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar", "rgb"] }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["planar"] }
 
 [[bench]]
 name = "row_batch"

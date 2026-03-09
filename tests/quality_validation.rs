@@ -1515,3 +1515,523 @@ fn generate_visual_comparison() {
         output_dir.display()
     );
 }
+
+// ─── darktable comparison infrastructure ─────────────────────────
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static DT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn darktable_available() -> bool {
+    Command::new("darktable-cli")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn skip_unless_darktable() -> bool {
+    if !corpus_available() {
+        eprintln!("SKIP: CID22 corpus not found at {}", corpus_dir());
+        return true;
+    }
+    if !darktable_available() {
+        eprintln!("SKIP: darktable-cli not available");
+        return true;
+    }
+    false
+}
+
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Module entry for a darktable XMP sidecar history stack.
+struct DtModule {
+    operation: &'static str,
+    modversion: u32,
+    params_hex: String,
+}
+
+const DT_BLENDOP_NORMAL: &str = "gz14eJxjYIAACQYYOOHEgAYY0QVwggZ7CB6pfNoAAEkgGQQ=";
+
+/// Generate a darktable XMP sidecar with the given modules in the history stack.
+fn generate_dt_xmp(modules: &[DtModule]) -> String {
+    let mut entries = String::new();
+    for (i, m) in modules.iter().enumerate() {
+        entries.push_str(&format!(
+            r#"     <rdf:li darktable:num="{i}" darktable:operation="{op}" darktable:enabled="1"
+      darktable:modversion="{ver}"
+      darktable:params="{params}"
+      darktable:multi_name="" darktable:multi_priority="0"
+      darktable:blendop_version="10"
+      darktable:blendop_params="{blend}"/>
+"#,
+            op = m.operation,
+            ver = m.modversion,
+            params = m.params_hex,
+            blend = DT_BLENDOP_NORMAL,
+        ));
+    }
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:darktable="http://darktable.sf.net/"
+   darktable:xmp_version="5"
+   darktable:raw_params="0"
+   darktable:auto_presets_applied="0"
+   darktable:iop_order_version="5"
+   darktable:history_end="{count}">
+   <darktable:masks_history><rdf:Seq/></darktable:masks_history>
+   <darktable:history>
+    <rdf:Seq>
+{entries}    </rdf:Seq>
+   </darktable:history>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#,
+        count = modules.len(),
+    )
+}
+
+/// Generate hex params for darktable exposure module (v7, 28 bytes).
+/// struct: mode(i32), black(f32), exposure(f32), deflicker_pct(f32),
+///   deflicker_tgt(f32), comp_bias(i32), comp_hilite(i32)
+fn dt_exposure_hex(exposure_ev: f32) -> String {
+    let mut b = Vec::with_capacity(28);
+    b.extend_from_slice(&0i32.to_le_bytes()); // mode = MANUAL
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // black = 0
+    b.extend_from_slice(&exposure_ev.to_le_bytes()); // exposure (EV)
+    b.extend_from_slice(&50.0f32.to_le_bytes()); // deflicker_percentile
+    b.extend_from_slice(&(-4.0f32).to_le_bytes()); // deflicker_target_level
+    b.extend_from_slice(&0i32.to_le_bytes()); // compensate_exposure_bias
+    b.extend_from_slice(&0i32.to_le_bytes()); // compensate_hilite_pres
+    bytes_to_hex(&b)
+}
+
+/// Generate hex params for darktable basicadj module (v2, 44 bytes).
+/// struct: black_point(f32), exposure(f32), hlcompr(f32), hlcomprthresh(f32),
+///   contrast(f32), preserve_colors(i32=1), middle_grey(f32=18.42),
+///   brightness(f32), saturation(f32), vibrance(f32), clip(f32)
+fn dt_basicadj_hex(contrast: f32, saturation: f32, vibrance: f32) -> String {
+    let mut b = Vec::with_capacity(44);
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // black_point
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // exposure
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // hlcompr
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // hlcomprthresh
+    b.extend_from_slice(&contrast.to_le_bytes()); // contrast
+    b.extend_from_slice(&1i32.to_le_bytes()); // preserve_colors = LUMINANCE
+    b.extend_from_slice(&18.42f32.to_le_bytes()); // middle_grey
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // brightness
+    b.extend_from_slice(&saturation.to_le_bytes()); // saturation
+    b.extend_from_slice(&vibrance.to_le_bytes()); // vibrance
+    b.extend_from_slice(&0.0f32.to_le_bytes()); // clip
+    bytes_to_hex(&b)
+}
+
+/// Run darktable-cli with a generated XMP sidecar, returning the output image.
+fn run_darktable(input: &Path, modules: &[DtModule]) -> Option<RgbImage> {
+    let id = DT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let xmp_path = PathBuf::from(format!("/tmp/dt_test_{id}.xmp"));
+    let output_path = PathBuf::from(format!("/tmp/dt_output_{id}.png"));
+
+    let xmp_content = generate_dt_xmp(modules);
+    std::fs::write(&xmp_path, &xmp_content).ok()?;
+
+    let result = Command::new("darktable-cli")
+        .args([
+            input.to_str().unwrap(),
+            xmp_path.to_str().unwrap(),
+            output_path.to_str().unwrap(),
+            "--apply-custom-presets",
+            "false",
+            "--out-ext",
+            "png",
+            "--core",
+            "--library",
+            ":memory:",
+            "--configdir",
+            "/tmp/dt_config",
+        ])
+        .output()
+        .ok()?;
+
+    let _ = std::fs::remove_file(&xmp_path);
+
+    if !result.status.success() {
+        eprintln!(
+            "darktable-cli failed: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let _ = std::fs::remove_file(&output_path);
+        return None;
+    }
+
+    let img = image::open(&output_path).ok()?.to_rgb8();
+    let _ = std::fs::remove_file(&output_path);
+    Some(img)
+}
+
+/// Run a darktable comparison across images, returning (min_zensim, avg_zensim, avg_diff).
+fn compare_with_darktable(
+    images: &[&str],
+    zen_fn: impl Fn(&RgbImage) -> RgbImage,
+    dt_modules_fn: impl Fn() -> Vec<DtModule>,
+    op_name: &str,
+) -> (f64, f64, f64) {
+    let mut scores = Vec::new();
+    let mut diffs = Vec::new();
+
+    for &img_name in images {
+        let img = load_corpus_image(img_name);
+        let zen_result = zen_fn(&img);
+        let input_path = corpus_path(img_name);
+
+        let dt_result = match run_darktable(&input_path, &dt_modules_fn()) {
+            Some(r) => r,
+            None => {
+                eprintln!("  dt {op_name} failed on {img_name}, skipping");
+                continue;
+            }
+        };
+
+        if zen_result.dimensions() != dt_result.dimensions() {
+            eprintln!(
+                "  size mismatch for {img_name}: zen={:?} dt={:?}",
+                zen_result.dimensions(),
+                dt_result.dimensions()
+            );
+            continue;
+        }
+
+        let score = zensim_score(&zen_result, &dt_result);
+        let mad = mean_abs_diff(&zen_result, &dt_result);
+        eprintln!("  {op_name} {img_name}: zensim={score:.1} mean_diff={mad:.1}");
+        scores.push(score);
+        diffs.push(mad);
+    }
+
+    if scores.is_empty() {
+        return (0.0, 0.0, 0.0);
+    }
+
+    let min = scores.iter().copied().fold(f64::INFINITY, f64::min);
+    let avg = scores.iter().sum::<f64>() / scores.len() as f64;
+    let avg_diff = diffs.iter().sum::<f64>() / diffs.len() as f64;
+    (min, avg, avg_diff)
+}
+
+// ─── darktable comparison tests ──────────────────────────────────
+
+#[test]
+fn dt_exposure_plus1() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let (min, avg, avg_diff) = compare_with_darktable(
+        FAST_IMAGES,
+        |img| {
+            let mut e = Exposure::default();
+            e.stops = 1.0;
+            apply_zenfilter(img, Box::new(e))
+        },
+        || {
+            vec![DtModule {
+                operation: "exposure",
+                modversion: 7,
+                params_hex: dt_exposure_hex(1.0),
+            }]
+        },
+        "exposure_p1",
+    );
+
+    eprintln!("dt exposure +1: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
+    // zenfilters scales in Oklab (perceptual), darktable in linear RGB.
+    // Both brighten correctly; differences arise from color-space choice.
+}
+
+#[test]
+fn dt_exposure_minus1() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let (min, avg, avg_diff) = compare_with_darktable(
+        FAST_IMAGES,
+        |img| {
+            let mut e = Exposure::default();
+            e.stops = -1.0;
+            apply_zenfilter(img, Box::new(e))
+        },
+        || {
+            vec![DtModule {
+                operation: "exposure",
+                modversion: 7,
+                params_hex: dt_exposure_hex(-1.0),
+            }]
+        },
+        "exposure_m1",
+    );
+
+    eprintln!("dt exposure -1: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
+}
+
+#[test]
+fn dt_contrast_plus50() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let (min, avg, avg_diff) = compare_with_darktable(
+        FAST_IMAGES,
+        |img| {
+            let mut c = Contrast::default();
+            c.amount = 0.5;
+            apply_zenfilter(img, Box::new(c))
+        },
+        || {
+            vec![DtModule {
+                operation: "basicadj",
+                modversion: 2,
+                params_hex: dt_basicadj_hex(0.5, 0.0, 0.0),
+            }]
+        },
+        "contrast_p50",
+    );
+
+    eprintln!("dt contrast +0.5: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
+    // zenfilters: Oklab L linear pivot at 0.5.
+    // darktable: linear RGB power curve around middle_grey (18.42%).
+    // Fundamentally different contrast models — divergence expected.
+}
+
+#[test]
+fn dt_saturation_boost() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let (min, avg, avg_diff) = compare_with_darktable(
+        FAST_IMAGES,
+        |img| {
+            let mut s = Saturation::default();
+            s.factor = 1.5;
+            apply_zenfilter(img, Box::new(s))
+        },
+        || {
+            // dt basicadj saturation=0.5 ≈ 1.5× scale: out + 0.5*(out-avg)
+            vec![DtModule {
+                operation: "basicadj",
+                modversion: 2,
+                params_hex: dt_basicadj_hex(0.0, 0.5, 0.0),
+            }]
+        },
+        "saturation_1_5",
+    );
+
+    eprintln!("dt saturation 1.5: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
+    // zenfilters: Oklab a,b uniform scale.
+    // darktable: linear RGB deviation from channel average.
+    // Different color spaces but similar intent.
+}
+
+#[test]
+fn dt_vibrance_boost() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let (min, avg, avg_diff) = compare_with_darktable(
+        FAST_IMAGES,
+        |img| {
+            let mut v = Vibrance::default();
+            v.amount = 0.5;
+            apply_zenfilter(img, Box::new(v))
+        },
+        || {
+            vec![DtModule {
+                operation: "basicadj",
+                modversion: 2,
+                params_hex: dt_basicadj_hex(0.0, 0.0, 0.5),
+            }]
+        },
+        "vibrance_0_5",
+    );
+
+    eprintln!("dt vibrance 0.5: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
+    // Both protect already-saturated pixels, but in different color spaces.
+}
+
+// ─── darktable comparison summary ────────────────────────────────
+
+#[test]
+fn darktable_comparison_summary() {
+    if skip_unless_darktable() {
+        return;
+    }
+
+    let images = FAST_IMAGES;
+
+    // Get darktable version for the header
+    let dt_ver = Command::new("darktable-cli")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+    let dt_ver = dt_ver.lines().next().unwrap_or("unknown").trim();
+
+    eprintln!("\n╔═══════════════════════════════════════════════════════════╗");
+    eprintln!("║  zenfilters vs darktable quality summary                  ║");
+    eprintln!("║  ref: {:<52}║", &dt_ver[..dt_ver.len().min(52)]);
+    eprintln!("╠═══════════════════════════════════════════════════════════╣");
+    eprintln!("║  Operation       │ Min zsim │ Avg zsim │ Diff │ Space   ║");
+    eprintln!("╟──────────────────┼──────────┼──────────┼──────┼─────────╢");
+
+    struct Op {
+        name: &'static str,
+        note: &'static str,
+    }
+
+    let ops: Vec<(
+        Op,
+        Box<dyn Fn(&RgbImage) -> RgbImage>,
+        Box<dyn Fn() -> Vec<DtModule>>,
+    )> = vec![
+        (
+            Op {
+                name: "exposure +1",
+                note: "Oklab",
+            },
+            Box::new(|img| {
+                let mut e = Exposure::default();
+                e.stops = 1.0;
+                apply_zenfilter(img, Box::new(e))
+            }),
+            Box::new(|| {
+                vec![DtModule {
+                    operation: "exposure",
+                    modversion: 7,
+                    params_hex: dt_exposure_hex(1.0),
+                }]
+            }),
+        ),
+        (
+            Op {
+                name: "exposure -1",
+                note: "Oklab",
+            },
+            Box::new(|img| {
+                let mut e = Exposure::default();
+                e.stops = -1.0;
+                apply_zenfilter(img, Box::new(e))
+            }),
+            Box::new(|| {
+                vec![DtModule {
+                    operation: "exposure",
+                    modversion: 7,
+                    params_hex: dt_exposure_hex(-1.0),
+                }]
+            }),
+        ),
+        (
+            Op {
+                name: "contrast +0.5",
+                note: "Oklab",
+            },
+            Box::new(|img| {
+                let mut c = Contrast::default();
+                c.amount = 0.5;
+                apply_zenfilter(img, Box::new(c))
+            }),
+            Box::new(|| {
+                vec![DtModule {
+                    operation: "basicadj",
+                    modversion: 2,
+                    params_hex: dt_basicadj_hex(0.5, 0.0, 0.0),
+                }]
+            }),
+        ),
+        (
+            Op {
+                name: "saturation 1.5",
+                note: "Oklab",
+            },
+            Box::new(|img| {
+                let mut s = Saturation::default();
+                s.factor = 1.5;
+                apply_zenfilter(img, Box::new(s))
+            }),
+            Box::new(|| {
+                vec![DtModule {
+                    operation: "basicadj",
+                    modversion: 2,
+                    params_hex: dt_basicadj_hex(0.0, 0.5, 0.0),
+                }]
+            }),
+        ),
+        (
+            Op {
+                name: "vibrance 0.5",
+                note: "Oklab",
+            },
+            Box::new(|img| {
+                let mut v = Vibrance::default();
+                v.amount = 0.5;
+                apply_zenfilter(img, Box::new(v))
+            }),
+            Box::new(|| {
+                vec![DtModule {
+                    operation: "basicadj",
+                    modversion: 2,
+                    params_hex: dt_basicadj_hex(0.0, 0.0, 0.5),
+                }]
+            }),
+        ),
+    ];
+
+    for (op, zen_fn, dt_fn) in &ops {
+        let mut scores = Vec::new();
+        let mut diffs = Vec::new();
+
+        for &img_name in images {
+            let img = load_corpus_image(img_name);
+            let zen_result = zen_fn(&img);
+            let input_path = corpus_path(img_name);
+
+            if let Some(dt_result) = run_darktable(&input_path, &dt_fn()) {
+                if zen_result.dimensions() == dt_result.dimensions() {
+                    scores.push(zensim_score(&zen_result, &dt_result));
+                    diffs.push(mean_abs_diff(&zen_result, &dt_result));
+                }
+            }
+        }
+
+        if scores.is_empty() {
+            eprintln!(
+                "║  {:<16} │ {:>8} │ {:>8} │ {:>4} │ {:>7} ║",
+                op.name, "N/A", "N/A", "N/A", op.note
+            );
+            continue;
+        }
+
+        let min = scores.iter().copied().fold(f64::INFINITY, f64::min);
+        let avg = scores.iter().sum::<f64>() / scores.len() as f64;
+        let avg_diff = diffs.iter().sum::<f64>() / diffs.len() as f64;
+
+        eprintln!(
+            "║  {:<16} │ {:>8.1} │ {:>8.1} │ {:>4.1} │ {:>7} ║",
+            op.name, min, avg, avg_diff, op.note
+        );
+    }
+
+    eprintln!("╠═══════════════════════════════════════════════════════════╣");
+    eprintln!("║  zenfilters: Oklab perceptual space                       ║");
+    eprintln!("║  darktable: linear RGB (exposure) / linear RGB (basicadj) ║");
+    eprintln!("╚═══════════════════════════════════════════════════════════╝\n");
+}

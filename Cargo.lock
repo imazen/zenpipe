@@ -1751,7 +1751,6 @@ name = "zenpixels"
 version = "0.1.1"
 dependencies = [
  "bytemuck",
- "imgref",
  "rgb",
  "whereat",
 ]
@@ -1763,14 +1762,13 @@ dependencies = [
  "bytemuck",
  "garb",
  "linear-srgb",
- "rgb",
  "whereat",
  "zenpixels",
 ]
 
 [[package]]
 name = "zensim"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "archmage",
  "bytemuck",
