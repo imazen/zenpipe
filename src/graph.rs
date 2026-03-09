@@ -6,8 +6,9 @@
 //!
 //! # Design
 //!
-//! - **Delegates to zen crates**: zenresize handles crop + orient + resize + canvas
-//!   in a single optimized call via [`LayoutPlan`]. No reimplemented geometry.
+//! - **Delegates to zen crates**: zenresize handles orient + resize. Layout nodes
+//!   decompose into streaming steps (crop → orient → resize → canvas) with
+//!   materialization only when unavoidable (axis-swapping orientations, canvas expansion).
 //! - **No estimate phase**: dimensions propagate naturally through `Source::width()`/`height()`
 //!   during compilation.
 //! - **No expand phase**: zen crates handle internal optimization.
@@ -45,7 +46,7 @@ use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 use crate::sources::{
-    CompositeSource, CropSource, MaterializedSource, ResizeSource, TransformSource,
+    CompositeSource, CropSource, FlipHSource, MaterializedSource, ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -72,10 +73,17 @@ pub enum NodeOp {
 
     // === Layout: crop + orient + resize + canvas via zenresize ===
     /// Execute a [`LayoutPlan`] — handles crop, orientation, resize, and canvas
-    /// placement in a single optimized zenresize call.
+    /// placement via decomposed streaming steps where possible.
     ///
-    /// Input must be `Rgba8`. Materializes upstream, applies the full
-    /// trim → orient → resize → canvas pipeline, then re-streams.
+    /// Input must be `Rgba8`. Decomposes into:
+    /// 1. `CropSource` (streaming) if trim is needed
+    /// 2. `FlipHSource` (streaming) or `MaterializedSource(orient_image)` for orientation
+    /// 3. `ResizeSource` (streaming) if resize is needed
+    /// 4. Canvas expansion (materialized) if canvas differs from resize output
+    ///
+    /// Common case (no orientation, no canvas padding) is fully streaming.
+    /// Falls back to materializing `execute_layout` for edge extension
+    /// (`content_size`) or `Linear` canvas colors.
     Layout {
         plan: zenresize::LayoutPlan,
         filter: zenresize::Filter,
@@ -232,28 +240,136 @@ impl PipelineGraph {
 
             NodeOp::Layout { plan, filter } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
-                let in_w = upstream.width();
-                let in_h = upstream.height();
-                let canvas_w = plan.canvas.width;
-                let canvas_h = plan.canvas.height;
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    move |data, w, h, _fmt| {
-                        let out = zenresize::execute_layout(
-                            data,
-                            in_w,
-                            in_h,
-                            &plan,
-                            zenresize::PixelDescriptor::RGBA8_SRGB,
-                            filter,
-                        );
-                        *data = out;
-                        *w = canvas_w;
-                        *h = canvas_h;
-                    },
-                )?))
+                let mut source = self.compile_node(input_id, sources)?;
+                source = ensure_format(source, PixelFormat::Rgba8);
+
+                let needs_canvas = plan.canvas.width != plan.resize_to.width
+                    || plan.canvas.height != plan.resize_to.height
+                    || plan.placement != (0, 0);
+                let has_linear_canvas =
+                    matches!(plan.canvas_color, zenresize::CanvasColor::Linear { .. });
+
+                // Fall back to materializing for features that can't stream
+                if plan.content_size.is_some() || (needs_canvas && has_linear_canvas) {
+                    let in_w = source.width();
+                    let in_h = source.height();
+                    let canvas_w = plan.canvas.width;
+                    let canvas_h = plan.canvas.height;
+                    return Ok(Box::new(MaterializedSource::from_source_with_transform(
+                        source,
+                        move |data, w, h, _fmt| {
+                            let out = zenresize::execute_layout(
+                                data,
+                                in_w,
+                                in_h,
+                                &plan,
+                                zenresize::PixelDescriptor::RGBA8_SRGB,
+                                filter,
+                            );
+                            *data = out;
+                            *w = canvas_w;
+                            *h = canvas_h;
+                        },
+                    )?));
+                }
+
+                // Step 1: Trim (streaming crop)
+                if let Some(trim) = plan.trim {
+                    source = Box::new(CropSource::new(
+                        source, trim.x, trim.y, trim.width, trim.height,
+                    )?);
+                }
+
+                // Step 2: Orientation
+                let orientation = plan.remaining_orientation;
+                if !orientation.is_identity() {
+                    if matches!(orientation, zenresize::Orientation::FlipH) {
+                        source = Box::new(FlipHSource::new(source));
+                    } else {
+                        let in_w = source.width();
+                        let in_h = source.height();
+                        source = Box::new(MaterializedSource::from_source_with_transform(
+                            source,
+                            move |data, w, h, _fmt| {
+                                let (result, new_w, new_h) =
+                                    zenresize::orient_image(data, in_w, in_h, orientation, 4);
+                                *data = result;
+                                *w = new_w;
+                                *h = new_h;
+                            },
+                        )?);
+                    }
+                }
+
+                // Step 3: Resize (streaming via StreamingResize)
+                if !plan.resize_is_identity {
+                    let in_w = source.width();
+                    let in_h = source.height();
+                    let config = zenresize::ResizeConfig::builder(
+                        in_w,
+                        in_h,
+                        plan.resize_to.width,
+                        plan.resize_to.height,
+                    )
+                    .filter(filter)
+                    .build();
+                    source = Box::new(ResizeSource::new(source, &config, 16)?);
+                }
+
+                // Step 4: Canvas expansion (if needed)
+                if needs_canvas {
+                    let canvas_w = plan.canvas.width;
+                    let canvas_h = plan.canvas.height;
+                    let (px, py) = plan.placement;
+                    let bg = match plan.canvas_color {
+                        zenresize::CanvasColor::Transparent => [0u8, 0, 0, 0],
+                        zenresize::CanvasColor::Srgb { r, g, b, a } => [r, g, b, a],
+                        // Linear case handled by fallback above
+                        _ => [0, 0, 0, 0],
+                    };
+                    source = Box::new(MaterializedSource::from_source_with_transform(
+                        source,
+                        move |data, w, h, _fmt| {
+                            let src_w = *w as usize;
+                            let src_h = *h as usize;
+                            let stride = canvas_w as usize * 4;
+                            let mut canvas = alloc::vec![0u8; stride * canvas_h as usize];
+
+                            for chunk in canvas.chunks_exact_mut(4) {
+                                chunk.copy_from_slice(&bg);
+                            }
+
+                            for row in 0..src_h {
+                                let dst_y = py as i64 + row as i64;
+                                if dst_y < 0 || dst_y >= canvas_h as i64 {
+                                    continue;
+                                }
+                                let dst_y = dst_y as usize;
+                                let src_x_start =
+                                    if px < 0 { (-px) as usize } else { 0 };
+                                let dst_x_start =
+                                    if px >= 0 { px as usize } else { 0 };
+                                let copy_w = src_w
+                                    .saturating_sub(src_x_start)
+                                    .min(canvas_w as usize - dst_x_start);
+                                if copy_w > 0 {
+                                    let src_off = row * src_w * 4 + src_x_start * 4;
+                                    let dst_off = dst_y * stride + dst_x_start * 4;
+                                    canvas[dst_off..dst_off + copy_w * 4]
+                                        .copy_from_slice(
+                                            &data[src_off..src_off + copy_w * 4],
+                                        );
+                                }
+                            }
+
+                            *data = canvas;
+                            *w = canvas_w;
+                            *h = canvas_h;
+                        },
+                    )?);
+                }
+
+                Ok(source)
             }
 
             NodeOp::LayoutComposite { plan, filter } => {
