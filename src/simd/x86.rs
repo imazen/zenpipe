@@ -75,6 +75,64 @@ fn power_contrast_plane_simd(token: X64V3Token, plane: &mut [f32], exp: f32, sca
 }
 
 #[arcane]
+pub(super) fn sigmoid_tone_map_plane_impl_v3(
+    token: X64V3Token,
+    plane: &mut [f32],
+    contrast: f32,
+    bias_a: f32,
+) {
+    sigmoid_tone_map_plane_simd(token, plane, contrast, bias_a);
+}
+
+#[rite]
+fn sigmoid_tone_map_plane_simd(token: X64V3Token, plane: &mut [f32], contrast: f32, bias_a: f32) {
+    let one_v = f32x8::splat(token, 1.0);
+    let zero_v = f32x8::zero(token);
+    let bias_a_v = f32x8::splat(token, bias_a);
+    let has_bias = bias_a.abs() > 1e-6;
+
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let mut x = f32x8::load(token, &*chunk).max(zero_v).min(one_v);
+
+        // Schlick bias: x / (bias_a * (1 - x) + 1)
+        if has_bias {
+            let denom = (one_v - x).mul_add(bias_a_v, one_v);
+            x *= denom.recip();
+            x = x.max(zero_v).min(one_v);
+        }
+
+        // Sigmoid: 1 / (1 + ((1-x)/x)^c)
+        // Compute ratio = (1-x)/x, handling x near 0 by clamping
+        let x_safe = x.max(f32x8::splat(token, 1e-7));
+        let ratio = (one_v - x_safe) * x_safe.recip();
+        let powered = ratio.pow_midp(contrast);
+        let result = (one_v + powered).recip();
+
+        // Blend: use 0.0 where x <= 0, 1.0 where x >= 1
+        let is_zero = x.simd_le(zero_v);
+        let is_one = x.simd_ge(one_v);
+        let r = f32x8::blend(is_zero, zero_v, result);
+        let r = f32x8::blend(is_one, one_v, r);
+        r.store(chunk);
+    }
+    for v in tail {
+        let mut x = v.clamp(0.0, 1.0);
+        if has_bias {
+            x = x / (bias_a * (1.0 - x) + 1.0);
+        }
+        *v = if x <= 0.0 {
+            0.0
+        } else if x >= 1.0 {
+            1.0
+        } else {
+            let ratio = ((1.0 - x) / x).powf(contrast);
+            1.0 / (1.0 + ratio)
+        };
+    }
+}
+
+#[arcane]
 pub(super) fn unsharp_fuse_impl_v3(
     token: X64V3Token,
     src: &[f32],

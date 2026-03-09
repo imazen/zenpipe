@@ -25,6 +25,13 @@ pub(crate) fn power_contrast_plane(plane: &mut [f32], exp: f32, scale: f32) {
     archmage::incant!(power_contrast_plane_impl(plane, exp, scale), [v3]);
 }
 
+/// Dispatch: sigmoid tone map on L plane.
+///
+/// Applies Schlick bias (if bias_a != 0) then generalized sigmoid `x^c / (x^c + (1-x)^c)`.
+pub(crate) fn sigmoid_tone_map_plane(plane: &mut [f32], contrast: f32, bias_a: f32) {
+    archmage::incant!(sigmoid_tone_map_plane_impl(plane, contrast, bias_a), [v3]);
+}
+
 /// Dispatch: unsharp mask fuse: dst[i] = (src[i] + (src[i] - blurred[i]) * amount).max(0)
 pub(crate) fn unsharp_fuse(src: &[f32], blurred: &[f32], dst: &mut [f32], amount: f32) {
     archmage::incant!(unsharp_fuse_impl(src, blurred, dst, amount), [v3]);

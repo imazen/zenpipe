@@ -30,6 +30,31 @@ pub(super) fn power_contrast_plane_impl_scalar(
     }
 }
 
+pub(super) fn sigmoid_tone_map_plane_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    contrast: f32,
+    bias_a: f32,
+) {
+    let has_bias = bias_a.abs() > 1e-6;
+    for v in plane.iter_mut() {
+        let mut x = v.clamp(0.0, 1.0);
+        if has_bias {
+            // Schlick bias: x / (bias_a * (1 - x) + 1)
+            x = x / (bias_a * (1.0 - x) + 1.0);
+        }
+        // Sigmoid: 1 / (1 + ((1-x)/x)^c)
+        *v = if x <= 0.0 {
+            0.0
+        } else if x >= 1.0 {
+            1.0
+        } else {
+            let ratio = ((1.0 - x) / x).powf(contrast);
+            1.0 / (1.0 + ratio)
+        };
+    }
+}
+
 pub(super) fn unsharp_fuse_impl_scalar(
     _token: ScalarToken,
     src: &[f32],
