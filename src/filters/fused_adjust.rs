@@ -126,6 +126,73 @@ impl Filter for FusedAdjust {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filters::*;
+
+    /// Create test planes with diverse, non-trivial values across the range.
+    fn make_test_planes() -> OklabPlanes {
+        let mut planes = OklabPlanes::new(4, 4);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 + 1.0) / 17.0; // 0.059..0.941
+        }
+        for (i, v) in planes.a.iter_mut().enumerate() {
+            *v = (i as f32 - 8.0) / 80.0; // -0.1..0.0875
+        }
+        for (i, v) in planes.b.iter_mut().enumerate() {
+            *v = (i as f32 - 5.0) / 100.0; // -0.05..0.10
+        }
+        planes
+    }
+
+    /// Apply standalone filters in the exact same order as FusedAdjust.
+    fn apply_standalone_chain(planes: &mut OklabPlanes, adj: &FusedAdjust) {
+        let mut ctx = FilterContext::new();
+        BlackPoint { level: adj.black_point }.apply(planes, &mut ctx);
+        WhitePoint { level: adj.white_point }.apply(planes, &mut ctx);
+        Exposure { stops: adj.exposure }.apply(planes, &mut ctx);
+        Contrast { amount: adj.contrast }.apply(planes, &mut ctx);
+        HighlightsShadows {
+            highlights: adj.highlights,
+            shadows: adj.shadows,
+        }
+        .apply(planes, &mut ctx);
+        Dehaze { strength: adj.dehaze }.apply(planes, &mut ctx);
+        Temperature { shift: adj.temperature }.apply(planes, &mut ctx);
+        Tint { shift: adj.tint }.apply(planes, &mut ctx);
+        Saturation { factor: adj.saturation }.apply(planes, &mut ctx);
+        Vibrance {
+            amount: adj.vibrance,
+            protection: adj.vibrance_protection,
+        }
+        .apply(planes, &mut ctx);
+    }
+
+    fn assert_planes_match(
+        fused: &OklabPlanes,
+        standalone: &OklabPlanes,
+        tolerance: f32,
+        label: &str,
+    ) {
+        for i in 0..fused.l.len() {
+            assert!(
+                (fused.l[i] - standalone.l[i]).abs() < tolerance,
+                "{label}: L mismatch at {i}: fused={} standalone={}",
+                fused.l[i],
+                standalone.l[i]
+            );
+            assert!(
+                (fused.a[i] - standalone.a[i]).abs() < tolerance,
+                "{label}: a mismatch at {i}: fused={} standalone={}",
+                fused.a[i],
+                standalone.a[i]
+            );
+            assert!(
+                (fused.b[i] - standalone.b[i]).abs() < tolerance,
+                "{label}: b mismatch at {i}: fused={} standalone={}",
+                fused.b[i],
+                standalone.b[i]
+            );
+        }
+    }
 
     #[test]
     fn default_is_identity() {
@@ -135,44 +202,193 @@ mod tests {
 
     #[test]
     fn identity_does_not_modify() {
-        let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        let mut planes = make_test_planes();
         let l_orig = planes.l.clone();
         let a_orig = planes.a.clone();
+        let b_orig = planes.b.clone();
         FusedAdjust::new().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, l_orig);
         assert_eq!(planes.a, a_orig);
+        assert_eq!(planes.b, b_orig);
     }
 
     #[test]
     fn exposure_matches_standalone() {
-        let mut planes_fused = OklabPlanes::new(4, 4);
-        let mut planes_standalone = OklabPlanes::new(4, 4);
-        for v in planes_fused
-            .l
-            .iter_mut()
-            .chain(planes_standalone.l.iter_mut())
-        {
-            *v = 0.3;
-        }
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
 
-        let mut fused = FusedAdjust::new();
-        fused.exposure = 1.0;
-        fused.apply(&mut planes_fused, &mut FilterContext::new());
+        let mut adj = FusedAdjust::new();
+        adj.exposure = 1.0;
 
-        crate::filters::Exposure { stops: 1.0 }
-            .apply(&mut planes_standalone, &mut FilterContext::new());
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
 
-        for i in 0..planes_fused.l.len() {
-            assert!(
-                (planes_fused.l[i] - planes_standalone.l[i]).abs() < 1e-5,
-                "fused vs standalone mismatch at {i}"
-            );
-        }
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "exposure");
+    }
+
+    #[test]
+    fn contrast_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.contrast = 0.5;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "contrast");
+    }
+
+    #[test]
+    fn highlights_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.highlights = 0.8;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "highlights");
+    }
+
+    #[test]
+    fn shadows_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.shadows = 0.8;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "shadows");
+    }
+
+    #[test]
+    fn saturation_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.saturation = 1.5;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "saturation");
+    }
+
+    #[test]
+    fn temperature_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.temperature = 0.5;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "temperature");
+    }
+
+    #[test]
+    fn tint_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.tint = -0.5;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "tint");
+    }
+
+    #[test]
+    fn dehaze_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.dehaze = 0.6;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "dehaze");
+    }
+
+    #[test]
+    fn vibrance_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.vibrance = 0.7;
+        adj.vibrance_protection = 2.0;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "vibrance");
+    }
+
+    #[test]
+    fn black_point_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.black_point = 0.05;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "black_point");
+    }
+
+    #[test]
+    fn white_point_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.white_point = 0.9;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-5, "white_point");
+    }
+
+    #[test]
+    fn full_chain_matches_standalone() {
+        let mut fused_planes = make_test_planes();
+        let mut standalone_planes = make_test_planes();
+
+        let mut adj = FusedAdjust::new();
+        adj.exposure = 0.5;
+        adj.contrast = 0.3;
+        adj.highlights = 0.4;
+        adj.shadows = 0.3;
+        adj.saturation = 1.2;
+        adj.temperature = 0.2;
+        adj.tint = -0.1;
+        adj.dehaze = 0.3;
+        adj.vibrance = 0.4;
+        adj.vibrance_protection = 2.0;
+        adj.black_point = 0.02;
+        adj.white_point = 0.95;
+
+        adj.apply(&mut fused_planes, &mut FilterContext::new());
+        apply_standalone_chain(&mut standalone_planes, &adj);
+
+        assert_planes_match(&fused_planes, &standalone_planes, 1e-4, "full_chain");
     }
 }
