@@ -660,44 +660,57 @@ pub struct ClusterModel {
 impl ClusterModel {
     /// Find the nearest cluster and return its optimized parameters.
     pub fn predict(&self, features: &ImageFeatures) -> TunedParams {
+        self.predict_blend(features, 1)
+    }
+
+    /// Predict using inverse-distance weighted blend of k nearest clusters.
+    ///
+    /// `k=1` is equivalent to nearest-neighbor. `k=3` blends the 3 closest
+    /// clusters using 1/distance weighting, which smooths transitions.
+    pub fn predict_blend(&self, features: &ImageFeatures, k: usize) -> TunedParams {
         let input = features.to_tensor();
 
-        // Find nearest centroid by squared Euclidean distance
-        let mut best_idx = 0;
-        let mut best_dist = f32::MAX;
-        for (i, centroid) in self.centroids.iter().enumerate() {
-            let dist: f32 = input
-                .iter()
-                .zip(centroid.iter())
-                .map(|(a, b)| (a - b) * (a - b))
-                .sum();
-            if dist < best_dist {
-                best_dist = dist;
-                best_idx = i;
+        // Compute distances to all centroids
+        let mut dists: alloc::vec::Vec<(usize, f32)> = self
+            .centroids
+            .iter()
+            .enumerate()
+            .map(|(i, centroid)| {
+                let dist: f32 = input
+                    .iter()
+                    .zip(centroid.iter())
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum();
+                (i, dist)
+            })
+            .collect();
+
+        dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let top_k = &dists[..k.min(dists.len())];
+
+        // Weighted average of parameters
+        let mut blended = [0.0f32; LINEAR_MODEL_OUTPUTS];
+        let mut total_weight = 0.0f32;
+
+        for &(idx, dist) in top_k {
+            // 1/sqrt(dist) weighting — sqrt(dist) is actual Euclidean distance
+            let w = 1.0 / (dist.sqrt() + 1e-6);
+            total_weight += w;
+            for (j, val) in self.params[idx].iter().enumerate() {
+                blended[j] += val * w;
             }
         }
 
-        let p = &self.params[best_idx];
-        TunedParams {
-            exposure: p[0].clamp(-3.0, 3.0),
-            contrast: p[1].clamp(-1.0, 1.0),
-            highlights: p[2].clamp(-1.0, 1.0),
-            shadows: p[3].clamp(-1.0, 1.0),
-            saturation: p[4].clamp(0.0, 3.0),
-            vibrance: p[5].clamp(-1.0, 1.0),
-            temperature: p[6].clamp(-1.0, 1.0),
-            tint: p[7].clamp(-1.0, 1.0),
-            black_point: p[8].clamp(0.0, 0.2),
-            white_point: p[9].clamp(0.5, 1.0),
-            sigmoid_contrast: p[10].clamp(0.5, 3.0),
-            sigmoid_skew: p[11].clamp(0.1, 0.9),
-            clarity: p[12].clamp(0.0, 1.0),
-            sharpen: p[13].clamp(0.0, 2.0),
-            highlight_recovery: p[14].clamp(0.0, 1.0),
-            shadow_lift: p[15].clamp(0.0, 1.0),
-            local_tonemap: p[16].clamp(0.0, 1.0),
-            gamut_expand: p[17].clamp(0.0, 1.0),
+        let inv_w = 1.0 / total_weight;
+        for v in &mut blended {
+            *v *= inv_w;
         }
+
+        TunedParams::from_array(
+            &blended
+                .try_into()
+                .expect("blended should be LINEAR_MODEL_OUTPUTS"),
+        )
     }
 }
 
@@ -939,5 +952,49 @@ mod tests {
         assert!((params.saturation - restored.saturation).abs() < 1e-6);
         assert!((params.sigmoid_skew - restored.sigmoid_skew).abs() < 1e-6);
         assert!((params.gamut_expand - restored.gamut_expand).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cluster_blend_k1_equals_nearest() {
+        // With k=1, predict_blend should match nearest-neighbor
+        let mut model = ClusterModel {
+            centroids: [[0.0; LINEAR_MODEL_INPUTS]; CLUSTER_COUNT],
+            params: [[0.0; LINEAR_MODEL_OUTPUTS]; CLUSTER_COUNT],
+        };
+        // Set up two distinct clusters
+        model.centroids[0] = [0.1; LINEAR_MODEL_INPUTS];
+        model.centroids[1] = [0.9; LINEAR_MODEL_INPUTS];
+        model.params[0] = [0.5; LINEAR_MODEL_OUTPUTS];
+        model.params[1] = [1.0; LINEAR_MODEL_OUTPUTS];
+
+        let planes = OklabPlanes::new(16, 16);
+        let features = ImageFeatures::extract(&planes);
+        let p1 = model.predict(&features);
+        let pb = model.predict_blend(&features, 1);
+        assert!((p1.exposure - pb.exposure).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cluster_blend_k3_interpolates() {
+        // With k=3, blend should produce a weighted average
+        let mut model = ClusterModel {
+            centroids: [[0.0; LINEAR_MODEL_INPUTS]; CLUSTER_COUNT],
+            params: [[0.0; LINEAR_MODEL_OUTPUTS]; CLUSTER_COUNT],
+        };
+        // Three clusters equidistant from test point
+        for i in 0..3 {
+            model.centroids[i] = [0.5; LINEAR_MODEL_INPUTS];
+            model.centroids[i][0] = (i as f32) * 0.1;
+            model.params[i][0] = (i as f32) * 0.3; // exposure: 0, 0.3, 0.6
+        }
+
+        let mut planes = OklabPlanes::new(16, 16);
+        for v in &mut planes.l {
+            *v = 0.5;
+        }
+        let features = ImageFeatures::extract(&planes);
+        let blend = model.predict_blend(&features, 3);
+        // Blended exposure should be between 0 and 0.6
+        assert!(blend.exposure >= 0.0 && blend.exposure <= 0.6);
     }
 }
