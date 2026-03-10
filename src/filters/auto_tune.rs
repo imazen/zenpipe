@@ -464,15 +464,29 @@ pub fn rule_based_tune(features: &ImageFeatures) -> TunedParams {
         params.exposure = stops.clamp(-2.0, 0.0) * 0.4;
     }
 
+    // ── Highlights / Shadows (FusedAdjust) ────────────────────────
+    // Subtle highlight compression and shadow opening. Expert edits
+    // almost always apply these to increase perceived dynamic range.
+    if features.p95() > 0.7 {
+        // Compress highlights proportionally to how bright the top end is
+        params.highlights = (features.p95() - 0.6) * 0.3;
+        params.highlights = params.highlights.clamp(0.0, 0.2);
+    }
+    if features.p5() < 0.3 {
+        // Open shadows proportionally to how dark the bottom end is
+        params.shadows = (0.3 - features.p5()) * 0.3;
+        params.shadows = params.shadows.clamp(0.0, 0.2);
+    }
+
     // ── Highlight recovery ──────────────────────────────────────
-    // Only for severe clipping (p99-p95 nearly zero).
+    // Dedicated recovery filter for severe clipping (p99-p95 nearly zero).
     let highlight_headroom = features.p99() - features.p95();
     if features.p95() > 0.85 && highlight_headroom < 0.01 {
         params.highlight_recovery = 0.5;
     }
 
     // ── Shadow lift ─────────────────────────────────────────────
-    // Only for severely crushed shadows.
+    // Dedicated lift filter for severely crushed shadows.
     let shadow_headroom = features.p5() - features.p1();
     if features.p5() < 0.08 && shadow_headroom < 0.005 {
         params.shadow_lift = 0.4;
