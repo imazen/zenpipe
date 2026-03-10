@@ -47,6 +47,14 @@ required-features = ["experimental"]
 name = "darktable_parity"
 required-features = ["experimental"]
 
+[[test]]
+name = "reference_validation"
+required-features = ["buffer"]
+
+[[test]]
+name = "quality_validation"
+required-features = ["buffer"]
+
 [[bench]]
 name = "row_batch"
 harness = false
