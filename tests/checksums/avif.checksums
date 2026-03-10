@@ -2,18 +2,24 @@
 
 ## roundtrip gray8
 ~ able-vale-a1c657102b:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ slim-eel-2cca87c0da:sea  x86_64-avx512  @e7a2590  auto-accepted vs able-vale-a1c657102b:sea score=88.8 maxΔ=[4,4,4]
 
 ## roundtrip rgb8
 ~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ loyal-spark-22edbc5121:sea  x86_64-avx512  @e7a2590  auto-accepted vs rocky-seed-83856a01ce:sea score=87.3 maxΔ=[6,6,5]
 
 ## roundtrip bgra8
 ~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ loyal-spark-22edbc5121:sea  x86_64-avx512  @e7a2590  auto-accepted vs rocky-seed-83856a01ce:sea score=87.3 maxΔ=[6,6,5]
 
 ## roundtrip rgba8
 ~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ loyal-spark-22edbc5121:sea  x86_64-avx512  @e7a2590  auto-accepted vs rocky-seed-83856a01ce:sea score=87.3 maxΔ=[6,6,5]
 
 ## roundtrip rgba_f32
 ~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ loyal-spark-22edbc5121:sea  x86_64-avx512  @e7a2590  auto-accepted vs rocky-seed-83856a01ce:sea score=87.3 maxΔ=[6,6,5]
 
 ## roundtrip rgb_f32
 ~ rocky-seed-83856a01ce:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ loyal-spark-22edbc5121:sea  x86_64-avx512  @e7a2590  auto-accepted vs rocky-seed-83856a01ce:sea score=87.3 maxΔ=[6,6,5]
