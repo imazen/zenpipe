@@ -9,7 +9,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 use whereat::at;
-use zc::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
+use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
 
 /// Probe WebP metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
@@ -57,7 +57,7 @@ fn build_encoding(
     lossless: bool,
     codec_config: Option<&CodecConfig>,
 ) -> zenwebp::WebpEncoderConfig {
-    use zc::encode::EncoderConfig;
+    use zencodec::encode::EncoderConfig;
 
     if lossless {
         if let Some(cfg) = codec_config.and_then(|c| c.webp_lossless.as_ref()) {

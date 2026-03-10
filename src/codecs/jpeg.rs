@@ -14,7 +14,7 @@ use crate::{EncodeOutput, MetadataView, pixel::ImgRef};
 #[cfg(feature = "jpeg-ultrahdr")]
 use rgb::{Rgb, Rgba};
 use whereat::at;
-use zc::decode::{Decode, DecodeJob as _, DecoderConfig as _};
+use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
 #[cfg(feature = "jpeg-ultrahdr")]
 use zenpixels::{PixelBuffer, PixelDescriptor};
 
@@ -44,7 +44,7 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
     }
     if let Some(ref exif) = info.exif {
         if let Some(orient) = zenjpeg::lossless::parse_exif_orientation(exif) {
-            ii = ii.with_orientation(zc::Orientation::from_exif(orient as u16));
+            ii = ii.with_orientation(zencodec::Orientation::from_exif(orient as u16));
         }
         ii = ii.with_exif(exif.clone());
     }
@@ -122,7 +122,7 @@ fn build_encoding(
     quality: Option<f32>,
     codec_config: Option<&CodecConfig>,
 ) -> zenjpeg::JpegEncoderConfig {
-    use zc::encode::EncoderConfig;
+    use zencodec::encode::EncoderConfig;
 
     if let Some(cfg) = codec_config.and_then(|c| c.jpeg_encoder.as_ref()) {
         let mut e = zenjpeg::JpegEncoderConfig::new();

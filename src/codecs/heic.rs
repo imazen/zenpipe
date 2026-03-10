@@ -8,7 +8,7 @@ use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, Stop,
 };
 use whereat::at;
-use zc::decode::Decode;
+use zencodec::decode::Decode;
 
 /// Probe HEIC metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {

@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use imgref::{Img, ImgRef, ImgVec};
 use rayon::prelude::*;
-use zc::encode::EncoderConfig;
+use zencodec::encode::EncoderConfig;
 
 use zencodecs::DecodeRequest;
 

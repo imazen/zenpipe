@@ -26,7 +26,7 @@ mod quality;
 
 use alloc::vec::Vec;
 
-use zc::ImageFormat;
+use zencodec::ImageFormat;
 use zenresize::{Filter, PixelDescriptor};
 
 use crate::config::CodecConfig;
@@ -102,10 +102,10 @@ struct OwnedMetadata {
     icc_profile: Option<Vec<u8>>,
     exif: Option<Vec<u8>>,
     xmp: Option<Vec<u8>>,
-    cicp: Option<zc::Cicp>,
-    content_light_level: Option<zc::ContentLightLevel>,
-    mastering_display: Option<zc::MasteringDisplay>,
-    orientation: zc::Orientation,
+    cicp: Option<zencodec::Cicp>,
+    content_light_level: Option<zencodec::ContentLightLevel>,
+    mastering_display: Option<zencodec::MasteringDisplay>,
+    orientation: zencodec::Orientation,
 }
 
 impl OwnedMetadata {
@@ -117,12 +117,12 @@ impl OwnedMetadata {
             cicp: None,
             content_light_level: None,
             mastering_display: None,
-            orientation: zc::Orientation::Normal,
+            orientation: zencodec::Orientation::Normal,
         }
     }
 
-    fn as_metadata(&self) -> zc::MetadataView<'_> {
-        let mut m = zc::MetadataView::none();
+    fn as_metadata(&self) -> zencodec::MetadataView<'_> {
+        let mut m = zencodec::MetadataView::none();
         if let Some(ref icc) = self.icc_profile {
             m = m.with_icc(icc);
         }
@@ -304,7 +304,7 @@ impl<'a> Pipeline<'a> {
         let orientation = if self.auto_orient {
             decoded.info().orientation
         } else {
-            zc::Orientation::Normal
+            zencodec::Orientation::Normal
         };
 
         // 4. Determine working pixel format based on source
@@ -499,7 +499,7 @@ impl<'a> Pipeline<'a> {
     /// Extract owned copies of metadata bytes, filtered by the metadata policy.
     ///
     /// This produces owned data so `decoded` can be consumed afterwards.
-    fn extract_metadata(&self, decoded: &zc::decode::DecodeOutput) -> OwnedMetadata {
+    fn extract_metadata(&self, decoded: &zencodec::decode::DecodeOutput) -> OwnedMetadata {
         let meta = decoded.metadata();
         match self.metadata_policy {
             MetadataPolicy::Preserve => OwnedMetadata {
@@ -523,7 +523,7 @@ impl<'a> Pipeline<'a> {
     fn build_encode_request<'b>(
         &self,
         format: ImageFormat,
-        metadata: &'b zc::MetadataView<'b>,
+        metadata: &'b zencodec::MetadataView<'b>,
     ) -> crate::EncodeRequest<'b>
     where
         'a: 'b,
@@ -555,8 +555,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgb<u8>>,
         format: ImageFormat,
-        metadata: &zc::MetadataView<'_>,
-    ) -> Result<zc::encode::EncodeOutput> {
+        metadata: &zencodec::MetadataView<'_>,
+    ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata).encode_rgb8(img)
     }
 
@@ -564,8 +564,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgba<u8>>,
         format: ImageFormat,
-        metadata: &zc::MetadataView<'_>,
-    ) -> Result<zc::encode::EncodeOutput> {
+        metadata: &zencodec::MetadataView<'_>,
+    ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata)
             .encode_rgba8(img)
     }
@@ -574,8 +574,8 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Gray<u8>>,
         format: ImageFormat,
-        metadata: &zc::MetadataView<'_>,
-    ) -> Result<zc::encode::EncodeOutput> {
+        metadata: &zencodec::MetadataView<'_>,
+    ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata)
             .encode_gray8(img)
     }

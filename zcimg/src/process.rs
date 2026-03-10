@@ -274,7 +274,7 @@ fn process_inner(
 
 /// Build metadata to embed, applying strip flags.
 fn build_metadata<'a>(
-    info: &'a zc::ImageInfo,
+    info: &'a zencodec::ImageInfo,
     args: &ProcessArgs,
 ) -> Option<ImageMetadata<'a>> {
     if args.strip_all {

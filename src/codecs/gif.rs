@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 use whereat::at;
-use zc::decode::{Decode, DecodeJob as _, DecoderConfig as _};
+use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
 
 /// Probe GIF metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {

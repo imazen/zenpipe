@@ -109,12 +109,12 @@ pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use limits::{Limits, Stop};
 pub use registry::CodecRegistry;
-pub use zc::ImageFormat;
-pub use zc::MetadataView;
+pub use zencodec::ImageFormat;
+pub use zencodec::MetadataView;
 
 // zencodec trait re-exports
-pub use zc::decode::{DecodeJob, DecoderConfig};
-pub use zc::encode::{EncodeJob, EncoderConfig};
+pub use zencodec::decode::{DecodeJob, DecoderConfig};
+pub use zencodec::encode::{EncodeJob, EncoderConfig};
 
 // Pixel conversion extension trait (provides to_rgb8(), to_rgba8(), etc.)
 pub use zenpixels_convert::PixelBufferConvertExt;

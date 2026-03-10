@@ -9,7 +9,7 @@ fn build_encoding(
     effort: Option<u32>,
     _codec_config: Option<&CodecConfig>,
 ) -> zenjxl::JxlEncoderConfig {
-    use zc::encode::EncoderConfig;
+    use zencodec::encode::EncoderConfig;
 
     let mut enc = zenjxl::JxlEncoderConfig::default();
     if let Some(q) = quality {

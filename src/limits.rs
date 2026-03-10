@@ -25,7 +25,7 @@ pub struct Limits {
     ///
     /// Defaults to [`ThreadingPolicy::Unlimited`]. Use [`ThreadingPolicy::SingleThread`]
     /// for deterministic output or constrained environments.
-    pub threading: zc::ThreadingPolicy,
+    pub threading: zencodec::ThreadingPolicy,
 }
 
 impl Default for Limits {
@@ -39,7 +39,7 @@ impl Default for Limits {
             max_output_bytes: None,
             max_frames: None,
             max_duration_ms: None,
-            threading: zc::ThreadingPolicy::Unlimited,
+            threading: zencodec::ThreadingPolicy::Unlimited,
         }
     }
 }
@@ -99,7 +99,7 @@ impl Limits {
     }
 
     /// Set threading policy for codec operations.
-    pub fn with_threading(mut self, policy: zc::ThreadingPolicy) -> Self {
+    pub fn with_threading(mut self, policy: zencodec::ThreadingPolicy) -> Self {
         self.threading = policy;
         self
     }
@@ -170,9 +170,9 @@ pub(crate) fn stop_or_default(stop: Option<&dyn Stop>) -> &dyn Stop {
     stop.unwrap_or(&enough::Unstoppable)
 }
 
-/// Convert zencodecs [`Limits`] to zencodec [`ResourceLimits`](zc::ResourceLimits).
-pub(crate) fn to_resource_limits(limits: &Limits) -> zc::ResourceLimits {
-    let mut rl = zc::ResourceLimits::none();
+/// Convert zencodecs [`Limits`] to zencodec [`ResourceLimits`](zencodec::ResourceLimits).
+pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec::ResourceLimits {
+    let mut rl = zencodec::ResourceLimits::none();
     if let Some(max_w) = limits.max_width {
         rl = rl.with_max_width(max_w.min(u32::MAX as u64) as u32);
     }
@@ -255,7 +255,7 @@ mod tests {
             max_output_bytes: Some(5_000_000),
             max_frames: Some(100),
             max_duration_ms: Some(30_000),
-            threading: zc::ThreadingPolicy::SingleThread,
+            threading: zencodec::ThreadingPolicy::SingleThread,
         };
 
         let rl = to_resource_limits(&limits);
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(rl.max_output_bytes, Some(5_000_000));
         assert_eq!(rl.max_frames, Some(100));
         assert_eq!(rl.max_duration_ms, Some(30_000));
-        assert_eq!(rl.threading, zc::ThreadingPolicy::SingleThread);
+        assert_eq!(rl.threading, zencodec::ThreadingPolicy::SingleThread);
     }
 
     #[test]
@@ -284,6 +284,6 @@ mod tests {
         assert_eq!(rl.max_output_bytes, None);
         assert_eq!(rl.max_frames, None);
         assert_eq!(rl.max_duration_ms, None);
-        assert_eq!(rl.threading, zc::ThreadingPolicy::Unlimited);
+        assert_eq!(rl.threading, zencodec::ThreadingPolicy::Unlimited);
     }
 }

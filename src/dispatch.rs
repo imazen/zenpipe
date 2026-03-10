@@ -9,7 +9,7 @@ use crate::error::Result;
 use crate::{CodecError, ImageFormat, Limits, MetadataView, Stop};
 use alloc::boxed::Box;
 use whereat::at;
-use zc::encode::EncodeOutput;
+use zencodec::encode::EncodeOutput;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 /// Encoding parameters extracted from [`EncodeRequest`](crate::EncodeRequest).
@@ -42,13 +42,13 @@ pub(crate) fn build_from_config<'a, C, F>(
     params: EncodeParams<'a>,
 ) -> BuiltEncoder<'a>
 where
-    C: zc::encode::EncoderConfig + 'a,
+    C: zencodec::encode::EncoderConfig + 'a,
     F: FnOnce(&EncodeParams<'a>) -> C + 'a,
-    for<'b> <C::Job<'b> as zc::encode::EncodeJob<'b>>::Enc: zc::encode::Encoder,
+    for<'b> <C::Job<'b> as zencodec::encode::EncodeJob<'b>>::Enc: zencodec::encode::Encoder,
 {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
-            use zc::encode::{EncodeJob as _, Encoder as _};
+            use zencodec::encode::{EncodeJob as _, Encoder as _};
             let config = build_config(&params);
             let mut job = config.job();
             if let Some(lim) = params.limits {
@@ -77,8 +77,8 @@ where
 
 /// Object-safe encoder configuration.
 ///
-/// Blanket-implemented for all [`EncoderConfig`](zc::encode::EncoderConfig)
-/// types whose encoder implements [`Encoder`](zc::encode::Encoder).
+/// Blanket-implemented for all [`EncoderConfig`](zencodec::encode::EncoderConfig)
+/// types whose encoder implements [`Encoder`](zencodec::encode::Encoder).
 /// Enables fully codec-agnostic code with no generic parameters:
 ///
 /// ```rust,ignore
@@ -133,8 +133,8 @@ pub trait AnyEncoder: Send + Sync {
 
 impl<C> AnyEncoder for C
 where
-    C: zc::encode::EncoderConfig,
-    for<'a> <C::Job<'a> as zc::encode::EncodeJob<'a>>::Enc: zc::encode::Encoder,
+    C: zencodec::encode::EncoderConfig,
+    for<'a> <C::Job<'a> as zencodec::encode::EncodeJob<'a>>::Enc: zencodec::encode::Encoder,
 {
     fn format(&self) -> ImageFormat {
         C::format()
@@ -151,7 +151,7 @@ where
         limits: Option<&Limits>,
         stop: Option<&dyn Stop>,
     ) -> Result<EncodeOutput> {
-        use zc::encode::{EncodeJob as _, Encoder as _};
+        use zencodec::encode::{EncodeJob as _, Encoder as _};
 
         // Negotiate pixel format -- convert input to something the encoder supports
         let pixel_data = pixels.contiguous_bytes();

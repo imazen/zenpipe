@@ -1,6 +1,6 @@
 //! Quality preset to per-format quality mapping.
 
-use zc::ImageFormat;
+use zencodec::ImageFormat;
 
 /// Quality presets with approximate perceptual equivalence across formats.
 ///

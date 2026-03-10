@@ -12,7 +12,7 @@ use crate::{CodecError, CodecRegistry, ImageFormat, Limits, MetadataView, Stop};
 use whereat::at;
 use zenpixels::{AlphaMode, PixelDescriptor};
 
-pub use zc::encode::EncodeOutput;
+pub use zencodec::encode::EncodeOutput;
 
 /// Image encode request builder.
 ///
@@ -576,7 +576,7 @@ mod tests {
     #[cfg(all(feature = "jpeg", feature = "webp"))]
     fn any_encoder_dyn_dispatch() {
         use crate::AnyEncoder;
-        use zc::encode::EncoderConfig as _;
+        use zencodec::encode::EncoderConfig as _;
 
         // This function has NO generic parameters
         fn encode_with(config: &dyn AnyEncoder, img: imgref::ImgRef<Rgba<u8>>) -> EncodeOutput {

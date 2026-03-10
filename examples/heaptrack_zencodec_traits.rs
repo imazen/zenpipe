@@ -6,10 +6,10 @@
 
 use std::borrow::Cow;
 
-use zc::decode::DecodeJob as _;
-use zc::decode::DecoderConfig as _;
-use zc::encode::EncodeJob as _;
-use zc::encode::EncoderConfig as _;
+use zencodec::decode::DecodeJob as _;
+use zencodec::decode::DecoderConfig as _;
+use zencodec::encode::EncodeJob as _;
+use zencodec::encode::EncoderConfig as _;
 
 fn generate_rgb8(width: u32, height: u32) -> Vec<u8> {
     let mut data = Vec::with_capacity((width * height * 3) as usize);
@@ -51,14 +51,14 @@ impl CollectingSink {
     }
 }
 
-impl zc::decode::DecodeRowSink for CollectingSink {
+impl zencodec::decode::DecodeRowSink for CollectingSink {
     fn provide_next_buffer(
         &mut self,
         _y: u32,
         height: u32,
         width: u32,
         descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
         let row_bytes = width as usize * descriptor.bytes_per_pixel();
         let total = row_bytes * height as usize;
         let start = self.buffer.len();
@@ -71,16 +71,16 @@ impl zc::decode::DecodeRowSink for CollectingSink {
             row_bytes,
             descriptor,
         )
-        .map_err(|e| Box::new(e) as zc::decode::SinkError)
+        .map_err(|e| Box::new(e) as zencodec::decode::SinkError)
     }
 }
 
 /// Run encode + decode via dyn dispatch (DynEncoder/DynDecoder)
 fn roundtrip_dyn(
-    enc_config: &dyn zc::encode::DynEncoderConfig,
-    dec_config: &dyn zc::decode::DynDecoderConfig,
+    enc_config: &dyn zencodec::encode::DynEncoderConfig,
+    dec_config: &dyn zencodec::decode::DynDecoderConfig,
     pixels: &zenpixels::PixelBuffer,
-    limits: &zc::ResourceLimits,
+    limits: &zencodec::ResourceLimits,
     label: &str,
 ) {
     let width = pixels.width();
@@ -140,7 +140,7 @@ fn roundtrip_dyn(
 }
 
 /// Run encode then push_decode via concrete codec types
-fn push_decode_jpeg(enc_bytes: &[u8], limits: &zc::ResourceLimits) {
+fn push_decode_jpeg(enc_bytes: &[u8], limits: &zencodec::ResourceLimits) {
     #[cfg(feature = "jpeg")]
     {
         let dec = zenjpeg::JpegDecoderConfig::new();
@@ -171,7 +171,7 @@ fn main() {
     let rgb_data = generate_rgb8(width, height);
     let rgba_data = generate_rgba8(width, height);
 
-    let limits = zc::ResourceLimits::none()
+    let limits = zencodec::ResourceLimits::none()
         .with_max_pixels(100_000_000)
         .with_max_memory(512 * 1024 * 1024)
         .with_max_width(16384)
@@ -195,7 +195,7 @@ fn main() {
     // --- JPEG via concrete types + dyn dispatch ---
     #[cfg(feature = "jpeg")]
     {
-        use zc::encode::Encoder as _;
+        use zencodec::encode::Encoder as _;
         let enc = zenjpeg::JpegEncoderConfig::new().with_generic_quality(85.0);
         let dec = zenjpeg::JpegDecoderConfig::new();
 

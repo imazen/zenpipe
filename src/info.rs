@@ -1,6 +1,6 @@
 //! Image metadata probing without full decode.
 
-pub use zc::ImageInfo;
+pub use zencodec::ImageInfo;
 
 use crate::error::Result;
 use crate::{CodecError, CodecRegistry, ImageFormat};
@@ -8,7 +8,7 @@ use whereat::at;
 
 /// Detect image format from magic bytes using the common format registry.
 pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
-    zc::ImageFormatRegistry::common().detect(data)
+    zencodec::ImageFormatRegistry::common().detect(data)
 }
 
 /// Probe image metadata without decoding pixels.

@@ -1,6 +1,6 @@
 //! Image decoding.
 
-pub use zc::decode::DecodeOutput;
+pub use zencodec::decode::DecodeOutput;
 
 use crate::config::CodecConfig;
 use crate::error::Result;
