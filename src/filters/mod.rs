@@ -1,6 +1,7 @@
 mod adaptive_sharpen;
 mod alpha;
 mod auto_exposure;
+#[cfg(feature = "experimental")]
 mod auto_tune;
 mod bilateral;
 mod black_point;
@@ -32,6 +33,7 @@ mod white_point;
 pub use adaptive_sharpen::AdaptiveSharpen;
 pub use alpha::Alpha;
 pub use auto_exposure::AutoExposure;
+#[cfg(feature = "experimental")]
 pub use auto_tune::{
     CLUSTER_COUNT, ClusterModel, ImageFeatures, LINEAR_MODEL_INPUTS, LINEAR_MODEL_OUTPUTS,
     LinearModel, TunedParams, rule_based_tune,

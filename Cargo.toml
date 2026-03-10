@@ -12,6 +12,7 @@ categories = ["multimedia::images", "graphics"]
 [features]
 default = []
 buffer = []
+experimental = []
 srgb-filters = ["buffer", "dep:rgb"]
 
 [dependencies]
@@ -32,6 +33,14 @@ palette = { version = "0.7", default-features = false, features = ["std"] }
 zensim = { version = "0.2", path = "../zensim/zensim", default-features = false }
 zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["planar"] }
+
+[[example]]
+name = "train_autotune"
+required-features = ["experimental"]
+
+[[example]]
+name = "compare_autotune"
+required-features = ["experimental"]
 
 [[bench]]
 name = "row_batch"
