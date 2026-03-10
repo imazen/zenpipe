@@ -30,6 +30,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 image = "0.25"
 imageproc = "0.26"
 palette = { version = "0.7", default-features = false, features = ["std"] }
+zenraw = { version = "0.1", path = "../zenraw", features = ["darktable"] }
 zensim = { version = "0.2", path = "../zensim/zensim", default-features = false }
 zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["planar"] }
@@ -42,7 +43,16 @@ required-features = ["experimental"]
 name = "compare_autotune"
 required-features = ["experimental"]
 
+[[example]]
+name = "darktable_parity"
+required-features = ["experimental"]
+
 [[bench]]
 name = "row_batch"
 harness = false
 required-features = ["srgb-filters"]
+
+[patch.crates-io]
+zenpixels = { path = "../zenpixels/zenpixels" }
+zensim = { path = "../zensim/zensim" }
+whereat = { path = "../whereat" }
