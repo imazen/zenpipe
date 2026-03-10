@@ -23,8 +23,10 @@ fn generate_4k_jpeg() -> Vec<u8> {
     let bpp = 4usize; // RGBA8
     let stride = WIDTH as usize * bpp;
 
-    // Use baseline (non-progressive) to avoid progressive token buffer overhead.
-    let config = EncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter).progressive(false);
+    // Baseline + fixed Huffman for true streaming (no block accumulation).
+    let config = EncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter)
+        .progressive(false)
+        .optimize_huffman(false);
     let mut enc = config
         .request()
         .encode_from_bytes(WIDTH, HEIGHT, PixelLayout::Rgba8Srgb)
@@ -77,8 +79,12 @@ fn stream_4k_jpeg_decode_encode() {
     assert_eq!(info.height, HEIGHT);
 
     // Native streaming encoder (truly row-streaming, no accumulation).
-    // Baseline mode avoids the progressive token buffer that stores all coefficients.
-    let enc_config = EncoderConfig::ycbcr(80.0, ChromaSubsampling::Quarter).progressive(false);
+    // Baseline + fixed Huffman: progressive buffers all coefficients,
+    // optimized Huffman buffers all blocks for two-pass. Fixed Huffman
+    // writes blocks immediately as they arrive.
+    let enc_config = EncoderConfig::ycbcr(80.0, ChromaSubsampling::Quarter)
+        .progressive(false)
+        .optimize_huffman(false);
     let mut encoder = enc_config
         .request()
         .encode_from_bytes(WIDTH, HEIGHT, PixelLayout::Rgba8Srgb)
