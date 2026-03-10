@@ -12,8 +12,8 @@ use image::imageops::FilterType;
 use image::{GenericImageView, RgbImage};
 use zenfilters::filters::*;
 use zenfilters::{
-    gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab, FilterContext, OklabPlanes, Pipeline,
-    PipelineConfig,
+    FilterContext, OklabPlanes, Pipeline, PipelineConfig, gather_oklab_to_srgb_u8,
+    scatter_srgb_u8_to_oklab,
 };
 use zenpixels::ColorPrimaries;
 use zenpixels_convert::gamut::GamutMatrix;

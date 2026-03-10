@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use image::imageops::FilterType;
-use image::{GenericImageView, RgbImage};
+use image::RgbImage;
 use zenfilters::filters::*;
 use zenfilters::{
     FilterContext, OklabPlanes, Pipeline, PipelineConfig, gather_oklab_to_srgb_u8,
@@ -41,19 +41,30 @@ fn load_f32s(path: &Path) -> Vec<f32> {
     bytemuck::cast_slice(&bytes).to_vec()
 }
 
-fn load_resized_rgb(path: &Path, max_dim: u32) -> Option<(Vec<u8>, u32, u32)> {
-    let img = image::open(path).ok()?;
-    let resized = img.resize(max_dim, max_dim, FilterType::Triangle);
-    let (w, h) = resized.dimensions();
-    Some((resized.to_rgb8().into_raw(), w, h))
-}
-
 fn zensim_score(a: &[u8], b: &[u8], w: u32, h: u32, zs: &Zensim) -> f64 {
+    let expected = w as usize * h as usize * 3;
+    if a.len() != expected || b.len() != expected {
+        eprintln!(
+            "    zensim: buffer size mismatch: a={} b={} expected={} ({}x{})",
+            a.len(),
+            b.len(),
+            expected,
+            w,
+            h
+        );
+        return 0.0;
+    }
     let a_rgb: &[[u8; 3]] = bytemuck::cast_slice(a);
     let b_rgb: &[[u8; 3]] = bytemuck::cast_slice(b);
     let sa = RgbSlice::new(a_rgb, w as usize, h as usize);
     let sb = RgbSlice::new(b_rgb, w as usize, h as usize);
-    zs.compute(&sa, &sb).map(|r| r.score()).unwrap_or(0.0)
+    match zs.compute(&sa, &sb) {
+        Ok(r) => r.score(),
+        Err(e) => {
+            eprintln!("    zensim error: {e} ({}x{})", w, h);
+            0.0
+        }
+    }
 }
 
 fn array_to_params(a: &[f32]) -> TunedParams {
@@ -213,29 +224,23 @@ fn main() {
         let stem = orig_path.file_stem().unwrap().to_str().unwrap();
         println!("\n[{}/{}] {}", si + 1, NUM_SAMPLES, stem);
 
-        // Load expert reference at target resolution
-        let (expert_px, ew, eh) = match load_resized_rgb(expert_path, MAX_DIM) {
-            Some(v) => v,
-            None => {
-                println!("  SKIP: can't load expert");
-                continue;
-            }
-        };
-
         // --- Path A: JPEG → zenfilters auto-tune → compare vs expert ---
-        let (orig_px, ow, oh) = match load_resized_rgb(orig_path, MAX_DIM) {
-            Some(v) => v,
-            None => {
+        let orig_img = match image::open(orig_path) {
+            Ok(i) => i,
+            Err(_) => {
                 println!("  SKIP: can't load original");
                 continue;
             }
         };
+        let orig_resized = orig_img.resize(MAX_DIM, MAX_DIM, FilterType::Triangle);
+        let expert_img2 = image::open(expert_path).unwrap();
+        let expert_resized = expert_img2.resize(MAX_DIM, MAX_DIM, FilterType::Triangle);
 
-        // Match dimensions (crop to min)
-        let w = ow.min(ew);
-        let h = oh.min(eh);
-        let crop_orig = crop_to(&orig_px, ow, oh, w, h);
-        let crop_expert = crop_to(&expert_px, ew, eh, w, h);
+        // Crop to common dimensions
+        let w = orig_resized.width().min(expert_resized.width());
+        let h = orig_resized.height().min(expert_resized.height());
+        let crop_orig = orig_resized.crop_imm(0, 0, w, h).to_rgb8().into_raw();
+        let crop_expert = expert_resized.crop_imm(0, 0, w, h).to_rgb8().into_raw();
 
         // Extract features from original
         let mut feat_planes = OklabPlanes::new(w, h);
@@ -275,9 +280,7 @@ fn main() {
         // --- Path B: DNG → darktable (linear) → zenfilters → compare vs expert ---
         let (score_dng_cluster, score_dng_rule) = match process_dng(
             dng_path,
-            &crop_expert,
-            w,
-            h,
+            expert_path,
             &cluster_params,
             &rule_params,
             &dt_config,
@@ -363,9 +366,7 @@ fn main() {
 #[allow(clippy::too_many_arguments)]
 fn process_dng(
     dng_path: &Path,
-    expert_px: &[u8],
-    target_w: u32,
-    target_h: u32,
+    expert_path: &Path,
     cluster_params: &TunedParams,
     rule_params: &TunedParams,
     dt_config: &DtConfig,
@@ -375,7 +376,13 @@ fn process_dng(
     zs: &Zensim,
 ) -> Option<(f64, f64)> {
     // Decode DNG through darktable to get linear f32
-    let output = darktable::decode_file(dng_path, dt_config).ok()?;
+    let output = match darktable::decode_file(dng_path, dt_config) {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("    DNG decode error: {e}");
+            return None;
+        }
+    };
     let pixels = output.pixels;
     let dw = pixels.width();
     let dh = pixels.height();
@@ -384,8 +391,7 @@ fn process_dng(
     let raw_bytes = pixels.copy_to_contiguous_bytes();
     let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
 
-    // Resize: convert linear f32 to sRGB u8 first, resize, then back to linear
-    // (Resizing in sRGB is more perceptually correct for display)
+    // Convert linear f32 to sRGB u8 for resize
     let mut srgb_full = vec![0u8; dw as usize * dh as usize * 3];
     {
         let mut planes = OklabPlanes::new(dw, dh);
@@ -393,37 +399,27 @@ fn process_dng(
         gather_oklab_to_srgb_u8(&planes, &mut srgb_full, 3, m1_inv);
     }
 
-    let img = RgbImage::from_raw(dw, dh, srgb_full)?;
-    let resized = image::imageops::resize(&img, target_w, target_h, FilterType::Triangle);
-    let (rw, rh) = resized.dimensions();
-    let w = rw.min(target_w);
-    let h = rh.min(target_h);
-    let resized_px = resized.into_raw();
-    let cropped = crop_to(&resized_px, rw, rh, w, h);
+    // Load and resize both DNG output and expert to same dimensions
+    let dng_img = RgbImage::from_raw(dw, dh, srgb_full)?;
+    let dng_resized =
+        image::DynamicImage::ImageRgb8(dng_img).resize(MAX_DIM, MAX_DIM, FilterType::Triangle);
+    let expert_img = image::open(expert_path).ok()?;
+    let expert_resized = expert_img.resize(MAX_DIM, MAX_DIM, FilterType::Triangle);
 
-    // Apply cluster params
-    let dng_cluster = apply_pipeline_u8(&cropped, w, h, cluster_params, m1, m1_inv, ctx);
-    let dng_rule = apply_pipeline_u8(&cropped, w, h, rule_params, m1, m1_inv, ctx);
+    // Crop to common dimensions
+    let w = dng_resized.width().min(expert_resized.width());
+    let h = dng_resized.height().min(expert_resized.height());
+    let dng_cropped = dng_resized.crop_imm(0, 0, w, h).to_rgb8().into_raw();
+    let expert_cropped = expert_resized.crop_imm(0, 0, w, h).to_rgb8().into_raw();
 
-    let score_cluster = zensim_score(&dng_cluster, expert_px, w, h, zs);
-    let score_rule = zensim_score(&dng_rule, expert_px, w, h, zs);
+    // Apply cluster params to DNG-sourced pixels
+    let dng_cluster = apply_pipeline_u8(&dng_cropped, w, h, cluster_params, m1, m1_inv, ctx);
+    let dng_rule = apply_pipeline_u8(&dng_cropped, w, h, rule_params, m1, m1_inv, ctx);
+
+    let score_cluster = zensim_score(&dng_cluster, &expert_cropped, w, h, zs);
+    let score_rule = zensim_score(&dng_rule, &expert_cropped, w, h, zs);
 
     Some((score_cluster, score_rule))
-}
-
-fn crop_to(src: &[u8], sw: u32, sh: u32, tw: u32, th: u32) -> Vec<u8> {
-    if sw == tw && sh == th {
-        return src.to_vec();
-    }
-    let mut out = vec![0u8; tw as usize * th as usize * 3];
-    let w = tw.min(sw) as usize;
-    let h = th.min(sh) as usize;
-    for y in 0..h {
-        let src_off = y * sw as usize * 3;
-        let dst_off = y * tw as usize * 3;
-        out[dst_off..dst_off + w * 3].copy_from_slice(&src[src_off..src_off + w * 3]);
-    }
-    out
 }
 
 fn save_rgb(data: &[u8], w: u32, h: u32, path: &str) {
