@@ -52,7 +52,13 @@
 // from histogram analysis (essentially combining the logic from
 // AutoExposure + HighlightRecovery + ShadowLift into a single pass).
 
+use crate::pipeline::{Pipeline, PipelineConfig};
 use crate::planes::OklabPlanes;
+
+use super::{
+    AdaptiveSharpen, Clarity, FusedAdjust, GamutExpand, HighlightRecovery, LocalToneMap,
+    ShadowLift, Sigmoid,
+};
 
 /// Lightweight image features for model inference.
 ///
@@ -221,6 +227,94 @@ impl Default for TunedParams {
             shadow_lift: 0.0,
             local_tonemap: 0.0,
             gamut_expand: 0.0,
+        }
+    }
+}
+
+impl TunedParams {
+    /// Build a filter pipeline for sRGB/JPEG input.
+    ///
+    /// Applies artistic adjustments: FusedAdjust, then optional Sigmoid,
+    /// HighlightRecovery, ShadowLift, LocalToneMap, Clarity, AdaptiveSharpen,
+    /// GamutExpand — each only added if its parameters differ from identity.
+    pub fn build_pipeline(&self) -> Pipeline {
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+        self.push_artistic_filters(&mut pipeline);
+        pipeline
+    }
+
+    /// Build a filter pipeline for linear (scene-referred) input.
+    ///
+    /// Prepends a base Sigmoid tone mapping step to convert scene→display
+    /// before applying the same artistic adjustments as `build_pipeline()`.
+    ///
+    /// `base_contrast` and `base_skew` control the scene-to-display tone curve.
+    /// Good defaults: contrast=1.4, skew=0.58 (tuned for darktable parity).
+    pub fn build_pipeline_linear(&self, base_contrast: f32, base_skew: f32) -> Pipeline {
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+
+        // Base tone mapping: scene-referred → display-referred
+        let mut base_sig = Sigmoid::default();
+        base_sig.contrast = base_contrast;
+        base_sig.skew = base_skew;
+        pipeline.push(Box::new(base_sig));
+
+        self.push_artistic_filters(&mut pipeline);
+        pipeline
+    }
+
+    /// Push artistic adjustment filters into an existing pipeline.
+    fn push_artistic_filters(&self, pipeline: &mut Pipeline) {
+        let mut fused = FusedAdjust::new();
+        fused.exposure = self.exposure;
+        fused.contrast = self.contrast;
+        fused.highlights = self.highlights;
+        fused.shadows = self.shadows;
+        fused.saturation = self.saturation;
+        fused.vibrance = self.vibrance;
+        fused.temperature = self.temperature;
+        fused.tint = self.tint;
+        fused.black_point = self.black_point;
+        fused.white_point = self.white_point;
+        pipeline.push(Box::new(fused));
+
+        if (self.sigmoid_contrast - 1.0).abs() > 0.01
+            || (self.sigmoid_skew - 0.5).abs() > 0.01
+        {
+            let mut sig = Sigmoid::default();
+            sig.contrast = self.sigmoid_contrast;
+            sig.skew = self.sigmoid_skew;
+            pipeline.push(Box::new(sig));
+        }
+        if self.highlight_recovery > 0.01 {
+            let mut hr = HighlightRecovery::default();
+            hr.strength = self.highlight_recovery;
+            pipeline.push(Box::new(hr));
+        }
+        if self.shadow_lift > 0.01 {
+            let mut sl = ShadowLift::default();
+            sl.strength = self.shadow_lift;
+            pipeline.push(Box::new(sl));
+        }
+        if self.local_tonemap > 0.01 {
+            let mut ltm = LocalToneMap::default();
+            ltm.compression = self.local_tonemap;
+            pipeline.push(Box::new(ltm));
+        }
+        if self.clarity > 0.01 {
+            let mut c = Clarity::default();
+            c.amount = self.clarity;
+            pipeline.push(Box::new(c));
+        }
+        if self.sharpen > 0.01 {
+            let mut s = AdaptiveSharpen::default();
+            s.amount = self.sharpen;
+            pipeline.push(Box::new(s));
+        }
+        if self.gamut_expand > 0.01 {
+            let mut ge = GamutExpand::default();
+            ge.strength = self.gamut_expand;
+            pipeline.push(Box::new(ge));
         }
     }
 }

@@ -19,7 +19,7 @@ use image::imageops::FilterType;
 use image::RgbImage;
 use zenfilters::filters::*;
 use zenfilters::{
-    FilterContext, OklabPlanes, Pipeline, PipelineConfig, gather_oklab_to_srgb_u8,
+    FilterContext, OklabPlanes, Pipeline, gather_oklab_to_srgb_u8,
     scatter_srgb_u8_to_oklab, scatter_to_oklab,
 };
 use zenpixels::ColorPrimaries;
@@ -93,57 +93,7 @@ fn array_to_params(a: &[f32]) -> TunedParams {
 }
 
 fn build_pipeline(params: &TunedParams) -> Pipeline {
-    let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
-    let mut fused = FusedAdjust::new();
-    fused.exposure = params.exposure;
-    fused.contrast = params.contrast;
-    fused.highlights = params.highlights;
-    fused.shadows = params.shadows;
-    fused.saturation = params.saturation;
-    fused.vibrance = params.vibrance;
-    fused.temperature = params.temperature;
-    fused.tint = params.tint;
-    fused.black_point = params.black_point;
-    fused.white_point = params.white_point;
-    pipeline.push(Box::new(fused));
-
-    if (params.sigmoid_contrast - 1.0).abs() > 0.01 || (params.sigmoid_skew - 0.5).abs() > 0.01 {
-        let mut sig = Sigmoid::default();
-        sig.contrast = params.sigmoid_contrast;
-        sig.skew = params.sigmoid_skew;
-        pipeline.push(Box::new(sig));
-    }
-    if params.highlight_recovery > 0.01 {
-        let mut hr = HighlightRecovery::default();
-        hr.strength = params.highlight_recovery;
-        pipeline.push(Box::new(hr));
-    }
-    if params.shadow_lift > 0.01 {
-        let mut sl = ShadowLift::default();
-        sl.strength = params.shadow_lift;
-        pipeline.push(Box::new(sl));
-    }
-    if params.local_tonemap > 0.01 {
-        let mut ltm = LocalToneMap::default();
-        ltm.compression = params.local_tonemap;
-        pipeline.push(Box::new(ltm));
-    }
-    if params.clarity > 0.01 {
-        let mut c = Clarity::default();
-        c.amount = params.clarity;
-        pipeline.push(Box::new(c));
-    }
-    if params.sharpen > 0.01 {
-        let mut s = AdaptiveSharpen::default();
-        s.amount = params.sharpen;
-        pipeline.push(Box::new(s));
-    }
-    if params.gamut_expand > 0.01 {
-        let mut ge = GamutExpand::default();
-        ge.strength = params.gamut_expand;
-        pipeline.push(Box::new(ge));
-    }
-    pipeline
+    params.build_pipeline()
 }
 
 /// Apply filter pipeline to sRGB u8 input, return sRGB u8 output.
@@ -169,11 +119,6 @@ fn apply_pipeline_srgb(
 /// Prepends a base tone mapping step (Sigmoid) to convert scene→display
 /// before applying the artistic adjustments.
 fn build_pipeline_linear(params: &TunedParams) -> Pipeline {
-    let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
-
-    // Base tone mapping: approximate darktable's base curve.
-    // Linear sensor data needs an S-curve to look like a camera JPEG.
-    // Tunable via env vars for parameter search.
     let base_contrast: f32 = std::env::var("ZEN_BASE_CONTRAST")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -182,63 +127,7 @@ fn build_pipeline_linear(params: &TunedParams) -> Pipeline {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.58);
-    let mut base_sig = Sigmoid::default();
-    base_sig.contrast = base_contrast;
-    base_sig.skew = base_skew;
-    pipeline.push(Box::new(base_sig));
-
-    // Now apply artistic adjustments (same as JPEG path)
-    let mut fused = FusedAdjust::new();
-    fused.exposure = params.exposure;
-    fused.contrast = params.contrast;
-    fused.highlights = params.highlights;
-    fused.shadows = params.shadows;
-    fused.saturation = params.saturation;
-    fused.vibrance = params.vibrance;
-    fused.temperature = params.temperature;
-    fused.tint = params.tint;
-    fused.black_point = params.black_point;
-    fused.white_point = params.white_point;
-    pipeline.push(Box::new(fused));
-
-    // Additional artistic sigmoid on top of base (only if cluster requests it)
-    if (params.sigmoid_contrast - 1.0).abs() > 0.01 || (params.sigmoid_skew - 0.5).abs() > 0.01 {
-        let mut sig = Sigmoid::default();
-        sig.contrast = params.sigmoid_contrast;
-        sig.skew = params.sigmoid_skew;
-        pipeline.push(Box::new(sig));
-    }
-    if params.highlight_recovery > 0.01 {
-        let mut hr = HighlightRecovery::default();
-        hr.strength = params.highlight_recovery;
-        pipeline.push(Box::new(hr));
-    }
-    if params.shadow_lift > 0.01 {
-        let mut sl = ShadowLift::default();
-        sl.strength = params.shadow_lift;
-        pipeline.push(Box::new(sl));
-    }
-    if params.local_tonemap > 0.01 {
-        let mut ltm = LocalToneMap::default();
-        ltm.compression = params.local_tonemap;
-        pipeline.push(Box::new(ltm));
-    }
-    if params.clarity > 0.01 {
-        let mut c = Clarity::default();
-        c.amount = params.clarity;
-        pipeline.push(Box::new(c));
-    }
-    if params.sharpen > 0.01 {
-        let mut s = AdaptiveSharpen::default();
-        s.amount = params.sharpen;
-        pipeline.push(Box::new(s));
-    }
-    if params.gamut_expand > 0.01 {
-        let mut ge = GamutExpand::default();
-        ge.strength = params.gamut_expand;
-        pipeline.push(Box::new(ge));
-    }
-    pipeline
+    params.build_pipeline_linear(base_contrast, base_skew)
 }
 
 /// Apply filter pipeline to linear f32 RGB input, return sRGB u8 output.
