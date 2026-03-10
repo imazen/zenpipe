@@ -449,9 +449,26 @@ impl ImageFeatures {
 pub fn rule_based_tune(features: &ImageFeatures) -> TunedParams {
     let mut params = TunedParams::default();
 
+    // ── Derived stats ────────────────────────────────────────────
+    let chroma_energy = (features.std_a() + features.std_b()) * 0.5;
+    let contrast_ratio = features.std_l() / features.mean_l().max(0.01);
+    let median = features.p50();
+
+    // ── Adjustment need ──────────────────────────────────────────
+    // Well-balanced images need less correction. Scale all "artistic"
+    // adjustments by this factor so we don't over-process good input.
+    // Exposure/highlight recovery/shadow lift are exempt — they fix
+    // problems, not add style.
+    let exposure_balance = 1.0 - (2.0 * (median - 0.45).abs()).min(1.0); // peak at 0.45
+    let dr_balance = ((features.dynamic_range - 0.3) / 0.5).clamp(0.0, 1.0); // >0.8 = full
+    let chroma_balance = (chroma_energy / 0.12).clamp(0.0, 1.0); // >0.12 = full
+    // 0..1 where 1 = image is already well-balanced, 0 = needs work
+    let balance = exposure_balance * dr_balance * chroma_balance;
+    // Artistic scaling: 1.0 for bad images, 0.3 for perfectly balanced
+    let art_scale = 1.0 - 0.7 * balance;
+
     // ── Exposure correction ─────────────────────────────────────
     // Only correct severely mis-exposed images. Most camera JPEGs are fine.
-    let median = features.p50();
     if median < 0.2 {
         // Very dark: lift gently
         let factor = 0.35 / median.max(0.05);
@@ -465,16 +482,13 @@ pub fn rule_based_tune(features: &ImageFeatures) -> TunedParams {
     }
 
     // ── Highlights / Shadows (FusedAdjust) ────────────────────────
-    // Subtle highlight compression and shadow opening. Expert edits
-    // almost always apply these to increase perceived dynamic range.
+    // Subtle highlight compression and shadow opening.
     if features.p95() > 0.7 {
-        // Compress highlights proportionally to how bright the top end is
-        params.highlights = (features.p95() - 0.6) * 0.3;
+        params.highlights = (features.p95() - 0.6) * 0.3 * art_scale;
         params.highlights = params.highlights.clamp(0.0, 0.2);
     }
     if features.p5() < 0.3 {
-        // Open shadows proportionally to how dark the bottom end is
-        params.shadows = (0.3 - features.p5()) * 0.3;
+        params.shadows = (0.3 - features.p5()) * 0.3 * art_scale;
         params.shadows = params.shadows.clamp(0.0, 0.2);
     }
 
@@ -505,78 +519,59 @@ pub fn rule_based_tune(features: &ImageFeatures) -> TunedParams {
         params.tint = params.tint.clamp(-0.1, 0.1);
     }
 
-    // ── Derived stats ────────────────────────────────────────────
-    let chroma_energy = (features.std_a() + features.std_b()) * 0.5;
-    let contrast_ratio = features.std_l() / features.mean_l().max(0.01);
-
     // ── Saturation ─────────────────────────────────────────────
-    // Modest boost for all images. Expert edits almost always increase saturation.
-    // Adaptive: boost less for already-saturated images (high std_a/std_b).
+    // Modest boost, scaled by art_scale so balanced images get less.
     if chroma_energy < 0.08 {
-        // Low-chroma image: boost more
-        params.saturation = 1.15;
+        params.saturation = 1.0 + 0.15 * art_scale;
     } else if chroma_energy < 0.15 {
-        // Normal image: modest boost
-        params.saturation = 1.08;
+        params.saturation = 1.0 + 0.08 * art_scale;
     }
-    // High-chroma: leave at 1.0 (default)
 
     // ── Vibrance ────────────────────────────────────────────────
-    // Selectively saturate muted colors. More for low-chroma images.
-    params.vibrance = if chroma_energy < 0.08 { 0.25 } else { 0.15 };
+    params.vibrance = if chroma_energy < 0.08 {
+        0.25 * art_scale
+    } else {
+        0.15 * art_scale
+    };
 
     // ── Contrast ──────────────────────────────────────────────────
-    // Modest mid-tone contrast boost. Expert edits almost always add contrast.
-    // Less for already-punchy images, more for flat ones.
     if contrast_ratio < 0.15 {
-        params.contrast = 0.12;
+        params.contrast = 0.12 * art_scale;
     } else if contrast_ratio < 0.25 {
-        params.contrast = 0.06;
+        params.contrast = 0.06 * art_scale;
     }
 
     // ── Sigmoid ─────────────────────────────────────────────────
     // Mild S-curve for added "pop". Skip if dynamic range is already high.
     if features.dynamic_range > 0.3 && features.dynamic_range < 0.85 {
-        params.sigmoid_contrast = 1.12;
+        params.sigmoid_contrast = 1.0 + 0.12 * art_scale;
     }
 
     // ── Black point ──────────────────────────────────────────────
-    // Subtle black point lift adds "weight" to shadows. Only for images
-    // that have meaningful shadow detail (not already crushed).
     if features.p5() > 0.05 && features.p1() > 0.01 {
-        params.black_point = 0.008;
+        params.black_point = 0.008 * art_scale;
     }
 
     // ── Clarity ─────────────────────────────────────────────────
-    // Adaptive: more clarity for flat/low-contrast images (landscapes,
-    // overcast), less for high-contrast (already punchy).
     if contrast_ratio < 0.15 {
-        // Low contrast: more clarity helps
-        params.clarity = 0.2;
+        params.clarity = 0.2 * art_scale;
     } else if contrast_ratio < 0.3 {
-        params.clarity = 0.12;
+        params.clarity = 0.12 * art_scale;
     }
-    // High contrast: skip clarity (would add halos)
 
     // ── Adaptive sharpening ─────────────────────────────────────
-    // Scale with dynamic range: low-DR images (foggy, overcast) need
-    // more sharpening, high-DR images are usually already crisp.
     if features.dynamic_range < 0.5 {
-        params.sharpen = 0.35;
+        params.sharpen = 0.35 * art_scale;
     } else if features.dynamic_range < 0.8 {
-        params.sharpen = 0.2;
+        params.sharpen = 0.2 * art_scale;
     }
-    // Very high DR: skip sharpening
 
     // ── Gamut expand ────────────────────────────────────────────
-    // Adaptive: expand more for low-chroma images. Already-vivid
-    // images don't benefit and can clip.
     if chroma_energy < 0.06 {
-        params.gamut_expand = 0.35;
+        params.gamut_expand = 0.35 * art_scale;
     } else if chroma_energy < 0.12 {
-        params.gamut_expand = 0.2;
+        params.gamut_expand = 0.2 * art_scale;
     }
-    // High-chroma: skip (would over-saturate)
 
     params
 }
