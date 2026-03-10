@@ -133,9 +133,8 @@ fn stream_4k_jpeg_decode_encode() {
 /// Test the zenpipe codec bridge types (DecoderSource / EncoderSink)
 /// with a smaller image to verify the API works.
 ///
-/// Note: EncoderSink uses zencodec's DynEncoder which accumulates all rows
-/// before encoding on finish(). This is a zencodec adapter limitation —
-/// zenjpeg's native BytesEncoder streams truly.
+/// Uses `with_canvas_size` on the encoder job so the adapter streams
+/// directly through the native BytesEncoder (no accumulation).
 #[test]
 fn codec_bridge_roundtrip() {
     use zenpipe::codec::{DecoderSource, EncoderSink};
@@ -185,10 +184,12 @@ fn codec_bridge_roundtrip() {
     assert_eq!(source.width(), w);
     assert_eq!(source.height(), h);
 
-    // Encode via zencodec dyn → EncoderSink
+    // Encode via zencodec dyn → EncoderSink.
+    // with_canvas_size enables true streaming (no accumulation).
     let enc_config2 = zenjpeg::JpegEncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter);
     let enc_job =
         <zenjpeg::JpegEncoderConfig as zencodec::encode::EncoderConfig>::job(&enc_config2);
+    let enc_job = zencodec::encode::EncodeJob::with_canvas_size(enc_job, w, h);
     let dyn_enc: Box<dyn zencodec::encode::DynEncoder + Send> = {
         let concrete = zencodec::encode::EncodeJob::encoder(enc_job).expect("encoder");
         Box::new(SendEncoderShim(concrete))
@@ -210,7 +211,7 @@ fn codec_bridge_roundtrip() {
     assert_eq!(verify_info.height, h);
 
     eprintln!(
-        "Codec bridge roundtrip: {}×{}, {} KB",
+        "Codec bridge roundtrip (streaming): {}×{}, {} KB",
         w,
         h,
         out_bytes.len() / 1024
