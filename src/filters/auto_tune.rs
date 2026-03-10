@@ -706,11 +706,7 @@ impl ClusterModel {
             *v *= inv_w;
         }
 
-        TunedParams::from_array(
-            &blended
-                .try_into()
-                .expect("blended should be LINEAR_MODEL_OUTPUTS"),
-        )
+        TunedParams::from_array(&blended)
     }
 }
 

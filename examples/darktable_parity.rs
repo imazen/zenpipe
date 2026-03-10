@@ -203,7 +203,8 @@ struct ImageResult {
     parity_base: f64, // our DNG pipeline (base only, no cluster) vs darktable display
     parity_rule_dng: f64, // our DNG pipeline (rule-based) vs darktable display
     ceiling: f64,     // darktable display vs expert
-    quality: f64,     // our JPEG cluster pipeline vs expert
+    quality: f64,     // our JPEG cluster pipeline (k=1) vs expert
+    quality_k3: f64,  // our JPEG cluster pipeline (k=3 blend) vs expert
     quality_rule: f64, // our JPEG rule-based pipeline vs expert
     baseline: f64,    // untouched original vs expert
 }
@@ -328,28 +329,52 @@ fn main() {
         let quality_rule = zensim_score(&jpeg_rule, &expert_r, w, h, &zs);
 
         // Cluster model pipeline (if available)
-        let (quality, best_cluster) = if n_clusters > 0 {
+        let (quality, quality_k3, best_cluster) = if n_clusters > 0 {
             let input = features.to_tensor();
-            let mut bc = 0;
-            let mut best_dist = f32::MAX;
-            for c in 0..n_clusters {
-                let centroid = &centroids_flat[c * N_FEAT..(c + 1) * N_FEAT];
-                let dist: f32 = input
-                    .iter()
-                    .zip(centroid.iter())
-                    .map(|(a, b)| (a - b) * (a - b))
-                    .sum();
-                if dist < best_dist {
-                    best_dist = dist;
-                    bc = c;
-                }
-            }
+            // Find nearest centroid
+            let mut dists: Vec<(usize, f32)> = (0..n_clusters)
+                .map(|c| {
+                    let centroid = &centroids_flat[c * N_FEAT..(c + 1) * N_FEAT];
+                    let dist: f32 = input
+                        .iter()
+                        .zip(centroid.iter())
+                        .map(|(a, b)| (a - b) * (a - b))
+                        .sum();
+                    (c, dist)
+                })
+                .collect();
+            dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            let bc = dists[0].0;
+
+            // k=1: nearest neighbor
             let cluster_p = &params_flat[bc * N_PARAMS..(bc + 1) * N_PARAMS];
             let params = array_to_params(cluster_p);
             let jpeg_out = apply_pipeline_srgb(&orig_r, w, h, &params, &m1, &m1_inv, &mut ctx);
-            (zensim_score(&jpeg_out, &expert_r, w, h, &zs), bc)
+            let q1 = zensim_score(&jpeg_out, &expert_r, w, h, &zs);
+
+            // k=3: weighted blend
+            let k = 3.min(n_clusters);
+            let mut blended = [0.0f32; N_PARAMS];
+            let mut total_w = 0.0f32;
+            for &(idx, dist) in &dists[..k] {
+                let w_val = 1.0 / (dist.sqrt() + 1e-6);
+                total_w += w_val;
+                let p = &params_flat[idx * N_PARAMS..(idx + 1) * N_PARAMS];
+                for (j, val) in p.iter().enumerate() {
+                    blended[j] += val * w_val;
+                }
+            }
+            for v in &mut blended {
+                *v /= total_w;
+            }
+            let blend_params = array_to_params(&blended);
+            let jpeg_blend =
+                apply_pipeline_srgb(&orig_r, w, h, &blend_params, &m1, &m1_inv, &mut ctx);
+            let q3 = zensim_score(&jpeg_blend, &expert_r, w, h, &zs);
+
+            (q1, q3, bc)
         } else {
-            (-1.0, 0)
+            (-1.0, -1.0, 0)
         };
 
         // --- DNG path: darktable linear → our pipeline → compare vs darktable display ---
@@ -373,7 +398,7 @@ fn main() {
         };
 
         println!(
-            "  C{best_cluster:02} | base={parity_base:.1} rDNG={parity_rule_dng:.1} ceil={ceiling:.1} clust={quality:.1} rule={quality_rule:.1} base0={baseline:.1}"
+            "  C{best_cluster:02} | base={parity_base:.1} rDNG={parity_rule_dng:.1} ceil={ceiling:.1} k1={quality:.1} k3={quality_k3:.1} rule={quality_rule:.1} base0={baseline:.1}"
         );
 
         // Save comparison images
@@ -388,6 +413,7 @@ fn main() {
             parity_rule_dng,
             ceiling,
             quality,
+            quality_k3,
             quality_rule,
             baseline,
         });
@@ -398,34 +424,37 @@ fn main() {
     println!("base    = our DNG pipeline (base sigmoid only) vs darktable display");
     println!("rDNG    = our DNG pipeline (rule-based) vs darktable display");
     println!("ceil    = darktable display vs expert");
-    println!("clust   = our JPEG cluster pipeline vs expert");
+    println!("k1      = our JPEG cluster pipeline (nearest) vs expert");
+    println!("k3      = our JPEG cluster pipeline (3-blend) vs expert");
     println!("rule    = our JPEG rule-based pipeline vs expert");
     println!("base0   = untouched original vs expert\n");
 
     println!(
-        "{:<35} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
-        "Image", "Base", "rDNG", "Ceil", "Clust", "Rule", "Base0"
+        "{:<35} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
+        "Image", "Base", "rDNG", "Ceil", "K1", "K3", "Rule", "Base0"
     );
-    println!("{}", "-".repeat(88));
+    println!("{}", "-".repeat(98));
 
-    let (mut spb, mut spr, mut sc, mut sq, mut sqr, mut sb) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let (mut spb, mut spr, mut sc, mut sq, mut sq3, mut sqr, mut sb) =
+        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let mut np = 0;
 
     for r in &results {
         let fmt = |v: f64| -> String {
             if v < 0.0 {
-                "FAIL".to_string()
+                "---".to_string()
             } else {
                 format!("{v:.1}")
             }
         };
         println!(
-            "{:<35} {:>7} {:>7} {:>7} {:>7.1} {:>7.1} {:>7.1}",
+            "{:<35} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7.1} {:>7.1}",
             &r.name[..r.name.len().min(35)],
             fmt(r.parity_base),
             fmt(r.parity_rule_dng),
             fmt(r.ceiling),
-            r.quality,
+            fmt(r.quality),
+            fmt(r.quality_k3),
             r.quality_rule,
             r.baseline
         );
@@ -436,32 +465,36 @@ fn main() {
             np += 1;
         }
         sq += r.quality;
+        sq3 += r.quality_k3;
         sqr += r.quality_rule;
         sb += r.baseline;
     }
 
     let n = results.len() as f64;
-    println!("{}", "-".repeat(88));
-    let mean_clust = sq / n;
+    println!("{}", "-".repeat(98));
+    let mean_k1 = sq / n;
+    let mean_k3 = sq3 / n;
     let mean_rule = sqr / n;
     let mean_base0 = sb / n;
     println!(
-        "{:<35} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1}",
+        "{:<35} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1}",
         "MEAN",
         if np > 0 { spb / np as f64 } else { 0.0 },
         if np > 0 { spr / np as f64 } else { 0.0 },
         if np > 0 { sc / np as f64 } else { 0.0 },
-        mean_clust,
+        mean_k1,
+        mean_k3,
         mean_rule,
         mean_base0
     );
     println!(
-        "{:<35} {:>7} {:>7} {:>7} {:>+7.1} {:>+7.1} {:>7}",
+        "{:<35} {:>7} {:>7} {:>7} {:>+7.1} {:>+7.1} {:>+7.1} {:>7}",
         "DELTA vs base0",
         "",
         "",
         "",
-        mean_clust - mean_base0,
+        mean_k1 - mean_base0,
+        mean_k3 - mean_base0,
         mean_rule - mean_base0,
         ""
     );
@@ -470,16 +503,17 @@ fn main() {
     let tsv_path = format!("{OUTPUT_DIR}/parity_results.tsv");
     let mut tsv = String::new();
     tsv.push_str(
-        "image\tparity_base\tparity_rule_dng\tceiling\tquality_cluster\tquality_rule\tbaseline\n",
+        "image\tparity_base\tparity_rule_dng\tceiling\tquality_k1\tquality_k3\tquality_rule\tbaseline\n",
     );
     for r in &results {
         tsv.push_str(&format!(
-            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\n",
+            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\n",
             r.name,
             r.parity_base,
             r.parity_rule_dng,
             r.ceiling,
             r.quality,
+            r.quality_k3,
             r.quality_rule,
             r.baseline
         ));
