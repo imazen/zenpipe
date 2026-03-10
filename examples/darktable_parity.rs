@@ -217,11 +217,29 @@ fn main() {
     }
     println!("darktable: {}", darktable::version().unwrap_or_default());
 
-    // Load cluster model
-    let centroids_flat = load_f32s(&PathBuf::from(TRAINING_DIR).join("centroids.bin"));
-    let params_flat = load_f32s(&PathBuf::from(TRAINING_DIR).join("cluster_params.bin"));
-    let n_clusters = centroids_flat.len() / N_FEAT;
-    println!("Loaded {n_clusters} clusters");
+    // Load cluster model (optional — run rule-based only if not available)
+    let centroids_path = PathBuf::from(TRAINING_DIR).join("centroids.bin");
+    let params_path = PathBuf::from(TRAINING_DIR).join("cluster_params.bin");
+    let (centroids_flat, params_flat, n_clusters) = if centroids_path.exists()
+        && params_path.exists()
+    {
+        let c = load_f32s(&centroids_path);
+        let p = load_f32s(&params_path);
+        let nc = c.len() / N_FEAT;
+        let np = p.len() / N_PARAMS;
+        if nc == np && nc > 0 {
+            println!("Loaded {nc} clusters");
+            (c, p, nc)
+        } else {
+            eprintln!(
+                "WARNING: cluster model size mismatch ({nc} centroids, {np} params) — using rule-based only"
+            );
+            (vec![], vec![], 0)
+        }
+    } else {
+        println!("No cluster model found — using rule-based only");
+        (vec![], vec![], 0)
+    };
 
     // Find images with DNG + JPEG + expert
     let mut triples: Vec<(PathBuf, PathBuf, PathBuf)> = Vec::new();
@@ -299,36 +317,40 @@ fn main() {
         let (orig_r, expert_r, w, h) = resize_pair(&orig_raw, ow, oh, &expert_raw, ew, eh);
         let baseline = zensim_score(&orig_r, &expert_r, w, h, &zs);
 
-        // --- JPEG path: extract features, find cluster, apply pipeline ---
+        // --- JPEG path: extract features, apply pipeline ---
         let mut feat_planes = OklabPlanes::new(w, h);
         scatter_srgb_u8_to_oklab(&orig_r, &mut feat_planes, 3, &m1);
         let features = ImageFeatures::extract(&feat_planes);
 
-        let input = features.to_tensor();
-        let mut best_cluster = 0;
-        let mut best_dist = f32::MAX;
-        for c in 0..n_clusters {
-            let centroid = &centroids_flat[c * N_FEAT..(c + 1) * N_FEAT];
-            let dist: f32 = input
-                .iter()
-                .zip(centroid.iter())
-                .map(|(a, b)| (a - b) * (a - b))
-                .sum();
-            if dist < best_dist {
-                best_dist = dist;
-                best_cluster = c;
-            }
-        }
-
-        let cluster_p = &params_flat[best_cluster * N_PARAMS..(best_cluster + 1) * N_PARAMS];
-        let params = array_to_params(cluster_p);
-        let jpeg_out = apply_pipeline_srgb(&orig_r, w, h, &params, &m1, &m1_inv, &mut ctx);
-        let quality = zensim_score(&jpeg_out, &expert_r, w, h, &zs);
-
-        // Also try rule-based for comparison
+        // Rule-based pipeline
         let rule_params = rule_based_tune(&features);
         let jpeg_rule = apply_pipeline_srgb(&orig_r, w, h, &rule_params, &m1, &m1_inv, &mut ctx);
         let quality_rule = zensim_score(&jpeg_rule, &expert_r, w, h, &zs);
+
+        // Cluster model pipeline (if available)
+        let (quality, best_cluster) = if n_clusters > 0 {
+            let input = features.to_tensor();
+            let mut bc = 0;
+            let mut best_dist = f32::MAX;
+            for c in 0..n_clusters {
+                let centroid = &centroids_flat[c * N_FEAT..(c + 1) * N_FEAT];
+                let dist: f32 = input
+                    .iter()
+                    .zip(centroid.iter())
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum();
+                if dist < best_dist {
+                    best_dist = dist;
+                    bc = c;
+                }
+            }
+            let cluster_p = &params_flat[bc * N_PARAMS..(bc + 1) * N_PARAMS];
+            let params = array_to_params(cluster_p);
+            let jpeg_out = apply_pipeline_srgb(&orig_r, w, h, &params, &m1, &m1_inv, &mut ctx);
+            (zensim_score(&jpeg_out, &expert_r, w, h, &zs), bc)
+        } else {
+            (-1.0, 0)
+        };
 
         // --- DNG path: darktable linear → our pipeline → compare vs darktable display ---
         let (parity_base, parity_rule_dng, ceiling) = match process_dng_parity(
@@ -357,7 +379,7 @@ fn main() {
         // Save comparison images
         let prefix = format!("{OUTPUT_DIR}/{stem}");
         save_rgb(&orig_r, w, h, &format!("{prefix}_1_orig.jpg"));
-        save_rgb(&jpeg_out, w, h, &format!("{prefix}_2_ours.jpg"));
+        save_rgb(&jpeg_rule, w, h, &format!("{prefix}_2_rule.jpg"));
         save_rgb(&expert_r, w, h, &format!("{prefix}_3_expert.jpg"));
 
         results.push(ImageResult {
