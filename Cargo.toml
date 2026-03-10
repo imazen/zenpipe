@@ -18,8 +18,8 @@ rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
 zencodec = { path = "../zencodec" }
-zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", default-features = false, features = ["buffer"] }
-zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer"] }
+zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
