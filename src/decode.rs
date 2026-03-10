@@ -105,32 +105,32 @@ impl<'a> DecodeRequest<'a> {
 
     /// Decode directly into a caller-provided RGB8 buffer.
     pub fn decode_into_rgb8(self, dst: imgref::ImgRefMut<'_, rgb::Rgb<u8>>) -> Result<ImageInfo> {
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         self.decode_into(dst, |b| b.to_rgb8())
     }
 
     /// Decode directly into a caller-provided RGBA8 buffer.
     pub fn decode_into_rgba8(self, dst: imgref::ImgRefMut<'_, rgb::Rgba<u8>>) -> Result<ImageInfo> {
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         self.decode_into(dst, |b| b.to_rgba8())
     }
 
     /// Decode directly into a caller-provided Gray8 buffer.
     pub fn decode_into_gray8(self, dst: imgref::ImgRefMut<'_, rgb::Gray<u8>>) -> Result<ImageInfo> {
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         self.decode_into(dst, |b| b.to_gray8())
     }
 
     /// Decode directly into a caller-provided BGRA8 buffer.
     pub fn decode_into_bgra8(self, dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>) -> Result<ImageInfo> {
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         self.decode_into(dst, |b| b.to_bgra8())
     }
 
     /// Decode directly into a caller-provided BGRX8 buffer (alpha byte set to 255).
     pub fn decode_into_bgrx8(self, dst: imgref::ImgRefMut<'_, rgb::Bgra<u8>>) -> Result<ImageInfo> {
         let format = self.resolve_format()?;
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
         let src = output.into_buffer().to_rgb8();
@@ -154,7 +154,7 @@ impl<'a> DecodeRequest<'a> {
         dst: imgref::ImgRefMut<'_, rgb::Rgb<f32>>,
     ) -> Result<ImageInfo> {
         use linear_srgb::default::srgb_u8_to_linear;
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         let format = self.resolve_format()?;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
@@ -178,7 +178,7 @@ impl<'a> DecodeRequest<'a> {
         dst: imgref::ImgRefMut<'_, rgb::Rgba<f32>>,
     ) -> Result<ImageInfo> {
         use linear_srgb::default::srgb_u8_to_linear;
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         let format = self.resolve_format()?;
         let output = self.decode_format(format)?;
         let info = output.info().clone();
@@ -203,7 +203,7 @@ impl<'a> DecodeRequest<'a> {
         dst: imgref::ImgRefMut<'_, rgb::Gray<f32>>,
     ) -> Result<ImageInfo> {
         use linear_srgb::default::srgb_u8_to_linear;
-        use zenpixels_convert::PixelBufferConvertExt as _;
+        use zenpixels_convert::PixelBufferConvertTypedExt as _;
         let format = self.resolve_format()?;
         let output = self.decode_format(format)?;
         let info = output.info().clone();

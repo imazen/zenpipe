@@ -9,7 +9,7 @@
 
 use zencodecs::config::CodecConfig;
 use zencodecs::config::jpeg::{ChromaSubsampling, DecodedExtras, EncoderConfig};
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
 
 fn main() {
     let jpeg_data = include_bytes!("../tests/images/ultrahdr_sample.jpg");
@@ -109,7 +109,7 @@ fn main() {
 
     let config = CodecConfig::default().with_jpeg_encoder(encoder_config);
 
-    let rgb8 = decoded.into_rgb8();
+    let rgb8 = decoded.into_buffer().to_rgb8();
     let img = rgb8.as_imgref();
 
     let re_encoded = EncodeRequest::new(ImageFormat::Jpeg)

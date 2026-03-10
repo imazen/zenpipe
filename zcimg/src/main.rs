@@ -232,7 +232,7 @@ impl ProcessArgs {
         if let Some(ref out) = self.output {
             let path = std::path::Path::new(out);
             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if let Some(fmt) = zencodecs::ImageFormat::from_extension(ext) {
+                if let Some(fmt) = zencodec::ImageFormatRegistry::common().from_extension(ext) {
                     return Some(fmt);
                 }
             }

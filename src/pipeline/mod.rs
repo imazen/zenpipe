@@ -121,16 +121,16 @@ impl OwnedMetadata {
         }
     }
 
-    fn as_metadata(&self) -> zencodec::MetadataView<'_> {
-        let mut m = zencodec::MetadataView::none();
+    fn as_metadata(&self) -> zencodec::Metadata {
+        let mut m = zencodec::Metadata::none();
         if let Some(ref icc) = self.icc_profile {
-            m = m.with_icc(icc);
+            m = m.with_icc(icc.as_slice());
         }
         if let Some(ref exif) = self.exif {
-            m = m.with_exif(exif);
+            m = m.with_exif(exif.as_slice());
         }
         if let Some(ref xmp) = self.xmp {
-            m = m.with_xmp(xmp);
+            m = m.with_xmp(xmp.as_slice());
         }
         if let Some(cicp) = self.cicp {
             m = m.with_cicp(cicp);
@@ -377,7 +377,7 @@ impl<'a> Pipeline<'a> {
             // Gray path
             let resized = if let Some(ref plan) = layout_plan {
                 let source = {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_gray8()
                 };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
@@ -397,7 +397,7 @@ impl<'a> Pipeline<'a> {
                     .expect("resize output size mismatch")
             } else {
                 {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_gray8()
                 }
             };
@@ -417,7 +417,7 @@ impl<'a> Pipeline<'a> {
             // RGBA path
             let resized = if let Some(ref plan) = layout_plan {
                 let source = {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_rgba8()
                 };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
@@ -437,7 +437,7 @@ impl<'a> Pipeline<'a> {
                     .expect("resize output size mismatch")
             } else {
                 {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_rgba8()
                 }
             };
@@ -457,7 +457,7 @@ impl<'a> Pipeline<'a> {
             // RGB path
             let resized = if let Some(ref plan) = layout_plan {
                 let source = {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_rgb8()
                 };
                 let (buf, w, h) = source.as_imgref().to_contiguous_buf();
@@ -477,7 +477,7 @@ impl<'a> Pipeline<'a> {
                     .expect("resize output size mismatch")
             } else {
                 {
-                    use zenpixels_convert::PixelBufferConvertExt as _;
+                    use zenpixels_convert::PixelBufferConvertTypedExt as _;
                     decoded.into_buffer().to_rgb8()
                 }
             };
@@ -523,7 +523,7 @@ impl<'a> Pipeline<'a> {
     fn build_encode_request<'b>(
         &self,
         format: ImageFormat,
-        metadata: &'b zencodec::MetadataView<'b>,
+        metadata: &'b zencodec::Metadata,
     ) -> crate::EncodeRequest<'b>
     where
         'a: 'b,
@@ -555,7 +555,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgb<u8>>,
         format: ImageFormat,
-        metadata: &zencodec::MetadataView<'_>,
+        metadata: &zencodec::Metadata,
     ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata).encode_rgb8(img)
     }
@@ -564,7 +564,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Rgba<u8>>,
         format: ImageFormat,
-        metadata: &zencodec::MetadataView<'_>,
+        metadata: &zencodec::Metadata,
     ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata)
             .encode_rgba8(img)
@@ -574,7 +574,7 @@ impl<'a> Pipeline<'a> {
         &self,
         img: imgref::ImgRef<rgb::Gray<u8>>,
         format: ImageFormat,
-        metadata: &zencodec::MetadataView<'_>,
+        metadata: &zencodec::Metadata,
     ) -> Result<zencodec::encode::EncodeOutput> {
         self.build_encode_request(format, metadata)
             .encode_gray8(img)

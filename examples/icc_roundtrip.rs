@@ -5,7 +5,7 @@
 //!
 //! Run: `cargo run --example icc_roundtrip --features all,std`
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
 
 fn main() {
     let jpeg_data = include_bytes!("../tests/images/ultrahdr_sample.jpg");
@@ -15,12 +15,13 @@ fn main() {
         .decode()
         .expect("failed to decode JPEG");
 
-    let original_icc = decoded
+    let original_icc: Vec<u8> = decoded
         .info()
         .source_color
         .icc_profile
         .as_deref()
-        .expect("no ICC profile in test JPEG");
+        .expect("no ICC profile in test JPEG")
+        .to_vec();
 
     println!("Original JPEG ICC: {} bytes", original_icc.len());
     println!(
@@ -29,7 +30,7 @@ fn main() {
     );
 
     let meta = decoded.metadata();
-    let rgb8 = decoded.to_rgb8();
+    let rgb8 = decoded.into_buffer().to_rgb8();
     let img = rgb8.as_imgref();
 
     // Chain: JPEG → WebP → PNG → JPEG
@@ -78,7 +79,7 @@ fn main() {
             .expect("decode failed");
 
         let step_meta = step.metadata();
-        let step_rgb8 = step.to_rgb8();
+        let step_rgb8 = step.into_buffer().to_rgb8();
         let step_img = step_rgb8.as_imgref();
 
         let encoded = EncodeRequest::new(format)

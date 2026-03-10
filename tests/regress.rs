@@ -10,7 +10,7 @@ use std::path::Path;
 
 use imgref::ImgVec;
 use zencodecs::pixel::{Bgra, Gray, Rgb, Rgba};
-use zencodecs::{DecodeRequest, EncodeOutput, EncodeRequest, ImageFormat, PixelBufferConvertExt};
+use zencodecs::{DecodeRequest, EncodeOutput, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
 use zensim_regress::checksums::ChecksumManager;
 use zensim_regress::generators;
 

@@ -6,7 +6,7 @@
 
 use crate::config::CodecConfig;
 use crate::error::Result;
-use crate::{CodecError, ImageFormat, Limits, MetadataView, Stop};
+use crate::{CodecError, ImageFormat, Limits, Metadata, Stop};
 use alloc::boxed::Box;
 use whereat::at;
 use zencodec::encode::EncodeOutput;
@@ -17,7 +17,7 @@ pub(crate) struct EncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
     pub lossless: bool,
-    pub metadata: Option<&'a MetadataView<'a>>,
+    pub metadata: Option<&'a Metadata>,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub stop: Option<&'a dyn Stop>,
@@ -103,7 +103,7 @@ pub trait AnyEncoder: Send + Sync {
     fn encode_pixels(
         &self,
         pixels: PixelSlice<'_>,
-        metadata: Option<&MetadataView<'_>>,
+        metadata: Option<&Metadata>,
         limits: Option<&Limits>,
         stop: Option<&dyn Stop>,
     ) -> Result<EncodeOutput>;
@@ -147,7 +147,7 @@ where
     fn encode_pixels(
         &self,
         pixels: PixelSlice<'_>,
-        metadata: Option<&MetadataView<'_>>,
+        metadata: Option<&Metadata>,
         limits: Option<&Limits>,
         stop: Option<&dyn Stop>,
     ) -> Result<EncodeOutput> {

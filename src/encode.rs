@@ -8,7 +8,7 @@ use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
 use crate::error::Result;
 use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
-use crate::{CodecError, CodecRegistry, ImageFormat, Limits, MetadataView, Stop};
+use crate::{CodecError, CodecRegistry, ImageFormat, Limits, Metadata, Stop};
 use whereat::at;
 use zenpixels::{AlphaMode, PixelDescriptor};
 
@@ -35,7 +35,7 @@ pub struct EncodeRequest<'a> {
     lossless: bool,
     limits: Option<&'a Limits>,
     stop: Option<&'a dyn Stop>,
-    metadata: Option<&'a MetadataView<'a>>,
+    metadata: Option<&'a Metadata>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
     /// Quality for UltraHDR gain map JPEG (0-100). Only used by `encode_ultrahdr_*`.
@@ -113,7 +113,7 @@ impl<'a> EncodeRequest<'a> {
     /// Not all formats support all metadata types. Unsupported metadata
     /// is silently ignored — GIF ignores all metadata, AVIF encode only
     /// supports EXIF, etc.
-    pub fn with_metadata(mut self, metadata: &'a MetadataView<'a>) -> Self {
+    pub fn with_metadata(mut self, metadata: &'a Metadata) -> Self {
         self.metadata = Some(metadata);
         self
     }
@@ -518,10 +518,10 @@ mod tests {
 
     #[test]
     fn metadata_builder() {
-        let meta = MetadataView::none()
-            .with_icc(b"fake_icc")
-            .with_exif(b"fake_exif")
-            .with_xmp(b"fake_xmp");
+        let meta = Metadata::none()
+            .with_icc(b"fake_icc".as_slice())
+            .with_exif(b"fake_exif".as_slice())
+            .with_xmp(b"fake_xmp".as_slice());
         let _request = EncodeRequest::new(ImageFormat::Jpeg).with_metadata(&meta);
     }
 

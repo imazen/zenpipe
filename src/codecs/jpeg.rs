@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
 #[cfg(feature = "jpeg-ultrahdr")]
-use crate::{EncodeOutput, MetadataView, pixel::ImgRef};
+use crate::{EncodeOutput, Metadata, pixel::ImgRef};
 #[cfg(feature = "jpeg-ultrahdr")]
 use rgb::{Rgb, Rgba};
 use whereat::at;
@@ -49,10 +49,6 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
         ii = ii.with_exif(exif.clone());
     }
     if let Some(ref xmp) = info.xmp {
-        // Detect UltraHDR gain map from XMP hdrgm namespace
-        if xmp.contains("hdrgm:Version") || xmp.contains("hdrgm:GainMapMax") {
-            ii = ii.with_gain_map(true);
-        }
         ii = ii.with_xmp(xmp.as_bytes().to_vec());
     }
     ii
@@ -246,8 +242,7 @@ pub(crate) fn decode_hdr(
     let buf = PixelBuffer::from_imgvec(img).with_descriptor(PixelDescriptor::RGBAF32_LINEAR);
 
     let mut ii = ImageInfo::new(width, height, ImageFormat::Jpeg)
-        .with_frame_count(1)
-        .with_gain_map(true);
+        .with_frame_count(1);
 
     // Preserve metadata from extras
     let extras = result.extras();
@@ -280,7 +275,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     img: ImgRef<Rgb<f32>>,
     quality: Option<f32>,
     gainmap_quality: Option<f32>,
-    _metadata: Option<&MetadataView<'_>>,
+    _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
     stop: Option<&dyn Stop>,
@@ -340,7 +335,7 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     img: ImgRef<Rgba<f32>>,
     quality: Option<f32>,
     gainmap_quality: Option<f32>,
-    _metadata: Option<&MetadataView<'_>>,
+    _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
     stop: Option<&dyn Stop>,

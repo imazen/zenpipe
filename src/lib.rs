@@ -110,14 +110,15 @@ pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use limits::{Limits, Stop};
 pub use registry::CodecRegistry;
 pub use zencodec::ImageFormat;
-pub use zencodec::MetadataView;
+pub use zencodec::Metadata;
 
 // zencodec trait re-exports
 pub use zencodec::decode::{DecodeJob, DecoderConfig};
 pub use zencodec::encode::{EncodeJob, EncoderConfig};
 
-// Pixel conversion extension trait (provides to_rgb8(), to_rgba8(), etc.)
+// Pixel conversion extension traits
 pub use zenpixels_convert::PixelBufferConvertExt;
+pub use zenpixels_convert::PixelBufferConvertTypedExt;
 
 #[cfg(feature = "png")]
 pub use zenpng::{PngDecodeJob, PngDecoderConfig, PngEncodeJob, PngEncoderConfig};

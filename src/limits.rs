@@ -195,7 +195,7 @@ pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec::ResourceLimits {
         rl = rl.with_max_frames(max_fr);
     }
     if let Some(max_dur) = limits.max_duration_ms {
-        rl = rl.with_max_duration(max_dur);
+        rl = rl.with_max_animation_ms(max_dur);
     }
     rl = rl.with_threading(limits.threading);
     rl
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(rl.max_input_bytes, Some(10_000_000));
         assert_eq!(rl.max_output_bytes, Some(5_000_000));
         assert_eq!(rl.max_frames, Some(100));
-        assert_eq!(rl.max_duration_ms, Some(30_000));
+        assert_eq!(rl.max_animation_ms, Some(30_000));
         assert_eq!(rl.threading, zencodec::ThreadingPolicy::SingleThread);
     }
 
@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(rl.max_input_bytes, None);
         assert_eq!(rl.max_output_bytes, None);
         assert_eq!(rl.max_frames, None);
-        assert_eq!(rl.max_duration_ms, None);
+        assert_eq!(rl.max_animation_ms, None);
         assert_eq!(rl.threading, zencodec::ThreadingPolicy::Unlimited);
     }
 }

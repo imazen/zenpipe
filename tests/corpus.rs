@@ -9,7 +9,7 @@
 use std::path::Path;
 
 use codec_corpus::Corpus;
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertExt};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
 
 fn corpus() -> Corpus {
     Corpus::new().expect("failed to initialize codec-corpus")

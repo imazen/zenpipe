@@ -12,7 +12,7 @@ use std::time::Instant;
 use anyhow::Context;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, ImageMetadata};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata, PixelBufferConvertTypedExt as _};
 
 use crate::batch::{self, BatchSummary, FileResult};
 use crate::output::OutputConfig;
@@ -172,7 +172,7 @@ fn process_inner(
     let input_size = data.len() as u64;
 
     // Detect source format
-    let source_format = ImageFormat::detect(&data)
+    let source_format = zencodec::ImageFormatRegistry::common().detect(&data)
         .ok_or_else(|| anyhow::anyhow!("unrecognized image format: {}", input.display()))?;
 
     // Determine target format
@@ -230,19 +230,20 @@ fn process_inner(
     }
 
     // Encode based on pixel type
+    let is_grayscale = decoded.descriptor().is_grayscale();
     let encoded = if has_alpha {
-        let pixels = decoded.into_rgba8();
+        let pixels = decoded.into_buffer().to_rgba8();
         encode_req.encode_rgba8(pixels.as_imgref())
-    } else if decoded.pixels().is_grayscale() {
-        let pixels = decoded.into_gray8();
+    } else if is_grayscale {
+        let pixels = decoded.into_buffer().to_gray8();
         encode_req.encode_gray8(pixels.as_imgref())
     } else {
-        let pixels = decoded.into_rgb8();
+        let pixels = decoded.into_buffer().to_rgb8();
         encode_req.encode_rgb8(pixels.as_imgref())
     }
     .with_context(|| format!("encoding {} as {:?}", input.display(), target_format))?;
 
-    let output_size = encoded.bytes().len() as u64;
+    let output_size = encoded.data().len() as u64;
 
     // Skip-if-larger check
     if args.skip_if_larger && output_size >= input_size {
@@ -265,7 +266,7 @@ fn process_inner(
         );
     } else {
         OutputConfig::ensure_parent(&output_path)?;
-        std::fs::write(&output_path, encoded.bytes())
+        std::fs::write(&output_path, encoded.data())
             .with_context(|| format!("writing {}", output_path.display()))?;
     }
 
@@ -273,38 +274,38 @@ fn process_inner(
 }
 
 /// Build metadata to embed, applying strip flags.
-fn build_metadata<'a>(
-    info: &'a zencodec::ImageInfo,
+fn build_metadata(
+    info: &zencodec::ImageInfo,
     args: &ProcessArgs,
-) -> Option<ImageMetadata<'a>> {
+) -> Option<Metadata> {
     if args.strip_all {
         return None;
     }
 
     if args.preserve_icc {
         // Keep only ICC
-        let mut meta = ImageMetadata::none();
+        let mut meta = Metadata::none();
         if let Some(ref icc) = info.source_color.icc_profile {
-            meta = meta.with_icc(icc);
+            meta = meta.with_icc(icc.clone());
         }
         return Some(meta);
     }
 
-    let mut meta = ImageMetadata::none();
+    let mut meta = Metadata::none();
 
     if !args.strip_icc {
         if let Some(ref icc) = info.source_color.icc_profile {
-            meta = meta.with_icc(icc);
+            meta = meta.with_icc(icc.clone());
         }
     }
     if !args.strip_exif {
         if let Some(ref exif) = info.embedded_metadata.exif {
-            meta = meta.with_exif(exif);
+            meta = meta.with_exif(exif.clone());
         }
     }
     if !args.strip_xmp {
         if let Some(ref xmp) = info.embedded_metadata.xmp {
-            meta = meta.with_xmp(xmp);
+            meta = meta.with_xmp(xmp.clone());
         }
     }
 

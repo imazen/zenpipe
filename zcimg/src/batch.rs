@@ -5,7 +5,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use zencodecs::ImageFormat;
 
 /// Expand input patterns into a deduplicated, sorted list of image files.
 ///
@@ -64,7 +63,7 @@ pub fn is_image(path: &Path) -> bool {
         Some(e) => e,
         None => return false,
     };
-    ImageFormat::from_extension(ext).is_some()
+    zencodec::ImageFormatRegistry::common().from_extension(ext).is_some()
 }
 
 /// Recursively find image files in a directory.

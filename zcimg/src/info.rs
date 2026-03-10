@@ -91,7 +91,7 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
             matrix_coefficients: c.matrix_coefficients,
             full_range: c.full_range,
         }),
-        has_gain_map: info.has_gain_map,
+        has_gain_map: false,
         file_size,
         warnings,
         parsed_exif,
