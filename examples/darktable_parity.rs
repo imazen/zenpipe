@@ -201,6 +201,7 @@ fn save_rgb(data: &[u8], w: u32, h: u32, path: &str) {
 struct ImageResult {
     name: String,
     parity_base: f64, // our DNG pipeline (base only, no cluster) vs darktable display
+    parity_rule_dng: f64, // our DNG pipeline (rule-based) vs darktable display
     ceiling: f64,     // darktable display vs expert
     quality: f64,     // our JPEG cluster pipeline vs expert
     quality_rule: f64, // our JPEG rule-based pipeline vs expert
@@ -330,7 +331,7 @@ fn main() {
         let quality_rule = zensim_score(&jpeg_rule, &expert_r, w, h, &zs);
 
         // --- DNG path: darktable linear → our pipeline → compare vs darktable display ---
-        let (parity_base, ceiling) = match process_dng_parity(
+        let (parity_base, parity_rule_dng, ceiling) = match process_dng_parity(
             dng_path,
             &expert_raw,
             ew,
@@ -345,12 +346,12 @@ fn main() {
             Some(r) => r,
             None => {
                 println!("  DNG failed");
-                (-1.0, -1.0)
+                (-1.0, -1.0, -1.0)
             }
         };
 
         println!(
-            "  C{best_cluster:02} | base={parity_base:.1} ceil={ceiling:.1} clust={quality:.1} rule={quality_rule:.1} base0={baseline:.1}"
+            "  C{best_cluster:02} | base={parity_base:.1} rDNG={parity_rule_dng:.1} ceil={ceiling:.1} clust={quality:.1} rule={quality_rule:.1} base0={baseline:.1}"
         );
 
         // Save comparison images
@@ -362,6 +363,7 @@ fn main() {
         results.push(ImageResult {
             name: stem.to_string(),
             parity_base,
+            parity_rule_dng,
             ceiling,
             quality,
             quality_rule,
@@ -372,18 +374,19 @@ fn main() {
     // Summary
     println!("\n\n=== RESULTS ===");
     println!("base    = our DNG pipeline (base sigmoid only) vs darktable display");
+    println!("rDNG    = our DNG pipeline (rule-based) vs darktable display");
     println!("ceil    = darktable display vs expert");
     println!("clust   = our JPEG cluster pipeline vs expert");
     println!("rule    = our JPEG rule-based pipeline vs expert");
     println!("base0   = untouched original vs expert\n");
 
     println!(
-        "{:<35} {:>7} {:>7} {:>7} {:>7} {:>7}",
-        "Image", "Base", "Ceil", "Clust", "Rule", "Base0"
+        "{:<35} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
+        "Image", "Base", "rDNG", "Ceil", "Clust", "Rule", "Base0"
     );
-    println!("{}", "-".repeat(80));
+    println!("{}", "-".repeat(88));
 
-    let (mut spb, mut sc, mut sq, mut sqr, mut sb) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    let (mut spb, mut spr, mut sc, mut sq, mut sqr, mut sb) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let mut np = 0;
 
     for r in &results {
@@ -395,9 +398,10 @@ fn main() {
             }
         };
         println!(
-            "{:<35} {:>7} {:>7} {:>7.1} {:>7.1} {:>7.1}",
+            "{:<35} {:>7} {:>7} {:>7} {:>7.1} {:>7.1} {:>7.1}",
             &r.name[..r.name.len().min(35)],
             fmt(r.parity_base),
+            fmt(r.parity_rule_dng),
             fmt(r.ceiling),
             r.quality,
             r.quality_rule,
@@ -405,6 +409,7 @@ fn main() {
         );
         if r.parity_base >= 0.0 {
             spb += r.parity_base;
+            spr += r.parity_rule_dng;
             sc += r.ceiling;
             np += 1;
         }
@@ -414,11 +419,12 @@ fn main() {
     }
 
     let n = results.len() as f64;
-    println!("{}", "-".repeat(80));
+    println!("{}", "-".repeat(88));
     println!(
-        "{:<35} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1}",
+        "{:<35} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1} {:>7.1}",
         "MEAN",
         if np > 0 { spb / np as f64 } else { 0.0 },
+        if np > 0 { spr / np as f64 } else { 0.0 },
         if np > 0 { sc / np as f64 } else { 0.0 },
         sq / n,
         sqr / n,
@@ -428,11 +434,19 @@ fn main() {
     // Write TSV
     let tsv_path = format!("{OUTPUT_DIR}/parity_results.tsv");
     let mut tsv = String::new();
-    tsv.push_str("image\tparity_base\tceiling\tquality_cluster\tquality_rule\tbaseline\n");
+    tsv.push_str(
+        "image\tparity_base\tparity_rule_dng\tceiling\tquality_cluster\tquality_rule\tbaseline\n",
+    );
     for r in &results {
         tsv.push_str(&format!(
-            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\n",
-            r.name, r.parity_base, r.ceiling, r.quality, r.quality_rule, r.baseline
+            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\n",
+            r.name,
+            r.parity_base,
+            r.parity_rule_dng,
+            r.ceiling,
+            r.quality,
+            r.quality_rule,
+            r.baseline
         ));
     }
     fs::write(&tsv_path, &tsv).unwrap();
@@ -440,7 +454,7 @@ fn main() {
 }
 
 /// Process DNG: get darktable display output + our base pipeline output, compare.
-/// Returns (parity_base_score, ceiling_score).
+/// Returns (parity_base_score, parity_rule_score, ceiling_score).
 #[allow(clippy::too_many_arguments)]
 fn process_dng_parity(
     dng_path: &Path,
@@ -453,7 +467,7 @@ fn process_dng_parity(
     ctx: &mut FilterContext,
     zs: &Zensim,
     out_prefix: &str,
-) -> Option<(f64, f64)> {
+) -> Option<(f64, f64, f64)> {
     // 1. Get darktable display-referred output (default tone mapping)
     let (dt_display, dtw, dth) = darktable_display_output(dng_path)?;
 
@@ -470,9 +484,19 @@ fn process_dng_parity(
     let base_only_srgb =
         apply_pipeline_linear(linear_f32, dw, dh, &identity_params, m1, m1_inv, ctx);
 
-    // 4. Resize and compare
+    // 4. Resize and compare base-only vs darktable
     let (base_r, dt_r, w, h) = resize_pair(&base_only_srgb, dw, dh, &dt_display, dtw, dth);
     let parity_base = zensim_score(&base_r, &dt_r, w, h, zs);
+
+    // 5. Apply rule-based adjustments on top of base sigmoid
+    // Extract features from the base-sigmoid output (now display-referred)
+    let mut feat_planes = OklabPlanes::new(w, h);
+    scatter_srgb_u8_to_oklab(&base_r, &mut feat_planes, 3, m1);
+    let features = ImageFeatures::extract(&feat_planes);
+    let rule_params = rule_based_tune(&features);
+    let rule_srgb = apply_pipeline_linear(linear_f32, dw, dh, &rule_params, m1, m1_inv, ctx);
+    let (rule_r, dt_r3, w3, h3) = resize_pair(&rule_srgb, dw, dh, &dt_display, dtw, dth);
+    let parity_rule = zensim_score(&rule_r, &dt_r3, w3, h3, zs);
 
     // Darktable display vs expert → ceiling
     let (dt_r2, expert_r, w2, h2) = resize_pair(&dt_display, dtw, dth, expert_raw, ew, eh);
@@ -482,5 +506,5 @@ fn process_dng_parity(
     save_rgb(&base_r, w, h, &format!("{out_prefix}_4_dng_ours.jpg"));
     save_rgb(&dt_r, w, h, &format!("{out_prefix}_5_dng_dt.jpg"));
 
-    Some((parity_base, ceiling))
+    Some((parity_base, parity_rule, ceiling))
 }
