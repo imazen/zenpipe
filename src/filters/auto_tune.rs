@@ -410,6 +410,69 @@ impl LinearModel {
     }
 }
 
+// ─── Cluster model ──────────────────────────────────────────────────
+
+/// Number of clusters in the trained model.
+pub const CLUSTER_COUNT: usize = 16;
+
+/// Cluster-based auto-tuner: nearest-centroid lookup.
+///
+/// Each cluster has a centroid (142 features) and optimized parameters (18 floats).
+/// At inference, finds the nearest centroid and returns its parameters.
+///
+/// Trained on MIT-Adobe FiveK (4,958 images) using Nelder-Mead optimization
+/// with zensim as the loss function. Model size: ~10 KB.
+pub struct ClusterModel {
+    /// Cluster centroids, each [142] floats.
+    pub centroids: [[f32; LINEAR_MODEL_INPUTS]; CLUSTER_COUNT],
+    /// Optimized parameters per cluster, each [18] floats.
+    pub params: [[f32; LINEAR_MODEL_OUTPUTS]; CLUSTER_COUNT],
+}
+
+impl ClusterModel {
+    /// Find the nearest cluster and return its optimized parameters.
+    pub fn predict(&self, features: &ImageFeatures) -> TunedParams {
+        let input = features.to_tensor();
+
+        // Find nearest centroid by squared Euclidean distance
+        let mut best_idx = 0;
+        let mut best_dist = f32::MAX;
+        for (i, centroid) in self.centroids.iter().enumerate() {
+            let dist: f32 = input
+                .iter()
+                .zip(centroid.iter())
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum();
+            if dist < best_dist {
+                best_dist = dist;
+                best_idx = i;
+            }
+        }
+
+        let p = &self.params[best_idx];
+        TunedParams {
+            exposure: p[0].clamp(-3.0, 3.0),
+            contrast: p[1].clamp(-1.0, 1.0),
+            highlights: p[2].clamp(-1.0, 1.0),
+            shadows: p[3].clamp(-1.0, 1.0),
+            saturation: p[4].clamp(0.0, 3.0),
+            vibrance: p[5].clamp(-1.0, 1.0),
+            temperature: p[6].clamp(-1.0, 1.0),
+            tint: p[7].clamp(-1.0, 1.0),
+            black_point: p[8].clamp(0.0, 0.2),
+            white_point: p[9].clamp(0.5, 1.0),
+            sigmoid_contrast: p[10].clamp(0.5, 3.0),
+            sigmoid_skew: p[11].clamp(0.1, 0.9),
+            clarity: p[12].clamp(0.0, 1.0),
+            sharpen: p[13].clamp(0.0, 2.0),
+            highlight_recovery: p[14].clamp(0.0, 1.0),
+            shadow_lift: p[15].clamp(0.0, 1.0),
+            local_tonemap: p[16].clamp(0.0, 1.0),
+            gamut_expand: p[17].clamp(0.0, 1.0),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
