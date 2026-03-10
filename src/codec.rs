@@ -215,9 +215,7 @@ impl crate::Sink for EncoderSink<'_> {
             .take()
             .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
 
-        let output = encoder
-            .finish()
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+        let output = encoder.finish().map_err(|e| PipeError::Op(e.to_string()))?;
 
         self.output = Some(output);
         Ok(())

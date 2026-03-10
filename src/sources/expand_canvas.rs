@@ -166,7 +166,6 @@ impl ExpandCanvasSource {
         }
         Ok(())
     }
-
 }
 
 impl Source for ExpandCanvasSource {
@@ -179,7 +178,8 @@ impl Source for ExpandCanvasSource {
         self.skip_leading_rows()?;
 
         let rows_wanted = self.strip_height.min(self.canvas_h - self.out_y);
-        self.buf.reconfigure(self.canvas_w, rows_wanted, self.format);
+        self.buf
+            .reconfigure(self.canvas_w, rows_wanted, self.format);
         self.buf.reset(self.out_y);
 
         let content_y_start = self.place_y;

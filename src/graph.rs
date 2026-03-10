@@ -46,8 +46,8 @@ use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 use crate::sources::{
-    CompositeSource, CropSource, ExpandCanvasSource, FlipHSource, MaterializedSource,
-    ResizeSource, TransformSource,
+    CompositeSource, CropSource, ExpandCanvasSource, FlipHSource, MaterializedSource, ResizeSource,
+    TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -277,7 +277,11 @@ impl PipelineGraph {
                 // Step 1: Trim (streaming crop)
                 if let Some(trim) = plan.trim {
                     source = Box::new(CropSource::new(
-                        source, trim.x, trim.y, trim.width, trim.height,
+                        source,
+                        trim.x,
+                        trim.y,
+                        trim.width,
+                        trim.height,
                     )?);
                 }
 

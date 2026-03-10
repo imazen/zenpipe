@@ -31,3 +31,4 @@ zencodec = { path = "../zencodec", default-features = false, optional = true }
 zenpixels = { path = "../zenpixels/zenpixels", default-features = false, optional = true }
 
 [dev-dependencies]
+zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
