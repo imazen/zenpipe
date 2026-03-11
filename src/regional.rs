@@ -1,11 +1,10 @@
-//! Spatially-aware image comparison using luminance and chroma region masks.
+//! Spatially-aware image comparison using tonal, chromatic, and texture region masks.
 //!
-//! Divides an image into perceptually meaningful regions (shadows, midtones,
-//! highlights, saturated colors, neutrals) and computes per-region histograms
-//! for diagnostic comparison. This tells you WHERE edits diverge, not just
-//! that they do.
+//! Two complementary classification schemes:
 //!
-//! # Regions
+//! ## Tonal/chromatic regions (per-pixel)
+//!
+//! Classifies pixels by their color properties:
 //!
 //! **Luminance zones** (5):
 //! - Deep shadows: L < 0.15
@@ -27,6 +26,16 @@
 //! - Cool (sky): hue 180°–260°
 //! - Purple: hue 260°–320°
 //! - Magenta-red: hue 320°–360°
+//!
+//! ## Texture regions (per-patch, spatial)
+//!
+//! Classifies 16×16 patches by local texture content:
+//!
+//! **Texture zones** (4):
+//! - Smooth: low variance, low gradient (sky, skin, OOF backgrounds)
+//! - Gradient: low variance, moderate gradient (soft transitions, vignettes)
+//! - Textured: high variance (foliage, fabric, gravel, hair)
+//! - Edge: high gradient magnitude (building edges, horizons, sharp boundaries)
 
 use crate::planes::OklabPlanes;
 
@@ -36,6 +45,10 @@ pub const LUM_ZONES: usize = 5;
 pub const CHROMA_ZONES: usize = 4;
 /// Number of hue sectors (for saturated pixels).
 pub const HUE_SECTORS: usize = 6;
+/// Number of texture zones (spatial patch classification).
+pub const TEXTURE_ZONES: usize = 4;
+/// Patch size for texture classification (pixels per side).
+pub const PATCH_SIZE: usize = 16;
 /// Histogram bins per channel per region.
 pub const HIST_BINS: usize = 32;
 
@@ -46,9 +59,32 @@ const CHROMA_BOUNDS: [f32; 3] = [0.03, 0.08, 0.15];
 /// Hue sector boundaries in degrees.
 const HUE_BOUNDS: [f32; 6] = [60.0, 120.0, 180.0, 260.0, 320.0, 360.0];
 
+/// Texture zone thresholds (empirically tuned for Oklab L in [0,1]).
+/// Variance threshold: patches above this have significant texture.
+const TEXTURE_VARIANCE_THRESH: f32 = 0.002;
+/// Gradient threshold: patches above this have strong edges.
+const TEXTURE_GRADIENT_THRESH: f32 = 0.04;
+/// Gradient threshold for distinguishing gradient from smooth.
+const TEXTURE_GRADIENT_LOW: f32 = 0.015;
+
+/// Classify a patch into a texture zone given its variance and mean gradient.
+#[inline]
+fn texture_zone(variance: f32, mean_gradient: f32) -> usize {
+    if mean_gradient >= TEXTURE_GRADIENT_THRESH {
+        3 // Edge
+    } else if variance >= TEXTURE_VARIANCE_THRESH {
+        2 // Textured
+    } else if mean_gradient >= TEXTURE_GRADIENT_LOW {
+        1 // Gradient
+    } else {
+        0 // Smooth
+    }
+}
+
 /// Per-region statistics extracted from an image.
 #[derive(Clone, Debug)]
 pub struct RegionalFeatures {
+    // --- Tonal/chromatic (per-pixel) ---
     /// Per-luminance-zone L histograms (LUM_ZONES × HIST_BINS).
     pub lum_l_hist: [[f32; HIST_BINS]; LUM_ZONES],
     /// Per-luminance-zone chroma mean.
@@ -68,6 +104,18 @@ pub struct RegionalFeatures {
     pub hue_b_hist: [[f32; HIST_BINS]; HUE_SECTORS],
     /// Per-hue-sector pixel count (fraction of total).
     pub hue_fraction: [f32; HUE_SECTORS],
+
+    // --- Spatial texture (per-patch) ---
+    /// Per-texture-zone L histograms (TEXTURE_ZONES × HIST_BINS).
+    pub texture_l_hist: [[f32; HIST_BINS]; TEXTURE_ZONES],
+    /// Per-texture-zone chroma histograms.
+    pub texture_chroma_hist: [[f32; HIST_BINS]; TEXTURE_ZONES],
+    /// Per-texture-zone mean L.
+    pub texture_l_mean: [f32; TEXTURE_ZONES],
+    /// Per-texture-zone mean chroma.
+    pub texture_chroma_mean: [f32; TEXTURE_ZONES],
+    /// Per-texture-zone patch fraction (fraction of total patches).
+    pub texture_fraction: [f32; TEXTURE_ZONES],
 }
 
 impl Default for RegionalFeatures {
@@ -81,6 +129,11 @@ impl Default for RegionalFeatures {
             hue_a_hist: [[0.0; HIST_BINS]; HUE_SECTORS],
             hue_b_hist: [[0.0; HIST_BINS]; HUE_SECTORS],
             hue_fraction: [0.0; HUE_SECTORS],
+            texture_l_hist: [[0.0; HIST_BINS]; TEXTURE_ZONES],
+            texture_chroma_hist: [[0.0; HIST_BINS]; TEXTURE_ZONES],
+            texture_l_mean: [0.0; TEXTURE_ZONES],
+            texture_chroma_mean: [0.0; TEXTURE_ZONES],
+            texture_fraction: [0.0; TEXTURE_ZONES],
         }
     }
 }
@@ -228,7 +281,162 @@ impl RegionalFeatures {
             }
         }
 
+        // --- Spatial texture classification (per-patch) ---
+        extract_texture_features(planes, &mut feat);
+
         feat
+    }
+}
+
+/// Compute per-patch texture features and accumulate into `feat`.
+///
+/// Divides the image into PATCH_SIZE × PATCH_SIZE tiles. For each tile:
+/// 1. Compute mean L and variance of L (texture energy)
+/// 2. Compute mean gradient magnitude (edge strength)
+/// 3. Classify tile into texture zone
+/// 4. Accumulate L and chroma histograms for that zone
+fn extract_texture_features(planes: &OklabPlanes, feat: &mut RegionalFeatures) {
+    let w = planes.width as usize;
+    let h = planes.height as usize;
+
+    if w < PATCH_SIZE || h < PATCH_SIZE {
+        // Image too small for patch analysis — leave texture features at zero
+        return;
+    }
+
+    let patches_x = w / PATCH_SIZE;
+    let patches_y = h / PATCH_SIZE;
+    let total_patches = patches_x * patches_y;
+    if total_patches == 0 {
+        return;
+    }
+
+    let mut zone_counts = [0u32; TEXTURE_ZONES];
+    let mut zone_l_sum = [0.0f64; TEXTURE_ZONES];
+    let mut zone_chroma_sum = [0.0f64; TEXTURE_ZONES];
+    let mut zone_pixel_counts = [0u32; TEXTURE_ZONES];
+
+    for py in 0..patches_y {
+        for px in 0..patches_x {
+            let x0 = px * PATCH_SIZE;
+            let y0 = py * PATCH_SIZE;
+
+            // Pass 1: compute mean L for this patch
+            let mut sum_l = 0.0f64;
+            let patch_n = PATCH_SIZE * PATCH_SIZE;
+            for dy in 0..PATCH_SIZE {
+                let row = (y0 + dy) * w;
+                for dx in 0..PATCH_SIZE {
+                    sum_l += planes.l[row + x0 + dx] as f64;
+                }
+            }
+            let mean_l = (sum_l / patch_n as f64) as f32;
+
+            // Pass 2: variance and gradient magnitude
+            let mut var_sum = 0.0f64;
+            let mut grad_sum = 0.0f64;
+            let mut chroma_sum = 0.0f64;
+            for dy in 0..PATCH_SIZE {
+                let y = y0 + dy;
+                let row = y * w;
+                for dx in 0..PATCH_SIZE {
+                    let x = x0 + dx;
+                    let idx = row + x;
+                    let l = planes.l[idx];
+
+                    // Variance
+                    let diff = l - mean_l;
+                    var_sum += (diff * diff) as f64;
+
+                    // Gradient (central differences, clamped at image borders)
+                    let gx = if x > 0 && x + 1 < w {
+                        (planes.l[idx + 1] - planes.l[idx - 1]) * 0.5
+                    } else if x + 1 < w {
+                        planes.l[idx + 1] - l
+                    } else if x > 0 {
+                        l - planes.l[idx - 1]
+                    } else {
+                        0.0
+                    };
+                    let gy = if y > 0 && y + 1 < h {
+                        (planes.l[idx + w] - planes.l[idx - w]) * 0.5
+                    } else if y + 1 < h {
+                        planes.l[idx + w] - l
+                    } else if y > 0 {
+                        l - planes.l[idx - w]
+                    } else {
+                        0.0
+                    };
+                    grad_sum += (gx * gx + gy * gy).sqrt() as f64;
+
+                    // Chroma
+                    let a = planes.a[idx];
+                    let b = planes.b[idx];
+                    chroma_sum += (a * a + b * b).sqrt() as f64;
+                }
+            }
+
+            let variance = (var_sum / patch_n as f64) as f32;
+            let mean_gradient = (grad_sum / patch_n as f64) as f32;
+            let mean_chroma = (chroma_sum / patch_n as f64) as f32;
+
+            let tz = texture_zone(variance, mean_gradient);
+            zone_counts[tz] += 1;
+            zone_l_sum[tz] += sum_l;
+            zone_chroma_sum[tz] += chroma_sum;
+            zone_pixel_counts[tz] += patch_n as u32;
+
+            // Accumulate per-pixel histograms for this zone
+            for dy in 0..PATCH_SIZE {
+                let row = (y0 + dy) * w;
+                for dx in 0..PATCH_SIZE {
+                    let idx = row + x0 + dx;
+                    let l_bin = hist_bin(planes.l[idx], 0.0, 1.0);
+                    feat.texture_l_hist[tz][l_bin] += 1.0;
+
+                    let a = planes.a[idx];
+                    let b = planes.b[idx];
+                    let c = (a * a + b * b).sqrt();
+                    let c_bin = hist_bin(c, 0.0, 0.3);
+                    feat.texture_chroma_hist[tz][c_bin] += 1.0;
+                }
+            }
+
+            let _ = mean_l;
+            let _ = mean_chroma;
+        }
+    }
+
+    // Normalize
+    let inv_total = 1.0 / total_patches as f32;
+    for (tz, (&count, (frac, (l_hist, (c_hist, (l_mean, c_mean)))))) in zone_counts
+        .iter()
+        .zip(
+            feat.texture_fraction.iter_mut().zip(
+                feat.texture_l_hist.iter_mut().zip(
+                    feat.texture_chroma_hist.iter_mut().zip(
+                        feat.texture_l_mean
+                            .iter_mut()
+                            .zip(feat.texture_chroma_mean.iter_mut()),
+                    ),
+                ),
+            ),
+        )
+        .enumerate()
+    {
+        *frac = count as f32 * inv_total;
+        let pc = zone_pixel_counts[tz];
+        if pc > 0 {
+            let inv_pc = 1.0 / pc as f32;
+            for bin in l_hist.iter_mut() {
+                *bin *= inv_pc;
+            }
+            for bin in c_hist.iter_mut() {
+                *bin *= inv_pc;
+            }
+            *l_mean = (zone_l_sum[tz] / pc as f64) as f32;
+            *c_mean = (zone_chroma_sum[tz] / pc as f64) as f32;
+        }
     }
 }
 
@@ -241,8 +449,18 @@ pub struct RegionalComparison {
     pub chroma_zone_dist: [f32; CHROMA_ZONES],
     /// Per-hue-sector color distance.
     pub hue_sector_dist: [f32; HUE_SECTORS],
+    /// Per-texture-zone histogram distance.
+    pub texture_zone_dist: [f32; TEXTURE_ZONES],
     /// Weighted aggregate distance (lower = more similar).
     pub aggregate: f32,
+}
+
+/// Human-readable labels for each zone type.
+pub struct ZoneLabels {
+    pub luminance: &'static [&'static str],
+    pub chroma: &'static [&'static str],
+    pub hue: &'static [&'static str],
+    pub texture: &'static [&'static str],
 }
 
 /// Compute histogram intersection distance between two normalized histograms.
@@ -263,6 +481,11 @@ const CHROMA_WEIGHTS: [f32; CHROMA_ZONES] = [0.15, 0.20, 0.30, 0.35];
 /// Perceptual importance weights for hue sectors.
 /// Warm/skin tones weighted highest (most perceptually sensitive).
 const HUE_WEIGHTS: [f32; HUE_SECTORS] = [0.30, 0.15, 0.10, 0.25, 0.10, 0.10];
+
+/// Perceptual importance weights for texture zones.
+/// Smooth areas (sky/skin) and textured areas (foliage/fabric) are most
+/// important — these are where over-sharpening or over-denoising shows up.
+const TEXTURE_WEIGHTS: [f32; TEXTURE_ZONES] = [0.30, 0.15, 0.35, 0.20];
 
 impl RegionalComparison {
     /// Compare two sets of regional features.
@@ -320,7 +543,27 @@ impl RegionalComparison {
             hue_weight_sum += w;
         }
 
-        // Aggregate: weighted combination of all three dimension scores
+        // Texture zone distances
+        let mut texture_total = 0.0f32;
+        let mut texture_weight_sum = 0.0f32;
+        for (tz, (&tw, dist)) in TEXTURE_WEIGHTS
+            .iter()
+            .zip(result.texture_zone_dist.iter_mut())
+            .enumerate()
+        {
+            let l_dist = hist_distance(&a.texture_l_hist[tz], &b.texture_l_hist[tz]);
+            let c_dist = hist_distance(&a.texture_chroma_hist[tz], &b.texture_chroma_hist[tz]);
+            // Also factor in mean L and chroma differences
+            let l_diff = (a.texture_l_mean[tz] - b.texture_l_mean[tz]).abs();
+            let c_diff = (a.texture_chroma_mean[tz] - b.texture_chroma_mean[tz]).abs();
+            *dist = (l_dist + c_dist) * 0.5 + l_diff + c_diff * 2.0;
+            let presence = (a.texture_fraction[tz] + b.texture_fraction[tz]) * 0.5;
+            let w = tw * presence;
+            texture_total += *dist * w;
+            texture_weight_sum += w;
+        }
+
+        // Aggregate: weighted combination of all four dimension scores
         let lum_score = if lum_weight_sum > 1e-6 {
             lum_total / lum_weight_sum
         } else {
@@ -336,24 +579,27 @@ impl RegionalComparison {
         } else {
             0.0
         };
+        let texture_score = if texture_weight_sum > 1e-6 {
+            texture_total / texture_weight_sum
+        } else {
+            0.0
+        };
 
-        // Luminance differences are most important, then color, then saturation
-        result.aggregate = lum_score * 0.50 + chroma_score * 0.20 + hue_score * 0.30;
+        // Four dimensions: luminance, color, hue detail, texture
+        result.aggregate =
+            lum_score * 0.35 + chroma_score * 0.15 + hue_score * 0.20 + texture_score * 0.30;
 
         result
     }
 
-    /// Return human-readable labels for all zones.
-    pub fn zone_labels() -> (
-        &'static [&'static str],
-        &'static [&'static str],
-        &'static [&'static str],
-    ) {
-        (
-            &["DeepShadow", "Shadow", "Midtone", "Highlight", "Specular"],
-            &["Neutral", "LowSat", "MedSat", "HighSat"],
-            &["Warm", "YellGreen", "GreenCyan", "Cool", "Purple", "MagRed"],
-        )
+    /// Return human-readable labels for all zone types.
+    pub fn zone_labels() -> ZoneLabels {
+        ZoneLabels {
+            luminance: &["DeepShadow", "Shadow", "Midtone", "Highlight", "Specular"],
+            chroma: &["Neutral", "LowSat", "MedSat", "HighSat"],
+            hue: &["Warm", "YellGreen", "GreenCyan", "Cool", "Purple", "MagRed"],
+            texture: &["Smooth", "Gradient", "Textured", "Edge"],
+        }
     }
 }
 
@@ -441,9 +687,108 @@ mod tests {
 
     #[test]
     fn zone_labels_correct_count() {
-        let (lum, chroma, hue) = RegionalComparison::zone_labels();
-        assert_eq!(lum.len(), LUM_ZONES);
-        assert_eq!(chroma.len(), CHROMA_ZONES);
-        assert_eq!(hue.len(), HUE_SECTORS);
+        let labels = RegionalComparison::zone_labels();
+        assert_eq!(labels.luminance.len(), LUM_ZONES);
+        assert_eq!(labels.chroma.len(), CHROMA_ZONES);
+        assert_eq!(labels.hue.len(), HUE_SECTORS);
+        assert_eq!(labels.texture.len(), TEXTURE_ZONES);
+    }
+
+    #[test]
+    fn texture_fractions_sum_to_one_or_zero() {
+        // Large enough for patches
+        let mut planes = OklabPlanes::new(64, 64);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 / (64.0 * 64.0)).clamp(0.0, 1.0);
+        }
+        let feat = RegionalFeatures::extract(&planes);
+        let sum: f32 = feat.texture_fraction.iter().sum();
+        // Should sum to 1.0 if image is large enough for patches
+        assert!(
+            (sum - 1.0).abs() < 1e-4,
+            "texture fractions should sum to 1: {sum}"
+        );
+    }
+
+    #[test]
+    fn smooth_image_classified_smooth() {
+        let mut planes = OklabPlanes::new(64, 64);
+        // Uniform luminance = all patches smooth
+        planes.l.fill(0.5);
+        let feat = RegionalFeatures::extract(&planes);
+        assert!(
+            feat.texture_fraction[0] > 0.9,
+            "uniform image should be mostly smooth: {:?}",
+            feat.texture_fraction
+        );
+    }
+
+    #[test]
+    fn checkerboard_classified_textured() {
+        let mut planes = OklabPlanes::new(64, 64);
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = (y * 64 + x) as usize;
+                planes.l[i] = if (x + y) % 2 == 0 { 0.3 } else { 0.7 };
+            }
+        }
+        let feat = RegionalFeatures::extract(&planes);
+        // High variance checkerboard: should be textured or edge, not smooth
+        assert!(
+            feat.texture_fraction[0] < 0.1,
+            "checkerboard should not be smooth: smooth fraction = {}",
+            feat.texture_fraction[0]
+        );
+    }
+
+    #[test]
+    fn edge_image_classified_edge() {
+        let mut planes = OklabPlanes::new(64, 64);
+        // Sharp vertical edge in the middle of each patch
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = (y * 64 + x) as usize;
+                // Edge at x=8 within each 16px patch
+                let local_x = x % PATCH_SIZE as u32;
+                planes.l[i] = if local_x < 8 { 0.2 } else { 0.8 };
+            }
+        }
+        let feat = RegionalFeatures::extract(&planes);
+        // Should have significant edge or textured classification
+        let non_smooth = 1.0 - feat.texture_fraction[0];
+        assert!(
+            non_smooth > 0.8,
+            "edge image should be mostly non-smooth: smooth={}, fracs={:?}",
+            feat.texture_fraction[0],
+            feat.texture_fraction
+        );
+    }
+
+    #[test]
+    fn texture_comparison_detects_smoothing() {
+        // Image A: textured (checkerboard)
+        let mut a = OklabPlanes::new(64, 64);
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = (y * 64 + x) as usize;
+                a.l[i] = if (x + y) % 2 == 0 { 0.4 } else { 0.6 };
+            }
+        }
+        // Image B: same but smoothed (uniform)
+        let mut b = OklabPlanes::new(64, 64);
+        b.l.fill(0.5);
+
+        let fa = RegionalFeatures::extract(&a);
+        let fb = RegionalFeatures::extract(&b);
+        let cmp = RegionalComparison::compare(&fa, &fb);
+
+        // Texture zone distance should be significant
+        let max_texture_dist = cmp.texture_zone_dist.iter().fold(0.0f32, |a, &b| a.max(b));
+        assert!(
+            max_texture_dist > 0.01 || cmp.aggregate > 0.05,
+            "smoothing should show in texture comparison: texture_dist={:?}, aggregate={}",
+            cmp.texture_zone_dist,
+            cmp.aggregate
+        );
     }
 }
