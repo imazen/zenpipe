@@ -60,6 +60,7 @@ mod gamut_lut;
 mod gamut_map;
 mod pipeline;
 mod planes;
+pub mod regional;
 mod scatter_gather;
 mod simd;
 

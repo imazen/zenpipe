@@ -30,6 +30,14 @@ pub struct NoiseReduction {
     /// Chroma noise reduction strength. 0.0 = off, 1.0 = strong.
     /// Typical: 0.5–1.0 (chroma noise is usually more objectionable).
     pub chroma: f32,
+    /// Luminance contrast preservation. Higher values preserve more local
+    /// contrast in denoised areas (at the cost of keeping some noise).
+    /// Default: 0.5. Range: 0.0–1.0. Matches Lightroom's NR Contrast slider.
+    pub luminance_contrast: f32,
+    /// Chroma detail preservation. Higher values keep more fine color detail
+    /// at the cost of less chroma noise removal. Default: 0.5. Range: 0.0–1.0.
+    /// Matches Lightroom's Color Detail slider.
+    pub chroma_detail: f32,
     /// Number of wavelet scales. More scales = smoother result.
     /// Default: 4. Range: 1–6.
     pub scales: u32,
@@ -41,6 +49,8 @@ impl Default for NoiseReduction {
             luminance: 0.0,
             chroma: 0.0,
             detail: 0.5,
+            luminance_contrast: 0.5,
+            chroma_detail: 0.5,
             scales: 4,
         }
     }
@@ -101,17 +111,27 @@ fn soft_threshold(val: f32, threshold: f32) -> f32 {
     }
 }
 
+/// Parameters for single-plane denoising.
+struct DenoiseParams {
+    strength: f32,
+    detail_preserve: f32,
+    contrast_preserve: f32,
+    num_scales: u32,
+}
+
 /// Denoise a single plane using à trous wavelet shrinkage.
+///
+/// `contrast_preserve` controls how much local contrast (coarser wavelet scales)
+/// is preserved. 0.0 = full denoising at all scales, 1.0 = only denoise the
+/// finest scale. This matches Lightroom's NR Contrast slider behaviour.
 fn denoise_plane(
     plane: &mut [f32],
     w: usize,
     h: usize,
-    strength: f32,
-    detail_preserve: f32,
-    num_scales: u32,
+    params: &DenoiseParams,
     ctx: &mut FilterContext,
 ) {
-    if strength.abs() < 1e-6 {
+    if params.strength.abs() < 1e-6 {
         return;
     }
 
@@ -127,7 +147,7 @@ fn denoise_plane(
         *v = 0.0;
     }
 
-    let num_scales = num_scales.clamp(1, 6);
+    let num_scales = params.num_scales.clamp(1, 6);
 
     for scale in 0..num_scales {
         atrous_smooth(&current, &mut smooth, w, h, scale, &mut tmp);
@@ -137,13 +157,21 @@ fn denoise_plane(
         let threshold_scale = if scale == 0 {
             // Finest scale: estimate noise sigma, apply full threshold
             let sigma = estimate_noise_sigma_from_diff(&current, &smooth, n);
-            sigma * strength * 3.0 * (1.0 - detail_preserve * 0.5)
+            sigma * params.strength * 3.0 * (1.0 - params.detail_preserve * 0.5)
         } else {
             // Coarser scales: progressively less thresholding
             // Noise decreases at coarser scales
             let decay = 0.5f32.powi(scale as i32);
             let sigma = estimate_noise_sigma_from_diff(&current, &smooth, n);
-            sigma * strength * 3.0 * decay * (1.0 - detail_preserve * 0.3)
+            // contrast_preserve reduces thresholding at coarser scales,
+            // preserving local contrast structure while still denoising fine noise.
+            let contrast_factor = 1.0 - params.contrast_preserve * (1.0 - decay);
+            sigma
+                * params.strength
+                * 3.0
+                * decay
+                * (1.0 - params.detail_preserve * 0.3)
+                * contrast_factor
         };
 
         // Soft-threshold the detail and add to result
@@ -197,30 +225,25 @@ impl Filter for NoiseReduction {
         let h = planes.height as usize;
 
         if self.luminance > 1e-6 {
-            denoise_plane(
-                &mut planes.l,
-                w,
-                h,
-                self.luminance,
-                self.detail,
-                self.scales,
-                ctx,
-            );
+            let params = DenoiseParams {
+                strength: self.luminance,
+                detail_preserve: self.detail,
+                contrast_preserve: self.luminance_contrast,
+                num_scales: self.scales,
+            };
+            denoise_plane(&mut planes.l, w, h, &params, ctx);
         }
 
         if self.chroma > 1e-6 {
             // Chroma noise is typically stronger — use higher effective strength
-            let chroma_strength = self.chroma * 1.5;
-            denoise_plane(
-                &mut planes.a,
-                w,
-                h,
-                chroma_strength,
-                0.2, // less detail preservation for chroma
-                self.scales,
-                ctx,
-            );
-            denoise_plane(&mut planes.b, w, h, chroma_strength, 0.2, self.scales, ctx);
+            let params = DenoiseParams {
+                strength: self.chroma * 1.5,
+                detail_preserve: self.chroma_detail * 0.4,
+                contrast_preserve: 0.0, // no contrast preservation for chroma
+                num_scales: self.scales,
+            };
+            denoise_plane(&mut planes.a, w, h, &params, ctx);
+            denoise_plane(&mut planes.b, w, h, &params, ctx);
         }
     }
 }

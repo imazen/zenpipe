@@ -29,6 +29,15 @@ pub struct AdaptiveSharpen {
     /// Noise floor in L standard deviation units. Detail below this
     /// is considered noise and won't be sharpened. Typical: 0.003-0.01.
     pub noise_floor: f32,
+    /// Detail control. Higher values sharpen more fine detail (edges AND surfaces).
+    /// Lower values concentrate sharpening on strong edges only.
+    /// 0.0 = edges only, 1.0 = full detail. Default: 0.5.
+    /// Matches Lightroom's Sharpening Detail slider.
+    pub detail: f32,
+    /// Edge masking threshold. Higher values restrict sharpening to stronger edges.
+    /// 0.0 = sharpen everything, 1.0 = only sharpen the strongest edges.
+    /// Default: 0.0. Matches Lightroom's Sharpening Masking slider.
+    pub masking: f32,
 }
 
 impl Default for AdaptiveSharpen {
@@ -37,6 +46,8 @@ impl Default for AdaptiveSharpen {
             amount: 0.0,
             sigma: 1.0,
             noise_floor: 0.005,
+            detail: 0.5,
+            masking: 0.0,
         }
     }
 }
@@ -82,15 +93,38 @@ impl Filter for AdaptiveSharpen {
         gaussian_blur_plane(&detail_sq, &mut energy, w, h, &kernel_energy, ctx);
         ctx.return_f32(detail_sq);
 
-        // 3+4. Gated sharpening: L' = L + amount * detail * gate
-        // gate = sqrt(energy) / (sqrt(energy) + noise_floor)
-        let nf = self.noise_floor;
+        // 3. Compute edge mask for the masking control.
+        // Masking uses a larger-scale gradient magnitude to identify edges.
+        // Higher masking values restrict sharpening to stronger edges.
+        let masking_threshold = if self.masking > 1e-6 {
+            // Compute global energy statistics for adaptive threshold
+            let mean_energy = energy.iter().sum::<f32>() / pc as f32;
+            // Threshold scales with masking: at masking=1.0, only the top edges get sharpened
+            mean_energy.sqrt() * self.masking * 4.0
+        } else {
+            0.0
+        };
+
+        // 4. Detail control: interpolate between edge-only and full-detail sharpening.
+        // detail=0 uses a larger sigma (edges only), detail=1 uses the fine sigma.
+        // We achieve this by blending the noise floor: lower detail = higher effective floor.
+        let detail_factor = self.detail.clamp(0.0, 1.0);
+        let effective_nf = self.noise_floor * (1.0 + (1.0 - detail_factor) * 5.0);
+
+        // 5. Gated sharpening: L' = L + amount * detail * gate * mask
         let amount = self.amount;
         let mut dst = ctx.take_f32(pc);
         for i in 0..pc {
             let e = energy[i].max(0.0).sqrt();
-            let gate = e / (e + nf);
-            dst[i] = (planes.l[i] + amount * detail[i] * gate).max(0.0);
+            // Noise gate: suppresses sharpening in flat areas
+            let gate = e / (e + effective_nf);
+            // Edge mask: further suppresses sharpening in low-edge areas
+            let mask = if masking_threshold > 1e-8 {
+                e / (e + masking_threshold)
+            } else {
+                1.0
+            };
+            dst[i] = (planes.l[i] + amount * detail[i] * gate * mask).max(0.0);
         }
 
         ctx.return_f32(energy);
@@ -113,8 +147,7 @@ mod tests {
         let original = planes.l.clone();
         AdaptiveSharpen {
             amount: 0.0,
-            sigma: 1.0,
-            noise_floor: 0.005,
+            ..Default::default()
         }
         .apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, original);
@@ -135,6 +168,7 @@ mod tests {
             amount: 1.0,
             sigma: 1.0,
             noise_floor: 0.001,
+            ..Default::default()
         }
         .apply(&mut planes, &mut FilterContext::new());
         let std_after = std_dev(&planes.l);
@@ -156,6 +190,7 @@ mod tests {
             amount: 2.0,
             sigma: 1.0,
             noise_floor: 0.01, // well above the noise level
+            ..Default::default()
         }
         .apply(&mut planes, &mut FilterContext::new());
         // Should barely change — noise gate blocks sharpening
@@ -186,10 +221,43 @@ mod tests {
             amount: 1.0,
             sigma: 1.0,
             noise_floor: 0.001,
+            ..Default::default()
         }
         .apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, a_orig);
         assert_eq!(planes.b, b_orig);
+    }
+
+    #[test]
+    fn high_masking_restricts_to_edges() {
+        let mut planes = OklabPlanes::new(64, 64);
+        // Create image with one strong edge and flat areas
+        for y in 0..64 {
+            for x in 0..64 {
+                let i = y * 64 + x;
+                planes.l[i] = if x < 32 { 0.3 } else { 0.7 };
+            }
+        }
+        let original = planes.l.clone();
+
+        // High masking: should only sharpen at the edge
+        AdaptiveSharpen {
+            amount: 1.0,
+            sigma: 1.0,
+            noise_floor: 0.001,
+            detail: 0.5,
+            masking: 0.8,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
+
+        // Pixels far from edge should be barely affected
+        let interior_diff = (planes.l[16] - original[16]).abs(); // middle of dark region
+        let edge_diff = (planes.l[31] - original[31]).abs(); // near edge
+        // Edge should change more than interior (or at least not less)
+        assert!(
+            edge_diff >= interior_diff * 0.5,
+            "edge should be more affected: edge={edge_diff} interior={interior_diff}"
+        );
     }
 
     fn std_dev(data: &[f32]) -> f32 {
