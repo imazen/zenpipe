@@ -18,6 +18,7 @@ use std::process::Command;
 use image::RgbImage;
 use image::imageops::FilterType;
 use zenfilters::filters::*;
+use zenfilters::regional::{RegionalComparison, RegionalFeatures};
 use zenfilters::{
     FilterContext, OklabPlanes, Pipeline, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab,
     scatter_to_oklab,
@@ -198,6 +199,78 @@ fn save_rgb(data: &[u8], w: u32, h: u32, path: &str) {
     }
 }
 
+/// Compare two sRGB u8 images regionally via Oklab feature extraction.
+fn regional_compare_srgb(
+    a: &[u8],
+    b: &[u8],
+    w: u32,
+    h: u32,
+    m1: &GamutMatrix,
+) -> RegionalComparison {
+    let mut planes_a = OklabPlanes::new(w, h);
+    scatter_srgb_u8_to_oklab(a, &mut planes_a, 3, m1);
+    let mut planes_b = OklabPlanes::new(w, h);
+    scatter_srgb_u8_to_oklab(b, &mut planes_b, 3, m1);
+    let fa = RegionalFeatures::extract(&planes_a);
+    let fb = RegionalFeatures::extract(&planes_b);
+    RegionalComparison::compare(&fa, &fb)
+}
+
+/// Print compact regional breakdown highlighting worst-offending zones.
+fn print_regional(label: &str, r: &RegionalComparison) {
+    let labels = RegionalComparison::zone_labels();
+    let (li, &lv) = r
+        .lum_zone_dist
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .unwrap();
+    let (hi, &hv) = r
+        .hue_sector_dist
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .unwrap();
+    let (ti, &tv) = r
+        .texture_zone_dist
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .unwrap();
+    println!(
+        "  {label}: L:{}={:.3} H:{}={:.3} T:{}={:.3} agg={:.3}",
+        labels.luminance[li], lv, labels.hue[hi], hv, labels.texture[ti], tv, r.aggregate,
+    );
+}
+
+/// Print mean per-zone distances for a set of regional comparisons.
+fn print_zone_summary<F, const N: usize>(
+    prefix: &str,
+    labels: &[&str],
+    regs: &[&RegionalComparison],
+    extract: F,
+) where
+    F: Fn(&RegionalComparison) -> &[f32; N],
+{
+    let n = regs.len() as f32;
+    let mut means = vec![0.0f32; N];
+    for r in regs {
+        let dists = extract(r);
+        for (i, &d) in dists.iter().enumerate() {
+            means[i] += d;
+        }
+    }
+    for m in &mut means {
+        *m /= n;
+    }
+    let parts: Vec<String> = labels
+        .iter()
+        .zip(means.iter())
+        .map(|(lbl, &m)| format!("{lbl}={m:.3}"))
+        .collect();
+    println!("{prefix}: {}", parts.join("  "));
+}
+
 struct ImageResult {
     name: String,
     parity_base: f64, // our DNG pipeline (base only, no cluster) vs darktable display
@@ -207,6 +280,8 @@ struct ImageResult {
     quality_k3: f64,  // our JPEG cluster pipeline (k=3 blend) vs expert
     quality_rule: f64, // our JPEG rule-based pipeline vs expert
     baseline: f64,    // untouched original vs expert
+    regional_dng: Option<RegionalComparison>,  // DNG base vs darktable
+    regional_jpeg: Option<RegionalComparison>, // best JPEG pipeline vs expert
 }
 
 fn main() {
@@ -329,7 +404,8 @@ fn main() {
         let quality_rule = zensim_score(&jpeg_rule, &expert_r, w, h, &zs);
 
         // Cluster model pipeline (if available)
-        let (quality, quality_k3, best_cluster) = if n_clusters > 0 {
+        // Returns (k1_score, k3_score, best_cluster, k3_output_for_regional)
+        let (quality, quality_k3, best_cluster, jpeg_best) = if n_clusters > 0 {
             let input = features.to_tensor();
             // Find nearest centroid
             let mut dists: Vec<(usize, f32)> = (0..n_clusters)
@@ -372,13 +448,13 @@ fn main() {
                 apply_pipeline_srgb(&orig_r, w, h, &blend_params, &m1, &m1_inv, &mut ctx);
             let q3 = zensim_score(&jpeg_blend, &expert_r, w, h, &zs);
 
-            (q1, q3, bc)
+            (q1, q3, bc, Some(jpeg_blend))
         } else {
-            (-1.0, -1.0, 0)
+            (-1.0, -1.0, 0, None)
         };
 
         // --- DNG path: darktable linear → our pipeline → compare vs darktable display ---
-        let (parity_base, parity_rule_dng, ceiling) = match process_dng_parity(
+        let (parity_base, parity_rule_dng, ceiling, regional_dng) = match process_dng_parity(
             dng_path,
             &expert_raw,
             ew,
@@ -390,16 +466,28 @@ fn main() {
             &zs,
             &format!("{OUTPUT_DIR}/{stem}"),
         ) {
-            Some(r) => r,
+            Some((pb, pr, c, reg)) => (pb, pr, c, Some(reg)),
             None => {
                 println!("  DNG failed");
-                (-1.0, -1.0, -1.0)
+                (-1.0, -1.0, -1.0, None)
             }
+        };
+
+        // --- Regional analysis: best JPEG pipeline vs expert ---
+        let regional_jpeg = {
+            let best_jpeg = jpeg_best.as_deref().unwrap_or(&jpeg_rule);
+            Some(regional_compare_srgb(best_jpeg, &expert_r, w, h, &m1))
         };
 
         println!(
             "  C{best_cluster:02} | base={parity_base:.1} rDNG={parity_rule_dng:.1} ceil={ceiling:.1} k1={quality:.1} k3={quality_k3:.1} rule={quality_rule:.1} base0={baseline:.1}"
         );
+        if let Some(ref reg) = regional_dng {
+            print_regional("DNG→dt", reg);
+        }
+        if let Some(ref reg) = regional_jpeg {
+            print_regional("JPEG→ex", reg);
+        }
 
         // Save comparison images
         let prefix = format!("{OUTPUT_DIR}/{stem}");
@@ -416,6 +504,8 @@ fn main() {
             quality_k3,
             quality_rule,
             baseline,
+            regional_dng,
+            regional_jpeg,
         });
     }
 
@@ -499,15 +589,46 @@ fn main() {
         ""
     );
 
+    // Regional summary
+    let labels = RegionalComparison::zone_labels();
+    {
+        let dng_regs: Vec<&RegionalComparison> =
+            results.iter().filter_map(|r| r.regional_dng.as_ref()).collect();
+        let jpeg_regs: Vec<&RegionalComparison> =
+            results.iter().filter_map(|r| r.regional_jpeg.as_ref()).collect();
+
+        if !dng_regs.is_empty() {
+            println!("\n=== REGIONAL: DNG base vs darktable ({} images) ===", dng_regs.len());
+            print_zone_summary("  Luminance", labels.luminance, &dng_regs, |r| &r.lum_zone_dist);
+            print_zone_summary("  Hue      ", labels.hue, &dng_regs, |r| &r.hue_sector_dist);
+            print_zone_summary("  Chroma   ", labels.chroma, &dng_regs, |r| &r.chroma_zone_dist);
+            print_zone_summary("  Texture  ", labels.texture, &dng_regs, |r| &r.texture_zone_dist);
+            let mean_agg: f32 = dng_regs.iter().map(|r| r.aggregate).sum::<f32>() / dng_regs.len() as f32;
+            println!("  Aggregate: {mean_agg:.4}");
+        }
+
+        if !jpeg_regs.is_empty() {
+            println!("\n=== REGIONAL: JPEG pipeline vs expert ({} images) ===", jpeg_regs.len());
+            print_zone_summary("  Luminance", labels.luminance, &jpeg_regs, |r| &r.lum_zone_dist);
+            print_zone_summary("  Hue      ", labels.hue, &jpeg_regs, |r| &r.hue_sector_dist);
+            print_zone_summary("  Chroma   ", labels.chroma, &jpeg_regs, |r| &r.chroma_zone_dist);
+            print_zone_summary("  Texture  ", labels.texture, &jpeg_regs, |r| &r.texture_zone_dist);
+            let mean_agg: f32 = jpeg_regs.iter().map(|r| r.aggregate).sum::<f32>() / jpeg_regs.len() as f32;
+            println!("  Aggregate: {mean_agg:.4}");
+        }
+    }
+
     // Write TSV
     let tsv_path = format!("{OUTPUT_DIR}/parity_results.tsv");
     let mut tsv = String::new();
     tsv.push_str(
-        "image\tparity_base\tparity_rule_dng\tceiling\tquality_k1\tquality_k3\tquality_rule\tbaseline\n",
+        "image\tparity_base\tparity_rule_dng\tceiling\tquality_k1\tquality_k3\tquality_rule\tbaseline\tregional_dng\tregional_jpeg\n",
     );
     for r in &results {
+        let reg_dng = r.regional_dng.as_ref().map_or(-1.0, |r| r.aggregate);
+        let reg_jpeg = r.regional_jpeg.as_ref().map_or(-1.0, |r| r.aggregate);
         tsv.push_str(&format!(
-            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\n",
+            "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.4}\t{:.4}\n",
             r.name,
             r.parity_base,
             r.parity_rule_dng,
@@ -515,7 +636,9 @@ fn main() {
             r.quality,
             r.quality_k3,
             r.quality_rule,
-            r.baseline
+            r.baseline,
+            reg_dng,
+            reg_jpeg,
         ));
     }
     fs::write(&tsv_path, &tsv).unwrap();
@@ -523,7 +646,7 @@ fn main() {
 }
 
 /// Process DNG: get darktable display output + our base pipeline output, compare.
-/// Returns (parity_base_score, parity_rule_score, ceiling_score).
+/// Returns (parity_base_score, parity_rule_score, ceiling_score, regional_comparison).
 #[allow(clippy::too_many_arguments)]
 fn process_dng_parity(
     dng_path: &Path,
@@ -536,7 +659,7 @@ fn process_dng_parity(
     ctx: &mut FilterContext,
     zs: &Zensim,
     out_prefix: &str,
-) -> Option<(f64, f64, f64)> {
+) -> Option<(f64, f64, f64, RegionalComparison)> {
     // 1. Get darktable display-referred output (default tone mapping)
     let (dt_display, dtw, dth) = darktable_display_output(dng_path)?;
 
@@ -571,10 +694,13 @@ fn process_dng_parity(
     let (dt_r2, expert_r, w2, h2) = resize_pair(&dt_display, dtw, dth, expert_raw, ew, eh);
     let ceiling = zensim_score(&dt_r2, &expert_r, w2, h2, zs);
 
+    // Regional comparison: DNG base vs darktable display
+    let regional = regional_compare_srgb(&base_r, &dt_r, w, h, m1);
+
     // Save DNG-specific comparison images
     save_rgb(&base_r, w, h, &format!("{out_prefix}_4_dng_base.jpg"));
     save_rgb(&rule_r, w3, h3, &format!("{out_prefix}_5_dng_rule.jpg"));
     save_rgb(&dt_r, w, h, &format!("{out_prefix}_6_dng_dt.jpg"));
 
-    Some((parity_base, parity_rule, ceiling))
+    Some((parity_base, parity_rule, ceiling, regional))
 }
