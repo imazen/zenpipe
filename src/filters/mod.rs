@@ -9,6 +9,8 @@ mod black_point;
 mod blur;
 mod brilliance;
 mod bw_mixer;
+#[allow(clippy::excessive_precision)]
+pub mod cat16;
 mod camera_calibration;
 mod chromatic_aberration;
 mod clarity;
