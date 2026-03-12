@@ -456,6 +456,29 @@ impl BasecurveToneMap {
             preset_name: preset.name,
         }
     }
+
+    /// Access the 256-entry LUT (input→output, both [0,1]).
+    pub fn lut(&self) -> &[f32; 256] {
+        &self.lut
+    }
+
+    /// Apply basecurve tone mapping to linear RGB f32 data in-place.
+    ///
+    /// This is the correct way to apply basecurve — in linear RGB space,
+    /// before converting to Oklab. The basecurve nodes were measured in
+    /// linear RGB, not perceptual space.
+    ///
+    /// Each channel value is independently mapped through the LUT with
+    /// linear interpolation. Values are clamped to [0,1].
+    pub fn apply_linear_rgb(&self, data: &mut [f32]) {
+        for v in data.iter_mut() {
+            let clamped = v.clamp(0.0, 1.0);
+            let idx_f = (clamped * 255.0).min(254.0);
+            let idx = idx_f as usize;
+            let frac = idx_f - idx as f32;
+            *v = self.lut[idx] * (1.0 - frac) + self.lut[idx + 1] * frac;
+        }
+    }
 }
 
 impl Filter for BasecurveToneMap {
