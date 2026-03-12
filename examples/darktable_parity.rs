@@ -845,7 +845,7 @@ fn process_dng_parity(
     let dt_exp: f32 = std::env::var("ZEN_DT_EXPOSURE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1.8);
+        .unwrap_or(1.85);
     let dt_sig_srgb = apply_dt_sigmoid_pipeline(linear_f32, dw, dh, dt_exp);
 
     // 8. Compare our sigmoid vs dt sigmoid output
