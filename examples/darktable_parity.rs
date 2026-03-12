@@ -101,6 +101,7 @@ fn apply_pipeline_srgb(
 /// Build a pipeline for linear (scene-referred) input.
 /// Prepends a base tone mapping step (Sigmoid) to convert scene→display
 /// before applying the artistic adjustments.
+#[allow(dead_code)]
 fn build_pipeline_linear(params: &TunedParams) -> Pipeline {
     let base_contrast: f32 = std::env::var("ZEN_BASE_CONTRAST")
         .ok()
@@ -115,6 +116,7 @@ fn build_pipeline_linear(params: &TunedParams) -> Pipeline {
 
 /// Apply filter pipeline to linear f32 RGB input, return sRGB u8 output.
 /// Includes base tone mapping for scene-to-display conversion.
+#[allow(dead_code)]
 fn apply_pipeline_linear(
     linear_f32: &[f32],
     w: u32,
@@ -137,6 +139,7 @@ fn apply_pipeline_linear(
 ///
 /// Basecurve is applied per-channel in linear RGB before Oklab conversion,
 /// matching how darktable applies it (in linear space, not perceptual).
+#[allow(dead_code)]
 fn apply_pipeline_basecurve(
     linear_f32: &[f32],
     w: u32,
@@ -192,28 +195,24 @@ fn apply_dt_sigmoid_pipeline(
     linear_to_srgb_u8(&rgb, w, h)
 }
 
-/// Apply CAT16 chromatic adaptation + exposure + dt_sigmoid pipeline.
+/// Apply dt_sigmoid with per-channel exposure multipliers [R, G, B].
 ///
-/// This matches darktable's scene-referred pipeline more closely:
-/// CAT16 adaptation (illuminant → D65) → exposure → sigmoid → sRGB gamma.
-fn apply_cat16_dt_sigmoid_pipeline(
+/// Each channel gets its own multiplier to capture color calibration differences.
+fn apply_dt_sigmoid_rgb(
     linear_f32: &[f32],
     w: u32,
     h: u32,
-    exposure_mult: f32,
-    illuminant_xy: (f32, f32),
+    rgb_mult: [f32; 3],
 ) -> Vec<u8> {
-    use zenfilters::filters::cat16::{self, AdaptationTarget};
     use zenfilters::filters::dt_sigmoid;
     let params = dt_sigmoid::default_params();
     let mut rgb = linear_f32.to_vec();
-    // CAT16 chromatic adaptation from scene illuminant to D65
-    cat16::apply_cat16(&mut rgb, illuminant_xy, AdaptationTarget::D65);
-    // Exposure correction
-    if (exposure_mult - 1.0).abs() > 1e-6 {
-        for v in rgb.iter_mut() {
-            *v *= exposure_mult;
-        }
+    let n = rgb.len() / 3;
+    for i in 0..n {
+        let base = i * 3;
+        rgb[base] *= rgb_mult[0];
+        rgb[base + 1] *= rgb_mult[1];
+        rgb[base + 2] *= rgb_mult[2];
     }
     dt_sigmoid::apply_dt_sigmoid(&mut rgb, &params);
     linear_to_srgb_u8(&rgb, w, h)
@@ -235,66 +234,83 @@ fn linear_to_srgb_u8(rgb: &[f32], w: u32, h: u32) -> Vec<u8> {
     output
 }
 
-/// Find the optimal exposure multiplier for dt_sigmoid using golden section search.
-///
-/// Searches [lo, hi] for the multiplier that maximizes zensim score against a reference image.
-/// If `illuminant_xy` is provided, applies CAT16 adaptation before exposure + sigmoid.
-/// Returns (best_multiplier, best_score).
-fn optimize_dt_sigmoid_exposure(
-    linear_f32: &[f32],
-    w: u32,
-    h: u32,
-    reference: &[u8],
-    ref_w: u32,
-    ref_h: u32,
-    zs: &Zensim,
-    lo: f32,
-    hi: f32,
-    illuminant_xy: Option<(f32, f32)>,
-) -> (f32, f64) {
-    let phi = (5.0f32.sqrt() - 1.0) / 2.0; // golden ratio conjugate
-
-    let eval = |mult: f32| -> f64 {
-        let out = if let Some(xy) = illuminant_xy {
-            apply_cat16_dt_sigmoid_pipeline(linear_f32, w, h, mult, xy)
-        } else {
-            apply_dt_sigmoid_pipeline(linear_f32, w, h, mult)
-        };
-        let (a, b, rw, rh) = resize_pair(&out, w, h, reference, ref_w, ref_h);
-        zensim_score(&a, &b, rw, rh, zs)
-    };
-
+/// Golden section search for scalar optimization.
+/// Maximizes `f` over `[lo, hi]`. Returns (best_x, best_score).
+fn golden_search(f: impl Fn(f32) -> f64, lo: f32, hi: f32) -> (f32, f64) {
+    let phi = (5.0f32.sqrt() - 1.0) / 2.0;
     let mut a = lo;
     let mut b = hi;
     let mut c = b - phi * (b - a);
     let mut d = a + phi * (b - a);
-    let mut fc = eval(c);
-    let mut fd = eval(d);
-
+    let mut fc = f(c);
+    let mut fd = f(d);
     for _ in 0..25 {
         if fc > fd {
-            // Maximum is in [a, d]
-            b = d;
-            d = c;
-            fd = fc;
+            b = d; d = c; fd = fc;
             c = b - phi * (b - a);
-            fc = eval(c);
+            fc = f(c);
         } else {
-            // Maximum is in [c, b]
-            a = c;
-            c = d;
-            fc = fd;
+            a = c; c = d; fc = fd;
             d = a + phi * (b - a);
-            fd = eval(d);
+            fd = f(d);
         }
-        if (b - a).abs() < 0.005 {
-            break;
+        if (b - a).abs() < 0.005 { break; }
+    }
+    let best = (a + b) / 2.0;
+    (best, f(best))
+}
+
+/// Find the optimal uniform exposure multiplier for dt_sigmoid.
+fn optimize_dt_sigmoid_exposure(
+    linear_f32: &[f32], w: u32, h: u32,
+    reference: &[u8], ref_w: u32, ref_h: u32,
+    zs: &Zensim, lo: f32, hi: f32,
+) -> (f32, f64) {
+    golden_search(
+        |mult| {
+            let out = apply_dt_sigmoid_pipeline(linear_f32, w, h, mult);
+            let (a, b, rw, rh) = resize_pair(&out, w, h, reference, ref_w, ref_h);
+            zensim_score(&a, &b, rw, rh, zs)
+        },
+        lo, hi,
+    )
+}
+
+/// Find optimal per-channel [R, G, B] multipliers via coordinate descent.
+///
+/// Starts from the uniform optimum, then optimizes each channel independently,
+/// repeating for `rounds` iterations.
+fn optimize_rgb_exposure(
+    linear_f32: &[f32], w: u32, h: u32,
+    reference: &[u8], ref_w: u32, ref_h: u32,
+    zs: &Zensim, uniform_mult: f32,
+) -> ([f32; 3], f64) {
+    let mut rgb = [uniform_mult; 3];
+    let mut best_score = 0.0f64;
+
+    let eval = |m: [f32; 3]| -> f64 {
+        let out = apply_dt_sigmoid_rgb(linear_f32, w, h, m);
+        let (a, b, rw, rh) = resize_pair(&out, w, h, reference, ref_w, ref_h);
+        zensim_score(&a, &b, rw, rh, zs)
+    };
+
+    // 3 rounds of coordinate descent
+    for _ in 0..3 {
+        for ch in 0..3 {
+            let (best_val, score) = golden_search(
+                |v| {
+                    let mut m = rgb;
+                    m[ch] = v;
+                    eval(m)
+                },
+                (rgb[ch] * 0.6).max(0.5), rgb[ch] * 1.6,
+            );
+            rgb[ch] = best_val;
+            best_score = score;
         }
     }
 
-    let best_mult = (a + b) / 2.0;
-    let best_score = eval(best_mult);
-    (best_mult, best_score)
+    (rgb, best_score)
 }
 
 /// Generate a per-pixel absolute difference heatmap between two sRGB u8 images.
@@ -397,6 +413,7 @@ fn darktable_display_output(dng_path: &Path) -> Option<(Vec<u8>, u32, u32)> {
 }
 
 /// Get darktable's display-referred (basecurve) sRGB output.
+#[allow(dead_code)]
 fn darktable_basecurve_output(dng_path: &Path) -> Option<(Vec<u8>, u32, u32)> {
     darktable_render(dng_path, "display-referred")
 }
@@ -501,21 +518,15 @@ fn print_zone_summary<F, const N: usize>(
 
 struct ImageResult {
     name: String,
-    parity_base: f64,      // our Oklab sigmoid vs darktable sigmoid
-    parity_dt_sig: f64,    // our dt_sigmoid (matching dt formula) vs darktable sigmoid
-    parity_dt_opt: f64,    // dt_sigmoid with per-image optimized exposure
-    parity_cat16: f64,     // CAT16 + dt_sigmoid with per-image optimized exposure
-    optimal_mult: f32,     // the per-image optimal exposure multiplier (no CAT16)
-    cat16_mult: f32,       // the per-image optimal exposure multiplier (with CAT16)
-    parity_basecurve: f64, // our basecurve vs darktable basecurve
-    parity_rule_dng: f64,  // our rule-based vs darktable sigmoid
+    parity_dt_opt: f64,    // dt_sigmoid with per-image optimized uniform exposure
+    parity_rgb: f64,       // dt_sigmoid with per-channel [R,G,B] optimized exposure
+    optimal_mult: f32,     // the per-image optimal uniform exposure multiplier
+    rgb_mult: [f32; 3],    // per-channel optimal multipliers
     ceiling: f64,          // darktable sigmoid vs expert
-    quality: f64,          // our JPEG cluster pipeline (k=1) vs expert
     quality_k3: f64,       // our JPEG cluster pipeline (k=3 blend) vs expert
     quality_rule: f64,     // our JPEG rule-based pipeline vs expert
     baseline: f64,         // untouched original vs expert
     illuminant_xy: Option<(f32, f32)>,
-    basecurve_name: String,
     regional_dng: Option<RegionalComparison>,
     regional_jpeg: Option<RegionalComparison>,
 }
@@ -641,7 +652,7 @@ fn main() {
 
         // Cluster model pipeline (if available)
         // Returns (k1_score, k3_score, best_cluster, k3_output_for_regional)
-        let (quality, quality_k3, best_cluster, jpeg_best) = if n_clusters > 0 {
+        let (_quality, quality_k3, _best_cluster, jpeg_best) = if n_clusters > 0 {
             let input = features.to_tensor();
             // Find nearest centroid
             let mut dists: Vec<(usize, f32)> = (0..n_clusters)
@@ -702,25 +713,20 @@ fn main() {
             &zs,
             &format!("{OUTPUT_DIR}/{stem}"),
         );
-        let (parity_base, parity_dt_sig, parity_dt_opt, parity_cat16, optimal_mult, cat16_mult, parity_basecurve, parity_rule_dng, ceiling, illuminant_xy, basecurve_name, regional_dng) =
+        let (parity_dt_opt, parity_rgb, optimal_mult, rgb_mult, ceiling, illuminant_xy, regional_dng) =
             match dng_result {
                 Some(r) => (
-                    r.parity_base,
-                    r.parity_dt_sig,
                     r.parity_dt_opt,
-                    r.parity_cat16,
+                    r.parity_rgb,
                     r.optimal_mult,
-                    r.cat16_mult,
-                    r.parity_basecurve,
-                    r.parity_rule,
+                    r.rgb_mult,
                     r.ceiling,
                     r.illuminant_xy,
-                    r.basecurve_name,
                     Some(r.regional),
                 ),
                 None => {
                     println!("  DNG failed");
-                    (-1.0, -1.0, -1.0, -1.0, 0.0, 0.0, -1.0, -1.0, -1.0, None, String::new(), None)
+                    (-1.0, -1.0, 0.0, [0.0; 3], -1.0, None, None)
                 }
             };
 
@@ -730,40 +736,31 @@ fn main() {
             Some(regional_compare_srgb(best_jpeg, &expert_r, w, h, &m1))
         };
 
-        let illum_str = illuminant_xy.map_or(String::new(), |(x, y)| format!(" illum=({x:.3},{y:.3})"));
+        let rgb_str = format!("[{:.2},{:.2},{:.2}]", rgb_mult[0], rgb_mult[1], rgb_mult[2]);
+        let delta = parity_rgb - parity_dt_opt;
         println!(
-            "  C{best_cluster:02} | dtO={parity_dt_opt:.1}({optimal_mult:.2}x) cat16={parity_cat16:.1}({cat16_mult:.2}x) ceil={ceiling:.1} k3={quality_k3:.1} rule={quality_rule:.1} base0={baseline:.1}{illum_str}"
+            "  dtO={parity_dt_opt:.1}({optimal_mult:.2}x) RGB={parity_rgb:.1}{rgb_str} Δ={delta:+.1} ceil={ceiling:.1} k3={quality_k3:.1} base0={baseline:.1}"
         );
         if let Some(ref reg) = regional_dng {
             print_regional("DNG→dt", reg);
-        }
-        if let Some(ref reg) = regional_jpeg {
-            print_regional("JPEG→ex", reg);
         }
 
         // Save comparison images
         let prefix = format!("{OUTPUT_DIR}/{stem}");
         save_rgb(&orig_r, w, h, &format!("{prefix}_1_orig.jpg"));
-        save_rgb(&jpeg_rule, w, h, &format!("{prefix}_2_rule.jpg"));
         save_rgb(&expert_r, w, h, &format!("{prefix}_3_expert.jpg"));
 
         results.push(ImageResult {
             name: stem.to_string(),
-            parity_base,
-            parity_dt_sig,
             parity_dt_opt,
-            parity_cat16,
+            parity_rgb,
             optimal_mult,
-            cat16_mult,
-            parity_basecurve,
-            parity_rule_dng,
+            rgb_mult,
             ceiling,
-            quality,
             quality_k3,
             quality_rule,
             baseline,
             illuminant_xy,
-            basecurve_name,
             regional_dng,
             regional_jpeg,
         });
@@ -771,83 +768,63 @@ fn main() {
 
     // Summary
     println!("\n\n=== RESULTS ===");
-    println!("dtOpt   = dt_sigmoid, per-image optimized exposure");
-    println!("CAT16   = CAT16 chromatic adaptation + dt_sigmoid, per-image optimized");
+    println!("dtOpt   = dt_sigmoid, per-image optimized uniform exposure");
+    println!("RGB     = dt_sigmoid, per-channel [R,G,B] optimized exposure");
     println!("ceil    = darktable display vs expert");
-    println!("k3      = our JPEG cluster pipeline (3-blend) vs expert");
-    println!("rule    = our JPEG rule-based pipeline vs expert");
-    println!("base0   = untouched original vs expert\n");
+    println!("k3      = our JPEG cluster pipeline (3-blend) vs expert\n");
 
     println!(
-        "{:<30} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
-        "Image", "dtOpt", "oMult", "CAT16", "cMult", "Ceil", "K3", "Rule", "Base0"
+        "{:<28} {:>6} {:>6} {:>6} {:>20} {:>6} {:>6} {:>6}",
+        "Image", "dtOpt", "mult", "RGB", "R,G,B mults", "Ceil", "K3", "Base0"
     );
     println!("{}", "-".repeat(104));
 
-    let (mut sdto, mut scat, mut sc, mut sq3, mut sqr, mut sb) =
-        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let (mut sdto, mut srgb, mut sc, mut sq3, mut sb) =
+        (0.0, 0.0, 0.0, 0.0, 0.0);
     let mut np = 0;
 
     for r in &results {
         let fmt = |v: f64| -> String {
             if v < 0.0 { "---".to_string() } else { format!("{v:.1}") }
         };
-        let mfmt = |v: f32| -> String {
-            if v > 0.0 { format!("{v:.2}x") } else { "---".to_string() }
-        };
+        let rgb_str = format!("{:.2},{:.2},{:.2}", r.rgb_mult[0], r.rgb_mult[1], r.rgb_mult[2]);
         println!(
-            "{:<30} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7.1} {:>7.1}",
-            &r.name[..r.name.len().min(30)],
+            "{:<28} {:>6} {:>6} {:>6} {:>20} {:>6} {:>6} {:>6.1}",
+            &r.name[..r.name.len().min(28)],
             fmt(r.parity_dt_opt),
-            mfmt(r.optimal_mult),
-            fmt(r.parity_cat16),
-            mfmt(r.cat16_mult),
+            if r.optimal_mult > 0.0 { format!("{:.2}x", r.optimal_mult) } else { "---".to_string() },
+            fmt(r.parity_rgb),
+            rgb_str,
             fmt(r.ceiling),
             fmt(r.quality_k3),
-            r.quality_rule,
             r.baseline
         );
         if r.parity_dt_opt >= 0.0 {
             sdto += r.parity_dt_opt;
-            scat += r.parity_cat16;
+            srgb += r.parity_rgb;
             sc += r.ceiling;
             np += 1;
         }
         sq3 += r.quality_k3;
-        sqr += r.quality_rule;
         sb += r.baseline;
     }
 
     let n = results.len() as f64;
     println!("{}", "-".repeat(104));
-    let mean_k3 = sq3 / n;
-    let mean_rule = sqr / n;
-    let mean_base0 = sb / n;
     let mean_dto = if np > 0 { sdto / np as f64 } else { 0.0 };
-    let mean_cat = if np > 0 { scat / np as f64 } else { 0.0 };
+    let mean_rgb = if np > 0 { srgb / np as f64 } else { 0.0 };
     println!(
-        "{:<30} {:>7.1} {:>7} {:>7.1} {:>7} {:>7.1} {:>7.1} {:>7.1} {:>7.1}",
+        "{:<28} {:>6.1} {:>6} {:>6.1} {:>20} {:>6.1} {:>6.1} {:>6.1}",
         "MEAN",
-        mean_dto,
-        "",
-        mean_cat,
-        "",
+        mean_dto, "",
+        mean_rgb, "",
         if np > 0 { sc / np as f64 } else { 0.0 },
-        mean_k3,
-        mean_rule,
-        mean_base0
+        sq3 / n,
+        sb / n,
     );
     println!(
-        "{:<30} {:>7} {:>7} {:>+7.1} {:>7} {:>7} {:>7} {:>7} {:>7}",
-        "CAT16 vs dtOpt",
-        "",
-        "",
-        mean_cat - mean_dto,
-        "",
-        "",
-        "",
-        "",
-        ""
+        "{:<28} {:>6} {:>6} {:>+6.1}",
+        "RGB vs uniform", "", "", mean_rgb - mean_dto,
     );
 
     // Exposure multiplier statistics
@@ -856,34 +833,34 @@ fn main() {
             .filter(|r| r.optimal_mult > 0.0)
             .map(|r| r.optimal_mult)
             .collect();
-        let cat_mults: Vec<f32> = results.iter()
-            .filter(|r| r.cat16_mult > 0.0)
-            .map(|r| r.cat16_mult)
-            .collect();
         if !mults.is_empty() {
             let mean_m: f32 = mults.iter().sum::<f32>() / mults.len() as f32;
             let min_m = mults.iter().copied().reduce(f32::min).unwrap();
             let max_m = mults.iter().copied().reduce(f32::max).unwrap();
-            println!(
-                "\nExposure (no CAT16): mean={mean_m:.2}x  range=[{min_m:.2}, {max_m:.2}]"
-            );
+            println!("\nUniform mult:  mean={mean_m:.2}x  range=[{min_m:.2}, {max_m:.2}]");
         }
-        if !cat_mults.is_empty() {
-            let mean_c: f32 = cat_mults.iter().sum::<f32>() / cat_mults.len() as f32;
-            let min_c = cat_mults.iter().copied().reduce(f32::min).unwrap();
-            let max_c = cat_mults.iter().copied().reduce(f32::max).unwrap();
-            println!(
-                "Exposure (CAT16):    mean={mean_c:.2}x  range=[{min_c:.2}, {max_c:.2}]"
-            );
+
+        // Per-channel stats
+        let rgb_mults: Vec<[f32; 3]> = results.iter()
+            .filter(|r| r.rgb_mult[0] > 0.0)
+            .map(|r| r.rgb_mult)
+            .collect();
+        if !rgb_mults.is_empty() {
+            let n = rgb_mults.len() as f32;
+            let mean_r = rgb_mults.iter().map(|m| m[0]).sum::<f32>() / n;
+            let mean_g = rgb_mults.iter().map(|m| m[1]).sum::<f32>() / n;
+            let mean_b = rgb_mults.iter().map(|m| m[2]).sum::<f32>() / n;
+            println!("RGB mults:     mean=[{mean_r:.2}, {mean_g:.2}, {mean_b:.2}]");
+            // Show ratio R/G and B/G to understand color shift
+            println!("  R/G={:.3}  B/G={:.3}", mean_r / mean_g, mean_b / mean_g);
         }
+
         // Illuminant xy statistics
         let xys: Vec<(f32, f32)> = results.iter().filter_map(|r| r.illuminant_xy).collect();
         if !xys.is_empty() {
             let mean_x = xys.iter().map(|xy| xy.0).sum::<f32>() / xys.len() as f32;
             let mean_y = xys.iter().map(|xy| xy.1).sum::<f32>() / xys.len() as f32;
-            println!(
-                "Illuminant xy:       mean=({mean_x:.4}, {mean_y:.4})  D65=(0.3127, 0.3290)  n={}", xys.len()
-            );
+            println!("Illuminant xy: mean=({mean_x:.4}, {mean_y:.4})  D65=(0.3127, 0.3290)  n={}", xys.len());
         }
     }
 
@@ -920,21 +897,20 @@ fn main() {
     let tsv_path = format!("{OUTPUT_DIR}/parity_results.tsv");
     let mut tsv = String::new();
     tsv.push_str(
-        "image\tparity_dt_opt\topt_mult\tparity_cat16\tcat16_mult\tilluminant_x\tilluminant_y\tparity_rule_dng\tceiling\tquality_k3\tquality_rule\tbaseline\tregional_dng\tregional_jpeg\n",
+        "image\tparity_dt_opt\topt_mult\tparity_rgb\trgb_r\trgb_g\trgb_b\tilluminant_x\tilluminant_y\tceiling\tquality_k3\tquality_rule\tbaseline\tregional_dng\tregional_jpeg\n",
     );
     for r in &results {
         let reg_dng = r.regional_dng.as_ref().map_or(-1.0, |r| r.aggregate);
         let reg_jpeg = r.regional_jpeg.as_ref().map_or(-1.0, |r| r.aggregate);
         let (ix, iy) = r.illuminant_xy.unwrap_or((-1.0, -1.0));
         tsv.push_str(&format!(
-            "{}\t{:.2}\t{:.3}\t{:.2}\t{:.3}\t{:.4}\t{:.4}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.4}\t{:.4}\n",
+            "{}\t{:.2}\t{:.3}\t{:.2}\t{:.3}\t{:.3}\t{:.3}\t{:.4}\t{:.4}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.4}\t{:.4}\n",
             r.name,
             r.parity_dt_opt,
             r.optimal_mult,
-            r.parity_cat16,
-            r.cat16_mult,
+            r.parity_rgb,
+            r.rgb_mult[0], r.rgb_mult[1], r.rgb_mult[2],
             ix, iy,
-            r.parity_rule_dng,
             r.ceiling,
             r.quality_k3,
             r.quality_rule,
@@ -947,23 +923,18 @@ fn main() {
     println!("\nResults saved to {tsv_path}");
 }
 
-/// DNG parity result: scores for sigmoid, basecurve, dt_sigmoid, and rule-based pipelines.
+/// DNG parity result: scores for dt_sigmoid with uniform and per-channel exposure.
 struct DngParityResult {
-    parity_base: f64,       // our sigmoid (Oklab) vs darktable sigmoid
-    parity_dt_sig: f64,     // our dt_sigmoid (linear RGB) vs darktable sigmoid
-    parity_dt_opt: f64,     // dt_sigmoid with per-image optimized exposure
-    parity_cat16: f64,      // CAT16 + dt_sigmoid with per-image optimized exposure
-    optimal_mult: f32,      // the per-image optimal exposure multiplier (no CAT16)
-    cat16_mult: f32,        // optimal exposure multiplier (with CAT16)
-    parity_basecurve: f64,  // camera basecurve vs darktable basecurve
-    parity_rule: f64,       // rule-based vs darktable
+    parity_dt_opt: f64,     // dt_sigmoid with per-image optimized uniform exposure
+    parity_rgb: f64,        // dt_sigmoid with per-channel [R,G,B] optimized exposure
+    optimal_mult: f32,      // optimal uniform exposure multiplier
+    rgb_mult: [f32; 3],     // per-channel optimal multipliers
     ceiling: f64,           // darktable vs expert
     illuminant_xy: Option<(f32, f32)>,
-    basecurve_name: String,
     regional: RegionalComparison,
 }
 
-/// Process DNG: get darktable display output + our pipeline outputs, compare.
+/// Process DNG: compare our dt_sigmoid pipeline against darktable's output.
 #[allow(clippy::too_many_arguments)]
 fn process_dng_parity(
     dng_path: &Path,
@@ -972,18 +943,15 @@ fn process_dng_parity(
     eh: u32,
     dt_config: &DtConfig,
     m1: &GamutMatrix,
-    m1_inv: &GamutMatrix,
-    ctx: &mut FilterContext,
+    _m1_inv: &GamutMatrix,
+    _ctx: &mut FilterContext,
     zs: &Zensim,
     out_prefix: &str,
 ) -> Option<DngParityResult> {
     // 1. Get darktable scene-referred (sigmoid) output — the default in dt 5.5
     let (dt_sig_out, dtw, dth) = darktable_display_output(dng_path)?;
 
-    // 2. Get darktable display-referred (basecurve) output for basecurve comparison
-    let dt_basecurve = darktable_basecurve_output(dng_path);
-
-    // 3. Get darktable linear output for our pipeline
+    // 2. Get darktable linear output for our pipeline
     let output = darktable::decode_file(dng_path, dt_config).ok()?;
     let pixels = output.pixels;
     let dw = pixels.width();
@@ -991,17 +959,11 @@ fn process_dng_parity(
     let raw_bytes = pixels.copy_to_contiguous_bytes();
     let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
 
-    // 4. Read EXIF for camera maker/model and illuminant
+    // 3. Extract illuminant xy from EXIF
     let dng_bytes = std::fs::read(dng_path).ok()?;
     let exif = zenraw::exif::read_metadata(&dng_bytes);
-    let maker = exif.as_ref().and_then(|e| e.make.as_deref()).unwrap_or("");
-    let model = exif.as_ref().and_then(|e| e.model.as_deref()).unwrap_or("");
-
-    // Extract illuminant xy for CAT16 adaptation
     use zenfilters::filters::cat16;
     let illuminant_xy = exif.as_ref().and_then(|e| {
-        // Prefer D65-referenced color matrix (CM2 with illuminant 21=D65) if available,
-        // otherwise fall back to CM1
         let cm = if e.calibration_illuminant_2 == Some(21) {
             e.color_matrix_2.as_deref().or(e.color_matrix_1.as_deref())
         } else {
@@ -1014,103 +976,42 @@ fn process_dng_parity(
         )
     });
 
-    // 5. Apply base-only sigmoid pipeline (no artistic adjustments)
-    let identity_params = TunedParams::default();
-    let base_only_srgb =
-        apply_pipeline_linear(linear_f32, dw, dh, &identity_params, m1, m1_inv, ctx);
-
-    // 6. Apply camera basecurve pipeline
-    let basecurve_srgb =
-        apply_pipeline_basecurve(linear_f32, dw, dh, maker, model, m1, m1_inv);
-    let preset = find_basecurve(maker, model);
-
-    // 7. Apply dt_sigmoid with fixed exposure multiplier
-    let dt_exp: f32 = std::env::var("ZEN_DT_EXPOSURE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1.85);
-    let dt_sig_srgb = apply_dt_sigmoid_pipeline(linear_f32, dw, dh, dt_exp);
-
-    // 8. Compare our sigmoid vs dt sigmoid output
-    let (base_r, dt_r, w, h) = resize_pair(&base_only_srgb, dw, dh, &dt_sig_out, dtw, dth);
-    let parity_base = zensim_score(&base_r, &dt_r, w, h, zs);
-
-    // 9. Compare our dt_sigmoid (fixed exposure) vs darktable sigmoid output
-    let (dts_r, dt_r_dts, w_dts, h_dts) = resize_pair(&dt_sig_srgb, dw, dh, &dt_sig_out, dtw, dth);
-    let parity_dt_sig = zensim_score(&dts_r, &dt_r_dts, w_dts, h_dts, zs);
-
-    // 9b. Per-image exposure optimization: golden section search for best multiplier
+    // 4. Optimize uniform exposure multiplier
     let (optimal_mult, parity_dt_opt) = optimize_dt_sigmoid_exposure(
         linear_f32, dw, dh,
         &dt_sig_out, dtw, dth,
-        zs, 1.0, 4.0, None,
+        zs, 1.0, 4.0,
     );
 
-    // 9c. CAT16 + per-image exposure optimization
-    // NOTE: CAT16 on already-WB'd data typically HURTS (double-correction).
-    // The workflow=none linear output has full WB applied, so the illuminant
-    // has already been adapted. CAT16 would only help on pre-WB data.
-    // We still track the illuminant xy for analysis but skip the expensive optimization.
-    let (cat16_mult, parity_cat16) = (optimal_mult, -1.0);
+    // 5. Optimize per-channel [R,G,B] exposure multipliers
+    let (rgb_mult, parity_rgb) = optimize_rgb_exposure(
+        linear_f32, dw, dh,
+        &dt_sig_out, dtw, dth,
+        zs, optimal_mult,
+    );
 
-    // 10. Compare our basecurve vs dt basecurve (if available)
-    let parity_basecurve = if let Some((ref dt_bc, dt_bc_w, dt_bc_h)) = dt_basecurve {
-        let (bc_r, dt_bc_r, w_bc, h_bc) =
-            resize_pair(&basecurve_srgb, dw, dh, dt_bc, dt_bc_w, dt_bc_h);
-        zensim_score(&bc_r, &dt_bc_r, w_bc, h_bc, zs)
-    } else {
-        // Fall back to comparing vs dt sigmoid output
-        let (bc_r, dt_r_bc, w_bc, h_bc) =
-            resize_pair(&basecurve_srgb, dw, dh, &dt_sig_out, dtw, dth);
-        zensim_score(&bc_r, &dt_r_bc, w_bc, h_bc, zs)
-    };
-
-    // 9. Apply rule-based adjustments on top of base sigmoid
-    let mut feat_planes = OklabPlanes::new(w, h);
-    scatter_srgb_u8_to_oklab(&base_r, &mut feat_planes, 3, m1);
-    let features = ImageFeatures::extract(&feat_planes);
-    let rule_params = rule_based_tune(&features);
-    let rule_srgb = apply_pipeline_linear(linear_f32, dw, dh, &rule_params, m1, m1_inv, ctx);
-    let (rule_r, dt_r3, w3, h3) = resize_pair(&rule_srgb, dw, dh, &dt_sig_out, dtw, dth);
-    let parity_rule = zensim_score(&rule_r, &dt_r3, w3, h3, zs);
-
-    // Darktable sigmoid vs expert → ceiling
+    // 6. Darktable sigmoid vs expert → ceiling
     let (dt_r2, expert_r, w2, h2) = resize_pair(&dt_sig_out, dtw, dth, expert_raw, ew, eh);
     let ceiling = zensim_score(&dt_r2, &expert_r, w2, h2, zs);
 
-    // Regional comparison: DNG sigmoid base vs darktable sigmoid
-    let regional = regional_compare_srgb(&base_r, &dt_r, w, h, m1);
+    // 7. Regional comparison: our best (RGB) vs darktable
+    let best_out = apply_dt_sigmoid_rgb(linear_f32, dw, dh, rgb_mult);
+    let (best_r, dt_r, w, h) = resize_pair(&best_out, dw, dh, &dt_sig_out, dtw, dth);
+    let regional = regional_compare_srgb(&best_r, &dt_r, w, h, m1);
 
-    // Save DNG-specific comparison images
-    save_rgb(&base_r, w, h, &format!("{out_prefix}_4_dng_sigmoid.jpg"));
-    save_rgb(&dts_r, w_dts, h_dts, &format!("{out_prefix}_4c_dng_dtsig_fixed.jpg"));
+    // Save comparison images
     save_rgb(&dt_r, w, h, &format!("{out_prefix}_6_dt_reference.jpg"));
-
-    // Save optimized dt_sigmoid output (best of with/without CAT16)
-    let (best_out, best_label) = if parity_cat16 > parity_dt_opt {
-        (apply_cat16_dt_sigmoid_pipeline(linear_f32, dw, dh, cat16_mult, illuminant_xy.unwrap()), "cat16")
-    } else {
-        (apply_dt_sigmoid_pipeline(linear_f32, dw, dh, optimal_mult), "opt")
-    };
-    let (best_r, _, _, _) = resize_pair(&best_out, dw, dh, &dt_sig_out, dtw, dth);
-    save_rgb(&best_r, w, h, &format!("{out_prefix}_4d_dng_best_{best_label}.jpg"));
-
-    // Generate side-by-side comparison: [our_best | darktable | diff_heatmap]
+    save_rgb(&best_r, w, h, &format!("{out_prefix}_4d_dng_rgb_opt.jpg"));
     let (sbs, sbs_w, sbs_h) = side_by_side(&best_r, &dt_r, w, h);
     save_rgb(&sbs, sbs_w, sbs_h, &format!("{out_prefix}_diff_sbs.jpg"));
 
     Some(DngParityResult {
-        parity_base,
-        parity_dt_sig,
         parity_dt_opt,
-        parity_cat16,
+        parity_rgb,
         optimal_mult,
-        cat16_mult,
-        parity_basecurve,
-        parity_rule,
+        rgb_mult,
         ceiling,
         illuminant_xy,
-        basecurve_name: preset.name.to_string(),
         regional,
     })
 }
