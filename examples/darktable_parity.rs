@@ -170,14 +170,24 @@ fn apply_pipeline_basecurve(
 ///
 /// Uses the exact generalized log-logistic sigmoid from darktable's sigmoid module
 /// with per-channel processing and hue preservation.
+///
+/// `exposure_mult`: Linear multiplier to approximate darktable's color calibration
+/// and input profile normalization (~1.8x matches darktable's scene-referred pipeline).
 fn apply_dt_sigmoid_pipeline(
     linear_f32: &[f32],
     w: u32,
     h: u32,
+    exposure_mult: f32,
 ) -> Vec<u8> {
     use zenfilters::filters::dt_sigmoid;
     let params = dt_sigmoid::default_params();
     let mut rgb = linear_f32.to_vec();
+    // Apply exposure correction to approximate darktable's pre-sigmoid processing
+    if (exposure_mult - 1.0).abs() > 1e-6 {
+        for v in rgb.iter_mut() {
+            *v *= exposure_mult;
+        }
+    }
     dt_sigmoid::apply_dt_sigmoid(&mut rgb, &params);
     // Convert to sRGB u8
     let n = (w as usize) * (h as usize);
@@ -830,7 +840,13 @@ fn process_dng_parity(
     let preset = find_basecurve(maker, model);
 
     // 7. Apply dt_sigmoid (matching darktable's exact formula)
-    let dt_sig_srgb = apply_dt_sigmoid_pipeline(linear_f32, dw, dh);
+    // Apply dt_sigmoid with ~1.8x exposure correction to approximate darktable's
+    // color calibration and input profile normalization
+    let dt_exp: f32 = std::env::var("ZEN_DT_EXPOSURE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1.8);
+    let dt_sig_srgb = apply_dt_sigmoid_pipeline(linear_f32, dw, dh, dt_exp);
 
     // 8. Compare our sigmoid vs dt sigmoid output
     let (base_r, dt_r, w, h) = resize_pair(&base_only_srgb, dw, dh, &dt_sig_out, dtw, dth);
