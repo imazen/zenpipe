@@ -31,7 +31,8 @@ imgref = "1.12"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 zencodecs = { version = "0.1", path = "../zencodecs", features = ["jpeg", "png"] }
-zenraw = { version = "0.1", path = "../zenraw", features = ["darktable", "exif"] }
+zenraw = { version = "0.1", path = "../zenraw", features = ["rawler", "darktable", "exif"] }
+enough = "0.4"
 zenresize = { version = "0.1", path = "../zenresize", default-features = false, features = ["std"] }
 zensim = { version = "0.2", path = "../zensim/zensim", default-features = false }
 zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["planar", "rgb"] }
