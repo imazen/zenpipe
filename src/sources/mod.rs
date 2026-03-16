@@ -21,7 +21,7 @@ pub use expand_canvas::ExpandCanvasSource;
 pub use filter::FilterSource;
 pub use flip::FlipHSource;
 pub use materialize::MaterializedSource;
-pub use resize::ResizeSource;
+pub use resize::{ResizeF32Source, ResizeSource};
 pub use transform::TransformSource;
 #[cfg(feature = "filters")]
 pub use windowed_filter::{DEFAULT_OVERLAP, WindowedFilterSource};

@@ -380,21 +380,45 @@ impl PipelineGraph {
             #[cfg(feature = "filters")]
             NodeOp::Filter(pipeline) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                let upstream = ensure_format(upstream, PixelFormat::Rgbaf32Linear);
+
+                // Fuse resize→filter: if upstream is Resize, use f32 path
+                // to avoid sRGB encode→decode roundtrip (~15% savings).
+                let upstream = if matches!(self.peek_op(input_id), Some(NodeOp::Resize { .. }))
+                    && self.output_count(input_id) <= 1
+                {
+                    let op = self.take_op(input_id)?;
+                    let NodeOp::Resize { w, h } = op else {
+                        unreachable!()
+                    };
+                    let resize_input_id = self.find_input(input_id, EdgeKind::Input)?;
+                    let resize_upstream = self.compile_node(resize_input_id, sources)?;
+                    let resize_upstream =
+                        ensure_format(resize_upstream, PixelFormat::Rgbaf32Linear);
+                    let config = zenresize::ResizeConfig::builder(
+                        resize_upstream.width(),
+                        resize_upstream.height(),
+                        w,
+                        h,
+                    )
+                    .format(zenresize::PixelDescriptor::RGBAF32_LINEAR)
+                    .build();
+                    Box::new(crate::sources::ResizeF32Source::new(
+                        resize_upstream,
+                        &config,
+                        16,
+                    )?) as Box<dyn Source>
+                } else {
+                    let upstream = self.compile_node(input_id, sources)?;
+                    ensure_format(upstream, PixelFormat::Rgbaf32Linear)
+                };
 
                 if pipeline.has_neighborhood_filter() {
-                    // Neighborhood filters need spatial context — use windowed
-                    // materialization: buffer strip_height + 2*overlap rows,
-                    // apply filters, output only center rows. Overlap is
-                    // computed from the actual filter radii, not guessed.
                     let overlap =
                         pipeline.max_neighborhood_radius(upstream.width(), upstream.height());
                     Ok(Box::new(crate::sources::WindowedFilterSource::new(
                         upstream, pipeline, overlap,
                     )?))
                 } else {
-                    // Per-pixel only — stream strip by strip.
                     Ok(Box::new(FilterSource::new(upstream, pipeline)?))
                 }
             }
