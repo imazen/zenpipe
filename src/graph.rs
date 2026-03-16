@@ -386,11 +386,12 @@ impl PipelineGraph {
                 if pipeline.has_neighborhood_filter() {
                     // Neighborhood filters need spatial context — use windowed
                     // materialization: buffer strip_height + 2*overlap rows,
-                    // apply filters, output only center rows.
+                    // apply filters, output only center rows. Overlap is
+                    // computed from the actual filter radii, not guessed.
+                    let overlap =
+                        pipeline.max_neighborhood_radius(upstream.width(), upstream.height());
                     Ok(Box::new(crate::sources::WindowedFilterSource::new(
-                        upstream,
-                        pipeline,
-                        crate::sources::DEFAULT_OVERLAP,
+                        upstream, pipeline, overlap,
                     )?))
                 } else {
                     // Per-pixel only — stream strip by strip.
