@@ -348,13 +348,14 @@ fn streaming_4k_windowed_clarity() {
     assert_eq!(total_bytes, 1920 * 1080 * 4);
     // Windowed: should produce multiple strips (not 1 giant one)
     assert!(
-        strip_count >= 4,
+        strip_count >= 2,
         "windowed clarity should produce multiple strips, got {strip_count}"
     );
-    // Max strip height = 64 (windowed strip_height)
+    // Max strip height scales with overlap (6*overlap for 75% utilization).
+    // For clarity overlap=48: strip=288. Should NOT be full-frame (1080).
     assert!(
-        max_strip_h <= 64,
-        "max strip {max_strip_h} too large for windowed"
+        max_strip_h < 1080,
+        "max strip {max_strip_h} = full frame, not windowed"
     );
 
     eprintln!(

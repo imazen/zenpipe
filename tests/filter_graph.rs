@@ -231,7 +231,8 @@ fn filter_graph_saturation_roundtrip() {
 
 #[test]
 fn filter_graph_neighborhood_windowed() {
-    // Clarity is a neighborhood filter — uses windowed materialization
+    // Clarity is a neighborhood filter — uses windowed materialization.
+    // 16×16 is small enough to fit in one window (strip=min(6*48,16)=16).
     let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default()).unwrap();
     let clarity = zenfilters::filters::Clarity::default();
     pipeline.push(Box::new(clarity));
@@ -253,7 +254,6 @@ fn filter_graph_neighborhood_windowed() {
     assert_eq!(compiled.width(), 16);
     assert_eq!(compiled.height(), 16);
 
-    // Should produce valid output via windowed path (not crash or panic)
     let data = drain(compiled.as_mut());
     assert_eq!(data.len(), 16 * 16 * 16);
 }
@@ -313,9 +313,10 @@ fn filter_graph_neighborhood_large_image() {
         strip_count += 1;
     }
     assert_eq!(total_rows, height);
-    // Should produce multiple strips (windowed, not single full-frame)
+    // For 512×512 with clarity overlap=48, strip=288: ~2 strips.
+    // Just verify it's not a single full-frame dump.
     assert!(
-        strip_count >= 4,
+        strip_count >= 2,
         "expected multiple strips from windowed filter, got {strip_count}"
     );
 }

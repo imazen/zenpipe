@@ -110,7 +110,15 @@ impl WindowedFilterSource {
         let width = upstream.width();
         let height = upstream.height();
         let row_len = width as usize * 4; // RGBA f32
-        let strip_height = 64.min(height);
+
+        // Scale strip height to target ~75% utilization:
+        // utilization = strip / (strip + 2*overlap). For 75%: strip = 6*overlap.
+        // Minimum 64, capped to image height. Large strips amortize overlap cost.
+        let strip_height = if overlap > 0 {
+            (overlap * 6).max(64).min(height)
+        } else {
+            64.min(height)
+        };
 
         // Max window = strip_height + 2*overlap, capped to image height
         let max_window = (strip_height + 2 * overlap).min(height);
