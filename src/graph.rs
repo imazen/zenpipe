@@ -131,9 +131,11 @@ pub enum NodeOp {
     /// Apply a [`zenfilters::Pipeline`] of photo filters.
     ///
     /// Input is auto-converted to [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
-    /// Per-pixel-only pipelines stream strip-by-strip. Pipelines with
-    /// neighborhood filters (blur, clarity, sharpen) materialize the full
-    /// image, apply filters, and re-stream.
+    /// Per-pixel-only pipelines stream strip-by-strip via [`FilterSource`].
+    /// Pipelines with neighborhood filters (blur, clarity, sharpen) use
+    /// windowed materialization via [`WindowedFilterSource`] — only
+    /// `strip_height + 2 * overlap` rows are buffered at a time instead
+    /// of the full image.
     #[cfg(feature = "filters")]
     Filter(zenfilters::Pipeline),
 
@@ -382,21 +384,13 @@ impl PipelineGraph {
                 let upstream = ensure_format(upstream, PixelFormat::Rgbaf32Linear);
 
                 if pipeline.has_neighborhood_filter() {
-                    // Neighborhood filters need full-frame access — materialize,
-                    // apply, then stream the result back.
-                    let w = upstream.width();
-                    let h = upstream.height();
-                    Ok(Box::new(MaterializedSource::from_source_with_transform(
+                    // Neighborhood filters need spatial context — use windowed
+                    // materialization: buffer strip_height + 2*overlap rows,
+                    // apply filters, output only center rows.
+                    Ok(Box::new(crate::sources::WindowedFilterSource::new(
                         upstream,
-                        move |data, _w, _h, _fmt| {
-                            let mut ctx = zenfilters::FilterContext::new();
-                            let src_copy = data.clone();
-                            let in_f32: &[f32] = bytemuck::cast_slice(&src_copy);
-                            let out_f32: &mut [f32] = bytemuck::cast_slice_mut(data);
-                            pipeline
-                                .apply(in_f32, out_f32, w, h, 4, &mut ctx)
-                                .expect("filter pipeline apply failed");
-                        },
+                        pipeline,
+                        crate::sources::DEFAULT_OVERLAP,
                     )?))
                 } else {
                     // Per-pixel only — stream strip by strip.

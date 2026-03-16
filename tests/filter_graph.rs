@@ -230,8 +230,8 @@ fn filter_graph_saturation_roundtrip() {
 }
 
 #[test]
-fn filter_graph_neighborhood_materializes() {
-    // Clarity is a neighborhood filter — should trigger materialized path
+fn filter_graph_neighborhood_windowed() {
+    // Clarity is a neighborhood filter — uses windowed materialization
     let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default()).unwrap();
     let clarity = zenfilters::filters::Clarity::default();
     pipeline.push(Box::new(clarity));
@@ -253,9 +253,71 @@ fn filter_graph_neighborhood_materializes() {
     assert_eq!(compiled.width(), 16);
     assert_eq!(compiled.height(), 16);
 
-    // Should produce valid output (not crash or panic)
+    // Should produce valid output via windowed path (not crash or panic)
     let data = drain(compiled.as_mut());
     assert_eq!(data.len(), 16 * 16 * 16);
+}
+
+#[test]
+fn filter_graph_neighborhood_large_image() {
+    // Test windowed clarity on a larger image to verify strip sliding works
+    let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default()).unwrap();
+    let mut clarity = zenfilters::filters::Clarity::default();
+    clarity.amount = 0.3;
+    pipeline.push(Box::new(clarity));
+
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    let filter = g.add_node(NodeOp::Filter(pipeline));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, filter, EdgeKind::Input);
+    g.add_edge(filter, out, EdgeKind::Input);
+
+    // 512×512 image — window slides multiple times with overlap=128, strip=64
+    let width = 512u32;
+    let height = 512u32;
+    let row_bytes = width as usize * 4;
+    let mut rows_produced = 0u32;
+    let source: Box<dyn Source> = Box::new(CallbackSource::new(
+        width,
+        height,
+        PixelFormat::Rgba8,
+        16,
+        move |buf| {
+            if rows_produced >= height {
+                return Ok(false);
+            }
+            for x in 0..width as usize {
+                let i = x * 4;
+                buf[i] = (x & 0xFF) as u8;
+                buf[i + 1] = (rows_produced & 0xFF) as u8;
+                buf[i + 2] = 128;
+                buf[i + 3] = 255;
+            }
+            rows_produced += 1;
+            Ok(true)
+        },
+    ));
+
+    let mut sources = HashMap::new();
+    sources.insert(src, source);
+
+    let mut compiled = g.compile(sources).unwrap();
+    assert_eq!(compiled.width(), width);
+    assert_eq!(compiled.height(), height);
+
+    let mut total_rows = 0u32;
+    let mut strip_count = 0u32;
+    while let Ok(Some(strip)) = compiled.next() {
+        total_rows += strip.height;
+        strip_count += 1;
+    }
+    assert_eq!(total_rows, height);
+    // Should produce multiple strips (windowed, not single full-frame)
+    assert!(
+        strip_count >= 4,
+        "expected multiple strips from windowed filter, got {strip_count}"
+    );
 }
 
 #[test]
