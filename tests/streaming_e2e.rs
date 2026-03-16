@@ -265,7 +265,7 @@ fn streaming_4k_layout_fliph() {
 fn streaming_4k_full_pipeline() {
     let t0 = Instant::now();
 
-    // Build: Source → Resize → SrgbToLinear → Filter(exposure) → LinearToSrgb → Output
+    // Build: Source → Resize → Filter(exposure+saturation) → LinearToSrgb → Output
     let mut filter_pipeline =
         zenfilters::Pipeline::new(zenfilters::PipelineConfig::default()).unwrap();
     let mut exposure = zenfilters::filters::Exposure::default();
@@ -302,6 +302,63 @@ fn streaming_4k_full_pipeline() {
 
     eprintln!(
         "4K full pipeline (resize+exposure+saturation): {strip_count} strips, {:.1}ms",
+        elapsed.as_secs_f64() * 1000.0,
+    );
+}
+
+// ============================================================================
+// Windowed neighborhood filter: 4K → resize → clarity → sRGB
+// ============================================================================
+
+#[test]
+fn streaming_4k_windowed_clarity() {
+    let t0 = Instant::now();
+
+    // Clarity is a neighborhood filter (Gaussian blur-based) — uses windowed path
+    let mut filter_pipeline =
+        zenfilters::Pipeline::new(zenfilters::PipelineConfig::default()).unwrap();
+    let mut clarity = zenfilters::filters::Clarity::default();
+    clarity.amount = 0.3;
+    filter_pipeline.push(Box::new(clarity));
+    assert!(filter_pipeline.has_neighborhood_filter());
+
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    let resize = g.add_node(NodeOp::Resize { w: 1920, h: 1080 });
+    let filter = g.add_node(NodeOp::Filter(filter_pipeline));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, resize, EdgeKind::Input);
+    g.add_edge(resize, filter, EdgeKind::Input);
+    g.add_edge(filter, to_srgb, EdgeKind::Input);
+    g.add_edge(to_srgb, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(src, gradient_4k());
+
+    let mut pipeline = g.compile(sources).unwrap();
+    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.width(), 1920);
+    assert_eq!(pipeline.height(), 1080);
+
+    let (total_bytes, strip_count, max_strip_h) = drain_counting(pipeline.as_mut());
+
+    let elapsed = t0.elapsed();
+
+    assert_eq!(total_bytes, 1920 * 1080 * 4);
+    // Windowed: should produce multiple strips (not 1 giant one)
+    assert!(
+        strip_count >= 4,
+        "windowed clarity should produce multiple strips, got {strip_count}"
+    );
+    // Max strip height = 64 (windowed strip_height)
+    assert!(
+        max_strip_h <= 64,
+        "max strip {max_strip_h} too large for windowed"
+    );
+
+    eprintln!(
+        "4K windowed clarity: {strip_count} strips (max {max_strip_h} rows), {:.1}ms",
         elapsed.as_secs_f64() * 1000.0,
     );
 }
