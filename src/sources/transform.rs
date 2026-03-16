@@ -80,11 +80,10 @@ impl Source for TransformSource {
         let height = strip.height;
         let y = strip.y;
 
-        // Seed buf_a with upstream data
-        self.buf_a.resize(strip.data.len(), 0);
-        self.buf_a.copy_from_slice(strip.data);
-
         if self.ops.is_empty() {
+            // No ops — copy to buf_a for lifetime management.
+            self.buf_a.resize(strip.data.len(), 0);
+            self.buf_a.copy_from_slice(strip.data);
             return Ok(Some(StripRef {
                 data: &self.buf_a,
                 width,
@@ -95,34 +94,25 @@ impl Source for TransformSource {
             }));
         }
 
-        // current_is_a tracks which buffer holds the current data
-        let mut current_is_a = true;
+        // Apply first op directly from strip.data → buf_b, skipping the
+        // buf_a copy. This saves one full memcpy per strip.
+        let first_op = &self.ops[0];
+        let out_size = first_op.output_format().row_bytes(width) * height as usize;
+        self.buf_b.resize(out_size, 0);
+        first_op.apply(strip.data, &mut self.buf_b, width, height);
+        let mut current_is_a = false;
 
-        for op in &self.ops {
+        // Remaining ops ping-pong between buf_a and buf_b.
+        for op in &self.ops[1..] {
             let out_size = op.output_format().row_bytes(width) * height as usize;
-
-            if op.input_format() == op.output_format() {
-                // In-place: read from current, write to other, then swap
-                if current_is_a {
-                    self.buf_b.resize(out_size, 0);
-                    op.apply(&self.buf_a, &mut self.buf_b, width, height);
-                    current_is_a = false;
-                } else {
-                    self.buf_a.resize(out_size, 0);
-                    op.apply(&self.buf_b, &mut self.buf_a, width, height);
-                    current_is_a = true;
-                }
+            if current_is_a {
+                self.buf_b.resize(out_size, 0);
+                op.apply(&self.buf_a, &mut self.buf_b, width, height);
+                current_is_a = false;
             } else {
-                // Format change: write to other buffer
-                if current_is_a {
-                    self.buf_b.resize(out_size, 0);
-                    op.apply(&self.buf_a, &mut self.buf_b, width, height);
-                    current_is_a = false;
-                } else {
-                    self.buf_a.resize(out_size, 0);
-                    op.apply(&self.buf_b, &mut self.buf_a, width, height);
-                    current_is_a = true;
-                }
+                self.buf_a.resize(out_size, 0);
+                op.apply(&self.buf_b, &mut self.buf_a, width, height);
+                current_is_a = true;
             }
         }
 

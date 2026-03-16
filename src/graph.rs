@@ -507,6 +507,13 @@ fn ensure_format(source: Box<dyn Source>, target: PixelFormat) -> Box<dyn Source
         (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgbaf32Linear) => {
             Box::new(TransformSource::new(source).push(ops::Unpremultiply))
         }
+        // === fused f32 sRGB ↔ premul linear (one pass instead of two) ===
+        (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgbaf32LinearPremul) => {
+            Box::new(TransformSource::new(source).push(ops::SrgbF32ToLinearPremul))
+        }
+        (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgbaf32Srgb) => {
+            Box::new(TransformSource::new(source).push(ops::UnpremulLinearToSrgbF32))
+        }
         // === Multi-hop for remaining conversions ===
         _ => {
             // Route through Rgbaf32Linear as the hub format — it connects

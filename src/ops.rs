@@ -181,6 +181,48 @@ impl PixelOp for DelinearizeF32 {
     }
 }
 
+/// Fused linearize + premultiply on f32 sRGB data.
+///
+/// Input: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+/// Output: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
+pub struct SrgbF32ToLinearPremul;
+
+impl PixelOp for SrgbF32ToLinearPremul {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        output.copy_from_slice(input);
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        linear_srgb::default::srgb_to_linear_premultiply_rgba_slice(out_f32);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Srgb
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32LinearPremul
+    }
+}
+
+/// Fused unpremultiply + delinearize on f32 linear premul data.
+///
+/// Input: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
+/// Output: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+pub struct UnpremulLinearToSrgbF32;
+
+impl PixelOp for UnpremulLinearToSrgbF32 {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        output.copy_from_slice(input);
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        linear_srgb::default::unpremultiply_linear_to_srgb_rgba_slice(out_f32);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32LinearPremul
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Srgb
+    }
+}
+
 /// Normalize u8 to f32 (divide by 255). No gamma conversion.
 ///
 /// Input: [`Rgba8`](PixelFormat::Rgba8)
