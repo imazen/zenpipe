@@ -13,6 +13,7 @@ categories = ["graphics", "multimedia::images"]
 default = ["std"]
 std = ["zenresize/std", "linear-srgb/std", "garb/std"]
 codec = ["zencodec", "zenpixels"]
+filters = ["dep:zenfilters"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
@@ -29,6 +30,8 @@ hashbrown = "0.15"
 zencodec = { path = "../zencodec", default-features = false, optional = true }
 # Pixel format types (optional — used by codec bridge)
 zenpixels = { path = "../zenpixels/zenpixels", default-features = false, optional = true }
+# Photo filters on planar Oklab f32 (optional — for filter pipeline integration)
+zenfilters = { path = "../zenfilters", default-features = false, optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }

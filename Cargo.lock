@@ -355,6 +355,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenfilters"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "magetypes",
+ "whereat 0.1.3",
+ "zenpixels 0.1.1",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "zenjpeg"
 version = "0.6.1"
 dependencies = [
@@ -392,6 +405,7 @@ dependencies = [
  "hashbrown",
  "linear-srgb 0.6.3",
  "zencodec",
+ "zenfilters",
  "zenjpeg",
  "zenpixels 0.1.1",
  "zenresize",
@@ -414,6 +428,17 @@ dependencies = [
  "imgref",
  "rgb",
  "whereat 0.1.3",
+]
+
+[[package]]
+name = "zenpixels-convert"
+version = "0.1.1"
+dependencies = [
+ "bytemuck",
+ "garb",
+ "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "whereat 0.1.3",
+ "zenpixels 0.1.1",
 ]
 
 [[package]]

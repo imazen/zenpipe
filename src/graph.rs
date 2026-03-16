@@ -45,6 +45,8 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
+#[cfg(feature = "filters")]
+use crate::sources::FilterSource;
 use crate::sources::{
     CompositeSource, CropSource, ExpandCanvasSource, FlipHSource, MaterializedSource, ResizeSource,
     TransformSource,
@@ -127,6 +129,16 @@ pub enum NodeOp {
     ///
     /// Both inputs are automatically converted to `Rgbaf32LinearPremul`.
     Composite { fg_x: u32, fg_y: u32 },
+
+    // === Filters (zenfilters integration) ===
+    /// Apply a [`zenfilters::Pipeline`] of photo filters.
+    ///
+    /// Input is auto-converted to [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+    /// Per-pixel-only pipelines stream strip-by-strip. Pipelines with
+    /// neighborhood filters (blur, clarity, sharpen) materialize the full
+    /// image, apply filters, and re-stream.
+    #[cfg(feature = "filters")]
+    Filter(zenfilters::Pipeline),
 
     // === Barriers ===
     /// Custom materialization barrier — drain upstream, transform, re-stream.
@@ -462,6 +474,35 @@ impl PipelineGraph {
                 Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
+            #[cfg(feature = "filters")]
+            NodeOp::Filter(pipeline) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, PixelFormat::Rgbaf32Linear);
+
+                if pipeline.has_neighborhood_filter() {
+                    // Neighborhood filters need full-frame access — materialize,
+                    // apply, then stream the result back.
+                    let w = upstream.width();
+                    let h = upstream.height();
+                    Ok(Box::new(MaterializedSource::from_source_with_transform(
+                        upstream,
+                        move |data, _w, _h, _fmt| {
+                            let mut ctx = zenfilters::FilterContext::new();
+                            let src_copy = data.clone();
+                            let in_f32: &[f32] = bytemuck::cast_slice(&src_copy);
+                            let out_f32: &mut [f32] = bytemuck::cast_slice_mut(data);
+                            pipeline
+                                .apply(in_f32, out_f32, w, h, 4, &mut ctx)
+                                .expect("filter pipeline apply failed");
+                        },
+                    )?))
+                } else {
+                    // Per-pixel only — stream strip by strip.
+                    Ok(Box::new(FilterSource::new(upstream, pipeline)?))
+                }
+            }
+
             NodeOp::Materialize(transform_fn) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
@@ -511,27 +552,46 @@ fn ensure_format(source: Box<dyn Source>, target: PixelFormat) -> Box<dyn Source
         return source;
     }
     match (current, target) {
+        // === Rgba8 ↔ premul linear ===
         (PixelFormat::Rgba8, PixelFormat::Rgbaf32LinearPremul) => {
             Box::new(TransformSource::new(source).push(SrgbToLinearPremul))
         }
         (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgba8) => {
             Box::new(TransformSource::new(source).push(UnpremulLinearToSrgb))
         }
+        // === Rgba8 ↔ straight linear ===
+        (PixelFormat::Rgba8, PixelFormat::Rgbaf32Linear) => {
+            Box::new(TransformSource::new(source).push(ops::SrgbToLinear))
+        }
+        (PixelFormat::Rgbaf32Linear, PixelFormat::Rgba8) => {
+            Box::new(TransformSource::new(source).push(ops::LinearToSrgb))
+        }
+        // === Rgba8 ↔ f32 sRGB ===
         (PixelFormat::Rgba8, PixelFormat::Rgbaf32Srgb) => {
             Box::new(TransformSource::new(source).push(ops::NormalizeU8ToF32))
         }
         (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgba8) => {
             Box::new(TransformSource::new(source).push(ops::QuantizeF32ToU8))
         }
+        // === f32 sRGB ↔ f32 linear (gamma only, no premul) ===
+        (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgbaf32Linear) => {
+            Box::new(TransformSource::new(source).push(ops::LinearizeF32))
+        }
+        (PixelFormat::Rgbaf32Linear, PixelFormat::Rgbaf32Srgb) => {
+            Box::new(TransformSource::new(source).push(ops::DelinearizeF32))
+        }
+        // === premul ↔ straight linear ===
         (PixelFormat::Rgbaf32Linear, PixelFormat::Rgbaf32LinearPremul) => {
             Box::new(TransformSource::new(source).push(ops::Premultiply))
         }
         (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgbaf32Linear) => {
             Box::new(TransformSource::new(source).push(ops::Unpremultiply))
         }
+        // === Multi-hop for remaining conversions ===
         _ => {
-            // Multi-hop: go through Rgba8 as intermediate
-            let intermediate = ensure_format(source, PixelFormat::Rgba8);
+            // Route through Rgbaf32Linear as the hub format — it connects
+            // to all other formats in one hop.
+            let intermediate = ensure_format(source, PixelFormat::Rgbaf32Linear);
             ensure_format(intermediate, target)
         }
     }

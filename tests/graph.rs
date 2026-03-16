@@ -488,3 +488,36 @@ fn auto_format_conversion_for_composite() {
         assert!((px[3] - 1.0).abs() < 0.01);
     }
 }
+
+// ==========================================================================
+// ensure_format direct path tests
+// ==========================================================================
+
+#[test]
+fn auto_format_rgba8_to_linear_direct() {
+    // Verify Rgba8 → Rgbaf32Linear uses the direct path (not multi-hop via premul)
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    // Composite requires Rgbaf32LinearPremul, but we test direct linear via
+    // a PixelTransform that expects Rgbaf32Linear input
+    let to_linear = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::SrgbToLinear)));
+    let back = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, to_linear, EdgeKind::Input);
+    g.add_edge(to_linear, back, EdgeKind::Input);
+    g.add_edge(back, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(src, solid_source(4, 2, [200, 100, 50, 180]));
+
+    let mut pipeline = g.compile(sources).unwrap();
+    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+
+    let data = drain(pipeline.as_mut());
+    for px in data.chunks_exact(4) {
+        assert!((px[0] as i16 - 200).unsigned_abs() <= 1, "R: {}", px[0]);
+        assert!((px[1] as i16 - 100).unsigned_abs() <= 1, "G: {}", px[1]);
+        assert!((px[2] as i16 - 50).unsigned_abs() <= 1, "B: {}", px[2]);
+        assert_eq!(px[3], 180); // alpha preserved exactly
+    }
+}

@@ -99,6 +99,88 @@ impl PixelOp for Unpremultiply {
     }
 }
 
+/// sRGB u8 → linear f32 (straight alpha, no premultiply).
+///
+/// Input: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
+/// Output: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear) (16 bytes/px)
+pub struct SrgbToLinear;
+
+impl PixelOp for SrgbToLinear {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        linear_srgb::default::srgb_u8_to_linear_rgba_slice(input, out_f32);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgba8
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Linear
+    }
+}
+
+/// Linear f32 → sRGB u8 (straight alpha, no unpremultiply).
+///
+/// Input: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear) (16 bytes/px)
+/// Output: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
+pub struct LinearToSrgb;
+
+impl PixelOp for LinearToSrgb {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        let in_f32: &[f32] = bytemuck::cast_slice(input);
+        linear_srgb::default::linear_to_srgb_u8_rgba_slice(in_f32, output);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Linear
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgba8
+    }
+}
+
+/// Linearize f32 sRGB channels in-place (straight alpha preserved).
+///
+/// Input: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+/// Output: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
+pub struct LinearizeF32;
+
+impl PixelOp for LinearizeF32 {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        output.copy_from_slice(input);
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        linear_srgb::default::srgb_to_linear_rgba_slice(out_f32);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Srgb
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Linear
+    }
+}
+
+/// Delinearize f32 linear channels in-place (straight alpha preserved).
+///
+/// Input: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
+/// Output: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+pub struct DelinearizeF32;
+
+impl PixelOp for DelinearizeF32 {
+    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        output.copy_from_slice(input);
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        linear_srgb::default::linear_to_srgb_rgba_slice(out_f32);
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Linear
+    }
+    fn output_format(&self) -> PixelFormat {
+        PixelFormat::Rgbaf32Srgb
+    }
+}
+
 /// Normalize u8 to f32 (divide by 255). No gamma conversion.
 ///
 /// Input: [`Rgba8`](PixelFormat::Rgba8)

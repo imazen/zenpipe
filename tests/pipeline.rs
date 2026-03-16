@@ -1,4 +1,7 @@
-use zenpipe::ops::{NormalizeU8ToF32, QuantizeF32ToU8, SrgbToLinearPremul, UnpremulLinearToSrgb};
+use zenpipe::ops::{
+    DelinearizeF32, LinearToSrgb, LinearizeF32, NormalizeU8ToF32, QuantizeF32ToU8, SrgbToLinear,
+    SrgbToLinearPremul, UnpremulLinearToSrgb,
+};
 use zenpipe::sources::{CallbackSource, CropSource, MaterializedSource, TransformSource};
 use zenpipe::{PipeError, PixelFormat, Source, StripRef};
 
@@ -356,4 +359,65 @@ fn small_strip_height() {
         strip_count += 1;
     }
     assert_eq!(strip_count, 4);
+}
+
+// ==========================================================================
+// New format conversion op tests
+// ==========================================================================
+
+#[test]
+fn transform_srgb_to_linear_roundtrip() {
+    // sRGB u8 → linear f32 (straight) → sRGB u8 should be near-identity
+    let mut src = TransformSource::new(Box::new(solid_rgba8(4, 2, 200, 100, 50, 200)))
+        .push(SrgbToLinear)
+        .push(LinearToSrgb);
+
+    assert_eq!(src.format(), PixelFormat::Rgba8);
+    let data = drain(&mut src);
+    assert_eq!(data.len(), 4 * 4 * 2);
+    for px in data.chunks_exact(4) {
+        assert!((px[0] as i16 - 200).unsigned_abs() <= 1, "R: {}", px[0]);
+        assert!((px[1] as i16 - 100).unsigned_abs() <= 1, "G: {}", px[1]);
+        assert!((px[2] as i16 - 50).unsigned_abs() <= 1, "B: {}", px[2]);
+        // Alpha should be preserved exactly (no gamma on alpha)
+        assert_eq!(px[3], 200, "A: {}", px[3]);
+    }
+}
+
+#[test]
+fn transform_linearize_delinearize_roundtrip() {
+    // Normalize to f32 sRGB → linearize → delinearize → quantize back to u8
+    let mut src = TransformSource::new(Box::new(solid_rgba8(4, 2, 180, 90, 45, 255)))
+        .push(NormalizeU8ToF32)
+        .push(LinearizeF32)
+        .push(DelinearizeF32)
+        .push(QuantizeF32ToU8);
+
+    assert_eq!(src.format(), PixelFormat::Rgba8);
+    let data = drain(&mut src);
+    for px in data.chunks_exact(4) {
+        assert!((px[0] as i16 - 180).unsigned_abs() <= 1, "R: {}", px[0]);
+        assert!((px[1] as i16 - 90).unsigned_abs() <= 1, "G: {}", px[1]);
+        assert!((px[2] as i16 - 45).unsigned_abs() <= 1, "B: {}", px[2]);
+        assert_eq!(px[3], 255);
+    }
+}
+
+#[test]
+fn transform_format_chain_linear_via_premul() {
+    // Rgba8 → linear premul → unpremul → linear → srgb u8
+    // Tests the new ops compose correctly with existing ones
+    let mut src = TransformSource::new(Box::new(solid_rgba8(2, 2, 160, 80, 40, 200)))
+        .push(SrgbToLinearPremul)
+        .push(zenpipe::ops::Unpremultiply)
+        .push(LinearToSrgb);
+
+    assert_eq!(src.format(), PixelFormat::Rgba8);
+    let data = drain(&mut src);
+    for px in data.chunks_exact(4) {
+        assert!((px[0] as i16 - 160).unsigned_abs() <= 2, "R: {}", px[0]);
+        assert!((px[1] as i16 - 80).unsigned_abs() <= 2, "G: {}", px[1]);
+        assert!((px[2] as i16 - 40).unsigned_abs() <= 2, "B: {}", px[2]);
+        assert!((px[3] as i16 - 200).unsigned_abs() <= 1, "A: {}", px[3]);
+    }
 }
