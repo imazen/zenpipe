@@ -205,16 +205,23 @@ fn process_appledng(
     let small_ref = crop_u8(&small_ref, srw, srh, cw, ch);
     println!("  Optimization res: {}x{} ({:.1}s)", cw, ch, t0.elapsed().as_secs_f32());
 
+    // Derive search range from BaselineExposure (Apple underexposes raw heavily)
+    let bl_ev = exif.as_ref().and_then(|e| e.baseline_exposure).unwrap_or(0.0);
+    let bl_mult = 2.0f64.powf(bl_ev) as f32;
+    let search_lo = (bl_mult * 0.25).max(0.5);
+    let search_hi = (bl_mult * 4.0).max(8.0).min(64.0);
+    println!("  Search range: {search_lo:.2}..{search_hi:.1}x (BL={bl_ev:+.2} EV → {bl_mult:.1}x)");
+
     // Optimize uniform exposure
     let (optimal_mult, parity_uniform) = optimize_dt_sigmoid_exposure(
-        &small_linear, cw, ch, &small_ref, cw, ch, zs, 0.5, 8.0,
+        &small_linear, cw, ch, &small_ref, cw, ch, zs, search_lo, search_hi,
     );
     println!("  Uniform mult: {optimal_mult:.3}x → parity={parity_uniform:.1} ({:.1}s)",
         t0.elapsed().as_secs_f32());
 
-    // Optimize per-channel RGB
-    let (rgb_mult, parity_rgb) = optimize_rgb_exposure(
-        &small_linear, cw, ch, &small_ref, cw, ch, zs, optimal_mult,
+    // Optimize per-channel RGB (wider range for APPLEDNG)
+    let (rgb_mult, parity_rgb) = optimize_rgb_exposure_range(
+        &small_linear, cw, ch, &small_ref, cw, ch, zs, optimal_mult, search_lo, search_hi,
     );
     let delta = parity_rgb - parity_uniform;
     println!("  RGB mult: [{:.3}, {:.3}, {:.3}] → parity={parity_rgb:.1} (Δ={delta:+.1}) ({:.1}s)",
@@ -323,16 +330,23 @@ fn process_standard_dng(
     let small_ref = crop_u8(&small_ref, srw, srh, cw, ch);
     println!("  Optimization res: {}x{} ({:.1}s)", cw, ch, t0.elapsed().as_secs_f32());
 
+    // Derive search range from BaselineExposure
+    let bl_ev = exif.as_ref().and_then(|e| e.baseline_exposure).unwrap_or(0.0);
+    let bl_mult = 2.0f64.powf(bl_ev) as f32;
+    let search_lo = (bl_mult * 0.25).max(0.5);
+    let search_hi = (bl_mult * 4.0).max(8.0).min(64.0);
+    println!("  Search range: {search_lo:.2}..{search_hi:.1}x (BL={bl_ev:+.2} EV → {bl_mult:.1}x)");
+
     // Optimize uniform exposure
     let (optimal_mult, parity_uniform) = optimize_dt_sigmoid_exposure(
-        &small_linear, cw, ch, &small_ref, cw, ch, zs, 0.5, 8.0,
+        &small_linear, cw, ch, &small_ref, cw, ch, zs, search_lo, search_hi,
     );
     println!("  Uniform mult: {optimal_mult:.3}x → parity={parity_uniform:.1} ({:.1}s)",
         t0.elapsed().as_secs_f32());
 
     // Optimize per-channel RGB
-    let (rgb_mult, parity_rgb) = optimize_rgb_exposure(
-        &small_linear, cw, ch, &small_ref, cw, ch, zs, optimal_mult,
+    let (rgb_mult, parity_rgb) = optimize_rgb_exposure_range(
+        &small_linear, cw, ch, &small_ref, cw, ch, zs, optimal_mult, search_lo, search_hi,
     );
     let delta = parity_rgb - parity_uniform;
     println!("  RGB mult: [{:.3}, {:.3}, {:.3}] → parity={parity_rgb:.1} (Δ={delta:+.1}) ({:.1}s)",
@@ -655,10 +669,10 @@ fn optimize_dt_sigmoid_exposure(
     )
 }
 
-fn optimize_rgb_exposure(
+fn optimize_rgb_exposure_range(
     linear_f32: &[f32], w: u32, h: u32,
     reference: &[u8], _rw: u32, _rh: u32,
-    zs: &Zensim, uniform_mult: f32,
+    zs: &Zensim, uniform_mult: f32, range_lo: f32, range_hi: f32,
 ) -> ([f32; 3], f64) {
     let mut rgb = [uniform_mult; 3];
     let mut best_score = 0.0f64;
@@ -668,11 +682,14 @@ fn optimize_rgb_exposure(
         zensim_score(&out, reference, w, h, zs)
     };
 
+    // Per-channel: search ±50% of current value, clamped to overall range
     for _ in 0..3 {
         for ch in 0..3 {
+            let lo = (rgb[ch] * 0.5).max(range_lo);
+            let hi = (rgb[ch] * 2.0).min(range_hi);
             let (best_val, score) = golden_search(
                 |v| { let mut m = rgb; m[ch] = v; eval(m) },
-                (rgb[ch] * 0.5).max(0.2), rgb[ch] * 2.0,
+                lo, hi,
             );
             rgb[ch] = best_val;
             best_score = score;
