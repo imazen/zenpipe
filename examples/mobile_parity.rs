@@ -184,14 +184,35 @@ fn process_appledng(
     let raw_pixels = output.pixels;
     let dw = raw_pixels.width();
     let dh = raw_pixels.height();
-    let raw_bytes = raw_pixels.copy_to_contiguous_bytes();
-    let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
+    let mut raw_bytes = raw_pixels.copy_to_contiguous_bytes();
     println!(
         "  Raw decode: {}x{} ({:.1}s)",
         dw,
         dh,
         t0.elapsed().as_secs_f32()
     );
+
+    // Save original linear data before PGTM (for fallback)
+    let original_raw_bytes = raw_bytes.clone();
+
+    // Apply ProfileGainTableMap (Smart HDR) if present
+    let pgtm = zenraw::apple::extract_profile_gain_table_map(dng_bytes);
+    if let Some(ref pgtm) = pgtm {
+        let bl_ev = exif.as_ref().and_then(|e| e.baseline_exposure).unwrap_or(0.0);
+        let (gmin, gmax, gmean) = pgtm.stats();
+        println!(
+            "  PGTM: {}x{} grid, {} tonal pts, gains [{gmin:.3}..{gmax:.3}] mean={gmean:.3}",
+            pgtm.grid_rows, pgtm.grid_cols, pgtm.tonal_points,
+        );
+        let linear_mut: &mut [f32] = bytemuck::cast_slice_mut(&mut raw_bytes);
+        pgtm.apply(linear_mut, dw, dh, bl_ev);
+        let (mean_after, _, _, _, _) = analyze_linear(linear_mut);
+        println!("  After PGTM: mean={mean_after:.4} ({:.1}s)", t0.elapsed().as_secs_f32());
+    }
+
+    // Use PGTM-corrected data as primary, original as fallback
+    let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
+    let original_linear: &[f32] = bytemuck::cast_slice(&original_raw_bytes);
 
     // Analyze linear data range
     let (mean_v, mr, mg, mb, clipped_pct) = analyze_linear(linear_f32);
@@ -410,11 +431,42 @@ fn process_appledng(
     }
 
     if enhanced_score > parity_rgb {
-        parity_uniform = 0.0; // not applicable for enhanced
+        parity_uniform = 0.0;
         parity_rgb = enhanced_score;
-        optimal_mult = enhanced_params.rgb_mult[1]; // use G channel as reference
+        optimal_mult = enhanced_params.rgb_mult[1];
         rgb_mult = enhanced_params.rgb_mult;
         method = "enhanced";
+    }
+
+    // ── Fallback: try enhanced pipeline on ORIGINAL (no PGTM) data ──
+    let mut fallback_params = enhanced_params;
+    if pgtm.is_some() {
+        let (orig_small, osw, osh) = downscale_linear_f32(original_linear, dw, dh, MAX_DIM);
+        let ocw = osw.min(cw);
+        let och = osh.min(ch);
+        let orig_small = crop_f32(&orig_small, osw, osh, ocw, och);
+        // Reuse already-downscaled reference
+        let orig_ref = crop_u8(&downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).0,
+            downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).1,
+            downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).2, ocw, och);
+
+        let (orig_params, orig_score) = optimize_enhanced_pipeline(
+            &orig_small, ocw, och, &orig_ref, zs, bl_mult, search_lo, search_hi,
+        );
+        println!(
+            "  Fallback (no PGTM): c={:.2} sk={:.2} sat={:.2} curves={} → {orig_score:.1} ({:.1}s)",
+            orig_params.contrast, orig_params.skew, orig_params.saturation,
+            if orig_params.curves.is_identity() { "identity" } else { "custom" },
+            t0.elapsed().as_secs_f32()
+        );
+
+        if orig_score > parity_rgb {
+            parity_rgb = orig_score;
+            optimal_mult = orig_params.rgb_mult[1];
+            rgb_mult = orig_params.rgb_mult;
+            method = "enhanced_nopgtm";
+            fallback_params = orig_params;
+        }
     }
 
     println!(
@@ -425,9 +477,15 @@ fn process_appledng(
     // Generate output with best method
     best_small = match method {
         "enhanced" => apply_enhanced_pipeline(&small_linear, cw, ch, &enhanced_params),
+        "enhanced_nopgtm" => {
+            let (os, osw, osh) = downscale_linear_f32(original_linear, dw, dh, MAX_DIM);
+            let ocw = osw.min(cw);
+            let och = osh.min(ch);
+            let os = crop_f32(&os, osw, osh, ocw, och);
+            apply_enhanced_pipeline(&os, ocw, och, &fallback_params)
+        }
         "apple_lum" => {
             let lut = tone_curve_lut.as_ref().unwrap();
-            // Re-extract saturation from earlier optimization (stored implicitly)
             apply_apple_curve_luminance(&small_linear, rgb_mult, lut, 1.0)
         }
         _ => apply_dt_sigmoid_rgb(&small_linear, cw, ch, rgb_mult),
