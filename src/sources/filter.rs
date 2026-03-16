@@ -27,8 +27,6 @@ pub struct FilterSource {
     upstream: Box<dyn Source>,
     pipeline: zenfilters::Pipeline,
     ctx: zenfilters::FilterContext,
-    /// Copy of upstream strip data (f32), needed to break borrow chain.
-    src_buf: Vec<f32>,
     /// Output buffer for pipeline.apply().
     dst_buf: Vec<f32>,
     width: u32,
@@ -60,7 +58,6 @@ impl FilterSource {
             upstream,
             pipeline,
             ctx: zenfilters::FilterContext::new(),
-            src_buf: Vec::new(),
             dst_buf: Vec::new(),
             width: w,
             height: h,
@@ -80,15 +77,12 @@ impl Source for FilterSource {
         let y = strip.y;
         let pixels = w as usize * h as usize;
 
-        // Copy upstream f32 data to break the borrow on self.upstream
+        // Apply filter pipeline directly from upstream strip data.
+        // strip.data borrows self.upstream; pipeline/dst_buf/ctx are disjoint fields.
         let in_f32: &[f32] = bytemuck::cast_slice(strip.data);
-        self.src_buf.resize(pixels * 4, 0.0);
-        self.src_buf.copy_from_slice(in_f32);
-
-        // Apply filter pipeline
         self.dst_buf.resize(pixels * 4, 0.0);
         self.pipeline
-            .apply(&self.src_buf, &mut self.dst_buf, w, h, 4, &mut self.ctx)
+            .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
             .map_err(|e| PipeError::Op(e.to_string()))?;
 
         let stride = PixelFormat::Rgbaf32Linear.row_bytes(w);

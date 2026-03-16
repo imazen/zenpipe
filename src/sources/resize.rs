@@ -29,27 +29,6 @@ pub struct ResizeSource {
     y: u32,
     input_exhausted: bool,
     finished: bool,
-    /// Leftover rows from the last upstream strip that haven't been pushed yet.
-    pending_strip: Option<PendingStrip>,
-}
-
-/// Tracks remaining rows from an upstream strip.
-struct PendingStrip {
-    data: alloc::vec::Vec<u8>,
-    stride: usize,
-    total_rows: u32,
-    next_row: u32,
-}
-
-impl PendingStrip {
-    fn row(&self, r: u32) -> &[u8] {
-        let start = r as usize * self.stride;
-        &self.data[start..start + self.stride]
-    }
-
-    fn remaining(&self) -> u32 {
-        self.total_rows - self.next_row
-    }
 }
 
 impl ResizeSource {
@@ -81,7 +60,10 @@ impl ResizeSource {
         let out_w = config.total_output_width();
         let out_h = config.total_output_height();
         let sh = strip_height.min(out_h);
-        let resizer = zenresize::StreamingResize::new(config);
+        // batch_hint sizes the ring buffer for push_upstream_strip():
+        // we push an entire upstream strip at once, so the ring buffer
+        // must hold at least that many extra rows beyond the filter taps.
+        let resizer = zenresize::StreamingResize::with_batch_hint(config, strip_height);
 
         Ok(Self {
             upstream,
@@ -93,7 +75,6 @@ impl ResizeSource {
             y: 0,
             input_exhausted: false,
             finished: false,
-            pending_strip: None,
         })
     }
 
@@ -128,59 +109,27 @@ impl ResizeSource {
             y: 0,
             input_exhausted: false,
             finished: false,
-            pending_strip: None,
         })
     }
 
-    /// Push one input row from the pending strip or upstream.
-    /// Returns Ok(true) if a row was pushed, Ok(false) if input exhausted.
-    fn push_one_row(&mut self) -> Result<bool, PipeError> {
-        // Try pending strip first
-        if let Some(ref mut pending) = self.pending_strip {
-            if pending.remaining() > 0 {
-                let row = pending.row(pending.next_row);
-                self.resizer
-                    .push_row(row)
-                    .map_err(|e| PipeError::Resize(e.to_string()))?;
-                pending.next_row += 1;
-                if pending.remaining() == 0 {
-                    self.pending_strip = None;
-                }
-                return Ok(true);
-            }
-            self.pending_strip = None;
-        }
-
-        // Pull from upstream
+    /// Pull a strip from upstream and push all its rows directly into the
+    /// resizer. No intermediate copy.
+    fn push_upstream_strip(&mut self) -> Result<bool, PipeError> {
         if self.input_exhausted {
             return Ok(false);
         }
 
-        let strip = self
-            .upstream
-            .next()
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+        let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             self.input_exhausted = true;
             return Ok(false);
         };
 
-        // Save the strip and push first row
-        let mut pending = PendingStrip {
-            data: strip.data.to_vec(),
-            stride: strip.stride,
-            total_rows: strip.height,
-            next_row: 0,
-        };
-
-        let row = pending.row(0);
-        self.resizer
-            .push_row(row)
-            .map_err(|e| PipeError::Resize(e.to_string()))?;
-        pending.next_row = 1;
-
-        if pending.remaining() > 0 {
-            self.pending_strip = Some(pending);
+        for r in 0..strip.height {
+            let row = strip.row(r);
+            self.resizer
+                .push_row(row)
+                .map_err(|e| PipeError::Resize(e.to_string()))?;
         }
 
         Ok(true)
@@ -229,7 +178,7 @@ impl Source for ResizeSource {
             }
 
             // Push more input
-            let pushed = self.push_one_row()?;
+            let pushed = self.push_upstream_strip()?;
             if !pushed {
                 // Input exhausted — finish and drain
                 self.resizer.finish();
@@ -283,7 +232,6 @@ pub struct ResizeF32Source {
     y: u32,
     input_exhausted: bool,
     finished: bool,
-    pending_strip: Option<PendingStrip>,
 }
 
 impl ResizeF32Source {
@@ -306,7 +254,7 @@ impl ResizeF32Source {
         let out_w = config.total_output_width();
         let out_h = config.total_output_height();
         let sh = strip_height.min(out_h);
-        let resizer = zenresize::StreamingResize::new(config);
+        let resizer = zenresize::StreamingResize::with_batch_hint(config, strip_height);
 
         Ok(Self {
             upstream,
@@ -318,56 +266,32 @@ impl ResizeF32Source {
             y: 0,
             input_exhausted: false,
             finished: false,
-            pending_strip: None,
         })
     }
 
-    fn push_one_row(&mut self) -> Result<bool, PipeError> {
-        if let Some(ref mut pending) = self.pending_strip {
-            if pending.remaining() > 0 {
-                let row = pending.row(pending.next_row);
-                let row_f32: &[f32] = bytemuck::cast_slice(row);
-                self.resizer
-                    .push_row_f32(row_f32)
-                    .map_err(|e| PipeError::Resize(e.to_string()))?;
-                pending.next_row += 1;
-                if pending.remaining() == 0 {
-                    self.pending_strip = None;
-                }
-                return Ok(true);
-            }
-            self.pending_strip = None;
-        }
-
+    /// Pull a strip from upstream and push all its rows directly into the
+    /// resizer. No intermediate copy — strip.data borrows self.upstream
+    /// while self.resizer is a disjoint field.
+    fn push_upstream_strip(&mut self) -> Result<bool, PipeError> {
         if self.input_exhausted {
             return Ok(false);
         }
 
-        let strip = self
-            .upstream
-            .next()
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+        let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             self.input_exhausted = true;
             return Ok(false);
         };
 
-        let mut pending = PendingStrip {
-            data: strip.data.to_vec(),
-            stride: strip.stride,
-            total_rows: strip.height,
-            next_row: 0,
-        };
-
-        let row = pending.row(0);
-        let row_f32: &[f32] = bytemuck::cast_slice(row);
-        self.resizer
-            .push_row_f32(row_f32)
-            .map_err(|e| PipeError::Resize(e.to_string()))?;
-        pending.next_row = 1;
-
-        if pending.remaining() > 0 {
-            self.pending_strip = Some(pending);
+        // Push all rows directly from the upstream strip into the resizer.
+        // NLL allows this: strip.data borrows *self.upstream, push_row_f32
+        // borrows self.resizer — disjoint fields.
+        for r in 0..strip.height {
+            let row = strip.row(r);
+            let row_f32: &[f32] = bytemuck::cast_slice(row);
+            self.resizer
+                .push_row_f32(row_f32)
+                .map_err(|e| PipeError::Resize(e.to_string()))?;
         }
 
         Ok(true)
@@ -413,7 +337,8 @@ impl Source for ResizeF32Source {
                 break;
             }
 
-            let pushed = self.push_one_row()?;
+            // Push entire upstream strip, then drain output.
+            let pushed = self.push_upstream_strip()?;
             if !pushed {
                 self.resizer.finish();
                 self.finished = true;
