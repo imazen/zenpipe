@@ -78,11 +78,46 @@ impl ResizeSource {
             )));
         }
 
-        let out_w = config.out_width;
-        let out_h = config.out_height;
+        let out_w = config.total_output_width();
+        let out_h = config.total_output_height();
         let sh = strip_height.min(out_h);
         let resizer = zenresize::StreamingResize::new(config);
 
+        Ok(Self {
+            upstream,
+            resizer,
+            out_width: out_w,
+            out_height: out_h,
+            strip_height: sh,
+            buf: StripBuf::new(out_w, sh, PixelFormat::Rgba8),
+            y: 0,
+            input_exhausted: false,
+            finished: false,
+            pending_strip: None,
+        })
+    }
+
+    /// Create from a pre-built [`StreamingResize`](zenresize::StreamingResize).
+    ///
+    /// Used by the Layout node to leverage zenresize's built-in crop,
+    /// padding, and orientation — all in one streaming pass.
+    ///
+    /// Upstream must produce [`Rgba8`](PixelFormat::Rgba8).
+    pub fn from_streaming(
+        upstream: Box<dyn Source>,
+        resizer: zenresize::StreamingResize,
+        strip_height: u32,
+    ) -> Result<Self, PipeError> {
+        if upstream.format() != PixelFormat::Rgba8 {
+            return Err(PipeError::FormatMismatch {
+                expected: PixelFormat::Rgba8,
+                got: upstream.format(),
+            });
+        }
+        // output_row_len is in bytes; RGBA8 = 4 bytes/pixel
+        let out_w = (resizer.output_row_len() / 4) as u32;
+        let out_h = resizer.total_output_height();
+        let sh = strip_height.min(out_h);
         Ok(Self {
             upstream,
             resizer,

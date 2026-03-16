@@ -48,8 +48,7 @@ use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 #[cfg(feature = "filters")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CompositeSource, CropSource, ExpandCanvasSource, FlipHSource, MaterializedSource, ResizeSource,
-    TransformSource,
+    CompositeSource, CropSource, MaterializedSource, ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -76,17 +75,14 @@ pub enum NodeOp {
 
     // === Layout: crop + orient + resize + canvas via zenresize ===
     /// Execute a [`LayoutPlan`] — handles crop, orientation, resize, and canvas
-    /// placement via decomposed streaming steps where possible.
+    /// placement in a single streaming pass via [`zenresize::streaming_from_plan_batched`].
     ///
-    /// Input must be `Rgba8`. Decomposes into:
-    /// 1. `CropSource` (streaming) if trim is needed
-    /// 2. `FlipHSource` (streaming) or `MaterializedSource(orient_image)` for orientation
-    /// 3. `ResizeSource` (streaming) if resize is needed
-    /// 4. Canvas expansion (materialized) if canvas differs from resize output
+    /// Input must be `Rgba8`. All steps (crop, resize, padding, orientation)
+    /// are handled inside one [`StreamingResize`](zenresize::StreamingResize)
+    /// — no intermediate materialization.
     ///
-    /// Common case (no orientation, no canvas padding) is fully streaming.
-    /// Falls back to materializing `execute_layout` for edge extension
-    /// (`content_size`) or `Linear` canvas colors.
+    /// Falls back to materializing `execute_layout` only for edge extension
+    /// (`content_size`).
     Layout {
         plan: zenresize::LayoutPlan,
         filter: zenresize::Filter,
@@ -256,14 +252,8 @@ impl PipelineGraph {
                 let mut source = self.compile_node(input_id, sources)?;
                 source = ensure_format(source, PixelFormat::Rgba8);
 
-                let needs_canvas = plan.canvas.width != plan.resize_to.width
-                    || plan.canvas.height != plan.resize_to.height
-                    || plan.placement != (0, 0);
-                let has_linear_canvas =
-                    matches!(plan.canvas_color, zenresize::CanvasColor::Linear { .. });
-
-                // Fall back to materializing for features that can't stream
-                if plan.content_size.is_some() || (needs_canvas && has_linear_canvas) {
+                // Fall back to materializing for edge replication (content_size)
+                if plan.content_size.is_some() {
                     let in_w = source.width();
                     let in_h = source.height();
                     let canvas_w = plan.canvas.width;
@@ -286,72 +276,19 @@ impl PipelineGraph {
                     )?));
                 }
 
-                // Step 1: Trim (streaming crop)
-                if let Some(trim) = plan.trim {
-                    source = Box::new(CropSource::new(
-                        source,
-                        trim.x,
-                        trim.y,
-                        trim.width,
-                        trim.height,
-                    )?);
-                }
-
-                // Step 2: Orientation
-                let orientation = plan.remaining_orientation;
-                if !orientation.is_identity() {
-                    if matches!(orientation, zenresize::Orientation::FlipH) {
-                        source = Box::new(FlipHSource::new(source));
-                    } else {
-                        let in_w = source.width();
-                        let in_h = source.height();
-                        source = Box::new(MaterializedSource::from_source_with_transform(
-                            source,
-                            move |data, w, h, _fmt| {
-                                let (result, new_w, new_h) =
-                                    zenresize::orient_image(data, in_w, in_h, orientation, 4);
-                                *data = result;
-                                *w = new_w;
-                                *h = new_h;
-                            },
-                        )?);
-                    }
-                }
-
-                // Step 3: Resize (streaming via StreamingResize)
-                if !plan.resize_is_identity {
-                    let in_w = source.width();
-                    let in_h = source.height();
-                    let config = zenresize::ResizeConfig::builder(
-                        in_w,
-                        in_h,
-                        plan.resize_to.width,
-                        plan.resize_to.height,
-                    )
-                    .filter(filter)
-                    .build();
-                    source = Box::new(ResizeSource::new(source, &config, 16)?);
-                }
-
-                // Step 4: Canvas expansion (streaming)
-                if needs_canvas {
-                    let (px, py) = plan.placement;
-                    let bg = match plan.canvas_color {
-                        zenresize::CanvasColor::Transparent => [0u8, 0, 0, 0],
-                        zenresize::CanvasColor::Srgb { r, g, b, a } => [r, g, b, a],
-                        _ => [0, 0, 0, 0],
-                    };
-                    source = Box::new(ExpandCanvasSource::new(
-                        source,
-                        plan.canvas.width,
-                        plan.canvas.height,
-                        px,
-                        py,
-                        bg,
-                    ));
-                }
-
-                Ok(source)
+                // Single streaming pass: crop + resize + padding + orientation
+                // all handled by zenresize's StreamingResize via config_from_plan.
+                let in_w = source.width();
+                let in_h = source.height();
+                let resizer = zenresize::streaming_from_plan_batched(
+                    in_w,
+                    in_h,
+                    &plan,
+                    zenresize::PixelDescriptor::RGBA8_SRGB,
+                    filter,
+                    16,
+                );
+                Ok(Box::new(ResizeSource::from_streaming(source, resizer, 16)?))
             }
 
             NodeOp::LayoutComposite { plan, filter } => {
