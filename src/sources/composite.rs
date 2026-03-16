@@ -3,7 +3,7 @@ use alloc::vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{self, PixelFormat};
 use crate::strip::{StripBuf, StripRef};
 
 /// Porter-Duff source-over compositing of two strip sources.
@@ -12,7 +12,7 @@ use crate::strip::{StripBuf, StripRef};
 /// composites foreground over background in premultiplied linear f32
 /// space, and outputs the result.
 ///
-/// Both sources must produce [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
+/// Both sources must produce `RGBAF32_LINEAR_PREMUL`
 /// and the background dimensions determine output dimensions.
 pub struct CompositeSource {
     background: Box<dyn Source>,
@@ -30,7 +30,7 @@ pub struct CompositeSource {
 impl CompositeSource {
     /// Create a source-over composite of `foreground` over `background`.
     ///
-    /// Both must produce `Rgbaf32LinearPremul`.
+    /// Both must produce `RGBAF32_LINEAR_PREMUL`.
     pub fn over(
         background: Box<dyn Source>,
         foreground: Box<dyn Source>,
@@ -45,7 +45,7 @@ impl CompositeSource {
         fg_x: u32,
         fg_y: u32,
     ) -> Result<Self, PipeError> {
-        let fmt = PixelFormat::Rgbaf32LinearPremul;
+        let fmt = format::RGBAF32_LINEAR_PREMUL;
         if background.format() != fmt {
             return Err(PipeError::FormatMismatch {
                 expected: fmt,
@@ -87,7 +87,7 @@ impl Source for CompositeSource {
 
         let rows_wanted = self.strip_height.min(self.height - self.y);
         self.buf
-            .reconfigure(self.width, rows_wanted, PixelFormat::Rgbaf32LinearPremul);
+            .reconfigure(self.width, rows_wanted, format::RGBAF32_LINEAR_PREMUL);
         self.buf.reset(self.y);
 
         // Pull background strip
@@ -150,7 +150,7 @@ impl Source for CompositeSource {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
 }
 

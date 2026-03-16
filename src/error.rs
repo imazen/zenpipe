@@ -21,7 +21,7 @@ impl fmt::Display for PipeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FormatMismatch { expected, got } => {
-                write!(f, "format mismatch: expected {expected:?}, got {got:?}")
+                write!(f, "format mismatch: expected {expected}, got {got}")
             }
             Self::Resize(msg) => write!(f, "resize: {msg}"),
             Self::DimensionMismatch(msg) => write!(f, "dimension mismatch: {msg}"),

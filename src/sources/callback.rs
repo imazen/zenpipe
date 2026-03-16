@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{PixelFormat, PixelFormatExt};
 use crate::strip::{StripBuf, StripRef};
 
 /// A source that pulls rows from a callback function.

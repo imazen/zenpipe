@@ -6,7 +6,7 @@ use hashbrown::HashMap;
 
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::sources::{CallbackSource, FilterSource};
-use zenpipe::{PixelFormat, Source};
+use zenpipe::{Source, format};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -24,7 +24,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
     Box::new(CallbackSource::new(
         width,
         height,
-        PixelFormat::Rgba8,
+        format::RGBA8_SRGB,
         16,
         move |buf| {
             if rows_produced >= height {
@@ -46,7 +46,7 @@ fn solid_linear_source(width: u32, height: u32, pixel: [f32; 4]) -> Box<dyn Sour
     Box::new(CallbackSource::new(
         width,
         height,
-        PixelFormat::Rgbaf32Linear,
+        format::RGBAF32_LINEAR,
         16,
         move |buf| {
             if rows_produced >= height {
@@ -76,7 +76,7 @@ fn filter_source_identity_pipeline() {
 
     assert_eq!(src.width(), 4);
     assert_eq!(src.height(), 4);
-    assert_eq!(src.format(), PixelFormat::Rgbaf32Linear);
+    assert_eq!(src.format(), format::RGBAF32_LINEAR);
 
     let data = drain(&mut src);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
@@ -138,7 +138,7 @@ fn filter_source_small_strips() {
     let upstream: Box<dyn Source> = Box::new(CallbackSource::new(
         4,
         4,
-        PixelFormat::Rgbaf32Linear,
+        format::RGBAF32_LINEAR,
         1, // strip height = 1
         move |buf| {
             if rows_produced >= 4 {
@@ -186,7 +186,7 @@ fn filter_graph_exposure_with_auto_convert() {
 
     let mut compiled = g.compile(sources).unwrap();
     // Output is Rgbaf32Linear (filter's output format)
-    assert_eq!(compiled.format(), PixelFormat::Rgbaf32Linear);
+    assert_eq!(compiled.format(), format::RGBAF32_LINEAR);
     assert_eq!(compiled.width(), 4);
     assert_eq!(compiled.height(), 4);
 
@@ -216,7 +216,7 @@ fn filter_graph_saturation_roundtrip() {
     sources.insert(src, solid_source(8, 4, [128, 64, 32, 255]));
 
     let mut compiled = g.compile(sources).unwrap();
-    assert_eq!(compiled.format(), PixelFormat::Rgba8);
+    assert_eq!(compiled.format(), format::RGBA8_SRGB);
 
     let data = drain(compiled.as_mut());
     assert_eq!(data.len(), 8 * 4 * 4);
@@ -250,7 +250,7 @@ fn filter_graph_neighborhood_windowed() {
     sources.insert(src, solid_source(16, 16, [128, 128, 128, 255]));
 
     let mut compiled = g.compile(sources).unwrap();
-    assert_eq!(compiled.format(), PixelFormat::Rgbaf32Linear);
+    assert_eq!(compiled.format(), format::RGBAF32_LINEAR);
     assert_eq!(compiled.width(), 16);
     assert_eq!(compiled.height(), 16);
 
@@ -276,12 +276,11 @@ fn filter_graph_neighborhood_large_image() {
     // 512×512 image — window slides multiple times with overlap=128, strip=64
     let width = 512u32;
     let height = 512u32;
-    let row_bytes = width as usize * 4;
     let mut rows_produced = 0u32;
     let source: Box<dyn Source> = Box::new(CallbackSource::new(
         width,
         height,
-        PixelFormat::Rgba8,
+        format::RGBA8_SRGB,
         16,
         move |buf| {
             if rows_produced >= height {

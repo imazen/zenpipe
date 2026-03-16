@@ -2,8 +2,16 @@
 //!
 //! Per-pixel ops are stateless and process strips independently — they need
 //! no neighborhood context and can be fused into a single pass.
+//!
+//! # Generic conversion
+//!
+//! [`RowConverterOp`] wraps a [`zenpixels_convert::RowConverter`] as a
+//! [`PixelOp`], supporting any format pair that zenpixels-convert can handle
+//! (P3, BT.2020, PQ, HLG, etc.). The named structs below are convenience
+//! aliases for common sRGB conversions.
 
 use crate::PixelFormat;
+use crate::format::{self, PixelFormatExt};
 
 /// A per-pixel operation applied to strip data.
 ///
@@ -21,248 +29,294 @@ pub trait PixelOp: Send {
     fn output_format(&self) -> PixelFormat;
 }
 
-/// Fused sRGB u8 → linear f32 + premultiply.
-///
-/// Input: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
-/// Output: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul) (16 bytes/px)
-pub struct SrgbToLinearPremul;
+// =========================================================================
+// Generic RowConverter-based op
+// =========================================================================
 
-impl PixelOp for SrgbToLinearPremul {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::srgb_u8_to_linear_premultiply_rgba_slice(input, out_f32);
+/// A [`PixelOp`] wrapping [`zenpixels_convert::RowConverter`].
+///
+/// Handles any format conversion that zenpixels-convert supports, including
+/// P3, BT.2020, PQ, HLG, depth changes, alpha mode changes, and gamut
+/// mapping — all via pre-computed conversion plans with no per-row allocation.
+pub struct RowConverterOp {
+    converter: zenpixels_convert::RowConverter,
+    from: PixelFormat,
+    to: PixelFormat,
+}
+
+impl RowConverterOp {
+    /// Create a conversion op between any two formats.
+    ///
+    /// Returns `None` if no conversion path exists.
+    pub fn new(from: PixelFormat, to: PixelFormat) -> Option<Self> {
+        let converter = zenpixels_convert::RowConverter::new(from, to).ok()?;
+        Some(Self {
+            converter,
+            from,
+            to,
+        })
+    }
+
+    /// Create a conversion op, panicking if no path exists.
+    #[track_caller]
+    pub fn must(from: PixelFormat, to: PixelFormat) -> Self {
+        Self::new(from, to).unwrap_or_else(|| {
+            panic!("no conversion path from {from} to {to}");
+        })
+    }
+}
+
+impl PixelOp for RowConverterOp {
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        let src_stride = self.from.row_bytes(width);
+        let dst_stride = self.to.row_bytes(width);
+        for r in 0..height {
+            let src_start = r as usize * src_stride;
+            let dst_start = r as usize * dst_stride;
+            self.converter.convert_row(
+                &input[src_start..src_start + src_stride],
+                &mut output[dst_start..dst_start + dst_stride],
+                width,
+            );
+        }
     }
 
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        self.from
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        self.to
+    }
+}
+
+// =========================================================================
+// Named convenience ops (backward compatible)
+// =========================================================================
+
+/// Fused sRGB u8 → linear f32 + premultiply.
+///
+/// Input: `RGBA8_SRGB` (4 bytes/px)
+/// Output: `RGBAF32_LINEAR_PREMUL` (16 bytes/px)
+pub struct SrgbToLinearPremul;
+
+impl PixelOp for SrgbToLinearPremul {
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBA8_SRGB, format::RGBAF32_LINEAR_PREMUL)
+            .apply(input, output, width, height);
+    }
+    fn input_format(&self) -> PixelFormat {
+        format::RGBA8_SRGB
+    }
+    fn output_format(&self) -> PixelFormat {
+        format::RGBAF32_LINEAR_PREMUL
     }
 }
 
 /// Fused unpremultiply + linear f32 → sRGB u8.
 ///
-/// Input: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul) (16 bytes/px)
-/// Output: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
+/// Input: `RGBAF32_LINEAR_PREMUL` (16 bytes/px)
+/// Output: `RGBA8_SRGB` (4 bytes/px)
 pub struct UnpremulLinearToSrgb;
 
 impl PixelOp for UnpremulLinearToSrgb {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let in_f32: &[f32] = bytemuck::cast_slice(input);
-        linear_srgb::default::unpremultiply_linear_to_srgb_u8_rgba_slice(in_f32, output);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR_PREMUL, format::RGBA8_SRGB)
+            .apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
 }
 
 /// Premultiply alpha in-place on f32 linear data.
 ///
-/// Format: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear) → [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
+/// Format: `RGBAF32_LINEAR` → `RGBAF32_LINEAR_PREMUL`
 pub struct Premultiply;
 
 impl PixelOp for Premultiply {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        garb::bytes::premultiply_alpha_f32(output).expect("buffer is pixel-aligned");
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR, format::RGBAF32_LINEAR_PREMUL)
+            .apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
 }
 
 /// Unpremultiply alpha in-place on f32 linear data.
 ///
-/// Format: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul) → [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
+/// Format: `RGBAF32_LINEAR_PREMUL` → `RGBAF32_LINEAR`
 pub struct Unpremultiply;
 
 impl PixelOp for Unpremultiply {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        garb::bytes::unpremultiply_alpha_f32(output).expect("buffer is pixel-aligned");
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR_PREMUL, format::RGBAF32_LINEAR)
+            .apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }
 
 /// sRGB u8 → linear f32 (straight alpha, no premultiply).
 ///
-/// Input: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
-/// Output: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear) (16 bytes/px)
+/// Input: `RGBA8_SRGB` (4 bytes/px)
+/// Output: `RGBAF32_LINEAR` (16 bytes/px)
 pub struct SrgbToLinear;
 
 impl PixelOp for SrgbToLinear {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::srgb_u8_to_linear_rgba_slice(input, out_f32);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBA8_SRGB, format::RGBAF32_LINEAR).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }
 
 /// Linear f32 → sRGB u8 (straight alpha, no unpremultiply).
 ///
-/// Input: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear) (16 bytes/px)
-/// Output: [`Rgba8`](PixelFormat::Rgba8) (4 bytes/px)
+/// Input: `RGBAF32_LINEAR` (16 bytes/px)
+/// Output: `RGBA8_SRGB` (4 bytes/px)
 pub struct LinearToSrgb;
 
 impl PixelOp for LinearToSrgb {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let in_f32: &[f32] = bytemuck::cast_slice(input);
-        linear_srgb::default::linear_to_srgb_u8_rgba_slice(in_f32, output);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR, format::RGBA8_SRGB).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
 }
 
 /// Linearize f32 sRGB channels in-place (straight alpha preserved).
 ///
-/// Input: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
-/// Output: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
+/// Input: `RGBAF32_SRGB`
+/// Output: `RGBAF32_LINEAR`
 pub struct LinearizeF32;
 
 impl PixelOp for LinearizeF32 {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::srgb_to_linear_rgba_slice(out_f32);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_SRGB, format::RGBAF32_LINEAR).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }
 
 /// Delinearize f32 linear channels in-place (straight alpha preserved).
 ///
-/// Input: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
-/// Output: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+/// Input: `RGBAF32_LINEAR`
+/// Output: `RGBAF32_SRGB`
 pub struct DelinearizeF32;
 
 impl PixelOp for DelinearizeF32 {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::linear_to_srgb_rgba_slice(out_f32);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR, format::RGBAF32_SRGB).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
 }
 
 /// Fused linearize + premultiply on f32 sRGB data.
 ///
-/// Input: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
-/// Output: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
+/// Input: `RGBAF32_SRGB`
+/// Output: `RGBAF32_LINEAR_PREMUL`
 pub struct SrgbF32ToLinearPremul;
 
 impl PixelOp for SrgbF32ToLinearPremul {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::srgb_to_linear_premultiply_rgba_slice(out_f32);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_SRGB, format::RGBAF32_LINEAR_PREMUL)
+            .apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
 }
 
 /// Fused unpremultiply + delinearize on f32 linear premul data.
 ///
-/// Input: [`Rgbaf32LinearPremul`](PixelFormat::Rgbaf32LinearPremul)
-/// Output: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+/// Input: `RGBAF32_LINEAR_PREMUL`
+/// Output: `RGBAF32_SRGB`
 pub struct UnpremulLinearToSrgbF32;
 
 impl PixelOp for UnpremulLinearToSrgbF32 {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        output.copy_from_slice(input);
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        linear_srgb::default::unpremultiply_linear_to_srgb_rgba_slice(out_f32);
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_LINEAR_PREMUL, format::RGBAF32_SRGB)
+            .apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32LinearPremul
+        format::RGBAF32_LINEAR_PREMUL
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
 }
 
 /// Normalize u8 to f32 (divide by 255). No gamma conversion.
 ///
-/// Input: [`Rgba8`](PixelFormat::Rgba8)
-/// Output: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
+/// Input: `RGBA8_SRGB`
+/// Output: `RGBAF32_SRGB`
 pub struct NormalizeU8ToF32;
 
 impl PixelOp for NormalizeU8ToF32 {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        for (o, &i) in out_f32.iter_mut().zip(input.iter()) {
-            *o = i as f32 / 255.0;
-        }
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBA8_SRGB, format::RGBAF32_SRGB).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
 }
 
 /// Quantize f32 to u8 (multiply by 255 + round). No gamma conversion.
 ///
-/// Input: [`Rgbaf32Srgb`](PixelFormat::Rgbaf32Srgb)
-/// Output: [`Rgba8`](PixelFormat::Rgba8)
+/// Input: `RGBAF32_SRGB`
+/// Output: `RGBA8_SRGB`
 pub struct QuantizeF32ToU8;
 
 impl PixelOp for QuantizeF32ToU8 {
-    fn apply(&self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
-        let in_f32: &[f32] = bytemuck::cast_slice(input);
-        for (o, &i) in output.iter_mut().zip(in_f32.iter()) {
-            *o = (i * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
-        }
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        static_op(format::RGBAF32_SRGB, format::RGBA8_SRGB).apply(input, output, width, height);
     }
-
     fn input_format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Srgb
+        format::RGBAF32_SRGB
     }
     fn output_format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
+}
+
+// =========================================================================
+// Helper: create a RowConverterOp for named ops at call time
+// =========================================================================
+
+fn static_op(from: PixelFormat, to: PixelFormat) -> RowConverterOp {
+    RowConverterOp::must(from, to)
 }

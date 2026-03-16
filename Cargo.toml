@@ -11,17 +11,15 @@ categories = ["graphics", "multimedia::images"]
 
 [features]
 default = ["std"]
-std = ["zenresize/std", "linear-srgb/std", "garb/std"]
+std = ["zenresize/std", "zenpixels-convert/std"]
 codec = ["zencodec", "zenpixels"]
 filters = ["dep:zenfilters"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
-# sRGB ↔ linear conversion (slice-based, stateless)
-linear-srgb = { path = "../linear-srgb", default-features = false }
-# Premultiply/unpremultiply, swizzle (slice-based, stateless)
-garb = { version = "0.2.1", default-features = false, features = ["experimental"] }
+# Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
+zenpixels-convert = { path = "../zenpixels/zenpixels-convert", default-features = false }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # no_std-compatible HashMap for graph compilation

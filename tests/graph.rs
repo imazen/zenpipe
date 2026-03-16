@@ -3,7 +3,7 @@ use hashbrown::HashMap;
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::ops::{SrgbToLinearPremul, UnpremulLinearToSrgb};
 use zenpipe::sources::CallbackSource;
-use zenpipe::{PixelFormat, Source};
+use zenpipe::{PixelFormat, Source, format};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -21,7 +21,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
     Box::new(CallbackSource::new(
         width,
         height,
-        PixelFormat::Rgba8,
+        format::RGBA8_SRGB,
         16,
         move |buf| {
             if rows_produced >= height {
@@ -42,7 +42,7 @@ fn gradient_source(width: u32, height: u32) -> Box<dyn Source> {
     Box::new(CallbackSource::new(
         width,
         height,
-        PixelFormat::Rgba8,
+        format::RGBA8_SRGB,
         16,
         move |buf| {
             if row_idx >= height {
@@ -127,7 +127,7 @@ fn pixel_op_fusion() {
     sources.insert(src, solid_source(4, 2, [200, 100, 50, 255]));
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
     for px in data.chunks_exact(4) {
@@ -337,7 +337,7 @@ fn streaming_resize_graph() {
     let mut pipeline = g.compile(sources).unwrap();
     assert_eq!(pipeline.width(), 2);
     assert_eq!(pipeline.height(), 2);
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 2 * 2 * 4);
@@ -366,7 +366,7 @@ fn streaming_composite_graph() {
 
     let mut pipeline = g.compile(sources).unwrap();
     // CompositeSource outputs Rgbaf32LinearPremul
-    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
+    assert_eq!(pipeline.format(), format::RGBAF32_LINEAR_PREMUL);
     assert_eq!(pipeline.width(), 4);
     assert_eq!(pipeline.height(), 4);
 
@@ -476,7 +476,7 @@ fn auto_format_conversion_for_composite() {
     sources.insert(fg, solid_source(2, 2, [0, 0, 0, 0])); // fully transparent
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
+    assert_eq!(pipeline.format(), format::RGBAF32_LINEAR_PREMUL);
 
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
@@ -526,7 +526,7 @@ fn layout_composite_streaming() {
 
     let mut pipeline = g.compile(sources).unwrap();
     // CompositeSource outputs Rgbaf32LinearPremul
-    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
+    assert_eq!(pipeline.format(), format::RGBAF32_LINEAR_PREMUL);
     assert_eq!(pipeline.width(), 4);
     assert_eq!(pipeline.height(), 4);
 
@@ -559,7 +559,7 @@ fn auto_format_rgba8_to_linear_direct() {
     sources.insert(src, solid_source(4, 2, [200, 100, 50, 180]));
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
     for px in data.chunks_exact(4) {

@@ -17,7 +17,7 @@
 //!     }
 //! }
 //! let streaming = job.into_streaming_decoder(data, &[PixelDescriptor::RGBA8_SRGB])?;
-//! let source = DecoderSource::new(streaming, PixelFormat::Rgba8)?;
+//! let source = DecoderSource::new(streaming, PixelDescriptor::RGBA8_SRGB)?;
 //! ```
 
 use alloc::boxed::Box;
@@ -31,32 +31,6 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{StripBuf, StripRef};
-
-// =============================================================================
-// PixelDescriptor ↔ PixelFormat mapping
-// =============================================================================
-
-/// Map a zenpixels [`PixelDescriptor`] to a zenpipe [`PixelFormat`].
-///
-/// Returns `None` for descriptors that don't map to a zenpipe format.
-pub fn descriptor_to_format(desc: PixelDescriptor) -> Option<PixelFormat> {
-    if desc == PixelDescriptor::RGBA8_SRGB {
-        Some(PixelFormat::Rgba8)
-    } else {
-        // TODO: map f32 linear premul, f32 linear, f32 srgb descriptors
-        None
-    }
-}
-
-/// Map a zenpipe [`PixelFormat`] to a zenpixels [`PixelDescriptor`].
-pub fn format_to_descriptor(fmt: PixelFormat) -> PixelDescriptor {
-    match fmt {
-        PixelFormat::Rgba8 => PixelDescriptor::RGBA8_SRGB,
-        // For f32 formats, construct the appropriate descriptor.
-        // These may need refinement once zenpixels f32 descriptors are stabilized.
-        _ => PixelDescriptor::RGBA8_SRGB, // fallback — caller should ensure format match
-    }
-}
 
 // =============================================================================
 // DecoderSource
@@ -168,7 +142,7 @@ impl<'a> EncoderSink<'a> {
         Self {
             encoder: Some(encoder),
             output: None,
-            descriptor: format_to_descriptor(format),
+            descriptor: format,
         }
     }
 

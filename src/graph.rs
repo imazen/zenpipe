@@ -12,8 +12,8 @@
 //! - **No estimate phase**: dimensions propagate naturally through `Source::width()`/`height()`
 //!   during compilation.
 //! - **No expand phase**: zen crates handle internal optimization.
-//! - **Automatic format conversion**: inserts `SrgbToLinearPremul` /
-//!   `UnpremulLinearToSrgb` where required (e.g., before streaming composite).
+//! - **Automatic format conversion**: inserts [`RowConverterOp`](crate::ops::RowConverterOp)
+//!   for any format pair supported by zenpixels-convert (sRGB, P3, BT.2020, PQ, HLG, etc.).
 //! - **Op fusion**: adjacent [`PixelTransform`](NodeOp::PixelTransform) nodes are fused into
 //!   a single [`TransformSource`](crate::sources::TransformSource).
 //!
@@ -43,8 +43,8 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
-use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
+use crate::format::{self, PixelFormat};
+use crate::ops::{PixelOp, RowConverterOp};
 #[cfg(feature = "filters")]
 use crate::sources::FilterSource;
 use crate::sources::{
@@ -130,7 +130,7 @@ pub enum NodeOp {
     // === Filters (zenfilters integration) ===
     /// Apply a [`zenfilters::Pipeline`] of photo filters.
     ///
-    /// Input is auto-converted to [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+    /// Input is auto-converted to [`Rgbaf32Linear`](format::RGBAF32_LINEAR).
     /// Per-pixel-only pipelines stream strip-by-strip via [`FilterSource`].
     /// Pipelines with neighborhood filters (blur, clarity, sharpen) use
     /// windowed materialization via [`WindowedFilterSource`] — only
@@ -253,7 +253,7 @@ impl PipelineGraph {
             NodeOp::Layout { plan, filter } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let mut source = self.compile_node(input_id, sources)?;
-                source = ensure_format(source, PixelFormat::Rgba8);
+                source = ensure_format(source, format::RGBA8_SRGB)?;
 
                 let content_size = plan.content_size;
 
@@ -296,7 +296,7 @@ impl PipelineGraph {
                 plan.canvas_color = zenresize::CanvasColor::Transparent;
 
                 let mut fg = self.compile_node(fg_id, sources)?;
-                fg = ensure_format(fg, PixelFormat::Rgba8);
+                fg = ensure_format(fg, format::RGBA8_SRGB)?;
                 let fg_w = fg.width();
                 let fg_h = fg.height();
                 let resizer = zenresize::streaming_from_plan_batched(
@@ -312,8 +312,8 @@ impl PipelineGraph {
                 let bg = self.compile_node(bg_id, sources)?;
 
                 // Composite foreground over background in premultiplied linear space.
-                let fg = ensure_format(fg, PixelFormat::Rgbaf32LinearPremul);
-                let bg = ensure_format(bg, PixelFormat::Rgbaf32LinearPremul);
+                let fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
+                let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
 
                 Ok(Box::new(CompositeSource::over_at(bg, fg, 0, 0)?))
             }
@@ -327,7 +327,7 @@ impl PipelineGraph {
             NodeOp::Resize { w, h } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
-                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let config =
                     zenresize::ResizeConfig::builder(upstream.width(), upstream.height(), w, h)
                         .build();
@@ -340,7 +340,7 @@ impl PipelineGraph {
                 if orientation.is_identity() {
                     return Ok(upstream);
                 }
-                let upstream = ensure_format(upstream, PixelFormat::Rgba8);
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let in_w = upstream.width();
                 let in_h = upstream.height();
                 Ok(Box::new(MaterializedSource::from_source_with_transform(
@@ -372,8 +372,8 @@ impl PipelineGraph {
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg = self.compile_node(bg_id, sources)?;
                 let fg = self.compile_node(fg_id, sources)?;
-                let bg = ensure_format(bg, PixelFormat::Rgbaf32LinearPremul);
-                let fg = ensure_format(fg, PixelFormat::Rgbaf32LinearPremul);
+                let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
+                let fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
                 Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
@@ -392,8 +392,7 @@ impl PipelineGraph {
                     };
                     let resize_input_id = self.find_input(input_id, EdgeKind::Input)?;
                     let resize_upstream = self.compile_node(resize_input_id, sources)?;
-                    let resize_upstream =
-                        ensure_format(resize_upstream, PixelFormat::Rgbaf32Linear);
+                    let resize_upstream = ensure_format(resize_upstream, format::RGBAF32_LINEAR)?;
                     let config = zenresize::ResizeConfig::builder(
                         resize_upstream.width(),
                         resize_upstream.height(),
@@ -409,7 +408,7 @@ impl PipelineGraph {
                     )?) as Box<dyn Source>
                 } else {
                     let upstream = self.compile_node(input_id, sources)?;
-                    ensure_format(upstream, PixelFormat::Rgbaf32Linear)
+                    ensure_format(upstream, format::RGBAF32_LINEAR)?
                 };
 
                 if pipeline.has_neighborhood_filter() {
@@ -462,64 +461,27 @@ impl Default for PipelineGraph {
 }
 
 // =============================================================================
-// Format conversion helpers
+// Format conversion helper — generic via RowConverterOp
 // =============================================================================
 
 /// Insert a format conversion source if needed.
-fn ensure_format(source: Box<dyn Source>, target: PixelFormat) -> Box<dyn Source> {
+///
+/// Uses [`RowConverterOp`] to handle any conversion that zenpixels-convert
+/// supports, including gamut changes (BT.709 ↔ P3 ↔ BT.2020), transfer
+/// function changes (sRGB ↔ Linear ↔ PQ ↔ HLG), alpha mode changes,
+/// and depth changes.
+fn ensure_format(
+    source: Box<dyn Source>,
+    target: PixelFormat,
+) -> Result<Box<dyn Source>, PipeError> {
     let current = source.format();
     if current == target {
-        return source;
+        return Ok(source);
     }
-    match (current, target) {
-        // === Rgba8 ↔ premul linear ===
-        (PixelFormat::Rgba8, PixelFormat::Rgbaf32LinearPremul) => {
-            Box::new(TransformSource::new(source).push(SrgbToLinearPremul))
-        }
-        (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgba8) => {
-            Box::new(TransformSource::new(source).push(UnpremulLinearToSrgb))
-        }
-        // === Rgba8 ↔ straight linear ===
-        (PixelFormat::Rgba8, PixelFormat::Rgbaf32Linear) => {
-            Box::new(TransformSource::new(source).push(ops::SrgbToLinear))
-        }
-        (PixelFormat::Rgbaf32Linear, PixelFormat::Rgba8) => {
-            Box::new(TransformSource::new(source).push(ops::LinearToSrgb))
-        }
-        // === Rgba8 ↔ f32 sRGB ===
-        (PixelFormat::Rgba8, PixelFormat::Rgbaf32Srgb) => {
-            Box::new(TransformSource::new(source).push(ops::NormalizeU8ToF32))
-        }
-        (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgba8) => {
-            Box::new(TransformSource::new(source).push(ops::QuantizeF32ToU8))
-        }
-        // === f32 sRGB ↔ f32 linear (gamma only, no premul) ===
-        (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgbaf32Linear) => {
-            Box::new(TransformSource::new(source).push(ops::LinearizeF32))
-        }
-        (PixelFormat::Rgbaf32Linear, PixelFormat::Rgbaf32Srgb) => {
-            Box::new(TransformSource::new(source).push(ops::DelinearizeF32))
-        }
-        // === premul ↔ straight linear ===
-        (PixelFormat::Rgbaf32Linear, PixelFormat::Rgbaf32LinearPremul) => {
-            Box::new(TransformSource::new(source).push(ops::Premultiply))
-        }
-        (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgbaf32Linear) => {
-            Box::new(TransformSource::new(source).push(ops::Unpremultiply))
-        }
-        // === fused f32 sRGB ↔ premul linear (one pass instead of two) ===
-        (PixelFormat::Rgbaf32Srgb, PixelFormat::Rgbaf32LinearPremul) => {
-            Box::new(TransformSource::new(source).push(ops::SrgbF32ToLinearPremul))
-        }
-        (PixelFormat::Rgbaf32LinearPremul, PixelFormat::Rgbaf32Srgb) => {
-            Box::new(TransformSource::new(source).push(ops::UnpremulLinearToSrgbF32))
-        }
-        // === Multi-hop for remaining conversions ===
-        _ => {
-            // Route through Rgbaf32Linear as the hub format — it connects
-            // to all other formats in one hop.
-            let intermediate = ensure_format(source, PixelFormat::Rgbaf32Linear);
-            ensure_format(intermediate, target)
-        }
-    }
+    let op = RowConverterOp::new(current, target).ok_or_else(|| {
+        PipeError::Op(alloc::format!(
+            "no conversion path from {current} to {target}"
+        ))
+    })?;
+    Ok(Box::new(TransformSource::new(source).push(op)))
 }

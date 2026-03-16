@@ -8,6 +8,14 @@
 //! upstream source, transforms them, and yields output strips. Only the
 //! rows needed by the current kernel window are buffered.
 //!
+//! # Pixel format model
+//!
+//! Pixel formats are described by [`PixelFormat`] (an alias for
+//! [`zenpixels_convert::PixelDescriptor`]), which carries color primaries
+//! (BT.709, Display P3, BT.2020), transfer function (sRGB, Linear, PQ, HLG),
+//! alpha mode, and channel layout. Format conversions are handled automatically
+//! by the graph compiler via [`zenpixels_convert::RowConverter`].
+//!
 //! # Execution model
 //!
 //! The pipeline is **pull-based**: the sink (encoder) drives execution by
@@ -32,7 +40,7 @@
 extern crate alloc;
 
 mod error;
-mod format;
+pub mod format;
 pub mod graph;
 pub mod ops;
 pub mod sources;
@@ -42,8 +50,14 @@ mod strip;
 pub mod codec;
 
 pub use error::PipeError;
-pub use format::PixelFormat;
+pub use format::{PixelFormat, PixelFormatExt};
 pub use strip::{StripBuf, StripRef};
+
+// Re-export key zenpixels-convert types for convenience.
+pub use zenpixels_convert::{
+    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelDescriptor, RowConverter,
+    SignalRange, TransferFunction,
+};
 
 /// A source of pixel strips (pull-based).
 ///

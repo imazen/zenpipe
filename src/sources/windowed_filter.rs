@@ -16,7 +16,7 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{self, PixelFormat};
 use crate::strip::{StripBuf, StripRef};
 
 /// Default overlap in rows. Covers Sharpen (3), Bilateral (6),
@@ -32,7 +32,7 @@ pub const DEFAULT_OVERLAP: u32 = 128;
 /// The `overlap` rows on each side provide neighborhood context for
 /// correct filter output.
 ///
-/// Input and output format is [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+/// Input and output format is [`Rgbaf32Linear`](format::RGBAF32_LINEAR).
 pub struct WindowedFilterSource {
     upstream: Box<dyn Source>,
     pipeline: zenfilters::Pipeline,
@@ -94,15 +94,15 @@ impl WindowedFilterSource {
     /// strip. Must be ≥ the maximum neighborhood radius of any filter in the
     /// pipeline. Use [`DEFAULT_OVERLAP`] (128) for common filters.
     ///
-    /// Upstream must produce [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+    /// Upstream must produce [`Rgbaf32Linear`](format::RGBAF32_LINEAR).
     pub fn new(
         upstream: Box<dyn Source>,
         pipeline: zenfilters::Pipeline,
         overlap: u32,
     ) -> Result<Self, PipeError> {
-        if upstream.format() != PixelFormat::Rgbaf32Linear {
+        if upstream.format() != format::RGBAF32_LINEAR {
             return Err(PipeError::FormatMismatch {
-                expected: PixelFormat::Rgbaf32Linear,
+                expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
             });
         }
@@ -136,7 +136,7 @@ impl WindowedFilterSource {
             buf_start_y: 0,
             buf_rows: 0,
             out_f32: vec![0.0f32; row_len * max_window as usize],
-            out_strip: StripBuf::new(width, strip_height, PixelFormat::Rgbaf32Linear),
+            out_strip: StripBuf::new(width, strip_height, format::RGBAF32_LINEAR),
             output_y: 0,
             upstream_y: 0,
             upstream_done: false,
@@ -273,7 +273,7 @@ impl Source for WindowedFilterSource {
         // Extract center rows into output strip
         let actual_rows = output_rows.min(window_height.saturating_sub(output_offset));
         self.out_strip
-            .reconfigure(self.width, actual_rows, PixelFormat::Rgbaf32Linear);
+            .reconfigure(self.width, actual_rows, format::RGBAF32_LINEAR);
         self.out_strip.reset(self.output_y);
 
         for r in 0..actual_rows {
@@ -300,6 +300,6 @@ impl Source for WindowedFilterSource {
         self.total_height
     }
     fn format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }

@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{PixelFormat, PixelFormatExt};
 use crate::ops::PixelOp;
 use crate::strip::StripRef;
 
@@ -43,7 +43,7 @@ impl TransformSource {
         assert_eq!(
             op.input_format(),
             self.output_format,
-            "op input format {:?} doesn't match chain output {:?}",
+            "op input format {} doesn't match chain output {}",
             op.input_format(),
             self.output_format,
         );
@@ -59,7 +59,7 @@ impl TransformSource {
         assert_eq!(
             op.input_format(),
             self.output_format,
-            "op input format {:?} doesn't match chain output {:?}",
+            "op input format {} doesn't match chain output {}",
             op.input_format(),
             self.output_format,
         );

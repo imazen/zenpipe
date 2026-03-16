@@ -14,7 +14,7 @@ use hashbrown::HashMap;
 
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::sources::CallbackSource;
-use zenpipe::{PixelFormat, Source};
+use zenpipe::{Source, format};
 
 const WIDTH: u32 = 3840;
 const HEIGHT: u32 = 2160;
@@ -31,7 +31,7 @@ fn gradient_4k() -> Box<dyn Source> {
     Box::new(CallbackSource::new(
         WIDTH,
         HEIGHT,
-        PixelFormat::Rgba8,
+        format::RGBA8_SRGB,
         16,
         move |buf| {
             if row_idx >= HEIGHT {
@@ -138,7 +138,7 @@ fn streaming_4k_resize_filter() {
     let mut pipeline = g.compile(sources).unwrap();
     assert_eq!(pipeline.width(), 1920);
     assert_eq!(pipeline.height(), 1080);
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let (total_bytes, strip_count, max_strip_h) = drain_counting(pipeline.as_mut());
 
@@ -290,7 +290,7 @@ fn streaming_4k_full_pipeline() {
     sources.insert(src, gradient_4k());
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let (total_bytes, strip_count, max_strip_h) = drain_counting(pipeline.as_mut());
 
@@ -337,7 +337,7 @@ fn streaming_4k_windowed_clarity() {
     sources.insert(src, gradient_4k());
 
     let mut pipeline = g.compile(sources).unwrap();
-    assert_eq!(pipeline.format(), PixelFormat::Rgba8);
+    assert_eq!(pipeline.format(), format::RGBA8_SRGB);
     assert_eq!(pipeline.width(), 1920);
     assert_eq!(pipeline.height(), 1080);
 

@@ -2,6 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::PixelFormat;
+use crate::format::PixelFormatExt;
 
 /// Borrowed view of a horizontal strip of pixels.
 ///

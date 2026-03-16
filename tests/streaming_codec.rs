@@ -144,7 +144,7 @@ fn stream_4k_jpeg_decode_encode() {
 #[test]
 fn codec_bridge_roundtrip() {
     use zenpipe::codec::{DecoderSource, EncoderSink};
-    use zenpipe::{PixelFormat, Source, execute};
+    use zenpipe::{Source, execute, format};
 
     // Small image to test the bridge (256×256)
     let w = 256u32;
@@ -186,7 +186,7 @@ fn codec_bridge_roundtrip() {
     };
 
     let mut source =
-        DecoderSource::new(streaming, PixelFormat::Rgba8).expect("DecoderSource creation");
+        DecoderSource::new(streaming, format::RGBA8_SRGB).expect("DecoderSource creation");
     assert_eq!(source.width(), w);
     assert_eq!(source.height(), h);
 
@@ -201,7 +201,7 @@ fn codec_bridge_roundtrip() {
         Box::new(SendEncoderShim(concrete))
     };
 
-    let mut sink = EncoderSink::new(dyn_enc, PixelFormat::Rgba8);
+    let mut sink = EncoderSink::new(dyn_enc, format::RGBA8_SRGB);
 
     // Execute pipeline
     execute(&mut source, &mut sink).expect("pipeline execution");

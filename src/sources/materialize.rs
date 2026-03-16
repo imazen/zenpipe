@@ -3,7 +3,7 @@ use alloc::vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{PixelFormat, PixelFormatExt};
 use crate::strip::StripRef;
 
 /// Fully materializes an upstream source, then replays it as strips.

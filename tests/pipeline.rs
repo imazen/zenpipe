@@ -5,7 +5,7 @@ use zenpipe::ops::{
 use zenpipe::sources::{
     CallbackSource, CropSource, EdgeReplicateSource, MaterializedSource, TransformSource,
 };
-use zenpipe::{PipeError, PixelFormat, Source, StripRef};
+use zenpipe::{PipeError, Source, StripRef, format};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -21,7 +21,7 @@ fn solid_rgba8(width: u32, height: u32, r: u8, g: u8, b: u8, a: u8) -> CallbackS
     let pixel = [r, g, b, a];
     let row_bytes = width as usize * 4;
     let mut rows_produced = 0u32;
-    CallbackSource::new(width, height, PixelFormat::Rgba8, 16, move |buf| {
+    CallbackSource::new(width, height, format::RGBA8_SRGB, 16, move |buf| {
         if rows_produced >= height {
             return Ok(false);
         }
@@ -38,7 +38,7 @@ fn callback_source_dimensions() {
     let src = solid_rgba8(64, 48, 255, 0, 0, 255);
     assert_eq!(src.width(), 64);
     assert_eq!(src.height(), 48);
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn from_data_source() {
         data[row2 + x * 4 + 3] = 255; // A
     }
 
-    let mut src = CallbackSource::from_data(&data, width, height, PixelFormat::Rgba8, 16);
+    let mut src = CallbackSource::from_data(&data, width, height, format::RGBA8_SRGB, 16);
     let out = drain(&mut src);
     assert_eq!(out, data);
 }
@@ -104,7 +104,7 @@ fn transform_roundtrip_srgb_linear() {
 
     assert_eq!(src.width(), 4);
     assert_eq!(src.height(), 2);
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
 
     let data = drain(&mut src);
     assert_eq!(data.len(), 4 * 4 * 2);
@@ -123,7 +123,7 @@ fn transform_normalize_quantize_roundtrip() {
         .push(NormalizeU8ToF32)
         .push(QuantizeF32ToU8);
 
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
     for px in data.chunks_exact(4) {
         assert_eq!(px, [128, 64, 32, 200]);
@@ -156,7 +156,7 @@ fn crop_basic() {
         }
     }
 
-    let src = CallbackSource::from_data(&data, width, height, PixelFormat::Rgba8, 16);
+    let src = CallbackSource::from_data(&data, width, height, format::RGBA8_SRGB, 16);
     let mut crop = CropSource::new(Box::new(src), 2, 1, 4, 3).unwrap();
 
     assert_eq!(crop.width(), 4);
@@ -211,7 +211,7 @@ fn materialize_with_transform() {
         }
     }
 
-    let src = CallbackSource::from_data(&data, width, height, PixelFormat::Rgba8, 16);
+    let src = CallbackSource::from_data(&data, width, height, format::RGBA8_SRGB, 16);
     let mut mat =
         MaterializedSource::from_source_with_transform(Box::new(src), |buf, w, _h, _fmt| {
             let width = *w as usize;
@@ -290,16 +290,16 @@ fn transform_chain_format_progression() {
     // Verify intermediate format tracking
     let src = solid_rgba8(2, 1, 100, 150, 200, 255);
     let t1 = TransformSource::new(Box::new(src)).push(NormalizeU8ToF32);
-    assert_eq!(t1.format(), PixelFormat::Rgbaf32Srgb);
+    assert_eq!(t1.format(), format::RGBAF32_SRGB);
     let t2 = t1.push(QuantizeF32ToU8);
-    assert_eq!(t2.format(), PixelFormat::Rgba8);
+    assert_eq!(t2.format(), format::RGBA8_SRGB);
 }
 
 #[test]
 fn strip_buf_basic() {
     use zenpipe::StripBuf;
 
-    let mut buf = StripBuf::new(4, 3, PixelFormat::Rgba8);
+    let mut buf = StripBuf::new(4, 3, format::RGBA8_SRGB);
     assert_eq!(buf.rows_filled(), 0);
     assert_eq!(buf.capacity_rows(), 3);
     assert_eq!(buf.stride(), 16);
@@ -319,7 +319,7 @@ fn strip_buf_basic() {
 #[test]
 fn materialize_from_data() {
     let data = vec![255u8; 4 * 4 * 4]; // 4x4 white RGBA
-    let mut src = MaterializedSource::from_data(data.clone(), 4, 4, PixelFormat::Rgba8);
+    let mut src = MaterializedSource::from_data(data.clone(), 4, 4, format::RGBA8_SRGB);
     let out = drain(&mut src);
     assert_eq!(out, data);
 }
@@ -328,7 +328,7 @@ fn materialize_from_data() {
 fn crop_full_image() {
     // Cropping the full image should be identity
     let data = vec![42u8; 8 * 8 * 4];
-    let src = CallbackSource::from_data(&data, 8, 8, PixelFormat::Rgba8, 16);
+    let src = CallbackSource::from_data(&data, 8, 8, format::RGBA8_SRGB, 16);
     let mut crop = CropSource::new(Box::new(src), 0, 0, 8, 8).unwrap();
     let out = drain(&mut crop);
     assert_eq!(out.len(), 8 * 8 * 4);
@@ -339,7 +339,7 @@ fn crop_full_image() {
 fn small_strip_height() {
     // Strip height of 1 — process one row at a time
     // CallbackSource uses the strip_height we give it
-    let mut src = CallbackSource::new(4, 4, PixelFormat::Rgba8, 1, {
+    let mut src = CallbackSource::new(4, 4, format::RGBA8_SRGB, 1, {
         let mut row = 0u32;
         move |buf| {
             if row >= 4 {
@@ -374,7 +374,7 @@ fn transform_srgb_to_linear_roundtrip() {
         .push(SrgbToLinear)
         .push(LinearToSrgb);
 
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
     assert_eq!(data.len(), 4 * 4 * 2);
     for px in data.chunks_exact(4) {
@@ -395,7 +395,7 @@ fn transform_linearize_delinearize_roundtrip() {
         .push(DelinearizeF32)
         .push(QuantizeF32ToU8);
 
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
     for px in data.chunks_exact(4) {
         assert!((px[0] as i16 - 180).unsigned_abs() <= 1, "R: {}", px[0]);
@@ -414,7 +414,7 @@ fn transform_format_chain_linear_via_premul() {
         .push(zenpipe::ops::Unpremultiply)
         .push(LinearToSrgb);
 
-    assert_eq!(src.format(), PixelFormat::Rgba8);
+    assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
     for px in data.chunks_exact(4) {
         assert!((px[0] as i16 - 160).unsigned_abs() <= 2, "R: {}", px[0]);
@@ -444,7 +444,7 @@ fn edge_replicate_right_and_bottom() {
         }
     }
 
-    let src = CallbackSource::from_data(&data, width, height, PixelFormat::Rgba8, 16);
+    let src = CallbackSource::from_data(&data, width, height, format::RGBA8_SRGB, 16);
     let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 3, 6, 5);
 
     assert_eq!(edge.width(), 6);
@@ -454,7 +454,7 @@ fn edge_replicate_right_and_bottom() {
     assert_eq!(out.len(), 6 * 5 * 4);
 
     // Row 0: x=[0,1,2,3,3,3] (rightmost pixel replicated)
-    assert_eq!(out[0 * 4], 0); // x=0
+    assert_eq!(out[0], 0); // x=0
     assert_eq!(out[3 * 4], 3); // x=3 (last content)
     assert_eq!(out[4 * 4], 3); // x=4 (replicated)
     assert_eq!(out[5 * 4], 3); // x=5 (replicated)

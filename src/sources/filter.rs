@@ -10,12 +10,12 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{self, PixelFormat, PixelFormatExt};
 use crate::strip::StripRef;
 
 /// Applies a [`zenfilters::Pipeline`] strip-by-strip.
 ///
-/// Input and output format is [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear)
+/// Input and output format is [`Rgbaf32Linear`](format::RGBAF32_LINEAR)
 /// (interleaved RGBA f32, straight alpha, linear light). The graph compiler
 /// inserts format conversions automatically.
 ///
@@ -36,14 +36,14 @@ pub struct FilterSource {
 impl FilterSource {
     /// Wrap an upstream source with a per-pixel filter pipeline.
     ///
-    /// Upstream must produce [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+    /// Upstream must produce [`Rgbaf32Linear`](format::RGBAF32_LINEAR).
     pub fn new(
         upstream: Box<dyn Source>,
         pipeline: zenfilters::Pipeline,
     ) -> Result<Self, PipeError> {
-        if upstream.format() != PixelFormat::Rgbaf32Linear {
+        if upstream.format() != format::RGBAF32_LINEAR {
             return Err(PipeError::FormatMismatch {
-                expected: PixelFormat::Rgbaf32Linear,
+                expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
             });
         }
@@ -85,7 +85,7 @@ impl Source for FilterSource {
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
             .map_err(|e| PipeError::Op(e.to_string()))?;
 
-        let stride = PixelFormat::Rgbaf32Linear.row_bytes(w);
+        let stride = format::RGBAF32_LINEAR.row_bytes(w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
 
         Ok(Some(StripRef {
@@ -94,7 +94,7 @@ impl Source for FilterSource {
             height: h,
             stride,
             y,
-            format: PixelFormat::Rgbaf32Linear,
+            format: format::RGBAF32_LINEAR,
         }))
     }
 
@@ -105,6 +105,6 @@ impl Source for FilterSource {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }

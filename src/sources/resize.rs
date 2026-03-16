@@ -4,7 +4,7 @@ use alloc::string::ToString;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::PixelFormat;
+use crate::format::{self, PixelFormat};
 use crate::strip::{StripBuf, StripRef};
 
 /// Streaming resize source wrapping [`zenresize::StreamingResize`].
@@ -16,9 +16,8 @@ use crate::strip::{StripBuf, StripRef};
 ///
 /// # Format requirements
 ///
-/// Upstream must produce [`Rgba8`](PixelFormat::Rgba8). The resizer
-/// handles sRGB→linear→premul conversion internally. Output is also
-/// [`Rgba8`](PixelFormat::Rgba8).
+/// Upstream must produce `RGBA8_SRGB`. The resizer handles sRGB→linear→premul
+/// conversion internally. Output is also `RGBA8_SRGB`.
 pub struct ResizeSource {
     upstream: Box<dyn Source>,
     resizer: zenresize::StreamingResize,
@@ -41,9 +40,9 @@ impl ResizeSource {
         config: &zenresize::ResizeConfig,
         strip_height: u32,
     ) -> Result<Self, PipeError> {
-        if upstream.format() != PixelFormat::Rgba8 {
+        if upstream.format() != format::RGBA8_SRGB {
             return Err(PipeError::FormatMismatch {
-                expected: PixelFormat::Rgba8,
+                expected: format::RGBA8_SRGB,
                 got: upstream.format(),
             });
         }
@@ -71,7 +70,7 @@ impl ResizeSource {
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, PixelFormat::Rgba8),
+            buf: StripBuf::new(out_w, sh, format::RGBA8_SRGB),
             y: 0,
             input_exhausted: false,
             finished: false,
@@ -83,15 +82,15 @@ impl ResizeSource {
     /// Used by the Layout node to leverage zenresize's built-in crop,
     /// padding, and orientation — all in one streaming pass.
     ///
-    /// Upstream must produce [`Rgba8`](PixelFormat::Rgba8).
+    /// Upstream must produce `RGBA8_SRGB`.
     pub fn from_streaming(
         upstream: Box<dyn Source>,
         resizer: zenresize::StreamingResize,
         strip_height: u32,
     ) -> Result<Self, PipeError> {
-        if upstream.format() != PixelFormat::Rgba8 {
+        if upstream.format() != format::RGBA8_SRGB {
             return Err(PipeError::FormatMismatch {
-                expected: PixelFormat::Rgba8,
+                expected: format::RGBA8_SRGB,
                 got: upstream.format(),
             });
         }
@@ -105,7 +104,7 @@ impl ResizeSource {
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, PixelFormat::Rgba8),
+            buf: StripBuf::new(out_w, sh, format::RGBA8_SRGB),
             y: 0,
             input_exhausted: false,
             finished: false,
@@ -155,7 +154,7 @@ impl Source for ResizeSource {
 
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
-            .reconfigure(self.out_width, rows_wanted, PixelFormat::Rgba8);
+            .reconfigure(self.out_width, rows_wanted, format::RGBA8_SRGB);
         self.buf.reset(self.y);
 
         // Feed input rows and drain output until we have enough
@@ -203,7 +202,7 @@ impl Source for ResizeSource {
         self.out_height
     }
     fn format(&self) -> PixelFormat {
-        PixelFormat::Rgba8
+        format::RGBA8_SRGB
     }
 }
 
@@ -217,7 +216,7 @@ impl Source for ResizeSource {
 /// via [`push_row_f32`](zenresize::StreamingResize::push_row_f32) and
 /// output rows are pulled via [`next_output_row_f32`](zenresize::StreamingResize::next_output_row_f32).
 ///
-/// Input/output format: [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+/// Input/output format: `RGBAF32_LINEAR`.
 ///
 /// Use this instead of [`ResizeSource`] when downstream needs f32 data
 /// (e.g., filters) to avoid an sRGB encode→decode roundtrip that wastes
@@ -237,16 +236,16 @@ pub struct ResizeF32Source {
 impl ResizeF32Source {
     /// Create a streaming f32 resize source.
     ///
-    /// Upstream must produce [`Rgbaf32Linear`](PixelFormat::Rgbaf32Linear).
+    /// Upstream must produce `RGBAF32_LINEAR`.
     /// The config must use an f32 linear pixel descriptor.
     pub fn new(
         upstream: Box<dyn Source>,
         config: &zenresize::ResizeConfig,
         strip_height: u32,
     ) -> Result<Self, PipeError> {
-        if upstream.format() != PixelFormat::Rgbaf32Linear {
+        if upstream.format() != format::RGBAF32_LINEAR {
             return Err(PipeError::FormatMismatch {
-                expected: PixelFormat::Rgbaf32Linear,
+                expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
             });
         }
@@ -262,7 +261,7 @@ impl ResizeF32Source {
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, PixelFormat::Rgbaf32Linear),
+            buf: StripBuf::new(out_w, sh, format::RGBAF32_LINEAR),
             y: 0,
             input_exhausted: false,
             finished: false,
@@ -317,7 +316,7 @@ impl Source for ResizeF32Source {
 
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
-            .reconfigure(self.out_width, rows_wanted, PixelFormat::Rgbaf32Linear);
+            .reconfigure(self.out_width, rows_wanted, format::RGBAF32_LINEAR);
         self.buf.reset(self.y);
 
         loop {
@@ -362,6 +361,6 @@ impl Source for ResizeF32Source {
         self.out_height
     }
     fn format(&self) -> PixelFormat {
-        PixelFormat::Rgbaf32Linear
+        format::RGBAF32_LINEAR
     }
 }
