@@ -48,7 +48,8 @@ use crate::ops::{self, PixelOp, SrgbToLinearPremul, UnpremulLinearToSrgb};
 #[cfg(feature = "filters")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CompositeSource, CropSource, MaterializedSource, ResizeSource, TransformSource,
+    CompositeSource, CropSource, EdgeReplicateSource, MaterializedSource, ResizeSource,
+    TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -252,29 +253,7 @@ impl PipelineGraph {
                 let mut source = self.compile_node(input_id, sources)?;
                 source = ensure_format(source, PixelFormat::Rgba8);
 
-                // Fall back to materializing for edge replication (content_size)
-                if plan.content_size.is_some() {
-                    let in_w = source.width();
-                    let in_h = source.height();
-                    let canvas_w = plan.canvas.width;
-                    let canvas_h = plan.canvas.height;
-                    return Ok(Box::new(MaterializedSource::from_source_with_transform(
-                        source,
-                        move |data, w, h, _fmt| {
-                            let out = zenresize::execute_layout(
-                                data,
-                                in_w,
-                                in_h,
-                                &plan,
-                                zenresize::PixelDescriptor::RGBA8_SRGB,
-                                filter,
-                            );
-                            *data = out;
-                            *w = canvas_w;
-                            *h = canvas_h;
-                        },
-                    )?));
-                }
+                let content_size = plan.content_size;
 
                 // Single streaming pass: crop + resize + padding + orientation
                 // all handled by zenresize's StreamingResize via config_from_plan.
@@ -288,68 +267,53 @@ impl PipelineGraph {
                     filter,
                     16,
                 );
-                Ok(Box::new(ResizeSource::from_streaming(source, resizer, 16)?))
+                source = Box::new(ResizeSource::from_streaming(source, resizer, 16)?);
+
+                // Streaming edge replication for MCU alignment (content_size).
+                // Replaces solid-color padding at the content boundary with
+                // replicated edge pixels for better encoder output quality.
+                if let Some(cs) = content_size {
+                    let out_w = source.width();
+                    let out_h = source.height();
+                    if cs.width < out_w || cs.height < out_h {
+                        source = Box::new(EdgeReplicateSource::new(
+                            source, cs.width, cs.height, out_w, out_h,
+                        ));
+                    }
+                }
+
+                Ok(source)
             }
 
-            NodeOp::LayoutComposite { plan, filter } => {
+            NodeOp::LayoutComposite { mut plan, filter } => {
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
-                let fg_upstream = self.compile_node(fg_id, sources)?;
-                let bg_upstream = self.compile_node(bg_id, sources)?;
-                let fg_upstream = ensure_format(fg_upstream, PixelFormat::Rgba8);
-                let bg_upstream = ensure_format(bg_upstream, PixelFormat::Rgba8);
 
-                // Materialize both to get pixel data
-                let mut fg_mat = MaterializedSource::from_source(fg_upstream)?;
-                let bg_mat = MaterializedSource::from_source(bg_upstream)?;
+                // Stream the foreground through Layout with transparent canvas,
+                // then composite over the background — fully streaming.
+                plan.canvas_color = zenresize::CanvasColor::Transparent;
 
-                // Collect foreground pixels
-                let fg_w = fg_mat.width();
-                let fg_h = fg_mat.height();
-                let mut fg_data = Vec::new();
-                while let Some(strip) = fg_mat.next()? {
-                    fg_data.extend_from_slice(strip.data);
-                }
-
-                // Collect background pixels and build SliceBackground
-                let bg_w = bg_mat.width();
-                let bg_h = bg_mat.height();
-                let mut bg_data_u8 = Vec::new();
-                let mut bg_src = bg_mat;
-                while let Some(strip) = bg_src.next()? {
-                    bg_data_u8.extend_from_slice(strip.data);
-                }
-
-                // Convert background to premultiplied linear f32 for SliceBackground
-                let bg_pixels = bg_w as usize * bg_h as usize;
-                let mut bg_f32 = alloc::vec![0.0f32; bg_pixels * 4];
-                linear_srgb::default::srgb_u8_to_linear_rgba_slice(&bg_data_u8, &mut bg_f32);
-                garb::bytes::premultiply_alpha_f32(bytemuck::cast_slice_mut(&mut bg_f32))
-                    .expect("aligned");
-
-                let row_len = bg_w as usize * 4;
-                let background = zenresize::SliceBackground::new(&bg_f32, row_len);
-
-                let canvas_w = plan.canvas.width;
-                let canvas_h = plan.canvas.height;
-
-                let result = zenresize::execute_layout_with_background(
-                    &fg_data,
+                let mut fg = self.compile_node(fg_id, sources)?;
+                fg = ensure_format(fg, PixelFormat::Rgba8);
+                let fg_w = fg.width();
+                let fg_h = fg.height();
+                let resizer = zenresize::streaming_from_plan_batched(
                     fg_w,
                     fg_h,
                     &plan,
                     zenresize::PixelDescriptor::RGBA8_SRGB,
                     filter,
-                    background,
-                )
-                .map_err(|e| PipeError::Op(e.to_string()))?;
+                    16,
+                );
+                fg = Box::new(ResizeSource::from_streaming(fg, resizer, 16)?);
 
-                Ok(Box::new(MaterializedSource::from_data(
-                    result,
-                    canvas_w,
-                    canvas_h,
-                    PixelFormat::Rgba8,
-                )))
+                let bg = self.compile_node(bg_id, sources)?;
+
+                // Composite foreground over background in premultiplied linear space.
+                let fg = ensure_format(fg, PixelFormat::Rgbaf32LinearPremul);
+                let bg = ensure_format(bg, PixelFormat::Rgbaf32LinearPremul);
+
+                Ok(Box::new(CompositeSource::over_at(bg, fg, 0, 0)?))
             }
 
             NodeOp::Crop { x, y, w, h } => {

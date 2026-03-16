@@ -494,6 +494,54 @@ fn auto_format_conversion_for_composite() {
 // ==========================================================================
 
 #[test]
+fn layout_composite_streaming() {
+    // LayoutComposite should stream (not materialize) — composite fg over bg
+    use zenresize::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
+
+    let request = DecoderRequest::new(Size::new(4, 4), Orientation::Identity);
+    let offer = DecoderOffer::full_decode(8, 8);
+    let (ideal, _req) = zenresize::Pipeline::new(8, 8)
+        .constrain(Constraint::new(ConstraintMode::Distort, 4, 4))
+        .plan()
+        .unwrap();
+    let plan = ideal.finalize(&request, &offer);
+
+    let mut g = PipelineGraph::new();
+    let fg_src = g.add_node(NodeOp::Source);
+    let bg_src = g.add_node(NodeOp::Source);
+    let layout_comp = g.add_node(NodeOp::LayoutComposite {
+        plan,
+        filter: zenresize::Filter::Robidoux,
+    });
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(fg_src, layout_comp, EdgeKind::Input);
+    g.add_edge(bg_src, layout_comp, EdgeKind::Canvas);
+    g.add_edge(layout_comp, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    // Opaque red foreground (8×8, will be resized to 4×4)
+    sources.insert(fg_src, solid_source(8, 8, [255, 0, 0, 255]));
+    // Opaque blue background (4×4, canvas size)
+    sources.insert(bg_src, solid_source(4, 4, [0, 0, 255, 255]));
+
+    let mut pipeline = g.compile(sources).unwrap();
+    // CompositeSource outputs Rgbaf32LinearPremul
+    assert_eq!(pipeline.format(), PixelFormat::Rgbaf32LinearPremul);
+    assert_eq!(pipeline.width(), 4);
+    assert_eq!(pipeline.height(), 4);
+
+    let data = drain(pipeline.as_mut());
+    let f32_data: &[f32] = bytemuck::cast_slice(&data);
+    // Opaque red fg over opaque blue bg = red (fg is opaque, fully covers bg)
+    for px in f32_data.chunks_exact(4) {
+        assert!(px[0] > 0.9, "R should be ~1.0 (red fg), got {}", px[0]);
+        assert!(px[1] < 0.01, "G should be ~0, got {}", px[1]);
+        assert!(px[2] < 0.01, "B should be ~0 (fg covers bg), got {}", px[2]);
+        assert!(px[3] > 0.99, "A should be ~1.0, got {}", px[3]);
+    }
+}
+
+#[test]
 fn auto_format_rgba8_to_linear_direct() {
     // Verify Rgba8 → Rgbaf32Linear uses the direct path (not multi-hop via premul)
     let mut g = PipelineGraph::new();

@@ -1,6 +1,7 @@
 mod callback;
 mod composite;
 mod crop;
+mod edge_replicate;
 mod expand_canvas;
 #[cfg(feature = "filters")]
 mod filter;
@@ -12,6 +13,7 @@ mod transform;
 pub use callback::CallbackSource;
 pub use composite::CompositeSource;
 pub use crop::CropSource;
+pub use edge_replicate::EdgeReplicateSource;
 pub use expand_canvas::ExpandCanvasSource;
 #[cfg(feature = "filters")]
 pub use filter::FilterSource;

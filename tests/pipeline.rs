@@ -2,7 +2,9 @@ use zenpipe::ops::{
     DelinearizeF32, LinearToSrgb, LinearizeF32, NormalizeU8ToF32, QuantizeF32ToU8, SrgbToLinear,
     SrgbToLinearPremul, UnpremulLinearToSrgb,
 };
-use zenpipe::sources::{CallbackSource, CropSource, MaterializedSource, TransformSource};
+use zenpipe::sources::{
+    CallbackSource, CropSource, EdgeReplicateSource, MaterializedSource, TransformSource,
+};
 use zenpipe::{PipeError, PixelFormat, Source, StripRef};
 
 /// Collect all strips from a source into a flat Vec<u8>.
@@ -419,5 +421,70 @@ fn transform_format_chain_linear_via_premul() {
         assert!((px[1] as i16 - 80).unsigned_abs() <= 2, "G: {}", px[1]);
         assert!((px[2] as i16 - 40).unsigned_abs() <= 2, "B: {}", px[2]);
         assert!((px[3] as i16 - 200).unsigned_abs() <= 1, "A: {}", px[3]);
+    }
+}
+
+// ==========================================================================
+// Edge replication tests
+// ==========================================================================
+
+#[test]
+fn edge_replicate_right_and_bottom() {
+    // 4×3 content on 6×5 canvas → right 2 cols replicated, bottom 2 rows repeated
+    let width = 4u32;
+    let height = 3u32;
+    let mut data = vec![0u8; width as usize * height as usize * 4];
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let i = (y * width as usize + x) * 4;
+            data[i] = x as u8;
+            data[i + 1] = y as u8;
+            data[i + 2] = 42;
+            data[i + 3] = 255;
+        }
+    }
+
+    let src = CallbackSource::from_data(&data, width, height, PixelFormat::Rgba8, 16);
+    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 3, 6, 5);
+
+    assert_eq!(edge.width(), 6);
+    assert_eq!(edge.height(), 5);
+
+    let out = drain(&mut edge);
+    assert_eq!(out.len(), 6 * 5 * 4);
+
+    // Row 0: x=[0,1,2,3,3,3] (rightmost pixel replicated)
+    assert_eq!(out[0 * 4], 0); // x=0
+    assert_eq!(out[3 * 4], 3); // x=3 (last content)
+    assert_eq!(out[4 * 4], 3); // x=4 (replicated)
+    assert_eq!(out[5 * 4], 3); // x=5 (replicated)
+
+    // Row 2 (last content row): y=2
+    let row2_start = 2 * 6 * 4;
+    assert_eq!(out[row2_start + 1], 2); // y=2
+
+    // Row 3 (past content): should be copy of row 2
+    let row3_start = 3 * 6 * 4;
+    assert_eq!(out[row3_start], out[row2_start]); // same x=0 pixel
+    assert_eq!(out[row3_start + 1], 2); // y should be 2 (replicated from row 2)
+
+    // Row 4 (past content): also copy of row 2
+    let row4_start = 4 * 6 * 4;
+    assert_eq!(out[row4_start + 1], 2);
+}
+
+#[test]
+fn edge_replicate_no_expansion() {
+    // When content == canvas, should pass through unchanged
+    let src = solid_rgba8(4, 4, 100, 200, 50, 255);
+    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 4, 4, 4);
+
+    assert_eq!(edge.width(), 4);
+    assert_eq!(edge.height(), 4);
+
+    let out = drain(&mut edge);
+    assert_eq!(out.len(), 4 * 4 * 4);
+    for px in out.chunks_exact(4) {
+        assert_eq!(px, [100, 200, 50, 255]);
     }
 }
