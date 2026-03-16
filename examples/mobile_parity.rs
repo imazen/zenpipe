@@ -34,7 +34,7 @@ use zenresize::{Filter, PixelDescriptor, ResizeConfig, Resizer};
 use zensim::{RgbSlice, Zensim, ZensimProfile};
 
 const OUTPUT_DIR: &str = "/mnt/v/output/zenfilters/mobile_parity";
-const MAX_DIM: u32 = 512;
+const MAX_DIM: u32 = 768;
 
 /// Mobile DNG files to test.
 const MOBILE_DNGS: &[(&str, &str)] = &[
@@ -316,11 +316,17 @@ fn process_appledng(
     let (enhanced_params, enhanced_score) = optimize_enhanced_pipeline(
         &small_linear, cw, ch, &small_ref, zs, bl_mult, search_lo, search_hi,
     );
-    println!("  Enhanced: c={:.2} sk={:.2} sat={:.2} γ={:.2} blk={:.3} RGB=[{:.2},{:.2},{:.2}] → {enhanced_score:.1} ({:.1}s)",
+    println!("  Enhanced: c={:.2} sk={:.2} sat={:.2} RGB=[{:.2},{:.2},{:.2}] curves={} → {enhanced_score:.1} ({:.1}s)",
         enhanced_params.contrast, enhanced_params.skew, enhanced_params.saturation,
-        enhanced_params.gamma, enhanced_params.black_lift,
         enhanced_params.rgb_mult[0], enhanced_params.rgb_mult[1], enhanced_params.rgb_mult[2],
+        if enhanced_params.curves.is_identity() { "identity" } else { "custom" },
         t0.elapsed().as_secs_f32());
+    if !enhanced_params.curves.is_identity() {
+        let p = &enhanced_params.curves.points;
+        println!("    R curve: [{:.2},{:.2},{:.2},{:.2}]", p[0], p[1], p[2], p[3]);
+        println!("    G curve: [{:.2},{:.2},{:.2},{:.2}]", p[4], p[5], p[6], p[7]);
+        println!("    B curve: [{:.2},{:.2},{:.2},{:.2}]", p[8], p[9], p[10], p[11]);
+    }
 
     if enhanced_score > parity_rgb {
         parity_uniform = 0.0; // not applicable for enhanced
@@ -490,9 +496,9 @@ fn process_standard_dng(
     let (enhanced_params, enhanced_score) = optimize_enhanced_pipeline(
         &small_linear, cw, ch, &small_ref, zs, bl_mult.max(1.0), search_lo, search_hi,
     );
-    println!("  Enhanced: c={:.2} sk={:.2} sat={:.2} γ={:.2} blk={:.3} → {enhanced_score:.1} ({:.1}s)",
+    println!("  Enhanced: c={:.2} sk={:.2} sat={:.2} curves={} → {enhanced_score:.1} ({:.1}s)",
         enhanced_params.contrast, enhanced_params.skew, enhanced_params.saturation,
-        enhanced_params.gamma, enhanced_params.black_lift,
+        if enhanced_params.curves.is_identity() { "identity" } else { "custom" },
         t0.elapsed().as_secs_f32());
     if enhanced_score > parity_rgb {
         parity_rgb = enhanced_score;
@@ -519,6 +525,11 @@ fn process_standard_dng(
     save_rgb8_jpeg(&sbs, sbs_w, sbs_h, &format!("{prefix}_sbs.jpg"));
     let heat = diff_heatmap(&best_small, &small_ref, cw, ch);
     save_rgb8_jpeg(&heat, cw, ch, &format!("{prefix}_diff.jpg"));
+
+    // Histogram match ceiling
+    let histmatch = histogram_match(&best_small, &small_ref);
+    let hm_score = zensim_score(&histmatch, &small_ref, cw, ch, zs);
+    println!("  Histogram match ceiling: {hm_score:.1}");
 
     // Also render darktable basecurve for comparison
     let dt_basecurve = darktable_render_png(dng_path, "display-referred");
@@ -1026,7 +1037,44 @@ fn optimize_apple_rgb_exposure(
     (rgb, best_score)
 }
 
-// ── Enhanced pipeline: dt_sigmoid with tunable parameters ────────────────
+// ── Enhanced pipeline: dt_sigmoid + per-channel curves ───────────────────
+
+/// Per-channel correction curve: 4 control points per channel mapping
+/// sRGB [0,1] → [0,1]. Control points at x = 0.0, 0.33, 0.67, 1.0.
+/// Linear interpolation between points.
+#[derive(Clone, Copy, Debug)]
+struct ChannelCurves {
+    /// [R0, R1, R2, R3, G0, G1, G2, G3, B0, B1, B2, B3]
+    /// where Ri is the output value at x = i/3 for the red channel.
+    points: [f32; 12],
+}
+
+impl ChannelCurves {
+    fn identity() -> Self {
+        Self {
+            // y = x at each control point: 0, 0.333, 0.667, 1.0
+            points: [0.0, 0.333, 0.667, 1.0, 0.0, 0.333, 0.667, 1.0, 0.0, 0.333, 0.667, 1.0],
+        }
+    }
+
+    /// Evaluate channel curve at x ∈ [0, 1].
+    fn eval(&self, ch: usize, x: f32) -> f32 {
+        let base = ch * 4;
+        let x = x.clamp(0.0, 1.0);
+        let t = x * 3.0; // scale to [0, 3]
+        let seg = (t as usize).min(2); // segment 0, 1, or 2
+        let frac = t - seg as f32;
+        let y0 = self.points[base + seg];
+        let y1 = self.points[base + seg + 1];
+        (y0 + (y1 - y0) * frac).clamp(0.0, 1.0)
+    }
+
+    fn is_identity(&self) -> bool {
+        let id = Self::identity();
+        self.points.iter().zip(id.points.iter())
+            .all(|(a, b)| (a - b).abs() < 0.005)
+    }
+}
 
 /// Tunable parameters for the enhanced pipeline.
 #[derive(Clone, Copy, Debug)]
@@ -1039,13 +1087,12 @@ struct PipelineParams {
     skew: f32,
     /// Post-sigmoid saturation multiplier (1.0 = no change).
     saturation: f32,
-    /// Post-sigmoid gamma (power curve, 1.0 = no change, <1 brightens midtones).
-    gamma: f32,
-    /// Black point lift (0.0 = no lift, 0.05 = slight fade).
-    black_lift: f32,
+    /// Per-channel correction curves applied after sRGB encode.
+    curves: ChannelCurves,
 }
 
-const N_PARAMS: usize = 8;
+/// Total parameter count: 3 (RGB mult) + 3 (sigmoid) + 12 (curves) = 18
+const N_PARAMS: usize = 18;
 
 impl PipelineParams {
     fn from_uniform(mult: f32) -> Self {
@@ -1054,32 +1101,47 @@ impl PipelineParams {
             contrast: 1.5,
             skew: 0.0,
             saturation: 1.0,
-            gamma: 1.0,
-            black_lift: 0.0,
+            curves: ChannelCurves::identity(),
         }
     }
 
     fn to_array(&self) -> [f32; N_PARAMS] {
-        [
-            self.rgb_mult[0], self.rgb_mult[1], self.rgb_mult[2],
-            self.contrast, self.skew, self.saturation,
-            self.gamma, self.black_lift,
-        ]
+        let mut a = [0.0f32; N_PARAMS];
+        a[0] = self.rgb_mult[0];
+        a[1] = self.rgb_mult[1];
+        a[2] = self.rgb_mult[2];
+        a[3] = self.contrast;
+        a[4] = self.skew;
+        a[5] = self.saturation;
+        a[6..18].copy_from_slice(&self.curves.points);
+        a
     }
 
     fn from_array(a: &[f32; N_PARAMS]) -> Self {
+        let mut points = [0.0f32; 12];
+        points.copy_from_slice(&a[6..18]);
+        // Ensure monotonicity within each channel
+        for ch in 0..3 {
+            let base = ch * 4;
+            for i in 1..4 {
+                points[base + i] = points[base + i].max(points[base + i - 1]);
+            }
+            // Clamp to [0, 1]
+            for i in 0..4 {
+                points[base + i] = points[base + i].clamp(0.0, 1.0);
+            }
+        }
         Self {
-            rgb_mult: [a[0], a[1], a[2]],
+            rgb_mult: [a[0].max(0.01), a[1].max(0.01), a[2].max(0.01)],
             contrast: a[3].clamp(0.5, 5.0),
             skew: a[4].clamp(-1.0, 1.0),
             saturation: a[5].clamp(0.0, 3.0),
-            gamma: a[6].clamp(0.3, 3.0),
-            black_lift: a[7].clamp(0.0, 0.15),
+            curves: ChannelCurves { points },
         }
     }
 }
 
-/// Apply enhanced pipeline: exposure → dt_sigmoid → saturation → gamma → black lift → sRGB.
+/// Apply enhanced pipeline: exposure → dt_sigmoid → saturation → sRGB → per-channel curves.
 fn apply_enhanced_pipeline(linear_f32: &[f32], _w: u32, _h: u32, p: &PipelineParams) -> Vec<u8> {
     let params = dt_sigmoid::compute_params(p.contrast, p.skew, 100.0, 0.0152, 1.0);
 
@@ -1097,7 +1159,7 @@ fn apply_enhanced_pipeline(linear_f32: &[f32], _w: u32, _h: u32, p: &PipelinePar
     // Apply dt_sigmoid tone mapping
     dt_sigmoid::apply_dt_sigmoid(&mut rgb, &params);
 
-    // Apply saturation adjustment in linear RGB (scale deviation from luminance)
+    // Apply saturation adjustment in linear RGB
     if (p.saturation - 1.0).abs() > 0.01 {
         for i in 0..n {
             let base = i * 3;
@@ -1111,100 +1173,222 @@ fn apply_enhanced_pipeline(linear_f32: &[f32], _w: u32, _h: u32, p: &PipelinePar
         }
     }
 
-    // Convert to sRGB u8 with optional gamma and black lift
+    // Convert to sRGB u8 with per-channel correction curves
+    let use_curves = !p.curves.is_identity();
     let mut output = vec![0u8; rgb.len()];
-    let apply_gamma = (p.gamma - 1.0).abs() > 0.01;
-    let apply_lift = p.black_lift > 0.001;
-    for (i, &v) in rgb.iter().enumerate() {
-        let v = v.clamp(0.0, 1.0);
-        // sRGB OETF
-        let mut srgb = if v <= 0.003_130_8 {
-            v * 12.92
-        } else {
-            1.055 * v.powf(1.0 / 2.4) - 0.055
-        };
-        // Post-sRGB gamma adjustment (operates on display values)
-        if apply_gamma {
-            srgb = srgb.powf(p.gamma);
+    for i in 0..n {
+        let base = i * 3;
+        for c in 0..3 {
+            let v = rgb[base + c].clamp(0.0, 1.0);
+            // sRGB OETF
+            let mut srgb = if v <= 0.003_130_8 {
+                v * 12.92
+            } else {
+                1.055 * v.powf(1.0 / 2.4) - 0.055
+            };
+            // Per-channel correction curve
+            if use_curves {
+                srgb = p.curves.eval(c, srgb);
+            }
+            output[base + c] = (srgb.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
         }
-        // Black lift (raise shadows)
-        if apply_lift {
-            srgb = p.black_lift + srgb * (1.0 - p.black_lift);
-        }
-        output[i] = (srgb.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
     }
     output
 }
 
-/// Optimize enhanced pipeline with coordinate descent on all 6 parameters.
+/// Nelder-Mead simplex optimizer. Maximizes `f` over N_PARAMS dimensions.
+/// Returns (best_params, best_score).
+fn nelder_mead(
+    f: &dyn Fn(&[f32; N_PARAMS]) -> f64,
+    initial: &[f32; N_PARAMS],
+    ranges: &[(f32, f32); N_PARAMS],
+    max_evals: usize,
+) -> ([f32; N_PARAMS], f64) {
+    let n = N_PARAMS;
+    let mut simplex: Vec<([f32; N_PARAMS], f64)> = Vec::with_capacity(n + 1);
+
+    // Initialize simplex: initial point + perturbations along each axis
+    let score = f(initial);
+    simplex.push((*initial, score));
+
+    for dim in 0..n {
+        let mut point = *initial;
+        let range = ranges[dim].1 - ranges[dim].0;
+        let step = range * 0.1; // 10% of range as initial step
+        point[dim] = (point[dim] + step).min(ranges[dim].1);
+        let s = f(&point);
+        simplex.push((point, s));
+    }
+
+    let alpha = 1.0f32; // reflection
+    let gamma_nm = 2.0f32; // expansion
+    let rho = 0.5f32; // contraction
+    let sigma = 0.5f32; // shrink
+
+    let mut evals = n + 1;
+
+    while evals < max_evals {
+        // Sort: highest score first (we're maximizing)
+        simplex.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let best_score = simplex[0].1;
+        let worst_score = simplex[n].1;
+        let second_worst = simplex[n - 1].1;
+
+        // Convergence check
+        if (best_score - worst_score).abs() < 0.01 && evals > 50 {
+            break;
+        }
+
+        // Centroid of all points except worst
+        let mut centroid = [0.0f32; N_PARAMS];
+        for i in 0..n {
+            for d in 0..n {
+                centroid[d] += simplex[i].0[d];
+            }
+        }
+        for d in 0..n {
+            centroid[d] /= n as f32;
+        }
+
+        // Reflection
+        let mut reflected = [0.0f32; N_PARAMS];
+        for d in 0..n {
+            reflected[d] = (centroid[d] + alpha * (centroid[d] - simplex[n].0[d]))
+                .clamp(ranges[d].0, ranges[d].1);
+        }
+        let reflected_score = f(&reflected);
+        evals += 1;
+
+        if reflected_score > second_worst && reflected_score <= best_score {
+            simplex[n] = (reflected, reflected_score);
+            continue;
+        }
+
+        if reflected_score > best_score {
+            // Expansion
+            let mut expanded = [0.0f32; N_PARAMS];
+            for d in 0..n {
+                expanded[d] = (centroid[d] + gamma_nm * (reflected[d] - centroid[d]))
+                    .clamp(ranges[d].0, ranges[d].1);
+            }
+            let expanded_score = f(&expanded);
+            evals += 1;
+
+            if expanded_score > reflected_score {
+                simplex[n] = (expanded, expanded_score);
+            } else {
+                simplex[n] = (reflected, reflected_score);
+            }
+            continue;
+        }
+
+        // Contraction
+        let mut contracted = [0.0f32; N_PARAMS];
+        let contract_from = if reflected_score > worst_score {
+            &reflected
+        } else {
+            &simplex[n].0
+        };
+        for d in 0..n {
+            contracted[d] = (centroid[d] + rho * (contract_from[d] - centroid[d]))
+                .clamp(ranges[d].0, ranges[d].1);
+        }
+        let contracted_score = f(&contracted);
+        evals += 1;
+
+        if contracted_score > worst_score {
+            simplex[n] = (contracted, contracted_score);
+            continue;
+        }
+
+        // Shrink: move all points toward best
+        let best = simplex[0].0;
+        for i in 1..=n {
+            for d in 0..n {
+                simplex[i].0[d] = (best[d] + sigma * (simplex[i].0[d] - best[d]))
+                    .clamp(ranges[d].0, ranges[d].1);
+            }
+            simplex[i].1 = f(&simplex[i].0);
+            evals += 1;
+        }
+    }
+
+    simplex.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    (simplex[0].0, simplex[0].1)
+}
+
+/// Optimize enhanced pipeline: phase 1 golden search for exposure,
+/// phase 2 coordinate descent for sigmoid params,
+/// phase 3 Nelder-Mead for full 18-param optimization including per-channel curves.
 fn optimize_enhanced_pipeline(
     linear_f32: &[f32], w: u32, h: u32,
     reference: &[u8], zs: &Zensim,
     initial_mult: f32, range_lo: f32, range_hi: f32,
 ) -> (PipelineParams, f64) {
-    // Start with uniform exposure at the initial mult
-    let mut params = PipelineParams::from_uniform(initial_mult);
-
-    let eval = |p: &PipelineParams| -> f64 {
-        let out = apply_enhanced_pipeline(linear_f32, w, h, p);
+    let eval = |a: &[f32; N_PARAMS]| -> f64 {
+        let p = PipelineParams::from_array(a);
+        let out = apply_enhanced_pipeline(linear_f32, w, h, &p);
         zensim_score(&out, reference, w, h, zs)
     };
 
-    // Phase 1: Find best uniform exposure with default sigmoid
+    // Phase 1: Find best uniform exposure
     let (best_mult, _) = golden_search(
-        |mult| eval(&PipelineParams::from_uniform(mult)),
+        |mult| {
+            let p = PipelineParams::from_uniform(mult);
+            let out = apply_enhanced_pipeline(linear_f32, w, h, &p);
+            zensim_score(&out, reference, w, h, zs)
+        },
         range_lo, range_hi,
     );
-    params.rgb_mult = [best_mult; 3];
+    let mut params = PipelineParams::from_uniform(best_mult);
 
-    // Phase 2: Coordinate descent on all parameters (5 rounds)
-    let ranges: [(f32, f32); N_PARAMS] = [
-        (range_lo, range_hi),                // R
-        (range_lo, range_hi),                // G
-        (range_lo, range_hi),                // B
-        (0.5, 4.0),                          // contrast
-        (-0.8, 0.8),                         // skew
-        (0.3, 2.5),                          // saturation
-        (0.3, 3.0),                          // gamma
-        (0.0, 0.15),                         // black_lift
+    // Phase 2: Coordinate descent for exposure + sigmoid params (fast, 6 dims)
+    let core_ranges: [(f32, f32); 6] = [
+        (range_lo, range_hi), (range_lo, range_hi), (range_lo, range_hi),
+        (0.5, 4.0), (-0.8, 0.8), (0.3, 2.5),
     ];
-
-    let mut best_score = eval(&params);
-
-    for round in 0..5 {
+    let mut best_score = eval(&params.to_array());
+    for _ in 0..4 {
         let mut improved = false;
-        for dim in 0..N_PARAMS {
+        for dim in 0..6 {
             let mut arr = params.to_array();
-            let lo = if dim < 3 {
-                (arr[dim] * 0.5).max(ranges[dim].0)
-            } else {
-                ranges[dim].0
-            };
-            let hi = if dim < 3 {
-                (arr[dim] * 2.0).min(ranges[dim].1)
-            } else {
-                ranges[dim].1
-            };
-
-            let (best_val, score) = golden_search(
-                |v| {
-                    let mut test = arr;
-                    test[dim] = v;
-                    eval(&PipelineParams::from_array(&test))
-                },
+            let lo = if dim < 3 { (arr[dim] * 0.5).max(core_ranges[dim].0) } else { core_ranges[dim].0 };
+            let hi = if dim < 3 { (arr[dim] * 2.0).min(core_ranges[dim].1) } else { core_ranges[dim].1 };
+            let (val, score) = golden_search(
+                |v| { let mut t = arr; t[dim] = v; eval(&t) },
                 lo, hi,
             );
-
             if score > best_score + 0.05 {
-                arr[dim] = best_val;
+                arr[dim] = val;
                 params = PipelineParams::from_array(&arr);
                 best_score = score;
                 improved = true;
             }
         }
-        if !improved && round > 0 {
-            break;
-        }
+        if !improved { break; }
+    }
+
+    // Phase 3: Nelder-Mead on all 18 params including per-channel curves
+    let mut full_ranges = [(0.0f32, 1.0f32); N_PARAMS];
+    for i in 0..3 { full_ranges[i] = (range_lo, range_hi); }
+    full_ranges[3] = (0.5, 4.0);   // contrast
+    full_ranges[4] = (-0.8, 0.8);  // skew
+    full_ranges[5] = (0.3, 2.5);   // saturation
+    // Curve points: R0,R1,R2,R3, G0,G1,G2,G3, B0,B1,B2,B3
+    for ch in 0..3 {
+        full_ranges[6 + ch * 4] = (0.0, 0.15);     // x=0 (shadows)
+        full_ranges[6 + ch * 4 + 1] = (0.1, 0.6);  // x=0.33
+        full_ranges[6 + ch * 4 + 2] = (0.4, 0.9);  // x=0.67
+        full_ranges[6 + ch * 4 + 3] = (0.8, 1.0);  // x=1.0 (highlights)
+    }
+
+    let initial = params.to_array();
+    let (best_arr, best_nm_score) = nelder_mead(&eval, &initial, &full_ranges, 600);
+
+    if best_nm_score > best_score {
+        params = PipelineParams::from_array(&best_arr);
+        best_score = best_nm_score;
     }
 
     (params, best_score)
