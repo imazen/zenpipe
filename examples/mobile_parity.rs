@@ -178,7 +178,76 @@ fn process_appledng(
         t0.elapsed().as_secs_f32()
     );
 
-    // Decode raw with zenraw (rawler backend)
+    let mut parity_rgb = 0.0f64;
+    let mut method: &str = "none";
+
+    // ── Try DngPipeline (proper DNG rendering) ──────────────────────────
+    // Decode camera-space raw (no WB/color matrix from rawler)
+    let mut cam_config = zenraw::RawDecodeConfig::default();
+    cam_config.skip_color_pipeline = true;
+    if let Ok(cam_output) = zenraw::decode(dng_bytes, &cam_config, &Unstoppable) {
+        let cam_w = cam_output.pixels.width();
+        let cam_h = cam_output.pixels.height();
+        let cam_bytes = cam_output.pixels.copy_to_contiguous_bytes();
+        let cam_raw: &[f32] = bytemuck::cast_slice(&cam_bytes);
+
+        let dng_profile = zenraw::apple::extract_dng_profile(dng_bytes);
+        let pgtm_data = zenraw::apple::extract_profile_gain_table_map(dng_bytes);
+
+        if let Some(e) = exif {
+            if let Some(mut pipeline) = zenraw::dng_render::DngPipeline::from_metadata(e, cam_w, cam_h) {
+                if let Some(ref profile) = dng_profile {
+                    if let Some(ref tc) = profile.tone_curve {
+                        pipeline = pipeline.with_tone_curve(tc);
+                    }
+                }
+                if let Some(pgtm) = pgtm_data {
+                    pipeline = pipeline.with_gain_table_map(pgtm);
+                }
+
+                // Render at small resolution for quick parity check
+                let (small_cam, scw, sch) = downscale_linear_f32(cam_raw, cam_w, cam_h, MAX_DIM);
+                let (sm_ref, srw2, srh2) = downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM);
+                let cw2 = scw.min(srw2);
+                let ch2 = sch.min(srh2);
+                let small_cam = crop_f32(&small_cam, scw, sch, cw2, ch2);
+                let sm_ref = crop_u8(&sm_ref, srw2, srh2, cw2, ch2);
+
+                // Build a small pipeline for the cropped data
+                let mut small_pipe = zenraw::dng_render::DngPipeline::from_metadata(e, cw2, ch2).unwrap();
+                if let Some(ref profile) = dng_profile {
+                    if let Some(ref tc) = profile.tone_curve {
+                        small_pipe = small_pipe.with_tone_curve(tc);
+                    }
+                }
+                // Note: PGTM spatial interpolation won't be perfect on downscaled data,
+                // but the tonal effect is still present
+                if let Some(pgtm2) = zenraw::apple::extract_profile_gain_table_map(dng_bytes) {
+                    small_pipe = small_pipe.with_gain_table_map(pgtm2);
+                }
+
+                let dng_out = small_pipe.render_lum_preserving(&small_cam);
+                let dng_score = zensim_score(&dng_out, &sm_ref, cw2, ch2, zs);
+                println!("  DngPipeline (lum-preserving): {dng_score:.1} ({:.1}s)", t0.elapsed().as_secs_f32());
+
+                let dng_out_perch = small_pipe.render(&small_cam);
+                let dng_score_perch = zensim_score(&dng_out_perch, &sm_ref, cw2, ch2, zs);
+                println!("  DngPipeline (per-channel): {dng_score_perch:.1}");
+
+                let prefix = format!("{OUTPUT_DIR}/{label}");
+                save_rgb8_jpeg(&dng_out, cw2, ch2, &format!("{prefix}_dng_pipeline_lum.jpg"));
+                save_rgb8_jpeg(&dng_out_perch, cw2, ch2, &format!("{prefix}_dng_pipeline_perch.jpg"));
+
+                let best_dng = dng_score.max(dng_score_perch);
+                if best_dng > parity_rgb {
+                    parity_rgb = best_dng;
+                    method = if dng_score > dng_score_perch { "dng_lum" } else { "dng_perch" };
+                }
+            }
+        }
+    }
+
+    // Decode raw with zenraw (rawler backend, WB+ColorMatrix applied)
     let config = zenraw::RawDecodeConfig::default();
     let output = zenraw::decode(dng_bytes, &config, &Unstoppable).ok()?;
     let raw_pixels = output.pixels;
@@ -268,11 +337,10 @@ fn process_appledng(
         .and_then(ToneCurveLut::from_profile_tone_curve);
 
     let mut parity_uniform = 0.0f64;
-    let mut parity_rgb = 0.0f64;
+    // parity_rgb and method declared earlier (before DngPipeline block)
     let mut optimal_mult = bl_mult;
     let mut rgb_mult = [bl_mult; 3];
     let best_small;
-    let mut method = "dt_sigmoid";
 
     if let Some(ref lut) = tone_curve_lut {
         println!(
