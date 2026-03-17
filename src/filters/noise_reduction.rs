@@ -69,31 +69,63 @@ const B3_KERNEL: [f32; 5] = [1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0
 /// `scale` determines the spacing between kernel taps: spacing = 2^scale.
 fn atrous_smooth(src: &[f32], dst: &mut [f32], w: usize, h: usize, scale: u32, tmp: &mut [f32]) {
     let step = 1usize << scale;
+    let [w0, w1, w2, w3, w4] = B3_KERNEL;
 
     // Horizontal pass: src → tmp
+    // Interior pixels (no boundary checks) for the middle of each row.
+    let margin = 2 * step;
     for y in 0..h {
-        let row_off = y * w;
-        for x in 0..w {
-            let mut sum = 0.0f32;
-            for (k, &weight) in B3_KERNEL.iter().enumerate() {
-                let sx = (x as isize + (k as isize - 2) * step as isize).clamp(0, w as isize - 1)
-                    as usize;
-                sum += src[row_off + sx] * weight;
-            }
-            tmp[row_off + x] = sum;
+        let row = y * w;
+        // Left boundary
+        for x in 0..margin.min(w) {
+            let sx = |k: usize| {
+                (x as isize + (k as isize - 2) * step as isize).clamp(0, w as isize - 1) as usize
+            };
+            tmp[row + x] = w0 * src[row + sx(0)]
+                + w1 * src[row + sx(1)]
+                + w2 * src[row + sx(2)]
+                + w3 * src[row + sx(3)]
+                + w4 * src[row + sx(4)];
+        }
+        // Interior (no bounds checks)
+        for x in margin..w.saturating_sub(margin) {
+            tmp[row + x] = w0 * src[row + x - 2 * step]
+                + w1 * src[row + x - step]
+                + w2 * src[row + x]
+                + w3 * src[row + x + step]
+                + w4 * src[row + x + 2 * step];
+        }
+        // Right boundary
+        for x in w.saturating_sub(margin)..w {
+            let sx = |k: usize| {
+                (x as isize + (k as isize - 2) * step as isize).clamp(0, w as isize - 1) as usize
+            };
+            tmp[row + x] = w0 * src[row + sx(0)]
+                + w1 * src[row + sx(1)]
+                + w2 * src[row + sx(2)]
+                + w3 * src[row + sx(3)]
+                + w4 * src[row + sx(4)];
         }
     }
 
     // Vertical pass: tmp → dst
+    // Precompute clamped row offsets for boundary rows, then use unchecked for interior.
     for y in 0..h {
+        let sy = |k: usize| {
+            (y as isize + (k as isize - 2) * step as isize).clamp(0, h as isize - 1) as usize
+        };
+        let r0 = sy(0) * w;
+        let r1 = sy(1) * w;
+        let r2 = sy(2) * w;
+        let r3 = sy(3) * w;
+        let r4 = sy(4) * w;
+        let out_row = y * w;
         for x in 0..w {
-            let mut sum = 0.0f32;
-            for (k, &weight) in B3_KERNEL.iter().enumerate() {
-                let sy = (y as isize + (k as isize - 2) * step as isize).clamp(0, h as isize - 1)
-                    as usize;
-                sum += tmp[sy * w + x] * weight;
-            }
-            dst[y * w + x] = sum;
+            dst[out_row + x] = w0 * tmp[r0 + x]
+                + w1 * tmp[r1 + x]
+                + w2 * tmp[r2 + x]
+                + w3 * tmp[r3 + x]
+                + w4 * tmp[r4 + x];
         }
     }
 }
@@ -175,20 +207,20 @@ fn denoise_plane(
         };
 
         // Soft-threshold the detail and add to result
-        for i in 0..n {
-            let detail = current[i] - smooth[i];
-            let thresholded = soft_threshold(detail, threshold_scale);
-            result[i] += thresholded;
-        }
+        // SIMD: process 8 elements at a time
+        crate::simd::wavelet_threshold_accumulate(
+            &current[..n],
+            &smooth[..n],
+            &mut result[..n],
+            threshold_scale,
+        );
 
         // Next iteration works on the smooth approximation
         current[..n].copy_from_slice(&smooth[..n]);
     }
 
     // Add the final smooth (coarsest approximation) to the thresholded details
-    for i in 0..n {
-        plane[i] = (result[i] + current[i]).max(0.0);
-    }
+    crate::simd::add_clamped(&result[..n], &current[..n], &mut plane[..n]);
 
     ctx.return_f32(result);
     ctx.return_f32(current);

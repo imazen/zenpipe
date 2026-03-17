@@ -312,6 +312,72 @@ pub(super) fn fused_adjust_impl_scalar(
     }
 }
 
+pub(super) fn subtract_planes_impl_scalar(
+    _token: ScalarToken,
+    a: &[f32],
+    b: &[f32],
+    dst: &mut [f32],
+) {
+    for i in 0..dst.len() {
+        dst[i] = a[i] - b[i];
+    }
+}
+
+pub(super) fn square_plane_impl_scalar(_token: ScalarToken, src: &[f32], dst: &mut [f32]) {
+    for i in 0..dst.len() {
+        dst[i] = src[i] * src[i];
+    }
+}
+
+pub(super) fn wavelet_threshold_accumulate_impl_scalar(
+    _token: ScalarToken,
+    current: &[f32],
+    smooth: &[f32],
+    result: &mut [f32],
+    threshold: f32,
+) {
+    for i in 0..result.len() {
+        let detail = current[i] - smooth[i];
+        result[i] += if detail > threshold {
+            detail - threshold
+        } else if detail < -threshold {
+            detail + threshold
+        } else {
+            0.0
+        };
+    }
+}
+
+pub(super) fn add_clamped_impl_scalar(_token: ScalarToken, a: &[f32], b: &[f32], dst: &mut [f32]) {
+    for i in 0..dst.len() {
+        dst[i] = (a[i] + b[i]).max(0.0);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn adaptive_sharpen_apply_impl_scalar(
+    _token: ScalarToken,
+    l: &[f32],
+    detail: &[f32],
+    energy: &[f32],
+    dst: &mut [f32],
+    amount: f32,
+    noise_floor: f32,
+    masking_threshold: f32,
+) {
+    let has_masking = masking_threshold > 1e-8;
+    for i in 0..dst.len() {
+        let e = energy[i].max(0.0).sqrt();
+        let gate = e / (e + noise_floor);
+        let mask = if has_masking {
+            e / (e + masking_threshold)
+        } else {
+            1.0
+        };
+        dst[i] = (l[i] + amount * detail[i] * gate * mask).max(0.0);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn fused_interleaved_adjust_impl_scalar(
     _token: ScalarToken,

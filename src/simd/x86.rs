@@ -1121,6 +1121,211 @@ fn fused_adjust_ab_rite(
 }
 
 // ============================================================================
+// Plane arithmetic SIMD helpers
+// ============================================================================
+
+#[arcane]
+pub(super) fn subtract_planes_impl_v3(token: X64V3Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
+    subtract_planes_rite(token, a, b, dst);
+}
+
+#[rite]
+fn subtract_planes_rite(token: X64V3Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
+    let n = dst.len();
+    let mut i = 0;
+    while i + 8 <= n {
+        let av: &[f32; 8] = a[i..i + 8].try_into().unwrap();
+        let bv: &[f32; 8] = b[i..i + 8].try_into().unwrap();
+        let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
+        (f32x8::load(token, av) - f32x8::load(token, bv)).store(out);
+        i += 8;
+    }
+    for idx in i..n {
+        dst[idx] = a[idx] - b[idx];
+    }
+}
+
+#[arcane]
+pub(super) fn square_plane_impl_v3(token: X64V3Token, src: &[f32], dst: &mut [f32]) {
+    square_plane_rite(token, src, dst);
+}
+
+#[rite]
+fn square_plane_rite(token: X64V3Token, src: &[f32], dst: &mut [f32]) {
+    let n = dst.len();
+    let mut i = 0;
+    while i + 8 <= n {
+        let sv: &[f32; 8] = src[i..i + 8].try_into().unwrap();
+        let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
+        let v = f32x8::load(token, sv);
+        (v * v).store(out);
+        i += 8;
+    }
+    for idx in i..n {
+        dst[idx] = src[idx] * src[idx];
+    }
+}
+
+// ============================================================================
+// Wavelet + adaptive sharpen SIMD helpers
+// ============================================================================
+
+#[arcane]
+pub(super) fn wavelet_threshold_accumulate_impl_v3(
+    token: X64V3Token,
+    current: &[f32],
+    smooth: &[f32],
+    result: &mut [f32],
+    threshold: f32,
+) {
+    wavelet_threshold_accumulate_rite(token, current, smooth, result, threshold);
+}
+
+#[rite]
+fn wavelet_threshold_accumulate_rite(
+    token: X64V3Token,
+    current: &[f32],
+    smooth: &[f32],
+    result: &mut [f32],
+    threshold: f32,
+) {
+    let thresh_v = f32x8::splat(token, threshold);
+    let neg_thresh_v = f32x8::splat(token, -threshold);
+    let zero_v = f32x8::zero(token);
+    let n = result.len();
+    let mut i = 0;
+    while i + 8 <= n {
+        let c: &[f32; 8] = current[i..i + 8].try_into().unwrap();
+        let s: &[f32; 8] = smooth[i..i + 8].try_into().unwrap();
+        let r: &mut [f32; 8] = (&mut result[i..i + 8]).try_into().unwrap();
+        let detail = f32x8::load(token, c) - f32x8::load(token, s);
+        // Soft threshold: clamp(detail - thresh, 0) for positive, clamp(detail + thresh, -inf, 0) for negative
+        let pos = (detail - thresh_v).max(zero_v);
+        let neg = (detail + thresh_v).min(zero_v);
+        // Combine: if detail > thresh → pos, if detail < -thresh → neg, else 0
+        let is_pos = detail.simd_gt(thresh_v);
+        let is_neg = detail.simd_lt(neg_thresh_v);
+        let thresholded = f32x8::blend(is_pos, pos, f32x8::blend(is_neg, neg, zero_v));
+        (f32x8::load(token, &*r) + thresholded).store(r);
+        i += 8;
+    }
+    for idx in i..n {
+        let detail = current[idx] - smooth[idx];
+        result[idx] += if detail > threshold {
+            detail - threshold
+        } else if detail < -threshold {
+            detail + threshold
+        } else {
+            0.0
+        };
+    }
+}
+
+#[arcane]
+pub(super) fn add_clamped_impl_v3(token: X64V3Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
+    add_clamped_rite(token, a, b, dst);
+}
+
+#[rite]
+fn add_clamped_rite(token: X64V3Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
+    let zero_v = f32x8::zero(token);
+    let n = dst.len();
+    let mut i = 0;
+    while i + 8 <= n {
+        let av: &[f32; 8] = a[i..i + 8].try_into().unwrap();
+        let bv: &[f32; 8] = b[i..i + 8].try_into().unwrap();
+        let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
+        (f32x8::load(token, av) + f32x8::load(token, bv))
+            .max(zero_v)
+            .store(out);
+        i += 8;
+    }
+    for idx in i..n {
+        dst[idx] = (a[idx] + b[idx]).max(0.0);
+    }
+}
+
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn adaptive_sharpen_apply_impl_v3(
+    token: X64V3Token,
+    l: &[f32],
+    detail: &[f32],
+    energy: &[f32],
+    dst: &mut [f32],
+    amount: f32,
+    noise_floor: f32,
+    masking_threshold: f32,
+) {
+    adaptive_sharpen_apply_rite(
+        token,
+        l,
+        detail,
+        energy,
+        dst,
+        amount,
+        noise_floor,
+        masking_threshold,
+    );
+}
+
+#[rite]
+#[allow(clippy::too_many_arguments)]
+fn adaptive_sharpen_apply_rite(
+    token: X64V3Token,
+    l: &[f32],
+    detail: &[f32],
+    energy: &[f32],
+    dst: &mut [f32],
+    amount: f32,
+    noise_floor: f32,
+    masking_threshold: f32,
+) {
+    let amount_v = f32x8::splat(token, amount);
+    let nf_v = f32x8::splat(token, noise_floor);
+    let mt_v = f32x8::splat(token, masking_threshold);
+    let zero_v = f32x8::zero(token);
+    let one_v = f32x8::splat(token, 1.0);
+    let has_masking = masking_threshold > 1e-8;
+    let n = dst.len();
+
+    let mut i = 0;
+    while i + 8 <= n {
+        let lv: &[f32; 8] = l[i..i + 8].try_into().unwrap();
+        let dv: &[f32; 8] = detail[i..i + 8].try_into().unwrap();
+        let ev: &[f32; 8] = energy[i..i + 8].try_into().unwrap();
+        let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
+
+        let l_val = f32x8::load(token, lv);
+        let d_val = f32x8::load(token, dv);
+        let e_val = f32x8::load(token, ev).max(zero_v).sqrt();
+
+        // gate = e / (e + noise_floor)
+        let gate = e_val * (e_val + nf_v).recip();
+        // mask = e / (e + masking_threshold) or 1.0
+        let mask = if has_masking {
+            e_val * (e_val + mt_v).recip()
+        } else {
+            one_v
+        };
+        (l_val + amount_v * d_val * gate * mask)
+            .max(zero_v)
+            .store(out);
+        i += 8;
+    }
+    for idx in i..n {
+        let e = energy[idx].max(0.0).sqrt();
+        let gate = e / (e + noise_floor);
+        let mask = if has_masking {
+            e / (e + masking_threshold)
+        } else {
+            1.0
+        };
+        dst[idx] = (l[idx] + amount * detail[idx] * gate * mask).max(0.0);
+    }
+}
+
+// ============================================================================
 // Fused interleaved per-pixel: RGB→Oklab→adjust→RGB in one streaming pass
 // ============================================================================
 

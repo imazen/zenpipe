@@ -168,6 +168,60 @@ pub(crate) fn vibrance(a: &mut [f32], b: &mut [f32], amount: f32, protection: f3
     archmage::incant!(vibrance_impl(a, b, amount, protection), [v3]);
 }
 
+/// Dispatch: subtract two planes. dst[i] = a[i] - b[i]
+pub(crate) fn subtract_planes(a: &[f32], b: &[f32], dst: &mut [f32]) {
+    archmage::incant!(subtract_planes_impl(a, b, dst), [v3]);
+}
+
+/// Dispatch: square a plane. dst[i] = src[i] * src[i]
+pub(crate) fn square_plane(src: &[f32], dst: &mut [f32]) {
+    archmage::incant!(square_plane_impl(src, dst), [v3]);
+}
+
+/// Dispatch: wavelet soft-threshold and accumulate.
+/// result[i] += soft_threshold(current[i] - smooth[i], threshold)
+pub(crate) fn wavelet_threshold_accumulate(
+    current: &[f32],
+    smooth: &[f32],
+    result: &mut [f32],
+    threshold: f32,
+) {
+    archmage::incant!(
+        wavelet_threshold_accumulate_impl(current, smooth, result, threshold),
+        [v3]
+    );
+}
+
+/// Dispatch: add two planes with clamping to zero.
+/// dst[i] = (a[i] + b[i]).max(0.0)
+pub(crate) fn add_clamped(a: &[f32], b: &[f32], dst: &mut [f32]) {
+    archmage::incant!(add_clamped_impl(a, b, dst), [v3]);
+}
+
+/// Dispatch: adaptive sharpen per-pixel (detail extraction + energy gating).
+pub(crate) fn adaptive_sharpen_apply(
+    l: &[f32],
+    detail: &[f32],
+    energy: &[f32],
+    dst: &mut [f32],
+    amount: f32,
+    noise_floor: f32,
+    masking_threshold: f32,
+) {
+    archmage::incant!(
+        adaptive_sharpen_apply_impl(
+            l,
+            detail,
+            energy,
+            dst,
+            amount,
+            noise_floor,
+            masking_threshold
+        ),
+        [v3]
+    );
+}
+
 /// Dispatch: fused per-pixel adjustment (L pass + AB pass).
 pub(crate) fn fused_adjust(
     l: &mut [f32],

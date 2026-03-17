@@ -82,16 +82,12 @@ impl Filter for AdaptiveSharpen {
 
         // detail = L - blurred (high-frequency content)
         let mut detail = ctx.take_f32(pc);
-        for i in 0..pc {
-            detail[i] = planes.l[i] - blurred[i];
-        }
+        crate::simd::subtract_planes(&planes.l, &blurred, &mut detail);
         ctx.return_f32(blurred);
 
         // 2. Local energy = blur(detail²)
         let mut detail_sq = ctx.take_f32(pc);
-        for i in 0..pc {
-            detail_sq[i] = detail[i] * detail[i];
-        }
+        crate::simd::square_plane(&detail, &mut detail_sq);
 
         let kernel_energy = GaussianKernel::new(self.sigma * 3.0);
         let mut energy = ctx.take_f32(pc);
@@ -117,20 +113,16 @@ impl Filter for AdaptiveSharpen {
         let effective_nf = self.noise_floor * (1.0 + (1.0 - detail_factor) * 5.0);
 
         // 5. Gated sharpening: L' = L + amount * detail * gate * mask
-        let amount = self.amount;
         let mut dst = ctx.take_f32(pc);
-        for i in 0..pc {
-            let e = energy[i].max(0.0).sqrt();
-            // Noise gate: suppresses sharpening in flat areas
-            let gate = e / (e + effective_nf);
-            // Edge mask: further suppresses sharpening in low-edge areas
-            let mask = if masking_threshold > 1e-8 {
-                e / (e + masking_threshold)
-            } else {
-                1.0
-            };
-            dst[i] = (planes.l[i] + amount * detail[i] * gate * mask).max(0.0);
-        }
+        crate::simd::adaptive_sharpen_apply(
+            &planes.l,
+            &detail,
+            &energy,
+            &mut dst,
+            self.amount,
+            effective_nf,
+            masking_threshold,
+        );
 
         ctx.return_f32(energy);
         ctx.return_f32(detail);
