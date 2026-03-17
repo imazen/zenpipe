@@ -37,25 +37,37 @@ Does NOT do resizing, compositing, or image processing — that's `zenimage`.
 zencodecs/
 ├── src/
 │   ├── lib.rs            # Public API, re-exports
-│   ├── format.rs         # ImageFormat enum, detection (magic bytes)
+│   ├── codec_id.rs       # CodecId — identifies specific codec implementations
+│   ├── format_set.rs     # FormatSet — bitflag set of ImageFormat values
+│   ├── quality.rs        # QualityIntent, QualityProfile, calibration tables
+│   ├── policy.rs         # CodecPolicy — per-request killbits/allowlist/preferences
+│   ├── select.rs         # Format auto-selection engine (ImageFacts + preferences)
+│   ├── trace.rs          # SelectionTrace — audit trail for decisions
+│   ├── dyn_dispatch.rs   # Dynamic dispatch via zencodec dyn traits
+│   ├── dispatch.rs       # Encoder closure dispatch (BuiltEncoder pattern)
 │   ├── error.rs          # CodecError (unified error type)
-│   ├── pixel.rs          # PixelData enum (Rgb8, Rgba8, Rgb16, Rgba16, RgbF32, RgbaF32, Gray8)
+│   ├── pixel.rs          # Pixel type re-exports (rgb + imgref)
 │   ├── config.rs         # CodecConfig struct, format-specific config re-exports
-│   ├── limits.rs         # Limits, ImageMetadata (ICC/EXIF/XMP)
-│   ├── info.rs           # ImageInfo (unified probe)
-│   ├── registry.rs       # CodecRegistry — runtime enable/disable
-│   ├── decode.rs         # DecodeRequest, DecodeOutput (returns PixelData)
-│   ├── encode.rs         # EncodeRequest with encode_rgb8/encode_rgba8
-│   ├── animation.rs      # AnimationDecoder, frame iteration (planned)
-│   ├── color.rs          # Color management via moxcms (planned)
+│   ├── limits.rs         # Limits, Stop
+│   ├── info.rs           # ImageInfo, probe functions
+│   ├── registry.rs       # CodecRegistry — runtime enable/disable + capability queries
+│   ├── decode.rs         # DecodeRequest (one-shot, push, animation)
+│   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles)
 │   └── codecs/
-│       ├── mod.rs        # Codec adapter trait
+│       ├── mod.rs        # Codec adapter modules
 │       ├── jpeg.rs       # zenjpeg adapter
 │       ├── webp.rs       # zenwebp adapter
 │       ├── gif.rs        # zengif adapter
-│       ├── png.rs        # png crate adapter
+│       ├── png.rs        # zenpng adapter
 │       ├── avif_dec.rs   # zenavif adapter
-│       └── avif_enc.rs   # ravif adapter
+│       ├── avif_enc.rs   # ravif adapter
+│       ├── jxl_dec.rs    # zenjxl decoder adapter
+│       ├── jxl_enc.rs    # jxl-encoder adapter
+│       ├── heic.rs       # heic-decoder adapter
+│       ├── pnm.rs        # zenbitmaps PNM adapter
+│       ├── bmp.rs        # zenbitmaps BMP adapter
+│       └── farbfeld.rs   # zenbitmaps Farbfeld adapter
+├── DESIGN-v2.md          # Full redesign document
 ├── Cargo.toml
 ├── CLAUDE.md
 ├── justfile
@@ -88,12 +100,30 @@ zencodecs/
 - `PixelData::as_bytes()` returns raw bytes
 - `PixelData::has_alpha()`, `width()`, `height()` accessors
 
+### v2 Additions (2026-03-16)
+- **CodecId**: identifies specific codec implementations for policy targeting
+- **FormatSet**: public bitflag set of formats (web_safe, modern_web, custom)
+- **QualityIntent + QualityProfile**: named quality presets with per-codec calibration tables from imageflow, DPR adjustment
+- **CodecPolicy**: per-request killbits, allowlist, preference ordering, format restrictions, composable via merge()
+- **SelectionTrace**: audit trail for format/encoder/decoder selection decisions
+- **Format auto-selection engine**: imageflow-derived preference hierarchy (JXL > AVIF > JPEG > WebP > PNG with scenario-specific reordering)
+- **DecodeRequest::push_decode(sink)**: zero-copy streaming decode via DecodeRowSink
+- **DecodeRequest::full_frame_decoder()**: animation decode via DynFullFrameDecoder ('static, data copied)
+- **DecodeRequest::probe()**: header-only metadata extraction
+- **EncodeRequest::full_frame_encoder(w, h)**: animation encode via DynFullFrameEncoder (GIF, WebP, PNG)
+- **EncodeRequest::with_quality_profile()**: named quality presets instead of raw float
+- **EncodeRequest::with_dpr()**: device pixel ratio quality adjustment
+- **EncodeRequest::with_policy()**: per-request codec/format filtering
+- **EncodeRequest::with_image_facts()**: source image properties for auto-selection
+- **EncodeRequest::quality_intent()**: accessor for resolved per-codec quality values
+- **CodecRegistry capability queries**: streaming_decode_available, animation_decode/encode_available
+- Re-exports: DynFullFrameDecoder, DynFullFrameEncoder, DynStreamingDecoder, DecodeRowSink, OutputInfo, OwnedFullFrame, FullFrame
+
 ### What's NOT implemented yet
-- Streaming decode/encode
-- Animation frame iteration
+- Pull-based streaming decode (DynStreamingDecoder + 'a lifetime blocked by GAT config borrow — use push_decode instead)
 - Color management (moxcms)
-- `decode_into()` pre-allocated buffer
-- Format-specific decode configs (JPEG/AVIF decoder configs accepted but not wired to underlying codecs yet)
+- Fallback chains (structural pieces ready, needs multi-decoder-per-format registry)
+- Registry v2 entries with factories (deferred — current match-based dispatch works)
 
 ## Public API Spec (Design Intent)
 
