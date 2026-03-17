@@ -187,13 +187,13 @@ pub(super) fn gaussian_blur_plane_impl_v3(
     ctx: &mut FilterContext,
 ) {
     use crate::blur::{
-        ExtendedBoxBlur, extended_box_blur_plane, kernel_sigma, should_use_box_blur,
+        kernel_sigma, should_use_stackblur, sigma_to_stackblur_radius, stackblur_plane,
     };
 
     let sigma = kernel_sigma(kernel);
-    if should_use_box_blur(sigma) {
-        let blur = ExtendedBoxBlur::from_sigma(sigma);
-        extended_box_blur_plane(src, dst, width, height, &blur, ctx);
+    if should_use_stackblur(sigma) {
+        let radius = sigma_to_stackblur_radius(sigma);
+        stackblur_plane(src, dst, width, height, radius, ctx);
         return;
     }
     gaussian_blur_plane_simd(_token, src, dst, width, height, kernel, ctx);

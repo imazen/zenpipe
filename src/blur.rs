@@ -2,18 +2,19 @@
 /// This covers any realistic blur sigma.
 const MAX_KERNEL_SIZE: usize = 512;
 
-/// Minimum sigma for the extended box blur fast path.
+/// Minimum sigma for the stackblur fast path.
 ///
-/// Below this threshold, SIMD FIR convolution is faster. Above it, the O(1)/pixel
-/// box blur wins because the FIR kernel size grows linearly with sigma.
+/// Below this threshold, SIMD FIR convolution is faster. Above it, stackblur
+/// wins because it's O(1)/pixel with only 2 memory passes (vs FIR's O(radius)).
 ///
 /// Benchmark-derived crossover (2026-03-16, x86_64 AVX2):
-///   σ=4:  FIR 8.6ms vs box 33ms (1080p), FIR 37ms vs box 152ms (4K)
-///   σ=16: FIR 36ms  vs box 34ms (1080p), FIR 148ms vs box 153ms (4K)
-///   σ=30: FIR 71ms  vs box 35ms (1080p), FIR 295ms vs box 152ms (4K)
+///   σ=4:  FIR 8.4ms vs stackblur 14.2ms (1080p), FIR 37.7ms vs stackblur 63.2ms (4K)
+///   σ=16: box/FIR 34ms vs stackblur 14.2ms (1080p), box/FIR 152ms vs stackblur 63ms (4K)
+///   σ=30: box/FIR 34ms vs stackblur 14.3ms (1080p), box/FIR 153ms vs stackblur 63ms (4K)
 ///
-/// Crossover: ~σ=12 at 1080p, ~σ=16 at 4K. Using σ=12 (conservative).
-const BOX_BLUR_SIGMA_THRESHOLD: f32 = 12.0;
+/// Stackblur is 2.4× faster than box blur at all sigma values.
+/// Crossover with FIR: ~σ=7. Using σ=6 (conservative, FIR at σ=6 is ~14ms).
+const STACKBLUR_SIGMA_THRESHOLD: f32 = 6.0;
 
 /// Precomputed separable Gaussian kernel.
 ///
@@ -102,7 +103,7 @@ pub fn gaussian_blur_plane(
 
 /// Scalar implementation of separable Gaussian blur.
 ///
-/// For sigma >= 1.5, dispatches to the extended box blur (O(1)/pixel).
+/// For sigma >= threshold, dispatches to stackblur (O(1)/pixel, 2.4× faster than box blur).
 /// For smaller sigma, uses direct FIR convolution (kernel is tiny).
 pub fn gaussian_blur_plane_scalar(
     src: &[f32],
@@ -113,9 +114,9 @@ pub fn gaussian_blur_plane_scalar(
     ctx: &mut FilterContext,
 ) {
     let sigma = kernel_sigma(kernel);
-    if should_use_box_blur(sigma) {
-        let blur = ExtendedBoxBlur::from_sigma(sigma);
-        extended_box_blur_plane(src, dst, width, height, &blur, ctx);
+    if should_use_stackblur(sigma) {
+        let radius = sigma_to_stackblur_radius(sigma);
+        stackblur_plane(src, dst, width, height, radius, ctx);
         return;
     }
 
@@ -421,9 +422,15 @@ pub fn extended_box_blur_plane(
     ctx.return_f32(buf_a);
 }
 
+/// Check if sigma is large enough to benefit from the stackblur fast path.
+pub fn should_use_stackblur(sigma: f32) -> bool {
+    sigma >= STACKBLUR_SIGMA_THRESHOLD
+}
+
 /// Check if sigma is large enough to benefit from the extended box blur path.
+/// Deprecated in favor of `should_use_stackblur` which is 2.4× faster.
 pub fn should_use_box_blur(sigma: f32) -> bool {
-    sigma >= BOX_BLUR_SIGMA_THRESHOLD
+    should_use_stackblur(sigma)
 }
 
 /// Get sigma from a GaussianKernel (approximate, from radius).
@@ -538,7 +545,11 @@ fn stackblur_row(
     for i in (r + 1)..stack_size {
         // Right side: offset = i - r (positive)
         let offset = i - r;
-        stack[i] = if offset < len { input[offset] } else { input[len - 1] };
+        stack[i] = if offset < len {
+            input[offset]
+        } else {
+            input[len - 1]
+        };
     }
 
     // Compute initial weighted sum.
@@ -572,7 +583,11 @@ fn stackblur_row(
 
         // 3. Insert new pixel at the vacated slot
         let new_x = x + r + 1;
-        let new_px = if new_x < len { input[new_x] } else { input[len - 1] };
+        let new_px = if new_x < len {
+            input[new_x]
+        } else {
+            input[len - 1]
+        };
         stack[sp] = new_px;
         sum_in += new_px;
 
@@ -1123,8 +1138,7 @@ mod tests {
         let mut src = vec![0.0f32; n];
         for y in 0..h as usize {
             for x in 0..w as usize {
-                src[y * w as usize + x] =
-                    0.1 + 0.8 * (x as f32 / w as f32) * (y as f32 / h as f32);
+                src[y * w as usize + x] = 0.1 + 0.8 * (x as f32 / w as f32) * (y as f32 / h as f32);
             }
         }
 
@@ -1136,7 +1150,14 @@ mod tests {
         gaussian_blur_plane_scalar(&src, &mut dst_fir, w, h, &kernel, &mut FilterContext::new());
 
         let mut dst_sb = vec![0.0f32; n];
-        stackblur_plane(&src, &mut dst_sb, w, h, sb_radius, &mut FilterContext::new());
+        stackblur_plane(
+            &src,
+            &mut dst_sb,
+            w,
+            h,
+            sb_radius,
+            &mut FilterContext::new(),
+        );
 
         let margin = (2.0 * sigma).ceil() as usize;
         let mut max_err = 0.0f32;
@@ -1152,7 +1173,9 @@ mod tests {
             }
         }
         let rmse = (sum_sq_err / count as f64).sqrt();
-        eprintln!("stackblur vs FIR sigma={sigma} radius={sb_radius}: max_err={max_err:.6}, rmse={rmse:.6}");
+        eprintln!(
+            "stackblur vs FIR sigma={sigma} radius={sb_radius}: max_err={max_err:.6}, rmse={rmse:.6}"
+        );
         assert!(
             max_err < 0.06,
             "stackblur vs FIR max error too large: {max_err}"
