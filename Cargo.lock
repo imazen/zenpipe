@@ -3171,6 +3171,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenblend"
+version = "0.1.0"
+dependencies = [
+ "archmage 0.9.5",
+ "libm",
+ "magetypes",
+ "safe_unaligned_simd",
+ "wide",
+]
+
+[[package]]
 name = "zencodec"
 version = "0.1.0"
 dependencies = [
@@ -3192,6 +3203,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zenavif",
+ "zenavif-parse",
  "zenbitmaps",
  "zencodec",
  "zengif",
@@ -3466,6 +3478,7 @@ dependencies = [
  "safe_unaligned_simd",
  "whereat",
  "wide",
+ "zenblend",
  "zenlayout",
  "zenpixels",
 ]
