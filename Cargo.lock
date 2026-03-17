@@ -2556,6 +2556,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ultrahdr-core"
+version = "0.2.0"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "half",
+ "linear-srgb",
+ "thiserror",
+ "wide",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3426,6 +3438,7 @@ dependencies = [
  "rawler",
  "rawloader",
  "thiserror",
+ "ultrahdr-core",
  "whereat",
  "zenpixels",
 ]

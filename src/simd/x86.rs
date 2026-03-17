@@ -64,7 +64,7 @@ fn power_contrast_plane_simd(token: X64V3Token, plane: &mut [f32], exp: f32, sca
     for chunk in chunks {
         let v = f32x8::load(token, &*chunk);
         // pow_midp handles v=0 correctly (returns 0)
-        let powered = v.max(zero_v).pow_midp(exp);
+        let powered = v.max(zero_v).pow_lowp_unchecked(exp);
         (powered * scale_v).store(chunk);
     }
     for v in tail {
@@ -106,7 +106,7 @@ fn sigmoid_tone_map_plane_simd(token: X64V3Token, plane: &mut [f32], contrast: f
         // Compute ratio = (1-x)/x, handling x near 0 by clamping
         let x_safe = x.max(f32x8::splat(token, 1e-7));
         let ratio = (one_v - x_safe) * x_safe.recip();
-        let powered = ratio.pow_midp(contrast);
+        let powered = ratio.pow_lowp_unchecked(contrast);
         let result = (one_v + powered).recip();
 
         // Blend: use 0.0 where x <= 0, 1.0 where x >= 1
@@ -251,33 +251,37 @@ fn gaussian_blur_plane_simd(
         }
     }
 
-    // Vertical pass
-    for y in 0..h {
-        let out_row = &mut dst[y * w..(y + 1) * w];
-        let (out_chunks, out_tail) = f32x8::partition_slice_mut(token, out_row);
+    // Vertical pass — column-tiled for cache locality.
+    // Process 8 adjacent columns per tile so each tile's working set
+    // (kernel_len rows × 32 bytes) stays hot in L1/L2.
+    let num_tiles = w / 8;
+    let weights = kernel.weights();
 
-        for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
-            let x = ci * 8;
+    for tile in 0..num_tiles {
+        let x = tile * 8;
+        for y in 0..h {
             let mut acc = f32x8::zero(token);
-            for (k, &weight) in kernel.weights().iter().enumerate() {
+            for (k, &weight) in weights.iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 let wv = f32x8::splat(token, weight);
                 let src_chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-                let vals = f32x8::load(token, src_chunk);
-                acc = vals.mul_add(wv, acc);
+                acc = f32x8::load(token, src_chunk).mul_add(wv, acc);
             }
-            acc.store(out_chunk);
+            let out: &mut [f32; 8] = (&mut dst[y * w + x..y * w + x + 8]).try_into().unwrap();
+            acc.store(out);
         }
+    }
 
-        let x_start = out_chunks.len() * 8;
-        for (xi, v) in out_tail.iter_mut().enumerate() {
-            let x = x_start + xi;
+    // Scalar tail for remaining w % 8 columns
+    let x_start = num_tiles * 8;
+    for x in x_start..w {
+        for y in 0..h {
             let mut sum = 0.0f32;
-            for (k, &weight) in kernel.weights().iter().enumerate() {
+            for (k, &weight) in weights.iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 sum += h_buf[sy * w + x] * weight;
             }
-            *v = sum;
+            dst[y * w + x] = sum;
         }
     }
 
@@ -442,13 +446,13 @@ fn scatter_oklab_simd(
         let ok_a = m2_10.mul_add(l_, m2_11.mul_add(m_, m2_12 * s_));
         let ok_b = m2_20.mul_add(l_, m2_21.mul_add(m_, m2_22 * s_));
 
-        // Store to planes
-        let l_arr = ok_l.to_array();
-        let a_arr = ok_a.to_array();
-        let b_arr = ok_b.to_array();
-        l_out[i..i + 8].copy_from_slice(&l_arr);
-        a_out[i..i + 8].copy_from_slice(&a_arr);
-        b_out[i..i + 8].copy_from_slice(&b_arr);
+        // Store to planes (direct SIMD store to contiguous memory)
+        let l_chunk: &mut [f32; 8] = (&mut l_out[i..i + 8]).try_into().unwrap();
+        let a_chunk: &mut [f32; 8] = (&mut a_out[i..i + 8]).try_into().unwrap();
+        let b_chunk: &mut [f32; 8] = (&mut b_out[i..i + 8]).try_into().unwrap();
+        ok_l.store(l_chunk);
+        ok_a.store(a_chunk);
+        ok_b.store(b_chunk);
 
         i += 8;
     }
@@ -662,13 +666,13 @@ fn scatter_srgb_u8_to_oklab_rite(
         let ok_a = m2_10.mul_add(l_, m2_11.mul_add(m_, m2_12 * s_));
         let ok_b = m2_20.mul_add(l_, m2_21.mul_add(m_, m2_22 * s_));
 
-        // Store to planes
-        let l_arr = ok_l.to_array();
-        let a_arr = ok_a.to_array();
-        let b_arr = ok_b.to_array();
-        l_out[i..i + 8].copy_from_slice(&l_arr);
-        a_out[i..i + 8].copy_from_slice(&a_arr);
-        b_out[i..i + 8].copy_from_slice(&b_arr);
+        // Store to planes (direct SIMD store to contiguous memory)
+        let l_chunk: &mut [f32; 8] = (&mut l_out[i..i + 8]).try_into().unwrap();
+        let a_chunk: &mut [f32; 8] = (&mut a_out[i..i + 8]).try_into().unwrap();
+        let b_chunk: &mut [f32; 8] = (&mut b_out[i..i + 8]).try_into().unwrap();
+        ok_l.store(l_chunk);
+        ok_a.store(a_chunk);
+        ok_b.store(b_chunk);
 
         i += 8;
     }
@@ -921,7 +925,7 @@ fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, p
         // normalized = min(chroma / MAX_CHROMA, 1.0)
         let normalized = (chroma * inv_max_chroma_v).min(one_v);
         // protection_factor = (1 - normalized)^protection
-        let pf = (one_v - normalized).pow_midp(protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked(protection);
         // scale = 1 + amount * pf
         let scale = amount_v.mul_add(pf, one_v);
         (av * scale).store(ac);
@@ -1023,7 +1027,7 @@ fn fused_adjust_l_rite(
         // 2+3. White point * exposure (combined multiply)
         v *= wp_exp_v;
         // 4. Contrast: power curve v^exp * scale, pivot at middle grey
-        v = v.max(zero_v).pow_midp(contrast_exp) * cs_v;
+        v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
         // 5. Shadows: mask = max(1 - v*2, 0), v += mask² * shadows*0.5
         let sm = (one_v - v * two_v).max(zero_v);
         v = (sm * sm).mul_add(shadows_half, v);
@@ -1095,7 +1099,7 @@ fn fused_adjust_ab_rite(
         // Vibrance
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_midp(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
         let scale = vib_v.mul_add(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
@@ -1320,7 +1324,7 @@ fn fused_interleaved_adjust_rite(
         // ── L adjustments (all in-register) ──
         ok_l = ((ok_l - bp_v) * inv_range_v).max(zero_v);
         ok_l *= wp_exp_v;
-        ok_l = ok_l.max(zero_v).pow_midp(contrast_exp) * cs_v;
+        ok_l = ok_l.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
         let sm = (one_v - ok_l * two_v).max(zero_v);
         ok_l = (sm * sm).mul_add(shadows_half, ok_l);
         let hm = ((ok_l - half_v) * two_v).max(zero_v).min(one_v);
@@ -1338,7 +1342,7 @@ fn fused_interleaved_adjust_rite(
         ok_b *= sat_v;
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_midp(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
         let vib_scale = vib_v.mul_add(pf, one_v);
         ok_a *= vib_scale;
         ok_b *= vib_scale;

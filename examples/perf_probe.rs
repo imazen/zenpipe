@@ -4,9 +4,9 @@
 //! Run: `cargo run --release --features experimental --example perf_probe`
 
 use std::sync::Arc;
-use zenfilters::filters::*;
-use zenfilters::{FusedAdjustParams, FilterContext, OklabPlanes, Pipeline, PipelineConfig};
 use zenbench::{Suite, Throughput};
+use zenfilters::filters::*;
+use zenfilters::{FilterContext, FusedAdjustParams, OklabPlanes, Pipeline, PipelineConfig};
 use zenpixels::ColorPrimaries;
 use zenpixels_convert::oklab;
 
@@ -219,11 +219,7 @@ fn pipe_heavy() -> Pipeline {
     pipe
 }
 
-const SIZES: &[(u32, u32, &str)] = &[
-    (1920, 1080, "2k"),
-    (3840, 2160, "4k"),
-    (7680, 4320, "8k"),
-];
+const SIZES: &[(u32, u32, &str)] = &[(1920, 1080, "2k"), (3840, 2160, "4k"), (7680, 4320, "8k")];
 
 fn main() {
     zenbench::run(|suite| {
@@ -234,9 +230,21 @@ fn main() {
             bench_fused_adjust(suite, w, h, label);
 
             // Full pipelines
-            bench_pipeline(suite, &format!("pipe_perpixel_{label}"), w, h, pipe_perpixel);
+            bench_pipeline(
+                suite,
+                &format!("pipe_perpixel_{label}"),
+                w,
+                h,
+                pipe_perpixel,
+            );
             bench_pipeline(suite, &format!("pipe_clarity_{label}"), w, h, pipe_clarity);
-            bench_pipeline(suite, &format!("pipe_realistic_{label}"), w, h, pipe_realistic);
+            bench_pipeline(
+                suite,
+                &format!("pipe_realistic_{label}"),
+                w,
+                h,
+                pipe_realistic,
+            );
             bench_pipeline(suite, &format!("pipe_heavy_{label}"), w, h, pipe_heavy);
         }
     });
