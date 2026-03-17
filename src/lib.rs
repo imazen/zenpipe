@@ -47,6 +47,8 @@ pub mod sources;
 mod strip;
 
 #[cfg(feature = "codec")]
+pub mod animation;
+#[cfg(feature = "codec")]
 pub mod codec;
 
 pub use error::PipeError;

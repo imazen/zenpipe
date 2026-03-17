@@ -114,6 +114,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gif"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5df2ba84018d80c213569363bdcd0c64e6933c67fe4c1d60ecf822971a3c35e"
+dependencies = [
+ "weezl",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -232,6 +241,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a041e753da8b807c9255f28de81879c78c876392ff2469cde94799b2896b9d"
 
 [[package]]
+name = "quantizr"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b28ab4659f6754222a9e96c7a48f68dba03a620f23803c67ccd4ca7c35d55f5f"
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -323,6 +338,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "weezl"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+
+[[package]]
 name = "whereat"
 version = "0.1.3"
 
@@ -374,6 +395,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zengif"
+version = "0.6.0"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "gif",
+ "linear-srgb",
+ "quantizr",
+ "rgb",
+ "thiserror",
+ "whereat 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
+ "zenpixels 0.1.1",
+]
+
+[[package]]
 name = "zenjpeg"
 version = "0.6.1"
 dependencies = [
@@ -407,10 +444,12 @@ name = "zenpipe"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "enough",
  "hashbrown",
  "moxcms",
  "zencodec",
  "zenfilters",
+ "zengif",
  "zenjpeg",
  "zenpixels 0.1.1",
  "zenpixels-convert",

@@ -36,3 +36,5 @@ moxcms = { version = "0.8", optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
+zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
+enough = "0.4"
