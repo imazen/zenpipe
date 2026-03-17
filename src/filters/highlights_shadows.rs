@@ -197,8 +197,14 @@ mod tests {
         .apply(&mut planes_default, &mut FilterContext::new());
 
         // Very dark pixel should still be lifted by both
-        assert!(planes_custom.l[0] > 0.05, "custom: very dark pixel should be lifted");
-        assert!(planes_default.l[0] > 0.05, "default: very dark pixel should be lifted");
+        assert!(
+            planes_custom.l[0] > 0.05,
+            "custom: very dark pixel should be lifted"
+        );
+        assert!(
+            planes_default.l[0] > 0.05,
+            "default: very dark pixel should be lifted"
+        );
 
         // Moderately dark pixel: custom threshold 0.15 means L=0.25 is OUTSIDE
         // the shadow zone, so it should be unaffected by custom thresholds.

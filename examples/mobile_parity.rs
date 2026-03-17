@@ -195,7 +195,9 @@ fn process_appledng(
         let pgtm_data = zenraw::apple::extract_profile_gain_table_map(dng_bytes);
 
         if let Some(e) = exif {
-            if let Some(mut pipeline) = zenraw::dng_render::DngPipeline::from_metadata(e, cam_w, cam_h) {
+            if let Some(mut pipeline) =
+                zenraw::dng_render::DngPipeline::from_metadata(e, cam_w, cam_h)
+            {
                 if let Some(ref profile) = dng_profile {
                     if let Some(ref tc) = profile.tone_curve {
                         pipeline = pipeline.with_tone_curve(tc);
@@ -214,7 +216,8 @@ fn process_appledng(
                 let sm_ref = crop_u8(&sm_ref, srw2, srh2, cw2, ch2);
 
                 // Build a small pipeline for the cropped data
-                let mut small_pipe = zenraw::dng_render::DngPipeline::from_metadata(e, cw2, ch2).unwrap();
+                let mut small_pipe =
+                    zenraw::dng_render::DngPipeline::from_metadata(e, cw2, ch2).unwrap();
                 if let Some(ref profile) = dng_profile {
                     if let Some(ref tc) = profile.tone_curve {
                         small_pipe = small_pipe.with_tone_curve(tc);
@@ -228,20 +231,37 @@ fn process_appledng(
 
                 let dng_out = small_pipe.render_lum_preserving(&small_cam);
                 let dng_score = zensim_score(&dng_out, &sm_ref, cw2, ch2, zs);
-                println!("  DngPipeline (lum-preserving): {dng_score:.1} ({:.1}s)", t0.elapsed().as_secs_f32());
+                println!(
+                    "  DngPipeline (lum-preserving): {dng_score:.1} ({:.1}s)",
+                    t0.elapsed().as_secs_f32()
+                );
 
                 let dng_out_perch = small_pipe.render(&small_cam);
                 let dng_score_perch = zensim_score(&dng_out_perch, &sm_ref, cw2, ch2, zs);
                 println!("  DngPipeline (per-channel): {dng_score_perch:.1}");
 
                 let prefix = format!("{OUTPUT_DIR}/{label}");
-                save_rgb8_jpeg(&dng_out, cw2, ch2, &format!("{prefix}_dng_pipeline_lum.jpg"));
-                save_rgb8_jpeg(&dng_out_perch, cw2, ch2, &format!("{prefix}_dng_pipeline_perch.jpg"));
+                save_rgb8_jpeg(
+                    &dng_out,
+                    cw2,
+                    ch2,
+                    &format!("{prefix}_dng_pipeline_lum.jpg"),
+                );
+                save_rgb8_jpeg(
+                    &dng_out_perch,
+                    cw2,
+                    ch2,
+                    &format!("{prefix}_dng_pipeline_perch.jpg"),
+                );
 
                 let best_dng = dng_score.max(dng_score_perch);
                 if best_dng > parity_rgb {
                     parity_rgb = best_dng;
-                    method = if dng_score > dng_score_perch { "dng_lum" } else { "dng_perch" };
+                    method = if dng_score > dng_score_perch {
+                        "dng_lum"
+                    } else {
+                        "dng_perch"
+                    };
                 }
             }
         }
@@ -267,7 +287,10 @@ fn process_appledng(
     // Apply ProfileGainTableMap (Smart HDR) if present
     let pgtm = zenraw::apple::extract_profile_gain_table_map(dng_bytes);
     if let Some(ref pgtm) = pgtm {
-        let bl_ev = exif.as_ref().and_then(|e| e.baseline_exposure).unwrap_or(0.0);
+        let bl_ev = exif
+            .as_ref()
+            .and_then(|e| e.baseline_exposure)
+            .unwrap_or(0.0);
         let (gmin, gmax, gmean) = pgtm.stats();
         println!(
             "  PGTM: {}x{} grid, {} tonal pts, gains [{gmin:.3}..{gmax:.3}] mean={gmean:.3}",
@@ -276,7 +299,10 @@ fn process_appledng(
         let linear_mut: &mut [f32] = bytemuck::cast_slice_mut(&mut raw_bytes);
         pgtm.apply(linear_mut, dw, dh, bl_ev);
         let (mean_after, _, _, _, _) = analyze_linear(linear_mut);
-        println!("  After PGTM: mean={mean_after:.4} ({:.1}s)", t0.elapsed().as_secs_f32());
+        println!(
+            "  After PGTM: mean={mean_after:.4} ({:.1}s)",
+            t0.elapsed().as_secs_f32()
+        );
     }
 
     // Use PGTM-corrected data as primary, original as fallback
@@ -514,17 +540,34 @@ fn process_appledng(
         let och = osh.min(ch);
         let orig_small = crop_f32(&orig_small, osw, osh, ocw, och);
         // Reuse already-downscaled reference
-        let orig_ref = crop_u8(&downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).0,
+        let orig_ref = crop_u8(
+            &downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).0,
             downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).1,
-            downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).2, ocw, och);
+            downscale_rgb8(&preview_rgb8, pw, ph, MAX_DIM).2,
+            ocw,
+            och,
+        );
 
         let (orig_params, orig_score) = optimize_enhanced_pipeline(
-            &orig_small, ocw, och, &orig_ref, zs, bl_mult, search_lo, search_hi,
+            &orig_small,
+            ocw,
+            och,
+            &orig_ref,
+            zs,
+            bl_mult,
+            search_lo,
+            search_hi,
         );
         println!(
             "  Fallback (no PGTM): c={:.2} sk={:.2} sat={:.2} curves={} → {orig_score:.1} ({:.1}s)",
-            orig_params.contrast, orig_params.skew, orig_params.saturation,
-            if orig_params.curves.is_identity() { "identity" } else { "custom" },
+            orig_params.contrast,
+            orig_params.skew,
+            orig_params.saturation,
+            if orig_params.curves.is_identity() {
+                "identity"
+            } else {
+                "custom"
+            },
             t0.elapsed().as_secs_f32()
         );
 

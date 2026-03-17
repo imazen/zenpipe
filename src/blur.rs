@@ -461,6 +461,68 @@ mod tests {
     }
 
     #[test]
+    fn fir_blur_gradient_accuracy() {
+        // Non-trivial gradient image to verify tiled vertical pass produces
+        // correct output. Compares dispatch path against a known-good naive
+        // implementation that doesn't tile.
+        let w = 200u32;
+        let h = 150u32;
+        let n = (w * h) as usize;
+        let w_s = w as usize;
+        let h_s = h as usize;
+
+        let mut src = vec![0.0f32; n];
+        for y in 0..h_s {
+            for x in 0..w_s {
+                src[y * w_s + x] = 0.1 + 0.8 * (x as f32 / w_s as f32);
+            }
+        }
+
+        let kernel = GaussianKernel::new(4.0);
+        let radius = kernel.radius;
+
+        // Reference: naive (un-tiled) vertical pass
+        let mut h_buf = vec![0.0f32; n];
+        let mut padded = Vec::new();
+        for y in 0..h_s {
+            let row = &src[y * w_s..(y + 1) * w_s];
+            pad_row(row, radius, &mut padded);
+            for x in 0..w_s {
+                let mut sum = 0.0f32;
+                for (k, &weight) in kernel.weights().iter().enumerate() {
+                    sum += padded[x + k] * weight;
+                }
+                h_buf[y * w_s + x] = sum;
+            }
+        }
+        let mut ref_dst = vec![0.0f32; n];
+        for y in 0..h_s {
+            for x in 0..w_s {
+                let mut sum = 0.0f32;
+                for (k, &weight) in kernel.weights().iter().enumerate() {
+                    let sy = (y + k).saturating_sub(radius).min(h_s - 1);
+                    sum += h_buf[sy * w_s + x] * weight;
+                }
+                ref_dst[y * w_s + x] = sum;
+            }
+        }
+
+        // Actual: dispatched path (uses tiled vertical)
+        let mut actual_dst = vec![0.0f32; n];
+        gaussian_blur_plane(&src, &mut actual_dst, w, h, &kernel, &mut FilterContext::new());
+
+        let mut max_err = 0.0f32;
+        for i in 0..n {
+            let err = (ref_dst[i] - actual_dst[i]).abs();
+            max_err = max_err.max(err);
+        }
+        assert!(
+            max_err < 1e-5,
+            "tiled FIR vs naive FIR max error = {max_err} (expected < 1e-5)"
+        );
+    }
+
+    #[test]
     fn extended_box_blur_constant_plane() {
         let w = 128u32;
         let h = 96u32;
