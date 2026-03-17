@@ -14,6 +14,7 @@ use crate::planes::OklabPlanes;
 ///
 /// This is the Oklab equivalent of Lightroom's HSL panel.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct HslAdjust {
     /// Hue shift per range in degrees. Order: R, O, Y, G, C, B, P, M.

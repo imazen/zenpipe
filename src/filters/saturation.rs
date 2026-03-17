@@ -10,6 +10,7 @@ use crate::simd;
 /// Scales chroma (a, b) by a constant factor. 1.0 = no change,
 /// 0.0 = grayscale, 2.0 = double saturation.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Saturation {
     /// Saturation factor. 1.0 = no change, 0.0 = grayscale, 2.0 = double.

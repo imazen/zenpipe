@@ -11,6 +11,7 @@ use crate::planes::OklabPlanes;
 ///
 /// Positive strength darkens edges (classic vignette), negative brightens.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Vignette {
     /// Vignette strength. Positive darkens edges, negative brightens.

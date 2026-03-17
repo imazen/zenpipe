@@ -20,6 +20,7 @@ use crate::planes::OklabPlanes;
 ///
 /// Operates on L channel only — glow is a luminance phenomenon.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Bloom {
     /// Luminance threshold. Only pixels brighter than this contribute to bloom.

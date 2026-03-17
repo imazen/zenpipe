@@ -21,6 +21,7 @@ use crate::planes::OklabPlanes;
 /// This is what phone cameras should do but don't — they sharpen everything
 /// uniformly, making sky grain and compression artifacts worse.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct AdaptiveSharpen {
     /// Sharpening strength. Typical: 0.3-1.5.

@@ -24,6 +24,7 @@ use crate::planes::OklabPlanes;
 /// Each value is an exposure compensation in stops: positive lifts, negative darkens.
 /// Default: all zeros (identity).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ToneEqualizer {
     /// Exposure compensation per zone, in stops. 9 zones from dark to bright.

@@ -22,6 +22,7 @@ use crate::simd;
 /// 7. Saturation
 /// 8. Vibrance
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct FusedAdjust {
     /// Exposure in stops.

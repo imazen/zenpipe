@@ -12,6 +12,7 @@ use crate::planes::OklabPlanes;
 /// This is the equivalent of Lightroom's Tone Curve panel or darktable's
 /// tone curve module.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ToneCurve {
     /// LUT mapping input L [0,1] to output L [0,1].

@@ -22,6 +22,7 @@ use crate::planes::OklabPlanes;
 /// The result is a smooth shoulder that preserves detail in bright areas
 /// without affecting anything below the knee point.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct HighlightRecovery {
     /// Recovery strength. 0.0 = off, 1.0 = full recovery.

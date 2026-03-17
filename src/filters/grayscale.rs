@@ -13,6 +13,7 @@ use crate::planes::OklabPlanes;
 /// result in Oklab: zero chroma. The perceived luminance is already encoded
 /// in the L channel, so there's no information loss.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Grayscale;
 

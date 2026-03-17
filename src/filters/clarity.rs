@@ -25,6 +25,7 @@ use crate::planes::OklabPlanes;
 /// Inspired by darktable's local contrast module (local Laplacian filter).
 /// This multi-scale approach is simpler but captures most of the benefit.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Clarity {
     /// Sigma for the fine-scale blur. Controls the smallest features

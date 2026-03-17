@@ -12,6 +12,7 @@ use crate::simd;
 /// Oklab channels (L, a, b) by `f^(1/3)`. This preserves hue and
 /// saturation exactly, unlike scaling L alone (which desaturates).
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Exposure {
     /// Exposure adjustment in stops. 0.0 = no change.

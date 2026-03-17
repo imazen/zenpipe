@@ -13,10 +13,12 @@ categories = ["multimedia::images", "graphics"]
 default = []
 buffer = []
 experimental = []
+serde = ["dep:serde"]
 srgb-filters = ["buffer", "dep:rgb"]
 
 [dependencies]
 archmage = { version = "0.9.5", features = ["avx512"] }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
 linear-srgb = "0.6.3"
 magetypes = "0.9.4"

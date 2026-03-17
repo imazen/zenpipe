@@ -21,6 +21,7 @@ pub(crate) const CONTRAST_PIVOT: f32 = 0.5691; // 0.1842_f32.cbrt()
 /// Positive values increase contrast (darks darker, lights lighter).
 /// Negative values reduce contrast.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Contrast {
     /// Contrast amount. 0.0 = no change, 1.0 = strong increase, -1.0 = flatten.

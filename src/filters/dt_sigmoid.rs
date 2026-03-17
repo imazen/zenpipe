@@ -17,6 +17,7 @@ const MIDDLE_GREY: f32 = 0.1845;
 
 /// Internal parameters computed from user-facing contrast/skew.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DtSigmoidParams {
     pub white_target: f32,
     pub black_target: f32,

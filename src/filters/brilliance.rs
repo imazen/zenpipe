@@ -13,6 +13,7 @@ use crate::simd;
 /// selectively. This produces a more natural "dynamic range compression"
 /// similar to Apple's Brilliance slider.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Brilliance {
     /// Blur sigma for computing local average.

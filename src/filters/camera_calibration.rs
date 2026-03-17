@@ -17,6 +17,7 @@ use crate::planes::OklabPlanes;
 /// Uses wider hue ranges than HSL adjust (~60° half-width) since primaries
 /// have broader influence than the 8 HSL color ranges.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct CameraCalibration {
     /// Red primary hue shift in degrees.

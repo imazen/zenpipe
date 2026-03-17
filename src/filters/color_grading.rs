@@ -12,6 +12,7 @@ use crate::planes::OklabPlanes;
 /// Colors are specified as Oklab a/b offsets, which map naturally to
 /// warm/cool (b axis) and green/magenta (a axis).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ColorGrading {
     /// Shadow tint: Oklab a offset.

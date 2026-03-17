@@ -24,6 +24,7 @@
 
 /// Top-level filter category for UI grouping.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FilterGroup {
     /// Exposure, contrast, levels, curves, tone mapping
     Tone,
@@ -43,6 +44,7 @@ pub enum FilterGroup {
 
 /// How a parameter maps to a UI slider.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SliderMapping {
     /// Direct 1:1 — parameter value = slider value. Most common.
     Linear,
@@ -58,6 +60,7 @@ pub enum SliderMapping {
 
 /// A single parameter descriptor.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ParamDesc {
     /// Machine name (matches struct field name).
     pub name: &'static str,
@@ -77,6 +80,7 @@ pub struct ParamDesc {
 
 /// Parameter type, range, and default.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ParamKind {
     /// Continuous float parameter.
     Float {
@@ -104,6 +108,7 @@ pub enum ParamKind {
 
 /// Complete schema for one filter.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct FilterSchema {
     /// Machine name (e.g., "adaptive_sharpen").
     pub name: &'static str,
@@ -131,10 +136,32 @@ pub trait Describe {
 
     /// Set a parameter value by name. Returns `false` if name is unknown.
     fn set_param(&mut self, name: &str, value: ParamValue) -> bool;
+
+    /// Get all parameters as name-value pairs (for serialization).
+    fn get_all_params(&self) -> alloc::vec::Vec<(&'static str, ParamValue)>
+    where
+        Self: Sized,
+    {
+        Self::schema()
+            .params
+            .iter()
+            .filter_map(|p| self.get_param(p.name).map(|v| (p.name, v)))
+            .collect()
+    }
+
+    /// Set parameters from name-value pairs (for deserialization).
+    /// Returns the count of successfully set parameters.
+    fn set_all_params(&mut self, params: &[(&str, ParamValue)]) -> usize {
+        params
+            .iter()
+            .filter(|(name, value)| self.set_param(name, value.clone()))
+            .count()
+    }
 }
 
 /// A concrete parameter value for get/set operations.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParamValue {
     Float(f32),
     Int(i32),

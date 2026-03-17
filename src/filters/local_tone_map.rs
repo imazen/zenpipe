@@ -24,6 +24,7 @@ use crate::planes::OklabPlanes;
 /// Combine with HighlightRecovery + ShadowLift + Clarity + Vibrance
 /// for a full faux HDR pipeline.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct LocalToneMap {
     /// Compression strength. 0.0 = no compression, 1.0 = strong.

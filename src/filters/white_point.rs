@@ -16,6 +16,7 @@ use crate::simd;
 /// highlight detail by compressing super-white values into a headroom
 /// band above the white point, rather than clipping them.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct WhitePoint {
     /// White point level. 1.0 = no change.

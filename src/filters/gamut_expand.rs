@@ -21,6 +21,7 @@ use crate::planes::OklabPlanes;
 /// The boost amount adapts per-pixel: already-saturated colors get less
 /// boost (vibrance-style protection) to prevent clipping.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct GamutExpand {
     /// Expansion strength. 0.0 = sRGB, 1.0 = full P3-like expansion.

@@ -21,6 +21,7 @@ const DEFAULT_HIGHLIGHT_THRESHOLD: f32 = 0.7;
 /// the fast SIMD path is used. Custom thresholds use a scalar fallback with
 /// smooth quadratic mask transitions.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct HighlightsShadows {
     /// Highlights recovery. Positive = compress highlights, negative = boost.

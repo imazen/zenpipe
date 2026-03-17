@@ -10,6 +10,7 @@ use crate::simd;
 /// This produces a perceptually correct negative — unlike sRGB inversion
 /// (255 - v) which distorts perceived brightness relationships.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Invert;
 

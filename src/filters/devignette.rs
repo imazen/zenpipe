@@ -13,6 +13,7 @@ use crate::planes::OklabPlanes;
 /// This is the inverse of the vignette filter — it brightens edges rather
 /// than darkening them.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Devignette {
     /// Correction strength. 1.0 = full cos^4 compensation.

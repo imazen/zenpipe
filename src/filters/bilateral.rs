@@ -24,6 +24,7 @@ use crate::planes::OklabPlanes;
 /// - No exp() per neighbor — numerically stable
 /// - Naturally separable via Gaussian blurs (SIMD-friendly)
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Bilateral {
     /// Spatial sigma for the smoothing window. Typical: 2.0-8.0.

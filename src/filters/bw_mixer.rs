@@ -17,6 +17,7 @@ use crate::planes::OklabPlanes;
 /// The effect is proportional to chroma — neutral/gray pixels are unaffected
 /// by the mixer weights (they're already colorless).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct BwMixer {
     /// Per-color luminance weights. Order: R, O, Y, G, Aq, B, P, M.

@@ -12,6 +12,7 @@ use crate::simd;
 /// Sharpening in Oklab L avoids the color fringing that RGB sharpening
 /// produces at high-contrast edges.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Sharpen {
     /// Blur sigma. Small values (0.5-2.0) for fine sharpening.

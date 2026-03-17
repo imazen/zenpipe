@@ -64,6 +64,7 @@ use super::{
 ///
 /// Extracted from `OklabPlanes` in a single pass over the data.
 /// Total size: ~160 floats (640 bytes). Cheap to compute.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImageFeatures {
     /// L channel histogram, 64 bins, normalized to sum=1.
     pub l_histogram: [f32; 64],
@@ -210,6 +211,7 @@ impl ImageFeatures {
 
 /// Predicted filter parameters from a model or rule-based system.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TunedParams {
     pub exposure: f32,
     pub contrast: f32,
@@ -595,6 +597,7 @@ pub const LINEAR_MODEL_OUTPUTS: usize = 18;
 ///
 /// These can be trained offline with least-squares regression on
 /// (ImageFeatures, expert_params) pairs. Total: 2574 floats (~10KB).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LinearModel {
     /// Weight matrix, row-major [142 × 18].
     pub weights: [f32; LINEAR_MODEL_INPUTS * LINEAR_MODEL_OUTPUTS],
@@ -655,6 +658,7 @@ pub const CLUSTER_COUNT: usize = 64;
 ///
 /// Trained on MIT-Adobe FiveK (4,958 images) using Nelder-Mead optimization
 /// with zensim as the loss function. Model size: ~10 KB.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClusterModel {
     /// Cluster centroids, each [142] floats.
     pub centroids: [[f32; LINEAR_MODEL_INPUTS]; CLUSTER_COUNT],

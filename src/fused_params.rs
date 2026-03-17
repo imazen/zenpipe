@@ -7,6 +7,7 @@ const CONTRAST_PIVOT: f32 = 0.5691;
 /// [`FusedAdjustParams::from_adjust`]. These are the derived values that
 /// the SIMD kernels actually consume — not the user-facing parameters.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FusedAdjustParams {
     // L-plane adjustments
     pub bp: f32,

@@ -17,6 +17,7 @@ use crate::planes::OklabPlanes;
 /// Each channel has its own 256-entry LUT mapping sRGB [0,1] → [0,1].
 /// The filter converts Oklab → linear sRGB → apply curves → Oklab.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ChannelCurves {
     /// R, G, B LUTs, each 256 entries mapping [0,1] → [0,1].

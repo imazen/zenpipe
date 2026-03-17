@@ -10,6 +10,7 @@ use crate::simd;
 /// Rotates colors around the hue circle by the specified angle in degrees.
 /// Preserves lightness and chroma.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct HueRotate {
     /// Rotation angle in degrees. 0.0 = no change, 180.0 = invert hues.

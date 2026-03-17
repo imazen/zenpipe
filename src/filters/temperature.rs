@@ -10,6 +10,7 @@ use crate::simd;
 /// Positive values warm the image (shift toward yellow/orange).
 /// Negative values cool it (shift toward blue).
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Temperature {
     /// Temperature shift. -1.0 (cool) to +1.0 (warm). 0.0 = no change.

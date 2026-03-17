@@ -10,6 +10,7 @@ use crate::simd;
 /// Remaps the shadow floor. A black point of 0.05 means values that were
 /// L=0.05 become L=0.0, and the range is stretched accordingly.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct BlackPoint {
     /// Black point level. 0.0 = no change, 0.1 = crush bottom 10%.

@@ -33,6 +33,7 @@ use crate::simd;
 ///
 /// Inspired by darktable's sigmoid and filmic modules.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Sigmoid {
     /// S-curve steepness. 1.0 = identity.

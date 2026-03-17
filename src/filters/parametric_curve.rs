@@ -16,6 +16,7 @@ use crate::planes::OklabPlanes;
 /// Each zone slider pushes the curve up (positive) or down (negative) within
 /// its region. The result is a smooth, monotonic LUT.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ParametricCurve {
     /// LUT with 256 entries mapping input L [0,1] to output L [0,1].

@@ -20,6 +20,7 @@ use crate::simd;
 /// 2. Apply gamma: `t' = t^(1/gamma)`
 /// 3. Remap output: `L' = out_black + t' * (out_white - out_black)`
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Levels {
     /// Input black point. Pixels at or below this become black.

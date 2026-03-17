@@ -23,6 +23,7 @@ use crate::planes::OklabPlanes;
 /// The result is a smooth toe curve that opens up shadows without
 /// affecting midtones or highlights. More crushed shadows = more lift.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ShadowLift {
     /// Lift strength. 0.0 = off, 1.0 = full lift.

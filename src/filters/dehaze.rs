@@ -21,6 +21,7 @@ use crate::planes::OklabPlanes;
 ///
 /// Inspired by He et al.'s dark channel prior, adapted for Oklab L.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Dehaze {
     /// Dehaze strength. 0.0 = no change, 1.0 = full correction.

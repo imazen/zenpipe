@@ -17,6 +17,7 @@ use zenpixels_convert::oklab;
 /// The matrix uses BT.709 primaries for the Oklab↔RGB conversion since
 /// the matrix coefficients are defined relative to standard RGB.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ColorMatrix {
     /// Row-major 5×5 matrix (25 elements).

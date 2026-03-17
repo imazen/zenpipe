@@ -12,6 +12,7 @@ use crate::planes::OklabPlanes;
 /// blurring in Oklab avoids the darkening artifacts that sRGB gamma-space
 /// blurs produce at color boundaries.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Blur {
     /// Gaussian sigma in pixels. Larger = more blur.

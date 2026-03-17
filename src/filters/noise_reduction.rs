@@ -20,6 +20,7 @@ use crate::planes::OklabPlanes;
 /// This approach is similar to darktable's "denoise (profiled)" module
 /// and Lightroom's noise reduction.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct NoiseReduction {
     /// Luminance noise reduction strength. 0.0 = off, 1.0 = strong.

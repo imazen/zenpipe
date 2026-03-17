@@ -20,6 +20,7 @@ use crate::simd;
 /// Partial strength is useful for batch processing where you want
 /// consistent brightness without making every photo identical.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct AutoExposure {
     /// How much to correct. 0.0 = off, 1.0 = full correction to target.

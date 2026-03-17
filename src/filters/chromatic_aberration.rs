@@ -14,6 +14,7 @@ use crate::planes::OklabPlanes;
 /// Positive values shift the plane outward, negative shifts inward.
 /// Typical corrections are very small (±0.001 to ±0.005).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct ChromaticAberration {
     /// Radial shift for the a (green-red) channel.

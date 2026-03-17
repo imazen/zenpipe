@@ -11,6 +11,7 @@ use crate::simd;
 /// preventing skin tone and sky clipping. The protection curve is:
 /// `scale = 1 + amount * (1 - chroma / max_chroma)^protection`
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Vibrance {
     /// Vibrance amount. 0.0 = no change, 1.0 = full boost.

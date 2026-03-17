@@ -15,6 +15,7 @@ use crate::planes::OklabPlanes;
 /// This matches Lightroom's Whites/Blacks sliders, which complement the
 /// Highlights/Shadows controls by targeting the more extreme tonal ranges.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct WhitesBlacks {
     /// Whites adjustment. Range: -1.0 to 1.0. Positive brightens bright areas.

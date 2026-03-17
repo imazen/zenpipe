@@ -12,6 +12,7 @@ use zenpixels::PlaneMask;
 /// fade effects or transparency adjustments. If no alpha plane
 /// exists, this is a no-op.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Alpha {
     /// Alpha multiplier. 0.0 = fully transparent, 1.0 = no change.

@@ -11,6 +11,7 @@ use crate::planes::OklabPlanes;
 /// Grain intensity varies with luminance: stronger in midtones,
 /// weaker in deep shadows and bright highlights (like real film).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Grain {
     /// Grain amount. 0.0 = none, 1.0 = heavy. Typical: 0.1–0.3.

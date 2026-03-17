@@ -20,6 +20,7 @@ use crate::planes::OklabPlanes;
 /// L'     = L + amount * detail
 /// ```
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Texture {
     /// Sigma for the fine-scale blur. Smaller than Clarity's sigma to

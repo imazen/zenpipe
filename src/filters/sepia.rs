@@ -15,6 +15,7 @@ use crate::simd;
 /// This produces more natural results than the classic sRGB sepia matrix
 /// because the tint is applied in perceptually uniform space.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Sepia {
     /// Sepia strength. 0.0 = grayscale, 1.0 = full sepia.

@@ -9,6 +9,7 @@ use crate::simd;
 ///
 /// Positive values shift toward magenta, negative toward green.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Tint {
     /// Tint shift. -1.0 (green) to +1.0 (magenta). 0.0 = no change.

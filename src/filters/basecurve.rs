@@ -22,6 +22,7 @@ use crate::planes::OklabPlanes;
 /// A basecurve defined by (input, output) node pairs, interpolated with
 /// monotone Hermite splines.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct BasecurvePreset {
     /// Human-readable name.
     pub name: &'static str,
@@ -595,6 +596,7 @@ fn build_lut(nodes: &[(f32, f32)]) -> Vec<f32> {
 /// linear luminance to display-referred values. Includes chroma compression
 /// to match the natural desaturation of RGB-space tone mapping.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasecurveToneMap {
     /// 256-entry LUT: input L → output L.
     lut: Vec<f32>,

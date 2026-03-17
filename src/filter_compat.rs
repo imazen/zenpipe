@@ -14,6 +14,7 @@ use alloc::vec::Vec;
 
 /// A filter compatibility issue found during pipeline validation.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompatIssue {
     /// Severity: "error" (will produce bad output), "warning" (risky), "info" (suboptimal).
     pub severity: &'static str,
@@ -26,6 +27,7 @@ pub struct CompatIssue {
 /// Each filter reports its tag via the `Filter` trait. Tags are used to
 /// detect conflicts without downcasting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum FilterTag {
     // Tone mapping (mutually exclusive group)
@@ -116,6 +118,7 @@ pub const ORDER_CONSTRAINTS: &[(FilterTag, FilterTag)] = &[
 
 /// Parameter range conflicts: combinations that produce bad results at high values.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RangeConflict {
     pub filter_a: FilterTag,
     pub filter_b: FilterTag,
