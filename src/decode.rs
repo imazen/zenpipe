@@ -289,9 +289,7 @@ impl<'a> DecodeRequest<'a> {
     /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
     /// ```
     #[cfg(feature = "jpeg-ultrahdr")]
-    pub fn decode_gain_map(
-        self,
-    ) -> Result<(DecodeOutput, Option<crate::gainmap::DecodedGainMap>)> {
+    pub fn decode_gain_map(self) -> Result<(DecodeOutput, Option<crate::gainmap::DecodedGainMap>)> {
         let format = self.resolve_format()?;
         let output = self.decode_format(format)?;
 
@@ -504,25 +502,17 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
 
     // Convert zenavif-parse's rational GainMapMetadata to ultrahdr-core's f32 GainMapMetadata
     let meta = &avif_gm.metadata;
-    let convert_channel =
-        |ch: &zenavif::GainMapChannel| -> (f32, f32, f32, f32, f32) {
-            let safe_div = |n: i64, d: u64| -> f32 {
-                if d == 0 { 0.0 } else { n as f32 / d as f32 }
-            };
-            let safe_div_u = |n: u64, d: u64| -> f32 {
-                if d == 0 { 0.0 } else { n as f32 / d as f32 }
-            };
-            (
-                safe_div(ch.gain_map_min_n as i64, ch.gain_map_min_d as u64), // min_content_boost
-                safe_div(ch.gain_map_max_n as i64, ch.gain_map_max_d as u64), // max_content_boost
-                safe_div_u(ch.gamma_n as u64, ch.gamma_d as u64),             // gamma
-                safe_div(ch.base_offset_n as i64, ch.base_offset_d as u64),   // offset_sdr
-                safe_div(
-                    ch.alternate_offset_n as i64,
-                    ch.alternate_offset_d as u64,
-                ), // offset_hdr
-            )
-        };
+    let convert_channel = |ch: &zenavif::GainMapChannel| -> (f32, f32, f32, f32, f32) {
+        let safe_div = |n: i64, d: u64| -> f32 { if d == 0 { 0.0 } else { n as f32 / d as f32 } };
+        let safe_div_u = |n: u64, d: u64| -> f32 { if d == 0 { 0.0 } else { n as f32 / d as f32 } };
+        (
+            safe_div(ch.gain_map_min_n as i64, ch.gain_map_min_d as u64), // min_content_boost
+            safe_div(ch.gain_map_max_n as i64, ch.gain_map_max_d as u64), // max_content_boost
+            safe_div_u(ch.gamma_n as u64, ch.gamma_d as u64),             // gamma
+            safe_div(ch.base_offset_n as i64, ch.base_offset_d as u64),   // offset_sdr
+            safe_div(ch.alternate_offset_n as i64, ch.alternate_offset_d as u64), // offset_hdr
+        )
+    };
 
     let ch0 = convert_channel(&meta.channels[0]);
     let ch1 = if meta.is_multichannel {
@@ -559,8 +549,7 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     };
 
     // Decode the raw AV1 gain map to pixels
-    let (gm_data, gm_w, gm_h, gm_ch) =
-        zenavif::decode_av1_obu(&avif_gm.gain_map_data).ok()?;
+    let (gm_data, gm_w, gm_h, gm_ch) = zenavif::decode_av1_obu(&avif_gm.gain_map_data).ok()?;
 
     Some(DecodedGainMap {
         gain_map: GainMapImage {
@@ -600,7 +589,9 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
 
     // Determine channels: if all R==G==B, it's effectively grayscale
-    let is_gray = gm_bytes.chunks_exact(3).all(|px| px[0] == px[1] && px[1] == px[2]);
+    let is_gray = gm_bytes
+        .chunks_exact(3)
+        .all(|px| px[0] == px[1] && px[1] == px[2]);
     let (data, channels) = if is_gray {
         // Collapse to single channel
         let gray: Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();

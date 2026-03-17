@@ -8,9 +8,7 @@
 
 use imgref::{ImgRef, ImgVec};
 use rgb::{Rgb, Rgba};
-use zencodecs::{
-    DecodeRequest, DecodedGainMap, EncodeRequest, GainMapSource, ImageFormat,
-};
+use zencodecs::{DecodeRequest, DecodedGainMap, EncodeRequest, GainMapSource, ImageFormat};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -184,8 +182,14 @@ fn e2e_decode_gain_map_twice_same_result() {
     let gm2 = gm2.expect("second decode must have gain map");
 
     // Metadata should be identical
-    assert_eq!(gm1.metadata.max_content_boost, gm2.metadata.max_content_boost);
-    assert_eq!(gm1.metadata.min_content_boost, gm2.metadata.min_content_boost);
+    assert_eq!(
+        gm1.metadata.max_content_boost,
+        gm2.metadata.max_content_boost
+    );
+    assert_eq!(
+        gm1.metadata.min_content_boost,
+        gm2.metadata.min_content_boost
+    );
     assert_eq!(gm1.metadata.gamma, gm2.metadata.gamma);
     assert_eq!(gm1.metadata.hdr_capacity_max, gm2.metadata.hdr_capacity_max);
 
@@ -244,10 +248,7 @@ fn e2e_gain_map_is_lower_resolution_than_base() {
         gm_pixels < base_pixels,
         "gain map ({gm_pixels} px) should be smaller than base ({base_pixels} px)"
     );
-    assert!(
-        gm_pixels > 0,
-        "gain map should have at least one pixel"
-    );
+    assert!(gm_pixels > 0, "gain map should have at least one pixel");
 }
 
 // ─── E2E: Non-gain-map formats return None ──────────────────────────────────
@@ -255,7 +256,14 @@ fn e2e_gain_map_is_lower_resolution_than_base() {
 #[cfg(feature = "webp")]
 #[test]
 fn e2e_no_gainmap_from_webp_encode_decode() {
-    let pixels = vec![Rgb { r: 100u8, g: 150, b: 200 }; 32 * 32];
+    let pixels = vec![
+        Rgb {
+            r: 100u8,
+            g: 150,
+            b: 200
+        };
+        32 * 32
+    ];
     let img = ImgVec::new(pixels, 32, 32);
 
     let encoded = EncodeRequest::new(ImageFormat::WebP)
@@ -270,7 +278,15 @@ fn e2e_no_gainmap_from_webp_encode_decode() {
 #[cfg(feature = "gif")]
 #[test]
 fn e2e_no_gainmap_from_gif_encode_decode() {
-    let pixels = vec![Rgba { r: 100u8, g: 150, b: 200, a: 255 }; 32 * 32];
+    let pixels = vec![
+        Rgba {
+            r: 100u8,
+            g: 150,
+            b: 200,
+            a: 255
+        };
+        32 * 32
+    ];
     let img = ImgVec::new(pixels, 32, 32);
 
     let encoded = EncodeRequest::new(ImageFormat::Gif)
@@ -372,9 +388,7 @@ mod jxl_gainmap {
         // Step 2: Create a gain map (grayscale, lower resolution)
         let gm_w = 16u32;
         let gm_h = 16u32;
-        let gm_data: Vec<u8> = (0..gm_w * gm_h)
-            .map(|i| (128 + (i % 64)) as u8)
-            .collect();
+        let gm_data: Vec<u8> = (0..gm_w * gm_h).map(|i| (128 + (i % 64)) as u8).collect();
         let gain_map = GainMapImage {
             data: gm_data,
             width: gm_w,

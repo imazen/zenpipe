@@ -644,10 +644,8 @@ impl<'a> EncodeRequest<'a> {
 
         // Check if we should embed a precomputed gain map
         #[cfg(feature = "jpeg-ultrahdr")]
-        if let Some(crate::gainmap::GainMapSource::Precomputed {
-            gain_map,
-            metadata,
-        }) = &self.gain_map_source
+        if let Some(crate::gainmap::GainMapSource::Precomputed { gain_map, metadata }) =
+            &self.gain_map_source
         {
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces

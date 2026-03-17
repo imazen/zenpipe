@@ -235,7 +235,10 @@ fn decode_gain_map_from_ultrahdr_jpeg() {
         "gain map should be 1 or 3 channels, got {}",
         gm.gain_map.channels,
     );
-    assert!(gm.gain_map.validate().is_ok(), "gain map data should validate");
+    assert!(
+        gm.gain_map.validate().is_ok(),
+        "gain map data should validate"
+    );
     // Metadata should have non-trivial boost (HDR content was >1.0)
     assert!(
         gm.metadata.max_content_boost[0] > 1.0,
@@ -274,7 +277,14 @@ fn decode_gain_map_from_sample_file() {
 #[test]
 fn decode_gain_map_returns_none_for_regular_jpeg() {
     let img = imgref::ImgVec::new(
-        vec![Rgb { r: 128u8, g: 64, b: 32 }; 32 * 32],
+        vec![
+            Rgb {
+                r: 128u8,
+                g: 64,
+                b: 32
+            };
+            32 * 32
+        ],
         32,
         32,
     );
@@ -296,7 +306,14 @@ fn decode_gain_map_returns_none_for_regular_jpeg() {
 #[test]
 fn decode_gain_map_returns_none_for_webp() {
     let img = imgref::ImgVec::new(
-        vec![Rgb { r: 128u8, g: 64, b: 32 }; 32 * 32],
+        vec![
+            Rgb {
+                r: 128u8,
+                g: 64,
+                b: 32
+            };
+            32 * 32
+        ],
         32,
         32,
     );
@@ -309,14 +326,25 @@ fn decode_gain_map_returns_none_for_webp() {
         .decode_gain_map()
         .expect("decode_gain_map failed");
 
-    assert!(gainmap.is_none(), "WebP should not have gain map support yet");
+    assert!(
+        gainmap.is_none(),
+        "WebP should not have gain map support yet"
+    );
 }
 
 #[cfg(feature = "png")]
 #[test]
 fn decode_gain_map_returns_none_for_png() {
     let img = imgref::ImgVec::new(
-        vec![Rgba { r: 128u8, g: 64, b: 32, a: 255 }; 32 * 32],
+        vec![
+            Rgba {
+                r: 128u8,
+                g: 64,
+                b: 32,
+                a: 255
+            };
+            32 * 32
+        ],
         32,
         32,
     );
@@ -328,7 +356,10 @@ fn decode_gain_map_returns_none_for_png() {
         .decode_gain_map()
         .expect("decode_gain_map failed");
 
-    assert!(gainmap.is_none(), "PNG should not have gain map support yet");
+    assert!(
+        gainmap.is_none(),
+        "PNG should not have gain map support yet"
+    );
 }
 
 #[test]

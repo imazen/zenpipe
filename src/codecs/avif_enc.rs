@@ -85,10 +85,16 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let gm_av1_data = if gain_map.channels == 1 {
         // Grayscale gain map — encode as grayscale AVIF
         // Convert to RGB (ravif doesn't have a direct gray path in the simple API)
-        let rgb_pixels: alloc::vec::Vec<rgb::Rgb<u8>> = gain_map.data.iter()
+        let rgb_pixels: alloc::vec::Vec<rgb::Rgb<u8>> = gain_map
+            .data
+            .iter()
             .map(|&v| rgb::Rgb { r: v, g: v, b: v })
             .collect();
-        let img = imgref::ImgVec::new(rgb_pixels, gain_map.width as usize, gain_map.height as usize);
+        let img = imgref::ImgVec::new(
+            rgb_pixels,
+            gain_map.width as usize,
+            gain_map.height as usize,
+        );
         let result = zenavif::encode_rgb8(img.as_ref(), &gm_enc, &enough::Unstoppable)
             .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
         // Extract AV1 data from the AVIF file by re-parsing
@@ -96,7 +102,11 @@ pub(crate) fn encode_with_precomputed_gainmap(
     } else {
         // RGB gain map
         let rgb_pixels: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&gain_map.data);
-        let img = imgref::Img::new(rgb_pixels, gain_map.width as usize, gain_map.height as usize);
+        let img = imgref::Img::new(
+            rgb_pixels,
+            gain_map.width as usize,
+            gain_map.height as usize,
+        );
         let result = zenavif::encode_rgb8(img, &gm_enc, &enough::Unstoppable)
             .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
         extract_av1_from_avif(&result.avif_file)?
@@ -126,7 +136,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
     }
     job = job.with_canvas_size(width, height);
 
-    let encoder = job.encoder()
+    let encoder = job
+        .encoder()
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
 
     let stride = width as usize * descriptor.bytes_per_pixel();
@@ -138,7 +149,11 @@ pub(crate) fn encode_with_precomputed_gainmap(
         stride,
         zenavif::AvifEncoderConfig::supported_descriptors(),
     )
-    .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel format: {e}"))))?;
+    .map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "pixel format: {e}"
+        )))
+    })?;
 
     let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
     let pixel_slice = zenpixels::PixelSlice::new(
@@ -150,7 +165,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
     )
     .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
 
-    encoder.encode(pixel_slice)
+    encoder
+        .encode(pixel_slice)
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))
 }
 
@@ -160,9 +176,13 @@ fn extract_av1_from_avif(avif_data: &[u8]) -> crate::error::Result<alloc::vec::V
     use crate::CodecError;
     use whereat::at;
 
-    let parser = zenavif_parse::AvifParser::from_bytes(avif_data)
-        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("parse gain map AVIF: {e}"))))?;
-    let primary = parser.primary_data()
+    let parser = zenavif_parse::AvifParser::from_bytes(avif_data).map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "parse gain map AVIF: {e}"
+        )))
+    })?;
+    let primary = parser
+        .primary_data()
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("extract AV1: {e}"))))?;
     Ok(primary.to_vec())
 }

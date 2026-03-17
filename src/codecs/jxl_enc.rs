@@ -34,7 +34,11 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
 /// wrapped in a [`GainMapBundle`](zenjxl::GainMapBundle) with serialized
 /// ISO 21496-1 metadata. The bundle is attached to the encoder config so the
 /// output JXL file contains a `jhgm` container box.
-#[cfg(all(feature = "jxl-encode", feature = "jxl-decode", feature = "jpeg-ultrahdr"))]
+#[cfg(all(
+    feature = "jxl-encode",
+    feature = "jxl-decode",
+    feature = "jpeg-ultrahdr"
+))]
 pub(crate) fn encode_with_precomputed_gainmap(
     pixel_data: &[u8],
     width: u32,
@@ -61,13 +65,21 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let gain_map_codestream = match gain_map.channels {
         1 => {
             let gray_pixels: &[Gray<u8>] = bytemuck::cast_slice(&gain_map.data);
-            let img = Img::new(gray_pixels, gain_map.width as usize, gain_map.height as usize);
+            let img = Img::new(
+                gray_pixels,
+                gain_map.width as usize,
+                gain_map.height as usize,
+            );
             zenjxl::encode_gray8_lossless(img.as_ref(), &lossless_config)
                 .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Jxl, e)))?
         }
         3 => {
             let rgb_pixels: &[Rgb<u8>] = bytemuck::cast_slice(&gain_map.data);
-            let img = Img::new(rgb_pixels, gain_map.width as usize, gain_map.height as usize);
+            let img = Img::new(
+                rgb_pixels,
+                gain_map.width as usize,
+                gain_map.height as usize,
+            );
             zenjxl::encode_rgb8_lossless(img.as_ref(), &lossless_config)
                 .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Jxl, e)))?
         }
@@ -107,12 +119,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let supported = zenjxl::JxlEncoderConfig::supported_descriptors();
 
     let adapted = zenpixels_convert::adapt::adapt_for_encode(
-        pixel_data,
-        descriptor,
-        width,
-        height,
-        stride,
-        supported,
+        pixel_data, descriptor, width, height, stride, supported,
     )
     .map_err(|e| {
         at!(crate::CodecError::InvalidInput(alloc::format!(

@@ -84,7 +84,8 @@ impl GainMapImage {
         if self.width == 0 || self.height == 0 {
             return Err(CodecError::InvalidInput(alloc::format!(
                 "gain map has zero dimensions: {}x{}",
-                self.width, self.height,
+                self.width,
+                self.height,
             )));
         }
         if self.channels != 1 && self.channels != 3 {
@@ -146,11 +147,11 @@ impl DecodedGainMap {
         channels: u8,
         display_boost: f32,
     ) -> crate::error::Result<Vec<u8>> {
+        use whereat::at;
         use zenjpeg::ultrahdr::{
             HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
             apply_gainmap,
         };
-        use whereat::at;
 
         if self.base_is_hdr {
             return Err(at!(CodecError::InvalidInput(
@@ -600,7 +601,10 @@ mod tests {
         }
         let result = gm.reconstruct_sdr(&hdr_pixels, 2, 2).unwrap();
         assert_eq!(result.len(), 2 * 2 * 4); // sRGB RGBA u8
-        assert!(result.iter().any(|&v| v > 0), "SDR should have non-zero pixels");
+        assert!(
+            result.iter().any(|&v| v > 0),
+            "SDR should have non-zero pixels"
+        );
         assert_eq!(result[3], 255); // alpha
     }
 
@@ -633,7 +637,10 @@ mod tests {
         let sdr_pixels = vec![128u8; 2 * 2 * 3];
         // This should succeed via reconstruct_hdr → apply_gainmap
         let result = gm_sdr.reconstruct_alternate(&sdr_pixels, 2, 2, 3, 4.0);
-        assert!(result.is_ok(), "reconstruct_alternate SDR→HDR failed: {result:?}");
+        assert!(
+            result.is_ok(),
+            "reconstruct_alternate SDR→HDR failed: {result:?}"
+        );
 
         // HDR base → should try reconstruct_sdr (now implemented)
         let gm_hdr = DecodedGainMap {
@@ -665,7 +672,10 @@ mod tests {
             hdr_pixels.extend_from_slice(&1.0f32.to_le_bytes());
         }
         let result = gm_hdr.reconstruct_alternate(&hdr_pixels, 2, 2, 4, 4.0);
-        assert!(result.is_ok(), "reconstruct_alternate HDR→SDR failed: {result:?}");
+        assert!(
+            result.is_ok(),
+            "reconstruct_alternate HDR→SDR failed: {result:?}"
+        );
     }
 
     #[cfg(feature = "jpeg-ultrahdr")]
