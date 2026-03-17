@@ -95,6 +95,7 @@ mod dyn_dispatch;
 mod encode;
 mod error;
 mod format_set;
+pub mod gainmap;
 mod info;
 mod limits;
 #[cfg(feature = "pipeline")]
@@ -126,6 +127,11 @@ pub use trace::SelectionTrace;
 pub use transcode::TranscodeSink;
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
+
+// Gain map types (format-agnostic)
+pub use gainmap::GainMapImage;
+#[cfg(feature = "jpeg-ultrahdr")]
+pub use gainmap::{DecodedGainMap, GainMapSource};
 
 // zencodec trait re-exports
 pub use zencodec::decode::{
