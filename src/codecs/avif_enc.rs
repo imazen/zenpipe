@@ -55,3 +55,114 @@ pub(crate) fn build_encoding(
 
     enc
 }
+
+/// Encode SDR pixels + precomputed gain map to AVIF with embedded tmap item.
+///
+/// The gain map pixels are first encoded as AV1, then the ISO 21496-1
+/// metadata and AV1 gain map are embedded via zenavif-serialize's tmap support.
+#[cfg(all(feature = "avif-encode", feature = "jpeg-ultrahdr"))]
+pub(crate) fn encode_with_precomputed_gainmap(
+    pixel_data: &[u8],
+    width: u32,
+    height: u32,
+    descriptor: zenpixels::PixelDescriptor,
+    quality: Option<f32>,
+    effort: Option<u32>,
+    codec_config: Option<&crate::config::CodecConfig>,
+    gain_map: &crate::gainmap::GainMapImage,
+    metadata: &crate::gainmap::GainMapMetadata,
+    limits: Option<&crate::Limits>,
+    stop: Option<&dyn crate::Stop>,
+) -> crate::error::Result<crate::EncodeOutput> {
+    use crate::{CodecError, ImageFormat};
+    use whereat::at;
+
+    gain_map.validate()?;
+
+    // Step 1: Encode gain map pixels as a small AVIF to get AV1 bytes
+    let gm_enc = zenavif::EncoderConfig::new(); // Default quality for gain map
+
+    let gm_av1_data = if gain_map.channels == 1 {
+        // Grayscale gain map — encode as grayscale AVIF
+        // Convert to RGB (ravif doesn't have a direct gray path in the simple API)
+        let rgb_pixels: alloc::vec::Vec<rgb::Rgb<u8>> = gain_map.data.iter()
+            .map(|&v| rgb::Rgb { r: v, g: v, b: v })
+            .collect();
+        let img = imgref::ImgVec::new(rgb_pixels, gain_map.width as usize, gain_map.height as usize);
+        let result = zenavif::encode_rgb8(img.as_ref(), &gm_enc, &enough::Unstoppable)
+            .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
+        // Extract AV1 data from the AVIF file by re-parsing
+        extract_av1_from_avif(&result.avif_file)?
+    } else {
+        // RGB gain map
+        let rgb_pixels: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&gain_map.data);
+        let img = imgref::Img::new(rgb_pixels, gain_map.width as usize, gain_map.height as usize);
+        let result = zenavif::encode_rgb8(img, &gm_enc, &enough::Unstoppable)
+            .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
+        extract_av1_from_avif(&result.avif_file)?
+    };
+
+    // Step 2: Serialize ISO 21496-1 metadata
+    let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496(metadata);
+
+    // Step 3: Build the main encoder with gain map attached
+    let mut enc = build_encoding(quality, effort, codec_config);
+    enc = enc.with_gain_map(
+        gm_av1_data,
+        gain_map.width,
+        gain_map.height,
+        8, // bit depth
+        iso_metadata,
+    );
+
+    // Step 4: Encode the base image through the normal trait path
+    use zencodec::encode::{EncodeJob as _, Encoder as _};
+    let mut job = enc.job();
+    if let Some(lim) = limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
+    if let Some(s) = stop {
+        job = job.with_stop(s);
+    }
+    job = job.with_canvas_size(width, height);
+
+    let encoder = job.encoder()
+        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
+
+    let stride = width as usize * descriptor.bytes_per_pixel();
+    let adapted = zenpixels_convert::adapt::adapt_for_encode(
+        pixel_data,
+        descriptor,
+        width,
+        height,
+        stride,
+        zenavif::AvifEncoderConfig::supported_descriptors(),
+    )
+    .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel format: {e}"))))?;
+
+    let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
+    let pixel_slice = zenpixels::PixelSlice::new(
+        &adapted.data,
+        adapted.width,
+        adapted.rows,
+        adapted_stride,
+        adapted.descriptor,
+    )
+    .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
+
+    encoder.encode(pixel_slice)
+        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))
+}
+
+/// Extract the primary item's AV1 data from an AVIF file.
+#[cfg(all(feature = "avif-decode", feature = "jpeg-ultrahdr"))]
+fn extract_av1_from_avif(avif_data: &[u8]) -> crate::error::Result<alloc::vec::Vec<u8>> {
+    use crate::CodecError;
+    use whereat::at;
+
+    let parser = zenavif_parse::AvifParser::from_bytes(avif_data)
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("parse gain map AVIF: {e}"))))?;
+    let primary = parser.primary_data()
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("extract AV1: {e}"))))?;
+    Ok(primary.to_vec())
+}

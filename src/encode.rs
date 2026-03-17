@@ -682,12 +682,25 @@ impl<'a> EncodeRequest<'a> {
                     self.stop,
                 );
             }
-            // AVIF gain map embedding requires zenavif encoder pipeline changes
-            // (serializer supports tmap, but encoder doesn't thread it through yet).
+            #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
+            if format == ImageFormat::Avif {
+                return crate::codecs::avif_enc::encode_with_precomputed_gainmap(
+                    &adapted.data,
+                    adapted.width,
+                    adapted.rows,
+                    adapted.descriptor,
+                    Some(resolved_quality),
+                    self.effort,
+                    self.codec_config,
+                    gain_map,
+                    metadata,
+                    self.limits,
+                    self.stop,
+                );
+            }
             return Err(at!(CodecError::UnsupportedOperation {
                 format,
-                detail: "gain map embedding not yet supported for this format \
-                         (JPEG and JXL only; AVIF support in progress)",
+                detail: "gain map embedding not supported for this format",
             }));
         }
 

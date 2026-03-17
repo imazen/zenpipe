@@ -27,6 +27,7 @@ zenjpeg = { path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder",
 zenwebp = { path = "../zenwebp", optional = true, features = ["zencodec"] }
 zengif = { path = "../zengif", optional = true, features = ["zencodec"] }
 zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
+zenavif-parse = { path = "../zenavif-parse", optional = true, features = ["eager"] }
 zenpng = { path = "../zenpng", optional = true, features = ["zencodec"] }
 zenjxl = { path = "../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
 heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }
@@ -61,7 +62,7 @@ gif-imagequant = ["gif", "zengif/imagequant"]
 png = ["dep:zenpng"]
 png-zenquant = ["png", "zenpng/quantize"]
 avif-decode = ["dep:zenavif"]
-avif-encode = ["dep:zenavif", "zenavif/encode"]
+avif-encode = ["dep:zenavif", "zenavif/encode", "dep:zenavif-parse"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
 heic-decode = ["dep:heic-decoder"]
