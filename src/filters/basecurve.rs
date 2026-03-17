@@ -494,13 +494,13 @@ pub fn find_basecurve(maker: &str, model: &str) -> &'static BasecurvePreset {
 }
 
 /// Build a 256-entry LUT from basecurve nodes using monotone Hermite interpolation.
-fn build_lut(nodes: &[(f32, f32)]) -> [f32; 256] {
-    let mut lut = [0.0f32; 256];
+fn build_lut(nodes: &[(f32, f32)]) -> Vec<f32> {
+    let mut lut = vec![0.0f32; crate::LUT_SIZE];
     let n = nodes.len();
     if n < 2 {
         // Identity
         for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
+            *v = i as f32 / crate::LUT_MAX as f32;
         }
         return lut;
     }
@@ -551,7 +551,7 @@ fn build_lut(nodes: &[(f32, f32)]) -> [f32; 256] {
     // Evaluate LUT via Hermite interpolation
     let mut seg = 0usize;
     for (i, v) in lut.iter_mut().enumerate() {
-        let x = i as f32 / 255.0;
+        let x = i as f32 / crate::LUT_MAX as f32;
 
         // Advance segment
         while seg < n - 2 && x > nodes[seg + 1].0 {
@@ -597,7 +597,7 @@ fn build_lut(nodes: &[(f32, f32)]) -> [f32; 256] {
 #[derive(Clone, Debug)]
 pub struct BasecurveToneMap {
     /// 256-entry LUT: input L → output L.
-    lut: [f32; 256],
+    lut: Vec<f32>,
     /// How strongly to compress chroma when luminance changes.
     /// 0.0 = no chroma change (L-only, current sigmoid behavior).
     /// 1.0 = scale chroma proportionally to L ratio (full RGB-like desaturation).
@@ -628,7 +628,7 @@ impl BasecurveToneMap {
     }
 
     /// Access the 256-entry LUT (input→output, both [0,1]).
-    pub fn lut(&self) -> &[f32; 256] {
+    pub fn lut(&self) -> &Vec<f32> {
         &self.lut
     }
 
@@ -643,7 +643,7 @@ impl BasecurveToneMap {
     pub fn apply_linear_rgb(&self, data: &mut [f32]) {
         for v in data.iter_mut() {
             let clamped = v.clamp(0.0, 1.0);
-            let idx_f = (clamped * 255.0).min(254.0);
+            let idx_f = (clamped * crate::LUT_MAX as f32).min((crate::LUT_MAX - 1) as f32);
             let idx = idx_f as usize;
             let frac = idx_f - idx as f32;
             *v = self.lut[idx] * (1.0 - frac) + self.lut[idx + 1] * frac;
@@ -669,7 +669,8 @@ impl Filter for BasecurveToneMap {
             for i in 0..n {
                 let l_old = planes.l[i];
                 // LUT lookup with linear interpolation
-                let idx_f = (l_old.clamp(0.0, 1.0) * 255.0).min(254.0);
+                let idx_f = (l_old.clamp(0.0, 1.0) * crate::LUT_MAX as f32)
+                    .min((crate::LUT_MAX - 1) as f32);
                 let idx = idx_f as usize;
                 let frac = idx_f - idx as f32;
                 let l_new = self.lut[idx] * (1.0 - frac) + self.lut[idx + 1] * frac;
@@ -687,7 +688,8 @@ impl Filter for BasecurveToneMap {
             // L-only (fast path)
             for i in 0..n {
                 let l = planes.l[i];
-                let idx_f = (l.clamp(0.0, 1.0) * 255.0).min(254.0);
+                let idx_f =
+                    (l.clamp(0.0, 1.0) * crate::LUT_MAX as f32).min((crate::LUT_MAX - 1) as f32);
                 let idx = idx_f as usize;
                 let frac = idx_f - idx as f32;
                 planes.l[i] = self.lut[idx] * (1.0 - frac) + self.lut[idx + 1] * frac;
@@ -760,10 +762,10 @@ mod tests {
                 lut[0]
             );
             assert!(
-                lut[255] > 0.99,
+                lut[crate::LUT_MAX] > 0.99,
                 "{}: white not preserved: {}",
                 preset.name,
-                lut[255]
+                lut[crate::LUT_MAX]
             );
         }
     }

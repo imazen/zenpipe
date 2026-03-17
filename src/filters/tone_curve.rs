@@ -14,17 +14,16 @@ use crate::planes::OklabPlanes;
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ToneCurve {
-    /// LUT with 256 entries mapping input L [0,1] to output L [0,1].
-    /// Built from control points at construction time.
-    lut: [f32; 256],
+    /// LUT mapping input L [0,1] to output L [0,1].
+    /// 4096 entries for 12-bit precision (banding-free at 16-bit and f32).
+    lut: Vec<f32>,
 }
 
 impl Default for ToneCurve {
     fn default() -> Self {
-        let mut lut = [0.0f32; 256];
-        for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
-        }
+        let lut: Vec<f32> = (0..crate::LUT_SIZE)
+            .map(|i| i as f32 / crate::LUT_MAX as f32)
+            .collect();
         Self { lut }
     }
 }
@@ -59,48 +58,52 @@ impl ToneCurve {
 
     /// Create a tone curve from a pre-computed LUT.
     ///
-    /// Accepts any number of entries (resampled to 256 via linear interpolation).
+    /// Accepts any number of entries (resampled to LUT_SIZE via linear interpolation).
     /// Input values are clamped to \[0, 1\].
     pub fn from_lut(lut_data: &[f32]) -> Self {
         if lut_data.len() < 2 {
             return Self::default();
         }
 
-        let mut lut = [0.0f32; 256];
+        let lut_size = crate::LUT_SIZE;
+        let lut_max = crate::LUT_MAX as f32;
         let src_max = (lut_data.len() - 1) as f32;
 
-        for (i, v) in lut.iter_mut().enumerate() {
-            let t = i as f32 / 255.0; // position in [0, 1]
-            let src_idx = t * src_max;
-            let lo = src_idx as usize;
-            let hi = (lo + 1).min(lut_data.len() - 1);
-            let frac = src_idx - lo as f32;
-            *v = (lut_data[lo] * (1.0 - frac) + lut_data[hi] * frac).clamp(0.0, 1.0);
-        }
+        let lut: Vec<f32> = (0..lut_size)
+            .map(|i| {
+                let t = i as f32 / lut_max;
+                let src_idx = t * src_max;
+                let lo = src_idx as usize;
+                let hi = (lo + 1).min(lut_data.len() - 1);
+                let frac = src_idx - lo as f32;
+                (lut_data[lo] * (1.0 - frac) + lut_data[hi] * frac).clamp(0.0, 1.0)
+            })
+            .collect();
 
         Self { lut }
     }
 
     fn is_identity(&self) -> bool {
+        let lut_max = crate::LUT_MAX as f32;
         self.lut
             .iter()
             .enumerate()
-            .all(|(i, &v)| (v - i as f32 / 255.0).abs() < 1e-4)
+            .all(|(i, &v)| (v - i as f32 / lut_max).abs() < 1e-4)
     }
 }
 
-/// Build a 256-entry LUT from control points using monotone cubic Hermite
+/// Build a LUT from control points using monotone cubic Hermite
 /// interpolation (Fritsch-Carlson method).
-fn build_monotone_cubic_lut(pts: &[(f32, f32)]) -> [f32; 256] {
+fn build_monotone_cubic_lut(pts: &[(f32, f32)]) -> Vec<f32> {
+    let lut_size = crate::LUT_SIZE;
+    let lut_max = crate::LUT_MAX as f32;
     let n = pts.len();
-    let mut lut = [0.0f32; 256];
 
     if n < 2 {
-        for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
-        }
-        return lut;
+        return (0..lut_size).map(|i| i as f32 / lut_max).collect();
     }
+
+    let mut lut = vec![0.0f32; lut_size];
 
     // Compute secants
     let mut delta = vec![0.0f32; n - 1];
@@ -144,7 +147,7 @@ fn build_monotone_cubic_lut(pts: &[(f32, f32)]) -> [f32; 256] {
 
     // Evaluate at each LUT position
     for (idx, v) in lut.iter_mut().enumerate() {
-        let x = idx as f32 / 255.0;
+        let x = idx as f32 / lut_max;
 
         // Find the interval
         let seg = pts[..n - 1]
@@ -189,12 +192,14 @@ impl Filter for ToneCurve {
             return;
         }
 
+        let lut_max = crate::LUT_MAX;
+        let scale = lut_max as f32;
         for v in &mut planes.l {
-            let x = (*v * 255.0).clamp(0.0, 255.0);
+            let x = (*v * scale).clamp(0.0, scale);
             let idx = x as usize;
             let frac = x - idx as f32;
-            let lo = self.lut[idx.min(255)];
-            let hi = self.lut[(idx + 1).min(255)];
+            let lo = self.lut[idx.min(lut_max)];
+            let hi = self.lut[(idx + 1).min(lut_max)];
             *v = lo + frac * (hi - lo);
         }
     }
@@ -259,7 +264,7 @@ mod tests {
             "black should map to black"
         );
         assert!(
-            (curve.lut[255] - 1.0).abs() < 1e-3,
+            (curve.lut[crate::LUT_MAX] - 1.0).abs() < 1e-3,
             "white should map to white"
         );
     }
@@ -302,12 +307,14 @@ mod tests {
         let curve = ToneCurve::from_lut(&gamma_lut);
 
         // Check midpoint: gamma(0.5) = 0.5^(1/2.2) ≈ 0.73
-        let mid = curve.lut[128]; // x = 0.502
+        let mid_idx = crate::LUT_SIZE / 2;
+        let mid = curve.lut[mid_idx];
         assert!((mid - 0.73).abs() < 0.02, "gamma(0.5) ≈ 0.73, got {mid}");
 
-        // Should brighten dark values
+        // Should brighten dark values (quarter point)
+        let quarter_idx = crate::LUT_SIZE / 4;
         assert!(
-            curve.lut[64] > 64.0 / 255.0,
+            curve.lut[quarter_idx] > 0.25,
             "gamma should brighten shadows"
         );
     }
@@ -317,12 +324,12 @@ mod tests {
         // Tiny 3-entry LUT [0.0, 0.8, 1.0] — should resample to 256
         let curve = ToneCurve::from_lut(&[0.0, 0.8, 1.0]);
         assert!((curve.lut[0] - 0.0).abs() < 0.01);
-        assert!((curve.lut[255] - 1.0).abs() < 0.01);
+        assert!((curve.lut[crate::LUT_MAX] - 1.0).abs() < 0.01);
         // Midpoint should be ~0.8
         assert!(
-            (curve.lut[128] - 0.8).abs() < 0.02,
+            (curve.lut[crate::LUT_SIZE / 2] - 0.8).abs() < 0.02,
             "mid={}",
-            curve.lut[128]
+            curve.lut[crate::LUT_SIZE / 2]
         );
     }
 

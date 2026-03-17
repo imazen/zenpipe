@@ -20,22 +20,23 @@ use crate::planes::OklabPlanes;
 #[non_exhaustive]
 pub struct ChannelCurves {
     /// R, G, B LUTs, each 256 entries mapping [0,1] → [0,1].
-    luts: [[f32; 256]; 3],
+    luts: [Vec<f32>; 3],
 }
 
 impl Default for ChannelCurves {
     fn default() -> Self {
-        let mut id = [0.0f32; 256];
-        for (i, v) in id.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
+        let id: Vec<f32> = (0..crate::LUT_SIZE)
+            .map(|i| i as f32 / crate::LUT_MAX as f32)
+            .collect();
+        Self {
+            luts: [id.clone(), id.clone(), id],
         }
-        Self { luts: [id, id, id] }
     }
 }
 
 impl ChannelCurves {
     /// Create from three pre-computed 256-entry LUTs (R, G, B).
-    pub fn from_luts(r: [f32; 256], g: [f32; 256], b: [f32; 256]) -> Self {
+    pub fn from_luts(r: Vec<f32>, g: Vec<f32>, b: Vec<f32>) -> Self {
         Self { luts: [r, g, b] }
     }
 
@@ -57,7 +58,7 @@ impl ChannelCurves {
     pub fn from_points_uniform(pts: &[(f32, f32)]) -> Self {
         let lut = build_channel_lut(pts);
         Self {
-            luts: [lut, lut, lut],
+            luts: [lut.clone(), lut.clone(), lut],
         }
     }
 
@@ -90,7 +91,7 @@ impl ChannelCurves {
         self.luts.iter().all(|lut| {
             lut.iter()
                 .enumerate()
-                .all(|(i, &v)| (v - i as f32 / 255.0).abs() < 1e-4)
+                .all(|(i, &v)| (v - i as f32 / crate::LUT_MAX as f32).abs() < 1e-4)
         })
     }
 }
@@ -144,27 +145,27 @@ impl Filter for ChannelCurves {
 
 // ── LUT evaluation ──────────────────────────────────────────────────
 
-fn eval_lut(lut: &[f32; 256], x: f32) -> f32 {
+fn eval_lut(lut: &Vec<f32>, x: f32) -> f32 {
     let x = x.clamp(0.0, 1.0);
-    let idx_f = x * 255.0;
+    let idx_f = x * crate::LUT_MAX as f32;
     let idx = idx_f as usize;
     let frac = idx_f - idx as f32;
-    let lo = lut[idx.min(255)];
-    let hi = lut[(idx + 1).min(255)];
+    let lo = lut[idx.min(crate::LUT_MAX)];
+    let hi = lut[(idx + 1).min(crate::LUT_MAX)];
     lo + frac * (hi - lo)
 }
 
-fn resample_lut(data: &[f32]) -> [f32; 256] {
-    let mut lut = [0.0f32; 256];
+fn resample_lut(data: &[f32]) -> Vec<f32> {
+    let mut lut = vec![0.0f32; crate::LUT_SIZE];
     if data.len() < 2 {
         for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
+            *v = i as f32 / crate::LUT_MAX as f32;
         }
         return lut;
     }
     let src_max = (data.len() - 1) as f32;
     for (i, v) in lut.iter_mut().enumerate() {
-        let t = i as f32 / 255.0;
+        let t = i as f32 / crate::LUT_MAX as f32;
         let src_idx = t * src_max;
         let lo = src_idx as usize;
         let hi = (lo + 1).min(data.len() - 1);
@@ -176,12 +177,12 @@ fn resample_lut(data: &[f32]) -> [f32; 256] {
 
 // ── Monotone cubic Hermite LUT builder ──────────────────────────────
 
-fn build_channel_lut(points: &[(f32, f32)]) -> [f32; 256] {
+fn build_channel_lut(points: &[(f32, f32)]) -> Vec<f32> {
     let mut pts: Vec<(f32, f32)> = Vec::new();
     if points.is_empty() || points.len() < 2 {
-        let mut lut = [0.0f32; 256];
+        let mut lut = vec![0.0f32; crate::LUT_SIZE];
         for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
+            *v = i as f32 / crate::LUT_MAX as f32;
         }
         return lut;
     }
@@ -195,7 +196,7 @@ fn build_channel_lut(points: &[(f32, f32)]) -> [f32; 256] {
     }
 
     let n = pts.len();
-    let mut lut = [0.0f32; 256];
+    let mut lut = vec![0.0f32; crate::LUT_SIZE];
 
     // Secants
     let mut delta = vec![0.0f32; n - 1];
@@ -239,7 +240,7 @@ fn build_channel_lut(points: &[(f32, f32)]) -> [f32; 256] {
 
     // Evaluate
     for (idx, v) in lut.iter_mut().enumerate() {
-        let x = idx as f32 / 255.0;
+        let x = idx as f32 / crate::LUT_MAX as f32;
         let seg = pts[..n - 1]
             .iter()
             .rposition(|p| x >= p.0)
@@ -369,9 +370,13 @@ mod tests {
     #[test]
     fn red_boost_shifts_hue() {
         // Boost red channel only: R curve = gamma 0.5, G/B = identity
-        let r_lut: [f32; 256] = core::array::from_fn(|i| (i as f32 / 255.0).powf(0.5));
-        let id: [f32; 256] = core::array::from_fn(|i| i as f32 / 255.0);
-        let curves = ChannelCurves::from_luts(r_lut, id, id);
+        let r_lut: Vec<f32> = (0..crate::LUT_SIZE)
+            .map(|i| (i as f32 / crate::LUT_MAX as f32).powf(0.5))
+            .collect();
+        let id: Vec<f32> = (0..crate::LUT_SIZE)
+            .map(|i| i as f32 / crate::LUT_MAX as f32)
+            .collect();
+        let curves = ChannelCurves::from_luts(r_lut, id.clone(), id);
 
         let mut planes = OklabPlanes::new(1, 1);
         planes.l[0] = 0.5;
@@ -450,7 +455,7 @@ mod tests {
     #[test]
     fn srgb_gamma_roundtrip() {
         for i in 0..=255 {
-            let v = i as f32 / 255.0;
+            let v = i as f32 / crate::LUT_MAX as f32;
             let rt = srgb_to_linear(linear_to_srgb(v));
             assert!(
                 (v - rt).abs() < 0.001,

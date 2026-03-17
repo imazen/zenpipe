@@ -19,14 +19,14 @@ use crate::planes::OklabPlanes;
 #[non_exhaustive]
 pub struct ParametricCurve {
     /// LUT with 256 entries mapping input L [0,1] to output L [0,1].
-    lut: [f32; 256],
+    lut: Vec<f32>,
 }
 
 impl Default for ParametricCurve {
     fn default() -> Self {
-        let mut lut = [0.0f32; 256];
+        let mut lut = vec![0.0f32; crate::LUT_SIZE];
         for (i, v) in lut.iter_mut().enumerate() {
-            *v = i as f32 / 255.0;
+            *v = i as f32 / crate::LUT_MAX as f32;
         }
         Self { lut }
     }
@@ -74,9 +74,9 @@ impl ParametricCurve {
         ];
 
         // Build the raw adjustment curve
-        let mut lut = [0.0f32; 256];
+        let mut lut = vec![0.0f32; crate::LUT_SIZE];
         for (i, entry) in lut.iter_mut().enumerate() {
-            let l = i as f32 / 255.0;
+            let l = i as f32 / crate::LUT_MAX as f32;
 
             // Accumulate weighted adjustments from all zones
             let mut adj = 0.0f32;
@@ -108,7 +108,7 @@ impl ParametricCurve {
         self.lut
             .iter()
             .enumerate()
-            .all(|(i, &v)| (v - i as f32 / 255.0).abs() < 1e-4)
+            .all(|(i, &v)| (v - i as f32 / crate::LUT_MAX as f32).abs() < 1e-4)
     }
 }
 
@@ -123,11 +123,11 @@ impl Filter for ParametricCurve {
         }
 
         for v in &mut planes.l {
-            let x = (*v * 255.0).clamp(0.0, 255.0);
+            let x = (*v * crate::LUT_MAX as f32).clamp(0.0, crate::LUT_MAX as f32);
             let idx = x as usize;
             let frac = x - idx as f32;
-            let lo = self.lut[idx.min(255)];
-            let hi = self.lut[(idx + 1).min(255)];
+            let lo = self.lut[idx.min(crate::LUT_MAX)];
+            let hi = self.lut[(idx + 1).min(crate::LUT_MAX)];
             *v = lo + frac * (hi - lo);
         }
     }

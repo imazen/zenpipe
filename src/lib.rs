@@ -51,6 +51,18 @@ extern crate alloc;
 
 whereat::define_at_crate_info!();
 
+/// LUT size for tone/color curves.
+///
+/// 4096 entries provides 12-bit precision with linear interpolation between
+/// entries, matching camera RAW sensor bit depth. This is sufficient for
+/// banding-free output at 16-bit and f32 depths.
+///
+/// Previous value (256) caused visible banding in smooth gradients at >8bpc.
+pub(crate) const LUT_SIZE: usize = 4096;
+
+/// Maximum LUT index (LUT_SIZE - 1), used for clamping.
+pub(crate) const LUT_MAX: usize = LUT_SIZE - 1;
+
 mod access;
 mod blur;
 mod context;

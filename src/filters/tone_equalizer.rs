@@ -56,17 +56,17 @@ impl ToneEqualizer {
     ///
     /// Each zone is a Gaussian window centered at its EV position. The zone
     /// weights overlap smoothly and are normalized so they sum to a constant.
-    fn build_compensation_lut(&self) -> [f32; 256] {
-        let mut lut = [1.0f32; 256];
+    fn build_compensation_lut(&self) -> Vec<f32> {
+        let lut_size = crate::LUT_SIZE;
+        let lut_max = crate::LUT_MAX as f32;
+        let mut lut = vec![1.0f32; lut_size];
 
-        // Zone centers in L space (Oklab L 0..1 maps roughly to −8..0 EV)
-        // L=0 → −8 EV, L=1 → 0 EV. Each zone is 1 stop wide.
         const ZONE_CENTERS: [f32; 9] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0];
-        const ZONE_WIDTH: f32 = 0.15; // Gaussian sigma for zone overlap
+        const ZONE_WIDTH: f32 = 0.15;
         const INV_2_WIDTH_SQ: f32 = 1.0 / (2.0 * 0.15 * 0.15);
 
-        for i in 0..256 {
-            let l = i as f32 / 255.0;
+        for i in 0..lut_size {
+            let l = i as f32 / lut_max;
             let mut total_weight = 0.0f32;
             let mut total_comp = 0.0f32;
 
@@ -145,16 +145,18 @@ impl Filter for ToneEqualizer {
         // 3. Apply: L' = L * lut[guide_value]
         // The guide determines which zone each pixel belongs to (edge-aware),
         // and the LUT provides the smooth compensation factor.
+        let lut_max = crate::LUT_MAX;
+        let scale = lut_max as f32;
         for i in 0..n {
             let guide_l = guide[i].clamp(0.0, 1.0);
-            let idx = (guide_l * 255.0) as usize;
-            let frac = guide_l * 255.0 - idx as f32;
+            let x = guide_l * scale;
+            let idx = x as usize;
+            let frac = x - idx as f32;
 
-            // Linear interpolation between LUT entries
-            let factor = if idx < 255 {
+            let factor = if idx < lut_max {
                 lut[idx] * (1.0 - frac) + lut[idx + 1] * frac
             } else {
-                lut[255]
+                lut[lut_max]
             };
 
             planes.l[i] = (planes.l[i] * factor).max(0.0);
