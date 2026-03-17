@@ -9,27 +9,41 @@ repository = "https://github.com/imazen/zenpipe"
 keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 
+[features]
+default = ["std"]
+# Enables zenfilters, moxcms ICC CMS, and std on all deps.
+# Without this feature, the core pipeline still works (resize, blend, codec,
+# animation, format conversion) in a no_std + alloc environment.
+std = [
+    "zenresize/std",
+    "zenpixels-convert/std",
+    "zenpixels-convert/cms-moxcms",
+    "enough/std",
+    "dep:zenfilters",
+    "dep:moxcms",
+]
+
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", features = ["std", "layout"] }
+zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
-zenblend = { path = "../zenblend" }
-# Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha, CMS)
-zenpixels-convert = { path = "../zenpixels/zenpixels-convert", features = ["std", "cms-moxcms"] }
+zenblend = { path = "../zenblend", default-features = false }
+# Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
+zenpixels-convert = { path = "../zenpixels/zenpixels-convert", default-features = false }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
-zenpixels = { path = "../zenpixels/zenpixels" }
+zenpixels = { path = "../zenpixels/zenpixels", default-features = false }
 # Codec trait abstraction (decode/encode, animation, streaming)
-zencodec = { path = "../zencodec" }
-# Photo filters on planar Oklab f32 (SIMD-accelerated)
-zenfilters = { path = "../zenfilters" }
-# ICC color management (SIMD-accelerated, pure Rust)
-moxcms = "0.8"
+zencodec = { path = "../zencodec", default-features = false }
 # Cooperative cancellation
-enough = "0.4"
+enough = { version = "0.4", default-features = false }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation
 hashbrown = "0.15"
+# Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
+zenfilters = { path = "../zenfilters", optional = true }
+# ICC color management (SIMD-accelerated, pure Rust) — requires std
+moxcms = { version = "0.8", optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }

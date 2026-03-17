@@ -1,5 +1,6 @@
 //! Tests for zenfilters integration via the `filters` feature.
 
+#![cfg(feature = "std")]
 use hashbrown::HashMap;
 
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};

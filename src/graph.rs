@@ -45,6 +45,7 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::ops::{PixelOp, RowConverterOp};
+#[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{
     CompositeSource, CropSource, EdgeReplicateSource, MaterializedSource, ResizeSource,
@@ -151,9 +152,10 @@ pub enum NodeOp {
     /// windowed materialization via [`WindowedFilterSource`] — only
     /// `strip_height + 2 * overlap` rows are buffered at a time instead
     /// of the full image.
+    #[cfg(feature = "std")]
     Filter(zenfilters::Pipeline),
 
-    // === ICC color management (requires `cms` feature) ===
+    // === ICC color management (requires std for moxcms) ===
     /// Apply an ICC profile transform to the pixel data.
     ///
     /// Converts pixels from the source ICC profile's color space to the
@@ -162,6 +164,7 @@ pub enum NodeOp {
     ///
     /// Provide the raw ICC profile bytes for source and destination.
     /// The transform is built at compile time from the upstream format.
+    #[cfg(feature = "std")]
     IccTransform {
         /// Source ICC profile bytes.
         src_icc: alloc::sync::Arc<[u8]>,
@@ -414,14 +417,12 @@ impl PipelineGraph {
                 Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
             }
 
-            NodeOp::Orient(orientation) => {
-                return compile_orient(self, node_id, sources, orientation);
-            }
+            NodeOp::Orient(orientation) => compile_orient(self, node_id, sources, orientation),
 
             NodeOp::AutoOrient(exif) => {
                 let orientation = zenresize::Orientation::from_exif(exif)
                     .unwrap_or(zenresize::Orientation::Identity);
-                return compile_orient(self, node_id, sources, orientation);
+                compile_orient(self, node_id, sources, orientation)
             }
 
             NodeOp::PixelTransform(pixel_op) => {
@@ -446,6 +447,7 @@ impl PipelineGraph {
                 Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
+            #[cfg(feature = "std")]
             NodeOp::Filter(pipeline) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
 
@@ -490,6 +492,7 @@ impl PipelineGraph {
                 }
             }
 
+            #[cfg(feature = "std")]
             NodeOp::IccTransform { src_icc, dst_icc } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;

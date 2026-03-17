@@ -17,8 +17,10 @@
 //! let cursor_b = tee.cursor(); // feeds into thumbnail pipeline
 //! ```
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;

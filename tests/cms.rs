@@ -6,6 +6,7 @@
 //! - Format preservation through transforms
 //! - Neutral gray stability across gamuts
 
+#![cfg(feature = "std")]
 use std::sync::Arc;
 
 use hashbrown::HashMap;
