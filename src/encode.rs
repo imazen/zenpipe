@@ -48,6 +48,9 @@ pub struct EncodeRequest<'a> {
     /// Quality for UltraHDR gain map JPEG (0-100). Only used by `encode_ultrahdr_*`.
     #[cfg(feature = "jpeg-ultrahdr")]
     gainmap_quality: Option<f32>,
+    /// Gain map source for embedding in the encoded output.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    gain_map_source: Option<crate::gainmap::GainMapSource<'a>>,
 }
 
 impl<'a> EncodeRequest<'a> {
@@ -69,6 +72,8 @@ impl<'a> EncodeRequest<'a> {
             image_facts: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
+            #[cfg(feature = "jpeg-ultrahdr")]
+            gain_map_source: None,
         }
     }
 
@@ -90,6 +95,8 @@ impl<'a> EncodeRequest<'a> {
             image_facts: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
+            #[cfg(feature = "jpeg-ultrahdr")]
+            gain_map_source: None,
         }
     }
 
@@ -194,6 +201,37 @@ impl<'a> EncodeRequest<'a> {
     #[cfg(feature = "jpeg-ultrahdr")]
     pub fn with_gainmap_quality(mut self, quality: f32) -> Self {
         self.gainmap_quality = Some(quality);
+        self
+    }
+
+    /// Attach a gain map to the encoded output.
+    ///
+    /// The gain map will be embedded in a format-appropriate way:
+    /// - **JPEG**: Embedded as UltraHDR (MPF secondary image + XMP metadata)
+    /// - **AVIF**: Embedded as tmap item (future, not yet implemented)
+    /// - **JXL**: Embedded as jhgm box (future, not yet implemented)
+    ///
+    /// Currently only [`GainMapSource::Precomputed`] is supported.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use zencodecs::{EncodeRequest, ImageFormat, GainMapSource};
+    /// use zencodecs::gainmap::GainMapImage;
+    /// use zencodecs::GainMapMetadata;
+    ///
+    /// # fn example(gain_map: &GainMapImage, metadata: &zencodecs::GainMapMetadata) {
+    /// let request = EncodeRequest::new(ImageFormat::Jpeg)
+    ///     .with_quality(85.0)
+    ///     .with_gain_map(GainMapSource::Precomputed {
+    ///         gain_map: &gain_map,
+    ///         metadata: &metadata,
+    ///     });
+    /// # }
+    /// ```
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn with_gain_map(mut self, source: crate::gainmap::GainMapSource<'a>) -> Self {
+        self.gain_map_source = Some(source);
         self
     }
 

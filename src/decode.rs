@@ -260,6 +260,50 @@ impl<'a> DecodeRequest<'a> {
         self.decode_format(format)
     }
 
+    /// Decode an image and extract its gain map, if present.
+    ///
+    /// Returns the base image decode output plus an optional [`DecodedGainMap`]
+    /// containing the gain map image pixels and ISO 21496-1 metadata.
+    ///
+    /// Gain map support by format:
+    /// - **JPEG**: Extracts UltraHDR gain map from MPF secondary images + XMP metadata.
+    /// - **AVIF**: Not yet implemented (returns `None` for gain map).
+    /// - **JXL**: Not yet implemented (returns `None` for gain map).
+    /// - **Other formats**: Returns `None` for gain map.
+    ///
+    /// The returned [`DecodedGainMap`] can reconstruct HDR from SDR (or vice versa)
+    /// via its [`reconstruct_hdr`](crate::DecodedGainMap::reconstruct_hdr) /
+    /// [`reconstruct_sdr`](crate::DecodedGainMap::reconstruct_sdr) methods.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use zencodecs::DecodeRequest;
+    ///
+    /// let data: &[u8] = &[]; // UltraHDR JPEG bytes
+    /// let (output, gainmap) = DecodeRequest::new(data).decode_gain_map()?;
+    /// if let Some(gm) = gainmap {
+    ///     println!("Gain map: {}x{}", gm.gain_map.width, gm.gain_map.height);
+    ///     println!("Base is HDR: {}", gm.base_is_hdr);
+    /// }
+    /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
+    /// ```
+    #[cfg(feature = "jpeg-ultrahdr")]
+    pub fn decode_gain_map(
+        self,
+    ) -> Result<(DecodeOutput, Option<crate::gainmap::DecodedGainMap>)> {
+        let format = self.resolve_format()?;
+        let output = self.decode_format(format)?;
+
+        let gainmap = match format {
+            ImageFormat::Jpeg => extract_jpeg_gainmap(&output),
+            // AVIF/JXL gain map extraction not yet implemented
+            _ => None,
+        };
+
+        Ok((output, gainmap))
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Streaming decode
     // ═══════════════════════════════════════════════════════════════════
@@ -409,6 +453,39 @@ fn copy_rows<P: Copy>(src: imgref::ImgRef<'_, P>, mut dst: imgref::ImgRefMut<'_,
         let n = src_row.len().min(dst_row.len());
         dst_row[..n].copy_from_slice(&src_row[..n]);
     }
+}
+
+/// Extract a gain map from a JPEG DecodeOutput's extras, if present.
+///
+/// Returns `None` if the JPEG doesn't contain UltraHDR gain map data.
+#[cfg(feature = "jpeg-ultrahdr")]
+fn extract_jpeg_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
+    use crate::gainmap::{DecodedGainMap, GainMapImage};
+    use zenjpeg::ultrahdr::UltraHdrExtras as _;
+
+    let extras = output.extras::<zenjpeg::decoder::DecodedExtras>()?;
+
+    if !extras.is_ultrahdr() {
+        return None;
+    }
+
+    // Parse gain map metadata from XMP
+    let (metadata, _) = extras.ultrahdr_metadata()?.ok()?;
+
+    // Decode the gain map JPEG from MPF secondary images
+    let core_gainmap = extras.decode_gainmap()?.ok()?;
+
+    Some(DecodedGainMap {
+        gain_map: GainMapImage {
+            data: core_gainmap.data,
+            width: core_gainmap.width,
+            height: core_gainmap.height,
+            channels: core_gainmap.channels,
+        },
+        metadata,
+        base_is_hdr: false, // JPEG UltraHDR: base=SDR, gain map maps SDR→HDR
+        source_format: ImageFormat::Jpeg,
+    })
 }
 
 #[cfg(test)]
