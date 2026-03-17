@@ -1,27 +1,37 @@
 use crate::access::ChannelAccess;
-use crate::blur::GaussianKernel;
 use crate::context::FilterContext;
 use crate::filter::Filter;
+use crate::filters::guided_filter::guided_filter_plane;
 use crate::planes::OklabPlanes;
 
-/// Edge-preserving noise reduction (bilateral filter) on all Oklab channels.
+/// Edge-preserving smoothing on all Oklab channels.
 ///
-/// Uses both spatial distance and L-channel range distance for weighting.
-/// Smooths noise while preserving edges. Operates on all three channels
-/// (L, a, b) with L-distance as the range kernel.
+/// Uses a guided filter (He et al., TPAMI 2013) with L as the guide image.
+/// This is O(1) per pixel regardless of radius (uses Gaussian blurs internally),
+/// compared to O(r²) for a traditional bilateral filter.
 ///
-/// Note: bilateral filter is non-separable and accesses all channels,
-/// so planar layout provides no speedup over interleaved for this filter.
-/// It's included for API completeness.
+/// The guided filter produces locally-linear output that preserves edges from
+/// the luminance channel while smoothing noise in all three channels.
+///
+/// eps controls the smoothing/edge-preservation tradeoff:
+/// - Small eps (0.001): strong edge preservation, less smoothing
+/// - Large eps (0.1): more smoothing, softer edges
+///
+/// This replaces the traditional bilateral filter because:
+/// - O(1) vs O(r²) per pixel — practical for any radius
+/// - Gradient-preserving (not just edge-preserving)
+/// - No exp() per neighbor — numerically stable
+/// - Naturally separable via Gaussian blurs (SIMD-friendly)
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Bilateral {
-    /// Spatial sigma for the Gaussian kernel. Typical: 1.0-3.0.
+    /// Spatial sigma for the smoothing window. Typical: 2.0-8.0.
     pub spatial_sigma: f32,
-    /// Range sigma for the L-distance weighting. Smaller = more edge preservation.
-    /// Typical: 0.05-0.2.
+    /// Edge preservation parameter (eps in the guided filter).
+    /// Smaller = more edge preservation. Typical: 0.001-0.05.
+    /// Relates to range_sigma² of a traditional bilateral: eps ≈ range_sigma².
     pub range_sigma: f32,
-    /// Blend strength. 0.0 = no denoising, 1.0 = full effect.
+    /// Blend strength. 0.0 = no effect, 1.0 = full smoothing.
     pub strength: f32,
 }
 
@@ -52,59 +62,65 @@ impl Filter for Bilateral {
         if self.strength.abs() < 1e-6 {
             return;
         }
-        let w = planes.width as usize;
-        let h = planes.height as usize;
-        let kernel = GaussianKernel::new(self.spatial_sigma);
-        let radius = kernel.radius;
-        let range_sigma2 = 2.0 * self.range_sigma * self.range_sigma;
+
+        let w = planes.width;
+        let h = planes.height;
+        let n = (w as usize) * (h as usize);
+
+        // eps = range_sigma² (maps traditional bilateral range parameter to guided filter eps)
+        let eps = self.range_sigma * self.range_sigma;
         let strength = self.strength;
 
-        let mut dst_l = ctx.take_f32(w * h);
-        let mut dst_a = ctx.take_f32(w * h);
-        let mut dst_b = ctx.take_f32(w * h);
+        // Guided filter each channel with L as guide
+        let guide = planes.l.clone(); // L is the edge guide
 
-        for y in 0..h {
-            for x in 0..w {
-                let idx = y * w + x;
-                let cl = planes.l[idx];
-                let ca = planes.a[idx];
-                let cb = planes.b[idx];
-
-                let mut sl = 0.0f32;
-                let mut sa = 0.0f32;
-                let mut sb = 0.0f32;
-                let mut wsum = 0.0f32;
-
-                for (dy, &wy) in kernel.weights().iter().enumerate() {
-                    let sy = (y as isize + dy as isize - radius as isize).clamp(0, h as isize - 1)
-                        as usize;
-                    for (kx, &wx) in kernel.weights().iter().enumerate() {
-                        let sx = (x as isize + kx as isize - radius as isize)
-                            .clamp(0, w as isize - 1) as usize;
-                        let sidx = sy * w + sx;
-                        let diff = cl - planes.l[sidx];
-                        let rw = (-diff * diff / range_sigma2).exp();
-                        let weight = wy * wx * rw;
-                        sl += planes.l[sidx] * weight;
-                        sa += planes.a[sidx] * weight;
-                        sb += planes.b[sidx] * weight;
-                        wsum += weight;
-                    }
-                }
-
-                let inv_w = 1.0 / wsum;
-                dst_l[idx] = cl * (1.0 - strength) + sl * inv_w * strength;
-                dst_a[idx] = ca * (1.0 - strength) + sa * inv_w * strength;
-                dst_b[idx] = cb * (1.0 - strength) + sb * inv_w * strength;
-            }
+        // Filter L (self-guided)
+        let mut filtered = ctx.take_f32(n);
+        guided_filter_plane(
+            &planes.l,
+            &guide,
+            &mut filtered,
+            w,
+            h,
+            self.spatial_sigma,
+            eps,
+            ctx,
+        );
+        for i in 0..n {
+            planes.l[i] = planes.l[i] * (1.0 - strength) + filtered[i] * strength;
         }
 
-        let old_l = core::mem::replace(&mut planes.l, dst_l);
-        let old_a = core::mem::replace(&mut planes.a, dst_a);
-        let old_b = core::mem::replace(&mut planes.b, dst_b);
-        ctx.return_f32(old_l);
-        ctx.return_f32(old_a);
-        ctx.return_f32(old_b);
+        // Filter a (L-guided)
+        guided_filter_plane(
+            &planes.a,
+            &guide,
+            &mut filtered,
+            w,
+            h,
+            self.spatial_sigma,
+            eps,
+            ctx,
+        );
+        for i in 0..n {
+            planes.a[i] = planes.a[i] * (1.0 - strength) + filtered[i] * strength;
+        }
+
+        // Filter b (L-guided)
+        guided_filter_plane(
+            &planes.b,
+            &guide,
+            &mut filtered,
+            w,
+            h,
+            self.spatial_sigma,
+            eps,
+            ctx,
+        );
+        for i in 0..n {
+            planes.b[i] = planes.b[i] * (1.0 - strength) + filtered[i] * strength;
+        }
+
+        ctx.return_f32(filtered);
     }
 }
 
@@ -132,7 +148,6 @@ mod tests {
     #[test]
     fn smooths_uniform_noise() {
         let mut planes = OklabPlanes::new(16, 16);
-        // Add noise to a uniform image
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = 0.5 + if i % 3 == 0 { 0.05 } else { -0.02 };
         }
@@ -146,7 +161,34 @@ mod tests {
         let after_var = variance(&planes.l);
         assert!(
             after_var < before_var,
-            "bilateral should reduce noise: {before_var} -> {after_var}"
+            "guided filter should reduce noise: {before_var} -> {after_var}"
+        );
+    }
+
+    #[test]
+    fn preserves_edges() {
+        // Create a sharp edge: left half = 0.3, right half = 0.7
+        let mut planes = OklabPlanes::new(32, 32);
+        for y in 0..32 {
+            for x in 0..32 {
+                planes.l[y * 32 + x] = if x < 16 { 0.3 } else { 0.7 };
+            }
+        }
+
+        Bilateral {
+            spatial_sigma: 3.0,
+            range_sigma: 0.05,
+            strength: 1.0,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
+
+        // Edge should be preserved: far-left should still be much darker than far-right
+        let left = planes.l[16 * 32 + 2]; // well inside left region
+        let right = planes.l[16 * 32 + 29]; // well inside right region
+        assert!(
+            (right - left) > 0.3,
+            "edge should be preserved: left={left}, right={right}, diff={}",
+            right - left
         );
     }
 

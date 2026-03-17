@@ -318,8 +318,15 @@ fn brilliance_apply_simd(
     shadow_str: f32,
     highlight_str: f32,
 ) {
+    // S-curve adaptation: smoothstep-weighted correction factors.
+    // Instead of linear correction (which clips hard at ratio boundaries),
+    // use quadratic smoothstep: t² * (3 - 2t) for smooth S-curve response.
+    // This matches the perceptual response of commercial "Brilliance" sliders.
     let one = f32x8::splat(token, 1.0);
+    let two = f32x8::splat(token, 2.0);
+    let three = f32x8::splat(token, 3.0);
     let min_avg = f32x8::splat(token, 0.001);
+    let zero = f32x8::zero(token);
     let sa = f32x8::splat(token, shadow_str * amount);
     let ha = f32x8::splat(token, highlight_str * amount);
 
@@ -336,8 +343,16 @@ fn brilliance_apply_simd(
         let avg = f32x8::load(token, ac).max(min_avg);
         let ratio = l * avg.recip();
 
-        let shadow_corr = (one - ratio).mul_add(sa, one);
-        let highlight_corr = one - (ratio - one).min(one) * ha;
+        // Shadow: t = clamp(1 - ratio, 0, 1), smoothstep = t² * (3 - 2t)
+        let st = (one - ratio).max(zero).min(one);
+        let shadow_curve = st * st * (three - two * st);
+        let shadow_corr = shadow_curve.mul_add(sa, one);
+
+        // Highlight: t = clamp(ratio - 1, 0, 1), smoothstep
+        let ht = (ratio - one).max(zero).min(one);
+        let highlight_curve = ht * ht * (three - two * ht);
+        let highlight_corr = one - highlight_curve * ha;
+
         let is_shadow = ratio.simd_lt(one);
         let correction = f32x8::blend(is_shadow, shadow_corr, highlight_corr);
         (l * correction).store(dc);
@@ -350,9 +365,11 @@ fn brilliance_apply_simd(
         let avg = avg_l[idx].max(0.001);
         let ratio = l / avg;
         let c = if ratio < 1.0 {
-            1.0 + (1.0 - ratio) * shadow_str * amount
+            let t = (1.0 - ratio).clamp(0.0, 1.0);
+            1.0 + t * t * (3.0 - 2.0 * t) * shadow_str * amount
         } else {
-            1.0 - (ratio - 1.0).min(1.0) * highlight_str * amount
+            let t = (ratio - 1.0).clamp(0.0, 1.0);
+            1.0 - t * t * (3.0 - 2.0 * t) * highlight_str * amount
         };
         *v = l * c;
     }

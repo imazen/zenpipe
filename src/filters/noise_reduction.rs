@@ -184,26 +184,41 @@ fn denoise_plane(
     for scale in 0..num_scales {
         atrous_smooth(&current, &mut smooth, w, h, scale, &mut tmp);
 
-        // Detail coefficients = current - smooth
-        // Threshold based on estimated noise at this scale
-        let threshold_scale = if scale == 0 {
-            // Finest scale: estimate noise sigma, apply full threshold
-            let sigma = estimate_noise_sigma_from_diff(&current, &smooth, n);
-            sigma * params.strength * 3.0 * (1.0 - params.detail_preserve * 0.5)
-        } else {
-            // Coarser scales: progressively less thresholding
-            // Noise decreases at coarser scales
-            let decay = 0.5f32.powi(scale as i32);
-            let sigma = estimate_noise_sigma_from_diff(&current, &smooth, n);
-            // contrast_preserve reduces thresholding at coarser scales,
-            // preserving local contrast structure while still denoising fine noise.
+        // BayesShrink: scale-adaptive optimal threshold.
+        //
+        // σ_noise estimated from MAD of finest-scale wavelet coefficients.
+        // σ_signal² = max(σ_total² - σ_noise², 0) at each scale.
+        // threshold = σ_noise² / σ_signal (Bayes-optimal for Gaussian prior).
+        //
+        // Reference: Chang, Yu, Vetterli, "Adaptive wavelet thresholding for
+        // image denoising and compression," IEEE TIP 2000.
+        let threshold_scale = {
+            // Noise sigma: estimated from detail coefficients at this scale
+            let sigma_noise = estimate_noise_sigma_from_diff(&current, &smooth, n);
+
+            // Signal variance: total variance minus noise variance
+            let sigma_total_sq = variance_of_diff(&current, &smooth, n);
+            let sigma_noise_sq = sigma_noise * sigma_noise;
+            let sigma_signal_sq = (sigma_total_sq - sigma_noise_sq).max(0.0);
+
+            let bayes_threshold = if sigma_signal_sq > 1e-10 {
+                sigma_noise_sq / sigma_signal_sq.sqrt()
+            } else {
+                // Pure noise at this scale — threshold everything
+                sigma_noise * 10.0
+            };
+
+            // User controls: strength scales the threshold inversely (more strength = less detail),
+            // detail_preserve reduces it (more preservation = lower threshold).
+            let decay = if scale == 0 {
+                1.0
+            } else {
+                0.5f32.powi(scale as i32)
+            };
             let contrast_factor = 1.0 - params.contrast_preserve * (1.0 - decay);
-            sigma
-                * params.strength
-                * 3.0
-                * decay
-                * (1.0 - params.detail_preserve * 0.3)
-                * contrast_factor
+            let detail_factor = 1.0 - params.detail_preserve * if scale == 0 { 0.5 } else { 0.3 };
+
+            bayes_threshold * params.strength * detail_factor * contrast_factor
         };
 
         // Soft-threshold the detail and add to result
@@ -228,7 +243,8 @@ fn denoise_plane(
     ctx.return_f32(smooth);
 }
 
-/// Estimate noise sigma from the difference between two signals.
+/// Estimate noise sigma from the MAD of detail coefficients (a - b).
+/// Uses the MAD/0.6745 robust estimator (standard for wavelet denoising).
 fn estimate_noise_sigma_from_diff(a: &[f32], b: &[f32], n: usize) -> f32 {
     let mean_abs = a[..n]
         .iter()
@@ -236,7 +252,27 @@ fn estimate_noise_sigma_from_diff(a: &[f32], b: &[f32], n: usize) -> f32 {
         .map(|(x, y)| (x - y).abs())
         .sum::<f32>()
         / n as f32;
+    // MAD-based sigma estimate: MAD / 0.6745 for Gaussian noise
     mean_abs / 0.6745
+}
+
+/// Variance of detail coefficients (a - b).
+fn variance_of_diff(a: &[f32], b: &[f32], n: usize) -> f32 {
+    let mean = a[..n]
+        .iter()
+        .zip(b[..n].iter())
+        .map(|(x, y)| x - y)
+        .sum::<f32>()
+        / n as f32;
+    a[..n]
+        .iter()
+        .zip(b[..n].iter())
+        .map(|(x, y)| {
+            let d = (x - y) - mean;
+            d * d
+        })
+        .sum::<f32>()
+        / n as f32
 }
 
 impl Filter for NoiseReduction {

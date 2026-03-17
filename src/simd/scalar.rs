@@ -93,9 +93,11 @@ pub(super) fn brilliance_apply_impl_scalar(
         let avg = avg_l[i].max(0.001);
         let ratio = l / avg;
         let c = if ratio < 1.0 {
-            1.0 + (1.0 - ratio) * shadow_str * amount
+            let t = (1.0 - ratio).clamp(0.0, 1.0);
+            1.0 + t * t * (3.0 - 2.0 * t) * shadow_str * amount
         } else {
-            1.0 - (ratio - 1.0).min(1.0) * highlight_str * amount
+            let t = (ratio - 1.0).clamp(0.0, 1.0);
+            1.0 - t * t * (3.0 - 2.0 * t) * highlight_str * amount
         };
         dst_l[i] = l * c;
     }

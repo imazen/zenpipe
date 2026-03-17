@@ -26,6 +26,7 @@ mod fused_adjust;
 mod gamut_expand;
 mod grain;
 mod grayscale;
+pub(crate) mod guided_filter;
 mod highlight_recovery;
 mod highlights_shadows;
 mod hsl_adjust;
