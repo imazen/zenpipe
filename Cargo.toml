@@ -9,32 +9,25 @@ repository = "https://github.com/imazen/zenpipe"
 keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 
-[features]
-default = ["std"]
-std = ["zenresize/std", "zenpixels-convert/std", "enough/std"]
-codec = ["zencodec", "zenpixels"]
-filters = ["dep:zenfilters"]
-cms = ["std", "zenpixels-convert/cms-moxcms", "dep:moxcms"]
-
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
-# Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
-zenpixels-convert = { path = "../zenpixels/zenpixels-convert", default-features = false }
+zenresize = { path = "../zenresize", features = ["std", "layout"] }
+# Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha, CMS)
+zenpixels-convert = { path = "../zenpixels/zenpixels-convert", features = ["std", "cms-moxcms"] }
+# Pixel buffer types, ColorContext, ICC/CICP metadata
+zenpixels = { path = "../zenpixels/zenpixels" }
+# Codec trait abstraction (decode/encode, animation, streaming)
+zencodec = { path = "../zencodec" }
+# Photo filters on planar Oklab f32 (SIMD-accelerated)
+zenfilters = { path = "../zenfilters" }
+# ICC color management (SIMD-accelerated, pure Rust)
+moxcms = "0.8"
 # Cooperative cancellation
-enough = { version = "0.4", default-features = false }
+enough = "0.4"
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
-# no_std-compatible HashMap for graph compilation
+# HashMap for graph compilation
 hashbrown = "0.15"
-# Codec trait abstraction (optional — for decoder/encoder integration)
-zencodec = { path = "../zencodec", default-features = false, optional = true }
-# Pixel format types (optional — used by codec bridge)
-zenpixels = { path = "../zenpixels/zenpixels", default-features = false, optional = true }
-# Photo filters on planar Oklab f32 (optional — for filter pipeline integration)
-zenfilters = { path = "../zenfilters", default-features = false, optional = true }
-# ICC color management (optional — for CMS-aware pipelines)
-moxcms = { version = "0.8", optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }

@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 //! Streaming pixel pipeline — zero-materialization graph execution.
 //!
@@ -47,9 +46,7 @@ pub mod ops;
 pub mod sources;
 mod strip;
 
-#[cfg(feature = "codec")]
 pub mod animation;
-#[cfg(feature = "codec")]
 pub mod codec;
 
 pub use error::PipeError;
@@ -66,10 +63,8 @@ pub use zenpixels_convert::{
 // Re-export cancellation types.
 pub use enough::{Stop, Unstoppable};
 
-// Re-export CMS types when the cms feature is enabled.
-#[cfg(feature = "cms")]
+// Re-export CMS types.
 pub use zenpixels_convert::cms::{ColorManagement, RowTransform};
-#[cfg(feature = "cms")]
 pub use zenpixels_convert::cms_moxcms::MoxCms;
 
 /// A source of pixel strips (pull-based).

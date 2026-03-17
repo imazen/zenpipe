@@ -3,8 +3,6 @@
 //! Uses zengif for end-to-end testing: generate animated GIF → decode
 //! frame-by-frame → process through pipeline → encode back to GIF.
 
-#![cfg(feature = "codec")]
-
 use std::borrow::Cow;
 
 use hashbrown::HashMap;

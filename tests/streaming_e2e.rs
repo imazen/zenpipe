@@ -6,8 +6,6 @@
 //! Run: `cargo test --features filters --test streaming_e2e -- --nocapture`
 //! Heaptrack: `heaptrack cargo test --features filters --release --test streaming_e2e -- --nocapture`
 
-#![cfg(feature = "filters")]
-
 use std::time::Instant;
 
 use hashbrown::HashMap;

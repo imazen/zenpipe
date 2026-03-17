@@ -6,7 +6,6 @@
 //!
 //! Run: `cargo test --features codec --test streaming_codec -- --nocapture`
 //! Heaptrack: `heaptrack cargo test --features codec --test streaming_codec -- --nocapture`
-#![cfg(feature = "codec")]
 
 use std::borrow::Cow;
 

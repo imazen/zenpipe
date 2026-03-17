@@ -45,7 +45,6 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::ops::{PixelOp, RowConverterOp};
-#[cfg(feature = "filters")]
 use crate::sources::FilterSource;
 use crate::sources::{
     CompositeSource, CropSource, EdgeReplicateSource, MaterializedSource, ResizeSource,
@@ -152,7 +151,6 @@ pub enum NodeOp {
     /// windowed materialization via [`WindowedFilterSource`] — only
     /// `strip_height + 2 * overlap` rows are buffered at a time instead
     /// of the full image.
-    #[cfg(feature = "filters")]
     Filter(zenfilters::Pipeline),
 
     // === ICC color management (requires `cms` feature) ===
@@ -164,7 +162,6 @@ pub enum NodeOp {
     ///
     /// Provide the raw ICC profile bytes for source and destination.
     /// The transform is built at compile time from the upstream format.
-    #[cfg(feature = "cms")]
     IccTransform {
         /// Source ICC profile bytes.
         src_icc: alloc::sync::Arc<[u8]>,
@@ -449,7 +446,6 @@ impl PipelineGraph {
                 Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
-            #[cfg(feature = "filters")]
             NodeOp::Filter(pipeline) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
 
@@ -494,7 +490,6 @@ impl PipelineGraph {
                 }
             }
 
-            #[cfg(feature = "cms")]
             NodeOp::IccTransform { src_icc, dst_icc } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
