@@ -78,8 +78,8 @@ pub use blur::GaussianKernel;
 #[doc(hidden)]
 pub mod blur_internals {
     pub use crate::blur::{
-        ExtendedBoxBlur, GaussianKernel, extended_box_blur_plane, gaussian_blur_plane,
-        gaussian_blur_plane_scalar, kernel_sigma,
+        DericheCoefficients, ExtendedBoxBlur, GaussianKernel, deriche_blur_plane,
+        extended_box_blur_plane, gaussian_blur_plane, gaussian_blur_plane_scalar, kernel_sigma,
     };
 }
 pub use context::FilterContext;

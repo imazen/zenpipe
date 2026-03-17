@@ -81,6 +81,20 @@ fn bench_blur_group(
                 });
             });
         }
+
+        // Deriche IIR (O(1)/pixel, high accuracy)
+        {
+            let src = Arc::clone(&src);
+            let deriche = Arc::new(DericheCoefficients::new(sigma));
+            group.bench("deriche_iir", move |b| {
+                let mut ctx = FilterContext::new();
+                let mut dst = vec![0.0f32; n];
+                deriche_blur_plane(&src, &mut dst, w, h, &deriche, &mut ctx);
+                b.iter(|| {
+                    deriche_blur_plane(&src, &mut dst, w, h, &deriche, &mut ctx);
+                });
+            });
+        }
     });
 }
 
