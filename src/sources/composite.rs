@@ -6,7 +6,7 @@ use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::{StripBuf, StripRef};
 
-/// Porter-Duff source-over compositing of two strip sources.
+/// Compositing of two strip sources with configurable blend mode.
 ///
 /// Pulls synchronized strips from a background and foreground source,
 /// composites foreground over background in premultiplied linear f32
@@ -25,6 +25,7 @@ pub struct CompositeSource {
     strip_height: u32,
     buf: StripBuf,
     y: u32,
+    blend_mode: zenblend::BlendMode,
 }
 
 impl CompositeSource {
@@ -36,6 +37,12 @@ impl CompositeSource {
         foreground: Box<dyn Source>,
     ) -> Result<Self, PipeError> {
         Self::over_at(background, foreground, 0, 0)
+    }
+
+    /// Set the blend mode (default: `SrcOver`).
+    pub fn with_blend_mode(mut self, mode: zenblend::BlendMode) -> Self {
+        self.blend_mode = mode;
+        self
     }
 
     /// Composite `foreground` at offset `(fg_x, fg_y)` within `background`.
@@ -75,6 +82,7 @@ impl CompositeSource {
             strip_height: sh,
             buf: StripBuf::new(w, sh, fmt),
             y: 0,
+            blend_mode: zenblend::BlendMode::SrcOver,
         })
     }
 }
@@ -129,6 +137,7 @@ impl Source for CompositeSource {
                             &mut out_row,
                             self.fg_x as usize,
                             self.width as usize,
+                            self.blend_mode,
                         );
                         self.buf.push_row(&out_row);
                         continue;
@@ -154,26 +163,46 @@ impl Source for CompositeSource {
     }
 }
 
-/// Porter-Duff source-over for one row: out = fg + bg * (1 - fg.alpha)
-fn composite_row_over(bg: &[u8], fg: &[u8], out: &mut [u8], fg_x_offset: usize, bg_width: usize) {
+/// Blend one row: fg placed at `fg_x_offset` within bg, result written to out.
+fn composite_row_over(
+    bg: &[u8],
+    fg: &[u8],
+    out: &mut [u8],
+    fg_x_offset: usize,
+    bg_width: usize,
+    mode: zenblend::BlendMode,
+) {
     let bg_f32: &[f32] = bytemuck::cast_slice(bg);
     let fg_f32: &[f32] = bytemuck::cast_slice(fg);
     let out_f32: &mut [f32] = bytemuck::cast_slice_mut(out);
 
+    // Start with background
     out_f32.copy_from_slice(bg_f32);
 
+    // Determine the overlapping pixel range
     let fg_pixels = fg_f32.len() / 4;
-    for px in 0..fg_pixels {
-        let dst_px = fg_x_offset + px;
-        if dst_px >= bg_width {
-            break;
-        }
-        let si = px * 4;
-        let di = dst_px * 4;
-        let inv_a = 1.0 - fg_f32[si + 3];
-        out_f32[di] = fg_f32[si] + out_f32[di] * inv_a;
-        out_f32[di + 1] = fg_f32[si + 1] + out_f32[di + 1] * inv_a;
-        out_f32[di + 2] = fg_f32[si + 2] + out_f32[di + 2] * inv_a;
-        out_f32[di + 3] = fg_f32[si + 3] + out_f32[di + 3] * inv_a;
+    let blend_end = (fg_x_offset + fg_pixels).min(bg_width);
+    if fg_x_offset >= blend_end {
+        return;
     }
+    let blend_pixels = blend_end - fg_x_offset;
+
+    // Copy fg into the overlap region of out, then blend in-place
+    let dst_start = fg_x_offset * 4;
+    let dst_end = dst_start + blend_pixels * 4;
+    let fg_end = blend_pixels * 4;
+
+    // fg goes into out[dst_start..dst_end], bg is already there.
+    // zenblend::blend_row(fg, bg, mode) writes result into fg.
+    // We need: out = blend(fg, bg_at_offset).
+    // Strategy: save bg portion, copy fg into out, blend out over saved bg.
+    // But that's more copies. Simpler: copy fg, blend bg underneath.
+
+    // For SrcOver: out = fg + bg * (1 - fg.a)
+    // zenblend expects fg in first arg (modified in-place), bg in second.
+    // We want: result = blend(fg_slice, bg_slice_at_offset)
+    // Copy fg into the overlap region, then blend bg underneath.
+    let bg_portion: alloc::vec::Vec<f32> = out_f32[dst_start..dst_end].to_vec();
+    out_f32[dst_start..dst_end].copy_from_slice(&fg_f32[..fg_end]);
+    zenblend::blend_row(&mut out_f32[dst_start..dst_end], &bg_portion, mode);
 }

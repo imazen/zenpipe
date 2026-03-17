@@ -12,6 +12,8 @@ categories = ["graphics", "multimedia::images"]
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", features = ["std", "layout"] }
+# Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
+zenblend = { path = "../zenblend" }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha, CMS)
 zenpixels-convert = { path = "../zenpixels/zenpixels-convert", features = ["std", "cms-moxcms"] }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
