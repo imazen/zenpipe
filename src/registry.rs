@@ -150,6 +150,39 @@ impl CodecRegistry {
             .iter()
             .filter(|&f| self.encode_enabled.contains(f))
     }
+
+    /// Whether true streaming (row-level) decode is available for a format.
+    ///
+    /// Returns true for codecs that implement native row-push or scanline
+    /// streaming. Returns false for codecs that buffer the full image.
+    pub fn streaming_decode_available(&self, format: ImageFormat) -> bool {
+        if !self.can_decode(format) {
+            return false;
+        }
+        matches!(format, ImageFormat::Jpeg | ImageFormat::Png)
+    }
+
+    /// Whether animation decode is available for a format.
+    pub fn animation_decode_available(&self, format: ImageFormat) -> bool {
+        if !self.can_decode(format) {
+            return false;
+        }
+        matches!(
+            format,
+            ImageFormat::Gif | ImageFormat::WebP | ImageFormat::Png | ImageFormat::Avif | ImageFormat::Jxl
+        )
+    }
+
+    /// Whether animation encode is available for a format.
+    pub fn animation_encode_available(&self, format: ImageFormat) -> bool {
+        if !self.can_encode(format) {
+            return false;
+        }
+        matches!(
+            format,
+            ImageFormat::Gif | ImageFormat::WebP | ImageFormat::Png
+        )
+    }
 }
 
 impl Default for CodecRegistry {
