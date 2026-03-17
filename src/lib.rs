@@ -59,6 +59,12 @@ pub use zenpixels_convert::{
     SignalRange, TransferFunction,
 };
 
+// Re-export CMS types when the cms feature is enabled.
+#[cfg(feature = "cms")]
+pub use zenpixels_convert::cms::{ColorManagement, RowTransform};
+#[cfg(feature = "cms")]
+pub use zenpixels_convert::cms_moxcms::MoxCms;
+
 /// A source of pixel strips (pull-based).
 ///
 /// Each call to [`next`](Source::next) yields the next horizontal strip

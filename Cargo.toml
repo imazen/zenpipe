@@ -14,6 +14,7 @@ default = ["std"]
 std = ["zenresize/std", "zenpixels-convert/std"]
 codec = ["zencodec", "zenpixels"]
 filters = ["dep:zenfilters"]
+cms = ["std", "zenpixels-convert/cms-moxcms", "dep:moxcms"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
@@ -30,6 +31,8 @@ zencodec = { path = "../zencodec", default-features = false, optional = true }
 zenpixels = { path = "../zenpixels/zenpixels", default-features = false, optional = true }
 # Photo filters on planar Oklab f32 (optional — for filter pipeline integration)
 zenfilters = { path = "../zenfilters", default-features = false, optional = true }
+# ICC color management (optional — for CMS-aware pipelines)
+moxcms = { version = "0.8", optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }

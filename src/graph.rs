@@ -139,6 +139,23 @@ pub enum NodeOp {
     #[cfg(feature = "filters")]
     Filter(zenfilters::Pipeline),
 
+    // === ICC color management (requires `cms` feature) ===
+    /// Apply an ICC profile transform to the pixel data.
+    ///
+    /// Converts pixels from the source ICC profile's color space to the
+    /// destination ICC profile's color space, row-by-row via moxcms.
+    /// The pixel format (layout, depth) is preserved — only color values change.
+    ///
+    /// Provide the raw ICC profile bytes for source and destination.
+    /// The transform is built at compile time from the upstream format.
+    #[cfg(feature = "cms")]
+    IccTransform {
+        /// Source ICC profile bytes.
+        src_icc: alloc::sync::Arc<[u8]>,
+        /// Destination ICC profile bytes.
+        dst_icc: alloc::sync::Arc<[u8]>,
+    },
+
     // === Barriers ===
     /// Custom materialization barrier — drain upstream, transform, re-stream.
     ///
@@ -420,6 +437,15 @@ impl PipelineGraph {
                 } else {
                     Ok(Box::new(FilterSource::new(upstream, pipeline)?))
                 }
+            }
+
+            #[cfg(feature = "cms")]
+            NodeOp::IccTransform { src_icc, dst_icc } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                Ok(Box::new(crate::sources::IccTransformSource::new(
+                    upstream, &src_icc, &dst_icc,
+                )?))
             }
 
             NodeOp::Materialize(transform_fn) => {
