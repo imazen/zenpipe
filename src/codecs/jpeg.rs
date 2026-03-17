@@ -377,3 +377,49 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
 
     Ok(EncodeOutput::new(jpeg_data, ImageFormat::Jpeg))
 }
+
+/// Encode SDR pixels + precomputed gain map to UltraHDR JPEG.
+#[cfg(feature = "jpeg-ultrahdr")]
+pub(crate) fn encode_with_precomputed_gainmap(
+    sdr_pixels: &[u8],
+    width: u32,
+    height: u32,
+    channels: u8,
+    quality: Option<f32>,
+    codec_config: Option<&CodecConfig>,
+    gain_map: &crate::gainmap::GainMapImage,
+    metadata: &crate::gainmap::GainMapMetadata,
+    stop: Option<&dyn Stop>,
+) -> Result<EncodeOutput> {
+    use zenjpeg::ultrahdr::{
+        GainMap, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
+        encode_with_gainmap,
+    };
+
+    let stop_token = crate::limits::stop_or_default(stop);
+    let pixel_format = match channels {
+        3 => UhdrPixelFormat::Rgb8,
+        4 => UhdrPixelFormat::Rgba8,
+        _ => return Err(at!(CodecError::InvalidInput(
+            alloc::format!("unsupported {channels} channels for gain map encode")
+        ))),
+    };
+
+    let sdr = UhdrRawImage::from_data(
+        width, height, pixel_format,
+        UhdrColorGamut::Bt709, UhdrColorTransfer::Srgb, sdr_pixels.to_vec(),
+    ).map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
+
+    let core_gainmap = GainMap {
+        width: gain_map.width, height: gain_map.height,
+        channels: gain_map.channels, data: gain_map.data.clone(),
+    };
+    let enc = build_encoding(quality, codec_config);
+
+    let out = encode_with_gainmap(
+        &sdr, &core_gainmap, metadata, enc.inner(),
+        quality.unwrap_or(75.0).min(85.0), stop_token,
+    ).map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
+
+    Ok(EncodeOutput::new(out, ImageFormat::Jpeg))
+}

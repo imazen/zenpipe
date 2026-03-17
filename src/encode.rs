@@ -642,6 +642,36 @@ impl<'a> EncodeRequest<'a> {
         )
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
 
+        // Check if we should embed a precomputed gain map
+        #[cfg(feature = "jpeg-ultrahdr")]
+        if let Some(crate::gainmap::GainMapSource::Precomputed {
+            gain_map,
+            metadata,
+        }) = &self.gain_map_source
+        {
+            if format == ImageFormat::Jpeg {
+                // For JPEG: use the specialized gain map encoder that produces
+                // UltraHDR JPEG (base + gain map + XMP metadata)
+                let channels = if adapted.descriptor.layout() == zenpixels::ChannelLayout::Rgba {
+                    4u8
+                } else {
+                    3u8
+                };
+                return crate::codecs::jpeg::encode_with_precomputed_gainmap(
+                    &adapted.data,
+                    adapted.width,
+                    adapted.rows,
+                    channels,
+                    Some(resolved_quality),
+                    self.codec_config,
+                    gain_map,
+                    metadata,
+                    self.stop,
+                );
+            }
+            // Other formats: encode normally (gain map embedding not yet supported)
+        }
+
         (built.encoder)(pixel_slice)
     }
 }

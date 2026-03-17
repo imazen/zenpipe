@@ -558,14 +558,16 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
         use_base_color_space: meta.use_base_colour_space,
     };
 
-    // The gain map data is raw AV1 — store as-is.
-    // Channels=0 signals "encoded, not yet decoded to pixels."
+    // Decode the raw AV1 gain map to pixels
+    let (gm_data, gm_w, gm_h, gm_ch) =
+        zenavif::decode_av1_obu(&avif_gm.gain_map_data).ok()?;
+
     Some(DecodedGainMap {
         gain_map: GainMapImage {
-            data: avif_gm.gain_map_data.clone(),
-            width: 0,  // Unknown until AV1 is decoded
-            height: 0, // Unknown until AV1 is decoded
-            channels: 0, // Signals raw encoded data
+            data: gm_data,
+            width: gm_w,
+            height: gm_h,
+            channels: gm_ch,
         },
         metadata: uhdr_metadata,
         base_is_hdr: false, // AVIF: base=SDR, gain map maps SDR→HDR
@@ -580,19 +582,39 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
 
     let bundle = output.extras::<zenjxl::GainMapBundle>()?;
 
-    // The jhgm bundle contains ISO 21496-1 binary metadata.
-    // TODO: Wire ultrahdr_core::metadata::iso21496::parse_iso21496() when
-    // the dependency chain includes it. For now, use default metadata.
-    let _ = &bundle.metadata; // metadata bytes available but parser not yet wired
-    let metadata = crate::gainmap::GainMapMetadata::default();
+    // Parse ISO 21496-1 binary metadata from the jhgm bundle
+    let metadata = if !bundle.metadata.is_empty() {
+        zenjpeg::ultrahdr::parse_iso21496(&bundle.metadata).ok()?
+    } else {
+        crate::gainmap::GainMapMetadata::default()
+    };
 
-    // The gain map codestream is a bare JXL — store as-is.
+    // Decode the bare JXL codestream to get gain map pixels
+    use alloc::vec::Vec;
+    let gm_output = zenjxl::decode(&bundle.gain_map_codestream, None, &[]).ok()?;
+    use zenpixels_convert::PixelBufferConvertTypedExt as _;
+    let gm_rgb8 = gm_output.pixels.to_rgb8();
+    let gm_ref = gm_rgb8.as_imgref();
+    let gm_w = gm_ref.width() as u32;
+    let gm_h = gm_ref.height() as u32;
+    let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
+
+    // Determine channels: if all R==G==B, it's effectively grayscale
+    let is_gray = gm_bytes.chunks_exact(3).all(|px| px[0] == px[1] && px[1] == px[2]);
+    let (data, channels) = if is_gray {
+        // Collapse to single channel
+        let gray: Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();
+        (gray, 1u8)
+    } else {
+        (gm_bytes, 3u8)
+    };
+
     Some(DecodedGainMap {
         gain_map: GainMapImage {
-            data: bundle.gain_map_codestream.clone(),
-            width: 0,
-            height: 0,
-            channels: 0, // Signals raw encoded data
+            data,
+            width: gm_w,
+            height: gm_h,
+            channels,
         },
         metadata,
         base_is_hdr: true, // JXL: base=HDR, gain map maps HDR→SDR
