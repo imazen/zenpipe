@@ -4,6 +4,7 @@ pub use zencodec::decode::DecodeOutput;
 
 use crate::config::CodecConfig;
 use crate::error::Result;
+use crate::policy::CodecPolicy;
 use crate::{CodecError, CodecRegistry, ImageFormat, ImageInfo, Limits, Stop};
 use whereat::at;
 
@@ -26,6 +27,7 @@ pub struct DecodeRequest<'a> {
     stop: Option<&'a dyn Stop>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
+    policy: Option<CodecPolicy>,
 }
 
 impl<'a> DecodeRequest<'a> {
@@ -41,6 +43,7 @@ impl<'a> DecodeRequest<'a> {
             stop: None,
             registry: None,
             codec_config: None,
+            policy: None,
         }
     }
 
@@ -71,6 +74,16 @@ impl<'a> DecodeRequest<'a> {
     /// Set format-specific codec configuration.
     pub fn with_codec_config(mut self, config: &'a CodecConfig) -> Self {
         self.codec_config = Some(config);
+        self
+    }
+
+    /// Set a per-request codec policy for filtering and preferences.
+    ///
+    /// Currently reserved for future use with fallback chains and
+    /// multi-decoder-per-format support. The policy's format restrictions
+    /// are checked during format detection.
+    pub fn with_policy(mut self, policy: CodecPolicy) -> Self {
+        self.policy = Some(policy);
         self
     }
 
