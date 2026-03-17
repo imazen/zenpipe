@@ -31,6 +31,9 @@ pub const RGBAF32_LINEAR_PREMUL: PixelFormat = PixelDescriptor::new(
 /// 16 bytes/pixel (4×f32), linear light, straight alpha.
 pub const RGBAF32_LINEAR: PixelFormat = PixelDescriptor::RGBAF32_LINEAR;
 
+/// 3 bytes/pixel, sRGB transfer, no alpha. Standard JPEG format.
+pub const RGB8_SRGB: PixelFormat = PixelDescriptor::RGB8_SRGB;
+
 /// 16 bytes/pixel (4×f32), sRGB transfer, straight alpha.
 /// Identity mode — no gamma conversion, just normalized to 0..1.
 pub const RGBAF32_SRGB: PixelFormat = PixelDescriptor::new(

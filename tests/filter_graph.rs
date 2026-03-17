@@ -331,7 +331,12 @@ fn filter_graph_chained_with_resize() {
 
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 4, h: 4 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 4,
+        h: 4,
+        filter: None,
+        sharpen_percent: None,
+    });
     let filter = g.add_node(NodeOp::Filter(pipeline));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);

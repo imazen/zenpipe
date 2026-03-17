@@ -314,6 +314,91 @@ impl PixelOp for QuantizeF32ToU8 {
 }
 
 // =========================================================================
+// Alpha operations
+// =========================================================================
+
+/// Composite RGBA8 pixels onto a solid matte color, producing RGB8.
+///
+/// Alpha blending is performed in sRGB space (matching browser behavior).
+/// Fully opaque pixels pass through unchanged (minus the alpha channel).
+///
+/// Input: `RGBA8_SRGB` (4 bytes/px)
+/// Output: `RGB8_SRGB` (3 bytes/px)
+pub struct MatteFlattenOp {
+    matte: [u8; 3],
+}
+
+impl MatteFlattenOp {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { matte: [r, g, b] }
+    }
+
+    /// White matte — the most common choice for JPEG output.
+    pub fn white() -> Self {
+        Self::new(255, 255, 255)
+    }
+}
+
+impl PixelOp for MatteFlattenOp {
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        let total_px = width as usize * height as usize;
+        for i in 0..total_px {
+            let si = i * 4;
+            let di = i * 3;
+            let a = input[si + 3] as u32;
+            let inv_a = 255 - a;
+            output[di] = ((input[si] as u32 * a + self.matte[0] as u32 * inv_a + 127) / 255) as u8;
+            output[di + 1] =
+                ((input[si + 1] as u32 * a + self.matte[1] as u32 * inv_a + 127) / 255) as u8;
+            output[di + 2] =
+                ((input[si + 2] as u32 * a + self.matte[2] as u32 * inv_a + 127) / 255) as u8;
+        }
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        format::RGBA8_SRGB
+    }
+    fn output_format(&self) -> PixelFormat {
+        format::RGB8_SRGB
+    }
+}
+
+/// Scale all channels (including alpha) by a factor in premultiplied linear space.
+///
+/// Used for opacity control on overlay/watermark sources.
+///
+/// Format: `RGBAF32_LINEAR_PREMUL` (in-place).
+pub struct ScaleAlphaOp {
+    opacity: f32,
+}
+
+impl ScaleAlphaOp {
+    pub fn new(opacity: f32) -> Self {
+        Self {
+            opacity: opacity.clamp(0.0, 1.0),
+        }
+    }
+}
+
+impl PixelOp for ScaleAlphaOp {
+    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        let in_f32: &[f32] = bytemuck::cast_slice(input);
+        let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
+        let len = width as usize * height as usize * 4;
+        for i in 0..len {
+            out_f32[i] = in_f32[i] * self.opacity;
+        }
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        format::RGBAF32_LINEAR_PREMUL
+    }
+    fn output_format(&self) -> PixelFormat {
+        format::RGBAF32_LINEAR_PREMUL
+    }
+}
+
+// =========================================================================
 // Helper: create a RowConverterOp for named ops at call time
 // =========================================================================
 

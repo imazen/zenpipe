@@ -73,7 +73,12 @@ fn streaming_4k_resize() {
 
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 1920, h: 1080 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 1920,
+        h: 1080,
+        filter: None,
+        sharpen_percent: None,
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, out, EdgeKind::Input);
@@ -123,7 +128,12 @@ fn streaming_4k_resize_filter() {
 
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 1920, h: 1080 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 1920,
+        h: 1080,
+        filter: None,
+        sharpen_percent: None,
+    });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
     let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
     let out = g.add_node(NodeOp::Output);
@@ -277,7 +287,12 @@ fn streaming_4k_full_pipeline() {
 
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 1920, h: 1080 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 1920,
+        h: 1080,
+        filter: None,
+        sharpen_percent: None,
+    });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
     let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
     let out = g.add_node(NodeOp::Output);
@@ -324,7 +339,12 @@ fn streaming_4k_windowed_clarity() {
 
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 1920, h: 1080 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 1920,
+        h: 1080,
+        filter: None,
+        sharpen_percent: None,
+    });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
     let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
     let out = g.add_node(NodeOp::Output);

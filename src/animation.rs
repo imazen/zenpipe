@@ -98,9 +98,7 @@ impl FrameSource {
     ///
     /// The first frame is automatically loaded. If the animation has zero
     /// frames, `frame_info()` returns `None`.
-    pub fn new(
-        decoder: Box<dyn DynFullFrameDecoder + Send>,
-    ) -> Result<Self, PipeError> {
+    pub fn new(decoder: Box<dyn DynFullFrameDecoder + Send>) -> Result<Self, PipeError> {
         let info = decoder.info().clone();
         let w = info.width;
         let h = info.height;
@@ -349,8 +347,7 @@ impl crate::Sink for FrameSink {
             }
             let src_row = strip.row(r);
             let dst_start = self.rows_accumulated as usize * stride;
-            self.frame_buf[dst_start..dst_start + stride]
-                .copy_from_slice(&src_row[..stride]);
+            self.frame_buf[dst_start..dst_start + stride].copy_from_slice(&src_row[..stride]);
             self.rows_accumulated += 1;
         }
         Ok(())

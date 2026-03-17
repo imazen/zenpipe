@@ -326,7 +326,12 @@ fn streaming_resize_graph() {
     // Direct streaming resize via ResizeSource (no layout plan)
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 2, h: 2 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 2,
+        h: 2,
+        filter: None,
+        sharpen_percent: None,
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, out, EdgeKind::Input);

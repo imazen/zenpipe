@@ -13,10 +13,10 @@ use std::sync::Arc;
 use hashbrown::HashMap;
 use moxcms::ColorProfile;
 
+use zenpipe::Source;
 use zenpipe::format;
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::sources::{CallbackSource, IccTransformSource};
-use zenpipe::Source;
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -209,11 +209,7 @@ fn graph_icc_transform_node() {
 
     // Neutral gray should be stable.
     for px in data.chunks_exact(4) {
-        assert!(
-            (px[0] as i16 - 128).unsigned_abs() <= 2,
-            "R: {}",
-            px[0]
-        );
+        assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
     }
 }
 

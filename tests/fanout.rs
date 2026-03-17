@@ -2,10 +2,10 @@
 
 use hashbrown::HashMap;
 
+use zenpipe::Source;
 use zenpipe::format;
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::sources::{CallbackSource, CropSource, TeeSource};
-use zenpipe::Source;
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -106,10 +106,12 @@ fn tee_many_cursors() {
     let tee = TeeSource::new(src).unwrap();
 
     // 10 cursors all reading the same data
-    let results: Vec<Vec<u8>> = (0..10).map(|_| {
-        let mut c = tee.cursor();
-        drain(&mut c)
-    }).collect();
+    let results: Vec<Vec<u8>> = (0..10)
+        .map(|_| {
+            let mut c = tee.cursor();
+            drain(&mut c)
+        })
+        .collect();
 
     for (i, data) in results.iter().enumerate() {
         assert_eq!(data.len(), 4 * 4 * 4, "cursor {i} wrong length");
@@ -187,7 +189,12 @@ fn tee_cursor_into_graph() {
     // Graph A: resize to 4×4
     let mut g_a = PipelineGraph::new();
     let src_a = g_a.add_node(NodeOp::Source);
-    let resize_a = g_a.add_node(NodeOp::Resize { w: 4, h: 4 });
+    let resize_a = g_a.add_node(NodeOp::Resize {
+        w: 4,
+        h: 4,
+        filter: None,
+        sharpen_percent: None,
+    });
     let out_a = g_a.add_node(NodeOp::Output);
     g_a.add_edge(src_a, resize_a, EdgeKind::Input);
     g_a.add_edge(resize_a, out_a, EdgeKind::Input);
@@ -199,7 +206,12 @@ fn tee_cursor_into_graph() {
     // Graph B: resize to 2×2
     let mut g_b = PipelineGraph::new();
     let src_b = g_b.add_node(NodeOp::Source);
-    let resize_b = g_b.add_node(NodeOp::Resize { w: 2, h: 2 });
+    let resize_b = g_b.add_node(NodeOp::Resize {
+        w: 2,
+        h: 2,
+        filter: None,
+        sharpen_percent: None,
+    });
     let out_b = g_b.add_node(NodeOp::Output);
     g_b.add_edge(src_b, resize_b, EdgeKind::Input);
     g_b.add_edge(resize_b, out_b, EdgeKind::Input);
@@ -274,23 +286,17 @@ fn tee_preserves_format() {
 
     let row_bytes = 4 * 16; // 4 pixels × 16 bytes (RGBA f32)
     let mut rows_produced = 0u32;
-    let src: Box<dyn Source> = Box::new(CallbackSource::new(
-        4,
-        4,
-        p3_linear,
-        16,
-        move |buf| {
-            if rows_produced >= 4 {
-                return Ok(false);
-            }
-            let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_row.chunks_exact_mut(4) {
-                px.copy_from_slice(&[0.5f32, 0.3, 0.1, 1.0]);
-            }
-            rows_produced += 1;
-            Ok(true)
-        },
-    ));
+    let src: Box<dyn Source> = Box::new(CallbackSource::new(4, 4, p3_linear, 16, move |buf| {
+        if rows_produced >= 4 {
+            return Ok(false);
+        }
+        let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
+        for px in f32_row.chunks_exact_mut(4) {
+            px.copy_from_slice(&[0.5f32, 0.3, 0.1, 1.0]);
+        }
+        rows_produced += 1;
+        Ok(true)
+    }));
 
     let tee = TeeSource::new(src).unwrap();
     assert_eq!(tee.format(), p3_linear);

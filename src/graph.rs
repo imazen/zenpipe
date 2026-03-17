@@ -107,11 +107,27 @@ pub enum NodeOp {
 
     /// Resize to target dimensions. Streamed via [`ResizeSource`].
     /// Input must be `Rgba8` (converted automatically if needed).
-    Resize { w: u32, h: u32 },
+    ///
+    /// Optional filter (default: Robidoux), sharpen percentage, and
+    /// kernel width scale for zero-cost sharpening during resize.
+    Resize {
+        w: u32,
+        h: u32,
+        /// Resampling filter (default: Robidoux if None).
+        filter: Option<zenresize::Filter>,
+        /// Post-resize sharpening percentage (0-100, applied during resize).
+        sharpen_percent: Option<f32>,
+    },
 
     /// Apply an orientation transform (any of the 8 EXIF orientations).
     /// Delegates to [`zenresize::orient_image`]. Materializes.
     Orient(zenresize::Orientation),
+
+    /// Auto-orient from raw EXIF orientation tag value (1-8).
+    ///
+    /// Values outside 1-8 are treated as identity (no-op).
+    /// Equivalent to `Orient(Orientation::from_exif(value))`.
+    AutoOrient(u8),
 
     // === Per-pixel ops (fusible into TransformSource) ===
     /// A per-pixel operation. Adjacent `PixelTransform` nodes are fused
@@ -154,6 +170,45 @@ pub enum NodeOp {
         src_icc: alloc::sync::Arc<[u8]>,
         /// Destination ICC profile bytes.
         dst_icc: alloc::sync::Arc<[u8]>,
+    },
+
+    // === Alpha operations ===
+    /// Remove alpha channel by compositing onto a solid matte color.
+    ///
+    /// Produces RGB output (3 bytes/pixel) suitable for JPEG encoding.
+    /// Alpha blending is in sRGB space (matching browser behavior).
+    RemoveAlpha {
+        /// Matte color [R, G, B] in sRGB.
+        matte: [u8; 3],
+    },
+
+    /// Add an opaque alpha channel to an RGB source.
+    ///
+    /// RGB → RGBA with A=255. No-op if upstream is already RGBA.
+    AddAlpha,
+
+    // === Overlay / watermark ===
+    /// Overlay a small image on top of the pipeline output.
+    ///
+    /// The overlay image is provided as raw pixel data and composited
+    /// via Porter-Duff source-over at the given position with opacity.
+    /// Both the upstream and overlay are auto-converted to premultiplied
+    /// linear f32 for correct blending.
+    Overlay {
+        /// Raw pixel data of the overlay image (row-major, tightly packed).
+        image_data: alloc::vec::Vec<u8>,
+        /// Overlay image width.
+        width: u32,
+        /// Overlay image height.
+        height: u32,
+        /// Pixel format of the overlay data.
+        format: PixelFormat,
+        /// X position on the background (clamped to ≥0).
+        x: i32,
+        /// Y position on the background (clamped to ≥0).
+        y: i32,
+        /// Opacity factor (0.0 = invisible, 1.0 = full).
+        opacity: f32,
     },
 
     // === Barriers ===
@@ -341,35 +396,35 @@ impl PipelineGraph {
                 Ok(Box::new(CropSource::new(upstream, x, y, w, h)?))
             }
 
-            NodeOp::Resize { w, h } => {
+            NodeOp::Resize {
+                w,
+                h,
+                filter,
+                sharpen_percent,
+            } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
-                let config =
-                    zenresize::ResizeConfig::builder(upstream.width(), upstream.height(), w, h)
-                        .build();
+                let mut builder =
+                    zenresize::ResizeConfig::builder(upstream.width(), upstream.height(), w, h);
+                if let Some(f) = filter {
+                    builder = builder.filter(f);
+                }
+                if let Some(pct) = sharpen_percent {
+                    builder = builder.resize_sharpen(pct);
+                }
+                let config = builder.build();
                 Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
             }
 
             NodeOp::Orient(orientation) => {
-                let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources)?;
-                if orientation.is_identity() {
-                    return Ok(upstream);
-                }
-                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
-                let in_w = upstream.width();
-                let in_h = upstream.height();
-                Ok(Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    move |data, w, h, _fmt| {
-                        let (result, new_w, new_h) =
-                            zenresize::orient_image(data, in_w, in_h, orientation, 4);
-                        *data = result;
-                        *w = new_w;
-                        *h = new_h;
-                    },
-                )?))
+                return compile_orient(self, node_id, sources, orientation);
+            }
+
+            NodeOp::AutoOrient(exif) => {
+                let orientation = zenresize::Orientation::from_exif(exif)
+                    .unwrap_or(zenresize::Orientation::Identity);
+                return compile_orient(self, node_id, sources, orientation);
             }
 
             NodeOp::PixelTransform(pixel_op) => {
@@ -404,7 +459,7 @@ impl PipelineGraph {
                     && self.output_count(input_id) <= 1
                 {
                     let op = self.take_op(input_id)?;
-                    let NodeOp::Resize { w, h } = op else {
+                    let NodeOp::Resize { w, h, .. } = op else {
                         unreachable!()
                     };
                     let resize_input_id = self.find_input(input_id, EdgeKind::Input)?;
@@ -446,6 +501,51 @@ impl PipelineGraph {
                 Ok(Box::new(crate::sources::IccTransformSource::new(
                     upstream, &src_icc, &dst_icc,
                 )?))
+            }
+
+            NodeOp::RemoveAlpha { matte } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
+                let flatten = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
+                Ok(Box::new(TransformSource::new(upstream).push(flatten)))
+            }
+
+            NodeOp::AddAlpha => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                // If already RGBA, this is a no-op. ensure_format handles
+                // RGB→RGBA via RowConverter (adds opaque alpha).
+                ensure_format(upstream, format::RGBA8_SRGB)
+            }
+
+            NodeOp::Overlay {
+                image_data,
+                width: ov_w,
+                height: ov_h,
+                format: ov_fmt,
+                x,
+                y,
+                opacity,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let bg = self.compile_node(input_id, sources)?;
+                let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
+
+                let mut fg: Box<dyn Source> = Box::new(MaterializedSource::from_data(
+                    image_data, ov_w, ov_h, ov_fmt,
+                ));
+                fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
+
+                if opacity < 1.0 {
+                    fg = Box::new(
+                        TransformSource::new(fg).push(crate::ops::ScaleAlphaOp::new(opacity)),
+                    );
+                }
+
+                let fg_x = x.max(0) as u32;
+                let fg_y = y.max(0) as u32;
+                Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
             }
 
             NodeOp::Materialize(transform_fn) => {
@@ -492,6 +592,32 @@ impl Default for PipelineGraph {
 
 /// Insert a format conversion source if needed.
 ///
+/// Compile an orientation transform (shared by Orient and AutoOrient).
+fn compile_orient(
+    graph: &mut PipelineGraph,
+    node_id: NodeId,
+    sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
+    orientation: zenresize::Orientation,
+) -> Result<Box<dyn Source>, PipeError> {
+    let input_id = graph.find_input(node_id, EdgeKind::Input)?;
+    let upstream = graph.compile_node(input_id, sources)?;
+    if orientation.is_identity() {
+        return Ok(upstream);
+    }
+    let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
+    let in_w = upstream.width();
+    let in_h = upstream.height();
+    Ok(Box::new(MaterializedSource::from_source_with_transform(
+        upstream,
+        move |data, w, h, _fmt| {
+            let (result, new_w, new_h) = zenresize::orient_image(data, in_w, in_h, orientation, 4);
+            *data = result;
+            *w = new_w;
+            *h = new_h;
+        },
+    )?))
+}
+
 /// Uses [`RowConverterOp`] to handle any conversion that zenpixels-convert
 /// supports, including gamut changes (BT.709 ↔ P3 ↔ BT.2020), transfer
 /// function changes (sRGB ↔ Linear ↔ PQ ↔ HLG), alpha mode changes,

@@ -10,8 +10,9 @@ use zenpipe::format;
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::ops::RowConverterOp;
 use zenpipe::sources::{CallbackSource, CropSource, MaterializedSource, TransformSource};
-use zenpipe::{AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelFormat, Source,
-    TransferFunction};
+use zenpipe::{
+    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelFormat, Source, TransferFunction,
+};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
@@ -67,44 +68,32 @@ fn solid_f32_source(width: u32, height: u32, pixel: [f32; 4], fmt: PixelFormat) 
     let row_floats = width as usize * 4;
     let row_bytes = row_floats * 4;
     let mut rows_produced = 0u32;
-    Box::new(CallbackSource::new(
-        width,
-        height,
-        fmt,
-        16,
-        move |buf| {
-            if rows_produced >= height {
-                return Ok(false);
-            }
-            let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_row.chunks_exact_mut(4) {
-                px.copy_from_slice(&pixel);
-            }
-            rows_produced += 1;
-            Ok(true)
-        },
-    ))
+    Box::new(CallbackSource::new(width, height, fmt, 16, move |buf| {
+        if rows_produced >= height {
+            return Ok(false);
+        }
+        let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
+        for px in f32_row.chunks_exact_mut(4) {
+            px.copy_from_slice(&pixel);
+        }
+        rows_produced += 1;
+        Ok(true)
+    }))
 }
 
 fn solid_u8_source(width: u32, height: u32, pixel: [u8; 4], fmt: PixelFormat) -> Box<dyn Source> {
     let row_bytes = width as usize * 4;
     let mut rows_produced = 0u32;
-    Box::new(CallbackSource::new(
-        width,
-        height,
-        fmt,
-        16,
-        move |buf| {
-            if rows_produced >= height {
-                return Ok(false);
-            }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
-                px.copy_from_slice(&pixel);
-            }
-            rows_produced += 1;
-            Ok(true)
-        },
-    ))
+    Box::new(CallbackSource::new(width, height, fmt, 16, move |buf| {
+        if rows_produced >= height {
+            return Ok(false);
+        }
+        for px in buf[..row_bytes].chunks_exact_mut(4) {
+            px.copy_from_slice(&pixel);
+        }
+        rows_produced += 1;
+        Ok(true)
+    }))
 }
 
 // =========================================================================
@@ -209,7 +198,10 @@ fn p3_to_srgb_conversion() {
 #[test]
 fn srgb_to_bt2020_conversion() {
     let op = RowConverterOp::new(format::RGBAF32_LINEAR, BT2020_RGBAF32_LINEAR);
-    assert!(op.is_some(), "sRGB → BT.2020 conversion should be supported");
+    assert!(
+        op.is_some(),
+        "sRGB → BT.2020 conversion should be supported"
+    );
 }
 
 #[test]
@@ -268,13 +260,21 @@ fn graph_auto_converts_p3_to_srgb_for_resize() {
     // P3 source → Resize node (requires RGBA8_SRGB) → should auto-convert.
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let resize = g.add_node(NodeOp::Resize { w: 2, h: 2 });
+    let resize = g.add_node(NodeOp::Resize {
+        w: 2,
+        h: 2,
+        filter: None,
+        sharpen_percent: None,
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, out, EdgeKind::Input);
 
     let mut sources = HashMap::new();
-    sources.insert(src, solid_u8_source(8, 8, [128, 64, 32, 255], P3_RGBA8_SRGB));
+    sources.insert(
+        src,
+        solid_u8_source(8, 8, [128, 64, 32, 255], P3_RGBA8_SRGB),
+    );
 
     let mut pipeline = g.compile(sources).unwrap();
     assert_eq!(pipeline.width(), 2);
@@ -372,23 +372,17 @@ fn rgba16_source_through_pipeline() {
 
     let row_bytes = 4 * 8; // 4 pixels × 8 bytes/pixel (4 channels × 2 bytes)
     let mut rows_produced = 0u32;
-    let src: Box<dyn Source> = Box::new(CallbackSource::new(
-        4,
-        4,
-        rgba16_srgb,
-        16,
-        move |buf| {
-            if rows_produced >= 4 {
-                return Ok(false);
-            }
-            // Fill with mid-gray: 32768 = 0x8000
-            for chunk in buf[..row_bytes].chunks_exact_mut(2) {
-                chunk.copy_from_slice(&32768u16.to_ne_bytes());
-            }
-            rows_produced += 1;
-            Ok(true)
-        },
-    ));
+    let src: Box<dyn Source> = Box::new(CallbackSource::new(4, 4, rgba16_srgb, 16, move |buf| {
+        if rows_produced >= 4 {
+            return Ok(false);
+        }
+        // Fill with mid-gray: 32768 = 0x8000
+        for chunk in buf[..row_bytes].chunks_exact_mut(2) {
+            chunk.copy_from_slice(&32768u16.to_ne_bytes());
+        }
+        rows_produced += 1;
+        Ok(true)
+    }));
 
     let mut crop = CropSource::new(src, 1, 1, 2, 2).unwrap();
     assert_eq!(crop.format(), rgba16_srgb);
@@ -414,8 +408,5 @@ fn gray_to_rgba_conversion() {
     );
 
     let op = RowConverterOp::new(gray8_srgb, format::RGBA8_SRGB);
-    assert!(
-        op.is_some(),
-        "Gray8 → RGBA8 conversion should be supported"
-    );
+    assert!(op.is_some(), "Gray8 → RGBA8 conversion should be supported");
 }
