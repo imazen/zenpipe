@@ -102,6 +102,7 @@ pub mod pipeline;
 pub mod pixel;
 pub mod quality;
 mod registry;
+pub mod select;
 pub mod trace;
 
 // Re-exports
@@ -118,6 +119,7 @@ pub use limits::{Limits, Stop};
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::CodecRegistry;
+pub use select::ImageFacts;
 pub use trace::SelectionTrace;
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
