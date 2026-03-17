@@ -8,6 +8,9 @@ use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
 use crate::error::Result;
 use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
+use crate::policy::CodecPolicy;
+use crate::quality::{QualityIntent, QualityProfile};
+use crate::select::ImageFacts;
 use crate::{CodecError, CodecRegistry, ImageFormat, Limits, Metadata, Stop};
 use whereat::at;
 use zenpixels::{AlphaMode, PixelDescriptor};
@@ -31,6 +34,8 @@ pub use zencodec::encode::EncodeOutput;
 pub struct EncodeRequest<'a> {
     format: Option<ImageFormat>,
     quality: Option<f32>,
+    quality_profile: Option<QualityProfile>,
+    dpr: Option<f32>,
     effort: Option<u32>,
     lossless: bool,
     limits: Option<&'a Limits>,
@@ -38,6 +43,8 @@ pub struct EncodeRequest<'a> {
     metadata: Option<&'a Metadata>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
+    policy: Option<CodecPolicy>,
+    image_facts: Option<ImageFacts>,
     /// Quality for UltraHDR gain map JPEG (0-100). Only used by `encode_ultrahdr_*`.
     #[cfg(feature = "jpeg-ultrahdr")]
     gainmap_quality: Option<f32>,
@@ -49,6 +56,8 @@ impl<'a> EncodeRequest<'a> {
         Self {
             format: Some(format),
             quality: None,
+            quality_profile: None,
+            dpr: None,
             effort: None,
             lossless: false,
             limits: None,
@@ -56,6 +65,8 @@ impl<'a> EncodeRequest<'a> {
             metadata: None,
             registry: None,
             codec_config: None,
+            policy: None,
+            image_facts: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
         }
@@ -66,6 +77,8 @@ impl<'a> EncodeRequest<'a> {
         Self {
             format: None,
             quality: None,
+            quality_profile: None,
+            dpr: None,
             effort: None,
             lossless: false,
             limits: None,
@@ -73,6 +86,8 @@ impl<'a> EncodeRequest<'a> {
             metadata: None,
             registry: None,
             codec_config: None,
+            policy: None,
+            image_facts: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
         }
@@ -130,6 +145,45 @@ impl<'a> EncodeRequest<'a> {
     /// quality/effort parameters for that format.
     pub fn with_codec_config(mut self, config: &'a CodecConfig) -> Self {
         self.codec_config = Some(config);
+        self
+    }
+
+    /// Set a named quality profile instead of a raw quality value.
+    ///
+    /// Quality profiles map to per-codec calibrated settings via
+    /// imageflow's perceptual tuning tables. When both `with_quality()`
+    /// and `with_quality_profile()` are set, the profile takes precedence.
+    pub fn with_quality_profile(mut self, profile: QualityProfile) -> Self {
+        self.quality_profile = Some(profile);
+        self
+    }
+
+    /// Set device pixel ratio for quality adjustment.
+    ///
+    /// At DPR 1.0, artifacts are magnified 3x → quality increases.
+    /// At DPR 6.0, pixels are tiny → quality can decrease.
+    /// Baseline is 3.0 (no adjustment). Only affects profile-based quality.
+    pub fn with_dpr(mut self, dpr: f32) -> Self {
+        self.dpr = Some(dpr);
+        self
+    }
+
+    /// Set a per-request codec policy for filtering and preferences.
+    ///
+    /// The policy controls which codec implementations are available
+    /// and which output formats are candidates for auto-selection.
+    pub fn with_policy(mut self, policy: CodecPolicy) -> Self {
+        self.policy = Some(policy);
+        self
+    }
+
+    /// Set image facts for better format auto-selection.
+    ///
+    /// When using `auto()`, providing facts about the source image
+    /// improves format selection (e.g., preferring AVIF for small images,
+    /// JPEG for large opaque images).
+    pub fn with_image_facts(mut self, facts: ImageFacts) -> Self {
+        self.image_facts = Some(facts);
         self
     }
 
@@ -363,6 +417,44 @@ impl<'a> EncodeRequest<'a> {
     // Core dispatch
     // ═══════════════════════════════════════════════════════════════════
 
+    /// Resolve the effective quality value.
+    ///
+    /// Priority: quality_profile (with optional DPR) > raw quality > default (Good profile).
+    fn resolve_quality(&self) -> f32 {
+        if let Some(profile) = self.quality_profile {
+            let intent = match self.dpr {
+                Some(dpr) => profile.to_intent_with_dpr(dpr),
+                None => profile.to_intent(),
+            };
+            intent.quality
+        } else if let Some(q) = self.quality {
+            q
+        } else {
+            QualityProfile::default().generic_quality()
+        }
+    }
+
+    /// Build a [`QualityIntent`] from the request's quality settings.
+    pub fn quality_intent(&self) -> QualityIntent {
+        let mut intent = if let Some(profile) = self.quality_profile {
+            match self.dpr {
+                Some(dpr) => profile.to_intent_with_dpr(dpr),
+                None => profile.to_intent(),
+            }
+        } else if let Some(q) = self.quality {
+            QualityIntent::from_quality(q)
+        } else {
+            QualityIntent::default()
+        };
+        if let Some(e) = self.effort {
+            intent = intent.with_effort(e);
+        }
+        if self.lossless {
+            intent = intent.with_lossless(true);
+        }
+        intent
+    }
+
     /// Common encode path: resolve format → validate → build encoder →
     /// negotiate pixel format via zenpixels → encode.
     fn encode_dispatch(
@@ -376,10 +468,22 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let default_registry = CodecRegistry::all();
         let registry = self.registry.unwrap_or(&default_registry);
+        let default_policy = CodecPolicy::new();
+        let policy = self.policy.as_ref().unwrap_or(&default_policy);
 
         let format = match self.format {
             Some(f) => f,
-            None => self.auto_select_format(has_alpha, registry)?,
+            None => {
+                // Use the new format selection engine
+                let facts = self.image_facts.clone().unwrap_or(ImageFacts {
+                    has_alpha,
+                    pixel_count: width as u64 * height as u64,
+                    ..Default::default()
+                });
+                let intent = self.quality_intent();
+                crate::select::select_format(&facts, &intent, registry, policy)?
+                    .format
+            }
         };
 
         if !registry.can_encode(format) {
@@ -392,8 +496,10 @@ impl<'a> EncodeRequest<'a> {
             }));
         }
 
+        let resolved_quality = self.resolve_quality();
+
         let params = EncodeParams {
-            quality: self.quality,
+            quality: Some(resolved_quality),
             effort: self.effort,
             lossless: self.lossless,
             metadata: self.metadata,
@@ -434,39 +540,6 @@ impl<'a> EncodeRequest<'a> {
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
 
         (built.encoder)(pixel_slice)
-    }
-
-    fn auto_select_format(&self, has_alpha: bool, registry: &CodecRegistry) -> Result<ImageFormat> {
-        if self.lossless {
-            if registry.can_encode(ImageFormat::WebP) {
-                return Ok(ImageFormat::WebP);
-            }
-            if registry.can_encode(ImageFormat::Png) {
-                return Ok(ImageFormat::Png);
-            }
-        } else if has_alpha {
-            if registry.can_encode(ImageFormat::WebP) {
-                return Ok(ImageFormat::WebP);
-            }
-            if registry.can_encode(ImageFormat::Avif) {
-                return Ok(ImageFormat::Avif);
-            }
-            if registry.can_encode(ImageFormat::Png) {
-                return Ok(ImageFormat::Png);
-            }
-        } else {
-            if registry.can_encode(ImageFormat::Jpeg) {
-                return Ok(ImageFormat::Jpeg);
-            }
-            if registry.can_encode(ImageFormat::WebP) {
-                return Ok(ImageFormat::WebP);
-            }
-            if registry.can_encode(ImageFormat::Avif) {
-                return Ok(ImageFormat::Avif);
-            }
-        }
-
-        Err(at!(CodecError::NoSuitableEncoder))
     }
 }
 
@@ -607,5 +680,125 @@ mod tests {
         assert_eq!(webp_out.format(), ImageFormat::WebP);
         assert!(!jpeg_out.data().is_empty());
         assert!(!webp_out.data().is_empty());
+    }
+
+    #[test]
+    fn quality_profile_encode() {
+        let img = imgref::ImgVec::new(
+            vec![
+                Rgb {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                };
+                10 * 10
+            ],
+            10,
+            10,
+        );
+        let output = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality_profile(QualityProfile::Good)
+            .encode_rgb8(img.as_ref())
+            .unwrap();
+        assert!(!output.data().is_empty());
+    }
+
+    #[test]
+    fn quality_profile_with_dpr_encode() {
+        let img = imgref::ImgVec::new(
+            vec![
+                Rgb {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                };
+                10 * 10
+            ],
+            10,
+            10,
+        );
+        // DPR 1.0 should increase quality (larger output)
+        let high = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality_profile(QualityProfile::Good)
+            .with_dpr(1.0)
+            .encode_rgb8(img.as_ref())
+            .unwrap();
+        // DPR 6.0 should decrease quality (smaller output)
+        let low = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality_profile(QualityProfile::Good)
+            .with_dpr(6.0)
+            .encode_rgb8(img.as_ref())
+            .unwrap();
+        // Higher quality should generally produce more bytes
+        assert!(
+            high.data().len() >= low.data().len(),
+            "DPR 1.0 ({} bytes) should be >= DPR 6.0 ({} bytes)",
+            high.data().len(),
+            low.data().len()
+        );
+    }
+
+    #[test]
+    fn quality_intent_accessor() {
+        let req = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality_profile(QualityProfile::High)
+            .with_effort(7)
+            .with_lossless(false);
+        let intent = req.quality_intent();
+        assert!((intent.quality - 91.0).abs() < 0.5);
+        assert_eq!(intent.effort, Some(7));
+        assert!(!intent.lossless);
+    }
+
+    #[test]
+    fn auto_with_policy() {
+        let img = imgref::ImgVec::new(
+            vec![
+                Rgb {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                };
+                10 * 10
+            ],
+            10,
+            10,
+        );
+        let output = EncodeRequest::auto()
+            .with_quality(75.0)
+            .with_policy(CodecPolicy::web_safe_output())
+            .encode_rgb8(img.as_ref())
+            .unwrap();
+        // web_safe_output only allows JPEG, PNG, GIF — for opaque lossy, JPEG wins
+        assert_eq!(output.format(), ImageFormat::Jpeg);
+    }
+
+    #[test]
+    fn auto_with_image_facts() {
+        let img = imgref::ImgVec::new(
+            vec![
+                Rgba {
+                    r: 128u8,
+                    g: 64,
+                    b: 32,
+                    a: 128,
+                };
+                10 * 10
+            ],
+            10,
+            10,
+        );
+        let facts = ImageFacts {
+            has_alpha: true,
+            pixel_count: 100,
+            ..Default::default()
+        };
+        let output = EncodeRequest::auto()
+            .with_quality(75.0)
+            .with_image_facts(facts)
+            .encode_rgba8(img.as_ref())
+            .unwrap();
+        // With alpha, should pick a format that supports alpha (not JPEG)
+        assert_ne!(output.format(), ImageFormat::Jpeg);
     }
 }
