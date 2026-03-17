@@ -90,6 +90,7 @@ pub mod codec_id;
 mod codecs;
 pub mod config;
 mod decode;
+pub mod depthmap;
 mod dispatch;
 mod dyn_dispatch;
 mod encode;
@@ -132,6 +133,12 @@ pub use zencodec::Metadata;
 pub use gainmap::GainMapImage;
 #[cfg(feature = "jpeg-ultrahdr")]
 pub use gainmap::{DecodedGainMap, GainMapSource};
+
+// Depth map types (format-agnostic)
+pub use depthmap::{
+    DecodedDepthMap, DepthFormat, DepthImage, DepthMapMetadata, DepthMeasureType, DepthPixelFormat,
+    DepthSource, DepthUnits,
+};
 
 // zencodec trait re-exports
 pub use zencodec::decode::{

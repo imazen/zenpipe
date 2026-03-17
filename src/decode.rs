@@ -306,6 +306,53 @@ impl<'a> DecodeRequest<'a> {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Depth map decode
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Decode an image and extract its depth map, if present.
+    ///
+    /// Returns the base image decode output plus an optional [`DecodedDepthMap`]
+    /// containing the depth image pixels and metadata.
+    ///
+    /// Depth map support by format:
+    /// - **JPEG**: iPhone MPF disparity secondary image.
+    ///   GDepth XMP and Android DDF are recognized but require future
+    ///   codec-level extraction support.
+    /// - **HEIC**: Auxiliary depth image (future — requires heic-decoder support).
+    /// - **Other formats**: Returns `None` for depth map.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use zencodecs::DecodeRequest;
+    ///
+    /// let data: &[u8] = &[]; // JPEG bytes with depth map
+    /// let (output, depth) = DecodeRequest::new(data).decode_depth_map()?;
+    /// if let Some(dm) = depth {
+    ///     println!("Depth map: {}x{}", dm.depth.width, dm.depth.height);
+    ///     let normalized = dm.to_normalized_f32();
+    ///     println!("Near/far: {}/{} {:?}", dm.metadata.near, dm.metadata.far, dm.metadata.units);
+    /// }
+    /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
+    /// ```
+    pub fn decode_depth_map(
+        self,
+    ) -> Result<(DecodeOutput, Option<crate::depthmap::DecodedDepthMap>)> {
+        let format = self.resolve_format()?;
+        let output = self.decode_format(format)?;
+
+        let depth = match format {
+            #[cfg(feature = "jpeg")]
+            ImageFormat::Jpeg => extract_jpeg_depth(&output),
+            #[cfg(feature = "heic-decode")]
+            ImageFormat::Heic => extract_heic_depth(&output),
+            _ => None,
+        };
+
+        Ok((output, depth))
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Streaming decode
     // ═══════════════════════════════════════════════════════════════════
 
@@ -613,6 +660,77 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     })
 }
 
+// =========================================================================
+// Depth map extraction
+// =========================================================================
+
+/// Extract a depth map from a JPEG DecodeOutput's extras, if present.
+///
+/// Checks for:
+/// 1. MPF secondary image with Disparity type (iPhone portrait mode)
+///
+/// GDepth XMP and Android DDF extraction are not yet implemented at the
+/// codec level — these require XMP parsing and container directory
+/// traversal that will be added to zenjpeg in future.
+#[cfg(feature = "jpeg")]
+fn extract_jpeg_depth(output: &DecodeOutput) -> Option<crate::depthmap::DecodedDepthMap> {
+    use crate::depthmap::{
+        DecodedDepthMap, DepthFormat, DepthImage, DepthMapMetadata, DepthMeasureType,
+        DepthPixelFormat, DepthSource, DepthUnits,
+    };
+
+    let extras = output.extras::<zenjpeg::decoder::DecodedExtras>()?;
+
+    // Check for MPF disparity map (iPhone portrait mode)
+    let depth_jpeg = extras.depth_map()?;
+
+    // Decode the secondary JPEG to get depth pixels
+    let depth_output = crate::codecs::jpeg::decode(depth_jpeg, None, None, None).ok()?;
+    use zenpixels_convert::PixelBufferConvertTypedExt as _;
+    let gray = depth_output.into_buffer().to_gray8();
+    let gray_ref = gray.as_imgref();
+    let w = gray_ref.width() as u32;
+    let h = gray_ref.height() as u32;
+
+    // Extract grayscale bytes
+    let data: alloc::vec::Vec<u8> = gray_ref.buf().iter().map(|g| g.value()).collect();
+
+    Some(DecodedDepthMap {
+        depth: DepthImage {
+            data,
+            width: w,
+            height: h,
+            pixel_format: DepthPixelFormat::Gray8,
+        },
+        metadata: DepthMapMetadata {
+            // iPhone MPF disparity maps use inverse depth (disparity)
+            // with normalized 0-255 range. Near/far are not encoded in
+            // the MPF metadata — these are relative values.
+            format: DepthFormat::Disparity,
+            near: 0.0,
+            far: 1.0,
+            units: DepthUnits::Normalized,
+            measure_type: DepthMeasureType::OpticalAxis,
+        },
+        confidence: None,
+        source_format: ImageFormat::Jpeg,
+        source_device: DepthSource::AppleMpf,
+    })
+}
+
+/// Extract a depth map from a HEIC DecodeOutput's extras, if present.
+///
+/// HEIC files can contain auxiliary depth images (Apple portrait mode).
+/// This is a stub — actual extraction requires heic-decoder support for
+/// auxiliary image enumeration and decode.
+#[cfg(feature = "heic-decode")]
+fn extract_heic_depth(_output: &DecodeOutput) -> Option<crate::depthmap::DecodedDepthMap> {
+    // TODO: Extract auxiliary depth image from HEIC container.
+    // heic-decoder needs `find_auxiliary_items(id, "urn:mpeg:hevc:2015:auxid:2")`
+    // or similar for depth, plus decoding the auxiliary HEVC tile.
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -637,5 +755,89 @@ mod tests {
             result.as_ref().map_err(|e| e.error()),
             Err(CodecError::DisabledFormat(_))
         ));
+    }
+
+    /// Verify decode_depth_map returns None for formats that don't support depth maps.
+    #[cfg(feature = "png")]
+    #[test]
+    fn decode_depth_map_returns_none_for_png() {
+        // Minimal valid 1x1 red PNG
+        let png_data = {
+            let mut buf = alloc::vec::Vec::new();
+            let mut encoder = png::Encoder::new(&mut buf, 1, 1);
+            encoder.set_color(png::ColorType::Rgb);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&[255, 0, 0]).unwrap();
+            writer.finish().unwrap();
+            buf
+        };
+
+        let (output, depth) = DecodeRequest::new(&png_data).decode_depth_map().unwrap();
+        assert!(depth.is_none(), "PNG should not have a depth map");
+        assert_eq!(output.width(), 1);
+    }
+
+    /// Verify decode_depth_map returns None for formats that don't support depth maps.
+    #[cfg(feature = "gif")]
+    #[test]
+    fn decode_depth_map_returns_none_for_gif() {
+        // Minimal 1x1 GIF87a
+        let gif_data: &[u8] = &[
+            b'G', b'I', b'F', b'8', b'7', b'a', // header
+            0x01, 0x00, // width=1
+            0x01, 0x00, // height=1
+            0x80, // packed: global color table, 2 entries
+            0x00, // bg color index
+            0x00, // pixel aspect ratio
+            0x00, 0x00, 0x00, // color 0: black
+            0xFF, 0xFF, 0xFF, // color 1: white
+            0x2C, // image descriptor
+            0x00, 0x00, 0x00, 0x00, // left, top
+            0x01, 0x00, // width
+            0x01, 0x00, // height
+            0x00, // packed
+            0x02, // LZW min code size
+            0x02, // sub-block size
+            0x4C, 0x01, // LZW data
+            0x00, // sub-block terminator
+            0x3B, // GIF trailer
+        ];
+
+        let (output, depth) = DecodeRequest::new(gif_data).decode_depth_map().unwrap();
+        assert!(depth.is_none(), "GIF should not have a depth map");
+        assert_eq!(output.width(), 1);
+    }
+
+    /// Verify decode_depth_map returns None for formats that don't support depth maps.
+    #[cfg(feature = "webp")]
+    #[test]
+    fn decode_depth_map_returns_none_for_webp() {
+        // Encode a tiny WebP first, then check that it has no depth map
+        use crate::EncodeRequest;
+        use alloc::vec;
+
+        let pixels = imgref::ImgVec::new(
+            vec![
+                rgb::Rgb {
+                    r: 128u8,
+                    g: 64,
+                    b: 32
+                };
+                4
+            ],
+            2,
+            2,
+        );
+        let encoded = EncodeRequest::new(ImageFormat::WebP)
+            .with_quality(50.0)
+            .encode_rgb8(pixels.as_ref())
+            .unwrap();
+
+        let (output, depth) = DecodeRequest::new(encoded.data())
+            .decode_depth_map()
+            .unwrap();
+        assert!(depth.is_none(), "WebP should not have a depth map");
+        assert_eq!(output.width(), 2);
     }
 }
