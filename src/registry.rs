@@ -1,135 +1,79 @@
 //! Runtime codec registry for enabling/disabling formats.
 
+use crate::format_set::FormatSet;
 use crate::ImageFormat;
-
-/// Set of image formats represented as bitflags.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct FormatSet(u16);
-
-impl FormatSet {
-    const EMPTY: Self = FormatSet(0);
-
-    /// Map format to bit position. Returns None for unknown formats.
-    const fn bit(format: ImageFormat) -> Option<u16> {
-        match format {
-            ImageFormat::Jpeg => Some(1 << 0),
-            ImageFormat::WebP => Some(1 << 1),
-            ImageFormat::Gif => Some(1 << 2),
-            ImageFormat::Png => Some(1 << 3),
-            ImageFormat::Avif => Some(1 << 4),
-            ImageFormat::Jxl => Some(1 << 5),
-            ImageFormat::Heic => Some(1 << 6),
-            ImageFormat::Pnm => Some(1 << 7),
-            ImageFormat::Bmp => Some(1 << 8),
-            ImageFormat::Farbfeld => Some(1 << 9),
-            _ => None,
-        }
-    }
-
-    #[allow(unused_mut)]
-    fn all_compiled() -> Self {
-        let mut bits = 0u16;
-        #[cfg(feature = "jpeg")]
-        {
-            bits |= 1 << 0;
-        }
-        #[cfg(feature = "webp")]
-        {
-            bits |= 1 << 1;
-        }
-        #[cfg(feature = "gif")]
-        {
-            bits |= 1 << 2;
-        }
-        #[cfg(feature = "png")]
-        {
-            bits |= 1 << 3;
-        }
-        #[cfg(feature = "bitmaps")]
-        {
-            bits |= 1 << 7; // Pnm
-            bits |= 1 << 9; // Farbfeld
-        }
-        #[cfg(feature = "bitmaps-bmp")]
-        {
-            bits |= 1 << 8; // Bmp
-        }
-        FormatSet(bits)
-    }
-
-    #[allow(unused_mut)]
-    fn all_compiled_decode() -> Self {
-        let mut bits = Self::all_compiled().0;
-        #[cfg(feature = "avif-decode")]
-        {
-            bits |= 1 << 4;
-        }
-        #[cfg(feature = "jxl-decode")]
-        {
-            bits |= 1 << 5;
-        }
-        #[cfg(feature = "heic-decode")]
-        {
-            bits |= 1 << 6;
-        }
-        FormatSet(bits)
-    }
-
-    #[allow(unused_mut)]
-    fn all_compiled_encode() -> Self {
-        let mut bits = Self::all_compiled().0;
-        #[cfg(feature = "avif-encode")]
-        {
-            bits |= 1 << 4;
-        }
-        #[cfg(feature = "jxl-encode")]
-        {
-            bits |= 1 << 5;
-        }
-        FormatSet(bits)
-    }
-
-    fn contains(self, format: ImageFormat) -> bool {
-        Self::bit(format).is_some_and(|b| (self.0 & b) != 0)
-    }
-
-    fn insert(&mut self, format: ImageFormat) {
-        if let Some(b) = Self::bit(format) {
-            self.0 |= b;
-        }
-    }
-
-    fn remove(&mut self, format: ImageFormat) {
-        if let Some(b) = Self::bit(format) {
-            self.0 &= !b;
-        }
-    }
-
-    fn iter(self) -> impl Iterator<Item = ImageFormat> {
-        const ALL_FORMATS: [ImageFormat; 10] = [
-            ImageFormat::Jpeg,
-            ImageFormat::WebP,
-            ImageFormat::Gif,
-            ImageFormat::Png,
-            ImageFormat::Avif,
-            ImageFormat::Jxl,
-            ImageFormat::Heic,
-            ImageFormat::Pnm,
-            ImageFormat::Bmp,
-            ImageFormat::Farbfeld,
-        ];
-        ALL_FORMATS.into_iter().filter(move |&f| self.contains(f))
-    }
-}
 
 /// Check at compile time whether a format has decode support compiled in.
 fn compiled_decode(format: ImageFormat) -> bool {
-    FormatSet::all_compiled_decode().contains(format)
+    all_compiled_decode().contains(format)
 }
 
 /// Check at compile time whether a format has encode support compiled in.
 fn compiled_encode(format: ImageFormat) -> bool {
-    FormatSet::all_compiled_encode().contains(format)
+    all_compiled_encode().contains(format)
+}
+
+#[allow(unused_mut)]
+fn all_compiled() -> FormatSet {
+    let mut set = FormatSet::EMPTY;
+    #[cfg(feature = "jpeg")]
+    {
+        set.insert(ImageFormat::Jpeg);
+    }
+    #[cfg(feature = "webp")]
+    {
+        set.insert(ImageFormat::WebP);
+    }
+    #[cfg(feature = "gif")]
+    {
+        set.insert(ImageFormat::Gif);
+    }
+    #[cfg(feature = "png")]
+    {
+        set.insert(ImageFormat::Png);
+    }
+    #[cfg(feature = "bitmaps")]
+    {
+        set.insert(ImageFormat::Pnm);
+        set.insert(ImageFormat::Farbfeld);
+    }
+    #[cfg(feature = "bitmaps-bmp")]
+    {
+        set.insert(ImageFormat::Bmp);
+    }
+    set
+}
+
+#[allow(unused_mut)]
+fn all_compiled_decode() -> FormatSet {
+    let mut set = all_compiled();
+    #[cfg(feature = "avif-decode")]
+    {
+        set.insert(ImageFormat::Avif);
+    }
+    #[cfg(feature = "jxl-decode")]
+    {
+        set.insert(ImageFormat::Jxl);
+    }
+    #[cfg(feature = "heic-decode")]
+    {
+        set.insert(ImageFormat::Heic);
+    }
+    set
+}
+
+#[allow(unused_mut)]
+fn all_compiled_encode() -> FormatSet {
+    let mut set = all_compiled();
+    #[cfg(feature = "avif-encode")]
+    {
+        set.insert(ImageFormat::Avif);
+    }
+    #[cfg(feature = "jxl-encode")]
+    {
+        set.insert(ImageFormat::Jxl);
+    }
+    set
 }
 
 /// Runtime codec registry.
@@ -150,8 +94,8 @@ impl CodecRegistry {
     /// All compiled-in codecs enabled.
     pub fn all() -> Self {
         Self {
-            decode_enabled: FormatSet::all_compiled_decode(),
-            encode_enabled: FormatSet::all_compiled_encode(),
+            decode_enabled: all_compiled_decode(),
+            encode_enabled: all_compiled_encode(),
         }
     }
 
@@ -195,14 +139,14 @@ impl CodecRegistry {
 
     /// Formats that are both compiled in and enabled for decoding.
     pub fn decodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        FormatSet::all_compiled_decode()
+        all_compiled_decode()
             .iter()
             .filter(|&f| self.decode_enabled.contains(f))
     }
 
     /// Formats that are both compiled in and enabled for encoding.
     pub fn encodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        FormatSet::all_compiled_encode()
+        all_compiled_encode()
             .iter()
             .filter(|&f| self.encode_enabled.contains(f))
     }

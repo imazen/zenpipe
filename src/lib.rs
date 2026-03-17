@@ -86,29 +86,39 @@ extern crate alloc;
 
 whereat::define_at_crate_info!();
 
+pub mod codec_id;
 mod codecs;
 pub mod config;
 mod decode;
 mod dispatch;
 mod encode;
 mod error;
+mod format_set;
 mod info;
 mod limits;
+pub mod policy;
 #[cfg(feature = "pipeline")]
 pub mod pipeline;
 pub mod pixel;
+pub mod quality;
 mod registry;
+pub mod trace;
 
 // Re-exports
+pub use codec_id::CodecId;
 pub use decode::{DecodeOutput, DecodeRequest};
 pub use dispatch::AnyEncoder;
 pub use encode::{EncodeOutput, EncodeRequest};
 pub use error::{CodecError, Result};
+pub use format_set::FormatSet;
 pub use info::ImageInfo;
 pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use limits::{Limits, Stop};
+pub use policy::CodecPolicy;
+pub use quality::{QualityIntent, QualityProfile};
 pub use registry::CodecRegistry;
+pub use trace::SelectionTrace;
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
 
