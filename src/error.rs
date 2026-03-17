@@ -13,6 +13,10 @@ pub enum PipeError {
     Resize(String),
     /// Strip dimensions don't match expectations.
     DimensionMismatch(String),
+    /// Resource limit exceeded (dimensions, pixel count, or memory).
+    LimitExceeded(String),
+    /// Operation cancelled via `enough::Stop`.
+    Cancelled,
     /// Generic operation error.
     Op(String),
 }
@@ -25,6 +29,8 @@ impl fmt::Display for PipeError {
             }
             Self::Resize(msg) => write!(f, "resize: {msg}"),
             Self::DimensionMismatch(msg) => write!(f, "dimension mismatch: {msg}"),
+            Self::LimitExceeded(msg) => write!(f, "limit exceeded: {msg}"),
+            Self::Cancelled => write!(f, "cancelled"),
             Self::Op(msg) => write!(f, "operation: {msg}"),
         }
     }
@@ -32,3 +38,9 @@ impl fmt::Display for PipeError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for PipeError {}
+
+impl From<enough::StopReason> for PipeError {
+    fn from(_: enough::StopReason) -> Self {
+        Self::Cancelled
+    }
+}

@@ -42,6 +42,7 @@ extern crate alloc;
 mod error;
 pub mod format;
 pub mod graph;
+pub mod limits;
 pub mod ops;
 pub mod sources;
 mod strip;
@@ -53,6 +54,7 @@ pub mod codec;
 
 pub use error::PipeError;
 pub use format::{PixelFormat, PixelFormatExt};
+pub use limits::Limits;
 pub use strip::{StripBuf, StripRef};
 
 // Re-export key zenpixels-convert types for convenience.
@@ -60,6 +62,9 @@ pub use zenpixels_convert::{
     AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelDescriptor, RowConverter,
     SignalRange, TransferFunction,
 };
+
+// Re-export cancellation types.
+pub use enough::{Stop, Unstoppable};
 
 // Re-export CMS types when the cms feature is enabled.
 #[cfg(feature = "cms")]
@@ -103,7 +108,20 @@ pub trait Sink: Send {
 
 /// Drive a pipeline: pull all strips from `source` into `sink`.
 pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> Result<(), PipeError> {
+    execute_with_stop(source, sink, &Unstoppable)
+}
+
+/// Drive a pipeline with cooperative cancellation.
+///
+/// Checks the `stop` token between strips. If cancellation is requested,
+/// returns `PipeError::Cancelled` promptly (within one strip's worth of work).
+pub fn execute_with_stop(
+    source: &mut dyn Source,
+    sink: &mut dyn Sink,
+    stop: &dyn Stop,
+) -> Result<(), PipeError> {
     while let Some(strip) = source.next()? {
+        stop.check().map_err(PipeError::from)?;
         sink.consume(&strip)?;
     }
     sink.finish()

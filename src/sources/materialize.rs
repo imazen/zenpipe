@@ -4,6 +4,7 @@ use alloc::vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
+use crate::limits::Limits;
 use crate::strip::StripRef;
 
 /// Fully materializes an upstream source, then replays it as strips.
@@ -26,6 +27,15 @@ pub struct MaterializedSource {
 }
 
 impl MaterializedSource {
+    /// Drain all strips from `upstream` into memory, checking resource limits.
+    pub fn from_source_checked(
+        upstream: Box<dyn Source>,
+        limits: &Limits,
+    ) -> Result<Self, PipeError> {
+        limits.check(upstream.width(), upstream.height(), upstream.format())?;
+        Self::from_source(upstream)
+    }
+
     /// Drain all strips from `upstream` into memory.
     pub fn from_source(mut upstream: Box<dyn Source>) -> Result<Self, PipeError> {
         let width = upstream.width();

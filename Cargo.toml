@@ -11,7 +11,7 @@ categories = ["graphics", "multimedia::images"]
 
 [features]
 default = ["std"]
-std = ["zenresize/std", "zenpixels-convert/std"]
+std = ["zenresize/std", "zenpixels-convert/std", "enough/std"]
 codec = ["zencodec", "zenpixels"]
 filters = ["dep:zenfilters"]
 cms = ["std", "zenpixels-convert/cms-moxcms", "dep:moxcms"]
@@ -21,6 +21,8 @@ cms = ["std", "zenpixels-convert/cms-moxcms", "dep:moxcms"]
 zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
 zenpixels-convert = { path = "../zenpixels/zenpixels-convert", default-features = false }
+# Cooperative cancellation
+enough = { version = "0.4", default-features = false }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # no_std-compatible HashMap for graph compilation
@@ -37,4 +39,3 @@ moxcms = { version = "0.8", optional = true }
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
-enough = "0.4"

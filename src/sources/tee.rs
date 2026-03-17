@@ -44,6 +44,15 @@ pub struct TeeSource {
 }
 
 impl TeeSource {
+    /// Materialize the upstream source, checking resource limits first.
+    pub fn new_checked(
+        upstream: Box<dyn Source>,
+        limits: &crate::limits::Limits,
+    ) -> Result<Self, PipeError> {
+        limits.check(upstream.width(), upstream.height(), upstream.format())?;
+        Self::new(upstream)
+    }
+
     /// Materialize the upstream source and prepare for fan-out.
     pub fn new(mut upstream: Box<dyn Source>) -> Result<Self, PipeError> {
         let width = upstream.width();
