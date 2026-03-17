@@ -186,14 +186,12 @@ pub(super) fn gaussian_blur_plane_impl_v3(
     kernel: &GaussianKernel,
     ctx: &mut FilterContext,
 ) {
-    use crate::blur::{
-        kernel_sigma, should_use_stackblur, sigma_to_stackblur_radius, stackblur_plane,
-    };
+    use crate::blur::{kernel_sigma, should_use_stackblur, sigma_to_stackblur_radius};
 
     let sigma = kernel_sigma(kernel);
     if should_use_stackblur(sigma) {
         let radius = sigma_to_stackblur_radius(sigma);
-        stackblur_plane(src, dst, width, height, radius, ctx);
+        stackblur_plane_simd(_token, src, dst, width, height, radius, ctx);
         return;
     }
     gaussian_blur_plane_simd(_token, src, dst, width, height, kernel, ctx);
@@ -1118,4 +1116,164 @@ fn fused_adjust_ab_rite(
         *a_val = av * scale;
         *b_val = bv * scale;
     }
+}
+
+// ============================================================================
+// SIMD Stackblur — 2 memory passes, no transpose
+// ============================================================================
+
+/// Stackblur on a single f32 plane with SIMD vertical pass.
+///
+/// Horizontal pass: scalar, one row at a time (cache-optimal sequential access).
+/// Vertical pass: f32x8, processes 8 adjacent columns simultaneously (no transpose).
+///
+/// Total: 2 memory passes over the data vs 4 in the scalar transpose-based version.
+#[rite]
+fn stackblur_plane_simd(
+    token: X64V3Token,
+    src: &[f32],
+    dst: &mut [f32],
+    width: u32,
+    height: u32,
+    radius: u32,
+    ctx: &mut FilterContext,
+) {
+    use crate::blur::stackblur_row;
+
+    if radius == 0 {
+        dst.copy_from_slice(src);
+        return;
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let r = radius as usize;
+    let n = w * h;
+    let stack_size = 2 * r + 1;
+    let inv_div = 1.0 / ((r as f32 + 1.0) * (r as f32 + 1.0));
+    let inv_div_v = f32x8::splat(token, inv_div);
+
+    // --- Pass 1: Horizontal (scalar, row-by-row) → h_buf ---
+    let mut h_buf = ctx.take_f32(n);
+    let mut stack_scratch = ctx.take_f32(stack_size);
+
+    for y in 0..h {
+        let row = &src[y * w..][..w];
+        let out = &mut h_buf[y * w..][..w];
+        stackblur_row(row, out, w, r, &mut stack_scratch, inv_div);
+    }
+
+    ctx.return_f32(stack_scratch);
+
+    // --- Pass 2: Vertical (SIMD, 8 columns at a time) → dst ---
+    // Each tile of 8 columns is processed independently with f32x8.
+    // No transpose needed — loads from h_buf[y*w + x..x+8] are contiguous.
+    let num_tiles = w / 8;
+
+    // Stack for SIMD vertical: stack_size elements, each f32x8
+    let mut stack_v: Vec<[f32; 8]> = vec![[0.0; 8]; stack_size];
+
+    for tile in 0..num_tiles {
+        let x = tile * 8;
+
+        // Initialize stack and running sums for this tile
+        let mut sum = f32x8::zero(token);
+        let mut sum_in = f32x8::zero(token);
+        let mut sum_out = f32x8::zero(token);
+
+        // Fill left side + center of stack (edge-replicated from row 0)
+        let first: &[f32; 8] = h_buf[x..x + 8].try_into().unwrap();
+        let first_v = f32x8::load(token, first);
+        for i in 0..=r {
+            stack_v[i] = first_v.to_array();
+        }
+
+        // Fill right side of stack
+        for i in (r + 1)..stack_size {
+            let offset = i - r; // row offset from center (positive)
+            let sy = offset.min(h - 1);
+            let chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
+            stack_v[i] = f32x8::load(token, chunk).to_array();
+        }
+
+        // Compute initial weighted sum
+        for i in 0..stack_size {
+            let dist = if i <= r { r - i } else { i - r };
+            let weight = f32x8::splat(token, (r + 1 - dist) as f32);
+            let val = f32x8::from_array(token, stack_v[i]);
+            sum = val.mul_add(weight, sum);
+        }
+
+        // Initial sum_out (positions 0..=r) and sum_in (positions r+1..stack_size)
+        for i in 0..=r {
+            sum_out += f32x8::from_array(token, stack_v[i]);
+        }
+        for i in (r + 1)..stack_size {
+            sum_in += f32x8::from_array(token, stack_v[i]);
+        }
+
+        let mut sp = 0usize;
+
+        // Main vertical scan
+        for y in 0..h {
+            // Output
+            let out: &mut [f32; 8] = (&mut dst[y * w + x..y * w + x + 8]).try_into().unwrap();
+            (sum * inv_div_v).store(out);
+
+            // Update running sums
+            sum -= sum_out;
+            let old_val = f32x8::from_array(token, stack_v[sp]);
+            sum_out -= old_val;
+
+            // Load new pixel from row y + r + 1 (clamped)
+            let new_y = (y + r + 1).min(h - 1);
+            let new_chunk: &[f32; 8] = h_buf[new_y * w + x..new_y * w + x + 8].try_into().unwrap();
+            let new_val = f32x8::load(token, new_chunk);
+            stack_v[sp] = new_val.to_array();
+            sum_in += new_val;
+
+            sum += sum_in;
+
+            sp += 1;
+            if sp >= stack_size {
+                sp = 0;
+            }
+
+            // Transfer center from in to out
+            let center_idx = if sp + r >= stack_size {
+                sp + r - stack_size
+            } else {
+                sp + r
+            };
+            let center_val = f32x8::from_array(token, stack_v[center_idx]);
+            sum_out += center_val;
+            sum_in -= center_val;
+        }
+    }
+
+    // Scalar tail: remaining columns (w % 8)
+    let x_start = num_tiles * 8;
+    if x_start < w {
+        let mut stack_scalar = ctx.take_f32(stack_size);
+        let mut col_buf = ctx.take_f32(h);
+        let mut col_out = ctx.take_f32(h);
+
+        for x in x_start..w {
+            // Gather column from h_buf
+            for y in 0..h {
+                col_buf[y] = h_buf[y * w + x];
+            }
+            crate::blur::stackblur_row(&col_buf, &mut col_out, h, r, &mut stack_scalar, inv_div);
+            // Scatter column to dst
+            for y in 0..h {
+                dst[y * w + x] = col_out[y];
+            }
+        }
+
+        ctx.return_f32(col_out);
+        ctx.return_f32(col_buf);
+        ctx.return_f32(stack_scalar);
+    }
+
+    ctx.return_f32(h_buf);
 }

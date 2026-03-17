@@ -67,6 +67,10 @@ fn bench_blur_group(
             });
         }
 
+        // Dispatch (now routes to SIMD stackblur for σ≥6, FIR below)
+        // This is what the pipeline actually uses — includes the SIMD vertical pass.
+        // zen_stackblur above is the old scalar transpose-based version for comparison.
+
         // libblur stackblur (SSE SIMD, in-place, direct column scan for vertical)
         {
             let src = Arc::clone(&src);

@@ -519,7 +519,7 @@ pub fn stackblur_plane(
 /// This produces a pyramid kernel [1, 2, ..., r, r+1, r, ..., 2, 1] with
 /// divisor (r+1)² — each step increments the weight of entering pixels by 1
 /// and decrements the weight of leaving pixels by 1.
-fn stackblur_row(
+pub(crate) fn stackblur_row(
     input: &[f32],
     output: &mut [f32],
     len: usize,
