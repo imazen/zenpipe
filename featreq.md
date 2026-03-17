@@ -1,77 +1,103 @@
 # Feature Requests from zenimage
 
-zenimage delegates 9 of 12 Oklab adjustment ops to zenfilters. The remaining 3
-have semantic mismatches that prevent delegation. Adding these would let zenimage
-drop the last ~600 lines of manual per-pixel Oklab code.
+## Done
 
-## 1. WhitePoint: Soft Clip with Headroom
+- ~~WhitePoint: Soft Clip with Headroom~~ — shipped (headroom field)
+- ~~HighlightsShadows: Configurable Thresholds~~ — shipped (shadow_threshold, highlight_threshold)
+- ~~SimpleDehaze~~ — rejected (inferior algorithm, not real dehaze)
+
+## 1. HDR Tone Mapping Operators
+
+**Priority: High**
+
+zenimage has three global HDR→SDR tone mapping ops (~630 lines) that should live in
+zenfilters. All are point operations on linear RGB f32 with unbounded input range.
+They use BT.709 luminance for color preservation (scale RGB by L_out/L_in ratio).
+
+### FilmicTonemap
+
+ACES-style filmic S-curve. Standard in games and film pipelines.
+
+```
+Parameters: exposure (pre-scale), whitepoint (HDR peak → 1.0)
+Algorithm:
+  x = pixel * exposure / whitepoint
+  L = BT.709 luminance
+  L' = (L*(2.51*L + 0.03)) / (L*(2.43*L + 0.59) + 0.14)
+  RGB' = RGB_scaled * (L' / L)
+```
+
+### ReinhardTonemap
+
+Extended Reinhard. Standard in photography pipelines.
+
+```
+Parameters: exposure (pre-scale), l_max (maximum luminance)
+Algorithm:
+  L = BT.709 luminance * exposure
+  L' = (L / l_max) / (1 + L / l_max)
+  RGB' = RGB_in * (L' / L)
+```
+
+### Bt2390Tonemap
+
+ITU BT.2390 EETF (Electrical-Electrical Transfer Function). Broadcast standard
+for HLG and HDR10 content.
+
+```
+Parameters: source_peak (HDR peak nits), target_peak (SDR target, default 1.0)
+Algorithm:
+  e = RGB / source_peak
+  L = BT.709 luminance
+  ks = (1.5 * target_peak / source_peak - 0.5).clamp(0, 1)
+  Below ks: pass through
+  Above ks: cubic Hermite spline soft rolloff (Catmull-Rom)
+  RGB' = e_out * target_peak
+```
+
+### Design considerations
+
+These operate in **linear RGB**, not Oklab. They need access to the raw HDR values
+before any perceptual transform. Options:
+
+1. **Pre-scatter filter** — apply before the Oklab scatter step in the pipeline
+2. **Separate HDR pipeline stage** — new trait or pipeline phase for linear RGB ops
+3. **Raw-plane filter** — operate on the L plane treating it as linear luminance
+   (loses the color-ratio preservation, probably wrong)
+
+Option 1 is cleanest: `Pipeline` gains an optional pre-scatter hook that runs on
+the interleaved linear RGB buffer before scatter_to_oklab. The tone mapper normalizes
+HDR→SDR range, then normal Oklab filters (exposure, contrast, etc.) operate on SDR.
+
+## 2. Gamut Mapping / Expansion
 
 **Priority: Medium**
 
-zenimage's `WhitePointOp` applies a soft asymptotic rolloff above the white point,
-not a hard scale. This preserves highlight detail in HDR-to-SDR workflows.
+zenimage has ~1200 lines of dead gamut code in `graphics/gamut.rs` that was never
+wired up. Rather than revive it, zenfilters should provide proper gamut operations.
 
-Current zenfilters `WhitePoint` just scales L by `1/level`. zenimage does:
+### What's needed
 
-```rust
-if l <= white_point {
-    l  // pass through
-} else {
-    // asymptotic approach: wp + headroom * (1 - exp(-excess * k))
-    let headroom = white_point * headroom_fraction;
-    let excess = l - white_point;
-    let k = 3.0 / headroom.max(0.01);
-    white_point + headroom * (1.0 - (-excess * k).exp())
-}
-```
+**Gamut compression (out-of-gamut → in-gamut):**
+zenfilters already has `GamutMapping::SoftCompress` in the pipeline gather step.
+This may be sufficient. Verify it handles Display P3 → sRGB compression correctly.
 
-**Needed:** Add a `headroom: f32` field to `WhitePoint` (default 0.0 = current behavior,
->0.0 = soft rolloff above level). When headroom is 0, keep the current fast path.
+**Gamut expansion (sRGB → wider gamut for HDR displays):**
+- sRGB → Display P3 (most common, Apple ecosystem)
+- sRGB → BT.2020 (broadcast HDR)
+- Intelligent chroma expansion at gamut boundary (not just matrix multiply)
 
-## 2. HighlightsShadows: Configurable Thresholds
+Approaches from the dead zenimage code (for reference, not necessarily worth porting):
+- `Oklch` chroma boost at boundary (fast, modest expansion)
+- 3D LUT with trilinear interpolation (pre-computed, O(1))
+- MLP neural network (3→32→32→3 with ReLU, 5KB weights, best quality)
 
-**Priority: Medium**
+The Oklch approach is probably the right one for zenfilters — it's simple, works in
+the existing Oklab pipeline, and produces good results for sRGB→P3 expansion.
 
-zenimage's `HighlightsShadowsOp` has configurable `shadow_threshold` (default 0.3)
-and `highlight_threshold` (default 0.7) with smooth quadratic mask transitions.
-The zenfilters `HighlightsShadows` filter has fixed internal thresholds.
+### ICC Profile Constants
 
-**Needed:** Add `shadow_threshold: f32` and `highlight_threshold: f32` fields
-to `HighlightsShadows` (defaults matching current behavior). The mask functions:
-
-```rust
-fn shadow_mask(l: f32, threshold: f32) -> f32 {
-    if l >= threshold { 0.0 }
-    else { let t = 1.0 - l / threshold; t * t }
-}
-
-fn highlight_mask(l: f32, threshold: f32) -> f32 {
-    if l <= threshold { 0.0 }
-    else { let t = (l - threshold) / (1.0 - threshold); t * t }
-}
-```
-
-Also confirm the SIMD `highlights_shadows()` function uses the same
-shadow/highlight adjustment formula as zenimage (blend toward mid-grey target).
-
-## 3. Dehaze: Per-Pixel (Non-Spatial) Variant
-
-**Priority: Low**
-
-zenfilters `Dehaze` uses a spatial dark-channel-prior approach (Gaussian blur
-for atmosphere estimation). zenimage's `DehazeOp` is a simpler per-pixel effect:
-
-1. Shadow lift: `amount * 0.15 * (1 - L)^2`
-2. S-curve contrast boost: `amount * 0.4`
-3. Chroma boost: `a,b *= 1 + amount * 0.3`
-
-This is the imageflow-compatible dehaze — fast, predictable, no neighborhood
-requirement. The spatial `Dehaze` is better for real haze removal but is a
-different operation with different use cases.
-
-**Options:**
-- Add a `SimpleDehaze` filter (per-pixel, no neighborhood) alongside the existing spatial `Dehaze`
-- Or add a `spatial: bool` field to `Dehaze` that switches between the two algorithms
-
-The per-pixel variant is a point operation (`is_neighborhood() = false`), so it
-benefits from strip processing and is much cheaper than the spatial version.
+zenimage also has embedded ICC profiles (Display P3 v2/v4, Adobe RGB, Rec.2020,
+ProPhoto). These are CC0-licensed from Compact-ICC-Profiles. Only Display P3 v4
+is actually used. These should live in zenpixels or a dedicated profiles crate,
+not in a filter library.
