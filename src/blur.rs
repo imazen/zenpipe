@@ -445,6 +445,7 @@ pub fn kernel_sigma(kernel: &GaussianKernel) -> f32 {
 /// Reference: Young & van Vliet, "Recursive implementation of the Gaussian
 /// filter," Signal Processing 44(2), 1995, pp. 139-151.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Used via blur_internals re-export under `experimental` feature
 pub struct DericheCoefficients {
     /// Feedforward gain (numerator coefficient).
     pub b: f32,
@@ -452,6 +453,7 @@ pub struct DericheCoefficients {
     pub d: [f32; 3],
 }
 
+#[allow(dead_code)]
 impl DericheCoefficients {
     /// Compute 3rd-order recursive Gaussian coefficients for the given sigma.
     ///
@@ -506,6 +508,7 @@ impl DericheCoefficients {
 /// Apply causal + anticausal IIR on a contiguous row.
 ///
 /// `y_f` and `y_b` are scratch buffers of length >= `len`.
+#[allow(dead_code, clippy::too_many_arguments)]
 fn iir_row(
     input: &[f32],
     output: &mut [f32],
@@ -550,8 +553,7 @@ fn iir_row(
         y_b[len - 2] = b * input[len - 2] + d1 * y_b[len - 1] + d2 * init_b + d3 * init_b;
     }
     if len > 2 {
-        y_b[len - 3] =
-            b * input[len - 3] + d1 * y_b[len - 2] + d2 * y_b[len - 1] + d3 * init_b;
+        y_b[len - 3] = b * input[len - 3] + d1 * y_b[len - 2] + d2 * y_b[len - 1] + d3 * init_b;
     }
     for n in (0..len.saturating_sub(3)).rev() {
         y_b[n] = b * input[n] + d1 * y_b[n + 1] + d2 * y_b[n + 2] + d3 * y_b[n + 3];
@@ -570,6 +572,7 @@ fn iir_row(
 /// O(1) per pixel regardless of sigma. Better accuracy than box blur.
 ///
 /// Vertical pass uses transpose → horizontal IIR → transpose for cache locality.
+#[allow(dead_code)]
 pub fn deriche_blur_plane(
     src: &[f32],
     dst: &mut [f32],
@@ -710,7 +713,14 @@ mod tests {
 
         // Actual: dispatched path (uses tiled vertical)
         let mut actual_dst = vec![0.0f32; n];
-        gaussian_blur_plane(&src, &mut actual_dst, w, h, &kernel, &mut FilterContext::new());
+        gaussian_blur_plane(
+            &src,
+            &mut actual_dst,
+            w,
+            h,
+            &kernel,
+            &mut FilterContext::new(),
+        );
 
         let mut max_err = 0.0f32;
         for i in 0..n {
@@ -936,8 +946,7 @@ mod tests {
         let mut src = vec![0.0f32; n];
         for y in 0..h as usize {
             for x in 0..w as usize {
-                src[y * w as usize + x] =
-                    0.1 + 0.8 * (x as f32 / w as f32) * (y as f32 / h as f32);
+                src[y * w as usize + x] = 0.1 + 0.8 * (x as f32 / w as f32) * (y as f32 / h as f32);
             }
         }
 
@@ -951,7 +960,14 @@ mod tests {
 
         // Deriche
         let mut dst_deriche = vec![0.0f32; n];
-        deriche_blur_plane(&src, &mut dst_deriche, w, h, &coeffs, &mut FilterContext::new());
+        deriche_blur_plane(
+            &src,
+            &mut dst_deriche,
+            w,
+            h,
+            &coeffs,
+            &mut FilterContext::new(),
+        );
 
         // Compare interior pixels (skip 2*sigma border where boundary effects differ)
         let margin = (2.0 * sigma).ceil() as usize;

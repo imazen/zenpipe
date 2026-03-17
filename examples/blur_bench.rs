@@ -8,9 +8,9 @@
 //! Run: `just blur-bench`
 
 use std::sync::Arc;
-use zenfilters::blur_internals::*;
-use zenfilters::FilterContext;
 use zenbench::{Suite, Throughput};
+use zenfilters::FilterContext;
+use zenfilters::blur_internals::*;
 
 fn make_gradient_plane(w: usize, h: usize) -> Vec<f32> {
     let n = w * h;
