@@ -36,8 +36,7 @@ impl fmt::Display for PipeError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for PipeError {}
+impl core::error::Error for PipeError {}
 
 impl From<enough::StopReason> for PipeError {
     fn from(_: enough::StopReason) -> Self {
