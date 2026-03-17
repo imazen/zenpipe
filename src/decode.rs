@@ -339,13 +339,14 @@ impl<'a> DecodeRequest<'a> {
         self,
     ) -> Result<(DecodeOutput, Option<crate::depthmap::DecodedDepthMap>)> {
         let format = self.resolve_format()?;
+        let data = self.data; // Save reference before consuming self
         let output = self.decode_format(format)?;
 
         let depth = match format {
             #[cfg(feature = "jpeg")]
             ImageFormat::Jpeg => extract_jpeg_depth(&output),
             #[cfg(feature = "heic-decode")]
-            ImageFormat::Heic => extract_heic_depth(&output),
+            ImageFormat::Heic => extract_heic_depth(data),
             _ => None,
         };
 
@@ -722,13 +723,69 @@ fn extract_jpeg_depth(output: &DecodeOutput) -> Option<crate::depthmap::DecodedD
 ///
 /// HEIC files can contain auxiliary depth images (Apple portrait mode).
 /// This is a stub — actual extraction requires heic-decoder support for
-/// auxiliary image enumeration and decode.
+/// Extract depth map from HEIC auxiliary image.
+///
+/// Uses heic-decoder's `decode_depth()` to decode the HEVC depth auxiliary item.
 #[cfg(feature = "heic-decode")]
-fn extract_heic_depth(_output: &DecodeOutput) -> Option<crate::depthmap::DecodedDepthMap> {
-    // TODO: Extract auxiliary depth image from HEIC container.
-    // heic-decoder needs `find_auxiliary_items(id, "urn:mpeg:hevc:2015:auxid:2")`
-    // or similar for depth, plus decoding the auxiliary HEVC tile.
-    None
+fn extract_heic_depth(data: &[u8]) -> Option<crate::depthmap::DecodedDepthMap> {
+    use crate::depthmap::*;
+
+    let config = heic_decoder::DecoderConfig::new();
+    let depth_map = config.decode_depth(data).ok()?;
+
+    // Convert heic-decoder's DepthRepresentationInfo to our DepthFormat
+    let (format, units) = match depth_map.depth_info.representation_type {
+        heic_decoder::DepthRepresentationType::UniformInverseZ => {
+            (DepthFormat::RangeInverse, DepthUnits::Meters)
+        }
+        heic_decoder::DepthRepresentationType::UniformDisparity => {
+            (DepthFormat::Disparity, DepthUnits::Diopters)
+        }
+        heic_decoder::DepthRepresentationType::UniformZ => {
+            (DepthFormat::RangeLinear, DepthUnits::Meters)
+        }
+        heic_decoder::DepthRepresentationType::NonuniformDisparity => {
+            (DepthFormat::Disparity, DepthUnits::Diopters)
+        }
+        _ => (DepthFormat::AbsoluteDepth, DepthUnits::Meters),
+    };
+
+    let near = depth_map
+        .depth_info
+        .z_near
+        .or(depth_map.depth_info.d_min.map(|d| 1.0 / d))
+        .unwrap_or(0.0) as f32;
+    let far = depth_map
+        .depth_info
+        .z_far
+        .or(depth_map.depth_info.d_max.map(|d| 1.0 / d))
+        .unwrap_or(100.0) as f32;
+
+    // Convert u16 samples to bytes (little-endian)
+    let pixel_bytes: alloc::vec::Vec<u8> = depth_map
+        .data
+        .iter()
+        .flat_map(|&v| v.to_le_bytes())
+        .collect();
+
+    Some(DecodedDepthMap {
+        depth: DepthImage {
+            data: pixel_bytes,
+            width: depth_map.width,
+            height: depth_map.height,
+            pixel_format: DepthPixelFormat::Gray16,
+        },
+        metadata: DepthMapMetadata {
+            format,
+            near,
+            far,
+            units,
+            measure_type: DepthMeasureType::OpticalAxis,
+        },
+        confidence: None,
+        source_format: ImageFormat::Heic,
+        source_device: DepthSource::AppleHeic,
+    })
 }
 
 #[cfg(test)]
