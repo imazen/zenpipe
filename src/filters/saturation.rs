@@ -11,8 +11,24 @@ use crate::simd;
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Saturation {
-    /// Saturation factor. 1.0 = no change.
+    /// Saturation factor. 1.0 = no change, 0.0 = grayscale, 2.0 = double.
+    ///
+    /// For slider integration, use [`Saturation::from_slider`] which maps
+    /// a 0.0–1.0 range with 0.5 as the identity point (no change).
     pub factor: f32,
+}
+
+impl Saturation {
+    /// Create from a 0.0–1.0 slider where 0.5 = identity (no change).
+    ///
+    /// - Slider 0.0 → factor 0.0 (grayscale)
+    /// - Slider 0.5 → factor 1.0 (no change)
+    /// - Slider 1.0 → factor 2.0 (double saturation)
+    pub fn from_slider(slider: f32) -> Self {
+        Self {
+            factor: crate::slider::saturation_from_slider(slider.clamp(0.0, 1.0)),
+        }
+    }
 }
 
 impl Default for Saturation {

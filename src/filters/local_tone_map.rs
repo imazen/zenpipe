@@ -27,12 +27,31 @@ use crate::planes::OklabPlanes;
 pub struct LocalToneMap {
     /// Compression strength. 0.0 = no compression, 1.0 = strong.
     /// Controls how much the base layer is compressed.
+    ///
+    /// Response is compressive: the effect ramps sharply at high values.
+    /// For slider integration, use [`LocalToneMap::from_slider`].
     pub compression: f32,
     /// Detail boost factor. 1.0 = preserve original detail, >1 = enhance.
     pub detail_boost: f32,
     /// Sigma for base layer extraction. Larger = coarser separation.
     /// Should be proportional to image size. Typical: 20-60.
     pub sigma: f32,
+}
+
+impl LocalToneMap {
+    /// Create from perceptual slider values.
+    ///
+    /// `compression_slider`: 0.0–1.0, sqrt-remapped so slider 0.5 → internal 0.25.
+    /// `detail_boost`: 1.0–3.0, linear (already perceptual).
+    pub fn from_slider(compression_slider: f32, detail_boost: f32, sigma: f32) -> Self {
+        Self {
+            compression: crate::slider::ltm_compression_from_slider(
+                compression_slider.clamp(0.0, 1.0),
+            ),
+            detail_boost,
+            sigma,
+        }
+    }
 }
 
 impl Default for LocalToneMap {

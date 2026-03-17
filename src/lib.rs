@@ -64,6 +64,7 @@ mod planes;
 pub mod regional;
 mod scatter_gather;
 mod simd;
+pub mod slider;
 
 #[cfg(feature = "buffer")]
 mod convenience;

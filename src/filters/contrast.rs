@@ -23,7 +23,23 @@ pub(crate) const CONTRAST_PIVOT: f32 = 0.5691; // 0.1842_f32.cbrt()
 #[non_exhaustive]
 pub struct Contrast {
     /// Contrast amount. 0.0 = no change, 1.0 = strong increase, -1.0 = flatten.
+    ///
+    /// For ergonomic slider integration, use [`slider::contrast_from_slider`]
+    /// which applies sqrt remapping so the first half of the slider covers
+    /// the most useful range (0–0.25 internal contrast).
     pub amount: f32,
+}
+
+impl Contrast {
+    /// Create from a perceptual slider value (-1.0 to +1.0).
+    ///
+    /// Applies sqrt remapping: slider 0.5 → internal 0.25 (moderate contrast).
+    /// This makes equal slider movements produce equal perceived changes.
+    pub fn from_slider(slider: f32) -> Self {
+        Self {
+            amount: crate::slider::contrast_from_slider(slider),
+        }
+    }
 }
 
 impl Filter for Contrast {

@@ -57,6 +57,19 @@ impl Default for NoiseReduction {
 }
 
 impl NoiseReduction {
+    /// Create from perceptual slider values (0.0–1.0 each).
+    ///
+    /// `luminance_slider` and `chroma_slider` are sqrt-remapped so the first
+    /// half of the slider covers the most useful denoising range (moderate NR).
+    /// `detail` and `luminance_contrast` are already perceptually linear.
+    pub fn from_slider(luminance_slider: f32, chroma_slider: f32) -> Self {
+        Self {
+            luminance: crate::slider::nr_strength_from_slider(luminance_slider.clamp(0.0, 1.0)),
+            chroma: crate::slider::nr_strength_from_slider(chroma_slider.clamp(0.0, 1.0)),
+            ..Default::default()
+        }
+    }
+
     fn is_identity(&self) -> bool {
         self.luminance.abs() < 1e-6 && self.chroma.abs() < 1e-6
     }

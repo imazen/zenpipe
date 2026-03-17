@@ -52,6 +52,33 @@ impl Default for AdaptiveSharpen {
     }
 }
 
+impl AdaptiveSharpen {
+    /// Create from perceptual slider values matching Lightroom's sharpening panel.
+    ///
+    /// - `amount`: 0.0–2.0, linear (already perceptual)
+    /// - `radius`: maps to sigma (0.5–3.0 range)
+    /// - `detail`: 0.0–1.0, linear (edges-only → full detail)
+    /// - `masking`: 0.0–1.0, linear (unrestricted → strong-edges-only)
+    /// - `noise_sensitivity`: 0.0–1.0 slider, sqrt-remapped to noise_floor 0.001–0.02
+    pub fn from_sliders(
+        amount: f32,
+        radius: f32,
+        detail: f32,
+        masking: f32,
+        noise_sensitivity: f32,
+    ) -> Self {
+        Self {
+            amount,
+            sigma: radius.clamp(0.5, 3.0),
+            noise_floor: crate::slider::sharpen_noise_floor_from_slider(
+                noise_sensitivity.clamp(0.0, 1.0),
+            ),
+            detail: detail.clamp(0.0, 1.0),
+            masking: masking.clamp(0.0, 1.0),
+        }
+    }
+}
+
 impl Filter for AdaptiveSharpen {
     fn channel_access(&self) -> ChannelAccess {
         ChannelAccess::L_ONLY

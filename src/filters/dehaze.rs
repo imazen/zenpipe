@@ -23,7 +23,22 @@ use crate::planes::OklabPlanes;
 #[non_exhaustive]
 pub struct Dehaze {
     /// Dehaze strength. 0.0 = no change, 1.0 = full correction.
+    ///
+    /// Response is compressive (inverse transmission): small values already
+    /// have visible effect. For slider integration, use [`Dehaze::from_slider`]
+    /// which applies sqrt remapping.
     pub strength: f32,
+}
+
+impl Dehaze {
+    /// Create from a perceptual slider value (0.0 to 1.0).
+    ///
+    /// Sqrt remapping: slider 0.5 → internal 0.25 (moderate dehaze).
+    pub fn from_slider(slider: f32) -> Self {
+        Self {
+            strength: crate::slider::dehaze_from_slider(slider.clamp(0.0, 1.0)),
+        }
+    }
 }
 
 impl Filter for Dehaze {
