@@ -51,9 +51,10 @@ zencodecs/
 │   ├── limits.rs         # Limits, Stop
 │   ├── info.rs           # ImageInfo, probe functions
 │   ├── registry.rs       # CodecRegistry — runtime enable/disable + capability queries
-│   ├── decode.rs         # DecodeRequest (one-shot, push, animation, gain map)
+│   ├── decode.rs         # DecodeRequest (one-shot, push, animation, gain map, depth map)
 │   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles, gain map)
 │   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapImage, GainMapSource)
+│   ├── depthmap.rs       # Format-agnostic depth map types (DecodedDepthMap, DepthImage, conversions)
 │   └── codecs/
 │       ├── mod.rs        # Codec adapter modules
 │       ├── jpeg.rs       # zenjpeg adapter
@@ -136,6 +137,25 @@ zencodecs/
 - Feature-gated behind `jpeg-ultrahdr`
 - 14 unit tests + 7 integration tests + 2 doc-tests
 
+### Depth Map Support (2026-03-17)
+- **depthmap.rs**: Format-agnostic depth map types
+- **DepthImage**: Raw depth pixel data (Gray8/Gray16/Float32/Float16) with validation
+- **DecodedDepthMap**: Depth pixels + metadata + optional confidence map + source info
+  - `to_normalized_f32()`: Convert any representation to [0.0, 1.0] range
+  - `to_meters()`: Convert to metric depth (returns None for Normalized units)
+  - `resize()`: Bilinear interpolation for resolution matching
+- **DepthFormat**: RangeLinear, RangeInverse, Disparity, AbsoluteDepth
+- **DepthUnits**: Meters, Millimeters, Diopters, Normalized
+- **DepthSource**: AndroidGDepth, AndroidDdf, AppleMpf, AppleHeic, Unknown
+- **Integer vs float semantics**: Gray8/Gray16 store normalized position for Range formats;
+  Float32/Float16 store actual depth/disparity values
+- **DecodeRequest::decode_depth_map()**: Decode + extract depth map in one call
+  - JPEG: Extracts MPF Disparity secondary image via zenjpeg extras
+  - HEIC: Stub for future auxiliary depth image extraction
+  - Other formats: Returns None
+- Internal f16<->f32 conversion (pure math, no unsafe)
+- 30+ unit tests covering all formats, pixel types, f16 roundtrip, resize, edge cases
+
 ### What's NOT implemented yet
 - Pull-based streaming decode (DynStreamingDecoder + 'a lifetime blocked by GAT config borrow — use push_decode instead)
 - Color management (moxcms)
@@ -145,6 +165,9 @@ zencodecs/
 - AVIF gain map decode (tmap extraction from zenavif)
 - JXL gain map decode (jhgm extraction from zenjxl)
 - JXL inverse gain map application (HDR→SDR)
+- JPEG GDepth XMP depth extraction (requires XMP parsing in zenjpeg)
+- JPEG Android DDF depth extraction (requires container directory parsing)
+- HEIC auxiliary depth image extraction (requires heic-decoder auxid support)
 
 ## Public API Spec (Design Intent)
 
