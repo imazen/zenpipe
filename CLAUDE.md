@@ -51,8 +51,9 @@ zencodecs/
 │   ├── limits.rs         # Limits, Stop
 │   ├── info.rs           # ImageInfo, probe functions
 │   ├── registry.rs       # CodecRegistry — runtime enable/disable + capability queries
-│   ├── decode.rs         # DecodeRequest (one-shot, push, animation)
-│   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles)
+│   ├── decode.rs         # DecodeRequest (one-shot, push, animation, gain map)
+│   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles, gain map)
+│   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapImage, GainMapSource)
 │   └── codecs/
 │       ├── mod.rs        # Codec adapter modules
 │       ├── jpeg.rs       # zenjpeg adapter
@@ -119,11 +120,31 @@ zencodecs/
 - **CodecRegistry capability queries**: streaming_decode_available, animation_decode/encode_available
 - Re-exports: DynFullFrameDecoder, DynFullFrameEncoder, DynStreamingDecoder, DecodeRowSink, OutputInfo, OwnedFullFrame, FullFrame
 
+### Gain Map Support (2026-03-17)
+- **gainmap.rs**: Format-agnostic gain map types (ISO 21496-1)
+- **GainMapImage**: Raw gain map pixel data (grayscale or RGB u8) with validation
+- **DecodedGainMap**: Gain map + metadata + direction flag (base_is_hdr) + source format
+  - `reconstruct_hdr()`: Apply gain map to SDR base (JPEG/AVIF direction) via ultrahdr-core
+  - `reconstruct_sdr()`: Apply inverse gain map to HDR base (JXL direction, stubbed)
+  - `reconstruct_alternate()`: Direction-aware dispatcher
+- **GainMapSource**: Pre-computed gain map for encode passthrough
+- **DecodeRequest::decode_gain_map()**: Decode + extract gain map in one call
+  - JPEG: Implemented via DecodedExtras UltraHdrExtras trait (XMP + MPF secondary image)
+  - AVIF/JXL: Stub returns None (codec support not yet available)
+- **EncodeRequest::with_gain_map()**: Builder method to attach gain map source
+  - Actual embedding during encode not yet wired (builder only)
+- Feature-gated behind `jpeg-ultrahdr`
+- 14 unit tests + 7 integration tests + 2 doc-tests
+
 ### What's NOT implemented yet
 - Pull-based streaming decode (DynStreamingDecoder + 'a lifetime blocked by GAT config borrow — use push_decode instead)
 - Color management (moxcms)
 - Fallback chains (structural pieces ready, needs multi-decoder-per-format registry)
 - Registry v2 entries with factories (deferred — current match-based dispatch works)
+- Gain map encode embedding (with_gain_map builder exists but doesn't wire to actual encode yet)
+- AVIF gain map decode (tmap extraction from zenavif)
+- JXL gain map decode (jhgm extraction from zenjxl)
+- JXL inverse gain map application (HDR→SDR)
 
 ## Public API Spec (Design Intent)
 
