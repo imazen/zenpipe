@@ -202,14 +202,20 @@ impl DecodedGainMap {
     /// Reconstruct the SDR rendition from an HDR base image + gain map.
     ///
     /// Only valid when `base_is_hdr == true` (JXL direction).
+    /// The base pixels must be linear f32 RGBA (16 bytes per pixel).
     ///
-    /// This is a placeholder — JXL gain map decode is not yet implemented.
+    /// Returns sRGB u8 RGBA pixels (4 bytes per pixel).
+    ///
+    /// This applies the inverse gain map formula:
+    /// `sdr = (hdr + offset_hdr) / gain - offset_sdr`
+    /// where gain is derived from the gain map LUT at weight=1.0.
     pub fn reconstruct_sdr(
         &self,
-        _base_hdr_pixels: &[u8],
-        _width: u32,
-        _height: u32,
+        base_hdr_pixels: &[u8],
+        width: u32,
+        height: u32,
     ) -> crate::error::Result<Vec<u8>> {
+        use linear_srgb::default::linear_to_srgb_u8;
         use whereat::at;
 
         if !self.base_is_hdr {
@@ -218,11 +224,134 @@ impl DecodedGainMap {
             )));
         }
 
-        // JXL inverse gain map application not yet implemented.
-        Err(at!(CodecError::UnsupportedOperation {
-            format: self.source_format,
-            detail: "inverse gain map (HDR→SDR) not yet implemented",
-        }))
+        self.gain_map.validate()?;
+
+        let pixel_count = width as usize * height as usize;
+        let expected_bytes = pixel_count * 16; // f32 RGBA = 16 bytes/pixel
+        if base_hdr_pixels.len() < expected_bytes {
+            return Err(at!(CodecError::InvalidInput(alloc::format!(
+                "HDR base too small: {} bytes for {}x{} f32 RGBA (need {})",
+                base_hdr_pixels.len(),
+                width,
+                height,
+                expected_bytes,
+            ))));
+        }
+
+        let gm = &self.gain_map;
+        let meta = &self.metadata;
+
+        // Precompute per-channel gain map parameters
+        let gamma = meta.gamma;
+        let log_min = [
+            meta.min_content_boost[0].ln(),
+            meta.min_content_boost[1].ln(),
+            meta.min_content_boost[2].ln(),
+        ];
+        let log_range = [
+            meta.max_content_boost[0].ln() - log_min[0],
+            meta.max_content_boost[1].ln() - log_min[1],
+            meta.max_content_boost[2].ln() - log_min[2],
+        ];
+
+        let mut output = alloc::vec![0u8; pixel_count * 4]; // sRGB RGBA u8
+
+        for y in 0..height {
+            for x in 0..width {
+                // Read HDR linear f32 pixel
+                let px_idx = (y as usize * width as usize + x as usize) * 16;
+                let r = f32::from_le_bytes([
+                    base_hdr_pixels[px_idx],
+                    base_hdr_pixels[px_idx + 1],
+                    base_hdr_pixels[px_idx + 2],
+                    base_hdr_pixels[px_idx + 3],
+                ]);
+                let g = f32::from_le_bytes([
+                    base_hdr_pixels[px_idx + 4],
+                    base_hdr_pixels[px_idx + 5],
+                    base_hdr_pixels[px_idx + 6],
+                    base_hdr_pixels[px_idx + 7],
+                ]);
+                let b = f32::from_le_bytes([
+                    base_hdr_pixels[px_idx + 8],
+                    base_hdr_pixels[px_idx + 9],
+                    base_hdr_pixels[px_idx + 10],
+                    base_hdr_pixels[px_idx + 11],
+                ]);
+
+                // Sample gain map with bilinear interpolation
+                let gm_x = (x as f32 / width as f32) * gm.width as f32;
+                let gm_y = (y as f32 / height as f32) * gm.height as f32;
+                let gx0 = (gm_x.floor() as u32).min(gm.width.saturating_sub(1));
+                let gy0 = (gm_y.floor() as u32).min(gm.height.saturating_sub(1));
+                let gx1 = (gx0 + 1).min(gm.width.saturating_sub(1));
+                let gy1 = (gy0 + 1).min(gm.height.saturating_sub(1));
+                let fx = gm_x - gm_x.floor();
+                let fy = gm_y - gm_y.floor();
+
+                // Compute gain per channel (weight=1.0 for full SDR reconstruction)
+                let gain = |byte_val: u8, ch: usize| -> f32 {
+                    let normalized = byte_val as f32 / 255.0;
+                    let linear = if gamma[ch] != 1.0 && gamma[ch] > 0.0 {
+                        normalized.powf(1.0 / gamma[ch])
+                    } else {
+                        normalized
+                    };
+                    // log_gain at weight=1.0
+                    (log_min[ch] + linear * log_range[ch]).exp()
+                };
+
+                let sample_channel = |ch: usize| -> f32 {
+                    if gm.channels == 1 {
+                        let g00 = gain(gm.data[(gy0 * gm.width + gx0) as usize], ch);
+                        let g10 = gain(gm.data[(gy0 * gm.width + gx1) as usize], ch);
+                        let g01 = gain(gm.data[(gy1 * gm.width + gx0) as usize], ch);
+                        let g11 = gain(gm.data[(gy1 * gm.width + gx1) as usize], ch);
+                        bilinear(g00, g10, g01, g11, fx, fy)
+                    } else {
+                        let i00 = (gy0 * gm.width + gx0) as usize * 3 + ch;
+                        let i10 = (gy0 * gm.width + gx1) as usize * 3 + ch;
+                        let i01 = (gy1 * gm.width + gx0) as usize * 3 + ch;
+                        let i11 = (gy1 * gm.width + gx1) as usize * 3 + ch;
+                        let g00 = gain(gm.data[i00], ch);
+                        let g10 = gain(gm.data[i10], ch);
+                        let g01 = gain(gm.data[i01], ch);
+                        let g11 = gain(gm.data[i11], ch);
+                        bilinear(g00, g10, g01, g11, fx, fy)
+                    }
+                };
+
+                let gain_r = sample_channel(0);
+                let gain_g = sample_channel(1);
+                let gain_b = sample_channel(2);
+
+                // Inverse gain map: sdr_linear = (hdr_linear + offset_hdr) / gain - offset_sdr
+                let inv_r = if gain_r > 1e-10 {
+                    (r + meta.offset_hdr[0]) / gain_r - meta.offset_sdr[0]
+                } else {
+                    0.0
+                };
+                let inv_g = if gain_g > 1e-10 {
+                    (g + meta.offset_hdr[1]) / gain_g - meta.offset_sdr[1]
+                } else {
+                    0.0
+                };
+                let inv_b = if gain_b > 1e-10 {
+                    (b + meta.offset_hdr[2]) / gain_b - meta.offset_sdr[2]
+                } else {
+                    0.0
+                };
+
+                // Convert linear → sRGB u8
+                let out_idx = (y as usize * width as usize + x as usize) * 4;
+                output[out_idx] = linear_to_srgb_u8(inv_r.max(0.0));
+                output[out_idx + 1] = linear_to_srgb_u8(inv_g.max(0.0));
+                output[out_idx + 2] = linear_to_srgb_u8(inv_b.max(0.0));
+                output[out_idx + 3] = 255;
+            }
+        }
+
+        Ok(output)
     }
 
     /// Reconstruct the alternate rendition.
@@ -245,6 +374,14 @@ impl DecodedGainMap {
             self.reconstruct_hdr(base_pixels, width, height, channels, display_boost)
         }
     }
+}
+
+/// Bilinear interpolation.
+#[inline(always)]
+fn bilinear(v00: f32, v10: f32, v01: f32, v11: f32, fx: f32, fy: f32) -> f32 {
+    let top = v00 * (1.0 - fx) + v10 * fx;
+    let bottom = v01 * (1.0 - fx) + v11 * fx;
+    top * (1.0 - fy) + bottom * fy
 }
 
 #[cfg(test)]
@@ -432,24 +569,39 @@ mod tests {
 
     #[cfg(feature = "jpeg-ultrahdr")]
     #[test]
-    fn reconstruct_sdr_unsupported_for_jxl() {
+    fn reconstruct_sdr_produces_valid_output() {
         let gm = DecodedGainMap {
             gain_map: GainMapImage {
-                data: vec![128; 4],
+                data: vec![128; 4], // mid-gray gain map
                 width: 2,
                 height: 2,
                 channels: 1,
             },
-            metadata: GainMapMetadata::default(),
+            metadata: GainMapMetadata {
+                max_content_boost: [4.0; 3],
+                min_content_boost: [1.0; 3],
+                gamma: [1.0; 3],
+                offset_sdr: [1.0 / 64.0; 3],
+                offset_hdr: [1.0 / 64.0; 3],
+                hdr_capacity_min: 1.0,
+                hdr_capacity_max: 4.0,
+                use_base_color_space: true,
+            },
             base_is_hdr: true,
             source_format: ImageFormat::Jxl,
         };
-        let dummy_pixels = vec![128u8; 2 * 2 * 16]; // f32 RGBA
-        let err = gm.reconstruct_sdr(&dummy_pixels, 2, 2).unwrap_err();
-        assert!(matches!(
-            err.error(),
-            CodecError::UnsupportedOperation { .. }
-        ));
+        // HDR linear f32 RGBA pixels: bright content
+        let mut hdr_pixels = Vec::new();
+        for _ in 0..4 {
+            hdr_pixels.extend_from_slice(&1.5f32.to_le_bytes()); // R
+            hdr_pixels.extend_from_slice(&1.0f32.to_le_bytes()); // G
+            hdr_pixels.extend_from_slice(&0.5f32.to_le_bytes()); // B
+            hdr_pixels.extend_from_slice(&1.0f32.to_le_bytes()); // A
+        }
+        let result = gm.reconstruct_sdr(&hdr_pixels, 2, 2).unwrap();
+        assert_eq!(result.len(), 2 * 2 * 4); // sRGB RGBA u8
+        assert!(result.iter().any(|&v| v > 0), "SDR should have non-zero pixels");
+        assert_eq!(result[3], 255); // alpha
     }
 
     #[cfg(feature = "jpeg-ultrahdr")]
@@ -483,7 +635,7 @@ mod tests {
         let result = gm_sdr.reconstruct_alternate(&sdr_pixels, 2, 2, 3, 4.0);
         assert!(result.is_ok(), "reconstruct_alternate SDR→HDR failed: {result:?}");
 
-        // HDR base → should try reconstruct_sdr (which returns UnsupportedOperation)
+        // HDR base → should try reconstruct_sdr (now implemented)
         let gm_hdr = DecodedGainMap {
             gain_map: GainMapImage {
                 data: vec![128; 4],
@@ -491,18 +643,29 @@ mod tests {
                 height: 2,
                 channels: 1,
             },
-            metadata: GainMapMetadata::default(),
+            metadata: GainMapMetadata {
+                max_content_boost: [4.0; 3],
+                min_content_boost: [1.0; 3],
+                gamma: [1.0; 3],
+                offset_sdr: [1.0 / 64.0; 3],
+                offset_hdr: [1.0 / 64.0; 3],
+                hdr_capacity_min: 1.0,
+                hdr_capacity_max: 4.0,
+                use_base_color_space: true,
+            },
             base_is_hdr: true,
             source_format: ImageFormat::Jxl,
         };
-        let hdr_pixels = vec![0u8; 2 * 2 * 16];
-        let err = gm_hdr
-            .reconstruct_alternate(&hdr_pixels, 2, 2, 4, 4.0)
-            .unwrap_err();
-        assert!(matches!(
-            err.error(),
-            CodecError::UnsupportedOperation { .. }
-        ));
+        // HDR linear f32 RGBA pixels
+        let mut hdr_pixels = Vec::new();
+        for _ in 0..4 {
+            hdr_pixels.extend_from_slice(&1.0f32.to_le_bytes());
+            hdr_pixels.extend_from_slice(&0.8f32.to_le_bytes());
+            hdr_pixels.extend_from_slice(&0.5f32.to_le_bytes());
+            hdr_pixels.extend_from_slice(&1.0f32.to_le_bytes());
+        }
+        let result = gm_hdr.reconstruct_alternate(&hdr_pixels, 2, 2, 4, 4.0);
+        assert!(result.is_ok(), "reconstruct_alternate HDR→SDR failed: {result:?}");
     }
 
     #[cfg(feature = "jpeg-ultrahdr")]
