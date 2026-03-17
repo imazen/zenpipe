@@ -669,7 +669,12 @@ impl<'a> EncodeRequest<'a> {
                     self.stop,
                 );
             }
-            // Other formats: encode normally (gain map embedding not yet supported)
+            // AVIF and JXL gain map embedding will be wired when
+            // zenavif-serialize and jxl-encoder add support.
+            return Err(at!(CodecError::UnsupportedOperation {
+                format,
+                detail: "gain map embedding not yet supported for this format",
+            }));
         }
 
         (built.encoder)(pixel_slice)
