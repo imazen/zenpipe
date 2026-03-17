@@ -79,6 +79,7 @@ mod gamut_map;
 pub mod param_schema;
 mod pipeline;
 mod planes;
+pub mod presets;
 pub mod regional;
 mod scatter_gather;
 mod simd;
