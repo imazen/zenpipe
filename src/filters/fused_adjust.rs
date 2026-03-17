@@ -154,6 +154,7 @@ mod tests {
         .apply(planes, &mut ctx);
         WhitePoint {
             level: adj.white_point,
+            headroom: 0.0,
         }
         .apply(planes, &mut ctx);
         Exposure {
@@ -167,6 +168,7 @@ mod tests {
         HighlightsShadows {
             highlights: adj.highlights,
             shadows: adj.shadows,
+            ..Default::default()
         }
         .apply(planes, &mut ctx);
         // FusedAdjust's dehaze is per-pixel (contrast + chroma boost),
