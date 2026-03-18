@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
-use zenpipe::ops::{SrgbToLinearPremul, UnpremulLinearToSrgb};
+use zenpipe::ops::RowConverterOp;
 use zenpipe::sources::CallbackSource;
 use zenpipe::{PixelFormat, Source, format};
 
@@ -116,8 +116,14 @@ fn pixel_op_fusion() {
     // sRGB → linear premul → unpremul → sRGB roundtrip via graph
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let to_linear = g.add_node(NodeOp::PixelTransform(Box::new(SrgbToLinearPremul)));
-    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(UnpremulLinearToSrgb)));
+    let to_linear = g.add_node(NodeOp::PixelTransform(Box::new(RowConverterOp::must(
+        format::RGBA8_SRGB,
+        format::RGBAF32_LINEAR_PREMUL,
+    ))));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(RowConverterOp::must(
+        format::RGBAF32_LINEAR_PREMUL,
+        format::RGBA8_SRGB,
+    ))));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, to_linear, EdgeKind::Input);
     g.add_edge(to_linear, to_srgb, EdgeKind::Input);
@@ -358,7 +364,11 @@ fn streaming_composite_graph() {
     let mut g = PipelineGraph::new();
     let bg_src = g.add_node(NodeOp::Source);
     let fg_src = g.add_node(NodeOp::Source);
-    let comp = g.add_node(NodeOp::Composite { fg_x: 0, fg_y: 0 });
+    let comp = g.add_node(NodeOp::Composite {
+        fg_x: 0,
+        fg_y: 0,
+        blend_mode: None,
+    });
     let out = g.add_node(NodeOp::Output);
 
     g.add_edge(bg_src, comp, EdgeKind::Canvas);
@@ -469,7 +479,11 @@ fn auto_format_conversion_for_composite() {
     let mut g = PipelineGraph::new();
     let bg = g.add_node(NodeOp::Source);
     let fg = g.add_node(NodeOp::Source);
-    let comp = g.add_node(NodeOp::Composite { fg_x: 0, fg_y: 0 });
+    let comp = g.add_node(NodeOp::Composite {
+        fg_x: 0,
+        fg_y: 0,
+        blend_mode: None,
+    });
     let out = g.add_node(NodeOp::Output);
 
     g.add_edge(bg, comp, EdgeKind::Canvas);
@@ -553,8 +567,14 @@ fn auto_format_rgba8_to_linear_direct() {
     let src = g.add_node(NodeOp::Source);
     // Composite requires Rgbaf32LinearPremul, but we test direct linear via
     // a PixelTransform that expects Rgbaf32Linear input
-    let to_linear = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::SrgbToLinear)));
-    let back = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let to_linear = g.add_node(NodeOp::PixelTransform(Box::new(RowConverterOp::must(
+        format::RGBA8_SRGB,
+        format::RGBAF32_LINEAR,
+    ))));
+    let back = g.add_node(NodeOp::PixelTransform(Box::new(RowConverterOp::must(
+        format::RGBAF32_LINEAR,
+        format::RGBA8_SRGB,
+    ))));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, to_linear, EdgeKind::Input);
     g.add_edge(to_linear, back, EdgeKind::Input);

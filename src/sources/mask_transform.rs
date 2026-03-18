@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
@@ -67,12 +68,7 @@ impl Source for MaskTransformSource {
             let dst_row = self.buf.row_mut(r);
 
             let row_f32: &mut [f32] = bytemuck::cast_slice_mut(dst_row);
-            zenblend::apply_mask_spans(
-                row_f32,
-                &mut self.mask_buf,
-                self.mask.as_ref(),
-                self.y,
-            );
+            zenblend::apply_mask_spans(row_f32, &mut self.mask_buf, self.mask.as_ref(), self.y);
             self.y += 1;
         }
 

@@ -203,6 +203,7 @@ fn overlay_opaque_covers_background() {
         x: 1,
         y: 1,
         opacity: 1.0,
+        blend_mode: None,
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, ov, EdgeKind::Input);
@@ -234,6 +235,7 @@ fn overlay_with_opacity() {
         x: 0,
         y: 0,
         opacity: 0.5,
+        blend_mode: None,
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, ov, EdgeKind::Input);

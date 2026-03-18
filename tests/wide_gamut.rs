@@ -292,7 +292,11 @@ fn graph_composite_mixed_gamut() {
     let mut g = PipelineGraph::new();
     let bg = g.add_node(NodeOp::Source);
     let fg = g.add_node(NodeOp::Source);
-    let comp = g.add_node(NodeOp::Composite { fg_x: 0, fg_y: 0 });
+    let comp = g.add_node(NodeOp::Composite {
+        fg_x: 0,
+        fg_y: 0,
+        blend_mode: None,
+    });
     let out = g.add_node(NodeOp::Output);
 
     g.add_edge(bg, comp, EdgeKind::Canvas);

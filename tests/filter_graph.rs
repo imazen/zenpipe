@@ -205,7 +205,12 @@ fn filter_graph_saturation_roundtrip() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
     let filter = g.add_node(NodeOp::Filter(pipeline));
-    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(
+        zenpipe::ops::RowConverterOp::must(
+            zenpipe::format::RGBAF32_LINEAR,
+            zenpipe::format::RGBA8_SRGB,
+        ),
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, filter, EdgeKind::Input);
     g.add_edge(filter, to_srgb, EdgeKind::Input);

@@ -119,6 +119,29 @@ pub enum NodeOp {
         sharpen_percent: Option<f32>,
     },
 
+    /// Constrain to target dimensions using a zenlayout constraint mode.
+    ///
+    /// Builds a [`LayoutPlan`] internally from the upstream dimensions,
+    /// constraint mode, target size, and optional EXIF orientation.
+    /// Equivalent to [`Layout`](NodeOp::Layout) but without requiring
+    /// manual [`LayoutPlan`] construction.
+    Constrain {
+        mode: zenresize::ConstraintMode,
+        w: u32,
+        h: u32,
+        /// Optional EXIF orientation (1-8) to apply during layout.
+        orientation: Option<u8>,
+        /// Resampling filter (default Robidoux if None).
+        filter: Option<zenresize::Filter>,
+    },
+
+    /// Advanced resize with a pre-built [`ResizeConfig`](zenresize::ResizeConfig).
+    ///
+    /// Provides access to all zenresize options: kernel_width_scale,
+    /// post_blur, lobe_ratio, padding, source_region, etc.
+    /// The config's `in_width`/`in_height` are overridden from upstream at compile time.
+    ResizeAdvanced(zenresize::ResizeConfig),
+
     /// Apply an orientation transform (any of the 8 EXIF orientations).
     /// Delegates to [`zenresize::orient_image`]. Materializes.
     Orient(zenresize::Orientation),
@@ -141,7 +164,12 @@ pub enum NodeOp {
     /// - `Input` edge = foreground (placed at `fg_x, fg_y`)
     ///
     /// Both inputs are automatically converted to `Rgbaf32LinearPremul`.
-    Composite { fg_x: u32, fg_y: u32 },
+    /// Optional blend mode (default: SrcOver if None).
+    Composite {
+        fg_x: u32,
+        fg_y: u32,
+        blend_mode: Option<zenblend::BlendMode>,
+    },
 
     // === Filters (zenfilters integration) ===
     /// Apply a [`zenfilters::Pipeline`] of photo filters.
@@ -209,6 +237,8 @@ pub enum NodeOp {
         y: i32,
         /// Opacity factor (0.0 = invisible, 1.0 = full).
         opacity: f32,
+        /// Blend mode (default: SrcOver if None).
+        blend_mode: Option<zenblend::BlendMode>,
     },
 
     // === Barriers ===
@@ -417,6 +447,65 @@ impl PipelineGraph {
                 Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
             }
 
+            NodeOp::Constrain {
+                mode,
+                w,
+                h,
+                orientation,
+                filter,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
+                let in_w = upstream.width();
+                let in_h = upstream.height();
+
+                let mut pipeline = zenresize::Pipeline::new(in_w, in_h);
+                if let Some(exif) = orientation {
+                    pipeline = pipeline.auto_orient(exif);
+                }
+                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+
+                let (ideal, request) = pipeline
+                    .plan()
+                    .map_err(|e| PipeError::Op(alloc::format!("layout plan failed: {e}")))?;
+                let offer = zenresize::DecoderOffer::full_decode(in_w, in_h);
+                let plan = ideal.finalize(&request, &offer);
+                let f = filter.unwrap_or(zenresize::Filter::Robidoux);
+
+                let resizer = zenresize::streaming_from_plan_batched(
+                    in_w,
+                    in_h,
+                    &plan,
+                    zenresize::PixelDescriptor::RGBA8_SRGB,
+                    f,
+                    16,
+                );
+                let mut source: Box<dyn Source> =
+                    Box::new(ResizeSource::from_streaming(upstream, resizer, 16)?);
+
+                if let Some(cs) = plan.content_size {
+                    let out_w = source.width();
+                    let out_h = source.height();
+                    if cs.width < out_w || cs.height < out_h {
+                        source = Box::new(EdgeReplicateSource::new(
+                            source, cs.width, cs.height, out_w, out_h,
+                        ));
+                    }
+                }
+
+                Ok(source)
+            }
+
+            NodeOp::ResizeAdvanced(mut config) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
+                config.in_width = upstream.width();
+                config.in_height = upstream.height();
+                Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
+            }
+
             NodeOp::Orient(orientation) => compile_orient(self, node_id, sources, orientation),
 
             NodeOp::AutoOrient(exif) => {
@@ -437,14 +526,22 @@ impl PipelineGraph {
                 Ok(Box::new(transform))
             }
 
-            NodeOp::Composite { fg_x, fg_y } => {
+            NodeOp::Composite {
+                fg_x,
+                fg_y,
+                blend_mode,
+            } => {
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg = self.compile_node(bg_id, sources)?;
                 let fg = self.compile_node(fg_id, sources)?;
                 let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
                 let fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
-                Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
+                let mut comp = CompositeSource::over_at(bg, fg, fg_x, fg_y)?;
+                if let Some(mode) = blend_mode {
+                    comp = comp.with_blend_mode(mode);
+                }
+                Ok(Box::new(comp))
             }
 
             #[cfg(feature = "std")]
@@ -525,6 +622,7 @@ impl PipelineGraph {
                 x,
                 y,
                 opacity,
+                blend_mode,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg = self.compile_node(input_id, sources)?;
@@ -543,7 +641,11 @@ impl PipelineGraph {
 
                 let fg_x = x.max(0) as u32;
                 let fg_y = y.max(0) as u32;
-                Ok(Box::new(CompositeSource::over_at(bg, fg, fg_x, fg_y)?))
+                let mut comp = CompositeSource::over_at(bg, fg, fg_x, fg_y)?;
+                if let Some(mode) = blend_mode {
+                    comp = comp.with_blend_mode(mode);
+                }
+                Ok(Box::new(comp))
             }
 
             NodeOp::Materialize(transform_fn) => {

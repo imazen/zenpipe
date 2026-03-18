@@ -1,7 +1,4 @@
-use zenpipe::ops::{
-    DelinearizeF32, LinearToSrgb, LinearizeF32, NormalizeU8ToF32, QuantizeF32ToU8, SrgbToLinear,
-    SrgbToLinearPremul, UnpremulLinearToSrgb,
-};
+use zenpipe::ops::RowConverterOp;
 use zenpipe::sources::{
     CallbackSource, CropSource, EdgeReplicateSource, MaterializedSource, TransformSource,
 };
@@ -98,8 +95,14 @@ fn from_data_source() {
 fn transform_roundtrip_srgb_linear() {
     // sRGB u8 → linear premul f32 → back to sRGB u8 should be near-identity
     let mut src = TransformSource::new(Box::new(solid_rgba8(4, 2, 200, 100, 50, 255)))
-        .push(SrgbToLinearPremul)
-        .push(UnpremulLinearToSrgb);
+        .push(RowConverterOp::must(
+            format::RGBA8_SRGB,
+            format::RGBAF32_LINEAR_PREMUL,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_LINEAR_PREMUL,
+            format::RGBA8_SRGB,
+        ));
 
     assert_eq!(src.width(), 4);
     assert_eq!(src.height(), 2);
@@ -119,8 +122,14 @@ fn transform_roundtrip_srgb_linear() {
 #[test]
 fn transform_normalize_quantize_roundtrip() {
     let mut src = TransformSource::new(Box::new(solid_rgba8(2, 2, 128, 64, 32, 200)))
-        .push(NormalizeU8ToF32)
-        .push(QuantizeF32ToU8);
+        .push(RowConverterOp::must(
+            format::RGBA8_SRGB,
+            format::RGBAF32_SRGB,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_SRGB,
+            format::RGBA8_SRGB,
+        ));
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
@@ -288,9 +297,15 @@ fn transform_chain_format_progression() {
     // Build a chain: Rgba8 → normalize → Rgbaf32Srgb → quantize → Rgba8
     // Verify intermediate format tracking
     let src = solid_rgba8(2, 1, 100, 150, 200, 255);
-    let t1 = TransformSource::new(Box::new(src)).push(NormalizeU8ToF32);
+    let t1 = TransformSource::new(Box::new(src)).push(RowConverterOp::must(
+        format::RGBA8_SRGB,
+        format::RGBAF32_SRGB,
+    ));
     assert_eq!(t1.format(), format::RGBAF32_SRGB);
-    let t2 = t1.push(QuantizeF32ToU8);
+    let t2 = t1.push(RowConverterOp::must(
+        format::RGBAF32_SRGB,
+        format::RGBA8_SRGB,
+    ));
     assert_eq!(t2.format(), format::RGBA8_SRGB);
 }
 
@@ -370,8 +385,14 @@ fn small_strip_height() {
 fn transform_srgb_to_linear_roundtrip() {
     // sRGB u8 → linear f32 (straight) → sRGB u8 should be near-identity
     let mut src = TransformSource::new(Box::new(solid_rgba8(4, 2, 200, 100, 50, 200)))
-        .push(SrgbToLinear)
-        .push(LinearToSrgb);
+        .push(RowConverterOp::must(
+            format::RGBA8_SRGB,
+            format::RGBAF32_LINEAR,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_LINEAR,
+            format::RGBA8_SRGB,
+        ));
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
@@ -389,10 +410,22 @@ fn transform_srgb_to_linear_roundtrip() {
 fn transform_linearize_delinearize_roundtrip() {
     // Normalize to f32 sRGB → linearize → delinearize → quantize back to u8
     let mut src = TransformSource::new(Box::new(solid_rgba8(4, 2, 180, 90, 45, 255)))
-        .push(NormalizeU8ToF32)
-        .push(LinearizeF32)
-        .push(DelinearizeF32)
-        .push(QuantizeF32ToU8);
+        .push(RowConverterOp::must(
+            format::RGBA8_SRGB,
+            format::RGBAF32_SRGB,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_SRGB,
+            format::RGBAF32_LINEAR,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_LINEAR,
+            format::RGBAF32_SRGB,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_SRGB,
+            format::RGBA8_SRGB,
+        ));
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
@@ -409,9 +442,18 @@ fn transform_format_chain_linear_via_premul() {
     // Rgba8 → linear premul → unpremul → linear → srgb u8
     // Tests the new ops compose correctly with existing ones
     let mut src = TransformSource::new(Box::new(solid_rgba8(2, 2, 160, 80, 40, 200)))
-        .push(SrgbToLinearPremul)
-        .push(zenpipe::ops::Unpremultiply)
-        .push(LinearToSrgb);
+        .push(RowConverterOp::must(
+            format::RGBA8_SRGB,
+            format::RGBAF32_LINEAR_PREMUL,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_LINEAR_PREMUL,
+            format::RGBAF32_LINEAR,
+        ))
+        .push(RowConverterOp::must(
+            format::RGBAF32_LINEAR,
+            format::RGBA8_SRGB,
+        ));
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);

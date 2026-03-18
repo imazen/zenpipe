@@ -134,7 +134,12 @@ fn streaming_4k_resize_filter() {
         sharpen_percent: None,
     });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
-    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(
+        zenpipe::ops::RowConverterOp::must(
+            zenpipe::format::RGBAF32_LINEAR,
+            zenpipe::format::RGBA8_SRGB,
+        ),
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, filter, EdgeKind::Input);
@@ -293,7 +298,12 @@ fn streaming_4k_full_pipeline() {
         sharpen_percent: None,
     });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
-    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(
+        zenpipe::ops::RowConverterOp::must(
+            zenpipe::format::RGBAF32_LINEAR,
+            zenpipe::format::RGBA8_SRGB,
+        ),
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, filter, EdgeKind::Input);
@@ -345,7 +355,12 @@ fn streaming_4k_windowed_clarity() {
         sharpen_percent: None,
     });
     let filter = g.add_node(NodeOp::Filter(filter_pipeline));
-    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(zenpipe::ops::LinearToSrgb)));
+    let to_srgb = g.add_node(NodeOp::PixelTransform(Box::new(
+        zenpipe::ops::RowConverterOp::must(
+            zenpipe::format::RGBAF32_LINEAR,
+            zenpipe::format::RGBA8_SRGB,
+        ),
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, resize, EdgeKind::Input);
     g.add_edge(resize, filter, EdgeKind::Input);
