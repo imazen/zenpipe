@@ -417,6 +417,7 @@ mod tests {
             primaries: ColorPrimaries::Unknown,
             reference_white: 1.0,
             gamut_mapping: GamutMapping::Clip,
+            reference_width: None,
         });
         assert!(result.is_err());
     }

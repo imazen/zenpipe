@@ -54,6 +54,10 @@ pub enum FilterTag {
     Texture,
     LocalToneMap,
 
+    // Noise / analysis
+    MedianBlur,
+    EdgeDetect,
+
     // Color
     Saturation,
     Vibrance,
@@ -107,6 +111,10 @@ pub const ORDER_CONSTRAINTS: &[(FilterTag, FilterTag)] = &[
     (FilterTag::NoiseReduction, FilterTag::Texture),
     (FilterTag::Bilateral, FilterTag::Sharpen),
     (FilterTag::Bilateral, FilterTag::AdaptiveSharpen),
+    // Median blur before sharpening — same reason as denoise
+    (FilterTag::MedianBlur, FilterTag::Sharpen),
+    (FilterTag::MedianBlur, FilterTag::AdaptiveSharpen),
+    (FilterTag::MedianBlur, FilterTag::Clarity),
     // Recovery before fine-tuning
     (FilterTag::HighlightRecovery, FilterTag::HighlightsShadows),
     (FilterTag::ShadowLift, FilterTag::HighlightsShadows),

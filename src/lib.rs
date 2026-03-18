@@ -85,6 +85,7 @@ pub mod resize_pipeline;
 mod scatter_gather;
 mod simd;
 pub mod slider;
+pub mod masked;
 
 #[cfg(feature = "buffer")]
 mod convenience;
