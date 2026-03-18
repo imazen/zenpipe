@@ -441,10 +441,10 @@ mod tests {
     fn dpr_clamps() {
         // Extreme values don't produce NaN or out-of-range
         let low = adjust_quality_for_dpr(50.0, 0.001);
-        assert!(low >= 5.0 && low <= 99.0);
+        assert!((5.0..=99.0).contains(&low));
 
         let high = adjust_quality_for_dpr(50.0, 1000.0);
-        assert!(high >= 5.0 && high <= 99.0);
+        assert!((5.0..=99.0).contains(&high));
     }
 
     #[test]

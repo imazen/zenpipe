@@ -22,7 +22,9 @@
 
 use alloc::vec::Vec;
 
-use crate::{CodecError, ImageFormat};
+use crate::CodecError;
+#[cfg(feature = "jpeg-ultrahdr")]
+use crate::ImageFormat;
 
 // Re-export the ISO 21496-1 metadata type from ultrahdr-core (via zenjpeg).
 #[cfg(feature = "jpeg-ultrahdr")]
@@ -378,6 +380,7 @@ impl DecodedGainMap {
 }
 
 /// Bilinear interpolation.
+#[cfg(feature = "jpeg-ultrahdr")]
 #[inline(always)]
 fn bilinear(v00: f32, v10: f32, v01: f32, v11: f32, fx: f32, fy: f32) -> f32 {
     let top = v00 * (1.0 - fx) + v10 * fx;

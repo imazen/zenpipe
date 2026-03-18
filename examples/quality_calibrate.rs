@@ -31,6 +31,9 @@ const QUALITY_LEVELS: &[f32] = &[
     78.0, 80.0, 82.0, 85.0, 87.0, 90.0, 92.0, 95.0, 97.0, 99.0,
 ];
 
+/// A codec factory: given a quality level, returns a codec (or None to skip).
+type CodecFactory = Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>;
+
 /// A single measurement: one image at one quality for one codec.
 #[derive(Clone)]
 struct Measurement {
@@ -120,31 +123,30 @@ fn main() {
     );
 
     // Run codecs — libjpeg-turbo first as the reference anchor
-    let codecs: Vec<(&str, Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>)> = vec![
+    let codecs: Vec<(&str, CodecFactory)> = vec![
         (
             "libjpeg-turbo",
-            Box::new(|q| Some(Codec::LibjpegTurbo(q)))
-                as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+            Box::new(|q| Some(Codec::LibjpegTurbo(q))) as CodecFactory,
         ),
         #[cfg(feature = "jpeg")]
         (
             "jpeg",
-            Box::new(|q| Some(Codec::Jpeg(q))) as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+            Box::new(|q| Some(Codec::Jpeg(q))) as CodecFactory,
         ),
         #[cfg(feature = "webp")]
         (
             "webp",
-            Box::new(|q| Some(Codec::Webp(q))) as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+            Box::new(|q| Some(Codec::Webp(q))) as CodecFactory,
         ),
         #[cfg(feature = "avif-encode")]
         (
             "avif",
-            Box::new(|q| Some(Codec::Avif(q))) as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+            Box::new(|q| Some(Codec::Avif(q))) as CodecFactory,
         ),
         #[cfg(feature = "jxl-encode")]
         (
             "jxl",
-            Box::new(|q| Some(Codec::Jxl(q))) as Box<dyn Fn(f32) -> Option<Codec> + Send + Sync>,
+            Box::new(|q| Some(Codec::Jxl(q))) as CodecFactory,
         ),
     ];
 
@@ -184,7 +186,7 @@ fn main() {
                 }
 
                 let count = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                if count % 100 == 0 {
+                if count.is_multiple_of(100) {
                     eprint!(
                         "\r  {}/{} ({:.0}%)",
                         count,
