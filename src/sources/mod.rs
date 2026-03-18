@@ -8,6 +8,7 @@ mod filter;
 mod flip;
 #[cfg(feature = "std")]
 mod icc_transform;
+mod mask_transform;
 mod materialize;
 mod resize;
 mod tee;
@@ -25,6 +26,7 @@ pub use filter::FilterSource;
 pub use flip::FlipHSource;
 #[cfg(feature = "std")]
 pub use icc_transform::IccTransformSource;
+pub use mask_transform::MaskTransformSource;
 pub use materialize::MaterializedSource;
 pub use resize::{ResizeF32Source, ResizeSource};
 pub use tee::{TeeCursor, TeeSource};
