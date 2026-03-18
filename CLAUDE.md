@@ -66,6 +66,7 @@ zencodecs/
 │       ├── jxl_dec.rs    # zenjxl decoder adapter
 │       ├── jxl_enc.rs    # jxl-encoder adapter
 │       ├── heic.rs       # heic-decoder adapter
+│       ├── raw.rs        # zenraw RAW/DNG adapter (feature: raw-decode)
 │       ├── pnm.rs        # zenbitmaps PNM adapter
 │       ├── bmp.rs        # zenbitmaps BMP adapter
 │       └── farbfeld.rs   # zenbitmaps Farbfeld adapter
@@ -155,6 +156,23 @@ zencodecs/
   - Other formats: Returns None
 - Internal f16<->f32 conversion (pure math, no unsafe)
 - 30+ unit tests covering all formats, pixel types, f16 roundtrip, resize, edge cases
+
+### RAW/DNG Support (2026-03-18)
+- **Feature-gated**: `raw-decode`, `raw-decode-exif`, `raw-decode-xmp` (not in default features — rawloader is LGPL)
+- **codecs/raw.rs**: zenraw adapter (decode, probe, preview extraction, metadata)
+- **Format detection**: `detect_format()` augmented to check `zenraw::is_raw_file()` after common registry
+- **ImageFormat::Custom**: RAW/DNG use `ImageFormat::Custom(&DNG_FORMAT)` / `Custom(&RAW_FORMAT)` — matched via `def.name == "dng" || "raw"` in dispatch
+- **CodecId::ZenrawDecode**: New decoder ID for RAW/DNG
+- **CodecConfig::raw_decoder**: Optional `Box<RawDecodeConfig>` for demosaic method, gamma, crop, orientation
+- **config::raw module**: Re-exports `RawDecodeConfig`, `DemosaicMethod`
+- **DecodeRequest::extract_raw_preview()**: Extract embedded JPEG preview from DNG/RAW (feature: raw-decode-exif)
+- **DecodeRequest::read_raw_metadata()**: Read structured EXIF+DNG metadata via zenraw's kamadak-exif (feature: raw-decode-exif)
+- **exif::from_raw_metadata()**: Convert `zenraw::exif::ExifMetadata` to `ExifData` (feature: raw-decode-exif)
+- **ExifData DNG fields**: `dng_version`, `unique_camera_model`, `color_matrix_1`/`_2`, `forward_matrix_1`/`_2`, `analog_balance`, `as_shot_neutral`, `as_shot_white_xy`, `baseline_exposure`, `calibration_illuminant_1`/`_2`
+- **EXIF parser**: IFD0 now parses all DNG tags (0xC612-0xC715) into ExifData
+- Wired into: decode dispatch, info probe, dyn_dispatch (push_decode, full_frame_decoder), codec_id mapping
+- Re-exports: `RawDecodeConfig`, `RawDecoderConfig` from lib.rs
+- 4 new DNG EXIF tests (dng_version, unique_camera_model, color_matrix+white_balance, as_shot_white_xy)
 
 ### What's NOT implemented yet
 - Pull-based streaming decode (DynStreamingDecoder + 'a lifetime blocked by GAT config borrow — use push_decode instead)
