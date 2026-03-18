@@ -594,7 +594,10 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
                 Ok(Box::new(crate::sources::IccTransformSource::new(
-                    upstream, &src_icc, &dst_icc,
+                    upstream,
+                    &src_icc,
+                    &dst_icc,
+                    &zenpixels_convert::cms_moxcms::MoxCms,
                 )?))
             }
 

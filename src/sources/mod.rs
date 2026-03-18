@@ -6,7 +6,6 @@ mod expand_canvas;
 #[cfg(feature = "std")]
 mod filter;
 mod flip;
-#[cfg(feature = "std")]
 mod icc_transform;
 mod mask_transform;
 mod materialize;
@@ -24,7 +23,6 @@ pub use expand_canvas::ExpandCanvasSource;
 #[cfg(feature = "std")]
 pub use filter::FilterSource;
 pub use flip::FlipHSource;
-#[cfg(feature = "std")]
 pub use icc_transform::IccTransformSource;
 pub use mask_transform::MaskTransformSource;
 pub use materialize::MaterializedSource;
