@@ -338,29 +338,28 @@ const CANNY_MIN_GRADIENT: f32 = 0.005;
 
 /// Auto-compute Canny thresholds from gradient magnitude distribution.
 ///
-/// Uses the 70th and 90th percentile of significant gradient magnitudes.
-/// Magnitudes below [`CANNY_MIN_GRADIENT`] are ignored (float noise).
+/// Uses a ratio-based approach on the maximum gradient:
+/// - high = max_magnitude * 0.3 (strong edge threshold)
+/// - low = high * 0.4 (weak edge threshold for hysteresis)
+///
+/// This is more robust than percentile-based methods because it adapts
+/// to the actual contrast in the image rather than the number of edge pixels.
 fn compute_canny_thresholds(nms: &[f32], n: usize) -> (f32, f32) {
-    // Collect magnitudes above the noise floor
-    let mut significant: alloc::vec::Vec<f32> = nms[..n]
-        .iter()
-        .copied()
-        .filter(|&v| v > CANNY_MIN_GRADIENT)
-        .collect();
-    if significant.is_empty() {
+    let mut max_mag = 0.0f32;
+    for &v in &nms[..n] {
+        if v > max_mag {
+            max_mag = v;
+        }
+    }
+
+    if max_mag <= CANNY_MIN_GRADIENT {
         return (0.0, 0.0);
     }
 
-    significant.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
+    let high = max_mag * 0.3;
+    let low = high * 0.4;
 
-    let p70_idx = (significant.len() as f32 * 0.7) as usize;
-    let p90_idx =
-        (significant.len() as f32 * 0.9).min(significant.len() as f32 - 1.0) as usize;
-
-    let low = significant[p70_idx].max(CANNY_MIN_GRADIENT);
-    let high = significant[p90_idx].max(low * 1.5);
-
-    (low, high)
+    (low.max(CANNY_MIN_GRADIENT), high)
 }
 
 static EDGE_DETECT_SCHEMA: FilterSchema = FilterSchema {

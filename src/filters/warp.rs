@@ -78,6 +78,9 @@ pub struct Warp {
     pub background: WarpBackground,
     /// Interpolation quality. Default: Bicubic.
     pub interpolation: WarpInterpolation,
+    /// Exact cardinal rotation (1=90°CCW, 2=180°, 3=270°CCW).
+    /// When set, uses pixel-perfect copy instead of matrix interpolation.
+    cardinal: Option<u8>,
 }
 
 impl Default for Warp {
@@ -87,6 +90,7 @@ impl Default for Warp {
             matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
             background: WarpBackground::Clamp,
             interpolation: WarpInterpolation::Bicubic,
+            cardinal: None,
         }
     }
 }
@@ -121,6 +125,7 @@ impl Warp {
             ],
             background: WarpBackground::Clamp,
             interpolation: WarpInterpolation::Bicubic,
+            cardinal: None,
         }
     }
 
@@ -148,6 +153,7 @@ impl Warp {
             matrix: [a, b, tx, c, d, ty, 0.0, 0.0, 1.0],
             background: WarpBackground::Clamp,
             interpolation: WarpInterpolation::Bicubic,
+            cardinal: None,
         }
     }
 
@@ -160,6 +166,77 @@ impl Warp {
             matrix,
             background: WarpBackground::Clamp,
             interpolation: WarpInterpolation::Bicubic,
+            cardinal: None,
+        }
+    }
+
+    /// Rotate around an arbitrary center point.
+    ///
+    /// Unlike [`rotation`](Self::rotation) which always uses the image center,
+    /// this allows rotating around any point — useful for rotating around a
+    /// detected feature, horizon vanishing point, or document corner.
+    ///
+    /// Coordinates are in pixels (not normalized). For the image center,
+    /// use `((width-1)/2, (height-1)/2)`.
+    pub fn rotation_around(
+        angle_degrees: f32,
+        center_x: f32,
+        center_y: f32,
+        _width: u32,
+        _height: u32,
+    ) -> Self {
+        let angle_rad = angle_degrees * core::f32::consts::PI / 180.0;
+        let cos_a = angle_rad.cos();
+        let sin_a = angle_rad.sin();
+
+        Self {
+            matrix: [
+                cos_a,
+                sin_a,
+                center_x - center_x * cos_a - center_y * sin_a,
+                -sin_a,
+                cos_a,
+                center_y + center_x * sin_a - center_y * cos_a,
+                0.0,
+                0.0,
+                1.0,
+            ],
+            background: WarpBackground::Clamp,
+            interpolation: WarpInterpolation::Bicubic,
+            cardinal: None,
+        }
+    }
+
+    /// Exact 90° rotation (counterclockwise). Pixel-perfect, no interpolation.
+    ///
+    /// For non-square images, width and height are swapped in the output.
+    /// This is lossless — no resampling artifacts.
+    pub fn rotate_90(width: u32, height: u32) -> Self {
+        Self::exact_cardinal(1, width, height)
+    }
+
+    /// Exact 180° rotation. Pixel-perfect, no interpolation.
+    pub fn rotate_180(width: u32, height: u32) -> Self {
+        Self::exact_cardinal(2, width, height)
+    }
+
+    /// Exact 270° rotation (counterclockwise) / 90° clockwise.
+    /// Pixel-perfect, no interpolation.
+    ///
+    /// For non-square images, width and height are swapped in the output.
+    pub fn rotate_270(width: u32, height: u32) -> Self {
+        Self::exact_cardinal(3, width, height)
+    }
+
+    /// Build a cardinal rotation (pixel-perfect, no interpolation).
+    /// `quarter_turns`: 1=90°CCW, 2=180°, 3=270°CCW
+    fn exact_cardinal(quarter_turns: u8, _width: u32, _height: u32) -> Self {
+        Self {
+            // Identity matrix — unused, the cardinal fast path handles everything
+            matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            background: WarpBackground::Clamp,
+            interpolation: WarpInterpolation::Bilinear,
+            cardinal: Some(quarter_turns),
         }
     }
 
@@ -210,6 +287,13 @@ impl Filter for Warp {
     }
 
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+        // Fast path: exact cardinal rotations (pixel-perfect, no interpolation)
+        // Check before identity — cardinal constructors use identity matrix as placeholder.
+        if let Some(quarter_turns) = self.cardinal {
+            apply_cardinal(planes, quarter_turns, ctx);
+            return;
+        }
+
         if self.is_identity() {
             return;
         }
@@ -494,6 +578,63 @@ fn sample_kernel<const TAPS: usize>(
     }
 
     sum
+}
+
+// ─── Cardinal rotation (pixel-perfect) ──────────────────────────────
+
+/// Apply an exact cardinal rotation (90°/180°/270°) without interpolation.
+///
+/// For 90° and 270°, width and height are swapped in the output planes.
+/// This is completely lossless — every pixel is copied exactly once.
+fn apply_cardinal(planes: &mut OklabPlanes, quarter_turns: u8, ctx: &mut FilterContext) {
+    let src_w = planes.width as usize;
+    let src_h = planes.height as usize;
+
+    let (dst_w, dst_h) = match quarter_turns {
+        1 | 3 => (src_h, src_w), // swap dimensions
+        _ => (src_w, src_h),     // 180° keeps dimensions
+    };
+
+    let dst_n = dst_w * dst_h;
+    let mut dst_l = ctx.take_f32(dst_n);
+    let mut dst_a = ctx.take_f32(dst_n);
+    let mut dst_b = ctx.take_f32(dst_n);
+
+    let rotate_plane = |src: &[f32], dst: &mut [f32]| {
+        for sy in 0..src_h {
+            for sx in 0..src_w {
+                let (dx, dy) = match quarter_turns {
+                    1 => (sy, src_w - 1 - sx),              // 90° CCW
+                    2 => (src_w - 1 - sx, src_h - 1 - sy),  // 180°
+                    3 => (src_h - 1 - sy, sx),               // 270° CCW
+                    _ => (sx, sy),
+                };
+                dst[dy * dst_w + dx] = src[sy * src_w + sx];
+            }
+        }
+    };
+
+    rotate_plane(&planes.l, &mut dst_l);
+    rotate_plane(&planes.a, &mut dst_a);
+    rotate_plane(&planes.b, &mut dst_b);
+
+    let old_l = core::mem::replace(&mut planes.l, dst_l);
+    let old_a = core::mem::replace(&mut planes.a, dst_a);
+    let old_b = core::mem::replace(&mut planes.b, dst_b);
+    ctx.return_f32(old_l);
+    ctx.return_f32(old_a);
+    ctx.return_f32(old_b);
+
+    if let Some(alpha) = &mut planes.alpha {
+        let mut dst_alpha = ctx.take_f32(dst_n);
+        rotate_plane(alpha, &mut dst_alpha);
+        let old_alpha = core::mem::replace(alpha, dst_alpha);
+        ctx.return_f32(old_alpha);
+    }
+
+    // Update dimensions for 90°/270° rotations
+    planes.width = dst_w as u32;
+    planes.height = dst_h as u32;
 }
 
 static WARP_SCHEMA: FilterSchema = FilterSchema {
@@ -816,5 +957,173 @@ mod tests {
     fn with_max_quality_sets_lanczos3() {
         let warp = Warp::rotation(5.0, 100, 100).with_max_quality();
         assert_eq!(warp.interpolation, WarpInterpolation::Lanczos3);
+    }
+
+    // ─── Cardinal rotation tests ─────────────────────────────────────
+
+    #[test]
+    fn rotate_90_swaps_dimensions() {
+        let mut planes = OklabPlanes::new(16, 8);
+        // Mark top-left corner
+        let tl = planes.index(0, 0);
+        planes.l[tl] = 1.0;
+        // Mark top-right corner
+        let tr = planes.index(15, 0);
+        planes.l[tr] = 0.5;
+
+        let warp = Warp::rotate_90(16, 8);
+        warp.apply(&mut planes, &mut FilterContext::new());
+
+        // Dimensions should be swapped
+        assert_eq!(planes.width, 8);
+        assert_eq!(planes.height, 16);
+
+        // Top-left (0,0) should have moved to bottom-left of rotated image
+        // 90° CCW: (0,0) → (0, w-1) in output = (0, 15)
+        let moved = planes.l[planes.index(0, 15)];
+        assert!(
+            (moved - 1.0).abs() < 1e-6,
+            "top-left should be at (0,15) after 90° CCW, got {moved}"
+        );
+    }
+
+    #[test]
+    fn rotate_180_preserves_dimensions() {
+        let mut planes = OklabPlanes::new(16, 8);
+        let tl = planes.index(0, 0);
+        planes.l[tl] = 1.0;
+
+        let warp = Warp::rotate_180(16, 8);
+        warp.apply(&mut planes, &mut FilterContext::new());
+
+        assert_eq!(planes.width, 16);
+        assert_eq!(planes.height, 8);
+
+        // (0,0) → (w-1, h-1) = (15, 7)
+        let moved = planes.l[planes.index(15, 7)];
+        assert!(
+            (moved - 1.0).abs() < 1e-6,
+            "(0,0) should be at (15,7) after 180°, got {moved}"
+        );
+    }
+
+    #[test]
+    fn rotate_270_is_inverse_of_90() {
+        let mut planes = OklabPlanes::new(16, 8);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 * 0.007).fract();
+        }
+        let original_l = planes.l.clone();
+        let original_w = planes.width;
+        let original_h = planes.height;
+
+        let mut ctx = FilterContext::new();
+
+        // 90° then 270° should be identity
+        let warp90 = Warp::rotate_90(original_w, original_h);
+        warp90.apply(&mut planes, &mut ctx);
+        let mid_w = planes.width;
+        let mid_h = planes.height;
+
+        let warp270 = Warp::rotate_270(mid_w, mid_h);
+        warp270.apply(&mut planes, &mut ctx);
+
+        assert_eq!(planes.width, original_w);
+        assert_eq!(planes.height, original_h);
+        assert_eq!(planes.l, original_l);
+    }
+
+    #[test]
+    fn four_90_rotations_is_identity() {
+        let mut planes = OklabPlanes::new(20, 12);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 * 0.0041).fract();
+        }
+        let original = planes.l.clone();
+
+        let mut ctx = FilterContext::new();
+        let mut w = planes.width;
+        let mut h = planes.height;
+        for _ in 0..4 {
+            let warp = Warp::rotate_90(w, h);
+            warp.apply(&mut planes, &mut ctx);
+            w = planes.width;
+            h = planes.height;
+        }
+
+        assert_eq!(planes.width, 20);
+        assert_eq!(planes.height, 12);
+        assert_eq!(planes.l, original, "4×90° cardinal should be exactly identity");
+    }
+
+    #[test]
+    fn cardinal_rotates_alpha() {
+        let mut planes = OklabPlanes::with_alpha(8, 4);
+        let alpha = planes.alpha.as_mut().unwrap();
+        alpha[0] = 0.99; // top-left
+
+        let warp = Warp::rotate_90(8, 4);
+        warp.apply(&mut planes, &mut FilterContext::new());
+
+        // After 90° CCW on 8×4 → 4×8 output
+        // (0,0) → (0, 7) in 4-wide output
+        assert_eq!(planes.width, 4);
+        assert_eq!(planes.height, 8);
+        let val = planes.alpha.as_ref().unwrap()[planes.index(0, 7)];
+        assert!(
+            (val - 0.99).abs() < 1e-6,
+            "alpha should follow rotation, got {val}"
+        );
+    }
+
+    #[test]
+    fn rotation_around_custom_center() {
+        let mut planes = OklabPlanes::new(64, 64);
+        // Fill a patch at (10, 10)
+        for dy in -2i32..=2 {
+            for dx in -2i32..=2 {
+                let i = planes.index((10 + dx) as u32, (10 + dy) as u32);
+                planes.l[i] = 0.9;
+            }
+        }
+
+        // Rotate around (10, 10) — the patch center should be preserved
+        let warp = Warp::rotation_around(15.0, 10.0, 10.0, 64, 64);
+        warp.apply(&mut planes, &mut FilterContext::new());
+
+        let center = planes.l[planes.index(10, 10)];
+        assert!(
+            (center - 0.9).abs() < 0.02,
+            "rotation around custom center should preserve that point, got {center}"
+        );
+    }
+
+    #[test]
+    fn sub_degree_rotation_works() {
+        // Verify sub-degree precision: 0.1° rotation should be barely different from identity
+        let mut planes = OklabPlanes::new(64, 64);
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = planes.index(x, y);
+                planes.l[i] = 0.1 + 0.8 * (x as f32 / 63.0);
+            }
+        }
+        let original = planes.l.clone();
+
+        let warp = Warp::rotation(0.1, 64, 64);
+        warp.apply(&mut planes, &mut FilterContext::new());
+
+        // Interior pixels should be very close to original (0.1° is tiny)
+        let mut max_err = 0.0f32;
+        for y in 8..56u32 {
+            for x in 8..56u32 {
+                let i = planes.index(x, y);
+                max_err = max_err.max((planes.l[i] - original[i]).abs());
+            }
+        }
+        assert!(
+            max_err < 0.02,
+            "0.1° rotation should barely change interior: max_err={max_err}"
+        );
     }
 }
