@@ -33,13 +33,13 @@ impl Source for FlipHSource {
             return Ok(None);
         };
 
-        let bpp = strip.format().bytes_per_pixel();
+        let bpp = strip.descriptor().bytes_per_pixel();
         let width = strip.width() as usize;
         self.buf
-            .reconfigure(strip.width(), strip.height(), strip.format());
-        self.buf.reset(strip.y);
+            .reconfigure(strip.width(), strip.rows(), strip.descriptor());
+        self.buf.reset();
 
-        for r in 0..strip.height() {
+        for r in 0..strip.rows() {
             let src_row = strip.row(r);
             self.buf.push_row(src_row);
             let dst_row = self.buf.row_mut(r);

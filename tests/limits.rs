@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use zenpipe::format;
 use zenpipe::sources::{CallbackSource, MaterializedSource, TeeSource};
-use zenpipe::{Limits, PipeError, Source, Stop};
+use zenpipe::{Limits, PipeError, Source, Stop, Strip};
 
 /// Create a solid RGBA8 source.
 fn solid_source(width: u32, height: u32) -> Box<dyn Source> {
@@ -181,8 +181,8 @@ impl CollectSink {
 }
 
 impl zenpipe::Sink for CollectSink {
-    fn consume(&mut self, strip: &zenpipe::StripRef<'_>) -> Result<(), PipeError> {
-        self.bytes += strip.data().len();
+    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+        self.bytes += strip.as_strided_bytes().len();
         Ok(())
     }
     fn finish(&mut self) -> Result<(), PipeError> {

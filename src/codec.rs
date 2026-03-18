@@ -96,7 +96,7 @@ impl Source for DecoderSource<'_> {
         let row_bytes = self.width as usize * bpp;
 
         self.buf.reconfigure(self.width, rows, self.format);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         for r in 0..rows {
             let src_row = pixels.row(r);
@@ -170,9 +170,9 @@ impl crate::Sink for EncoderSink<'_> {
             .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
 
         let pixels = zenpixels::PixelSlice::new(
-            strip.data(),
+            strip.as_strided_bytes(),
             strip.width(),
-            strip.height(),
+            strip.rows(),
             strip.stride(),
             self.descriptor,
         )

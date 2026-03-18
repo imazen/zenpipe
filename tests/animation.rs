@@ -54,7 +54,7 @@ fn build_test_gif(frame_count: usize, width: u16, height: u16) -> Vec<u8> {
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data());
+        out.extend_from_slice(strip.as_strided_bytes());
     }
     out
 }
@@ -121,7 +121,7 @@ fn frame_source_strips_cover_frame() {
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = source.next() {
         assert_eq!(strip.width(), 4);
-        total_rows += strip.height();
+        total_rows += strip.rows();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);

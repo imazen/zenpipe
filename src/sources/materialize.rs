@@ -46,12 +46,12 @@ impl MaterializedSource {
         let mut y = 0u32;
 
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.height() {
+            for r in 0..strip.rows() {
                 let dst_start = (y + r) as usize * row_bytes;
                 let src_row = strip.row(r);
                 data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
             }
-            y += strip.height();
+            y += strip.rows();
         }
 
         Ok(Self {
@@ -117,7 +117,6 @@ impl Source for MaterializedSource {
         let start = self.y as usize * stride;
         let end = start + rows as usize * stride;
 
-        let y = self.y;
         self.y += rows;
 
         Ok(Some(Strip::new(
@@ -126,7 +125,6 @@ impl Source for MaterializedSource {
             rows,
             stride,
             self.format,
-            y,
         )?))
     }
 

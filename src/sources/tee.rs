@@ -66,12 +66,12 @@ impl TeeSource {
         let mut y = 0usize;
 
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.height() {
+            for r in 0..strip.rows() {
                 let dst_start = (y + r as usize) * stride;
                 let src_row = strip.row(r);
                 data[dst_start..dst_start + stride].copy_from_slice(&src_row[..stride]);
             }
-            y += strip.height() as usize;
+            y += strip.rows() as usize;
         }
 
         Ok(Self {
@@ -147,7 +147,6 @@ impl Source for TeeCursor {
         let start = self.y as usize * self.stride;
         let end = start + rows as usize * self.stride;
 
-        let y = self.y;
         self.y += rows;
 
         Ok(Some(Strip::new(
@@ -156,7 +155,6 @@ impl Source for TeeCursor {
             rows,
             self.stride,
             self.format,
-            y,
         )?))
     }
 

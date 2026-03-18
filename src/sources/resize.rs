@@ -124,7 +124,7 @@ impl ResizeSource {
             return Ok(false);
         };
 
-        for r in 0..strip.height() {
+        for r in 0..strip.rows() {
             let row = strip.row(r);
             self.resizer
                 .push_row(row)
@@ -155,7 +155,7 @@ impl Source for ResizeSource {
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
             .reconfigure(self.out_width, rows_wanted, format::RGBA8_SRGB);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         // Feed input rows and drain output until we have enough
         loop {
@@ -285,7 +285,7 @@ impl ResizeF32Source {
         // Push all rows directly from the upstream strip into the resizer.
         // NLL allows this: strip.data borrows *self.upstream, push_row_f32
         // borrows self.resizer — disjoint fields.
-        for r in 0..strip.height() {
+        for r in 0..strip.rows() {
             let row = strip.row(r);
             let row_f32: &[f32] = bytemuck::cast_slice(row);
             self.resizer
@@ -317,7 +317,7 @@ impl Source for ResizeF32Source {
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
             .reconfigure(self.out_width, rows_wanted, format::RGBAF32_LINEAR);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         loop {
             self.drain_output();

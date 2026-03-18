@@ -130,9 +130,9 @@ impl ExpandCanvasSource {
         match self.upstream.next()? {
             Some(strip) => {
                 self.pending = Some(PendingStrip {
-                    data: strip.data().to_vec(),
+                    data: strip.as_strided_bytes().to_vec(),
                     stride: strip.stride(),
-                    height: strip.height(),
+                    height: strip.rows(),
                     next_row: 0,
                 });
                 Ok(Some(()))
@@ -180,7 +180,7 @@ impl Source for ExpandCanvasSource {
         let rows_wanted = self.strip_height.min(self.canvas_h - self.out_y);
         self.buf
             .reconfigure(self.canvas_w, rows_wanted, self.format);
-        self.buf.reset(self.out_y);
+        self.buf.reset();
 
         let content_y_start = self.place_y;
         let content_y_end = self.place_y + self.content_h;

@@ -19,6 +19,8 @@ pub struct CropSource {
     strip_height: u32,
     buf: StripBuf,
     out_y: u32,
+    /// Tracks the absolute y position of rows consumed from upstream.
+    upstream_y: u32,
 }
 
 impl CropSource {
@@ -51,6 +53,7 @@ impl CropSource {
             strip_height: sh,
             buf: StripBuf::new(w, sh, fmt),
             out_y: 0,
+            upstream_y: 0,
         })
     }
 
@@ -70,7 +73,7 @@ impl Source for CropSource {
 
         let rows_wanted = self.strip_height.min(self.crop_h - self.out_y);
         self.buf.reconfigure(self.crop_w, rows_wanted, self.format);
-        self.buf.reset(self.out_y);
+        self.buf.reset();
 
         let bpp = self.format.bytes_per_pixel();
 
@@ -78,8 +81,8 @@ impl Source for CropSource {
             let strip = self.upstream.next()?;
             let Some(strip) = strip else { break };
 
-            for r in 0..strip.height() {
-                let abs_y = strip.y + r;
+            for r in 0..strip.rows() {
+                let abs_y = self.upstream_y + r;
 
                 // Skip rows before crop region
                 if abs_y < self.y {
@@ -103,6 +106,7 @@ impl Source for CropSource {
                 let cropped = Self::extract_row_into(src_row, self.x, self.crop_w, bpp);
                 self.buf.push_row(cropped);
             }
+            self.upstream_y += strip.rows();
         }
 
         if self.buf.rows_filled() == 0 {

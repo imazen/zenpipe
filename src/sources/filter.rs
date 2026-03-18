@@ -73,13 +73,12 @@ impl Source for FilterSource {
         };
 
         let w = strip.width();
-        let h = strip.height();
-        let y = strip.y;
+        let h = strip.rows();
         let pixels = w as usize * h as usize;
 
         // Apply filter pipeline directly from upstream strip data.
-        // strip.data() borrows self.upstream; pipeline/dst_buf/ctx are disjoint fields.
-        let in_f32: &[f32] = bytemuck::cast_slice(strip.data());
+        // strip.as_strided_bytes() borrows self.upstream; pipeline/dst_buf/ctx are disjoint fields.
+        let in_f32: &[f32] = bytemuck::cast_slice(strip.as_strided_bytes());
         self.dst_buf.resize(pixels * 4, 0.0);
         self.pipeline
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
@@ -94,7 +93,6 @@ impl Source for FilterSource {
             h,
             stride,
             format::RGBAF32_LINEAR,
-            y,
         )?))
     }
 

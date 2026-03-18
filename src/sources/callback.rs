@@ -91,7 +91,7 @@ impl Source for CallbackSource {
         }
 
         let rows_wanted = self.strip_height.min(self.height - self.y);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         for _ in 0..rows_wanted {
             let row_bytes = self.format.row_bytes(self.width);

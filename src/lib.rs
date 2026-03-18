@@ -31,8 +31,6 @@ pub use error::PipeError;
 pub use format::{PixelFormat, PixelFormatExt};
 pub use limits::Limits;
 pub use strip::{Strip, StripBuf};
-/// Type alias for backward compatibility.
-pub type StripRef<'a> = Strip<'a>;
 
 // Re-export key zenpixels-convert types.
 pub use zenpixels_convert::{

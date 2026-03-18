@@ -112,9 +112,9 @@ impl EdgeReplicateSource {
         };
 
         let mut pending = PendingStrip {
-            data: strip.data().to_vec(),
+            data: strip.as_strided_bytes().to_vec(),
             stride: strip.stride(),
-            total_rows: strip.height(),
+            total_rows: strip.rows(),
             next_row: 0,
         };
 
@@ -156,7 +156,7 @@ impl Source for EdgeReplicateSource {
         let rows_wanted = 16.min(self.canvas_h - self.y);
         self.buf
             .reconfigure(self.canvas_w, rows_wanted, self.format);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         for _ in 0..rows_wanted {
             if self.y < self.content_h {

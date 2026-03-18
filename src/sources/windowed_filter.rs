@@ -184,9 +184,9 @@ impl WindowedFilterSource {
         };
 
         let mut pending = PendingStrip {
-            data: strip.data().to_vec(),
+            data: strip.as_strided_bytes().to_vec(),
             stride: strip.stride(),
-            total_rows: strip.height(),
+            total_rows: strip.rows(),
             next_row: 0,
         };
 
@@ -274,7 +274,7 @@ impl Source for WindowedFilterSource {
         let actual_rows = output_rows.min(window_height.saturating_sub(output_offset));
         self.out_strip
             .reconfigure(self.width, actual_rows, format::RGBAF32_LINEAR);
-        self.out_strip.reset(self.output_y);
+        self.out_strip.reset();
 
         for r in 0..actual_rows {
             let src_row = (output_offset + r) as usize;

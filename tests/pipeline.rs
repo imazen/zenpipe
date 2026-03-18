@@ -5,13 +5,13 @@ use zenpipe::ops::{
 use zenpipe::sources::{
     CallbackSource, CropSource, EdgeReplicateSource, MaterializedSource, TransformSource,
 };
-use zenpipe::{PipeError, Source, StripRef, format};
+use zenpipe::{PipeError, Source, Strip, format};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data());
+        out.extend_from_slice(strip.as_strided_bytes());
     }
     out
 }
@@ -60,8 +60,7 @@ fn callback_source_strips_cover_image() {
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = src.next() {
         assert_eq!(strip.width(), 4);
-        assert_eq!(strip.y, total_rows);
-        total_rows += strip.height();
+        total_rows += strip.rows();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);
@@ -273,8 +272,8 @@ impl CollectSink {
 }
 
 impl zenpipe::Sink for CollectSink {
-    fn consume(&mut self, strip: &StripRef<'_>) -> Result<(), PipeError> {
-        self.data.extend_from_slice(strip.data());
+    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+        self.data.extend_from_slice(strip.as_strided_bytes());
         Ok(())
     }
 
@@ -357,7 +356,7 @@ fn small_strip_height() {
 
     let mut strip_count = 0;
     while let Ok(Some(strip)) = src.next() {
-        assert_eq!(strip.height(), 1);
+        assert_eq!(strip.rows(), 1);
         strip_count += 1;
     }
     assert_eq!(strip_count, 4);

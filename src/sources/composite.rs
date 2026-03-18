@@ -96,7 +96,7 @@ impl Source for CompositeSource {
         let rows_wanted = self.strip_height.min(self.height - self.y);
         self.buf
             .reconfigure(self.width, rows_wanted, format::RGBAF32_LINEAR_PREMUL);
-        self.buf.reset(self.y);
+        self.buf.reset();
 
         // Pull background strip
         let bg_strip = self.background.next()?;
@@ -105,19 +105,19 @@ impl Source for CompositeSource {
         };
 
         // Check if foreground overlaps this strip's y range
-        let strip_y_end = self.y + bg_strip.height();
+        let strip_y_end = self.y + bg_strip.rows();
         let fg_overlaps = self.y < self.fg_y + self.fg_h && strip_y_end > self.fg_y;
 
         if !fg_overlaps {
             // No foreground — pass through background
-            for r in 0..bg_strip.height() {
+            for r in 0..bg_strip.rows() {
                 self.buf.push_row(bg_strip.row(r));
             }
         } else {
             // Pull foreground strip
             let fg_strip = self.foreground.next()?;
 
-            for r in 0..bg_strip.height() {
+            for r in 0..bg_strip.rows() {
                 let abs_y = self.y + r;
                 let bg_row = bg_strip.row(r);
 
@@ -127,8 +127,8 @@ impl Source for CompositeSource {
                 if has_fg {
                     let fg = fg_strip.as_ref().unwrap();
                     let fg_local_y = abs_y - self.fg_y;
-                    if fg_local_y >= fg.y && fg_local_y < fg.y + fg.height() {
-                        let fg_row = fg.row(fg_local_y - fg.y);
+                    if fg_local_y < fg.rows() {
+                        let fg_row = fg.row(fg_local_y);
                         let stride = self.buf.stride();
                         let mut out_row = vec![0u8; stride];
                         composite_row_over(

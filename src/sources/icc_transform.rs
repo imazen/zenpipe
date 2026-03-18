@@ -167,8 +167,7 @@ impl Source for IccTransformSource {
         };
 
         let width = strip.width();
-        let height = strip.height();
-        let y = strip.y;
+        let height = strip.rows();
         let stride = self.format.row_bytes(width);
         let total_bytes = stride * height as usize;
 
@@ -178,7 +177,7 @@ impl Source for IccTransformSource {
             let src_start = r as usize * strip.stride();
             let dst_start = r as usize * stride;
             self.transform.transform_row(
-                &strip.data()[src_start..src_start + stride],
+                &strip.as_strided_bytes()[src_start..src_start + stride],
                 &mut self.buf[dst_start..dst_start + stride],
             );
         }
@@ -189,7 +188,6 @@ impl Source for IccTransformSource {
             height,
             stride,
             self.format,
-            y,
         )?))
     }
 

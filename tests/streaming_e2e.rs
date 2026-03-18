@@ -55,9 +55,9 @@ fn drain_counting(source: &mut dyn Source) -> (usize, u32, u32) {
     let mut strip_count = 0u32;
     let mut max_strip_h = 0u32;
     while let Ok(Some(strip)) = source.next() {
-        total_bytes += strip.data().len();
+        total_bytes += strip.as_strided_bytes().len();
         strip_count += 1;
-        max_strip_h = max_strip_h.max(strip.height());
+        max_strip_h = max_strip_h.max(strip.rows());
     }
     (total_bytes, strip_count, max_strip_h)
 }

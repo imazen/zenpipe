@@ -209,7 +209,6 @@ impl Source for FrameSource {
         let start = self.y as usize * self.stride;
         let end = start + rows as usize * self.stride;
 
-        let y = self.y;
         self.y += rows;
 
         Ok(Some(Strip::new(
@@ -218,7 +217,6 @@ impl Source for FrameSource {
             rows,
             self.stride,
             self.format,
-            y,
         )?))
     }
 
@@ -338,7 +336,7 @@ impl FrameSink {
 impl crate::Sink for FrameSink {
     fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
         let stride = self.format.row_bytes(self.width);
-        for r in 0..strip.height() {
+        for r in 0..strip.rows() {
             if self.rows_accumulated >= self.height {
                 return Err(PipeError::DimensionMismatch(alloc::format!(
                     "frame sink received more than {} rows",

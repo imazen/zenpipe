@@ -77,29 +77,27 @@ impl Source for TransformSource {
         };
 
         let width = strip.width();
-        let height = strip.height();
-        let y = strip.y;
+        let height = strip.rows();
 
         if self.ops.is_empty() {
             // No ops — copy to buf_a for lifetime management.
-            self.buf_a.resize(strip.data().len(), 0);
-            self.buf_a.copy_from_slice(strip.data());
+            self.buf_a.resize(strip.as_strided_bytes().len(), 0);
+            self.buf_a.copy_from_slice(strip.as_strided_bytes());
             return Ok(Some(Strip::new(
                 &self.buf_a,
                 width,
                 height,
                 strip.stride(),
                 self.output_format,
-                y,
             )?));
         }
 
-        // Apply first op directly from strip.data() → buf_b, skipping the
+        // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
         // buf_a copy. This saves one full memcpy per strip.
         let first_op = &self.ops[0];
         let out_size = first_op.output_format().row_bytes(width) * height as usize;
         self.buf_b.resize(out_size, 0);
-        first_op.apply(strip.data(), &mut self.buf_b, width, height);
+        first_op.apply(strip.as_strided_bytes(), &mut self.buf_b, width, height);
         let mut current_is_a = false;
 
         // Remaining ops ping-pong between buf_a and buf_b.
@@ -129,7 +127,6 @@ impl Source for TransformSource {
             height,
             stride,
             self.output_format,
-            y,
         )?))
     }
 

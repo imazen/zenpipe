@@ -9,7 +9,7 @@ use zenpipe::{PixelFormat, Source, format};
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data());
+        out.extend_from_slice(strip.as_strided_bytes());
     }
     out
 }
