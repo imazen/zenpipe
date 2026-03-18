@@ -139,54 +139,51 @@ let issues = validate_pipeline(&tags);
 
 ## Resize-aware filtering
 
-When processing includes geometry changes (crop, resize, orient, pad), filters must run at the correct stage. Each filter declares its phase via `resize_phase()`:
+Filters declare when they should run relative to a resize:
 
-| Phase | Filters | Reason |
-|-------|---------|--------|
-| **PreResize** | CA correction, noise reduction, sharpening, clarity, texture, bilateral, dehaze, brilliance | Sigma in absolute pixels; full-res detail |
+| Phase | Filters | Why |
+|-------|---------|-----|
+| **PreResize** | CA, noise reduction, sharpen, clarity, texture, bilateral, dehaze | Pixel-space sigma; need full-res detail |
 | **PostResize** | Grain, vignette, bloom | Spatial effects relative to output frame |
-| **Either** | Exposure, contrast, curves, saturation, vibrance, temperature, tint, color grading, levels | Per-pixel, no spatial dependency |
-
-### split_for_resize
-
-One method splits any pipeline into pre-resize and post-resize halves:
-
-```rust
-let mut pipe = Pipeline::new(PipelineConfig::default())?;
-pipe.push(Box::new(NoiseReduction { luminance: 0.5, ..Default::default() }));
-pipe.push(Box::new(Exposure { stops: 0.3 }));
-pipe.push(Box::new(Grain { amount: 0.2, ..Default::default() }));
-
-let (pre, post) = pipe.split_for_resize();
-// pre: NoiseReduction + Exposure (PreResize + Either)
-// post: Grain (PostResize)
-
-pre.apply(&src, &mut full_res, in_w, in_h, 3, &mut ctx)?;
-// ... zenresize here ...
-post.apply(&resized, &mut dst, out_w, out_h, 3, &mut ctx)?;
-```
+| **Either** | Exposure, contrast, curves, saturation, vibrance, color grading | Per-pixel, no spatial dependency |
 
 ### Resolution-independent parameters
 
-Set `reference_width` in `PipelineConfig` to make all pixel-space parameters (sigma, noise_floor, grain size) automatically scale to any output resolution:
+Set `reference_width` so parameters work identically at any resolution. Define values once (e.g., for 4K), and the pipeline scales them automatically:
 
 ```rust
 let mut pipe = Pipeline::new(PipelineConfig {
-    reference_width: Some(3840), // parameters calibrated for 4K
+    reference_width: Some(3840), // params calibrated for 4K
     ..Default::default()
 })?;
 pipe.push(Box::new(Clarity { sigma: 4.0, amount: 0.3 }));
+pipe.push(Box::new(Exposure { stops: 0.3 }));
 pipe.push(Box::new(Grain { amount: 0.2, size: 1.5, seed: 0 }));
-
-// At 1080p: sigma auto-scales to 2.0, grain size to 0.75
-pipe.scale_to_width(1920);
-pipe.apply(&src, &mut dst, 1920, 1080, 3, &mut ctx)?;
-
-// At 8K: sigma auto-scales to 8.0, grain size to 3.0
-// (rebuild pipeline from original params, or keep a template)
 ```
 
-Filters implement `scale_for_resolution(scale)` to adjust their pixel-space fields. The pipeline calls it on all filters when `scale_to_width()` is invoked. One-shot — clears `reference_width` after scaling so it's not applied twice.
+**Without resize** — scale everything for the actual resolution:
+```rust
+pipe.scale_to_width(1920);  // clarity σ→2.0, grain size→0.75
+pipe.apply(&src, &mut dst, 1920, 1080, 3, &mut ctx)?;
+```
+
+**With resize** — one call scales each half for the resolution it runs at, then splits:
+```rust
+let (pre, post) = pipe.split_scaled(3840, 1920);
+// pre: clarity σ=4.0 (scaled for 3840 input)
+// post: grain size=0.75 (scaled for 1920 output)
+
+pre.apply(&src, &mut buf, 3840, 2160, 3, &mut ctx)?;
+// ... zenresize ...
+post.apply(&resized, &mut dst, 1920, 1080, 3, &mut ctx)?;
+```
+
+**Without scaling** — use raw pixel values, split only:
+```rust
+let (pre, post) = pipe.split_for_resize();
+```
+
+Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scaled()`. Presets, autotune, and user edits all work through the same system.
 
 ## Filters (51)
 
