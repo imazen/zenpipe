@@ -122,7 +122,7 @@ zencodecs/
 - **CodecRegistry capability queries**: streaming_decode_available, animation_decode/encode_available
 - Re-exports: DynFullFrameDecoder, DynFullFrameEncoder, DynStreamingDecoder, DecodeRowSink, OutputInfo, OwnedFullFrame, FullFrame
 
-### Gain Map Support (2026-03-17)
+### Gain Map Support (2026-03-18)
 - **gainmap.rs**: Format-agnostic gain map types (ISO 21496-1)
 - **GainMapImage**: Raw gain map pixel data (grayscale or RGB u8) with validation
 - **DecodedGainMap**: Gain map + metadata + direction flag (base_is_hdr) + source format
@@ -131,12 +131,15 @@ zencodecs/
   - `reconstruct_alternate()`: Direction-aware dispatcher
 - **GainMapSource**: Pre-computed gain map for encode passthrough
 - **DecodeRequest::decode_gain_map()**: Decode + extract gain map in one call
-  - JPEG: Implemented via DecodedExtras UltraHdrExtras trait (XMP + MPF secondary image)
-  - AVIF/JXL: Stub returns None (codec support not yet available)
+  - JPEG: UltraHDR XMP + MPF, with Apple MPF fallback for AMPF (iPhone 17 Pro)
+  - AVIF: tmap gain map from AV1 auxiliary image
+  - JXL: jhgm gain map from JXL codestream
+  - DNG/RAW: ISO 21496-1 gain map from embedded preview JPEG's MPF (Apple ProRAW)
+  - AMPF: Detected as JPEG, gain map extracted via Apple MPF fallback path
 - **EncodeRequest::with_gain_map()**: Builder method to attach gain map source
   - Actual embedding during encode not yet wired (builder only)
-- Feature-gated behind `jpeg-ultrahdr`
-- 14 unit tests + 7 integration tests + 2 doc-tests
+- Feature-gated: `jpeg-ultrahdr` (JPEG/AVIF/JXL), `raw-decode-gainmap` (DNG/AMPF)
+- 14 unit tests + 7 integration tests + 2 doc-tests + 3 RAW gain map tests
 
 ### Depth Map Support (2026-03-17)
 - **depthmap.rs**: Format-agnostic depth map types

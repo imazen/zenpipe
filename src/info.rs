@@ -8,16 +8,18 @@ use whereat::at;
 
 /// Detect image format from magic bytes using the common format registry.
 ///
-/// Also checks for RAW/DNG files when the `raw-decode` feature is enabled,
-/// since these use `ImageFormat::Custom` and are not in the common registry.
+/// RAW/DNG detection is attempted before common formats for TIFF-based files,
+/// since DNG files share TIFF magic bytes but should be dispatched to the
+/// RAW decoder, not the TIFF handler.
 pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
-    // Try common formats first (JPEG, PNG, GIF, WebP, etc.)
-    if let Some(fmt) = zencodec::ImageFormatRegistry::common().detect(data) {
-        return Some(fmt);
-    }
-    // Try RAW/DNG detection
+    // Try RAW/DNG before common formats — DNG shares TIFF magic bytes,
+    // and we want the more specific RAW match to take priority.
     #[cfg(feature = "raw-decode")]
     if let Some(fmt) = crate::codecs::raw::detect_raw_format(data) {
+        return Some(fmt);
+    }
+    // Try common formats (JPEG, PNG, GIF, WebP, TIFF, etc.)
+    if let Some(fmt) = zencodec::ImageFormatRegistry::common().detect(data) {
         return Some(fmt);
     }
     None

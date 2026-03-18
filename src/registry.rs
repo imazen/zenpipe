@@ -13,6 +13,19 @@ fn compiled_encode(format: ImageFormat) -> bool {
     all_compiled_encode().contains(format)
 }
 
+/// Check whether a `Custom` format has decode support compiled in.
+///
+/// Custom formats are not tracked by `FormatSet` — they are checked by
+/// matching the format definition's name against known custom codecs.
+#[allow(unused_variables)]
+fn compiled_decode_custom(format: ImageFormat) -> bool {
+    match format {
+        #[cfg(feature = "raw-decode")]
+        ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => true,
+        _ => false,
+    }
+}
+
 #[allow(unused_mut)]
 fn all_compiled() -> FormatSet {
     let mut set = FormatSet::EMPTY;
@@ -128,8 +141,14 @@ impl CodecRegistry {
     }
 
     /// Is this format available (compiled in) AND enabled for decoding?
+    ///
+    /// Custom formats (e.g., RAW/DNG) are always considered enabled when their
+    /// feature is compiled in, since they are not tracked by `FormatSet`.
     pub fn can_decode(&self, format: ImageFormat) -> bool {
-        self.decode_enabled.contains(format) && compiled_decode(format)
+        match format {
+            ImageFormat::Custom(_) => compiled_decode_custom(format),
+            _ => self.decode_enabled.contains(format) && compiled_decode(format),
+        }
     }
 
     /// Is this format available (compiled in) AND enabled for encoding?

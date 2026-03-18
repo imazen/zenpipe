@@ -104,3 +104,120 @@ pub(crate) fn extract_preview(data: &[u8]) -> Option<alloc::vec::Vec<u8>> {
 pub(crate) fn read_raw_metadata(data: &[u8]) -> Option<zenraw::exif::ExifMetadata> {
     zenraw::exif::read_metadata(data)
 }
+
+/// Extract an ISO 21496-1 gain map from a DNG/RAW file.
+///
+/// Apple APPLEDNG files (iPhone ProRAW) embed a preview JPEG that may contain
+/// an HDR gain map via MPF (Multi-Picture Format), the same structure used by
+/// UltraHDR JPEGs. This function extracts the gain map JPEG, decodes it to
+/// pixels, and converts the XMP metadata to [`crate::gainmap::GainMapMetadata`].
+///
+/// Returns `None` if:
+/// - The file is not an Apple DNG with a gain map
+/// - The gain map JPEG cannot be decoded
+/// - The `raw-decode-gainmap` feature is not enabled
+#[cfg(feature = "raw-decode-gainmap")]
+pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
+    use crate::gainmap::{DecodedGainMap, GainMapImage, GainMapMetadata};
+
+    let gm_info = zenraw::apple::extract_gain_map(data)?;
+
+    // Decode the gain map JPEG to pixels using zencodecs' own JPEG decoder.
+    let gm_output = crate::codecs::jpeg::decode(&gm_info.jpeg_data, None, None, None).ok()?;
+    use zenpixels_convert::PixelBufferConvertTypedExt as _;
+    let gm_rgb8 = gm_output.into_buffer().to_rgb8();
+    let gm_ref = gm_rgb8.as_imgref();
+    let gm_w = gm_ref.width() as u32;
+    let gm_h = gm_ref.height() as u32;
+    let gm_bytes: alloc::vec::Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
+
+    // Determine if the content is effectively grayscale (R==G==B).
+    let is_gray = gm_bytes
+        .chunks_exact(3)
+        .take(100)
+        .all(|px| px[0] == px[1] && px[1] == px[2]);
+    let (gm_data, channels) = if is_gray {
+        let gray: alloc::vec::Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();
+        (gray, 1u8)
+    } else {
+        (gm_bytes, 3u8)
+    };
+
+    // Convert zenraw's GainMapInfo XMP fields to GainMapMetadata.
+    //
+    // Apple gain maps use two XMP namespaces:
+    // 1. HDRGainMap (older Apple style): headroom in stops
+    // 2. HDRToneMap (ISO 21496-1 style): full gain map parameters
+    //
+    // If HDRToneMap fields are present, use them directly.
+    // Otherwise, synthesize from Apple's headroom value.
+    let metadata = if gm_info.gain_map_max.is_some() || gm_info.alternate_headroom.is_some() {
+        // ISO 21496-1 style metadata present — convert to GainMapMetadata.
+        let gain_max = gm_info
+            .gain_map_max
+            .or(gm_info.alternate_headroom)
+            .unwrap_or(1.0);
+        let max_boost = 2.0f32.powf(gain_max as f32);
+        let gain_min = gm_info.gain_map_min.unwrap_or(0.0);
+        let min_boost = 2.0f32.powf(gain_min as f32);
+        let gamma = gm_info.gamma.unwrap_or(1.0) as f32;
+        let offset_sdr = gm_info.offset_sdr.unwrap_or(1.0 / 64.0) as f32;
+        let offset_hdr = gm_info.offset_hdr.unwrap_or(1.0 / 64.0) as f32;
+        let base_headroom = gm_info.base_headroom.unwrap_or(0.0) as f32;
+        let alt_headroom = gm_info
+            .alternate_headroom
+            .or(gm_info.gain_map_max)
+            .unwrap_or(1.0) as f32;
+
+        GainMapMetadata {
+            max_content_boost: [max_boost; 3],
+            min_content_boost: [min_boost; 3],
+            gamma: [gamma; 3],
+            offset_sdr: [offset_sdr; 3],
+            offset_hdr: [offset_hdr; 3],
+            hdr_capacity_min: base_headroom,
+            hdr_capacity_max: alt_headroom,
+            use_base_color_space: true,
+        }
+    } else if let Some(headroom) = gm_info.headroom {
+        // Apple HDRGainMap style — synthesize ISO 21496-1 metadata from headroom.
+        // headroom is max brightness in stops (e.g., 2.89 stops = ~7.4x boost).
+        let max_boost = 2.0f32.powf(headroom as f32);
+        GainMapMetadata {
+            max_content_boost: [max_boost; 3],
+            min_content_boost: [1.0; 3],
+            gamma: [1.0; 3],
+            offset_sdr: [1.0 / 64.0; 3],
+            offset_hdr: [1.0 / 64.0; 3],
+            hdr_capacity_min: 1.0,
+            hdr_capacity_max: headroom as f32,
+            use_base_color_space: true,
+        }
+    } else {
+        // No metadata at all — use defaults.
+        GainMapMetadata::default()
+    };
+
+    // Determine source format: AMPF files start with JPEG SOI but are
+    // handled here for gain map extraction. Use the RAW format if detected,
+    // otherwise fall back to JPEG (for AMPF) or DNG.
+    let format = detect_raw_format(data).unwrap_or_else(|| {
+        if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+            zencodec::ImageFormat::Jpeg
+        } else {
+            dng_format()
+        }
+    });
+
+    Some(DecodedGainMap {
+        gain_map: GainMapImage {
+            data: gm_data,
+            width: gm_w,
+            height: gm_h,
+            channels,
+        },
+        metadata,
+        base_is_hdr: gm_info.base_rendition_is_hdr.unwrap_or(false),
+        source_format: format,
+    })
+}

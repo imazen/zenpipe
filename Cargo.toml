@@ -72,6 +72,7 @@ bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]
 raw-decode = ["dep:zenraw"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
+raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
 
 # Pipeline
 pipeline = ["dep:zenresize"]
@@ -80,7 +81,7 @@ pipeline = ["dep:zenresize"]
 moxcms = []  # Disabled for now
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
 
 # Calibration harness (all lossy encoders)
 calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
