@@ -11,7 +11,7 @@
 //! aliases for common sRGB conversions.
 
 use crate::PixelFormat;
-use crate::format::{self, PixelFormatExt};
+use crate::format::{self};
 
 /// A per-pixel operation applied to strip data.
 ///
@@ -68,8 +68,8 @@ impl RowConverterOp {
 
 impl PixelOp for RowConverterOp {
     fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
-        let src_stride = self.from.row_bytes(width);
-        let dst_stride = self.to.row_bytes(width);
+        let src_stride = self.from.aligned_stride(width);
+        let dst_stride = self.to.aligned_stride(width);
         for r in 0..height {
             let src_start = r as usize * src_stride;
             let dst_start = r as usize * dst_stride;

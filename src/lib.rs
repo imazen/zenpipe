@@ -28,7 +28,7 @@ pub mod animation;
 pub mod codec;
 
 pub use error::PipeError;
-pub use format::{PixelFormat, PixelFormatExt};
+pub use format::PixelFormat;
 pub use limits::Limits;
 pub use strip::{Strip, StripBuf};
 

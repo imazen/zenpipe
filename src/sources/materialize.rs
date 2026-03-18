@@ -3,7 +3,7 @@ use alloc::vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{PixelFormat, PixelFormatExt};
+use crate::format::PixelFormat;
 use crate::limits::Limits;
 use crate::strip::Strip;
 
@@ -41,7 +41,7 @@ impl MaterializedSource {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
-        let row_bytes = format.row_bytes(width);
+        let row_bytes = format.aligned_stride(width);
         let mut data = vec![0u8; row_bytes * height as usize];
         let mut y = 0u32;
 
@@ -113,7 +113,7 @@ impl Source for MaterializedSource {
         }
 
         let rows = self.strip_height.min(self.height - self.y);
-        let stride = self.format.row_bytes(self.width);
+        let stride = self.format.aligned_stride(self.width);
         let start = self.y as usize * stride;
         let end = start + rows as usize * stride;
 

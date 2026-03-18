@@ -13,7 +13,7 @@ pub use zenpixels_convert::{
 pub type PixelFormat = PixelDescriptor;
 
 // =========================================================================
-// Well-known format constants (backward compatibility + common formats)
+// Well-known format constants
 // =========================================================================
 
 /// 4 bytes/pixel, sRGB transfer, straight alpha. Standard decode/encode format.
@@ -42,20 +42,3 @@ pub const RGBAF32_SRGB: PixelFormat = PixelDescriptor::new(
     Some(AlphaMode::Straight),
     TransferFunction::Srgb,
 );
-
-// =========================================================================
-// Extension trait for row_bytes (convenience for strip calculations)
-// =========================================================================
-
-/// Extension methods for [`PixelDescriptor`] used throughout zenpipe.
-pub trait PixelFormatExt {
-    /// Row stride in bytes for the given width (tightly packed, no padding).
-    fn row_bytes(self, width: u32) -> usize;
-}
-
-impl PixelFormatExt for PixelDescriptor {
-    #[inline]
-    fn row_bytes(self, width: u32) -> usize {
-        width as usize * self.bytes_per_pixel()
-    }
-}

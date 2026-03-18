@@ -47,7 +47,7 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{PixelFormat, PixelFormatExt};
+use crate::format::PixelFormat;
 use crate::strip::Strip;
 
 // =========================================================================
@@ -110,7 +110,7 @@ impl FrameSource {
             width: w,
             height: h,
             format,
-            stride: format.row_bytes(w),
+            stride: format.aligned_stride(w),
             strip_height: 16.min(h),
             y: 0,
             frame_info: None,
@@ -169,7 +169,7 @@ impl FrameSource {
                 self.width = w;
                 self.height = h;
                 self.format = desc;
-                self.stride = desc.row_bytes(w);
+                self.stride = desc.aligned_stride(w);
                 self.strip_height = 16.min(h);
 
                 // Copy frame data into our buffer.
@@ -268,7 +268,7 @@ impl FrameSink {
         height: u32,
         format: PixelFormat,
     ) -> Self {
-        let stride = format.row_bytes(width);
+        let stride = format.aligned_stride(width);
         Self {
             encoder: Some(encoder),
             output: None,
@@ -295,7 +295,7 @@ impl FrameSink {
             .as_mut()
             .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
 
-        let stride = self.format.row_bytes(self.width);
+        let stride = self.format.aligned_stride(self.width);
         let total = stride * self.rows_accumulated as usize;
 
         let pixels = PixelSlice::new(
@@ -335,7 +335,7 @@ impl FrameSink {
 
 impl crate::Sink for FrameSink {
     fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
-        let stride = self.format.row_bytes(self.width);
+        let stride = self.format.aligned_stride(self.width);
         for r in 0..strip.rows() {
             if self.rows_accumulated >= self.height {
                 return Err(PipeError::DimensionMismatch(alloc::format!(

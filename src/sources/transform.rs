@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{PixelFormat, PixelFormatExt};
+use crate::format::PixelFormat;
 use crate::ops::PixelOp;
 use crate::strip::Strip;
 
@@ -95,14 +95,14 @@ impl Source for TransformSource {
         // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
         // buf_a copy. This saves one full memcpy per strip.
         let first_op = &self.ops[0];
-        let out_size = first_op.output_format().row_bytes(width) * height as usize;
+        let out_size = first_op.output_format().aligned_stride(width) * height as usize;
         self.buf_b.resize(out_size, 0);
         first_op.apply(strip.as_strided_bytes(), &mut self.buf_b, width, height);
         let mut current_is_a = false;
 
         // Remaining ops ping-pong between buf_a and buf_b.
         for op in &self.ops[1..] {
-            let out_size = op.output_format().row_bytes(width) * height as usize;
+            let out_size = op.output_format().aligned_stride(width) * height as usize;
             if current_is_a {
                 self.buf_b.resize(out_size, 0);
                 op.apply(&self.buf_a, &mut self.buf_b, width, height);
@@ -114,7 +114,7 @@ impl Source for TransformSource {
             }
         }
 
-        let stride = self.output_format.row_bytes(width);
+        let stride = self.output_format.aligned_stride(width);
         let data = if current_is_a {
             &self.buf_a
         } else {

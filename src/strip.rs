@@ -6,7 +6,6 @@ use zenpixels::color::ColorContext;
 
 use crate::PixelFormat;
 use crate::error::PipeError;
-use crate::format::PixelFormatExt;
 
 /// Type alias — strips are [`zenpixels::PixelSlice`] values.
 ///
@@ -31,7 +30,7 @@ pub struct StripBuf {
 impl StripBuf {
     /// Create a new strip buffer with space for `max_rows` rows.
     pub fn new(width: u32, max_rows: u32, format: PixelFormat) -> Self {
-        let stride = format.row_bytes(width);
+        let stride = format.aligned_stride(width);
         Self {
             data: vec![0u8; stride * max_rows as usize],
             width,
@@ -128,7 +127,7 @@ impl StripBuf {
 
     /// Resize buffer for a different format/width (reallocates if needed).
     pub fn reconfigure(&mut self, width: u32, max_rows: u32, format: PixelFormat) {
-        let stride = format.row_bytes(width);
+        let stride = format.aligned_stride(width);
         if self.width != width || self.capacity_rows != max_rows || self.format != format {
             self.width = width;
             self.stride = stride;

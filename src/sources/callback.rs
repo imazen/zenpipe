@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{PixelFormat, PixelFormatExt};
+use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
 
 /// A source that pulls rows from a callback function.
@@ -69,7 +69,7 @@ impl CallbackSource {
         format: PixelFormat,
         strip_height: u32,
     ) -> Self {
-        let row_bytes = format.row_bytes(width);
+        let row_bytes = format.aligned_stride(width);
         let data = data.to_vec();
         let mut offset = 0usize;
         Self::new(width, height, format, strip_height, move |buf| {
@@ -94,7 +94,7 @@ impl Source for CallbackSource {
         self.buf.reset();
 
         for _ in 0..rows_wanted {
-            let row_bytes = self.format.row_bytes(self.width);
+            let row_bytes = self.format.aligned_stride(self.width);
             let mut row_buf = alloc::vec![0u8; row_bytes];
             let has_more = (self.callback)(&mut row_buf)?;
             self.buf.push_row(&row_buf);

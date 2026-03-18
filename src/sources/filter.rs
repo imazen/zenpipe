@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{self, PixelFormat, PixelFormatExt};
+use crate::format::{self, PixelFormat};
 use crate::strip::Strip;
 
 /// Applies a [`zenfilters::Pipeline`] strip-by-strip.
@@ -84,7 +84,7 @@ impl Source for FilterSource {
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
             .map_err(|e| PipeError::Op(e.to_string()))?;
 
-        let stride = format::RGBAF32_LINEAR.row_bytes(w);
+        let stride = format::RGBAF32_LINEAR.aligned_stride(w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
 
         Ok(Some(Strip::new(

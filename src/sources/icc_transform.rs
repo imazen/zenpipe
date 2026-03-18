@@ -19,7 +19,7 @@ use moxcms::{ColorProfile, Layout, TransformExecutor, TransformOptions};
 
 use crate::Source;
 use crate::error::PipeError;
-use crate::format::{PixelFormat, PixelFormatExt};
+use crate::format::PixelFormat;
 use crate::strip::Strip;
 
 /// Map a zenpixels PixelFormat to a moxcms Layout.
@@ -168,7 +168,7 @@ impl Source for IccTransformSource {
 
         let width = strip.width();
         let height = strip.rows();
-        let stride = self.format.row_bytes(width);
+        let stride = self.format.aligned_stride(width);
         let total_bytes = stride * height as usize;
 
         self.buf.resize(total_bytes, 0);
