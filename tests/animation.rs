@@ -59,26 +59,20 @@ fn drain(source: &mut dyn Source) -> Vec<u8> {
     out
 }
 
-fn make_gif_decoder(data: Vec<u8>) -> Box<dyn zencodec::decode::DynFullFrameDecoder + Send> {
+fn make_gif_decoder(data: Vec<u8>) -> Box<dyn zencodec::decode::DynFullFrameDecoder> {
     let dec = GifDecoderConfig::new();
-    let frame_dec = dec
-        .job()
-        .full_frame_decoder(Cow::Owned(data), &[PixelDescriptor::RGBA8_SRGB])
-        .unwrap();
-    Box::new(SendFullFrameDecoderShim(frame_dec))
+    dec.job()
+        .dyn_full_frame_decoder(Cow::Owned(data), &[PixelDescriptor::RGBA8_SRGB])
+        .unwrap()
 }
 
-fn make_gif_encoder(
-    width: u16,
-    height: u16,
-) -> Box<dyn zencodec::encode::DynFullFrameEncoder + Send> {
+fn make_gif_encoder(width: u16, height: u16) -> Box<dyn zencodec::encode::DynFullFrameEncoder> {
     let config = GifEncoderConfig::new();
-    let encoder = config
+    config
         .job()
         .with_canvas_size(width as u32, height as u32)
-        .full_frame_encoder()
-        .unwrap();
-    Box::new(SendFullFrameEncoderShim(encoder))
+        .dyn_full_frame_encoder()
+        .unwrap()
 }
 
 // =========================================================================
@@ -276,86 +270,4 @@ fn make_solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source>
             Ok(true)
         },
     ))
-}
-
-// =========================================================================
-// Send shims
-// =========================================================================
-
-struct SendFullFrameDecoderShim<D>(D);
-unsafe impl<D: Send> Send for SendFullFrameDecoderShim<D> {}
-
-impl<D: zencodec::decode::FullFrameDecoder + Send + 'static> zencodec::decode::DynFullFrameDecoder
-    for SendFullFrameDecoderShim<D>
-{
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.0
-    }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        &mut self.0
-    }
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        Box::new(self.0)
-    }
-    fn info(&self) -> &zencodec::ImageInfo {
-        self.0.info()
-    }
-    fn frame_count(&self) -> Option<u32> {
-        self.0.frame_count()
-    }
-    fn loop_count(&self) -> Option<u32> {
-        self.0.loop_count()
-    }
-    fn render_next_frame_owned(
-        &mut self,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<Option<zencodec::OwnedFullFrame>, zencodec::encode::BoxedError> {
-        self.0
-            .render_next_frame_owned(stop)
-            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
-    }
-    fn render_next_frame_to_sink(
-        &mut self,
-        stop: Option<&dyn enough::Stop>,
-        sink: &mut dyn zencodec::decode::DecodeRowSink,
-    ) -> Result<Option<zencodec::decode::OutputInfo>, zencodec::encode::BoxedError> {
-        self.0
-            .render_next_frame_to_sink(stop, sink)
-            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
-    }
-}
-
-struct SendFullFrameEncoderShim<E>(E);
-unsafe impl<E: Send> Send for SendFullFrameEncoderShim<E> {}
-
-impl<E: zencodec::encode::FullFrameEncoder + Send + 'static> zencodec::encode::DynFullFrameEncoder
-    for SendFullFrameEncoderShim<E>
-{
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.0
-    }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        &mut self.0
-    }
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        Box::new(self.0)
-    }
-    fn push_frame(
-        &mut self,
-        pixels: zenpixels::PixelSlice<'_>,
-        duration_ms: u32,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<(), zencodec::encode::BoxedError> {
-        self.0
-            .push_frame(pixels, duration_ms, stop)
-            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
-    }
-    fn finish(
-        self: Box<Self>,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError> {
-        self.0
-            .finish(stop)
-            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
-    }
 }

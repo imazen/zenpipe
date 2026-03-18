@@ -42,7 +42,7 @@ use crate::strip::{Strip, StripBuf};
 /// The decoder's pixel data is copied into an internal buffer so the strip
 /// lifetime is tied to this source, not the decoder.
 pub struct DecoderSource<'a> {
-    decoder: Box<dyn DynStreamingDecoder + Send + 'a>,
+    decoder: Box<dyn DynStreamingDecoder + 'a>,
     width: u32,
     height: u32,
     format: PixelFormat,
@@ -57,7 +57,7 @@ impl<'a> DecoderSource<'a> {
     /// `preferred` descriptors used when creating the streaming decoder.
     /// Width and height are read from the decoder's [`ImageInfo`].
     pub fn new(
-        decoder: Box<dyn DynStreamingDecoder + Send + 'a>,
+        decoder: Box<dyn DynStreamingDecoder + 'a>,
         format: PixelFormat,
     ) -> Result<Self, PipeError> {
         let info = decoder.info();

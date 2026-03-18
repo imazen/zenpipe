@@ -175,13 +175,9 @@ fn codec_bridge_roundtrip() {
     // Decode via zencodec dyn → DecoderSource
     let dec_config = JpegDecoderConfig::default();
     let job = dec_config.job();
-    let streaming: Box<dyn zencodec::decode::DynStreamingDecoder + Send> = {
-        // Use the concrete streaming decoder and wrap it manually,
-        // since dyn_streaming_decoder() doesn't return + Send.
-        let concrete = job
-            .streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelDescriptor::RGBA8_SRGB])
-            .expect("streaming decoder");
-        Box::new(SendStreamingDecoderShim(concrete))
+    let streaming: Box<dyn zencodec::decode::DynStreamingDecoder> = {
+        job.dyn_streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelDescriptor::RGBA8_SRGB])
+            .expect("streaming decoder")
     };
 
     let mut source =
@@ -229,24 +225,6 @@ fn codec_bridge_roundtrip() {
 // bridge the gap so the types work with zenpipe's Source/Sink (which
 // require Send).
 // ============================================================================
-
-struct SendStreamingDecoderShim<S>(S);
-
-impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreamingDecoder
-    for SendStreamingDecoderShim<S>
-{
-    fn next_batch(
-        &mut self,
-    ) -> Result<Option<(u32, zenpixels::PixelSlice<'_>)>, zencodec::encode::BoxedError> {
-        self.0
-            .next_batch()
-            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
-    }
-
-    fn info(&self) -> &zencodec::ImageInfo {
-        self.0.info()
-    }
-}
 
 struct SendEncoderShim<E>(E);
 
