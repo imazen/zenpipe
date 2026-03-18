@@ -95,6 +95,7 @@ mod dispatch;
 mod dyn_dispatch;
 mod encode;
 mod error;
+pub mod exif;
 mod format_set;
 pub mod gainmap;
 mod info;
