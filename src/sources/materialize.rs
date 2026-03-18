@@ -5,7 +5,7 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
 use crate::limits::Limits;
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 /// Fully materializes an upstream source, then replays it as strips.
 ///
@@ -46,12 +46,12 @@ impl MaterializedSource {
         let mut y = 0u32;
 
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.height {
+            for r in 0..strip.height() {
                 let dst_start = (y + r) as usize * row_bytes;
                 let src_row = strip.row(r);
                 data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
             }
-            y += strip.height;
+            y += strip.height();
         }
 
         Ok(Self {
@@ -107,7 +107,7 @@ impl MaterializedSource {
 }
 
 impl Source for MaterializedSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -120,14 +120,14 @@ impl Source for MaterializedSource {
         let y = self.y;
         self.y += rows;
 
-        Ok(Some(StripRef {
-            data: &self.data[start..end],
-            width: self.width,
-            height: rows,
+        Ok(Some(Strip::new(
+            &self.data[start..end],
+            self.width,
+            rows,
             stride,
+            self.format,
             y,
-            format: self.format,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {

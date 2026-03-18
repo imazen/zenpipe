@@ -36,6 +36,8 @@ zenpixels = { path = "../zenpixels/zenpixels", default-features = false }
 zencodec = { path = "../zencodec", default-features = false }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
+# Error location tracking (re-exported by zenpixels for BufferError)
+whereat = { version = "0.1.3", path = "../whereat", default-features = false }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation

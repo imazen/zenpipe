@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Streaming canvas expansion — places upstream on a larger canvas with padding.
 ///
@@ -130,9 +130,9 @@ impl ExpandCanvasSource {
         match self.upstream.next()? {
             Some(strip) => {
                 self.pending = Some(PendingStrip {
-                    data: strip.data.to_vec(),
-                    stride: strip.stride,
-                    height: strip.height,
+                    data: strip.data().to_vec(),
+                    stride: strip.stride(),
+                    height: strip.height(),
                     next_row: 0,
                 });
                 Ok(Some(()))
@@ -169,7 +169,7 @@ impl ExpandCanvasSource {
 }
 
 impl Source for ExpandCanvasSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.out_y >= self.canvas_h {
             return Ok(None);
         }
@@ -222,7 +222,7 @@ impl Source for ExpandCanvasSource {
         }
 
         self.out_y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

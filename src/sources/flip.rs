@@ -3,7 +3,7 @@ use alloc::boxed::Box;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Streaming horizontal flip — reverses pixel order within each row.
 ///
@@ -27,19 +27,19 @@ impl FlipHSource {
 }
 
 impl Source for FlipHSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
         };
 
-        let bpp = strip.format.bytes_per_pixel();
-        let width = strip.width as usize;
+        let bpp = strip.format().bytes_per_pixel();
+        let width = strip.width() as usize;
         self.buf
-            .reconfigure(strip.width, strip.height, strip.format);
+            .reconfigure(strip.width(), strip.height(), strip.format());
         self.buf.reset(strip.y);
 
-        for r in 0..strip.height {
+        for r in 0..strip.height() {
             let src_row = strip.row(r);
             self.buf.push_row(src_row);
             let dst_row = self.buf.row_mut(r);
@@ -53,7 +53,7 @@ impl Source for FlipHSource {
             }
         }
 
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

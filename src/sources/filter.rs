@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat, PixelFormatExt};
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 /// Applies a [`zenfilters::Pipeline`] strip-by-strip.
 ///
@@ -66,20 +66,20 @@ impl FilterSource {
 }
 
 impl Source for FilterSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
         };
 
-        let w = strip.width;
-        let h = strip.height;
+        let w = strip.width();
+        let h = strip.height();
         let y = strip.y;
         let pixels = w as usize * h as usize;
 
         // Apply filter pipeline directly from upstream strip data.
-        // strip.data borrows self.upstream; pipeline/dst_buf/ctx are disjoint fields.
-        let in_f32: &[f32] = bytemuck::cast_slice(strip.data);
+        // strip.data() borrows self.upstream; pipeline/dst_buf/ctx are disjoint fields.
+        let in_f32: &[f32] = bytemuck::cast_slice(strip.data());
         self.dst_buf.resize(pixels * 4, 0.0);
         self.pipeline
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
@@ -88,14 +88,14 @@ impl Source for FilterSource {
         let stride = format::RGBAF32_LINEAR.row_bytes(w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
 
-        Ok(Some(StripRef {
+        Ok(Some(Strip::new(
             data,
-            width: w,
-            height: h,
+            w,
+            h,
             stride,
+            format::RGBAF32_LINEAR,
             y,
-            format: format::RGBAF32_LINEAR,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {

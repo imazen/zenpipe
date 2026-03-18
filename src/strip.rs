@@ -1,44 +1,99 @@
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use zenpixels::buffer::BufferError;
+use zenpixels::color::ColorContext;
+
 use crate::PixelFormat;
+use crate::error::PipeError;
 use crate::format::PixelFormatExt;
 
-/// Borrowed view of a horizontal strip of pixels.
+/// A strip of pixel rows — a borrowed view wrapping [`zenpixels::PixelSlice`].
 ///
-/// Returned by [`Source::next`](crate::Source::next). Valid until the
-/// next call to the source.
-pub struct StripRef<'a> {
-    /// Raw pixel data (row-major, tightly packed).
-    pub data: &'a [u8],
-    /// Width in pixels.
-    pub width: u32,
-    /// Number of rows in this strip.
-    pub height: u32,
-    /// Bytes per row (== width * format.bytes_per_pixel()).
-    pub stride: usize,
+/// Carries pixel data, format descriptor, ICC/CICP color context, and the
+/// y-offset of this strip within the full image. All metadata flows
+/// automatically through the pipeline.
+pub struct Strip<'a> {
+    /// The pixel data for this strip (borrowed, validated, carries ColorContext).
+    pub pixels: zenpixels::PixelSlice<'a>,
     /// Y offset of this strip within the full image.
     pub y: u32,
-    /// Pixel format.
-    pub format: PixelFormat,
 }
 
-impl<'a> StripRef<'a> {
-    /// Get a single row by index (0-based within this strip).
+impl<'a> Strip<'a> {
+    /// Create a strip from raw parts. Validates the pixel data.
+    pub fn new(
+        data: &'a [u8],
+        width: u32,
+        height: u32,
+        stride: usize,
+        format: PixelFormat,
+        y: u32,
+    ) -> Result<Self, PipeError> {
+        let pixels = zenpixels::PixelSlice::new(data, width, height, stride, format)
+            .map_err(|e| PipeError::Op(alloc::format!("strip construction: {e}")))?;
+        Ok(Self { pixels, y })
+    }
+
+    /// Width in pixels.
+    #[inline]
+    pub fn width(&self) -> u32 {
+        self.pixels.width()
+    }
+
+    /// Number of rows in this strip.
+    #[inline]
+    pub fn height(&self) -> u32 {
+        self.pixels.rows()
+    }
+
+    /// Bytes per row.
+    #[inline]
+    pub fn stride(&self) -> usize {
+        self.pixels.stride()
+    }
+
+    /// Pixel format descriptor.
+    #[inline]
+    pub fn format(&self) -> PixelFormat {
+        self.pixels.descriptor()
+    }
+
+    /// Raw pixel data (all rows, may include stride padding).
+    #[inline]
+    pub fn data(&self) -> &[u8] {
+        self.pixels.as_strided_bytes()
+    }
+
+    /// Get a single row by index (0-based within this strip, no padding).
     #[inline]
     pub fn row(&self, r: u32) -> &[u8] {
-        let start = r as usize * self.stride;
-        &self.data[start..start + self.stride]
+        self.pixels.row(r)
+    }
+
+    /// Color context (ICC profile + CICP), if attached.
+    #[inline]
+    pub fn color_context(&self) -> Option<&Arc<ColorContext>> {
+        self.pixels.color_context()
+    }
+
+    /// Return a new strip with the given color context attached.
+    pub fn with_color_context(mut self, ctx: Arc<ColorContext>) -> Self {
+        self.pixels = self.pixels.with_color_context(ctx);
+        self
     }
 }
 
 /// Owned buffer for accumulating strip data.
 ///
 /// Pre-allocated and reused across strips to avoid per-strip allocation.
+/// Produces [`Strip`] views via [`as_strip()`](Self::as_strip).
 pub struct StripBuf {
     data: Vec<u8>,
     width: u32,
     format: PixelFormat,
+    color: Option<Arc<ColorContext>>,
     capacity_rows: u32,
     rows_filled: u32,
     y_offset: u32,
@@ -52,10 +107,16 @@ impl StripBuf {
             data: vec![0u8; total],
             width,
             format,
+            color: None,
             capacity_rows: max_rows,
             rows_filled: 0,
             y_offset: 0,
         }
+    }
+
+    /// Set the color context for strips produced by this buffer.
+    pub fn set_color_context(&mut self, ctx: Option<Arc<ColorContext>>) {
+        self.color = ctx;
     }
 
     /// Reset for a new strip starting at the given y offset.
@@ -110,16 +171,24 @@ impl StripBuf {
         &mut self.data[start..start + stride]
     }
 
-    /// View the filled portion as a StripRef.
-    pub fn as_ref(&self) -> StripRef<'_> {
+    /// View the filled portion as a [`Strip`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer data fails PixelSlice validation (should not
+    /// happen if the buffer was constructed correctly).
+    pub fn as_strip(&self) -> Strip<'_> {
         let stride = self.stride();
-        StripRef {
-            data: &self.data[..self.rows_filled as usize * stride],
-            width: self.width,
-            height: self.rows_filled,
-            stride,
+        let data = &self.data[..self.rows_filled as usize * stride];
+        let mut pixels =
+            zenpixels::PixelSlice::new(data, self.width, self.rows_filled, stride, self.format)
+                .expect("StripBuf data should always be valid for PixelSlice");
+        if let Some(ref ctx) = self.color {
+            pixels = pixels.with_color_context(Arc::clone(ctx));
+        }
+        Strip {
+            pixels,
             y: self.y_offset,
-            format: self.format,
         }
     }
 
@@ -144,5 +213,12 @@ impl StripBuf {
         self.y_offset = 0;
         let total = format.row_bytes(width) * max_rows as usize;
         self.data.resize(total, 0);
+    }
+}
+
+/// Convert a [`BufferError`] to a [`PipeError`].
+impl From<whereat::At<BufferError>> for PipeError {
+    fn from(e: whereat::At<BufferError>) -> Self {
+        PipeError::Op(alloc::format!("pixel buffer: {e}"))
     }
 }

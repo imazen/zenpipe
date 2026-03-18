@@ -3,7 +3,7 @@ use alloc::boxed::Box;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// A source that pulls rows from a callback function.
 ///
@@ -85,7 +85,7 @@ impl CallbackSource {
 }
 
 impl Source for CallbackSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.exhausted || self.y >= self.height {
             return Ok(None);
         }
@@ -109,7 +109,7 @@ impl Source for CallbackSource {
         }
 
         self.y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

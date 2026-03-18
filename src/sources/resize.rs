@@ -5,7 +5,7 @@ use alloc::string::ToString;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Streaming resize source wrapping [`zenresize::StreamingResize`].
 ///
@@ -124,7 +124,7 @@ impl ResizeSource {
             return Ok(false);
         };
 
-        for r in 0..strip.height {
+        for r in 0..strip.height() {
             let row = strip.row(r);
             self.resizer
                 .push_row(row)
@@ -147,7 +147,7 @@ impl ResizeSource {
 }
 
 impl Source for ResizeSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.out_height {
             return Ok(None);
         }
@@ -192,7 +192,7 @@ impl Source for ResizeSource {
         }
 
         self.y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {
@@ -285,7 +285,7 @@ impl ResizeF32Source {
         // Push all rows directly from the upstream strip into the resizer.
         // NLL allows this: strip.data borrows *self.upstream, push_row_f32
         // borrows self.resizer — disjoint fields.
-        for r in 0..strip.height {
+        for r in 0..strip.height() {
             let row = strip.row(r);
             let row_f32: &[f32] = bytemuck::cast_slice(row);
             self.resizer
@@ -309,7 +309,7 @@ impl ResizeF32Source {
 }
 
 impl Source for ResizeF32Source {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.out_height {
             return Ok(None);
         }
@@ -351,7 +351,7 @@ impl Source for ResizeF32Source {
         }
 
         self.y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

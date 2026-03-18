@@ -3,7 +3,7 @@ use alloc::boxed::Box;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Crops a region from an upstream source without materializing.
 ///
@@ -63,7 +63,7 @@ impl CropSource {
 }
 
 impl Source for CropSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.out_y >= self.crop_h {
             return Ok(None);
         }
@@ -78,7 +78,7 @@ impl Source for CropSource {
             let strip = self.upstream.next()?;
             let Some(strip) = strip else { break };
 
-            for r in 0..strip.height {
+            for r in 0..strip.height() {
                 let abs_y = strip.y + r;
 
                 // Skip rows before crop region
@@ -89,7 +89,7 @@ impl Source for CropSource {
                 if abs_y >= self.y + self.crop_h {
                     self.out_y += self.buf.rows_filled();
                     return if self.buf.rows_filled() > 0 {
-                        Ok(Some(self.buf.as_ref()))
+                        Ok(Some(self.buf.as_strip()))
                     } else {
                         Ok(None)
                     };
@@ -110,7 +110,7 @@ impl Source for CropSource {
         }
 
         self.out_y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

@@ -20,7 +20,7 @@ use moxcms::{ColorProfile, Layout, TransformExecutor, TransformOptions};
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 /// Map a zenpixels PixelFormat to a moxcms Layout.
 fn pixel_format_to_layout(format: zenpixels_convert::PixelFormat) -> Layout {
@@ -160,14 +160,14 @@ impl IccTransformSource {
 }
 
 impl Source for IccTransformSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
         };
 
-        let width = strip.width;
-        let height = strip.height;
+        let width = strip.width();
+        let height = strip.height();
         let y = strip.y;
         let stride = self.format.row_bytes(width);
         let total_bytes = stride * height as usize;
@@ -175,22 +175,22 @@ impl Source for IccTransformSource {
         self.buf.resize(total_bytes, 0);
 
         for r in 0..height {
-            let src_start = r as usize * strip.stride;
+            let src_start = r as usize * strip.stride();
             let dst_start = r as usize * stride;
             self.transform.transform_row(
-                &strip.data[src_start..src_start + stride],
+                &strip.data()[src_start..src_start + stride],
                 &mut self.buf[dst_start..dst_start + stride],
             );
         }
 
-        Ok(Some(StripRef {
-            data: &self.buf,
+        Ok(Some(Strip::new(
+            &self.buf,
             width,
             height,
             stride,
+            self.format,
             y,
-            format: self.format,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {

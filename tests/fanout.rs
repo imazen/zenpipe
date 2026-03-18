@@ -11,7 +11,7 @@ use zenpipe::sources::{CallbackSource, CropSource, TeeSource};
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data);
+        out.extend_from_slice(strip.data());
     }
     out
 }
@@ -128,7 +128,7 @@ fn tee_cursor_strip_height() {
     let mut cursor = tee.cursor_with_strip_height(3);
     let mut strip_heights = Vec::new();
     while let Ok(Some(strip)) = cursor.next() {
-        strip_heights.push(strip.height);
+        strip_heights.push(strip.height());
     }
     assert_eq!(strip_heights, vec![3, 3, 3, 1]);
 }
@@ -141,7 +141,7 @@ fn tee_cursor_y_offsets() {
     let mut cursor = tee.cursor(); // strip_height = 16, but image is 8 rows
     let strip = cursor.next().unwrap().unwrap();
     assert_eq!(strip.y, 0);
-    assert_eq!(strip.height, 8); // single strip covers the whole image
+    assert_eq!(strip.height(), 8); // single strip covers the whole image
 
     let next = cursor.next().unwrap();
     assert!(next.is_none());

@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Expands upstream content to canvas dimensions via edge replication.
 ///
@@ -112,9 +112,9 @@ impl EdgeReplicateSource {
         };
 
         let mut pending = PendingStrip {
-            data: strip.data.to_vec(),
-            stride: strip.stride,
-            total_rows: strip.height,
+            data: strip.data().to_vec(),
+            stride: strip.stride(),
+            total_rows: strip.height(),
             next_row: 0,
         };
 
@@ -148,7 +148,7 @@ impl EdgeReplicateSource {
 }
 
 impl Source for EdgeReplicateSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.canvas_h {
             return Ok(None);
         }
@@ -184,7 +184,7 @@ impl Source for EdgeReplicateSource {
             return Ok(None);
         }
 
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

@@ -11,7 +11,7 @@ use zenpipe::{PipeError, Source, StripRef, format};
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data);
+        out.extend_from_slice(strip.data());
     }
     out
 }
@@ -59,9 +59,9 @@ fn callback_source_strips_cover_image() {
     let mut total_rows = 0u32;
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = src.next() {
-        assert_eq!(strip.width, 4);
+        assert_eq!(strip.width(), 4);
         assert_eq!(strip.y, total_rows);
-        total_rows += strip.height;
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);
@@ -274,7 +274,7 @@ impl CollectSink {
 
 impl zenpipe::Sink for CollectSink {
     fn consume(&mut self, strip: &StripRef<'_>) -> Result<(), PipeError> {
-        self.data.extend_from_slice(strip.data);
+        self.data.extend_from_slice(strip.data());
         Ok(())
     }
 
@@ -357,7 +357,7 @@ fn small_strip_height() {
 
     let mut strip_count = 0;
     while let Ok(Some(strip)) = src.next() {
-        assert_eq!(strip.height, 1);
+        assert_eq!(strip.height(), 1);
         strip_count += 1;
     }
     assert_eq!(strip_count, 4);

@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Default overlap in rows. Covers Sharpen (3), Bilateral (6),
 /// Clarity (48), Brilliance (30), and most LocalToneMap (90).
@@ -184,9 +184,9 @@ impl WindowedFilterSource {
         };
 
         let mut pending = PendingStrip {
-            data: strip.data.to_vec(),
-            stride: strip.stride,
-            total_rows: strip.height,
+            data: strip.data().to_vec(),
+            stride: strip.stride(),
+            total_rows: strip.height(),
             next_row: 0,
         };
 
@@ -242,7 +242,7 @@ impl WindowedFilterSource {
 }
 
 impl Source for WindowedFilterSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.output_y >= self.total_height {
             return Ok(None);
         }
@@ -290,7 +290,7 @@ impl Source for WindowedFilterSource {
             return Ok(None);
         }
 
-        Ok(Some(self.out_strip.as_ref()))
+        Ok(Some(self.out_strip.as_strip()))
     }
 
     fn width(&self) -> u32 {

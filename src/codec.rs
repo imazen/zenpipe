@@ -30,7 +30,7 @@ use zenpixels::PixelDescriptor;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 // =============================================================================
 // DecoderSource
@@ -38,7 +38,7 @@ use crate::strip::{StripBuf, StripRef};
 
 /// Wraps a zencodec [`DynStreamingDecoder`] as a zenpipe [`Source`].
 ///
-/// Pulls scanline batches from the decoder and yields them as [`StripRef`]s.
+/// Pulls scanline batches from the decoder and yields them as [`Strip`]s.
 /// The decoder's pixel data is copied into an internal buffer so the strip
 /// lifetime is tied to this source, not the decoder.
 pub struct DecoderSource<'a> {
@@ -77,7 +77,7 @@ impl<'a> DecoderSource<'a> {
 }
 
 impl Source for DecoderSource<'_> {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -104,7 +104,7 @@ impl Source for DecoderSource<'_> {
         }
 
         self.y += rows;
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {
@@ -163,17 +163,17 @@ impl<'a> EncoderSink<'a> {
 }
 
 impl crate::Sink for EncoderSink<'_> {
-    fn consume(&mut self, strip: &StripRef<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
         let encoder = self
             .encoder
             .as_mut()
             .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
 
         let pixels = zenpixels::PixelSlice::new(
-            strip.data,
-            strip.width,
-            strip.height,
-            strip.stride,
+            strip.data(),
+            strip.width(),
+            strip.height(),
+            strip.stride(),
             self.descriptor,
         )
         .map_err(|e| PipeError::Op(alloc::format!("PixelSlice construction failed: {e}")))?;

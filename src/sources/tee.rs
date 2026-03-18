@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::PixelFormat;
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 /// Shared buffer holding the fully materialized upstream image.
 struct SharedBuffer {
@@ -66,12 +66,12 @@ impl TeeSource {
         let mut y = 0usize;
 
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.height {
+            for r in 0..strip.height() {
                 let dst_start = (y + r as usize) * stride;
                 let src_row = strip.row(r);
                 data[dst_start..dst_start + stride].copy_from_slice(&src_row[..stride]);
             }
-            y += strip.height as usize;
+            y += strip.height() as usize;
         }
 
         Ok(Self {
@@ -138,7 +138,7 @@ pub struct TeeCursor {
 }
 
 impl Source for TeeCursor {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -150,14 +150,14 @@ impl Source for TeeCursor {
         let y = self.y;
         self.y += rows;
 
-        Ok(Some(StripRef {
-            data: &self.data[start..end],
-            width: self.width,
-            height: rows,
-            stride: self.stride,
+        Ok(Some(Strip::new(
+            &self.data[start..end],
+            self.width,
+            rows,
+            self.stride,
+            self.format,
             y,
-            format: self.format,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {

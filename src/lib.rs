@@ -30,7 +30,9 @@ pub mod codec;
 pub use error::PipeError;
 pub use format::{PixelFormat, PixelFormatExt};
 pub use limits::Limits;
-pub use strip::{StripBuf, StripRef};
+pub use strip::{Strip, StripBuf};
+/// Type alias for backward compatibility.
+pub type StripRef<'a> = Strip<'a>;
 
 // Re-export key zenpixels-convert types.
 pub use zenpixels_convert::{
@@ -50,7 +52,7 @@ pub use zenpixels_convert::cms_moxcms::MoxCms;
 /// A source of pixel strips (pull-based).
 pub trait Source: Send {
     /// Pull the next strip. Returns `None` when the image is exhausted.
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError>;
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError>;
     /// Output image width in pixels.
     fn width(&self) -> u32;
     /// Total output image height in pixels.
@@ -62,7 +64,7 @@ pub trait Source: Send {
 /// A sink that consumes pixel strips (push-based).
 pub trait Sink: Send {
     /// Consume one strip of pixel data.
-    fn consume(&mut self, strip: &StripRef<'_>) -> Result<(), PipeError>;
+    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError>;
     /// Signal end of image.
     fn finish(&mut self) -> Result<(), PipeError>;
 }

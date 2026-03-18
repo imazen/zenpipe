@@ -4,7 +4,7 @@ use alloc::vec;
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
-use crate::strip::{StripBuf, StripRef};
+use crate::strip::{Strip, StripBuf};
 
 /// Compositing of two strip sources with configurable blend mode.
 ///
@@ -88,7 +88,7 @@ impl CompositeSource {
 }
 
 impl Source for CompositeSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -105,19 +105,19 @@ impl Source for CompositeSource {
         };
 
         // Check if foreground overlaps this strip's y range
-        let strip_y_end = self.y + bg_strip.height;
+        let strip_y_end = self.y + bg_strip.height();
         let fg_overlaps = self.y < self.fg_y + self.fg_h && strip_y_end > self.fg_y;
 
         if !fg_overlaps {
             // No foreground — pass through background
-            for r in 0..bg_strip.height {
+            for r in 0..bg_strip.height() {
                 self.buf.push_row(bg_strip.row(r));
             }
         } else {
             // Pull foreground strip
             let fg_strip = self.foreground.next()?;
 
-            for r in 0..bg_strip.height {
+            for r in 0..bg_strip.height() {
                 let abs_y = self.y + r;
                 let bg_row = bg_strip.row(r);
 
@@ -127,7 +127,7 @@ impl Source for CompositeSource {
                 if has_fg {
                     let fg = fg_strip.as_ref().unwrap();
                     let fg_local_y = abs_y - self.fg_y;
-                    if fg_local_y >= fg.y && fg_local_y < fg.y + fg.height {
+                    if fg_local_y >= fg.y && fg_local_y < fg.y + fg.height() {
                         let fg_row = fg.row(fg_local_y - fg.y);
                         let stride = self.buf.stride();
                         let mut out_row = vec![0u8; stride];
@@ -149,7 +149,7 @@ impl Source for CompositeSource {
         }
 
         self.y += self.buf.rows_filled();
-        Ok(Some(self.buf.as_ref()))
+        Ok(Some(self.buf.as_strip()))
     }
 
     fn width(&self) -> u32 {

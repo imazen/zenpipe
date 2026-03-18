@@ -5,7 +5,7 @@ use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
 use crate::ops::PixelOp;
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 /// Fuses per-pixel operations into a single-pass transform over strips.
 ///
@@ -70,36 +70,36 @@ impl TransformSource {
 }
 
 impl Source for TransformSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
         };
 
-        let width = strip.width;
-        let height = strip.height;
+        let width = strip.width();
+        let height = strip.height();
         let y = strip.y;
 
         if self.ops.is_empty() {
             // No ops — copy to buf_a for lifetime management.
-            self.buf_a.resize(strip.data.len(), 0);
-            self.buf_a.copy_from_slice(strip.data);
-            return Ok(Some(StripRef {
-                data: &self.buf_a,
+            self.buf_a.resize(strip.data().len(), 0);
+            self.buf_a.copy_from_slice(strip.data());
+            return Ok(Some(Strip::new(
+                &self.buf_a,
                 width,
                 height,
-                stride: strip.stride,
+                strip.stride(),
+                self.output_format,
                 y,
-                format: strip.format,
-            }));
+            )?));
         }
 
-        // Apply first op directly from strip.data → buf_b, skipping the
+        // Apply first op directly from strip.data() → buf_b, skipping the
         // buf_a copy. This saves one full memcpy per strip.
         let first_op = &self.ops[0];
         let out_size = first_op.output_format().row_bytes(width) * height as usize;
         self.buf_b.resize(out_size, 0);
-        first_op.apply(strip.data, &mut self.buf_b, width, height);
+        first_op.apply(strip.data(), &mut self.buf_b, width, height);
         let mut current_is_a = false;
 
         // Remaining ops ping-pong between buf_a and buf_b.
@@ -123,14 +123,14 @@ impl Source for TransformSource {
             &self.buf_b
         };
 
-        Ok(Some(StripRef {
+        Ok(Some(Strip::new(
             data,
             width,
             height,
             stride,
+            self.output_format,
             y,
-            format: self.output_format,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {

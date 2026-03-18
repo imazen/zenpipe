@@ -468,6 +468,7 @@ dependencies = [
  "enough",
  "hashbrown",
  "moxcms",
+ "whereat 0.1.3",
  "zenblend",
  "zencodec",
  "zenfilters",

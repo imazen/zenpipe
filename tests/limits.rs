@@ -182,7 +182,7 @@ impl CollectSink {
 
 impl zenpipe::Sink for CollectSink {
     fn consume(&mut self, strip: &zenpipe::StripRef<'_>) -> Result<(), PipeError> {
-        self.bytes += strip.data.len();
+        self.bytes += strip.data().len();
         Ok(())
     }
     fn finish(&mut self) -> Result<(), PipeError> {

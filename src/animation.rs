@@ -48,7 +48,7 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 use crate::Source;
 use crate::error::PipeError;
 use crate::format::{PixelFormat, PixelFormatExt};
-use crate::strip::StripRef;
+use crate::strip::Strip;
 
 // =========================================================================
 // Frame metadata
@@ -200,7 +200,7 @@ impl FrameSource {
 }
 
 impl Source for FrameSource {
-    fn next(&mut self) -> Result<Option<StripRef<'_>>, PipeError> {
+    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
         if self.frame_info.is_none() || self.y >= self.height {
             return Ok(None);
         }
@@ -212,14 +212,14 @@ impl Source for FrameSource {
         let y = self.y;
         self.y += rows;
 
-        Ok(Some(StripRef {
-            data: &self.data[start..end],
-            width: self.width,
-            height: rows,
-            stride: self.stride,
+        Ok(Some(Strip::new(
+            &self.data[start..end],
+            self.width,
+            rows,
+            self.stride,
+            self.format,
             y,
-            format: self.format,
-        }))
+        )?))
     }
 
     fn width(&self) -> u32 {
@@ -336,9 +336,9 @@ impl FrameSink {
 }
 
 impl crate::Sink for FrameSink {
-    fn consume(&mut self, strip: &StripRef<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
         let stride = self.format.row_bytes(self.width);
-        for r in 0..strip.height {
+        for r in 0..strip.height() {
             if self.rows_accumulated >= self.height {
                 return Err(PipeError::DimensionMismatch(alloc::format!(
                     "frame sink received more than {} rows",

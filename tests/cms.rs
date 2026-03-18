@@ -21,7 +21,7 @@ use zenpipe::sources::{CallbackSource, IccTransformSource};
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        out.extend_from_slice(strip.data);
+        out.extend_from_slice(strip.data());
     }
     out
 }
@@ -169,7 +169,7 @@ fn icc_streaming_strips() {
     let mut total_rows = 0u32;
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = transform.next() {
-        total_rows += strip.height;
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);
