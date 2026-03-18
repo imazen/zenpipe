@@ -169,6 +169,8 @@ pub enum DepthSource {
     AppleMpf,
     /// HEIC auxiliary depth image (Apple or other).
     AppleHeic,
+    /// AVIF auxiliary depth image (auxl + auxC depth URN).
+    Avif,
     /// Unknown or undetectable source.
     #[default]
     Unknown,

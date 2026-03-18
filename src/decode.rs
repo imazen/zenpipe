@@ -347,6 +347,8 @@ impl<'a> DecodeRequest<'a> {
             ImageFormat::Jpeg => extract_jpeg_depth(&output),
             #[cfg(feature = "heic-decode")]
             ImageFormat::Heic => extract_heic_depth(data),
+            #[cfg(feature = "avif-decode")]
+            ImageFormat::Avif => extract_avif_depth(data),
             _ => None,
         };
 
@@ -837,6 +839,70 @@ fn extract_heic_depth(data: &[u8]) -> Option<crate::depthmap::DecodedDepthMap> {
     })
 }
 
+/// Extract depth map from an AVIF auxiliary depth image.
+///
+/// Parses the AVIF container to detect `auxl`-linked depth items (with `auxC`
+/// depth URN), then decodes the depth AV1 bitstream via zenavif to obtain
+/// grayscale pixels.
+#[cfg(feature = "avif-decode")]
+fn extract_avif_depth(data: &[u8]) -> Option<crate::depthmap::DecodedDepthMap> {
+    use crate::depthmap::*;
+
+    // Parse the AVIF container to find the depth auxiliary item
+    let parser = zenavif::ManagedAvifDecoder::new(data, &zenavif::DecoderConfig::default()).ok()?;
+    let info = parser.probe_info().ok()?;
+    let avif_depth = info.depth_map?;
+
+    if avif_depth.data.is_empty() {
+        return None;
+    }
+
+    // Decode the depth AV1 bitstream to pixels
+    let (pixel_data, w, h, channels) = zenavif::decode_av1_obu(&avif_depth.data).ok()?;
+
+    if w == 0 || h == 0 {
+        return None;
+    }
+
+    // Convert to grayscale bytes if needed (depth images are typically monochrome)
+    let pixel_bytes = if channels == 1 {
+        pixel_data
+    } else {
+        // RGB→gray: use luminance approximation (0.299R + 0.587G + 0.114B)
+        let pixel_count = (w as usize) * (h as usize);
+        let mut gray = alloc::vec::Vec::with_capacity(pixel_count);
+        for chunk in pixel_data.chunks_exact(channels as usize) {
+            let r = chunk[0] as u32;
+            let g = chunk[1] as u32;
+            let b = chunk[2] as u32;
+            gray.push(((r * 77 + g * 150 + b * 29) >> 8) as u8);
+        }
+        gray
+    };
+
+    Some(DecodedDepthMap {
+        depth: DepthImage {
+            data: pixel_bytes,
+            width: w,
+            height: h,
+            pixel_format: DepthPixelFormat::Gray8,
+        },
+        metadata: DepthMapMetadata {
+            // AVIF depth auxiliary doesn't carry range/units metadata in the container.
+            // Default to range-linear with generic near/far — callers should use
+            // application-level metadata if available.
+            format: DepthFormat::RangeLinear,
+            near: 0.0,
+            far: 1.0,
+            units: DepthUnits::Meters,
+            measure_type: DepthMeasureType::OpticalAxis,
+        },
+        confidence: None,
+        source_format: ImageFormat::Avif,
+        source_device: DepthSource::Avif,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,5 +1011,47 @@ mod tests {
             .unwrap();
         assert!(depth.is_none(), "WebP should not have a depth map");
         assert_eq!(output.width(), 2);
+    }
+
+    /// Verify decode_depth_map extracts depth from an AVIF with depth auxiliary.
+    #[cfg(feature = "avif-decode")]
+    #[test]
+    fn decode_depth_map_avif_with_depth() {
+        extern crate std;
+        let avif_data =
+            std::fs::read("../zenavif-parse/tests/colors-animated-8bpc-depth-exif-xmp.avif")
+                .expect("test vector not found");
+
+        let (output, depth) = DecodeRequest::new(&avif_data).decode_depth_map().unwrap();
+        assert!(output.width() > 0, "base image should decode");
+
+        let dm = depth.expect("AVIF with depth auxiliary should produce a depth map");
+        assert!(dm.depth.width > 0, "depth width should be positive");
+        assert!(dm.depth.height > 0, "depth height should be positive");
+        assert!(!dm.depth.data.is_empty(), "depth data should not be empty");
+        assert_eq!(dm.source_format, ImageFormat::Avif);
+        assert_eq!(dm.source_device, crate::depthmap::DepthSource::Avif);
+        assert_eq!(
+            dm.depth.pixel_format,
+            crate::depthmap::DepthPixelFormat::Gray8
+        );
+    }
+
+    /// Verify AVIF without depth returns None.
+    #[cfg(feature = "avif-decode")]
+    #[test]
+    fn decode_depth_map_avif_no_depth() {
+        extern crate std;
+        let avif_path = "../zenavif-parse/tests/colors-animated-8bpc.avif";
+        let Ok(avif_data) = std::fs::read(avif_path) else {
+            return; // skip if test vector not available
+        };
+
+        let (output, depth) = DecodeRequest::new(&avif_data).decode_depth_map().unwrap();
+        assert!(output.width() > 0, "base image should decode");
+        assert!(
+            depth.is_none(),
+            "AVIF without depth auxiliary should return None"
+        );
     }
 }
