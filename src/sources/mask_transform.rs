@@ -66,17 +66,13 @@ impl Source for MaskTransformSource {
             self.buf.push_row(src_row);
             let dst_row = self.buf.row_mut(r);
 
-            let fill = self.mask.fill_mask_row(&mut self.mask_buf, self.y);
-            match fill {
-                zenblend::mask::MaskFill::AllOpaque => {} // no-op, data already copied
-                zenblend::mask::MaskFill::AllTransparent => {
-                    dst_row.fill(0);
-                }
-                zenblend::mask::MaskFill::Partial => {
-                    let row_f32: &mut [f32] = bytemuck::cast_slice_mut(dst_row);
-                    zenblend::mask_row(row_f32, &self.mask_buf);
-                }
-            }
+            let row_f32: &mut [f32] = bytemuck::cast_slice_mut(dst_row);
+            zenblend::apply_mask_spans(
+                row_f32,
+                &mut self.mask_buf,
+                self.mask.as_ref(),
+                self.y,
+            );
             self.y += 1;
         }
 
