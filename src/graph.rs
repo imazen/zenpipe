@@ -605,8 +605,18 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
-                let flatten = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
-                Ok(Box::new(TransformSource::new(upstream).push(flatten)))
+                let options = zenpixels_convert::policy::ConvertOptions::permissive()
+                    .with_alpha_policy(zenpixels_convert::policy::AlphaPolicy::CompositeOnto {
+                        r: matte[0],
+                        g: matte[1],
+                        b: matte[2],
+                    });
+                let op =
+                    RowConverterOp::new_explicit(format::RGBA8_SRGB, format::RGB8_SRGB, &options)
+                        .ok_or_else(|| {
+                        PipeError::Op(alloc::format!("no conversion path for alpha removal"))
+                    })?;
+                Ok(Box::new(TransformSource::new(upstream).push(op)))
             }
 
             NodeOp::AddAlpha => {
