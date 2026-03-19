@@ -4,7 +4,7 @@ use crate::filter::Filter;
 use crate::filters::guided_filter::guided_filter_plane;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 
 /// Zone-based luminance adjustment with edge-aware masking.
 ///

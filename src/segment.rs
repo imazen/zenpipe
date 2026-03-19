@@ -38,7 +38,7 @@
 use crate::blur::{GaussianKernel, gaussian_blur_plane};
 use crate::context::FilterContext;
 use crate::planes::OklabPlanes;
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use crate::prelude::*;
 
 /// Smoothstep: 0 when x <= edge0, 1 when x >= edge1, smooth cubic in between.
 #[inline]

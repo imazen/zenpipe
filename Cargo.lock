@@ -3244,7 +3244,6 @@ dependencies = [
  "image",
  "imgref",
  "libblur",
- "libm",
  "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "magetypes",
  "palette",

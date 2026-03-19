@@ -54,7 +54,7 @@
 
 use crate::pipeline::{Pipeline, PipelineConfig};
 use crate::planes::OklabPlanes;
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use crate::prelude::*;
 
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;

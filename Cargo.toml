@@ -18,7 +18,6 @@ srgb-filters = ["buffer", "dep:rgb", "zenpixels/rgb"]
 
 [dependencies]
 archmage = { version = "0.9.5", features = ["avx512"] }
-libm = "0.2"
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }

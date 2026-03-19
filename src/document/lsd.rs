@@ -10,11 +10,11 @@
 //!    of pixels with similar level-line angles
 //! 4. Fit a bounding rectangle to each region
 //! 5. Validate via NFA (reject segments likely due to noise)
-use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 
 extern crate alloc;
 
 use crate::context::FilterContext;
+use crate::prelude::*;
 
 /// A detected line segment with quality metrics.
 #[derive(Clone, Debug)]

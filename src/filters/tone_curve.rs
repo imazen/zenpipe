@@ -2,7 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 
 /// Arbitrary tone curve via control points with cubic spline interpolation.
 ///

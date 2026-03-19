@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 use archmage::prelude::*;
 use magetypes::simd::f32x8;
 

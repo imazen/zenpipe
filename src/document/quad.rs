@@ -2,11 +2,11 @@
 //! Given LSD line segments, generates candidate quadrilaterals and scores them
 //! by edge response, inside/outside contrast, and geometric plausibility.
 //! Returns the best-scoring document boundary.
-use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 
 extern crate alloc;
 
 use super::lsd::LineSegment;
+use crate::prelude::*;
 
 /// A detected document quadrilateral with quality score.
 #[derive(Clone, Debug)]

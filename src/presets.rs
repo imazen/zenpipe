@@ -23,10 +23,10 @@
 //! [`Preset::build_pipeline_at`] blends each parameter between its identity
 //! value and the preset value: `effective = identity + intensity * (preset - identity)`.
 //! This gives smooth ramping from no effect (0.0) to full preset (1.0).
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
 use crate::filters::*;
 use crate::pipeline::{Pipeline, PipelineConfig};
+use crate::prelude::*;
 
 /// A named filter preset with category and parameter values.
 #[derive(Clone, Debug)]

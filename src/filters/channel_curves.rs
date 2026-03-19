@@ -2,7 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 
 /// Per-channel tone curves applied independently to R, G, B in sRGB space.
 ///

@@ -1,5 +1,3 @@
-use alloc::{vec, vec::Vec};
-
 /// Reusable scratch buffer pool for filter pipeline operations.
 ///
 /// `FilterContext` eliminates per-call heap allocations by maintaining a
@@ -32,6 +30,7 @@ use alloc::{vec, vec::Vec};
 ///
 /// The context also provides [`take_u8`](FilterContext::take_u8) for
 /// byte buffers used in format conversion paths.
+use crate::prelude::*;
 pub struct FilterContext {
     f32_pool: Vec<Vec<f32>>,
     u8_pool: Vec<Vec<u8>>,

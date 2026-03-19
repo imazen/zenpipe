@@ -3,8 +3,8 @@ use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
+use crate::prelude::*;
 use crate::simd;
-use alloc::vec::Vec;
 
 /// Sigmoid tone mapper: maps scene luminance through an S-curve for display.
 ///

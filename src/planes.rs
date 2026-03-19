@@ -1,5 +1,5 @@
 use crate::context::FilterContext;
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 
 /// Owned planar f32 data for Oklab L, a, b, and optional alpha.
 ///

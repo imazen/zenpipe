@@ -45,12 +45,12 @@
 //! When needed, it should be implemented as a separate `BlendLayer` struct
 //! that takes two OklabPlanes and a blend mode, rather than forcing it into
 //! the Filter trait.
-use alloc::boxed::Box;
 
 use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::prelude::*;
 
 /// A spatial mask controlling per-pixel filter intensity.
 #[derive(Clone, Debug)]

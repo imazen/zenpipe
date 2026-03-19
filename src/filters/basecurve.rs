@@ -13,12 +13,12 @@
 //!
 //! Data sourced from darktable's `src/iop/basecurve.c` (GPL-2.0+). The curve node
 //! coordinates are factual measurements, not copyrightable expression.
-use alloc::{vec, vec::Vec};
 
 use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
+use crate::prelude::*;
 
 /// A basecurve defined by (input, output) node pairs, interpolated with
 /// monotone Hermite splines.

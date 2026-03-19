@@ -2,7 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
-use alloc::{vec, vec::Vec};
+use crate::prelude::*;
 
 /// Parametric tone curve with 4 zone controls and 3 movable dividers.
 ///

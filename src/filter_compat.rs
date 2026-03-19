@@ -7,10 +7,9 @@
 //! The pipeline can use [`validate_pipeline`] to check for problems before
 //! processing, and the autotune system uses these rules to avoid generating
 //! conflicting parameter combinations.
-use alloc::string::String;
-use alloc::vec::Vec;
 
 /// A filter compatibility issue found during pipeline validation.
+use crate::prelude::*;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompatIssue {
