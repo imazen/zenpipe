@@ -614,7 +614,7 @@ impl PipelineGraph {
                 let op =
                     RowConverterOp::new_explicit(format::RGBA8_SRGB, format::RGB8_SRGB, &options)
                         .ok_or_else(|| {
-                        PipeError::Op(alloc::format!("no conversion path for alpha removal"))
+                        PipeError::Op("no conversion path for alpha removal".to_string())
                     })?;
                 Ok(Box::new(TransformSource::new(upstream).push(op)))
             }

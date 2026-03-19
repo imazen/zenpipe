@@ -27,6 +27,12 @@ pub trait PixelOp: Send {
 
     /// Produced output format.
     fn output_format(&self) -> PixelFormat;
+
+    /// If this op is a `RowConverterOp`, return a reference to its inner
+    /// `RowConverter` for composition with adjacent converter ops.
+    fn as_row_converter(&self) -> Option<&zenpixels_convert::RowConverter> {
+        None
+    }
 }
 
 // =========================================================================
@@ -74,6 +80,19 @@ impl RowConverterOp {
         })
     }
 
+    /// Create from a pre-built `RowConverter` with known format endpoints.
+    pub fn from_converter(
+        converter: zenpixels_convert::RowConverter,
+        from: PixelFormat,
+        to: PixelFormat,
+    ) -> Self {
+        Self {
+            converter,
+            from,
+            to,
+        }
+    }
+
     /// Create a conversion op, panicking if no path exists.
     #[track_caller]
     pub fn must(from: PixelFormat, to: PixelFormat) -> Self {
@@ -103,6 +122,9 @@ impl PixelOp for RowConverterOp {
     }
     fn output_format(&self) -> PixelFormat {
         self.to
+    }
+    fn as_row_converter(&self) -> Option<&zenpixels_convert::RowConverter> {
+        Some(&self.converter)
     }
 }
 

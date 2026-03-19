@@ -39,22 +39,16 @@ impl TransformSource {
     /// # Panics
     ///
     /// Panics if `op.input_format()` doesn't match the current output format.
-    pub fn push(mut self, op: impl PixelOp + 'static) -> Self {
-        assert_eq!(
-            op.input_format(),
-            self.output_format,
-            "op input format {} doesn't match chain output {}",
-            op.input_format(),
-            self.output_format,
-        );
-        self.output_format = op.output_format();
-        self.ops.push(Box::new(op));
-        self
+    pub fn push(self, op: impl PixelOp + 'static) -> Self {
+        self.push_boxed(Box::new(op))
     }
 
     /// Append a boxed per-pixel operation to the fused chain.
     ///
     /// Like [`push`](Self::push) but accepts a pre-boxed trait object.
+    /// If both this op and the previous op are `RowConverterOp`s,
+    /// they are composed into a single converter (eliminating one
+    /// intermediate buffer allocation per strip).
     pub fn push_boxed(mut self, op: Box<dyn PixelOp>) -> Self {
         assert_eq!(
             op.input_format(),
@@ -63,6 +57,31 @@ impl TransformSource {
             op.input_format(),
             self.output_format,
         );
+
+        // Try to compose with the last op if both are RowConverters.
+        if let Some(new_rc) = op.as_row_converter() {
+            if let Some(last) = self.ops.last() {
+                if let Some(prev_rc) = last.as_row_converter() {
+                    if let Some(composed) = prev_rc.compose(new_rc) {
+                        let from = self.ops.last().unwrap().input_format();
+                        let to = op.output_format();
+                        self.ops.pop();
+                        if composed.is_identity() {
+                            // Total cancellation — no op needed.
+                            self.output_format = from;
+                        } else {
+                            let composed_op = crate::ops::RowConverterOp::from_converter(
+                                composed, from, to,
+                            );
+                            self.output_format = to;
+                            self.ops.push(Box::new(composed_op));
+                        }
+                        return self;
+                    }
+                }
+            }
+        }
+
         self.output_format = op.output_format();
         self.ops.push(op);
         self
