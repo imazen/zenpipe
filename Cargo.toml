@@ -94,3 +94,6 @@ whereat = { path = "../whereat" }
 zencodecs = { path = "../zencodecs" }
 zencodec = { path = "../zencodec" }
 zenresize = { path = "../zenresize" }
+magetypes = { path = "../../archmage/magetypes" }
+archmage = { path = "../../archmage" }
+linear-srgb = { path = "../linear-srgb" }

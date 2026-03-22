@@ -179,8 +179,6 @@ dependencies = [
 [[package]]
 name = "archmage"
 version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fd400bfe079970d495bda0865afa8e3ba6f1604812f003c1ddcedc4d7a55a7e"
 dependencies = [
  "archmage-macros 0.9.5",
  "safe_unaligned_simd",
@@ -200,8 +198,6 @@ dependencies = [
 [[package]]
 name = "archmage-macros"
 version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e73d1377bc9ebbed872f6a818decf8b360050183c641604078c0b5fc0f4a9189"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1360,18 +1356,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linear-srgb"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "125a2ceb187051329f82182e8aa5ad24a988749bb58c3ab5ee64ea65c0284bc8"
-dependencies = [
- "archmage 0.9.5",
- "bytemuck",
- "magetypes",
- "num-traits",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1404,8 +1388,6 @@ dependencies = [
 [[package]]
 name = "magetypes"
 version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1d74daed887a4af79f24aff472446d8b5f9a626d555db93f8c4bcdf6e6db41e"
 dependencies = [
  "archmage 0.9.5",
 ]
@@ -2581,7 +2563,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "half",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "thiserror",
  "wide",
 ]
@@ -3129,7 +3111,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "imgref",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "log",
  "magetypes",
  "rav1d-safe",
@@ -3216,7 +3198,7 @@ dependencies = [
  "enough",
  "heic-decoder",
  "imgref",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "rgb",
  "thiserror",
  "whereat",
@@ -3244,7 +3226,7 @@ dependencies = [
  "image",
  "imgref",
  "libblur",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "magetypes",
  "palette",
  "rgb",
@@ -3276,7 +3258,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "gif",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "rgb",
  "thiserror",
  "whereat",
@@ -3315,7 +3297,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "imgref",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "rgb",
  "thiserror",
  "whereat",
@@ -3383,7 +3365,7 @@ version = "0.1.1"
 dependencies = [
  "bytemuck",
  "garb",
- "linear-srgb 0.6.3",
+ "linear-srgb",
  "rgb",
  "whereat",
  "zenpixels",
@@ -3398,7 +3380,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "imgref",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
@@ -3416,7 +3398,7 @@ version = "0.1.0"
 dependencies = [
  "archmage 0.9.5",
  "imgref",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "magetypes",
  "num-traits",
  "rgb",
@@ -3492,7 +3474,7 @@ dependencies = [
  "archmage 0.9.5",
  "imgref",
  "libm",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "magetypes",
  "rgb",
  "safe_unaligned_simd",
@@ -3509,7 +3491,7 @@ version = "0.2.1"
 dependencies = [
  "archmage 0.9.5",
  "bytemuck",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "magetypes",
  "rayon",
  "thiserror",
@@ -3526,7 +3508,7 @@ dependencies = [
  "garb",
  "hashbrown 0.16.1",
  "libm",
- "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linear-srgb",
  "magetypes",
  "rgb",
  "self_cell",
