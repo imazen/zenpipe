@@ -4,13 +4,17 @@
 //! The caller builds a [`PipelineGraph`], adds nodes and edges, then calls
 //! [`compile`](PipelineGraph::compile) to produce an executable source.
 //!
+//! Call [`estimate`](PipelineGraph::estimate) first to check resource usage
+//! before committing to compilation (which may decode pixels for content-adaptive
+//! nodes like [`CropWhitespace`](NodeOp::CropWhitespace)).
+//!
 //! # Design
 //!
 //! - **Delegates to zen crates**: zenresize handles orient + resize. Layout nodes
 //!   decompose into streaming steps (crop → orient → resize → canvas) with
 //!   materialization only when unavoidable (axis-swapping orientations, canvas expansion).
-//! - **No estimate phase**: dimensions propagate naturally through `Source::width()`/`height()`
-//!   during compilation.
+//! - **Estimate before compile**: [`estimate()`](PipelineGraph::estimate) propagates
+//!   worst-case dimensions through the graph without allocating or decoding.
 //! - **No expand phase**: zen crates handle internal optimization.
 //! - **Automatic format conversion**: inserts [`RowConverterOp`](crate::ops::RowConverterOp)
 //!   for any format pair supported by zenpixels-convert (sRGB, P3, BT.2020, PQ, HLG, etc.).
@@ -58,6 +62,84 @@ pub type NodeId = usize;
 /// A transform applied to a fully materialized pixel buffer.
 pub type MaterializeTransform =
     Box<dyn FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut PixelFormat) + Send>;
+
+/// A closure that analyzes a materialized buffer and returns a new source chain.
+///
+/// Used by [`NodeOp::Analyze`] for content-adaptive operations (e.g., face
+/// detection, image classification) that need full-frame pixel access to
+/// decide what downstream operations to apply.
+pub type AnalyzeBuilder =
+    Box<dyn FnOnce(MaterializedSource) -> Result<Box<dyn Source>, PipeError> + Send>;
+
+/// Metadata about a source, used by [`PipelineGraph::estimate`].
+///
+/// Provide one per [`NodeOp::Source`] node so the estimator can propagate
+/// dimensions through the graph without decoding any pixels.
+#[derive(Clone, Debug)]
+pub struct SourceInfo {
+    /// Image width in pixels.
+    pub width: u32,
+    /// Image height in pixels.
+    pub height: u32,
+    /// Pixel format.
+    pub format: PixelFormat,
+}
+
+/// Resource usage estimate for a compiled pipeline.
+///
+/// All values are worst-case upper bounds. Actual usage may be lower
+/// (e.g., `CropWhitespace` may shrink dimensions, reducing downstream memory).
+#[derive(Clone, Debug)]
+pub struct ResourceEstimate {
+    /// Peak memory for strip buffers, resize ring buffers, etc.
+    /// Does NOT include materialization buffers (see [`materialization_bytes`]).
+    pub streaming_bytes: u64,
+    /// Worst-case materialization buffer (largest single full-frame allocation).
+    /// Zero if no node materializes.
+    pub materialization_bytes: u64,
+    /// Whether any node requires full-frame materialization.
+    pub materializes: bool,
+    /// Output image width (worst-case).
+    pub output_width: u32,
+    /// Output image height (worst-case).
+    pub output_height: u32,
+    /// Output pixel format.
+    pub output_format: PixelFormat,
+}
+
+impl Default for ResourceEstimate {
+    fn default() -> Self {
+        Self {
+            streaming_bytes: 0,
+            materialization_bytes: 0,
+            materializes: false,
+            output_width: 0,
+            output_height: 0,
+            output_format: format::RGBA8_SRGB,
+        }
+    }
+}
+
+impl ResourceEstimate {
+    /// Total worst-case peak memory (streaming + materialization).
+    pub fn peak_memory_bytes(&self) -> u64 {
+        self.streaming_bytes + self.materialization_bytes
+    }
+
+    /// Check this estimate against resource limits.
+    pub fn check(&self, limits: &crate::Limits) -> Result<(), PipeError> {
+        limits.check(self.output_width, self.output_height, self.output_format)?;
+        if let Some(max_mem) = limits.max_memory_bytes {
+            if self.peak_memory_bytes() > max_mem {
+                return Err(PipeError::LimitExceeded(alloc::format!(
+                    "estimated peak memory {} bytes exceeds limit {max_mem}",
+                    self.peak_memory_bytes()
+                )));
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Edge type connecting two nodes.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -241,6 +323,40 @@ pub enum NodeOp {
         blend_mode: Option<zenblend::BlendMode>,
     },
 
+    // === Content-adaptive (materialize + analyze) ===
+
+    /// Analyze materialized pixels, then build a downstream source chain.
+    ///
+    /// The closure receives the fully materialized upstream image and must
+    /// return a [`Source`] to continue the pipeline. This is the low-level
+    /// primitive for content-adaptive operations — face detection, image
+    /// classification, or any analysis that needs full-frame pixel access
+    /// before deciding what operations to apply.
+    ///
+    /// Not representable in JSON — use named variants like [`CropWhitespace`]
+    /// for declarative pipelines.
+    ///
+    /// During [`estimate()`](PipelineGraph::estimate), treated as worst-case
+    /// pass-through (upstream dimensions unchanged).
+    Analyze(AnalyzeBuilder),
+
+    /// Detect and crop uniform borders (whitespace trimming).
+    ///
+    /// Materializes the upstream image, scans inward from each edge to find
+    /// where pixel values diverge from the border color by more than
+    /// `threshold`, then crops to the content bounds plus `percent_padding`.
+    ///
+    /// During [`estimate()`](PipelineGraph::estimate), treated as worst-case
+    /// no-op (dimensions unchanged — actual crop can only be smaller).
+    CropWhitespace {
+        /// Color distance threshold (0–255). Pixels within this distance
+        /// of the border color are considered "whitespace".
+        threshold: u8,
+        /// Padding to add around detected content, as a percentage of the
+        /// content dimensions (0.0 = tight crop, 0.05 = 5% padding).
+        percent_padding: f32,
+    },
+
     // === Barriers ===
     /// Custom materialization barrier — drain upstream, transform, re-stream.
     ///
@@ -288,6 +404,278 @@ impl PipelineGraph {
     /// Connect `from` → `to` with the given edge kind.
     pub fn add_edge(&mut self, from: NodeId, to: NodeId, kind: EdgeKind) {
         self.edges.push(Edge { from, to, kind });
+    }
+
+    /// Estimate resource usage without decoding any pixels.
+    ///
+    /// Propagates worst-case dimensions through the graph and computes
+    /// peak memory estimates. Call this before [`compile()`](Self::compile)
+    /// to reject oversized requests cheaply.
+    ///
+    /// `source_info` maps [`NodeOp::Source`] node IDs to their dimensions
+    /// (typically from decoder header probes).
+    ///
+    /// Content-adaptive nodes ([`CropWhitespace`](NodeOp::CropWhitespace),
+    /// [`Analyze`](NodeOp::Analyze)) estimate worst-case (upstream dimensions
+    /// unchanged), since their actual output can only be smaller.
+    pub fn estimate(
+        &self,
+        source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
+    ) -> Result<ResourceEstimate, PipeError> {
+        let output_id = self
+            .nodes
+            .iter()
+            .position(|n| matches!(&n.op, Some(NodeOp::Output)))
+            .ok_or_else(|| PipeError::Op("graph has no Output node".to_string()))?;
+
+        let mut estimate = ResourceEstimate::default();
+        let dims = self.estimate_node(output_id, source_info, &mut estimate)?;
+        estimate.output_width = dims.width;
+        estimate.output_height = dims.height;
+        estimate.output_format = dims.format;
+        Ok(estimate)
+    }
+
+    fn estimate_node(
+        &self,
+        node_id: NodeId,
+        source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
+        est: &mut ResourceEstimate,
+    ) -> Result<SourceInfo, PipeError> {
+        let op = self.nodes[node_id].op.as_ref().ok_or_else(|| {
+            PipeError::Op(alloc::format!("node {node_id} has no op"))
+        })?;
+
+        match op {
+            NodeOp::Source => source_info.get(&node_id).cloned().ok_or_else(|| {
+                PipeError::Op(alloc::format!("no source info for node {node_id}"))
+            }),
+
+            NodeOp::Output => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                self.estimate_node(input_id, source_info, est)
+            }
+
+            NodeOp::Crop { w, h, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                // Strip buffer for crop output
+                est.streaming_bytes += strip_mem(*w, upstream.format);
+                Ok(SourceInfo { width: *w, height: *h, format: upstream.format })
+            }
+
+            NodeOp::Resize { w, h, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                // Resize ring buffer: kernel_height rows of input width
+                let kernel_rows = 16u64; // conservative for most filters
+                est.streaming_bytes += kernel_rows * upstream.width as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                // Output strip buffer
+                est.streaming_bytes += strip_mem(*w, format::RGBA8_SRGB);
+                Ok(SourceInfo { width: *w, height: *h, format: format::RGBA8_SRGB })
+            }
+
+            NodeOp::Constrain { w, h, mode, orientation, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let (in_w, in_h) = if let Some(exif) = orientation {
+                    let o = zenresize::Orientation::from_exif(*exif)
+                        .unwrap_or(zenresize::Orientation::Identity);
+                    if o.swaps_axes() {
+                        (upstream.height, upstream.width)
+                    } else {
+                        (upstream.width, upstream.height)
+                    }
+                } else {
+                    (upstream.width, upstream.height)
+                };
+                // Use zenlayout to compute output dimensions
+                let mut pipeline = zenresize::Pipeline::new(in_w, in_h);
+                if let Some(exif) = orientation {
+                    pipeline = pipeline.auto_orient(*exif);
+                }
+                pipeline = pipeline.constrain(zenresize::Constraint::new(*mode, *w, *h));
+                let (ideal, request) = pipeline.plan().map_err(|e| {
+                    PipeError::Op(alloc::format!("estimate layout plan failed: {e}"))
+                })?;
+                let offer = zenresize::DecoderOffer::full_decode(in_w, in_h);
+                let plan = ideal.finalize(&request, &offer);
+                let out_w = plan.canvas.width;
+                let out_h = plan.canvas.height;
+                // Resize ring buffer + output strip
+                let kernel_rows = 16u64;
+                est.streaming_bytes += kernel_rows * upstream.width as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                // Orient may need materialization
+                if orientation.is_some() {
+                    let o = zenresize::Orientation::from_exif(orientation.unwrap())
+                        .unwrap_or(zenresize::Orientation::Identity);
+                    if o.swaps_axes() {
+                        est.materializes = true;
+                        let mat = upstream.width as u64 * upstream.height as u64
+                            * upstream.format.bytes_per_pixel() as u64;
+                        est.materialization_bytes = est.materialization_bytes.max(mat);
+                    }
+                }
+                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+            }
+
+            NodeOp::Layout { plan, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let out_w = plan.canvas.width;
+                let out_h = plan.canvas.height;
+                let kernel_rows = 16u64;
+                est.streaming_bytes += kernel_rows * upstream.width as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+            }
+
+            NodeOp::LayoutComposite { plan, .. } => {
+                let fg_id = self.find_input(node_id, EdgeKind::Input)?;
+                let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
+                let fg = self.estimate_node(fg_id, source_info, est)?;
+                let bg = self.estimate_node(bg_id, source_info, est)?;
+                let out_w = plan.canvas.width.max(bg.width);
+                let out_h = plan.canvas.height.max(bg.height);
+                let kernel_rows = 16u64;
+                est.streaming_bytes += kernel_rows * fg.width as u64
+                    * fg.format.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, format::RGBAF32_LINEAR_PREMUL);
+                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBAF32_LINEAR_PREMUL })
+            }
+
+            NodeOp::ResizeAdvanced(config) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let out_w = config.total_output_width();
+                let out_h = config.total_output_height();
+                let kernel_rows = 16u64;
+                est.streaming_bytes += kernel_rows * upstream.width as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+            }
+
+            NodeOp::Orient(_) | NodeOp::AutoOrient(_) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let orientation = match op {
+                    NodeOp::Orient(o) => *o,
+                    NodeOp::AutoOrient(exif) => zenresize::Orientation::from_exif(*exif)
+                        .unwrap_or(zenresize::Orientation::Identity),
+                    _ => unreachable!(),
+                };
+                let (out_w, out_h) = if orientation.swaps_axes() {
+                    (upstream.height, upstream.width)
+                } else {
+                    (upstream.width, upstream.height)
+                };
+                if !orientation.is_identity() {
+                    est.materializes = true;
+                    let mat = upstream.width as u64 * upstream.height as u64
+                        * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                    est.materialization_bytes = est.materialization_bytes.max(mat);
+                }
+                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+            }
+
+            NodeOp::PixelTransform(_) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                // Strip buffer for transform output (format may change)
+                est.streaming_bytes += strip_mem(upstream.width, upstream.format);
+                Ok(upstream)
+            }
+
+            NodeOp::Composite { .. } => {
+                let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
+                let fg_id = self.find_input(node_id, EdgeKind::Input)?;
+                let bg = self.estimate_node(bg_id, source_info, est)?;
+                let _fg = self.estimate_node(fg_id, source_info, est)?;
+                est.streaming_bytes += strip_mem(bg.width, format::RGBAF32_LINEAR_PREMUL);
+                Ok(SourceInfo {
+                    width: bg.width, height: bg.height,
+                    format: format::RGBAF32_LINEAR_PREMUL,
+                })
+            }
+
+            #[cfg(feature = "std")]
+            NodeOp::Filter(pipeline) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                if pipeline.has_neighborhood_filter() {
+                    let overlap = pipeline.max_neighborhood_radius(upstream.width, upstream.height);
+                    // Windowed filter: strip_height + 2*overlap rows
+                    let rows = 16u64 + 2 * overlap as u64;
+                    est.streaming_bytes += rows * upstream.width as u64
+                        * format::RGBAF32_LINEAR.bytes_per_pixel() as u64;
+                }
+                est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR);
+                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: format::RGBAF32_LINEAR })
+            }
+
+            #[cfg(feature = "std")]
+            NodeOp::IccTransform { .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                est.streaming_bytes += strip_mem(upstream.width, upstream.format);
+                Ok(upstream)
+            }
+
+            NodeOp::RemoveAlpha { .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let out_fmt = format::RGB8_SRGB;
+                est.streaming_bytes += strip_mem(upstream.width, out_fmt);
+                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: out_fmt })
+            }
+
+            NodeOp::AddAlpha => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                let out_fmt = format::RGBA8_SRGB;
+                est.streaming_bytes += strip_mem(upstream.width, out_fmt);
+                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: out_fmt })
+            }
+
+            NodeOp::Overlay { width: ov_w, height: ov_h, format: ov_fmt, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                // Overlay image is held in memory
+                let ov_mem = *ov_w as u64 * *ov_h as u64 * ov_fmt.bytes_per_pixel() as u64;
+                est.streaming_bytes += ov_mem;
+                est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR_PREMUL);
+                Ok(SourceInfo {
+                    width: upstream.width, height: upstream.height,
+                    format: format::RGBAF32_LINEAR_PREMUL,
+                })
+            }
+
+            // Worst case: dimensions unchanged, full materialization
+            NodeOp::CropWhitespace { .. } | NodeOp::Analyze(_) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                est.materializes = true;
+                let mat = upstream.width as u64 * upstream.height as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.materialization_bytes = est.materialization_bytes.max(mat);
+                Ok(upstream)
+            }
+
+            NodeOp::Materialize(_) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est)?;
+                est.materializes = true;
+                let mat = upstream.width as u64 * upstream.height as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.materialization_bytes = est.materialization_bytes.max(mat);
+                Ok(upstream)
+            }
+        }
     }
 
     /// Compile the graph into a single output [`Source`].
@@ -661,6 +1049,30 @@ impl PipelineGraph {
                 Ok(Box::new(comp))
             }
 
+            NodeOp::Analyze(builder) => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let mat = MaterializedSource::from_source(upstream)?;
+                builder(mat)
+            }
+
+            NodeOp::CropWhitespace {
+                threshold,
+                percent_padding,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources)?;
+                let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
+                let mat = MaterializedSource::from_source(upstream)?;
+                let (x, y, w, h) =
+                    detect_content_bounds(&mat, threshold, percent_padding);
+                if w == mat.width() && h == mat.height() && x == 0 && y == 0 {
+                    // No whitespace found — pass through without re-cropping.
+                    return Ok(Box::new(mat));
+                }
+                Ok(Box::new(CropSource::new(Box::new(mat), x, y, w, h)?))
+            }
+
             NodeOp::Materialize(transform_fn) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources)?;
@@ -749,4 +1161,105 @@ fn ensure_format(
         ))
     })?;
     Ok(Box::new(TransformSource::new(source).push(op)))
+}
+
+// =============================================================================
+// Estimation helper
+// =============================================================================
+
+/// Estimate memory for one strip buffer (16 rows at the given width and format).
+fn strip_mem(width: u32, fmt: PixelFormat) -> u64 {
+    16 * width as u64 * fmt.bytes_per_pixel() as u64
+}
+
+// =============================================================================
+// Whitespace detection (used by CropWhitespace)
+// =============================================================================
+
+/// Scan a materialized RGBA8 image for uniform borders and return content bounds.
+///
+/// Scans inward from each edge. A row/column is "whitespace" if every pixel
+/// is within `threshold` per-channel distance of the top-left corner pixel.
+/// Returns `(x, y, w, h)` with `percent_padding` applied.
+fn detect_content_bounds(
+    mat: &MaterializedSource,
+    threshold: u8,
+    percent_padding: f32,
+) -> (u32, u32, u32, u32) {
+    let w = mat.width();
+    let h = mat.height();
+    if w == 0 || h == 0 {
+        return (0, 0, w, h);
+    }
+
+    let bpp = mat.format().bytes_per_pixel() as usize;
+
+    // Reference color: top-left pixel
+    let row0 = mat.row(0);
+    let ref_color: &[u8] = &row0[..bpp];
+    let thresh = threshold as i16;
+
+    let pixel_matches = |row: &[u8], x: u32| -> bool {
+        let start = x as usize * bpp;
+        // Compare each channel independently (skip alpha for 4-channel)
+        let channels = bpp.min(3);
+        for c in 0..channels {
+            let diff = (row[start + c] as i16 - ref_color[c] as i16).abs();
+            if diff > thresh {
+                return false;
+            }
+        }
+        true
+    };
+
+    let row_is_whitespace = |y: u32| -> bool {
+        let row = mat.row(y);
+        (0..w).all(|x| pixel_matches(row, x))
+    };
+
+    let col_is_whitespace = |x: u32| -> bool {
+        (0..h).all(|y| pixel_matches(mat.row(y), x))
+    };
+
+    // Scan from each edge
+    let mut top = 0u32;
+    while top < h && row_is_whitespace(top) {
+        top += 1;
+    }
+
+    let mut bottom = h;
+    while bottom > top && row_is_whitespace(bottom - 1) {
+        bottom -= 1;
+    }
+
+    let mut left = 0u32;
+    while left < w && col_is_whitespace(left) {
+        left += 1;
+    }
+
+    let mut right = w;
+    while right > left && col_is_whitespace(right - 1) {
+        right -= 1;
+    }
+
+    // Handle fully uniform image
+    if top >= bottom || left >= right {
+        return (0, 0, w, h);
+    }
+
+    let content_w = right - left;
+    let content_h = bottom - top;
+
+    // Apply padding
+    if percent_padding > 0.0 {
+        let pad_x = (content_w as f32 * percent_padding).round() as u32;
+        let pad_y = (content_h as f32 * percent_padding).round() as u32;
+        let x = left.saturating_sub(pad_x);
+        let y = top.saturating_sub(pad_y);
+        let r = (right + pad_x).min(w);
+        let b = (bottom + pad_y).min(h);
+        (x, y, r - x, b - y)
+    } else {
+        (left, top, content_w, content_h)
+    }
 }

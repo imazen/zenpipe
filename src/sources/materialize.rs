@@ -104,6 +104,23 @@ impl MaterializedSource {
         self.strip_height = h.min(self.height);
         self
     }
+
+    /// Raw pixel data (row-major, `stride × height` bytes).
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// Stride (bytes per row, may include padding).
+    pub fn stride(&self) -> usize {
+        self.format.aligned_stride(self.width)
+    }
+
+    /// Read a single row by index.
+    pub fn row(&self, y: u32) -> &[u8] {
+        let stride = self.stride();
+        let start = y as usize * stride;
+        &self.data[start..start + stride]
+    }
 }
 
 impl Source for MaterializedSource {

@@ -29,6 +29,7 @@ pub mod codec;
 
 pub use error::PipeError;
 pub use format::PixelFormat;
+pub use graph::{ResourceEstimate, SourceInfo};
 pub use limits::Limits;
 pub use strip::{Strip, StripBuf};
 
