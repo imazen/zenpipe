@@ -96,14 +96,12 @@ fn ultrahdr_roundtrip_rgb_f32() {
     assert_eq!(sdr.height(), h as u32);
     assert_eq!(sdr.format(), ImageFormat::Jpeg);
 
-    // Decode HDR
-    let hdr = DecodeRequest::new(encoded.data())
-        .decode_hdr(4.0)
-        .expect("HDR decode failed");
+    // Decode + extract gain map (replaces old decode_hdr convenience)
+    let (_, gainmap) = DecodeRequest::new(encoded.data())
+        .decode_gain_map()
+        .expect("gain map decode failed");
 
-    assert_eq!(hdr.width(), w as u32);
-    assert_eq!(hdr.height(), h as u32);
-    assert_eq!(hdr.format(), ImageFormat::Jpeg);
+    assert!(gainmap.is_some(), "UltraHDR JPEG should have a gain map");
 }
 
 #[test]
@@ -118,70 +116,18 @@ fn ultrahdr_roundtrip_rgba_f32() {
         .encode_ultrahdr_rgba_f32(img.as_ref())
         .expect("encode failed");
 
-    // Both SDR and HDR decode should work
+    // SDR decode should work
     let sdr = DecodeRequest::new(encoded.data())
         .decode()
         .expect("SDR decode failed");
     assert_eq!(sdr.width(), w as u32);
     assert_eq!(sdr.height(), h as u32);
 
-    let hdr = DecodeRequest::new(encoded.data())
-        .decode_hdr(4.0)
-        .expect("HDR decode failed");
-    assert_eq!(hdr.width(), w as u32);
-    assert_eq!(hdr.height(), h as u32);
-}
-
-#[test]
-fn decode_hdr_rejects_non_ultrahdr_jpeg() {
-    // Create a regular JPEG (no gain map)
-    let img = ImgVec::new(
-        vec![
-            Rgb {
-                r: 128u8,
-                g: 128,
-                b: 128,
-            };
-            32 * 32
-        ],
-        32,
-        32,
-    );
-    let encoded = EncodeRequest::new(ImageFormat::Jpeg)
-        .with_quality(85.0)
-        .encode_rgb8(img.as_ref())
-        .expect("encode failed");
-
-    // decode_hdr should fail for non-UltraHDR
-    let result = DecodeRequest::new(encoded.data()).decode_hdr(4.0);
-    assert!(result.is_err(), "expected error for non-UltraHDR JPEG");
-}
-
-#[test]
-fn decode_hdr_rejects_non_jpeg() {
-    // Try decode_hdr with WebP data (if webp feature is enabled)
-    #[cfg(feature = "webp")]
-    {
-        let img = ImgVec::new(
-            vec![
-                Rgb {
-                    r: 128u8,
-                    g: 128,
-                    b: 128,
-                };
-                32 * 32
-            ],
-            32,
-            32,
-        );
-        let webp = EncodeRequest::new(ImageFormat::WebP)
-            .with_quality(85.0)
-            .encode_rgb8(img.as_ref())
-            .expect("webp encode failed");
-
-        let result = DecodeRequest::new(webp.data()).decode_hdr(4.0);
-        assert!(result.is_err(), "expected error for non-JPEG");
-    }
+    // Gain map should be extractable
+    let (_, gainmap) = DecodeRequest::new(encoded.data())
+        .decode_gain_map()
+        .expect("gain map decode failed");
+    assert!(gainmap.is_some(), "UltraHDR JPEG should have a gain map");
 }
 
 #[test]

@@ -366,48 +366,28 @@ fn e2e_jpeg_gain_map_is_forward_direction() {
     assert_eq!(gm.source_format, ImageFormat::Jpeg);
 }
 
-// ─── E2E: Reconstruct + compare with decode_hdr ────────────────────────────
+// ─── E2E: Full HDR roundtrip via apply_gainmap ──────────────────────────────
 
 #[test]
-fn e2e_reconstruct_hdr_matches_decode_hdr() {
+fn e2e_gain_map_reconstruct_hdr_roundtrip() {
     let hdr_img = make_hdr_gradient(64, 64, 2.5);
     let bytes = encode_ultrahdr(hdr_img.as_ref(), 90.0);
-    let boost = 4.0;
 
-    // Path A: decode_hdr (existing API)
-    let hdr_output = DecodeRequest::new(&bytes)
-        .decode_hdr(boost)
-        .expect("decode_hdr failed");
-
-    // Path B: decode_gain_map + apply_gainmap (direct ultrahdr-core)
+    // decode_gain_map + apply_gainmap
     let (output, gainmap) = decode_with_gainmap(&bytes);
     let gm = gainmap.expect("must have gain map");
     let (base_bytes, w, h) = sdr_bytes(output);
-    let hdr_data = reconstruct_hdr(&gm, &base_bytes, w, h, 3, boost);
+    let hdr_data = reconstruct_hdr(&gm, &base_bytes, w, h, 3, 4.0);
 
-    // Both paths should produce output of the same dimensions
-    assert_eq!(hdr_output.width(), w);
-    assert_eq!(hdr_output.height(), h);
-    assert_eq!(hdr_data.len(), w as usize * h as usize * 16); // RGBA f32
+    // Should produce RGBA f32 output
+    assert_eq!(hdr_data.len(), w as usize * h as usize * 16);
 
-    // The pixel values won't be bit-identical (different code paths, potential
-    // differences in sRGB→linear conversion), but should be in the same ballpark.
-    let hdr_buf = hdr_output.into_buffer();
-    let hdr_bytes = hdr_buf.as_contiguous_bytes().expect("should be contiguous");
-    let f32_a: &[f32] = bytemuck::cast_slice(hdr_bytes);
-    let f32_b: &[f32] = bytemuck::cast_slice(&hdr_data);
-
-    // Compare means — should be within 50% (compression + tonemapping differences)
-    let mean_a: f32 = f32_a.iter().sum::<f32>() / f32_a.len() as f32;
-    let mean_b: f32 = f32_b.iter().sum::<f32>() / f32_b.len() as f32;
-    let ratio = if mean_a > mean_b {
-        mean_a / mean_b
-    } else {
-        mean_b / mean_a
-    };
+    // HDR values should exceed SDR range
+    let f32_pixels: &[f32] = bytemuck::cast_slice(&hdr_data);
+    let max_val = f32_pixels.iter().copied().fold(0.0f32, f32::max);
     assert!(
-        ratio < 1.5,
-        "mean brightness should be similar: path A={mean_a:.4}, path B={mean_b:.4}, ratio={ratio:.4}"
+        max_val > 1.0,
+        "reconstructed HDR should exceed 1.0, got {max_val}"
     );
 }
 

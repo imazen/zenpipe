@@ -100,8 +100,6 @@ mod format_set;
 pub mod gainmap;
 mod info;
 mod limits;
-#[cfg(feature = "pipeline")]
-pub mod pipeline;
 pub mod pixel;
 pub mod policy;
 pub mod quality;

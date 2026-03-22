@@ -15,8 +15,6 @@ use crate::{EncodeOutput, Metadata, pixel::ImgRef};
 use rgb::{Rgb, Rgba};
 use whereat::at;
 use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
-#[cfg(feature = "jpeg-ultrahdr")]
-use zenpixels::{PixelBuffer, PixelDescriptor};
 
 /// Probe JPEG metadata without decoding pixels.
 ///
@@ -67,29 +65,6 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
     }
 
     ii
-}
-
-/// Build a zenjpeg Decoder from codec config and limits.
-#[cfg(feature = "jpeg-ultrahdr")]
-fn build_decoder(
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-) -> zenjpeg::decoder::DecodeConfig {
-    let mut decoder = codec_config
-        .and_then(|c| c.jpeg_decoder.as_ref())
-        .map(|d| d.as_ref().clone())
-        .unwrap_or_default();
-
-    if let Some(lim) = limits {
-        if let Some(max_px) = lim.max_pixels {
-            decoder = decoder.max_pixels(max_px);
-        }
-        if let Some(max_mem) = lim.max_memory_bytes {
-            decoder = decoder.max_memory(max_mem);
-        }
-    }
-
-    decoder
 }
 
 /// Decode JPEG to pixels.
@@ -160,126 +135,6 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
 
 /// Decode UltraHDR JPEG to linear f32 RGBA HDR pixels.
 ///
-/// Decodes the SDR base image, extracts the gain map, and reconstructs
-/// HDR content at the specified display boost level.
-///
-/// Returns linear f32 RGBA pixels suitable for HDR display or further processing.
-#[cfg(feature = "jpeg-ultrahdr")]
-pub(crate) fn decode_hdr(
-    data: &[u8],
-    display_boost: f32,
-    codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
-) -> Result<DecodeOutput> {
-    use linear_srgb::default::srgb_u8_to_linear;
-    use zenjpeg::ultrahdr::{UltraHdrExtras, create_hdr_reconstructor};
-
-    let stop_token = crate::limits::stop_or_default(stop);
-    let decoder = build_decoder(codec_config, limits);
-
-    let mut result = decoder
-        .decode(data, stop_token)
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
-
-    let width = result.width();
-    let height = result.height();
-
-    if let Some(lim) = limits {
-        lim.validate(width, height, 4)?;
-    }
-
-    let extras = result
-        .extras()
-        .ok_or_else(|| at!(CodecError::InvalidInput("no extras in decoded JPEG".into())))?;
-
-    if !extras.is_ultrahdr() {
-        return Err(at!(CodecError::InvalidInput(
-            "JPEG does not contain UltraHDR gain map".into(),
-        )));
-    }
-
-    // Create HDR reconstructor from gain map metadata
-    let mut reconstructor = create_hdr_reconstructor(width, height, extras, display_boost)
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
-
-    // Get SDR pixels and convert to linear f32
-    let raw_pixels = result.pixels_u8().ok_or_else(|| {
-        at!(CodecError::InvalidInput(
-            "no pixel data in decoded image".into()
-        ))
-    })?;
-
-    let row_stride = width as usize * 3; // RGB8
-
-    // Process in batches of 16 rows
-    let batch_size = 16u32;
-    let mut hdr_pixels: alloc::vec::Vec<Rgba<f32>> =
-        alloc::vec::Vec::with_capacity(width as usize * height as usize);
-
-    let mut y = 0u32;
-    while y < height {
-        let batch_height = batch_size.min(height - y);
-        let batch_pixel_count = width as usize * batch_height as usize;
-
-        // Convert this batch from sRGB u8 to linear f32 RGB
-        let batch_start = y as usize * row_stride;
-        let batch_end = batch_start + batch_height as usize * row_stride;
-        let sdr_bytes = &raw_pixels[batch_start..batch_end];
-
-        let mut sdr_linear: alloc::vec::Vec<f32> =
-            alloc::vec::Vec::with_capacity(batch_pixel_count * 3);
-        for pixel in sdr_bytes.chunks_exact(3) {
-            sdr_linear.push(srgb_u8_to_linear(pixel[0]));
-            sdr_linear.push(srgb_u8_to_linear(pixel[1]));
-            sdr_linear.push(srgb_u8_to_linear(pixel[2]));
-        }
-
-        // Reconstruct HDR (returns linear f32 RGBA)
-        let hdr_batch = reconstructor
-            .process_rows(&sdr_linear, batch_height)
-            .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
-
-        // Convert f32 slice to Rgba<f32> pixels
-        for rgba in hdr_batch.chunks_exact(4) {
-            hdr_pixels.push(Rgba {
-                r: rgba[0],
-                g: rgba[1],
-                b: rgba[2],
-                a: rgba[3],
-            });
-        }
-
-        y += batch_height;
-    }
-
-    let img = imgref::ImgVec::new(hdr_pixels, width as usize, height as usize);
-    let buf = PixelBuffer::from_imgvec(img).with_descriptor(PixelDescriptor::RGBAF32_LINEAR);
-
-    let mut ii = ImageInfo::new(width, height, ImageFormat::Jpeg);
-
-    // Preserve metadata from extras
-    let extras = result.extras();
-    if let Some(extras) = extras {
-        if let Some(icc) = extras.icc_profile() {
-            ii = ii.with_icc_profile(icc.to_vec());
-        }
-        if let Some(exif) = extras.exif() {
-            ii = ii.with_exif(exif.to_vec());
-        }
-        if let Some(xmp) = extras.xmp() {
-            ii = ii.with_xmp(xmp.as_bytes().to_vec());
-        }
-    }
-
-    let jpeg_extras = result.take_extras();
-    let mut output = DecodeOutput::new(buf.into(), ii);
-    if let Some(extras) = jpeg_extras {
-        output = output.with_extras(extras);
-    }
-    Ok(output)
-}
-
 /// Encode linear f32 RGB pixels to UltraHDR JPEG.
 ///
 /// Takes HDR content in linear f32 RGB and produces a backward-compatible

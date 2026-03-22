@@ -34,9 +34,6 @@ heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features 
 zenbitmaps = { path = "../zenbitmaps", optional = true, features = ["zencodec"] }
 zenraw = { path = "../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
 
-# Pipeline (optional, feature-gated)
-zenresize = { path = "../zenresize", optional = true, default-features = false, features = ["std", "layout"] }
-
 # Color management (optional)
 # moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
 
@@ -73,9 +70,6 @@ raw-decode = ["dep:zenraw"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
 raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
-
-# Pipeline
-pipeline = ["dep:zenresize"]
 
 # Color management
 moxcms = []  # Disabled for now

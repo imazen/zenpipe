@@ -129,25 +129,13 @@ fn main() {
             Box::new(|q| Some(Codec::LibjpegTurbo(q))) as CodecFactory,
         ),
         #[cfg(feature = "jpeg")]
-        (
-            "jpeg",
-            Box::new(|q| Some(Codec::Jpeg(q))) as CodecFactory,
-        ),
+        ("jpeg", Box::new(|q| Some(Codec::Jpeg(q))) as CodecFactory),
         #[cfg(feature = "webp")]
-        (
-            "webp",
-            Box::new(|q| Some(Codec::Webp(q))) as CodecFactory,
-        ),
+        ("webp", Box::new(|q| Some(Codec::Webp(q))) as CodecFactory),
         #[cfg(feature = "avif-encode")]
-        (
-            "avif",
-            Box::new(|q| Some(Codec::Avif(q))) as CodecFactory,
-        ),
+        ("avif", Box::new(|q| Some(Codec::Avif(q))) as CodecFactory),
         #[cfg(feature = "jxl-encode")]
-        (
-            "jxl",
-            Box::new(|q| Some(Codec::Jxl(q))) as CodecFactory,
-        ),
+        ("jxl", Box::new(|q| Some(Codec::Jxl(q))) as CodecFactory),
     ];
 
     for (codec_name, make_codec) in &codecs {

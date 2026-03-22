@@ -141,29 +141,6 @@ impl Limits {
     }
 }
 
-#[cfg(feature = "jpeg-ultrahdr")]
-impl Limits {
-    /// Validate dimensions and estimated memory against limits, returning CodecError on violation.
-    pub(crate) fn validate(
-        &self,
-        width: u32,
-        height: u32,
-        bytes_per_pixel: u32,
-    ) -> crate::error::Result<()> {
-        use whereat::at;
-        self.check_dimensions(width as u64, height as u64)
-            .map_err(|msg| at!(crate::CodecError::LimitExceeded(msg.into())))?;
-
-        let estimated_bytes = (width as u64)
-            .saturating_mul(height as u64)
-            .saturating_mul(bytes_per_pixel as u64);
-        self.check_memory(estimated_bytes)
-            .map_err(|msg| at!(crate::CodecError::LimitExceeded(msg.into())))?;
-
-        Ok(())
-    }
-}
-
 /// Get a `&dyn Stop` reference, defaulting to `Unstoppable` if `None`.
 #[cfg(feature = "jpeg-ultrahdr")]
 pub(crate) fn stop_or_default(stop: Option<&dyn Stop>) -> &dyn Stop {
