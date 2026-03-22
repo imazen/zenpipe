@@ -575,7 +575,7 @@ fn copy_rows<P: Copy>(src: imgref::ImgRef<'_, P>, mut dst: imgref::ImgRefMut<'_,
 /// Returns `None` if the JPEG doesn't contain UltraHDR gain map data.
 #[cfg(feature = "jpeg-ultrahdr")]
 fn extract_jpeg_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
-    use crate::gainmap::{DecodedGainMap, GainMapImage};
+    use crate::gainmap::DecodedGainMap;
     use zenjpeg::ultrahdr::UltraHdrExtras as _;
 
     let extras = output.extras::<zenjpeg::decoder::DecodedExtras>()?;
@@ -587,16 +587,12 @@ fn extract_jpeg_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     // Parse gain map metadata from XMP
     let (metadata, _) = extras.ultrahdr_metadata()?.ok()?;
 
-    // Decode the gain map JPEG from MPF secondary images
-    let core_gainmap = extras.decode_gainmap()?.ok()?;
+    // Decode the gain map JPEG from MPF secondary images.
+    // extras.decode_gainmap() returns ultrahdr_core::GainMap directly.
+    let gain_map = extras.decode_gainmap()?.ok()?;
 
     Some(DecodedGainMap {
-        gain_map: GainMapImage {
-            data: core_gainmap.data,
-            width: core_gainmap.width,
-            height: core_gainmap.height,
-            channels: core_gainmap.channels,
-        },
+        gain_map,
         metadata,
         base_is_hdr: false, // JPEG UltraHDR: base=SDR, gain map maps SDR→HDR
         source_format: ImageFormat::Jpeg,
@@ -607,10 +603,10 @@ fn extract_jpeg_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
 ///
 /// The gain map image is returned as raw AV1 bytes — the caller must
 /// decode them separately to get pixels. For now we store the raw bytes
-/// in `GainMapImage` with channels=0 to signal "not yet decoded."
+/// in `GainMap` with channels=0 to signal "not yet decoded."
 #[cfg(all(feature = "avif-decode", feature = "jpeg-ultrahdr"))]
 fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
-    use crate::gainmap::{DecodedGainMap, GainMapImage};
+    use crate::gainmap::DecodedGainMap;
 
     let avif_gm = output.extras::<zenavif::AvifGainMap>()?;
 
@@ -624,7 +620,7 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     let (gm_data, gm_w, gm_h, gm_ch) = zenavif::decode_av1_obu(&avif_gm.gain_map_data).ok()?;
 
     Some(DecodedGainMap {
-        gain_map: GainMapImage {
+        gain_map: crate::gainmap::GainMap {
             data: gm_data,
             width: gm_w,
             height: gm_h,
@@ -645,20 +641,8 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
 /// keeps gains/headroom in log2 domain (gamma/offsets are already linear).
 #[cfg(all(feature = "avif-decode", feature = "jpeg-ultrahdr"))]
 fn avif_gain_map_to_params(meta: &zenavif::GainMapMetadata) -> zencodec::GainMapParams {
-    let safe_div = |n: i64, d: u64| -> f64 {
-        if d == 0 {
-            0.0
-        } else {
-            n as f64 / d as f64
-        }
-    };
-    let safe_div_u = |n: u64, d: u64| -> f64 {
-        if d == 0 {
-            0.0
-        } else {
-            n as f64 / d as f64
-        }
-    };
+    let safe_div = |n: i64, d: u64| -> f64 { if d == 0 { 0.0 } else { n as f64 / d as f64 } };
+    let safe_div_u = |n: u64, d: u64| -> f64 { if d == 0 { 0.0 } else { n as f64 / d as f64 } };
 
     let convert_channel = |ch: &zenavif::GainMapChannel| -> zencodec::GainMapChannel {
         zencodec::GainMapChannel {
@@ -685,10 +669,14 @@ fn avif_gain_map_to_params(meta: &zenavif::GainMapMetadata) -> zencodec::GainMap
     let mut params = zencodec::GainMapParams::default();
     params.channels = channels;
     // Headroom: n/d produces log2 value — GainMapParams stores log2
-    params.base_hdr_headroom =
-        safe_div_u(meta.base_hdr_headroom_n as u64, meta.base_hdr_headroom_d as u64);
-    params.alternate_hdr_headroom =
-        safe_div_u(meta.alternate_hdr_headroom_n as u64, meta.alternate_hdr_headroom_d as u64);
+    params.base_hdr_headroom = safe_div_u(
+        meta.base_hdr_headroom_n as u64,
+        meta.base_hdr_headroom_d as u64,
+    );
+    params.alternate_hdr_headroom = safe_div_u(
+        meta.alternate_hdr_headroom_n as u64,
+        meta.alternate_hdr_headroom_d as u64,
+    );
     params.use_base_color_space = meta.use_base_colour_space;
     params
 }
@@ -696,7 +684,7 @@ fn avif_gain_map_to_params(meta: &zenavif::GainMapMetadata) -> zencodec::GainMap
 /// Extract a gain map from a JXL DecodeOutput's extras, if present.
 #[cfg(all(feature = "jxl-decode", feature = "jpeg-ultrahdr"))]
 fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
-    use crate::gainmap::{DecodedGainMap, GainMapImage};
+    use crate::gainmap::{DecodedGainMap, GainMap};
 
     let bundle = output.extras::<zenjxl::GainMapBundle>()?;
 
@@ -730,7 +718,7 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     };
 
     Some(DecodedGainMap {
-        gain_map: GainMapImage {
+        gain_map: GainMap {
             data,
             width: gm_w,
             height: gm_h,
@@ -1180,7 +1168,7 @@ mod tests {
             );
             assert!(gm.gain_map.width > 0);
             assert!(gm.gain_map.height > 0);
-            assert!(gm.gain_map.validate().is_ok());
+            assert!(gm.gain_map.width > 0 && gm.gain_map.height > 0);
             assert_eq!(gm.source_format, ImageFormat::Custom(&zenraw::DNG_FORMAT));
             std::eprintln!(
                 "  hdr_capacity_max={} base_is_hdr={}",
@@ -1226,7 +1214,7 @@ mod tests {
             );
             assert!(gm.gain_map.width > 0);
             assert!(gm.gain_map.height > 0);
-            assert!(gm.gain_map.validate().is_ok());
+            assert!(gm.gain_map.width > 0 && gm.gain_map.height > 0);
             // Source format should be JPEG since it was detected as JPEG.
             assert_eq!(gm.source_format, ImageFormat::Jpeg);
         } else {

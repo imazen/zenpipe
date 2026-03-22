@@ -29,14 +29,20 @@ fn jpeg_ultrahdr_seine_gainmap() {
     let gm = gainmap.expect("JPEG UltraHDR must have a gain map");
 
     assert!(!gm.base_is_hdr, "JPEG: base should be SDR");
-    assert!(gm.gain_map.validate().is_ok());
+    assert!(gm.gain_map.data.len() == gm.gain_map.width as usize * gm.gain_map.height as usize * gm.gain_map.channels as usize);
     assert!(gm.gain_map.width > 0);
     assert!(gm.gain_map.height > 0);
 
     // Verify metadata is sane
     let meta = &gm.metadata;
-    assert!(meta.max_content_boost[0] >= 1.0, "max_content_boost should be >= 1.0 (linear)");
-    assert!(meta.hdr_capacity_max >= 1.0, "hdr_capacity_max should be >= 1.0 (linear)");
+    assert!(
+        meta.max_content_boost[0] >= 1.0,
+        "max_content_boost should be >= 1.0 (linear)"
+    );
+    assert!(
+        meta.hdr_capacity_max >= 1.0,
+        "hdr_capacity_max should be >= 1.0 (linear)"
+    );
 
     // Verify canonical params are in log2 domain
     let params = gm.params();
@@ -61,7 +67,7 @@ fn avif_seine_gainmap() {
     let gm = gainmap.expect("AVIF seine must have a gain map");
 
     assert!(!gm.base_is_hdr, "AVIF: base should be SDR");
-    assert!(gm.gain_map.validate().is_ok());
+    assert!(gm.gain_map.data.len() == gm.gain_map.width as usize * gm.gain_map.height as usize * gm.gain_map.channels as usize);
 
     // Verify metadata is in LINEAR domain (ultrahdr's convention)
     let meta = &gm.metadata;
@@ -149,8 +155,14 @@ fn cross_format_seine_both_have_gain_maps() {
     let avif_params = avif_gm.expect("AVIF must have gain map").params();
 
     // Both should validate
-    assert!(jpeg_params.validate().is_ok(), "JPEG params should be valid");
-    assert!(avif_params.validate().is_ok(), "AVIF params should be valid");
+    assert!(
+        jpeg_params.validate().is_ok(),
+        "JPEG params should be valid"
+    );
+    assert!(
+        avif_params.validate().is_ok(),
+        "AVIF params should be valid"
+    );
 
     // Both should have SDR base direction
     assert_eq!(

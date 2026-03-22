@@ -217,10 +217,10 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// ```no_run
     /// use zencodecs::{EncodeRequest, ImageFormat, GainMapSource};
-    /// use zencodecs::gainmap::GainMapImage;
+    /// use zencodecs::GainMap;
     /// use zencodecs::GainMapMetadata;
     ///
-    /// # fn example(gain_map: &GainMapImage, metadata: &zencodecs::GainMapMetadata) {
+    /// # fn example(gain_map: &GainMap, metadata: &zencodecs::GainMapMetadata) {
     /// let request = EncodeRequest::new(ImageFormat::Jpeg)
     ///     .with_quality(85.0)
     ///     .with_gain_map(GainMapSource::Precomputed {

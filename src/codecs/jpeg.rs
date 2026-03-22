@@ -388,13 +388,12 @@ pub(crate) fn encode_with_precomputed_gainmap(
     channels: u8,
     quality: Option<f32>,
     codec_config: Option<&CodecConfig>,
-    gain_map: &crate::gainmap::GainMapImage,
+    gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
     stop: Option<&dyn Stop>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
-        GainMap, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
-        encode_with_gainmap,
+        UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage, encode_with_gainmap,
     };
 
     let stop_token = crate::limits::stop_or_default(stop);
@@ -418,17 +417,11 @@ pub(crate) fn encode_with_precomputed_gainmap(
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
-    let core_gainmap = GainMap {
-        width: gain_map.width,
-        height: gain_map.height,
-        channels: gain_map.channels,
-        data: gain_map.data.clone(),
-    };
     let enc = build_encoding(quality, codec_config);
 
     let out = encode_with_gainmap(
         &sdr,
-        &core_gainmap,
+        gain_map,
         metadata,
         enc.inner(),
         quality.unwrap_or(75.0).min(85.0),

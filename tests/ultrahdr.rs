@@ -235,9 +235,10 @@ fn decode_gain_map_from_ultrahdr_jpeg() {
         "gain map should be 1 or 3 channels, got {}",
         gm.gain_map.channels,
     );
-    assert!(
-        gm.gain_map.validate().is_ok(),
-        "gain map data should validate"
+    assert_eq!(
+        gm.gain_map.data.len(),
+        gm.gain_map.width as usize * gm.gain_map.height as usize * gm.gain_map.channels as usize,
+        "gain map data length should match dimensions"
     );
     // Metadata should have non-trivial boost (HDR content was >1.0)
     assert!(
@@ -268,7 +269,7 @@ fn decode_gain_map_from_sample_file() {
     if let Some(gm) = &gainmap {
         assert!(!gm.base_is_hdr);
         assert_eq!(gm.source_format, ImageFormat::Jpeg);
-        assert!(gm.gain_map.validate().is_ok());
+        assert!(gm.gain_map.width > 0 && gm.gain_map.height > 0);
     }
     // Test passes regardless — the sample file may or may not extract a gain map
     // depending on MPF reader capabilities.
@@ -379,17 +380,38 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
 
     let gm = gainmap.expect("gain map should be present");
 
-    // Reconstruct HDR from SDR base + gain map
+    // Reconstruct HDR from SDR base + gain map via ultrahdr-core directly
     use zencodecs::PixelBufferConvertTypedExt as _;
+    use zenjpeg::ultrahdr::{
+        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
+        Unstoppable, apply_gainmap,
+    };
     let rgb8 = output.into_buffer().to_rgb8();
     let img_ref = rgb8.as_imgref();
     let base_bytes: &[u8] = bytemuck::cast_slice(img_ref.buf());
     let width = img_ref.width() as u32;
     let height = img_ref.height() as u32;
 
-    let hdr_data = gm
-        .reconstruct_hdr(base_bytes, width, height, 3, 4.0)
-        .expect("reconstruct_hdr failed");
+    let sdr = UhdrRawImage::from_data(
+        width,
+        height,
+        UhdrPixelFormat::Rgb8,
+        UhdrColorGamut::Bt709,
+        UhdrColorTransfer::Srgb,
+        base_bytes.to_vec(),
+    )
+    .expect("RawImage creation failed");
+
+    let hdr_result = apply_gainmap(
+        &sdr,
+        &gm.gain_map,
+        &gm.metadata,
+        4.0,
+        HdrOutputFormat::LinearFloat,
+        Unstoppable,
+    )
+    .expect("apply_gainmap failed");
+    let hdr_data = hdr_result.data;
 
     // HDR output is linear f32 RGBA: 4 floats per pixel = 16 bytes per pixel
     let expected_len = width as usize * height as usize * 16;

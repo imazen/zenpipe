@@ -131,10 +131,9 @@ pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
 
 // Gain map types (format-agnostic)
-pub use gainmap::GainMapImage;
-pub use zencodec::gainmap::{GainMapDirection, GainMapParams};
 #[cfg(feature = "jpeg-ultrahdr")]
-pub use gainmap::{DecodedGainMap, GainMapSource};
+pub use gainmap::{DecodedGainMap, GainMap, GainMapMetadata, GainMapSource};
+pub use zencodec::gainmap::{GainMapDirection, GainMapParams};
 
 // Depth map types (format-agnostic)
 pub use depthmap::{
@@ -166,7 +165,7 @@ pub use zengif::{GifDecodeJob, GifDecoderConfig, GifEncodeJob, GifEncoderConfig}
 pub use zenjpeg::{JpegDecodeJob, JpegDecoderConfig, JpegEncodeJob, JpegEncoderConfig};
 
 #[cfg(feature = "jpeg-ultrahdr")]
-pub use zenjpeg::ultrahdr::{GainMap, GainMapMetadata, UltraHdrExtras};
+pub use zenjpeg::ultrahdr::UltraHdrExtras;
 
 #[cfg(feature = "jxl-decode")]
 pub use zenjxl::{JxlDecodeJob, JxlDecoderConfig};

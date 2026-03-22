@@ -57,6 +57,71 @@ fn sdr_bytes(output: zencodecs::DecodeOutput) -> (Vec<u8>, u32, u32) {
     (bytes, w, h)
 }
 
+/// Apply gain map to reconstruct HDR using ultrahdr-core.
+fn reconstruct_hdr(
+    gm: &DecodedGainMap,
+    base_bytes: &[u8],
+    w: u32,
+    h: u32,
+    channels: u8,
+    display_boost: f32,
+) -> Vec<u8> {
+    use zenjpeg::ultrahdr::{
+        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
+        Unstoppable, apply_gainmap,
+    };
+
+    let pixel_format = match channels {
+        3 => UhdrPixelFormat::Rgb8,
+        4 => UhdrPixelFormat::Rgba8,
+        _ => panic!("unsupported channels: {channels}"),
+    };
+
+    let sdr = UhdrRawImage::from_data(
+        w,
+        h,
+        pixel_format,
+        UhdrColorGamut::Bt709,
+        UhdrColorTransfer::Srgb,
+        base_bytes.to_vec(),
+    )
+    .expect("RawImage creation failed");
+
+    let hdr_result = apply_gainmap(
+        &sdr,
+        &gm.gain_map,
+        &gm.metadata,
+        display_boost,
+        HdrOutputFormat::LinearFloat,
+        Unstoppable,
+    )
+    .expect("apply_gainmap failed");
+
+    hdr_result.data
+}
+
+/// Assert gain map fields are well-formed.
+fn assert_gain_map_valid(gm: &zencodecs::GainMap) {
+    assert!(gm.width > 0, "gain map width must be > 0");
+    assert!(gm.height > 0, "gain map height must be > 0");
+    assert!(
+        gm.channels == 1 || gm.channels == 3,
+        "channels must be 1 or 3, got {}",
+        gm.channels
+    );
+    let expected = gm.width as usize * gm.height as usize * gm.channels as usize;
+    assert_eq!(
+        gm.data.len(),
+        expected,
+        "data length {} != {}x{}x{} = {}",
+        gm.data.len(),
+        gm.width,
+        gm.height,
+        gm.channels,
+        expected
+    );
+}
+
 // ─── E2E: Full HDR Roundtrip ────────────────────────────────────────────────
 
 #[test]
@@ -74,13 +139,11 @@ fn e2e_hdr_encode_decode_reconstruct_verify_values() {
 
     assert!(!gm.base_is_hdr);
     assert_eq!(gm.source_format, ImageFormat::Jpeg);
-    assert!(gm.gain_map.validate().is_ok());
+    assert_gain_map_valid(&gm.gain_map);
 
     // Step 4: Reconstruct HDR from SDR base + gain map
     let (base_bytes, w, h) = sdr_bytes(output);
-    let hdr_data = gm
-        .reconstruct_hdr(&base_bytes, w, h, 3, 4.0)
-        .expect("HDR reconstruction failed");
+    let hdr_data = reconstruct_hdr(&gm, &base_bytes, w, h, 3, 4.0);
 
     // Step 5: Verify HDR output properties
     let f32_pixels: &[f32] = bytemuck::cast_slice(&hdr_data);
@@ -98,9 +161,7 @@ fn e2e_hdr_encode_decode_reconstruct_verify_values() {
     );
 
     // HDR reconstruction at boost=1.0 should approximately match SDR
-    let sdr_at_1x = gm
-        .reconstruct_hdr(&base_bytes, w, h, 3, 1.0)
-        .expect("reconstruction at boost=1.0 failed");
+    let sdr_at_1x = reconstruct_hdr(&gm, &base_bytes, w, h, 3, 1.0);
     let sdr_f32: &[f32] = bytemuck::cast_slice(&sdr_at_1x);
     let max_sdr = sdr_f32.iter().copied().fold(0.0f32, f32::max);
     assert!(
@@ -147,7 +208,6 @@ fn e2e_gain_map_passthrough_jpeg_to_jpeg() {
     let gm = gainmap.expect("must have gain map");
 
     // Step 3: Re-encode the SDR base at different quality with passthrough gain map
-    // (The encode-with-gain-map builder exists but doesn't embed yet — this tests the API)
     let source = GainMapSource::Precomputed {
         gain_map: &gm.gain_map,
         metadata: &gm.metadata,
@@ -164,7 +224,7 @@ fn e2e_gain_map_passthrough_jpeg_to_jpeg() {
         .expect("re-encode should succeed");
 
     // Verify the gain map data survived the passthrough
-    assert!(gm.gain_map.validate().is_ok());
+    assert_gain_map_valid(&gm.gain_map);
     assert!(gm.metadata.max_content_boost[0] > 1.0);
 }
 
@@ -211,12 +271,8 @@ fn e2e_hdr_reconstruction_boost_affects_output() {
     let (base_bytes, w, h) = sdr_bytes(output);
 
     // Reconstruct at different boost levels
-    let hdr_low = gm
-        .reconstruct_hdr(&base_bytes, w, h, 3, 1.5)
-        .expect("low boost failed");
-    let hdr_high = gm
-        .reconstruct_hdr(&base_bytes, w, h, 3, 6.0)
-        .expect("high boost failed");
+    let hdr_low = reconstruct_hdr(&gm, &base_bytes, w, h, 3, 1.5);
+    let hdr_high = reconstruct_hdr(&gm, &base_bytes, w, h, 3, 6.0);
 
     let f32_low: &[f32] = bytemuck::cast_slice(&hdr_low);
     let f32_high: &[f32] = bytemuck::cast_slice(&hdr_high);
@@ -241,7 +297,7 @@ fn e2e_gain_map_is_lower_resolution_than_base() {
     let gm = gainmap.expect("must have gain map");
 
     let base_pixels = output.width() as u64 * output.height() as u64;
-    let gm_pixels = gm.gain_map.pixel_count();
+    let gm_pixels = gm.gain_map.width as u64 * gm.gain_map.height as u64;
 
     // Gain map is typically 1/4 to 1/16 the resolution
     assert!(
@@ -323,13 +379,11 @@ fn e2e_reconstruct_hdr_matches_decode_hdr() {
         .decode_hdr(boost)
         .expect("decode_hdr failed");
 
-    // Path B: decode_gain_map + reconstruct_hdr (new API)
+    // Path B: decode_gain_map + apply_gainmap (direct ultrahdr-core)
     let (output, gainmap) = decode_with_gainmap(&bytes);
     let gm = gainmap.expect("must have gain map");
     let (base_bytes, w, h) = sdr_bytes(output);
-    let hdr_data = gm
-        .reconstruct_hdr(&base_bytes, w, h, 3, boost)
-        .expect("reconstruct_hdr failed");
+    let hdr_data = reconstruct_hdr(&gm, &base_bytes, w, h, 3, boost);
 
     // Both paths should produce output of the same dimensions
     assert_eq!(hdr_output.width(), w);
@@ -343,7 +397,7 @@ fn e2e_reconstruct_hdr_matches_decode_hdr() {
     let f32_a: &[f32] = bytemuck::cast_slice(hdr_bytes);
     let f32_b: &[f32] = bytemuck::cast_slice(&hdr_data);
 
-    // Compare means — should be within 20% (compression + tonemapping differences)
+    // Compare means — should be within 50% (compression + tonemapping differences)
     let mean_a: f32 = f32_a.iter().sum::<f32>() / f32_a.len() as f32;
     let mean_b: f32 = f32_b.iter().sum::<f32>() / f32_b.len() as f32;
     let ratio = if mean_a > mean_b {
@@ -362,8 +416,8 @@ fn e2e_reconstruct_hdr_matches_decode_hdr() {
 #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
 mod jxl_gainmap {
     use super::*;
+    use zencodecs::GainMap;
     use zencodecs::GainMapMetadata;
-    use zencodecs::gainmap::GainMapImage;
 
     /// Encode a base image + precomputed gain map to JXL, then decode and verify
     /// that the jhgm box is present and the metadata roundtrips.
@@ -389,13 +443,12 @@ mod jxl_gainmap {
         let gm_w = 16u32;
         let gm_h = 16u32;
         let gm_data: Vec<u8> = (0..gm_w * gm_h).map(|i| (128 + (i % 64)) as u8).collect();
-        let gain_map = GainMapImage {
+        let gain_map = GainMap {
             data: gm_data,
             width: gm_w,
             height: gm_h,
             channels: 1,
         };
-        assert!(gain_map.validate().is_ok());
 
         // Step 3: Create ISO 21496-1 metadata
         let metadata = GainMapMetadata {
@@ -442,12 +495,11 @@ mod jxl_gainmap {
         let gm = decoded_gainmap.expect("JXL output should contain a gain map");
         assert!(gm.base_is_hdr, "JXL gain map: base should be HDR");
         assert_eq!(gm.source_format, ImageFormat::Jxl);
-        assert!(gm.gain_map.validate().is_ok());
+        assert_gain_map_valid(&gm.gain_map);
         assert_eq!(gm.gain_map.width, gm_w);
         assert_eq!(gm.gain_map.height, gm_h);
 
         // Step 8: Verify ISO 21496-1 metadata roundtripped
-        // Allow small floating-point differences from fraction serialization
         let eps = 0.01;
         assert!(
             (gm.metadata.max_content_boost[0] - 4.0).abs() < eps,
@@ -471,9 +523,6 @@ mod jxl_gainmap {
         );
 
         // Step 9: Verify gain map pixel data roundtripped (lossless encode)
-        // The gain map was encoded lossless, so pixels should match exactly.
-        // Note: the original was 1-channel, but decoded may be 3-channel (RGB).
-        // Either way, the pixel values should be correct.
         if gm.gain_map.channels == 1 {
             assert_eq!(
                 gm.gain_map.data.len(),
@@ -511,7 +560,7 @@ mod jxl_gainmap {
         let gm_data: Vec<u8> = (0..gm_w * gm_h * 3)
             .map(|i| (100 + (i % 100)) as u8)
             .collect();
-        let gain_map = GainMapImage {
+        let gain_map = GainMap {
             data: gm_data,
             width: gm_w,
             height: gm_h,

@@ -118,7 +118,7 @@ pub(crate) fn read_raw_metadata(data: &[u8]) -> Option<zenraw::exif::ExifMetadat
 /// - The `raw-decode-gainmap` feature is not enabled
 #[cfg(feature = "raw-decode-gainmap")]
 pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
-    use crate::gainmap::{DecodedGainMap, GainMapImage, GainMapMetadata};
+    use crate::gainmap::{DecodedGainMap, GainMap, GainMapMetadata};
 
     let gm_info = zenraw::apple::extract_gain_map(data)?;
 
@@ -210,7 +210,7 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
     });
 
     Some(DecodedGainMap {
-        gain_map: GainMapImage {
+        gain_map: GainMap {
             data: gm_data,
             width: gm_w,
             height: gm_h,

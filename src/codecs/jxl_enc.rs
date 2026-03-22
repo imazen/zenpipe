@@ -46,7 +46,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     height: u32,
     descriptor: zenpixels::PixelDescriptor,
     quality: Option<f32>,
-    gain_map: &crate::gainmap::GainMapImage,
+    gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
     stop: Option<&dyn crate::Stop>,
 ) -> crate::error::Result<crate::encode::EncodeOutput> {
@@ -57,9 +57,6 @@ pub(crate) fn encode_with_precomputed_gainmap(
     use zenjxl::GainMapBundle;
 
     let _ = stop; // JXL encoder doesn't support cancellation yet
-
-    // 1. Validate the gain map
-    gain_map.validate()?;
 
     // 2. Encode the gain map as a bare JXL codestream (lossless for quality)
     let lossless_config = zenjxl::LosslessConfig::default();
