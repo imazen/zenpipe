@@ -53,7 +53,7 @@ zencodecs/
 │   ├── registry.rs       # CodecRegistry — runtime enable/disable + capability queries
 │   ├── decode.rs         # DecodeRequest (one-shot, push, animation, gain map, depth map)
 │   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles, gain map)
-│   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapImage, GainMapSource)
+│   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapSource)
 │   ├── depthmap.rs       # Format-agnostic depth map types (DecodedDepthMap, DepthImage, conversions)
 │   └── codecs/
 │       ├── mod.rs        # Codec adapter modules
