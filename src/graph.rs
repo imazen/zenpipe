@@ -1289,7 +1289,7 @@ fn detect_content_bounds(
         return (0, 0, w, h);
     }
 
-    let bpp = mat.format().bytes_per_pixel() as usize;
+    let bpp = mat.format().bytes_per_pixel();
 
     // Reference color: top-left pixel
     let row0 = mat.row(0);

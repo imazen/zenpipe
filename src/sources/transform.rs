@@ -113,14 +113,14 @@ impl Source for TransformSource {
 
         // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
         // buf_a copy. This saves one full memcpy per strip.
-        let first_op = &self.ops[0];
+        let first_op = &mut self.ops[0];
         let out_size = first_op.output_format().aligned_stride(width) * height as usize;
         self.buf_b.resize(out_size, 0);
         first_op.apply(strip.as_strided_bytes(), &mut self.buf_b, width, height);
         let mut current_is_a = false;
 
         // Remaining ops ping-pong between buf_a and buf_b.
-        for op in &self.ops[1..] {
+        for op in &mut self.ops[1..] {
             let out_size = op.output_format().aligned_stride(width) * height as usize;
             if current_is_a {
                 self.buf_b.resize(out_size, 0);

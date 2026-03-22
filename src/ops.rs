@@ -20,7 +20,7 @@ use crate::format::{self};
 /// the operation runs in-place on the same buffer.
 pub trait PixelOp: Send {
     /// Apply the operation. `input` and `output` may alias if formats match.
-    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32);
+    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32);
 
     /// Expected input format.
     fn input_format(&self) -> PixelFormat;
@@ -103,7 +103,7 @@ impl RowConverterOp {
 }
 
 impl PixelOp for RowConverterOp {
-    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
         let src_stride = self.from.aligned_stride(width);
         let dst_stride = self.to.aligned_stride(width);
         for r in 0..height {
@@ -150,7 +150,7 @@ impl ScaleAlphaOp {
 }
 
 impl PixelOp for ScaleAlphaOp {
-    fn apply(&self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
         let in_f32: &[f32] = bytemuck::cast_slice(input);
         let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
         let len = width as usize * height as usize * 4;
