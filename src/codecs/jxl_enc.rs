@@ -1,7 +1,7 @@
 //! JXL encode adapter — delegates to zenjxl via trait interface.
 
 use crate::config::CodecConfig;
-use crate::dispatch::{BuiltEncoder, EncodeParams, build_from_config};
+use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
 
 /// Build a JxlEncoderConfig from encoding params.
 fn build_encoding(
@@ -23,6 +23,15 @@ fn build_encoding(
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(
+        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        params,
+    )
+}
+
+pub(crate) fn build_streaming<'a>(
+    params: EncodeParams<'a>,
+) -> crate::error::Result<StreamingEncoder<'a>> {
+    crate::dispatch::build_streaming_from_config(
         |p| build_encoding(p.quality, p.effort, p.codec_config),
         params,
     )

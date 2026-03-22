@@ -40,8 +40,14 @@ pub(crate) fn decode(
 // Trait-based encoder dispatch
 // ═══════════════════════════════════════════════════════════════════════
 
-use crate::dispatch::{BuiltEncoder, EncodeParams, build_from_config};
+use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(|_p| zenbitmaps::PnmEncoderConfig::new(), params)
+}
+
+pub(crate) fn build_streaming<'a>(
+    params: EncodeParams<'a>,
+) -> crate::error::Result<StreamingEncoder<'a>> {
+    crate::dispatch::build_streaming_from_config(|_p| zenbitmaps::PnmEncoderConfig::new(), params)
 }

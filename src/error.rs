@@ -74,4 +74,12 @@ impl CodecError {
             source: Box::new(error),
         }
     }
+
+    /// Wrap a pre-boxed codec error (from dyn dispatch).
+    pub fn from_codec_boxed(
+        format: ImageFormat,
+        source: Box<dyn core::error::Error + Send + Sync>,
+    ) -> Self {
+        CodecError::Codec { format, source }
+    }
 }

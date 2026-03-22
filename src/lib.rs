@@ -111,7 +111,7 @@ pub mod transcode;
 // Re-exports
 pub use codec_id::CodecId;
 pub use decode::{DecodeOutput, DecodeRequest};
-pub use dispatch::AnyEncoder;
+pub use dispatch::{AnyEncoder, StreamingEncoder};
 pub use encode::{EncodeOutput, EncodeRequest};
 pub use error::{CodecError, Result};
 pub use format_set::FormatSet;
@@ -143,7 +143,7 @@ pub use depthmap::{
 pub use zencodec::decode::{
     DecodeJob, DecodeRowSink, DecoderConfig, DynFullFrameDecoder, DynStreamingDecoder, OutputInfo,
 };
-pub use zencodec::encode::{DynFullFrameEncoder, EncodeJob, EncoderConfig};
+pub use zencodec::encode::{DynEncoder, DynFullFrameEncoder, EncodeJob, EncoderConfig};
 pub use zencodec::{FullFrame, OwnedFullFrame};
 
 // Pixel conversion extension traits

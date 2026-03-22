@@ -198,6 +198,116 @@ where
     }
 }
 
+/// A streaming encoder: a `DynEncoder` + its supported pixel descriptors.
+///
+/// The caller pushes strips via [`DynEncoder::push_rows()`] and finalizes
+/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode`] per-strip
+/// to convert pixel formats without materializing the full image.
+///
+/// [`adapt_for_encode`]: zenpixels_convert::adapt::adapt_for_encode
+pub struct StreamingEncoder<'a> {
+    /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
+    pub encoder: Box<dyn zencodec::encode::DynEncoder + 'a>,
+    /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
+    /// Pass to `adapt_for_encode` to pick the cheapest conversion.
+    pub supported: &'static [PixelDescriptor],
+    /// The resolved output format.
+    pub format: ImageFormat,
+}
+
+/// Build a `DynEncoder` from a config-building closure.
+///
+/// Like [`build_from_config`] but returns the live encoder object
+/// instead of a one-shot closure. The encoder supports both
+/// `push_rows()` (streaming) and `encode()` (one-shot).
+pub(crate) fn build_streaming_from_config<'a, C, F>(
+    build_config: F,
+    params: EncodeParams<'a>,
+) -> Result<StreamingEncoder<'a>>
+where
+    C: zencodec::encode::EncoderConfig + 'a,
+    F: FnOnce(&EncodeParams<'a>) -> C + 'a,
+    for<'b> <C::Job<'b> as zencodec::encode::EncodeJob<'b>>::Enc: zencodec::encode::Encoder,
+{
+    use zencodec::encode::EncodeJob as _;
+    let config = build_config(&params);
+    let format = C::format();
+    let supported = C::supported_descriptors();
+    let mut job = config.job();
+    if let Some(lim) = params.limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
+    if let Some(meta) = params.metadata {
+        job = job.with_metadata(meta);
+    }
+    if let Some(s) = params.stop {
+        job = job.with_stop(s);
+    }
+    let encoder = job
+        .dyn_encoder()
+        .map_err(|e| at!(CodecError::from_codec_boxed(format, e)))?;
+    Ok(StreamingEncoder {
+        encoder,
+        supported,
+        format,
+    })
+}
+
+/// Build a streaming encoder for the specified format.
+pub(crate) fn build_streaming_encoder<'a>(
+    format: ImageFormat,
+    params: EncodeParams<'a>,
+) -> Result<StreamingEncoder<'a>> {
+    match format {
+        #[cfg(feature = "jpeg")]
+        ImageFormat::Jpeg => crate::codecs::jpeg::build_streaming(params),
+        #[cfg(not(feature = "jpeg"))]
+        ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "webp")]
+        ImageFormat::WebP => crate::codecs::webp::build_streaming(params),
+        #[cfg(not(feature = "webp"))]
+        ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "gif")]
+        ImageFormat::Gif => crate::codecs::gif::build_streaming(params),
+        #[cfg(not(feature = "gif"))]
+        ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "png")]
+        ImageFormat::Png => crate::codecs::png::build_streaming(params),
+        #[cfg(not(feature = "png"))]
+        ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "avif-encode")]
+        ImageFormat::Avif => crate::codecs::avif_enc::build_streaming(params),
+        #[cfg(not(feature = "avif-encode"))]
+        ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "jxl-encode")]
+        ImageFormat::Jxl => crate::codecs::jxl_enc::build_streaming(params),
+        #[cfg(not(feature = "jxl-encode"))]
+        ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Pnm => crate::codecs::pnm::build_streaming(params),
+        #[cfg(not(feature = "bitmaps"))]
+        ImageFormat::Pnm => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "bitmaps-bmp")]
+        ImageFormat::Bmp => crate::codecs::bmp::build_streaming(params),
+        #[cfg(not(feature = "bitmaps-bmp"))]
+        ImageFormat::Bmp => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Farbfeld => crate::codecs::farbfeld::build_streaming(params),
+        #[cfg(not(feature = "bitmaps"))]
+        ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        _ => Err(at!(CodecError::UnsupportedFormat(format))),
+    }
+}
+
 /// Build a type-erased encoder for the specified format.
 ///
 /// Each codec arm delegates to its `build_trait_encoder` which builds

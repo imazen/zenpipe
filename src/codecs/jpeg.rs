@@ -59,9 +59,9 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
     {
         let params = crate::gainmap::metadata_to_params(&metadata);
         ii.supplements.gain_map = true;
-        ii.gain_map = zencodec::gainmap::GainMapPresence::Available(
-            alloc::boxed::Box::new(zencodec::gainmap::GainMapInfo::new(params, 0, 0, 0)),
-        );
+        ii.gain_map = zencodec::gainmap::GainMapPresence::Available(alloc::boxed::Box::new(
+            zencodec::gainmap::GainMapInfo::new(params, 0, 0, 0),
+        ));
     }
 
     ii
@@ -127,10 +127,19 @@ pub(crate) fn build_encoding(
 // Trait-based encoder dispatch
 // ═══════════════════════════════════════════════════════════════════════
 
-use crate::dispatch::{BuiltEncoder, EncodeParams, build_from_config};
+use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(|p| build_encoding(p.quality, p.codec_config), params)
+}
+
+pub(crate) fn build_streaming<'a>(
+    params: EncodeParams<'a>,
+) -> crate::error::Result<StreamingEncoder<'a>> {
+    crate::dispatch::build_streaming_from_config(
+        |p| build_encoding(p.quality, p.codec_config),
+        params,
+    )
 }
 
 /// Decode UltraHDR JPEG to linear f32 RGBA HDR pixels.

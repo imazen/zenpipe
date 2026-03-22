@@ -410,7 +410,6 @@ impl<'a> DecodeRequest<'a> {
     }
 }
 
-
 /// Extract a gain map from a JPEG DecodeOutput's extras, if present.
 ///
 /// Returns `None` if the JPEG doesn't contain UltraHDR gain map data.

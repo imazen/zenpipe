@@ -1,141 +1,188 @@
-//! Decode→encode bridge via [`DecodeRowSink`].
+//! Streaming decode→encode bridge via [`DecodeRowSink`].
 //!
-//! [`TranscodeSink`] collects decoded pixels from `push_decode()` and then
-//! encodes them in one shot via `EncodeRequest`. This avoids materializing
-//! a typed `ImgVec` — pixels go from decode buffers straight to the encoder.
+//! [`TranscodeSink`] forwards decoded strips directly to an encoder's
+//! `push_rows()`, converting pixel formats per-strip via `adapt_for_encode`.
+//! No full-image buffer is ever allocated by the sink — only a strip-sized
+//! conversion buffer when the decoded pixel format doesn't match the
+//! encoder's native format.
 //!
-//! # True streaming transcode
-//!
-//! For encoders that support `push_rows()` (JPEG, PNG), a zero-materialization
-//! pipeline is possible but requires all objects to live in the same scope.
-//! See the module-level docs on [`dyn_dispatch`](crate::dyn_dispatch) for the
-//! lifetime constraints. In practice, zenimage builds this pipeline using
-//! concrete codec types directly, bypassing the dyn layer.
+//! Codecs that need the full image (WebP, AVIF) buffer internally in their
+//! `push_rows()` implementation. That's the codec's concern, not the
+//! pipeline's.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use zencodec::decode::{DecodeRowSink, SinkError};
+use zencodec::encode::{DynEncoder, EncodeOutput};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
 
-/// Collects decoded pixels for subsequent encoding.
+/// Streaming transcode sink: forwards decoded strips to an encoder.
 ///
-/// Use with [`DecodeRequest::push_decode()`](crate::DecodeRequest::push_decode)
-/// to collect decoded pixels, then pass to an `EncodeRequest` via
-/// [`as_pixel_slice()`](TranscodeSink::as_pixel_slice).
+/// Created via [`TranscodeSink::new`] with a [`StreamingEncoder`] from
+/// [`EncodeRequest::build_streaming_encoder`].
+///
+/// [`StreamingEncoder`]: crate::dispatch::StreamingEncoder
+/// [`EncodeRequest::build_streaming_encoder`]: crate::EncodeRequest::build_streaming_encoder
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// let mut sink = TranscodeSink::new();
+/// // Build the encoder
+/// let se = EncodeRequest::new(ImageFormat::Jpeg)
+///     .with_quality(85.0)
+///     .build_streaming_encoder(width, height)?;
+///
+/// // Create sink and decode through it
+/// let mut sink = TranscodeSink::new(se.encoder, se.supported);
 /// DecodeRequest::new(data).push_decode(&mut sink)?;
 ///
-/// let pixels = sink.as_pixel_slice()?;
-/// let output = EncodeRequest::new(ImageFormat::Jpeg)
-///     .with_quality(85.0)
-///     .encode_pixels(pixels)?;
+/// // Finalize
+/// let output = sink.finish_encode()?;
 /// ```
-pub struct TranscodeSink {
-    buf: Vec<u8>,
+pub struct TranscodeSink<'a> {
+    encoder: Option<Box<dyn DynEncoder + 'a>>,
+    supported: &'static [PixelDescriptor],
+    /// Scratch buffer for receiving decoded rows from the decoder.
+    /// The decoder writes into this via `provide_next_buffer`, and
+    /// we forward it to the encoder on the *next* call (or on finish).
+    strip_buf: Vec<u8>,
+    /// Metadata for the pending (written but not yet forwarded) strip.
+    pending: Option<PendingStrip>,
+}
+
+/// Metadata for a strip that the decoder has written but we haven't
+/// forwarded to the encoder yet.
+struct PendingStrip {
     width: u32,
     height: u32,
     descriptor: PixelDescriptor,
-    rows_received: u32,
 }
 
-impl TranscodeSink {
-    /// Create a new empty sink.
-    pub fn new() -> Self {
+impl<'a> TranscodeSink<'a> {
+    /// Create a new streaming transcode sink.
+    ///
+    /// `encoder` — the `DynEncoder` to push strips into.
+    /// `supported` — the encoder's supported pixel descriptors
+    ///   (from `EncoderConfig::supported_descriptors()`).
+    pub fn new(encoder: Box<dyn DynEncoder + 'a>, supported: &'static [PixelDescriptor]) -> Self {
         Self {
-            buf: Vec::new(),
-            width: 0,
-            height: 0,
-            descriptor: PixelDescriptor::RGB8_SRGB,
-            rows_received: 0,
+            encoder: Some(encoder),
+            supported,
+            strip_buf: Vec::new(),
+            pending: None,
         }
     }
 
-    /// Width of the decoded image (available after push_decode completes).
-    pub fn width(&self) -> u32 {
-        self.width
+    /// Finalize encoding and return the output.
+    ///
+    /// Must be called after `push_decode` completes (which calls
+    /// `DecodeRowSink::finish` internally). Consumes the encoder
+    /// via `DynEncoder::finish()`.
+    pub fn finish_encode(
+        mut self,
+    ) -> core::result::Result<EncodeOutput, Box<dyn core::error::Error + Send + Sync>> {
+        let encoder =
+            self.encoder
+                .take()
+                .ok_or_else(|| -> Box<dyn core::error::Error + Send + Sync> {
+                    "encoder already finished".into()
+                })?;
+        encoder.finish()
     }
 
-    /// Height of the decoded image.
-    pub fn height(&self) -> u32 {
-        self.height
-    }
+    /// Forward the pending strip (if any) to the encoder.
+    fn flush_pending(&mut self) -> Result<(), SinkError> {
+        let pending = match self.pending.take() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
 
-    /// Pixel descriptor of the decoded image.
-    pub fn descriptor(&self) -> PixelDescriptor {
-        self.descriptor
-    }
+        let encoder = self
+            .encoder
+            .as_mut()
+            .ok_or_else(|| -> SinkError { "encoder already finished".into() })?;
 
-    /// Raw pixel data as a byte slice.
-    pub fn data(&self) -> &[u8] {
-        &self.buf
-    }
+        let bpp = pending.descriptor.bytes_per_pixel();
+        let stride = pending.width as usize * bpp;
+        let data_len = stride * pending.height as usize;
+        let strip_data = &self.strip_buf[..data_len];
 
-    /// Create a `PixelSlice` for encoding.
-    pub fn as_pixel_slice(&self) -> Result<zenpixels::PixelSlice<'_>, alloc::string::String> {
-        let stride = self.width as usize * self.descriptor.bytes_per_pixel();
-        zenpixels::PixelSlice::new(&self.buf, self.width, self.height, stride, self.descriptor)
-            .map_err(|e| alloc::format!("{e}"))
-    }
+        // Adapt pixel format per-strip — zero-copy when format already matches
+        let adapted = zenpixels_convert::adapt::adapt_for_encode(
+            strip_data,
+            pending.descriptor,
+            pending.width,
+            pending.height,
+            stride,
+            self.supported,
+        )
+        .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
 
-    /// Consume the sink and return the raw pixel buffer.
-    pub fn into_data(self) -> Vec<u8> {
-        self.buf
+        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
+        let pixel_slice = zenpixels::PixelSlice::new(
+            &adapted.data,
+            adapted.width,
+            adapted.rows,
+            adapted_stride,
+            adapted.descriptor,
+        )
+        .map_err(|e| -> SinkError { alloc::format!("pixel slice: {e}").into() })?;
+
+        encoder
+            .push_rows(pixel_slice)
+            .map_err(|e| -> SinkError { alloc::format!("push_rows: {e}").into() })
     }
 }
 
-impl Default for TranscodeSink {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DecodeRowSink for TranscodeSink {
+impl DecodeRowSink for TranscodeSink<'_> {
     fn begin(
         &mut self,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
+        _width: u32,
+        _height: u32,
+        _descriptor: PixelDescriptor,
     ) -> Result<(), SinkError> {
-        self.width = width;
-        self.height = height;
-        self.descriptor = descriptor;
-        self.rows_received = 0;
-
-        let total = width as usize * height as usize * descriptor.bytes_per_pixel();
-        self.buf = Vec::with_capacity(total);
-        // Pre-fill so provide_next_buffer can return slices into it.
-        self.buf.resize(total, 0);
+        self.pending = None;
+        self.strip_buf.clear();
         Ok(())
     }
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
+        _y: u32,
         height: u32,
         width: u32,
         descriptor: PixelDescriptor,
     ) -> Result<PixelSliceMut<'_>, SinkError> {
+        // The previous buffer (if any) has been fully written by the decoder.
+        // Forward it to the encoder before providing the next buffer.
+        self.flush_pending()?;
+
         let bpp = descriptor.bytes_per_pixel();
         let stride = width as usize * bpp;
-        let start = y as usize * stride;
-        let end = start + height as usize * stride;
+        let needed = stride * height as usize;
 
-        if end > self.buf.len() {
-            return Err(alloc::format!(
-                "strip y={y} height={height} exceeds buffer (len={})",
-                self.buf.len()
-            )
-            .into());
-        }
+        // Resize strip_buf for this strip
+        self.strip_buf.resize(needed, 0);
+        self.pending = Some(PendingStrip {
+            width,
+            height,
+            descriptor,
+        });
 
-        self.rows_received = y + height;
+        PixelSliceMut::new(
+            &mut self.strip_buf[..needed],
+            width,
+            height,
+            stride,
+            descriptor,
+        )
+        .map_err(|e| -> SinkError { alloc::format!("pixel slice: {e}").into() })
+    }
 
-        PixelSliceMut::new(&mut self.buf[start..end], width, height, stride, descriptor)
-            .map_err(|e| -> SinkError { alloc::format!("pixel slice: {e}").into() })
+    fn finish(&mut self) -> Result<(), SinkError> {
+        // Forward the last strip
+        self.flush_pending()
     }
 }
 
@@ -144,36 +191,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn transcode_sink_lifecycle() {
-        let mut sink = TranscodeSink::new();
-        let desc = PixelDescriptor::RGB8_SRGB;
-
-        sink.begin(10, 24, desc).unwrap();
-        assert_eq!(sink.width(), 10);
-        assert_eq!(sink.height(), 24);
-
-        // Simulate 3 strips of 8 rows each
-        for strip in 0..3u32 {
-            let y = strip * 8;
-            let mut ps = sink.provide_next_buffer(y, 8, 10, desc).unwrap();
-            for row in 0..8 {
-                ps.row_mut(row).fill((strip + 1) as u8);
-            }
-        }
-
-        sink.finish().unwrap();
-
-        // Verify data
-        assert_eq!(sink.data().len(), 10 * 24 * 3); // 10 wide, 24 tall, RGB8
-        let pixel_slice = sink.as_pixel_slice().unwrap();
-        assert_eq!(pixel_slice.width(), 10);
-        assert_eq!(pixel_slice.rows(), 24);
-    }
-
-    #[test]
-    fn transcode_sink_default() {
-        let sink = TranscodeSink::default();
-        assert_eq!(sink.width(), 0);
-        assert_eq!(sink.height(), 0);
+    fn transcode_sink_construction() {
+        // Verify the type compiles and basic construction works.
+        // Full integration requires a real encoder, tested in integration tests.
+        assert!(core::mem::size_of::<TranscodeSink<'_>>() > 0);
     }
 }

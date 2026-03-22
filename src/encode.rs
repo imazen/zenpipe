@@ -352,8 +352,95 @@ impl<'a> EncodeRequest<'a> {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Build raw encoder for pipeline use
+    // Build streaming encoder for pipeline use
     // ═══════════════════════════════════════════════════════════════════
+
+    /// Build a streaming encoder without encoding anything.
+    ///
+    /// Returns a [`StreamingEncoder`] containing:
+    /// - A `DynEncoder` that accepts rows via `push_rows()` / `finish()`
+    /// - The encoder's `supported` pixel descriptors (for `adapt_for_encode`)
+    /// - The resolved output `format`
+    ///
+    /// The caller is responsible for pixel format conversion per-strip via
+    /// [`adapt_for_encode`]. This avoids materializing the full image for
+    /// format conversion — only a strip-sized buffer is needed.
+    ///
+    /// Codecs that require the full image (WebP, AVIF) buffer internally
+    /// inside their `push_rows()` implementation. That's the codec's
+    /// decision — the pipeline never buffers.
+    ///
+    /// [`adapt_for_encode`]: zenpixels_convert::adapt::adapt_for_encode
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use zencodecs::{EncodeRequest, ImageFormat};
+    /// use zenpixels_convert::adapt::adapt_for_encode;
+    ///
+    /// let se = EncodeRequest::new(ImageFormat::Jpeg)
+    ///     .with_quality(85.0)
+    ///     .build_streaming_encoder(1920, 1080)?;
+    ///
+    /// // Per strip:
+    /// let adapted = adapt_for_encode(
+    ///     strip_bytes, descriptor, width, strip_rows, stride,
+    ///     se.supported,
+    /// )?;
+    /// let ps = PixelSlice::new(&adapted.data, adapted.width, adapted.rows,
+    ///     adapted.width as usize * adapted.descriptor.bytes_per_pixel(),
+    ///     adapted.descriptor)?;
+    /// se.encoder.push_rows(ps)?;
+    ///
+    /// // Finalize:
+    /// let output = se.encoder.finish()?;
+    /// ```
+    pub fn build_streaming_encoder(
+        self,
+        width: u32,
+        height: u32,
+    ) -> Result<crate::dispatch::StreamingEncoder<'a>> {
+        let default_registry = CodecRegistry::all();
+        let registry = self.registry.unwrap_or(&default_registry);
+        let default_policy = CodecPolicy::new();
+        let policy = self.policy.as_ref().unwrap_or(&default_policy);
+
+        let format = match self.format {
+            Some(f) => f,
+            None => {
+                let facts = self.image_facts.clone().unwrap_or(ImageFacts {
+                    pixel_count: width as u64 * height as u64,
+                    ..Default::default()
+                });
+                let intent = self.quality_intent();
+                crate::select::select_format(&facts, &intent, registry, policy)?.format
+            }
+        };
+
+        if !registry.can_encode(format) {
+            return Err(at!(CodecError::DisabledFormat(format)));
+        }
+        if self.lossless && !format.supports_lossless() {
+            return Err(at!(CodecError::UnsupportedOperation {
+                format,
+                detail: "lossless encoding not supported",
+            }));
+        }
+
+        let resolved_quality = self.resolve_quality();
+
+        let params = crate::dispatch::EncodeParams {
+            quality: Some(resolved_quality),
+            effort: self.effort,
+            lossless: self.lossless,
+            metadata: self.metadata,
+            codec_config: self.codec_config,
+            limits: self.limits,
+            stop: self.stop,
+        };
+
+        crate::dispatch::build_streaming_encoder(format, params)
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Typed encode methods — thin wrappers over dispatch
