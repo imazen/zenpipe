@@ -618,7 +618,7 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     // → ultrahdr GainMapMetadata (linear domain). This avoids the domain confusion
     // bug where log2 rational values were previously assigned directly to linear fields.
     let params = avif_gain_map_to_params(&avif_gm.metadata);
-    let uhdr_metadata = crate::gainmap::GainMapMetadata::from(&params);
+    let uhdr_metadata = crate::gainmap::params_to_metadata(&params);
 
     // Decode the raw AV1 gain map to pixels
     let (gm_data, gm_w, gm_h, gm_ch) = zenavif::decode_av1_obu(&avif_gm.gain_map_data).ok()?;

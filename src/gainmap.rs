@@ -30,6 +30,67 @@ use crate::ImageFormat;
 #[cfg(feature = "jpeg-ultrahdr")]
 pub use zenjpeg::ultrahdr::GainMapMetadata;
 
+// Re-export zencodec gain map types.
+pub use zencodec::gainmap::{GainMapChannel, GainMapParams, GainMapPresence};
+
+/// Convert [`GainMapParams`] (log2 domain) → [`GainMapMetadata`] (linear domain).
+///
+/// Applies `2^x` to gains and headroom fields. Gamma and offsets pass through directly.
+#[cfg(feature = "jpeg-ultrahdr")]
+pub fn params_to_metadata(p: &GainMapParams) -> GainMapMetadata {
+    GainMapMetadata {
+        min_content_boost: [
+            2.0f32.powf(p.channels[0].min as f32),
+            2.0f32.powf(p.channels[1].min as f32),
+            2.0f32.powf(p.channels[2].min as f32),
+        ],
+        max_content_boost: [
+            2.0f32.powf(p.channels[0].max as f32),
+            2.0f32.powf(p.channels[1].max as f32),
+            2.0f32.powf(p.channels[2].max as f32),
+        ],
+        gamma: [
+            p.channels[0].gamma as f32,
+            p.channels[1].gamma as f32,
+            p.channels[2].gamma as f32,
+        ],
+        offset_sdr: [
+            p.channels[0].base_offset as f32,
+            p.channels[1].base_offset as f32,
+            p.channels[2].base_offset as f32,
+        ],
+        offset_hdr: [
+            p.channels[0].alternate_offset as f32,
+            p.channels[1].alternate_offset as f32,
+            p.channels[2].alternate_offset as f32,
+        ],
+        hdr_capacity_min: 2.0f32.powf(p.base_hdr_headroom as f32),
+        hdr_capacity_max: 2.0f32.powf(p.alternate_hdr_headroom as f32),
+        use_base_color_space: p.use_base_color_space,
+    }
+}
+
+/// Convert [`GainMapMetadata`] (linear domain) → [`GainMapParams`] (log2 domain).
+///
+/// Applies `log2(x)` to gains and headroom fields. Gamma and offsets pass through directly.
+#[cfg(feature = "jpeg-ultrahdr")]
+pub fn metadata_to_params(m: &GainMapMetadata) -> GainMapParams {
+    let mut channels = [GainMapChannel::default(); 3];
+    for i in 0..3 {
+        channels[i].min = (m.min_content_boost[i] as f64).log2();
+        channels[i].max = (m.max_content_boost[i] as f64).log2();
+        channels[i].gamma = m.gamma[i] as f64;
+        channels[i].base_offset = m.offset_sdr[i] as f64;
+        channels[i].alternate_offset = m.offset_hdr[i] as f64;
+    }
+    let mut params = GainMapParams::default();
+    params.channels = channels;
+    params.base_hdr_headroom = (m.hdr_capacity_min as f64).log2();
+    params.alternate_hdr_headroom = (m.hdr_capacity_max as f64).log2();
+    params.use_base_color_space = m.use_base_color_space;
+    params
+}
+
 /// Gain map extracted from a decoded image.
 ///
 /// Format-agnostic: works for JPEG (UltraHDR), AVIF (tmap), and JXL (jhgm).
@@ -133,6 +194,23 @@ pub enum GainMapSource<'a> {
 
 #[cfg(feature = "jpeg-ultrahdr")]
 impl DecodedGainMap {
+    /// Convert the stored linear-domain metadata to the canonical
+    /// log2-domain [`GainMapParams`].
+    pub fn params(&self) -> GainMapParams {
+        metadata_to_params(&self.metadata)
+    }
+
+    /// Build a [`GainMapInfo`](zencodec::GainMapInfo) describing this gain map
+    /// (metadata + dimensions, no pixel data).
+    pub fn to_gain_map_info(&self) -> zencodec::GainMapInfo {
+        zencodec::GainMapInfo::new(
+            self.params(),
+            self.gain_map.width,
+            self.gain_map.height,
+            self.gain_map.channels,
+        )
+    }
+
     /// Reconstruct the HDR rendition from an SDR base image + gain map.
     ///
     /// Only valid when `base_is_hdr == false` (JPEG/AVIF direction).
