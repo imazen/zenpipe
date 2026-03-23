@@ -29,6 +29,7 @@ pub mod bridge;
 
 pub mod animation;
 pub mod codec;
+pub mod sidecar;
 
 pub use error::PipeError;
 pub use format::PixelFormat;
