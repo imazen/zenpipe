@@ -117,7 +117,10 @@ impl<'a> DecodeRequest<'a> {
     /// **Deprecated:** Use [`decode_full_frame`](Self::decode_full_frame) instead.
     /// The name `decode()` hides the fact that this materializes the entire image.
     /// `push_decode()` is the streaming alternative.
-    #[deprecated(since = "0.2.0", note = "renamed to decode_full_frame() to signal materialization; use push_decode() for streaming")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to decode_full_frame() to signal materialization; use push_decode() for streaming"
+    )]
     pub fn decode(self) -> Result<DecodeOutput> {
         self.decode_full_frame()
     }

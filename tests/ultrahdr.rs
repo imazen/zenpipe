@@ -89,7 +89,7 @@ fn ultrahdr_roundtrip_rgb_f32() {
 
     // Decode SDR (standard path — should work even for UltraHDR)
     let sdr = DecodeRequest::new(encoded.data())
-        .decode()
+        .decode_full_frame()
         .expect("SDR decode failed");
 
     assert_eq!(sdr.width(), w as u32);
@@ -118,7 +118,7 @@ fn ultrahdr_roundtrip_rgba_f32() {
 
     // SDR decode should work
     let sdr = DecodeRequest::new(encoded.data())
-        .decode()
+        .decode_full_frame()
         .expect("SDR decode failed");
     assert_eq!(sdr.width(), w as u32);
     assert_eq!(sdr.height(), h as u32);
@@ -237,7 +237,7 @@ fn decode_gain_map_returns_none_for_regular_jpeg() {
     );
     let encoded = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(85.0)
-        .encode_rgb8(img.as_ref())
+        .encode_full_frame_rgb8(img.as_ref())
         .expect("encode failed");
 
     let (output, gainmap) = DecodeRequest::new(encoded.data())
@@ -266,7 +266,7 @@ fn decode_gain_map_returns_none_for_webp() {
     );
     let encoded = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(85.0)
-        .encode_rgb8(img.as_ref())
+        .encode_full_frame_rgb8(img.as_ref())
         .expect("encode failed");
 
     let (_, gainmap) = DecodeRequest::new(encoded.data())
@@ -296,7 +296,7 @@ fn decode_gain_map_returns_none_for_png() {
         32,
     );
     let encoded = EncodeRequest::new(ImageFormat::Png)
-        .encode_rgba8(img.as_ref())
+        .encode_full_frame_rgba8(img.as_ref())
         .expect("encode failed");
 
     let (_, gainmap) = DecodeRequest::new(encoded.data())

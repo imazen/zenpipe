@@ -37,7 +37,7 @@ fn bench_image(path: &str) {
 
     // Decode
     let decoded = bench("Decode", ITERS, || {
-        DecodeRequest::new(&data).decode().unwrap()
+        DecodeRequest::new(&data).decode_full_frame().unwrap()
     });
 
     let w = decoded.width();
@@ -64,7 +64,7 @@ fn bench_image(path: &str) {
             if let Some(q) = quality {
                 req = req.with_quality(q);
             }
-            req.encode_rgb8(img)
+            req.encode_full_frame_rgb8(img)
         });
         match result {
             Ok(encoded) => {
@@ -91,7 +91,7 @@ fn bench_image(path: &str) {
         if let Some(q) = quality {
             req = req.with_quality(q);
         }
-        let encoded = match req.encode_rgb8(img) {
+        let encoded = match req.encode_full_frame_rgb8(img) {
             Ok(e) => e,
             Err(e) => {
                 println!("  Decode {name}: SKIP (encode failed: {e})");
@@ -99,7 +99,7 @@ fn bench_image(path: &str) {
             }
         };
         match bench(&format!("Decode {name}"), ITERS, || {
-            DecodeRequest::new(encoded.data()).decode()
+            DecodeRequest::new(encoded.data()).decode_full_frame()
         }) {
             Ok(_) => {}
             Err(e) => println!("    FAILED: {e}"),

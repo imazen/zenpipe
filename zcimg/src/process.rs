@@ -180,7 +180,7 @@ fn process_inner(
 
     // Decode
     let decoded = DecodeRequest::new(&data)
-        .decode()
+        .decode_full_frame()
         .with_context(|| format!("decoding {}", input.display()))?;
 
     let info = decoded.info().clone();
@@ -233,13 +233,13 @@ fn process_inner(
     let is_grayscale = decoded.descriptor().is_grayscale();
     let encoded = if has_alpha {
         let pixels = decoded.into_buffer().to_rgba8();
-        encode_req.encode_rgba8(pixels.as_imgref())
+        encode_req.encode_full_frame_rgba8(pixels.as_imgref())
     } else if is_grayscale {
         let pixels = decoded.into_buffer().to_gray8();
-        encode_req.encode_gray8(pixels.as_imgref())
+        encode_req.encode_full_frame_gray8(pixels.as_imgref())
     } else {
         let pixels = decoded.into_buffer().to_rgb8();
-        encode_req.encode_rgb8(pixels.as_imgref())
+        encode_req.encode_full_frame_rgb8(pixels.as_imgref())
     }
     .with_context(|| format!("encoding {} as {:?}", input.display(), target_format))?;
 

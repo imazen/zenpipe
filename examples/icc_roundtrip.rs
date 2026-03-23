@@ -12,7 +12,7 @@ fn main() {
 
     // Step 1: Decode original JPEG
     let decoded = DecodeRequest::new(jpeg_data)
-        .decode()
+        .decode_full_frame()
         .expect("failed to decode JPEG");
 
     let original_icc: Vec<u8> = decoded
@@ -45,14 +45,14 @@ fn main() {
     let first_encoded = EncodeRequest::new(chain[0].1)
         .with_quality(95.0)
         .with_metadata(&meta)
-        .encode_rgb8(img)
+        .encode_full_frame_rgb8(img)
         .expect("encode failed");
 
     current_data = first_encoded.into_vec();
 
     // Verify first hop
     let step1 = DecodeRequest::new(&current_data)
-        .decode()
+        .decode_full_frame()
         .expect("decode failed");
     let step1_icc = step1
         .info()
@@ -75,7 +75,7 @@ fn main() {
     // Continue chain
     for &(label, format) in &chain[1..] {
         let step = DecodeRequest::new(&current_data)
-            .decode()
+            .decode_full_frame()
             .expect("decode failed");
 
         let step_meta = step.metadata();
@@ -85,13 +85,13 @@ fn main() {
         let encoded = EncodeRequest::new(format)
             .with_quality(95.0)
             .with_metadata(&step_meta)
-            .encode_rgb8(step_img)
+            .encode_full_frame_rgb8(step_img)
             .expect("encode failed");
 
         current_data = encoded.into_vec();
 
         let re_decoded = DecodeRequest::new(&current_data)
-            .decode()
+            .decode_full_frame()
             .expect("decode failed");
 
         let new_icc = re_decoded

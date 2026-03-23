@@ -155,7 +155,7 @@ fn check_roundtrip(
         encoded.unwrap_or_else(|e| panic!("{codec_name}/{format_name} encode failed: {e}"));
 
     let decoded = DecodeRequest::new(encoded.as_ref())
-        .decode()
+        .decode_full_frame()
         .unwrap_or_else(|e| panic!("{codec_name}/{format_name} decode failed: {e}"));
 
     let rgba_buf = decoded.into_buffer().to_rgba8();
@@ -193,7 +193,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_rgb8();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_rgb8(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_rgb8(img.as_ref()),
                 $codec, "rgb8",
             );
         }
@@ -205,7 +205,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_rgba8();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_rgba8(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_rgba8(img.as_ref()),
                 $codec, "rgba8",
             );
         }
@@ -217,7 +217,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_bgra8();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_bgra8(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_bgra8(img.as_ref()),
                 $codec, "bgra8",
             );
         }
@@ -229,7 +229,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_bgra8(); // bgrx uses same Bgra type, alpha ignored
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_bgrx8(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_bgrx8(img.as_ref()),
                 $codec, "bgrx8",
             );
         }
@@ -241,7 +241,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_gray8();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_gray8(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_gray8(img.as_ref()),
                 $codec, "gray8",
             );
         }
@@ -253,7 +253,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_rgb_f32();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_rgb_f32(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_rgb_f32(img.as_ref()),
                 $codec, "rgb_f32",
             );
         }
@@ -265,7 +265,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_rgba_f32();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_rgba_f32(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_rgba_f32(img.as_ref()),
                 $codec, "rgba_f32",
             );
         }
@@ -277,7 +277,7 @@ macro_rules! regress {
         fn $name() {
             let img = gradient_gray_f32();
             check_roundtrip(
-                EncodeRequest::new($format).with_quality(75.0).encode_gray_f32(img.as_ref()),
+                EncodeRequest::new($format).with_quality(75.0).encode_full_frame_gray_f32(img.as_ref()),
                 $codec, "gray_f32",
             );
         }
@@ -448,7 +448,7 @@ fn regress_jxl_rgba8() {
     check_roundtrip(
         EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_rgba8(img.as_ref()),
+            .encode_full_frame_rgba8(img.as_ref()),
         "jxl",
         "rgba8",
     );
@@ -463,7 +463,7 @@ fn regress_jxl_bgra8() {
     check_roundtrip(
         EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_bgra8(img.as_ref()),
+            .encode_full_frame_bgra8(img.as_ref()),
         "jxl",
         "bgra8",
     );
@@ -478,7 +478,7 @@ fn regress_jxl_bgrx8() {
     check_roundtrip(
         EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_bgrx8(img.as_ref()),
+            .encode_full_frame_bgrx8(img.as_ref()),
         "jxl",
         "bgrx8",
     );
@@ -493,7 +493,7 @@ fn regress_jxl_rgba_f32() {
     check_roundtrip(
         EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_rgba_f32(img.as_ref()),
+            .encode_full_frame_rgba_f32(img.as_ref()),
         "jxl",
         "rgba_f32",
     );

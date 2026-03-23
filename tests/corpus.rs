@@ -36,7 +36,7 @@ fn collect_files(dir: &Path, extensions: &[&str]) -> Vec<std::path::PathBuf> {
 fn roundtrip_ok(path: &Path, format: ImageFormat, quality: f32) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let decoded = DecodeRequest::new(&data)
-        .decode()
+        .decode_full_frame()
         .unwrap_or_else(|e| panic!("decode {}: {e}", path.display()));
 
     let w = decoded.width();
@@ -48,11 +48,11 @@ fn roundtrip_ok(path: &Path, format: ImageFormat, quality: f32) {
 
     let encoded = EncodeRequest::new(format)
         .with_quality(quality)
-        .encode_rgba8(rgba_ref)
+        .encode_full_frame_rgba8(rgba_ref)
         .unwrap_or_else(|e| panic!("encode {}: {e}", path.display()));
 
     let re_decoded = DecodeRequest::new(encoded.as_ref())
-        .decode()
+        .decode_full_frame()
         .unwrap_or_else(|e| panic!("re-decode {}: {e}", path.display()));
 
     assert_eq!(
@@ -86,7 +86,7 @@ fn corpus_jpeg_decode_valid() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 assert!(d.height() > 0);
@@ -125,7 +125,7 @@ fn corpus_jpeg_roundtrip() {
     let mut tested = 0;
     for path in files.iter().take(10) {
         let data = std::fs::read(path).unwrap();
-        if DecodeRequest::new(&data).decode().is_ok() {
+        if DecodeRequest::new(&data).decode_full_frame().is_ok() {
             roundtrip_ok(path, ImageFormat::Jpeg, 85.0);
             tested += 1;
         }
@@ -156,7 +156,7 @@ fn corpus_png_decode_pngsuite() {
             continue;
         }
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 assert!(d.height() > 0);
@@ -190,7 +190,7 @@ fn corpus_png_roundtrip() {
             continue;
         }
         let data = std::fs::read(path).unwrap();
-        if DecodeRequest::new(&data).decode().is_ok() {
+        if DecodeRequest::new(&data).decode_full_frame().is_ok() {
             roundtrip_ok(path, ImageFormat::Png, 100.0);
             tested += 1;
             if tested >= 20 {
@@ -219,7 +219,7 @@ fn corpus_png_conformance_decode() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 ok += 1;
@@ -271,7 +271,7 @@ fn corpus_webp_decode() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 assert!(d.height() > 0);
@@ -303,7 +303,7 @@ fn corpus_webp_roundtrip() {
     let mut tested = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        if DecodeRequest::new(&data).decode().is_ok() {
+        if DecodeRequest::new(&data).decode_full_frame().is_ok() {
             roundtrip_ok(path, ImageFormat::WebP, 75.0);
             tested += 1;
         }
@@ -344,7 +344,7 @@ fn corpus_gif_decode() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 assert!(d.height() > 0);
@@ -376,7 +376,7 @@ fn corpus_gif_roundtrip() {
     let mut tested = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        if DecodeRequest::new(&data).decode().is_ok() {
+        if DecodeRequest::new(&data).decode_full_frame().is_ok() {
             roundtrip_ok(path, ImageFormat::Gif, 100.0);
             tested += 1;
         }
@@ -401,7 +401,7 @@ fn corpus_jpeg_mozjpeg_decode() {
     let mut ok = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        if let Ok(d) = DecodeRequest::new(&data).decode() {
+        if let Ok(d) = DecodeRequest::new(&data).decode_full_frame() {
             assert!(d.width() > 0);
             ok += 1;
         }
@@ -427,7 +427,7 @@ fn corpus_jpeg_invalid_no_panic() {
     let mut errors = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        if DecodeRequest::new(&data).decode().is_err() {
+        if DecodeRequest::new(&data).decode_full_frame().is_err() {
             errors += 1;
         }
     }
@@ -453,7 +453,7 @@ fn corpus_jpeg_crash_repro_no_panic() {
     for path in &files {
         let data = std::fs::read(path).unwrap();
         // Must not panic — error result is fine
-        let _ = DecodeRequest::new(&data).decode();
+        let _ = DecodeRequest::new(&data).decode_full_frame();
     }
     eprintln!(
         "JPEG crash-repro: {} files processed without panic",
@@ -481,7 +481,7 @@ fn corpus_png_invalid_no_panic() {
             continue;
         }
         let data = std::fs::read(path).unwrap();
-        let _ = DecodeRequest::new(&data).decode();
+        let _ = DecodeRequest::new(&data).decode_full_frame();
         invalid_tested += 1;
     }
     eprintln!("PNG invalid (pngsuite x*): {invalid_tested} files processed without panic");
@@ -524,7 +524,7 @@ fn corpus_jpeg_zune_fuzz() {
     let mut panics = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match std::panic::catch_unwind(|| DecodeRequest::new(&data).decode()) {
+        match std::panic::catch_unwind(|| DecodeRequest::new(&data).decode_full_frame()) {
             Ok(Ok(_)) => ok += 1,
             Ok(Err(_)) => err += 1,
             Err(_) => panics += 1,
@@ -576,7 +576,7 @@ fn corpus_png_zune_fuzz() {
     let mut panics = 0;
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match std::panic::catch_unwind(|| DecodeRequest::new(&data).decode()) {
+        match std::panic::catch_unwind(|| DecodeRequest::new(&data).decode_full_frame()) {
             Ok(Ok(_)) => ok += 1,
             Ok(Err(_)) => err += 1,
             Err(_) => panics += 1,
@@ -636,7 +636,7 @@ fn corpus_imageflow_probe() {
             probed += 1;
         }
         // Decode may fail for some edge cases — that's OK
-        if DecodeRequest::new(&data).decode().is_ok() {
+        if DecodeRequest::new(&data).decode_full_frame().is_ok() {
             decoded += 1;
         }
     }
@@ -665,7 +665,7 @@ fn corpus_avif_roundtrip() {
 
     for path in files.iter().take(5) {
         let data = std::fs::read(path).unwrap();
-        let Ok(decoded) = DecodeRequest::new(&data).decode() else {
+        let Ok(decoded) = DecodeRequest::new(&data).decode_full_frame() else {
             continue;
         };
         let w = decoded.width();
@@ -675,11 +675,11 @@ fn corpus_avif_roundtrip() {
 
         let encoded = EncodeRequest::new(ImageFormat::Avif)
             .with_quality(60.0)
-            .encode_rgba8(rgba_ref)
+            .encode_full_frame_rgba8(rgba_ref)
             .unwrap_or_else(|e| panic!("AVIF encode {}: {e}", path.display()));
 
         let re = DecodeRequest::new(encoded.as_ref())
-            .decode()
+            .decode_full_frame()
             .unwrap_or_else(|e| panic!("AVIF re-decode {}: {e}", path.display()));
 
         assert_eq!(re.width(), w);
@@ -707,7 +707,7 @@ fn corpus_jxl_roundtrip() {
 
     for path in files.iter().take(5) {
         let data = std::fs::read(path).unwrap();
-        let Ok(decoded) = DecodeRequest::new(&data).decode() else {
+        let Ok(decoded) = DecodeRequest::new(&data).decode_full_frame() else {
             continue;
         };
         let w = decoded.width();
@@ -719,11 +719,11 @@ fn corpus_jxl_roundtrip() {
 
         let encoded = EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_rgb8(rgb_ref)
+            .encode_full_frame_rgb8(rgb_ref)
             .unwrap_or_else(|e| panic!("JXL encode {}: {e}", path.display()));
 
         let re = DecodeRequest::new(encoded.as_ref())
-            .decode()
+            .decode_full_frame()
             .unwrap_or_else(|e| panic!("JXL re-decode {}: {e}", path.display()));
 
         assert_eq!(re.width(), w);
@@ -770,7 +770,7 @@ fn corpus_jxl_decode() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 ok += 1;
@@ -807,7 +807,7 @@ fn corpus_webp_conformance_decode() {
     let mut fail = Vec::new();
     for path in &files {
         let data = std::fs::read(path).unwrap();
-        match DecodeRequest::new(&data).decode() {
+        match DecodeRequest::new(&data).decode_full_frame() {
             Ok(d) => {
                 assert!(d.width() > 0);
                 ok += 1;

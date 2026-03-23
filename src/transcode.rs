@@ -38,7 +38,7 @@ use whereat::at;
 /// Options controlling a transcode operation.
 ///
 /// Controls metadata roundtrip, supplement handling, and alpha compositing.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TranscodeOptions<'a> {
     /// Metadata to embed in the output (EXIF, ICC, XMP).
     ///
@@ -55,16 +55,6 @@ pub struct TranscodeOptions<'a> {
     ///
     /// `None` defaults to white `[255, 255, 255]`.
     pub matte: Option<[u8; 3]>,
-}
-
-impl Default for TranscodeOptions<'_> {
-    fn default() -> Self {
-        Self {
-            metadata: None,
-            supplements: SupplementPolicy::default(),
-            matte: None,
-        }
-    }
 }
 
 /// What to do with container supplements (gain maps, depth maps, etc.)

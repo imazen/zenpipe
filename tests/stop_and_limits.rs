@@ -65,7 +65,7 @@ fn stop_decode_jpeg() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
     let result = DecodeRequest::new(&data)
         .with_stop(&AlreadyStopped)
-        .decode();
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "JPEG decode should fail with AlreadyStopped"
@@ -81,7 +81,7 @@ fn stop_decode_webp() {
     let data = encode_test_data(ImageFormat::WebP, 256, 256);
     let result = DecodeRequest::new(&data)
         .with_stop(&AlreadyStopped)
-        .decode();
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "WebP decode should fail with AlreadyStopped"
@@ -97,7 +97,7 @@ fn stop_decode_gif() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 128, 128);
     let result = DecodeRequest::new(&data)
         .with_stop(&AlreadyStopped)
-        .decode();
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "GIF decode should fail with AlreadyStopped"
@@ -113,7 +113,7 @@ fn stop_decode_avif() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
     let result = DecodeRequest::new(&data)
         .with_stop(&AlreadyStopped)
-        .decode();
+        .decode_full_frame();
     // AVIF decode may not check stop before completing for small images,
     // but it should at least not panic.
     if let Err(e) = &result {
@@ -130,7 +130,7 @@ fn stop_decode_png() {
     let data = encode_test_data(ImageFormat::Png, 256, 256);
     let result = DecodeRequest::new(&data)
         .with_stop(&AlreadyStopped)
-        .decode();
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "PNG decode should fail with AlreadyStopped"
@@ -151,7 +151,7 @@ fn stop_encode_jpeg() {
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_stop(&AlreadyStopped)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "JPEG encode should fail with AlreadyStopped"
@@ -168,7 +168,7 @@ fn stop_encode_webp() {
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
         .with_stop(&AlreadyStopped)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "WebP encode should fail with AlreadyStopped"
@@ -184,7 +184,7 @@ fn stop_encode_gif_rgb8() {
     let img = rgb8_image(128, 128);
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_stop(&AlreadyStopped)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "GIF encode (rgb8) should fail with AlreadyStopped"
@@ -200,7 +200,7 @@ fn stop_encode_gif_rgba8() {
     let img = rgba8_image(128, 128);
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_stop(&AlreadyStopped)
-        .encode_rgba8(img.as_ref());
+        .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
         "GIF encode (rgba8) should fail with AlreadyStopped"
@@ -217,7 +217,7 @@ fn stop_encode_avif() {
     let result = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(50.0)
         .with_stop(&AlreadyStopped)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     // AVIF encode may not check stop for small images, but should not panic.
     if let Err(e) = &result {
         assert!(
@@ -233,7 +233,7 @@ fn stop_encode_png() {
     let img = rgb8_image(256, 256);
     let result = EncodeRequest::new(ImageFormat::Png)
         .with_stop(&AlreadyStopped)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "PNG encode should fail with AlreadyStopped"
@@ -255,7 +255,9 @@ fn limits_decode_jpeg_width() {
         max_width: Some(10),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "JPEG decode should fail with tight width limit"
@@ -274,7 +276,9 @@ fn limits_decode_png_pixels() {
         max_pixels: Some(100),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "PNG decode should fail with tight pixel limit"
@@ -292,7 +296,9 @@ fn limits_decode_gif_width() {
         max_width: Some(10),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "GIF decode should fail with tight width limit"
@@ -310,7 +316,9 @@ fn limits_decode_webp_width() {
         max_width: Some(10),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "WebP decode should fail with tight width limit"
@@ -329,7 +337,9 @@ fn limits_decode_avif_pixels() {
         max_pixels: Some(100),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_err(),
         "AVIF decode should fail with tight pixel limit"
@@ -355,7 +365,7 @@ fn limits_encode_gif_dimensions() {
     };
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_limits(&limits)
-        .encode_rgba8(img.as_ref());
+        .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
         "GIF encode should fail with tight width limit"
@@ -376,7 +386,7 @@ fn limits_encode_jpeg_memory() {
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "JPEG encode should fail with 1-byte memory limit"
@@ -397,7 +407,7 @@ fn limits_encode_jpeg_dimensions() {
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "JPEG encode should fail with tight width limit"
@@ -418,7 +428,7 @@ fn limits_encode_webp_memory() {
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "WebP encode should fail with 1-byte memory limit"
@@ -439,7 +449,7 @@ fn limits_encode_webp_dimensions() {
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "WebP encode should fail with tight width limit"
@@ -460,7 +470,7 @@ fn limits_encode_png_memory() {
     };
     let result = EncodeRequest::new(ImageFormat::Png)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "PNG encode should fail with 1-byte memory limit"
@@ -480,7 +490,7 @@ fn limits_encode_gif_memory() {
     };
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_limits(&limits)
-        .encode_rgba8(img.as_ref());
+        .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
         "GIF encode should fail with 1-byte memory limit"
@@ -501,7 +511,7 @@ fn limits_encode_avif_memory() {
     let result = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(50.0)
         .with_limits(&limits)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
         "AVIF encode should fail with 1-byte memory limit"
@@ -519,7 +529,7 @@ fn limits_encode_avif_memory() {
 #[test]
 fn normal_decode_jpeg_succeeds() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
-    let result = DecodeRequest::new(&data).decode();
+    let result = DecodeRequest::new(&data).decode_full_frame();
     assert!(result.is_ok(), "Normal JPEG decode should succeed");
     let output = result.unwrap();
     assert_eq!(output.width(), 256);
@@ -531,7 +541,7 @@ fn normal_encode_jpeg_succeeds() {
     let img = rgb8_image(256, 256);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
-        .encode_rgb8(img.as_ref());
+        .encode_full_frame_rgb8(img.as_ref());
     assert!(result.is_ok(), "Normal JPEG encode should succeed");
 }
 
@@ -545,7 +555,9 @@ fn generous_limits_still_work() {
         max_memory_bytes: Some(1_000_000_000),
         ..Default::default()
     };
-    let result = DecodeRequest::new(&data).with_limits(&limits).decode();
+    let result = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .decode_full_frame();
     assert!(
         result.is_ok(),
         "Decode with generous limits should succeed: {:?}",
@@ -569,11 +581,11 @@ fn roundtrip_all_codecs_no_stop() {
         let img = rgb8_image(64, 64);
         let encoded = EncodeRequest::new(format)
             .with_quality(50.0)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .unwrap_or_else(|e| panic!("{format:?} encode failed: {e}"));
 
         let decoded = DecodeRequest::new(encoded.as_ref())
-            .decode()
+            .decode_full_frame()
             .unwrap_or_else(|e| panic!("{format:?} decode failed: {e}"));
 
         assert_eq!(decoded.width(), 64, "{format:?} width mismatch");
@@ -585,11 +597,11 @@ fn roundtrip_all_codecs_no_stop() {
 fn roundtrip_gif_no_stop() {
     let img = rgba8_image(64, 64);
     let encoded = EncodeRequest::new(ImageFormat::Gif)
-        .encode_rgba8(img.as_ref())
+        .encode_full_frame_rgba8(img.as_ref())
         .expect("GIF encode failed");
 
     let decoded = DecodeRequest::new(encoded.as_ref())
-        .decode()
+        .decode_full_frame()
         .expect("GIF decode failed");
 
     assert_eq!(decoded.width(), 64);

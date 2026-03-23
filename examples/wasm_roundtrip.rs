@@ -13,7 +13,7 @@ fn main() {
     let jpeg_data = include_bytes!("../tests/images/ultrahdr_sample.jpg");
 
     let decoded = DecodeRequest::new(jpeg_data)
-        .decode()
+        .decode_full_frame()
         .expect("decode failed");
 
     println!(
@@ -43,7 +43,7 @@ fn main() {
         let encoded = EncodeRequest::new(format)
             .with_quality(80.0)
             .with_metadata(&meta)
-            .encode_rgb8(img)
+            .encode_full_frame_rgb8(img)
             .expect("encode failed");
 
         println!("{name}: {} bytes", encoded.len());

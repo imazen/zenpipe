@@ -669,55 +669,86 @@ impl<'a> EncodeRequest<'a> {
     // ═══════════════════════════════════════════════════════════════════
 
     /// **Deprecated:** Use [`encode_full_frame_rgb8`](Self::encode_full_frame_rgb8).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgb8() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_rgb8() to signal materialization"
+    )]
     pub fn encode_rgb8(self, img: ImgRef<Rgb<u8>>) -> Result<EncodeOutput> {
         self.encode_full_frame_rgb8(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_rgba8`](Self::encode_full_frame_rgba8).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgba8() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_rgba8() to signal materialization"
+    )]
     pub fn encode_rgba8(self, img: ImgRef<Rgba<u8>>) -> Result<EncodeOutput> {
         self.encode_full_frame_rgba8(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_srgba8_imgref`](Self::encode_full_frame_srgba8_imgref).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_srgba8_imgref() to signal materialization")]
-    pub fn encode_srgba8_imgref(self, img: ImgRef<Rgba<u8>>, ignore_alpha: bool) -> Result<EncodeOutput> {
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_srgba8_imgref() to signal materialization"
+    )]
+    pub fn encode_srgba8_imgref(
+        self,
+        img: ImgRef<Rgba<u8>>,
+        ignore_alpha: bool,
+    ) -> Result<EncodeOutput> {
         self.encode_full_frame_srgba8_imgref(img, ignore_alpha)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_bgra8`](Self::encode_full_frame_bgra8).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_bgra8() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_bgra8() to signal materialization"
+    )]
     pub fn encode_bgra8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
         self.encode_full_frame_bgra8(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_bgrx8`](Self::encode_full_frame_bgrx8).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_bgrx8() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_bgrx8() to signal materialization"
+    )]
     pub fn encode_bgrx8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
         self.encode_full_frame_bgrx8(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_gray8`](Self::encode_full_frame_gray8).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_gray8() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_gray8() to signal materialization"
+    )]
     pub fn encode_gray8(self, img: ImgRef<Gray<u8>>) -> Result<EncodeOutput> {
         self.encode_full_frame_gray8(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_rgb_f32`](Self::encode_full_frame_rgb_f32).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgb_f32() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_rgb_f32() to signal materialization"
+    )]
     pub fn encode_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
         self.encode_full_frame_rgb_f32(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_rgba_f32`](Self::encode_full_frame_rgba_f32).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgba_f32() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_rgba_f32() to signal materialization"
+    )]
     pub fn encode_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
         self.encode_full_frame_rgba_f32(img)
     }
 
     /// **Deprecated:** Use [`encode_full_frame_gray_f32`](Self::encode_full_frame_gray_f32).
-    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_gray_f32() to signal materialization")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "renamed to encode_full_frame_gray_f32() to signal materialization"
+    )]
     pub fn encode_gray_f32(self, img: ImgRef<Gray<f32>>) -> Result<EncodeOutput> {
         self.encode_full_frame_gray_f32(img)
     }

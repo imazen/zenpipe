@@ -220,7 +220,7 @@ fn e2e_gain_map_passthrough_jpeg_to_jpeg() {
     let _request = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(75.0) // different quality
         .with_gain_map(source)
-        .encode_rgb8(img_ref)
+        .encode_full_frame_rgb8(img_ref)
         .expect("re-encode should succeed");
 
     // Verify the gain map data survived the passthrough
@@ -324,7 +324,7 @@ fn e2e_no_gainmap_from_webp_encode_decode() {
 
     let encoded = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(80.0)
-        .encode_rgb8(img.as_ref())
+        .encode_full_frame_rgb8(img.as_ref())
         .expect("webp encode failed");
 
     let (_, gainmap) = decode_with_gainmap(encoded.data());
@@ -346,7 +346,7 @@ fn e2e_no_gainmap_from_gif_encode_decode() {
     let img = ImgVec::new(pixels, 32, 32);
 
     let encoded = EncodeRequest::new(ImageFormat::Gif)
-        .encode_rgba8(img.as_ref())
+        .encode_full_frame_rgba8(img.as_ref())
         .expect("gif encode failed");
 
     let (_, gainmap) = decode_with_gainmap(encoded.data());
@@ -450,7 +450,7 @@ mod jxl_gainmap {
         let output = EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(85.0)
             .with_gain_map(source)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .expect("JXL encode with gain map failed");
 
         assert!(!output.data().is_empty());
@@ -565,7 +565,7 @@ mod jxl_gainmap {
         let output = EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(90.0)
             .with_gain_map(source)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .expect("JXL encode with RGB gain map failed");
 
         assert!(zenjxl::container::is_container(output.data()));

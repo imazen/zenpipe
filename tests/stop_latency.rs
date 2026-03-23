@@ -114,7 +114,9 @@ const CANCEL_DELAY: Duration = Duration::from_millis(20);
 fn stop_latency_jpeg_decode() {
     let data = encode_test_data(ImageFormat::Jpeg, 4096, 4096);
     measure_stop_latency("jpeg_decode", CANCEL_DELAY, |stop| {
-        DecodeRequest::new(&data).with_stop(stop).decode()?;
+        DecodeRequest::new(&data)
+            .with_stop(stop)
+            .decode_full_frame()?;
         Ok(())
     });
 }
@@ -124,7 +126,9 @@ fn stop_latency_jpeg_decode() {
 fn stop_latency_webp_decode() {
     let data = encode_test_data(ImageFormat::WebP, 4096, 4096);
     measure_stop_latency("webp_decode", CANCEL_DELAY, |stop| {
-        DecodeRequest::new(&data).with_stop(stop).decode()?;
+        DecodeRequest::new(&data)
+            .with_stop(stop)
+            .decode_full_frame()?;
         Ok(())
     });
 }
@@ -134,7 +138,9 @@ fn stop_latency_webp_decode() {
 fn stop_latency_png_decode() {
     let data = encode_test_data(ImageFormat::Png, 4096, 4096);
     measure_stop_latency("png_decode", CANCEL_DELAY, |stop| {
-        DecodeRequest::new(&data).with_stop(stop).decode()?;
+        DecodeRequest::new(&data)
+            .with_stop(stop)
+            .decode_full_frame()?;
         Ok(())
     });
 }
@@ -144,7 +150,9 @@ fn stop_latency_png_decode() {
 fn stop_latency_gif_decode() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 2048, 2048);
     measure_stop_latency("gif_decode", CANCEL_DELAY, |stop| {
-        DecodeRequest::new(&data).with_stop(stop).decode()?;
+        DecodeRequest::new(&data)
+            .with_stop(stop)
+            .decode_full_frame()?;
         Ok(())
     });
 }
@@ -154,7 +162,9 @@ fn stop_latency_gif_decode() {
 fn stop_latency_avif_decode() {
     let data = encode_test_data(ImageFormat::Avif, 1024, 1024);
     measure_stop_latency("avif_decode", CANCEL_DELAY, |stop| {
-        DecodeRequest::new(&data).with_stop(stop).decode()?;
+        DecodeRequest::new(&data)
+            .with_stop(stop)
+            .decode_full_frame()?;
         Ok(())
     });
 }
@@ -171,7 +181,7 @@ fn stop_latency_jpeg_encode() {
         EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(50.0)
             .with_stop(stop)
-            .encode_rgb8(img.as_ref())?;
+            .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
 }
@@ -184,7 +194,7 @@ fn stop_latency_webp_encode() {
         EncodeRequest::new(ImageFormat::WebP)
             .with_quality(50.0)
             .with_stop(stop)
-            .encode_rgb8(img.as_ref())?;
+            .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
 }
@@ -196,7 +206,7 @@ fn stop_latency_png_encode() {
     measure_stop_latency("png_encode", CANCEL_DELAY, |stop| {
         EncodeRequest::new(ImageFormat::Png)
             .with_stop(stop)
-            .encode_rgb8(img.as_ref())?;
+            .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
 }
@@ -208,7 +218,7 @@ fn stop_latency_gif_encode() {
     measure_stop_latency("gif_encode", CANCEL_DELAY, |stop| {
         EncodeRequest::new(ImageFormat::Gif)
             .with_stop(stop)
-            .encode_rgba8(img.as_ref())?;
+            .encode_full_frame_rgba8(img.as_ref())?;
         Ok(())
     });
 }
@@ -221,7 +231,7 @@ fn stop_latency_avif_encode() {
         EncodeRequest::new(ImageFormat::Avif)
             .with_quality(50.0)
             .with_stop(stop)
-            .encode_rgb8(img.as_ref())?;
+            .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
 }

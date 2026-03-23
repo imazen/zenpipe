@@ -38,7 +38,7 @@ pub fn encode_test_data(format: ImageFormat, w: usize, h: usize) -> Vec<u8> {
     let img = rgb8_image(w, h);
     EncodeRequest::new(format)
         .with_quality(50.0)
-        .encode_rgb8(img.as_ref())
+        .encode_full_frame_rgb8(img.as_ref())
         .unwrap_or_else(|e| panic!("failed to encode {format:?} test data: {e}"))
         .into_vec()
 }
@@ -48,7 +48,7 @@ pub fn encode_rgba_test_data(format: ImageFormat, w: usize, h: usize) -> Vec<u8>
     let img = rgba8_image(w, h);
     EncodeRequest::new(format)
         .with_quality(50.0)
-        .encode_rgba8(img.as_ref())
+        .encode_full_frame_rgba8(img.as_ref())
         .unwrap_or_else(|e| panic!("failed to encode {format:?} RGBA test data: {e}"))
         .into_vec()
 }

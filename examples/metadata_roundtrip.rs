@@ -12,7 +12,7 @@ fn main() {
 
     // Decode the JPEG
     let decoded = DecodeRequest::new(jpeg_data)
-        .decode()
+        .decode_full_frame()
         .expect("failed to decode JPEG");
 
     println!(
@@ -63,12 +63,12 @@ fn main() {
         let encoded = EncodeRequest::new(*format)
             .with_quality(85.0)
             .with_metadata(&meta)
-            .encode_rgb8(img)
+            .encode_full_frame_rgb8(img)
             .expect("encode failed");
 
         // Decode the re-encoded image to verify metadata survived
         let re_decoded = DecodeRequest::new(encoded.data())
-            .decode()
+            .decode_full_frame()
             .expect("re-decode failed");
 
         let re_meta = re_decoded.metadata();

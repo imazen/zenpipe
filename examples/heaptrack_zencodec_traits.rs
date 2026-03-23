@@ -129,7 +129,7 @@ fn roundtrip_dyn(
         .unwrap_or_else(|e| panic!("{label} dyn_decoder: {e}"));
 
     let output = dec
-        .decode()
+        .decode_full_frame()
         .unwrap_or_else(|e| panic!("{label} dyn_decode: {e}"));
     eprintln!(
         "  decoded: {}x{} descriptor={:?}",

@@ -110,7 +110,7 @@ fn main() {
         .filter_map(|path| {
             let name = path.file_stem()?.to_string_lossy().to_string();
             let data = fs::read(path).ok()?;
-            let decoded = DecodeRequest::new(&data).decode().ok()?;
+            let decoded = DecodeRequest::new(&data).decode_full_frame().ok()?;
             let rgb = decode_output_to_rgb8(&decoded)?;
             Some((name, rgb))
         })
@@ -274,7 +274,7 @@ fn encode_and_measure(
     let decoded_rgb = if matches!(codec, Codec::LibjpegTurbo(_)) {
         decode_with_libjpeg_turbo(&encoded)?
     } else {
-        let decoded = DecodeRequest::new(&encoded).decode().ok()?;
+        let decoded = DecodeRequest::new(&encoded).decode_full_frame().ok()?;
         decode_output_to_rgb8(&decoded)?
     };
 
@@ -366,7 +366,7 @@ where
     let rgba_img = Img::new(rgba_pixels.as_slice(), img.width(), img.height());
 
     let output = config
-        .encode_srgba8_imgref(rgba_img, true)
+        .encode_full_frame_srgba8_imgref(rgba_img, true)
         .map_err(|e| format!("{e}"))?;
     Ok(output.into_vec())
 }

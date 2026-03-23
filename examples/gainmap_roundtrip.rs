@@ -16,7 +16,7 @@ fn main() {
 
     // Decode the UltraHDR JPEG
     let decoded = DecodeRequest::new(jpeg_data)
-        .decode()
+        .decode_full_frame()
         .expect("failed to decode JPEG");
 
     println!(
@@ -86,7 +86,7 @@ fn main() {
 
             // Decode the gain map as a separate JPEG
             let gm_decoded = DecodeRequest::new(gainmap_data)
-                .decode()
+                .decode_full_frame()
                 .expect("failed to decode gain map JPEG");
 
             println!(
@@ -114,7 +114,7 @@ fn main() {
 
     let re_encoded = EncodeRequest::new(ImageFormat::Jpeg)
         .with_codec_config(&config)
-        .encode_rgb8(img)
+        .encode_full_frame_rgb8(img)
         .expect("re-encode failed");
 
     println!(
@@ -125,7 +125,7 @@ fn main() {
 
     // Verify segments survived
     let re_decoded = DecodeRequest::new(re_encoded.data())
-        .decode()
+        .decode_full_frame()
         .expect("failed to re-decode");
 
     if let Some(re_extras) = re_decoded.extras::<DecodedExtras>() {
