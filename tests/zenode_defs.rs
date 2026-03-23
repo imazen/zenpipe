@@ -114,8 +114,8 @@ mod tests {
         let mut registry = NodeRegistry::new();
         register_all(&mut registry);
         assert!(
-            registry.all().len() >= 32,
-            "expected at least 32 nodes, got {}",
+            registry.all().len() >= 35,
+            "expected at least 35 nodes, got {}",
             registry.all().len()
         );
         assert!(registry.get("zenfilters.exposure").is_some());
@@ -223,6 +223,227 @@ mod tests {
             ParamKind::Int { .. } => {}
             other => panic!("expected Int, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn hsl_adjust_schema() {
+        let schema = HSL_ADJUST_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.hsl_adjust");
+        assert_eq!(schema.group, NodeGroup::Color);
+        assert_eq!(schema.phase, Phase::DisplayAdjust);
+        assert_eq!(schema.params.len(), 3);
+
+        // Check hue param
+        assert_eq!(schema.params[0].name, "hue");
+        assert_eq!(schema.params[0].section, "Hue");
+        assert_eq!(schema.params[0].unit, "°");
+        assert_eq!(schema.params[0].slider, SliderMapping::NotSlider);
+        match &schema.params[0].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                labels,
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, -180.0);
+                assert_eq!(*max, 180.0);
+                assert_eq!(*default, 0.0);
+                assert_eq!(labels.len(), 8);
+                assert_eq!(labels[0], "Red");
+                assert_eq!(labels[3], "Green");
+                assert_eq!(labels[7], "Magenta");
+            }
+            other => panic!("expected FloatArray for hue, got {other:?}"),
+        }
+
+        // Check saturation param
+        assert_eq!(schema.params[1].name, "saturation");
+        assert_eq!(schema.params[1].section, "Saturation");
+        match &schema.params[1].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 3.0);
+                assert_eq!(*default, 1.0);
+            }
+            other => panic!("expected FloatArray for saturation, got {other:?}"),
+        }
+
+        // Check luminance param
+        assert_eq!(schema.params[2].name, "luminance");
+        assert_eq!(schema.params[2].section, "Luminance");
+        match &schema.params[2].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, -0.5);
+                assert_eq!(*max, 0.5);
+                assert_eq!(*default, 0.0);
+            }
+            other => panic!("expected FloatArray for luminance, got {other:?}"),
+        }
+
+        // Tags
+        assert!(schema.tags.contains(&"color"));
+        assert!(schema.tags.contains(&"hsl"));
+    }
+
+    #[test]
+    fn hsl_adjust_identity() {
+        use zenode::traits::NodeInstance;
+        let node = HslAdjust::default();
+        assert!(node.is_identity());
+
+        let mut non_identity = node.clone();
+        non_identity.hue[3] = 10.0;
+        assert!(!non_identity.is_identity());
+    }
+
+    #[test]
+    fn hsl_adjust_get_set() {
+        use zenode::traits::NodeInstance;
+        let mut node = HslAdjust::default();
+
+        // Get returns F32Array
+        let val = node.get_param("hue").unwrap();
+        match &val {
+            ParamValue::F32Array(arr) => assert_eq!(arr.len(), 8),
+            other => panic!("expected F32Array, got {other:?}"),
+        }
+
+        // Set works
+        let new_hue = vec![10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0];
+        assert!(node.set_param("hue", ParamValue::F32Array(new_hue)));
+        assert_eq!(node.hue[0], 10.0);
+        assert_eq!(node.hue[7], -40.0);
+
+        // Wrong length fails
+        assert!(!node.set_param("hue", ParamValue::F32Array(vec![1.0, 2.0])));
+    }
+
+    #[test]
+    fn bw_mixer_schema() {
+        let schema = BW_MIXER_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.bw_mixer");
+        assert_eq!(schema.group, NodeGroup::Color);
+        assert_eq!(schema.params.len(), 1);
+        assert_eq!(schema.params[0].name, "weights");
+        match &schema.params[0].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                labels,
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 2.0);
+                assert_eq!(*default, 1.0);
+                assert_eq!(labels[0], "Red");
+                assert_eq!(labels[7], "Magenta");
+            }
+            other => panic!("expected FloatArray, got {other:?}"),
+        }
+        assert!(schema.tags.contains(&"bw"));
+        assert!(schema.tags.contains(&"grayscale"));
+    }
+
+    #[test]
+    fn bw_mixer_identity() {
+        use zenode::traits::NodeInstance;
+        let node = BwMixer::default();
+        assert!(node.is_identity());
+
+        let mut non_identity = node.clone();
+        non_identity.weights[0] = 0.5;
+        assert!(!non_identity.is_identity());
+    }
+
+    #[test]
+    fn basecurve_tonemap_schema() {
+        let schema = BASECURVE_TONE_MAP_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.basecurve_tonemap");
+        assert_eq!(schema.group, NodeGroup::ToneMap);
+        assert_eq!(schema.phase, Phase::ToneMap);
+        assert_eq!(schema.params.len(), 2);
+
+        // preset is a String param
+        assert_eq!(schema.params[0].name, "preset");
+        assert_eq!(schema.params[0].label, "Preset");
+        assert_eq!(schema.params[0].section, "Main");
+        match &schema.params[0].kind {
+            ParamKind::Str { default } => assert_eq!(*default, ""),
+            other => panic!("expected Str for preset, got {other:?}"),
+        }
+
+        // chroma_compression is a Float param
+        assert_eq!(schema.params[1].name, "chroma_compression");
+        match &schema.params[1].kind {
+            ParamKind::Float {
+                min,
+                max,
+                default,
+                identity,
+                step,
+            } => {
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 1.0);
+                assert_eq!(*default, 0.4);
+                assert_eq!(*identity, 0.0);
+                assert_eq!(*step, 0.05);
+            }
+            other => panic!("expected Float for chroma_compression, got {other:?}"),
+        }
+
+        assert!(schema.tags.contains(&"tonemap"));
+        assert!(schema.tags.contains(&"basecurve"));
+    }
+
+    #[test]
+    fn basecurve_tonemap_get_set() {
+        use zenode::traits::NodeInstance;
+        let mut node = BasecurveToneMap::default();
+
+        assert_eq!(
+            node.get_param("preset"),
+            Some(ParamValue::Str(String::new()))
+        );
+        assert_eq!(
+            node.get_param("chroma_compression"),
+            Some(ParamValue::F32(0.4))
+        );
+
+        assert!(node.set_param(
+            "preset",
+            ParamValue::Str("nikon_d7000".to_string())
+        ));
+        assert_eq!(node.preset, "nikon_d7000");
+
+        assert!(node.set_param("chroma_compression", ParamValue::F32(0.8)));
+        assert_eq!(node.chroma_compression, 0.8);
+    }
+
+    #[test]
+    fn hsl_adjust_in_registry() {
+        let mut registry = NodeRegistry::new();
+        register_all(&mut registry);
+        assert!(registry.get("zenfilters.hsl_adjust").is_some());
+        assert!(registry.get("zenfilters.bw_mixer").is_some());
+        assert!(registry.get("zenfilters.basecurve_tonemap").is_some());
     }
 
     #[test]

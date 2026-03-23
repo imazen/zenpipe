@@ -12,6 +12,7 @@
 //! follow the pattern `<SCREAMING_SNAKE>_NODE` (e.g., `EXPOSURE_NODE` for
 //! struct `Exposure`). Access via `zenode_defs::EXPOSURE_NODE` etc.
 
+use alloc::string::String;
 use zenode::*;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -156,7 +157,32 @@ impl Default for Sigmoid {
 }
 
 // TODO: ToneCurve -- requires control point array, skip for now.
-// TODO: BasecurveToneMap -- requires preset enum, skip for now.
+
+/// Camera-matched basecurve tone mapping from darktable presets
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenfilters.basecurve_tonemap", group = ToneMap, phase = ToneMap)]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("tonemap", "camera", "basecurve"))]
+pub struct BasecurveToneMap {
+    /// Camera preset name (e.g., "nikon_d7000", "canon_eos_5d_mark_ii")
+    #[param(default = "")]
+    #[param(section = "Main", label = "Preset")]
+    pub preset: String,
+
+    /// Chroma compression strength (0=L-only, 1=full RGB-like desaturation)
+    #[param(range(0.0..=1.0), default = 0.4, identity = 0.0, step = 0.05)]
+    #[param(section = "Main")]
+    pub chroma_compression: f32,
+}
+
+impl Default for BasecurveToneMap {
+    fn default() -> Self {
+        Self {
+            preset: String::new(),
+            chroma_compression: 0.4,
+        }
+    }
+}
 
 /// Parametric tone curve with 4 zone controls and 3 movable dividers.
 ///
@@ -454,9 +480,40 @@ pub struct Tint {
     pub shift: f32,
 }
 
-// TODO: HslAdjust -- requires [f32; 8] arrays for hue/saturation/luminance.
-// The derive macro supports [f32; N] but needs `labels(...)` attribute.
-// Skip for now and implement when array support is validated.
+/// Per-color hue, saturation, and luminance adjustment
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenfilters.hsl_adjust", group = Color, phase = DisplayAdjust)]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("color", "hsl"))]
+pub struct HslAdjust {
+    /// Hue shift per color range in degrees
+    #[param(range(-180.0..=180.0), default = 0.0, identity = 0.0, step = 1.0)]
+    #[param(unit = "°", section = "Hue", slider = NotSlider)]
+    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    pub hue: [f32; 8],
+
+    /// Saturation multiplier per color range
+    #[param(range(0.0..=3.0), default = 1.0, identity = 1.0, step = 0.05)]
+    #[param(unit = "×", section = "Saturation", slider = NotSlider)]
+    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    pub saturation: [f32; 8],
+
+    /// Luminance offset per color range
+    #[param(range(-0.5..=0.5), default = 0.0, identity = 0.0, step = 0.01)]
+    #[param(section = "Luminance", slider = NotSlider)]
+    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    pub luminance: [f32; 8],
+}
+
+impl Default for HslAdjust {
+    fn default() -> Self {
+        Self {
+            hue: [0.0; 8],
+            saturation: [1.0; 8],
+            luminance: [0.0; 8],
+        }
+    }
+}
 
 /// Three-way split-toning for shadows, midtones, and highlights.
 ///
@@ -563,7 +620,24 @@ impl Default for CameraCalibration {
     }
 }
 
-// TODO: BwMixer -- requires [f32; 8] with labels. Skip for now.
+/// Grayscale conversion with per-color luminance weights
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenfilters.bw_mixer", group = Color, phase = DisplayAdjust)]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("color", "grayscale", "bw"))]
+pub struct BwMixer {
+    /// Weight per color range (proportional to chroma)
+    #[param(range(0.0..=2.0), default = 1.0, identity = 1.0, step = 0.05)]
+    #[param(unit = "×", section = "Main", slider = NotSlider)]
+    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    pub weights: [f32; 8],
+}
+
+impl Default for BwMixer {
+    fn default() -> Self {
+        Self { weights: [1.0; 8] }
+    }
+}
 
 /// Convert to grayscale by zeroing chroma channels.
 ///
@@ -1002,6 +1076,7 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(&SIGMOID_NODE);
     registry.register(&PARAMETRIC_CURVE_NODE);
     registry.register(&DT_SIGMOID_NODE);
+    registry.register(&BASECURVE_TONE_MAP_NODE);
     registry.register(&LEVELS_NODE);
     registry.register(&HIGHLIGHTS_SHADOWS_NODE);
     registry.register(&SHADOW_LIFT_NODE);
@@ -1010,8 +1085,10 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(&VIBRANCE_NODE);
     registry.register(&TEMPERATURE_NODE);
     registry.register(&TINT_NODE);
+    registry.register(&HSL_ADJUST_NODE);
     registry.register(&COLOR_GRADING_NODE);
     registry.register(&CAMERA_CALIBRATION_NODE);
+    registry.register(&BW_MIXER_NODE);
     registry.register(&GRAYSCALE_NODE);
     registry.register(&HUE_ROTATE_NODE);
     registry.register(&SEPIA_NODE);
@@ -1035,6 +1112,8 @@ pub fn register_all(registry: &mut NodeRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
+    use alloc::vec;
 
     #[test]
     fn exposure_node_schema_matches() {
@@ -1145,10 +1224,10 @@ mod tests {
     fn register_all_populates_registry() {
         let mut registry = NodeRegistry::new();
         register_all(&mut registry);
-        // We register 32 nodes
+        // We register 35 nodes
         assert!(
-            registry.all().len() >= 32,
-            "expected at least 32 nodes, got {}",
+            registry.all().len() >= 35,
+            "expected at least 35 nodes, got {}",
             registry.all().len()
         );
         // Spot-check lookups
@@ -1177,6 +1256,217 @@ mod tests {
         let params = node.to_params();
         assert_eq!(params.get("amount"), Some(&ParamValue::F32(0.3)));
         assert_eq!(params.get("protection"), Some(&ParamValue::F32(1.5)));
+    }
+
+    #[test]
+    fn hsl_adjust_schema() {
+        let schema = HSL_ADJUST_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.hsl_adjust");
+        assert_eq!(schema.group, NodeGroup::Color);
+        assert_eq!(schema.phase, Phase::DisplayAdjust);
+        assert_eq!(schema.params.len(), 3);
+
+        // Check hue param
+        assert_eq!(schema.params[0].name, "hue");
+        assert_eq!(schema.params[0].section, "Hue");
+        assert_eq!(schema.params[0].unit, "°");
+        assert_eq!(schema.params[0].slider, SliderMapping::NotSlider);
+        match &schema.params[0].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                labels,
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, -180.0);
+                assert_eq!(*max, 180.0);
+                assert_eq!(*default, 0.0);
+                assert_eq!(labels.len(), 8);
+                assert_eq!(labels[0], "Red");
+                assert_eq!(labels[7], "Magenta");
+            }
+            other => panic!("expected FloatArray for hue, got {other:?}"),
+        }
+
+        // Check saturation param
+        assert_eq!(schema.params[1].name, "saturation");
+        assert_eq!(schema.params[1].section, "Saturation");
+        match &schema.params[1].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 3.0);
+                assert_eq!(*default, 1.0);
+            }
+            other => panic!("expected FloatArray for saturation, got {other:?}"),
+        }
+
+        // Check luminance param
+        assert_eq!(schema.params[2].name, "luminance");
+        assert_eq!(schema.params[2].section, "Luminance");
+        match &schema.params[2].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                ..
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, -0.5);
+                assert_eq!(*max, 0.5);
+                assert_eq!(*default, 0.0);
+            }
+            other => panic!("expected FloatArray for luminance, got {other:?}"),
+        }
+
+        // Tags
+        assert!(schema.tags.contains(&"color"));
+        assert!(schema.tags.contains(&"hsl"));
+    }
+
+    #[test]
+    fn hsl_adjust_identity() {
+        use zenode::traits::NodeInstance;
+        let node = HslAdjust::default();
+        assert!(node.is_identity());
+
+        let mut non_identity = node.clone();
+        non_identity.hue[3] = 10.0;
+        assert!(!non_identity.is_identity());
+    }
+
+    #[test]
+    fn hsl_adjust_get_set() {
+        use zenode::traits::NodeInstance;
+        let mut node = HslAdjust::default();
+
+        // Get returns F32Array
+        let val = node.get_param("hue").unwrap();
+        match &val {
+            ParamValue::F32Array(arr) => assert_eq!(arr.len(), 8),
+            other => panic!("expected F32Array, got {other:?}"),
+        }
+
+        // Set works
+        let new_hue = vec![10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0];
+        assert!(node.set_param("hue", ParamValue::F32Array(new_hue.clone())));
+        assert_eq!(node.hue[0], 10.0);
+        assert_eq!(node.hue[7], -40.0);
+
+        // Wrong length fails
+        assert!(!node.set_param("hue", ParamValue::F32Array(vec![1.0, 2.0])));
+    }
+
+    #[test]
+    fn bw_mixer_schema() {
+        let schema = BW_MIXER_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.bw_mixer");
+        assert_eq!(schema.group, NodeGroup::Color);
+        assert_eq!(schema.params.len(), 1);
+        assert_eq!(schema.params[0].name, "weights");
+        match &schema.params[0].kind {
+            ParamKind::FloatArray {
+                len,
+                min,
+                max,
+                default,
+                labels,
+            } => {
+                assert_eq!(*len, 8);
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 2.0);
+                assert_eq!(*default, 1.0);
+                assert_eq!(labels[0], "Red");
+                assert_eq!(labels[7], "Magenta");
+            }
+            other => panic!("expected FloatArray, got {other:?}"),
+        }
+        assert!(schema.tags.contains(&"bw"));
+        assert!(schema.tags.contains(&"grayscale"));
+    }
+
+    #[test]
+    fn bw_mixer_identity() {
+        use zenode::traits::NodeInstance;
+        let node = BwMixer::default();
+        assert!(node.is_identity());
+
+        let mut non_identity = node.clone();
+        non_identity.weights[0] = 0.5;
+        assert!(!non_identity.is_identity());
+    }
+
+    #[test]
+    fn basecurve_tonemap_schema() {
+        let schema = BASECURVE_TONE_MAP_NODE.schema();
+        assert_eq!(schema.id, "zenfilters.basecurve_tonemap");
+        assert_eq!(schema.group, NodeGroup::ToneMap);
+        assert_eq!(schema.phase, Phase::ToneMap);
+        assert_eq!(schema.params.len(), 2);
+
+        // preset is a String param
+        assert_eq!(schema.params[0].name, "preset");
+        assert_eq!(schema.params[0].label, "Preset");
+        assert_eq!(schema.params[0].section, "Main");
+        match &schema.params[0].kind {
+            ParamKind::Str { default } => assert_eq!(*default, ""),
+            other => panic!("expected Str for preset, got {other:?}"),
+        }
+
+        // chroma_compression is a Float param
+        assert_eq!(schema.params[1].name, "chroma_compression");
+        match &schema.params[1].kind {
+            ParamKind::Float {
+                min,
+                max,
+                default,
+                identity,
+                step,
+            } => {
+                assert_eq!(*min, 0.0);
+                assert_eq!(*max, 1.0);
+                assert_eq!(*default, 0.4);
+                assert_eq!(*identity, 0.0);
+                assert_eq!(*step, 0.05);
+            }
+            other => panic!("expected Float for chroma_compression, got {other:?}"),
+        }
+
+        assert!(schema.tags.contains(&"tonemap"));
+        assert!(schema.tags.contains(&"basecurve"));
+    }
+
+    #[test]
+    fn basecurve_tonemap_get_set() {
+        use zenode::traits::NodeInstance;
+        let mut node = BasecurveToneMap::default();
+
+        assert_eq!(
+            node.get_param("preset"),
+            Some(ParamValue::Str(String::new()))
+        );
+        assert_eq!(
+            node.get_param("chroma_compression"),
+            Some(ParamValue::F32(0.4))
+        );
+
+        assert!(node.set_param(
+            "preset",
+            ParamValue::Str("nikon_d7000".to_string())
+        ));
+        assert_eq!(node.preset, "nikon_d7000");
+
+        assert!(node.set_param("chroma_compression", ParamValue::F32(0.8)));
+        assert_eq!(node.chroma_compression, 0.8);
     }
 
     #[test]
