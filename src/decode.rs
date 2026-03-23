@@ -16,7 +16,7 @@ use whereat::at;
 /// use zencodecs::DecodeRequest;
 ///
 /// let data: &[u8] = &[]; // your image bytes
-/// let output = DecodeRequest::new(data).decode()?;
+/// let output = DecodeRequest::new(data).decode_full_frame()?;
 /// println!("{}x{}", output.width(), output.height());
 /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 /// ```
@@ -102,10 +102,24 @@ impl<'a> DecodeRequest<'a> {
         Ok(format)
     }
 
-    /// Decode the image to pixels.
-    pub fn decode(self) -> Result<DecodeOutput> {
+    /// Decode the full image to pixels (one-shot, full materialization).
+    ///
+    /// This allocates a buffer for the entire decoded image. For streaming
+    /// decode without full materialization, use [`push_decode`](Self::push_decode)
+    /// or the top-level [`push_decode`](crate::push_decode) convenience function.
+    pub fn decode_full_frame(self) -> Result<DecodeOutput> {
         let format = self.resolve_format()?;
         self.decode_format(format)
+    }
+
+    /// Decode the image to pixels.
+    ///
+    /// **Deprecated:** Use [`decode_full_frame`](Self::decode_full_frame) instead.
+    /// The name `decode()` hides the fact that this materializes the entire image.
+    /// `push_decode()` is the streaming alternative.
+    #[deprecated(since = "0.2.0", note = "renamed to decode_full_frame() to signal materialization; use push_decode() for streaming")]
+    pub fn decode(self) -> Result<DecodeOutput> {
+        self.decode_full_frame()
     }
 
     /// Decode an image and extract its gain map, if present.
@@ -239,7 +253,7 @@ impl<'a> DecodeRequest<'a> {
     ///
     /// let raw_data: &[u8] = &[]; // DNG file bytes
     /// if let Some(preview_jpeg) = DecodeRequest::new(raw_data).extract_raw_preview() {
-    ///     let preview = DecodeRequest::new(&preview_jpeg).decode()?;
+    ///     let preview = DecodeRequest::new(&preview_jpeg).decode_full_frame()?;
     ///     println!("Preview: {}x{}", preview.width(), preview.height());
     /// }
     /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
@@ -790,7 +804,7 @@ mod tests {
 
         let result = DecodeRequest::new(&jpeg_data)
             .with_registry(&registry)
-            .decode();
+            .decode_full_frame();
 
         assert!(matches!(
             result.as_ref().map_err(|e| e.error()),
@@ -872,7 +886,7 @@ mod tests {
         );
         let encoded = EncodeRequest::new(ImageFormat::WebP)
             .with_quality(50.0)
-            .encode_rgb8(pixels.as_ref())
+            .encode_full_frame_rgb8(pixels.as_ref())
             .unwrap();
 
         let (output, depth) = DecodeRequest::new(encoded.data())

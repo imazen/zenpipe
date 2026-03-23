@@ -28,7 +28,7 @@ pub use zencodec::encode::EncodeOutput;
 /// let pixels = ImgVec::new(vec![Rgba { r: 0u8, g: 0, b: 0, a: 255 }; 100*100], 100, 100);
 /// let output = EncodeRequest::new(ImageFormat::WebP)
 ///     .with_quality(85.0)
-///     .encode_rgba8(pixels.as_ref())?;
+///     .encode_full_frame_rgba8(pixels.as_ref())?;
 /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 /// ```
 pub struct EncodeRequest<'a> {
@@ -446,8 +446,10 @@ impl<'a> EncodeRequest<'a> {
     // Typed encode methods — thin wrappers over dispatch
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Encode RGB8 pixels.
-    pub fn encode_rgb8(self, img: ImgRef<Rgb<u8>>) -> Result<EncodeOutput> {
+    /// Encode RGB8 pixels (one-shot, full materialization).
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_rgb8(self, img: ImgRef<Rgb<u8>>) -> Result<EncodeOutput> {
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Rgb<u8>>();
         self.encode_dispatch(
@@ -460,8 +462,10 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode RGBA8 pixels.
-    pub fn encode_rgba8(self, img: ImgRef<Rgba<u8>>) -> Result<EncodeOutput> {
+    /// Encode RGBA8 pixels (one-shot, full materialization).
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_rgba8(self, img: ImgRef<Rgba<u8>>) -> Result<EncodeOutput> {
         let has_alpha = img.pixels().any(|p| p.a < 255);
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Rgba<u8>>();
@@ -475,7 +479,7 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode sRGB RGBA8 pixels (straight alpha, not premultiplied).
+    /// Encode sRGB RGBA8 pixels (one-shot, full materialization, straight alpha, not premultiplied).
     ///
     /// When `ignore_alpha` is true, the alpha channel is treated as padding —
     /// codecs may use RGB-only paths and skip alpha handling entirely.
@@ -487,7 +491,9 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// Pixels must be straight (non-premultiplied) alpha. Premultiplied
     /// input will produce wrong output — unpremultiply first.
-    pub fn encode_srgba8_imgref(
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_srgba8_imgref(
         self,
         img: ImgRef<Rgba<u8>>,
         ignore_alpha: bool,
@@ -509,8 +515,10 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode BGRA8 pixels (native byte order, zero-copy for codecs that support it).
-    pub fn encode_bgra8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
+    /// Encode BGRA8 pixels (one-shot, full materialization, native byte order).
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_bgra8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
         let has_alpha = img.pixels().any(|p| p.a < 255);
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Bgra<u8>>();
@@ -524,8 +532,10 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode BGRX8 pixels (opaque BGRA — padding byte is ignored).
-    pub fn encode_bgrx8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
+    /// Encode BGRX8 pixels (one-shot, full materialization, opaque BGRA — padding byte is ignored).
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_bgrx8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Bgra<u8>>();
         self.encode_dispatch(
@@ -538,8 +548,10 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode Gray8 pixels.
-    pub fn encode_gray8(self, img: ImgRef<Gray<u8>>) -> Result<EncodeOutput> {
+    /// Encode Gray8 pixels (one-shot, full materialization).
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_gray8(self, img: ImgRef<Gray<u8>>) -> Result<EncodeOutput> {
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Gray<u8>>();
         self.encode_dispatch(
@@ -552,11 +564,13 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode linear RGB f32 pixels.
+    /// Encode linear RGB f32 pixels (one-shot, full materialization).
     ///
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
-    pub fn encode_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Rgb<f32>>();
         self.encode_dispatch(
@@ -569,11 +583,13 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode linear RGBA f32 pixels.
+    /// Encode linear RGBA f32 pixels (one-shot, full materialization).
     ///
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
-    pub fn encode_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
         let has_alpha = img.pixels().any(|p| p.a < 1.0);
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Rgba<f32>>();
@@ -587,11 +603,13 @@ impl<'a> EncodeRequest<'a> {
         )
     }
 
-    /// Encode linear grayscale f32 pixels.
+    /// Encode linear grayscale f32 pixels (one-shot, full materialization).
     ///
     /// Input is expected in linear light (not sRGB gamma). Codecs that store
     /// sRGB will convert internally.
-    pub fn encode_gray_f32(self, img: ImgRef<Gray<f32>>) -> Result<EncodeOutput> {
+    ///
+    /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
+    pub fn encode_full_frame_gray_f32(self, img: ImgRef<Gray<f32>>) -> Result<EncodeOutput> {
         let data: &[u8] = bytemuck::cast_slice(img.buf());
         let stride = img.stride() * core::mem::size_of::<Gray<f32>>();
         self.encode_dispatch(
@@ -645,6 +663,68 @@ impl<'a> EncodeRequest<'a> {
         }
         intent
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Deprecated aliases — old names that hide materialization
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// **Deprecated:** Use [`encode_full_frame_rgb8`](Self::encode_full_frame_rgb8).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgb8() to signal materialization")]
+    pub fn encode_rgb8(self, img: ImgRef<Rgb<u8>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_rgb8(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_rgba8`](Self::encode_full_frame_rgba8).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgba8() to signal materialization")]
+    pub fn encode_rgba8(self, img: ImgRef<Rgba<u8>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_rgba8(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_srgba8_imgref`](Self::encode_full_frame_srgba8_imgref).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_srgba8_imgref() to signal materialization")]
+    pub fn encode_srgba8_imgref(self, img: ImgRef<Rgba<u8>>, ignore_alpha: bool) -> Result<EncodeOutput> {
+        self.encode_full_frame_srgba8_imgref(img, ignore_alpha)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_bgra8`](Self::encode_full_frame_bgra8).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_bgra8() to signal materialization")]
+    pub fn encode_bgra8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_bgra8(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_bgrx8`](Self::encode_full_frame_bgrx8).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_bgrx8() to signal materialization")]
+    pub fn encode_bgrx8(self, img: ImgRef<Bgra<u8>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_bgrx8(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_gray8`](Self::encode_full_frame_gray8).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_gray8() to signal materialization")]
+    pub fn encode_gray8(self, img: ImgRef<Gray<u8>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_gray8(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_rgb_f32`](Self::encode_full_frame_rgb_f32).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgb_f32() to signal materialization")]
+    pub fn encode_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_rgb_f32(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_rgba_f32`](Self::encode_full_frame_rgba_f32).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_rgba_f32() to signal materialization")]
+    pub fn encode_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_rgba_f32(img)
+    }
+
+    /// **Deprecated:** Use [`encode_full_frame_gray_f32`](Self::encode_full_frame_gray_f32).
+    #[deprecated(since = "0.2.0", note = "renamed to encode_full_frame_gray_f32() to signal materialization")]
+    pub fn encode_gray_f32(self, img: ImgRef<Gray<f32>>) -> Result<EncodeOutput> {
+        self.encode_full_frame_gray_f32(img)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Core dispatch
+    // ═══════════════════════════════════════════════════════════════════
 
     /// Common encode path: resolve format → validate → build encoder →
     /// negotiate pixel format via zenpixels → encode.
@@ -825,7 +905,7 @@ mod tests {
         );
         let result = EncodeRequest::new(ImageFormat::Jpeg)
             .with_lossless(true)
-            .encode_rgb8(img.as_ref());
+            .encode_full_frame_rgb8(img.as_ref());
 
         assert!(matches!(
             result.as_ref().map_err(|e| e.error()),
@@ -865,7 +945,7 @@ mod tests {
         );
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(75.0)
-            .encode_srgba8_imgref(img.as_ref(), true)
+            .encode_full_frame_srgba8_imgref(img.as_ref(), true)
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -889,7 +969,7 @@ mod tests {
         // WebP supports alpha
         let output = EncodeRequest::new(ImageFormat::WebP)
             .with_quality(75.0)
-            .encode_srgba8_imgref(img.as_ref(), false)
+            .encode_full_frame_srgba8_imgref(img.as_ref(), false)
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -948,7 +1028,7 @@ mod tests {
         );
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -971,13 +1051,13 @@ mod tests {
         let high = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(1.0)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .unwrap();
         // DPR 6.0 should decrease quality (smaller output)
         let low = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(6.0)
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .unwrap();
         // Higher quality should generally produce more bytes
         assert!(
@@ -1017,7 +1097,7 @@ mod tests {
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_policy(CodecPolicy::web_safe_output())
-            .encode_rgb8(img.as_ref())
+            .encode_full_frame_rgb8(img.as_ref())
             .unwrap();
         // web_safe_output only allows JPEG, PNG, GIF — for opaque lossy, JPEG wins
         assert_eq!(output.format(), ImageFormat::Jpeg);
@@ -1046,7 +1126,7 @@ mod tests {
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_image_facts(facts)
-            .encode_rgba8(img.as_ref())
+            .encode_full_frame_rgba8(img.as_ref())
             .unwrap();
         // With alpha, should pick a format that supports alpha (not JPEG)
         assert_ne!(output.format(), ImageFormat::Jpeg);
