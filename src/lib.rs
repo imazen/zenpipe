@@ -111,6 +111,8 @@ pub mod riapi_parse;
 pub mod select;
 pub mod trace;
 pub mod transcode;
+#[cfg(feature = "zenode")]
+pub mod zenode_defs;
 
 // Re-exports
 pub use codec_id::CodecId;

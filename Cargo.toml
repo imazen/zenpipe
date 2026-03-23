@@ -34,6 +34,9 @@ heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features 
 zenbitmaps = { path = "../zenbitmaps", optional = true, features = ["zencodec"] }
 zenraw = { path = "../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
 
+# Node definitions (optional)
+zenode = { path = "../zenode/zenode", default-features = false, features = ["derive"], optional = true }
+
 # Color management (optional)
 # moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
 
@@ -73,6 +76,9 @@ raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
 
 # RIAPI codec key parsing
 riapi = []
+
+# zenode node definitions
+zenode = ["dep:zenode"]
 
 # Color management
 moxcms = []  # Disabled for now
