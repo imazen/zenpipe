@@ -55,4 +55,4 @@ zenode = { path = "../zenode/zenode", default-features = false, features = ["der
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
-zenlayout = { path = "../zenlayout", default-features = false }
+zenlayout = { path = "../zenlayout", default-features = false, features = ["zenode"] }

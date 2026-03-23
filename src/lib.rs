@@ -27,6 +27,10 @@ mod strip;
 #[cfg(feature = "zenode")]
 pub mod bridge;
 
+// Re-export bridge config types at crate root for convenience.
+#[cfg(feature = "zenode")]
+pub use bridge::{DecodeConfig, EncodeConfig};
+
 pub mod animation;
 pub mod codec;
 pub mod sidecar;
