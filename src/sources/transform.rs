@@ -70,9 +70,8 @@ impl TransformSource {
                             // Total cancellation — no op needed.
                             self.output_format = from;
                         } else {
-                            let composed_op = crate::ops::RowConverterOp::from_converter(
-                                composed, from, to,
-                            );
+                            let composed_op =
+                                crate::ops::RowConverterOp::from_converter(composed, from, to);
                             self.output_format = to;
                             self.ops.push(Box::new(composed_op));
                         }

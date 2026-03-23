@@ -324,7 +324,6 @@ pub enum NodeOp {
     },
 
     // === Content-adaptive (materialize + analyze) ===
-
     /// Analyze materialized pixels, then build a downstream source chain.
     ///
     /// The closure receives the fully materialized upstream image and must
@@ -439,18 +438,21 @@ impl PipelineGraph {
             if e.from >= self.nodes.len() {
                 return Err(PipeError::Op(alloc::format!(
                     "edge {i}: source node {} out of range (graph has {} nodes)",
-                    e.from, self.nodes.len()
+                    e.from,
+                    self.nodes.len()
                 )));
             }
             if e.to >= self.nodes.len() {
                 return Err(PipeError::Op(alloc::format!(
                     "edge {i}: target node {} out of range (graph has {} nodes)",
-                    e.to, self.nodes.len()
+                    e.to,
+                    self.nodes.len()
                 )));
             }
             if e.from == e.to {
                 return Err(PipeError::Op(alloc::format!(
-                    "edge {i}: self-loop on node {}", e.from
+                    "edge {i}: self-loop on node {}",
+                    e.from
                 )));
             }
         }
@@ -531,14 +533,17 @@ impl PipelineGraph {
                 "graph depth exceeds {MAX_GRAPH_DEPTH} at node {node_id}"
             )));
         }
-        let op = self.nodes.get(node_id).and_then(|n| n.op.as_ref()).ok_or_else(|| {
-            PipeError::Op(alloc::format!("node {node_id} has no op"))
-        })?;
+        let op = self
+            .nodes
+            .get(node_id)
+            .and_then(|n| n.op.as_ref())
+            .ok_or_else(|| PipeError::Op(alloc::format!("node {node_id} has no op")))?;
 
         match op {
-            NodeOp::Source => source_info.get(&node_id).cloned().ok_or_else(|| {
-                PipeError::Op(alloc::format!("no source info for node {node_id}"))
-            }),
+            NodeOp::Source => source_info
+                .get(&node_id)
+                .cloned()
+                .ok_or_else(|| PipeError::Op(alloc::format!("no source info for node {node_id}"))),
 
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
@@ -550,7 +555,11 @@ impl PipelineGraph {
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Strip buffer for crop output
                 est.streaming_bytes += strip_mem(*w, upstream.format);
-                Ok(SourceInfo { width: *w, height: *h, format: upstream.format })
+                Ok(SourceInfo {
+                    width: *w,
+                    height: *h,
+                    format: upstream.format,
+                })
             }
 
             NodeOp::Resize { w, h, .. } => {
@@ -558,14 +567,24 @@ impl PipelineGraph {
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Resize ring buffer: kernel_height rows of input width
                 let kernel_rows = 16u64; // conservative for most filters
-                est.streaming_bytes += kernel_rows * upstream.width as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes +=
+                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 // Output strip buffer
                 est.streaming_bytes += strip_mem(*w, format::RGBA8_SRGB);
-                Ok(SourceInfo { width: *w, height: *h, format: format::RGBA8_SRGB })
+                Ok(SourceInfo {
+                    width: *w,
+                    height: *h,
+                    format: format::RGBA8_SRGB,
+                })
             }
 
-            NodeOp::Constrain { w, h, mode, orientation, .. } => {
+            NodeOp::Constrain {
+                w,
+                h,
+                mode,
+                orientation,
+                ..
+            } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let (in_w, in_h) = if let Some(exif) = orientation {
@@ -594,8 +613,8 @@ impl PipelineGraph {
                 let out_h = plan.canvas.height;
                 // Resize ring buffer + output strip
                 let kernel_rows = 16u64;
-                est.streaming_bytes += kernel_rows * upstream.width as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes +=
+                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
                 // Orient may need materialization
                 if orientation.is_some() {
@@ -603,12 +622,17 @@ impl PipelineGraph {
                         .unwrap_or(zenresize::Orientation::Identity);
                     if o.swaps_axes() {
                         est.materializes = true;
-                        let mat = upstream.width as u64 * upstream.height as u64
+                        let mat = upstream.width as u64
+                            * upstream.height as u64
                             * upstream.format.bytes_per_pixel() as u64;
                         est.materialization_bytes = est.materialization_bytes.max(mat);
                     }
                 }
-                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+                Ok(SourceInfo {
+                    width: out_w,
+                    height: out_h,
+                    format: format::RGBA8_SRGB,
+                })
             }
 
             NodeOp::Layout { plan, .. } => {
@@ -617,10 +641,14 @@ impl PipelineGraph {
                 let out_w = plan.canvas.width;
                 let out_h = plan.canvas.height;
                 let kernel_rows = 16u64;
-                est.streaming_bytes += kernel_rows * upstream.width as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes +=
+                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
-                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+                Ok(SourceInfo {
+                    width: out_w,
+                    height: out_h,
+                    format: format::RGBA8_SRGB,
+                })
             }
 
             NodeOp::LayoutComposite { plan, .. } => {
@@ -631,10 +659,14 @@ impl PipelineGraph {
                 let out_w = plan.canvas.width.max(bg.width);
                 let out_h = plan.canvas.height.max(bg.height);
                 let kernel_rows = 16u64;
-                est.streaming_bytes += kernel_rows * fg.width as u64
-                    * fg.format.bytes_per_pixel() as u64;
+                est.streaming_bytes +=
+                    kernel_rows * fg.width as u64 * fg.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBAF32_LINEAR_PREMUL);
-                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBAF32_LINEAR_PREMUL })
+                Ok(SourceInfo {
+                    width: out_w,
+                    height: out_h,
+                    format: format::RGBAF32_LINEAR_PREMUL,
+                })
             }
 
             NodeOp::ResizeAdvanced(config) => {
@@ -643,10 +675,14 @@ impl PipelineGraph {
                 let out_w = config.total_output_width();
                 let out_h = config.total_output_height();
                 let kernel_rows = 16u64;
-                est.streaming_bytes += kernel_rows * upstream.width as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes +=
+                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
-                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+                Ok(SourceInfo {
+                    width: out_w,
+                    height: out_h,
+                    format: format::RGBA8_SRGB,
+                })
             }
 
             NodeOp::Orient(_) | NodeOp::AutoOrient(_) => {
@@ -665,11 +701,16 @@ impl PipelineGraph {
                 };
                 if !orientation.is_identity() {
                     est.materializes = true;
-                    let mat = upstream.width as u64 * upstream.height as u64
+                    let mat = upstream.width as u64
+                        * upstream.height as u64
                         * format::RGBA8_SRGB.bytes_per_pixel() as u64;
                     est.materialization_bytes = est.materialization_bytes.max(mat);
                 }
-                Ok(SourceInfo { width: out_w, height: out_h, format: format::RGBA8_SRGB })
+                Ok(SourceInfo {
+                    width: out_w,
+                    height: out_h,
+                    format: format::RGBA8_SRGB,
+                })
             }
 
             NodeOp::PixelTransform(_) => {
@@ -687,7 +728,8 @@ impl PipelineGraph {
                 let _fg = self.estimate_node(fg_id, source_info, est, depth + 1)?;
                 est.streaming_bytes += strip_mem(bg.width, format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
-                    width: bg.width, height: bg.height,
+                    width: bg.width,
+                    height: bg.height,
                     format: format::RGBAF32_LINEAR_PREMUL,
                 })
             }
@@ -700,11 +742,16 @@ impl PipelineGraph {
                     let overlap = pipeline.max_neighborhood_radius(upstream.width, upstream.height);
                     // Windowed filter: strip_height + 2*overlap rows
                     let rows = 16u64 + 2 * overlap as u64;
-                    est.streaming_bytes += rows * upstream.width as u64
+                    est.streaming_bytes += rows
+                        * upstream.width as u64
                         * format::RGBAF32_LINEAR.bytes_per_pixel() as u64;
                 }
                 est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR);
-                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: format::RGBAF32_LINEAR })
+                Ok(SourceInfo {
+                    width: upstream.width,
+                    height: upstream.height,
+                    format: format::RGBAF32_LINEAR,
+                })
             }
 
             #[cfg(feature = "std")]
@@ -720,7 +767,11 @@ impl PipelineGraph {
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let out_fmt = format::RGB8_SRGB;
                 est.streaming_bytes += strip_mem(upstream.width, out_fmt);
-                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: out_fmt })
+                Ok(SourceInfo {
+                    width: upstream.width,
+                    height: upstream.height,
+                    format: out_fmt,
+                })
             }
 
             NodeOp::AddAlpha => {
@@ -728,10 +779,19 @@ impl PipelineGraph {
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let out_fmt = format::RGBA8_SRGB;
                 est.streaming_bytes += strip_mem(upstream.width, out_fmt);
-                Ok(SourceInfo { width: upstream.width, height: upstream.height, format: out_fmt })
+                Ok(SourceInfo {
+                    width: upstream.width,
+                    height: upstream.height,
+                    format: out_fmt,
+                })
             }
 
-            NodeOp::Overlay { width: ov_w, height: ov_h, format: ov_fmt, .. } => {
+            NodeOp::Overlay {
+                width: ov_w,
+                height: ov_h,
+                format: ov_fmt,
+                ..
+            } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Overlay image is held in memory
@@ -739,7 +799,8 @@ impl PipelineGraph {
                 est.streaming_bytes += ov_mem;
                 est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
-                    width: upstream.width, height: upstream.height,
+                    width: upstream.width,
+                    height: upstream.height,
                     format: format::RGBAF32_LINEAR_PREMUL,
                 })
             }
@@ -749,7 +810,8 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 est.materializes = true;
-                let mat = upstream.width as u64 * upstream.height as u64
+                let mat = upstream.width as u64
+                    * upstream.height as u64
                     * upstream.format.bytes_per_pixel() as u64;
                 est.materialization_bytes = est.materialization_bytes.max(mat);
                 Ok(upstream)
@@ -759,7 +821,8 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 est.materializes = true;
-                let mat = upstream.width as u64 * upstream.height as u64
+                let mat = upstream.width as u64
+                    * upstream.height as u64
                     * upstream.format.bytes_per_pixel() as u64;
                 est.materialization_bytes = est.materialization_bytes.max(mat);
                 Ok(upstream)
@@ -990,7 +1053,9 @@ impl PipelineGraph {
                 Ok(Box::new(ResizeSource::new(upstream, &config, 16)?))
             }
 
-            NodeOp::Orient(orientation) => compile_orient(self, node_id, sources, orientation, depth),
+            NodeOp::Orient(orientation) => {
+                compile_orient(self, node_id, sources, orientation, depth)
+            }
 
             NodeOp::AutoOrient(exif) => {
                 let orientation = zenresize::Orientation::from_exif(exif)
@@ -1160,8 +1225,7 @@ impl PipelineGraph {
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let mat = MaterializedSource::from_source(upstream)?;
-                let (x, y, w, h) =
-                    detect_content_bounds(&mat, threshold, percent_padding);
+                let (x, y, w, h) = detect_content_bounds(&mat, threshold, percent_padding);
                 if w == mat.width() && h == mat.height() && x == 0 && y == 0 {
                     // No whitespace found — pass through without re-cropping.
                     return Ok(Box::new(mat));
@@ -1314,9 +1378,7 @@ fn detect_content_bounds(
         (0..w).all(|x| pixel_matches(row, x))
     };
 
-    let col_is_whitespace = |x: u32| -> bool {
-        (0..h).all(|y| pixel_matches(mat.row(y), x))
-    };
+    let col_is_whitespace = |x: u32| -> bool { (0..h).all(|y| pixel_matches(mat.row(y), x)) };
 
     // Scan from each edge
     let mut top = 0u32;
