@@ -89,6 +89,7 @@ whereat::define_at_crate_info!();
 pub mod codec_id;
 mod codecs;
 pub mod config;
+pub mod decision;
 mod decode;
 pub mod depthmap;
 mod dispatch;
@@ -99,17 +100,21 @@ pub mod exif;
 mod format_set;
 pub mod gainmap;
 mod info;
+pub mod intent;
 mod limits;
 pub mod pixel;
 pub mod policy;
 pub mod quality;
 mod registry;
+#[cfg(feature = "riapi")]
+pub mod riapi_parse;
 pub mod select;
 pub mod trace;
 pub mod transcode;
 
 // Re-exports
 pub use codec_id::CodecId;
+pub use decision::FormatDecision;
 pub use decode::{DecodeOutput, DecodeRequest};
 pub use dispatch::{AnyEncoder, StreamingEncoder};
 pub use encode::{EncodeOutput, EncodeRequest};
@@ -118,11 +123,15 @@ pub use format_set::FormatSet;
 pub use info::ImageInfo;
 pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
+pub use intent::{BoolKeep, CodecIntent, FormatChoice, PerCodecHints};
 pub use limits::{Limits, Stop};
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::CodecRegistry;
+#[cfg(feature = "riapi")]
+pub use riapi_parse::{CodecEngine, parse_codec_keys};
 pub use select::ImageFacts;
+pub use select::select_format_from_intent;
 pub use trace::SelectionTrace;
 pub use transcode::TranscodeSink;
 pub use zencodec::ImageFormat;

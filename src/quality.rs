@@ -30,6 +30,53 @@ pub enum QualityProfile {
 }
 
 impl QualityProfile {
+    /// Parse a quality profile from a string.
+    ///
+    /// Accepts named profiles (case-insensitive): `lowest`, `low`, `medium_low`,
+    /// `medium`, `good`, `high`, `highest`, `lossless`.
+    ///
+    /// Also accepts numeric values 0-100, which are mapped to the nearest profile.
+    ///
+    /// Returns `None` for unrecognized strings.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "lowest" => Some(Self::Lowest),
+            "low" => Some(Self::Low),
+            "medium_low" | "mediumlow" | "medium-low" => Some(Self::MediumLow),
+            "medium" | "med" => Some(Self::Medium),
+            "good" | "default" => Some(Self::Good),
+            "high" => Some(Self::High),
+            "highest" => Some(Self::Highest),
+            "lossless" => Some(Self::Lossless),
+            other => {
+                // Try parsing as a number and mapping to nearest profile
+                let q: f32 = other.parse().ok()?;
+                Some(Self::from_quality(q))
+            }
+        }
+    }
+
+    /// Map a numeric quality (0-100) to the nearest named profile.
+    pub fn from_quality(q: f32) -> Self {
+        if q >= 98.0 {
+            Self::Lossless
+        } else if q >= 93.5 {
+            Self::Highest
+        } else if q >= 82.0 {
+            Self::High
+        } else if q >= 64.0 {
+            Self::Good
+        } else if q >= 44.5 {
+            Self::Medium
+        } else if q >= 27.0 {
+            Self::MediumLow
+        } else if q >= 17.5 {
+            Self::Low
+        } else {
+            Self::Lowest
+        }
+    }
+
     /// The generic quality value (0-100) for this profile.
     pub fn generic_quality(self) -> f32 {
         match self {
@@ -169,6 +216,20 @@ impl QualityIntent {
             .round()
             .clamp(0.0, 100.0) as u8;
         (min, max.max(min))
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Aliases matching imageflow / proposal naming
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Alias for [`jpeg_quality`](Self::jpeg_quality) -- mozjpeg native quality.
+    pub fn mozjpeg_quality(&self) -> u8 {
+        self.jpeg_quality()
+    }
+
+    /// Alias for [`webp_quality`](Self::webp_quality) -- libwebp native quality.
+    pub fn libwebp_quality(&self) -> f32 {
+        self.webp_quality()
     }
 }
 
@@ -481,5 +542,68 @@ mod tests {
         let intent = QualityProfile::Good.to_intent_with_dpr(1.0);
         // DPR 1.0 should raise quality from 73 to ~91
         assert!((intent.quality - 91.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn profile_parse_named() {
+        assert_eq!(
+            QualityProfile::parse("lowest"),
+            Some(QualityProfile::Lowest)
+        );
+        assert_eq!(QualityProfile::parse("Low"), Some(QualityProfile::Low));
+        assert_eq!(
+            QualityProfile::parse("MEDIUM_LOW"),
+            Some(QualityProfile::MediumLow)
+        );
+        assert_eq!(
+            QualityProfile::parse("medium-low"),
+            Some(QualityProfile::MediumLow)
+        );
+        assert_eq!(
+            QualityProfile::parse("mediumlow"),
+            Some(QualityProfile::MediumLow)
+        );
+        assert_eq!(
+            QualityProfile::parse("medium"),
+            Some(QualityProfile::Medium)
+        );
+        assert_eq!(QualityProfile::parse("med"), Some(QualityProfile::Medium));
+        assert_eq!(QualityProfile::parse("good"), Some(QualityProfile::Good));
+        assert_eq!(QualityProfile::parse("default"), Some(QualityProfile::Good));
+        assert_eq!(QualityProfile::parse("HIGH"), Some(QualityProfile::High));
+        assert_eq!(
+            QualityProfile::parse("highest"),
+            Some(QualityProfile::Highest)
+        );
+        assert_eq!(
+            QualityProfile::parse("lossless"),
+            Some(QualityProfile::Lossless)
+        );
+    }
+
+    #[test]
+    fn profile_parse_numeric() {
+        assert_eq!(QualityProfile::parse("73"), Some(QualityProfile::Good));
+        assert_eq!(QualityProfile::parse("91"), Some(QualityProfile::High));
+        assert_eq!(QualityProfile::parse("100"), Some(QualityProfile::Lossless));
+        assert_eq!(QualityProfile::parse("15"), Some(QualityProfile::Lowest));
+    }
+
+    #[test]
+    fn profile_parse_invalid() {
+        assert_eq!(QualityProfile::parse("bogus"), None);
+        assert_eq!(QualityProfile::parse(""), None);
+    }
+
+    #[test]
+    fn mozjpeg_quality_alias() {
+        let intent = QualityIntent::from_quality(73.0);
+        assert_eq!(intent.mozjpeg_quality(), intent.jpeg_quality());
+    }
+
+    #[test]
+    fn libwebp_quality_alias() {
+        let intent = QualityIntent::from_quality(73.0);
+        assert!((intent.libwebp_quality() - intent.webp_quality()).abs() < 0.001);
     }
 }
