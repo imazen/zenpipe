@@ -458,8 +458,32 @@ dependencies = [
 [[package]]
 name = "zenlayout"
 version = "0.2.0"
+dependencies = [
+ "whereat 0.1.3",
+ "zenode",
+]
+
+[[package]]
+name = "zenlayout"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e136195598f6c1dc769200888ad1f9071f99d54ac3a91b80be6ba0b164e6b5b"
+
+[[package]]
+name = "zenode"
+version = "0.1.0"
+dependencies = [
+ "zenode-derive",
+]
+
+[[package]]
+name = "zenode-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "zenpipe"
@@ -475,6 +499,8 @@ dependencies = [
  "zenfilters",
  "zengif",
  "zenjpeg",
+ "zenlayout 0.2.0",
+ "zenode",
  "zenpixels 0.1.1",
  "zenpixels-convert",
  "zenresize",
@@ -538,6 +564,7 @@ dependencies = [
  "whereat 0.1.3",
  "wide",
  "zenblend",
- "zenlayout",
+ "zenlayout 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenode",
  "zenpixels 0.1.0",
 ]

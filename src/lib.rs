@@ -24,6 +24,9 @@ pub mod ops;
 pub mod sources;
 mod strip;
 
+#[cfg(feature = "zenode")]
+pub mod bridge;
+
 pub mod animation;
 pub mod codec;
 
