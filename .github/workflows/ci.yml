@@ -53,9 +53,7 @@ jobs:
             -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
       - run: cargo clippy --all-targets -- -D warnings
-        continue-on-error: true
       - run: cargo clippy --all-targets --no-default-features -- -D warnings
-        continue-on-error: true
 
   test:
     name: Test (${{ matrix.os }})
@@ -89,18 +87,15 @@ jobs:
             -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
       - run: cargo test --all-targets
-        continue-on-error: true
       - run: cargo test --all-targets --no-default-features
-        continue-on-error: true
 
   msrv:
-    name: MSRV (1.85)
+    name: MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
       - name: Patch path deps to git refs
         shell: bash
@@ -116,5 +111,5 @@ jobs:
             -e 's|path = "\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
             -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
-      - run: cargo check
-        continue-on-error: true
+      - name: Check MSRV
+        run: cargo hack check --rust-version
