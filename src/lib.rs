@@ -127,6 +127,7 @@ pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use intent::{BoolKeep, CodecIntent, FormatChoice, PerCodecHints};
 pub use limits::{Limits, Stop};
+pub use zencodec::StopToken;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::CodecRegistry;

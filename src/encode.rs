@@ -11,7 +11,7 @@ use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
 use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
 use crate::select::ImageFacts;
-use crate::{CodecError, CodecRegistry, ImageFormat, Limits, Metadata, Stop};
+use crate::{CodecError, CodecRegistry, ImageFormat, Limits, Metadata, StopToken};
 use whereat::at;
 use zenpixels::{AlphaMode, PixelDescriptor};
 
@@ -39,7 +39,7 @@ pub struct EncodeRequest<'a> {
     effort: Option<u32>,
     lossless: bool,
     limits: Option<&'a Limits>,
-    stop: Option<&'a dyn Stop>,
+    stop: Option<StopToken>,
     metadata: Option<&'a Metadata>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
@@ -125,7 +125,7 @@ impl<'a> EncodeRequest<'a> {
     }
 
     /// Set a cancellation token.
-    pub fn with_stop(mut self, stop: &'a dyn Stop) -> Self {
+    pub fn with_stop(mut self, stop: StopToken) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -343,7 +343,7 @@ impl<'a> EncodeRequest<'a> {
                 metadata: self.metadata,
                 codec_config: self.codec_config,
                 limits: self.limits,
-                _stop: self.stop,
+                stop: self.stop,
                 canvas_width: width,
                 canvas_height: height,
                 loop_count: None,

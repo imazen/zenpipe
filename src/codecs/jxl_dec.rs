@@ -5,7 +5,7 @@ use alloc::borrow::Cow;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{
-    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, Stop,
+    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, StopToken,
 };
 use whereat::at;
 use zencodec::decode::Decode;
@@ -22,7 +22,7 @@ pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
 pub(crate) fn decode(
     data: &[u8],
     limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<DecodeOutput> {
     let dec = zenjxl::JxlDecoderConfig::new();
     let mut job = dec.job();

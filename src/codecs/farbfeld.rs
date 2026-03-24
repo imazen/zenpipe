@@ -4,7 +4,7 @@ use alloc::borrow::Cow;
 
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
+use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
 use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
 
@@ -20,7 +20,7 @@ pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
 pub(crate) fn decode(
     data: &[u8],
     limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<DecodeOutput> {
     let dec = zenbitmaps::FarbfeldDecoderConfig::new();
     let mut job = dec.job();

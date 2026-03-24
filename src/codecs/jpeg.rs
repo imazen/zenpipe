@@ -8,7 +8,7 @@ use alloc::borrow::Cow;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, Stop};
+use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, StopToken};
 #[cfg(feature = "jpeg-ultrahdr")]
 use crate::{EncodeOutput, Metadata, pixel::ImgRef};
 #[cfg(feature = "jpeg-ultrahdr")]
@@ -72,7 +72,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<DecodeOutput> {
     let mut dec = zenjpeg::JpegDecoderConfig::new();
     if let Some(cfg) = codec_config.and_then(|c| c.jpeg_decoder.as_ref()) {
@@ -156,14 +156,14 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
         UhdrRawImage, encode_ultrahdr,
     };
 
-    let stop_token = crate::limits::stop_or_default(stop);
+    let stop_token = crate::limits::stop_or_default(&stop);
     let width = img.width() as u32;
     let height = img.height() as u32;
 
@@ -216,14 +216,14 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
         UhdrRawImage, encode_ultrahdr,
     };
 
-    let stop_token = crate::limits::stop_or_default(stop);
+    let stop_token = crate::limits::stop_or_default(&stop);
     let width = img.width() as u32;
     let height = img.height() as u32;
 
@@ -269,13 +269,13 @@ pub(crate) fn encode_with_precomputed_gainmap(
     codec_config: Option<&CodecConfig>,
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
         UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage, encode_with_gainmap,
     };
 
-    let stop_token = crate::limits::stop_or_default(stop);
+    let stop_token = crate::limits::stop_or_default(&stop);
     let pixel_format = match channels {
         3 => UhdrPixelFormat::Rgb8,
         4 => UhdrPixelFormat::Rgba8,

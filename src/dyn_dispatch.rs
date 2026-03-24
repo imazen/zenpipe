@@ -18,7 +18,7 @@ use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::trace::{SelectionStep, SelectionTrace};
-use crate::{CodecError, ImageFormat, Limits, Stop};
+use crate::{CodecError, ImageFormat, Limits, StopToken};
 use whereat::at;
 use zencodec::decode::{DecodeJob as _, DecoderConfig as _, DynDecoderConfig, OutputInfo};
 
@@ -40,7 +40,7 @@ pub(crate) struct DecodeParams<'a> {
     pub data: &'a [u8],
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<&'a dyn Stop>,
+    pub stop: Option<StopToken>,
     pub preferred: &'a [zenpixels::PixelDescriptor],
 }
 
@@ -133,8 +133,8 @@ pub(crate) fn dyn_push_decode(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(s) = params.stop {
-                job = job.with_stop(s);
+            if let Some(ref s) = params.stop {
+                job = job.with_stop(s.clone());
             }
             job.push_decoder(Cow::Borrowed(params.data), sink, params.preferred)
                 .map_err(|e| at!(CodecError::from_codec(format, e)))
@@ -284,7 +284,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub metadata: Option<&'a crate::Metadata>,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub _stop: Option<&'a dyn Stop>,
+    pub stop: Option<StopToken>,
     pub canvas_width: u32,
     pub canvas_height: u32,
     pub loop_count: Option<u32>,
@@ -299,6 +299,9 @@ pub(crate) fn dyn_full_frame_encoder(
         ($config:expr) => {{
             let config = $config;
             let mut job = config.job();
+            if let Some(s) = params.stop {
+                job = job.with_stop(s);
+            }
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }

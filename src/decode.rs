@@ -5,7 +5,7 @@ pub use zencodec::decode::DecodeOutput;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::policy::CodecPolicy;
-use crate::{CodecError, CodecRegistry, ImageFormat, ImageInfo, Limits, Stop};
+use crate::{CodecError, CodecRegistry, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
 
 /// Image decode request builder.
@@ -24,7 +24,7 @@ pub struct DecodeRequest<'a> {
     data: &'a [u8],
     format: Option<ImageFormat>,
     limits: Option<&'a Limits>,
-    stop: Option<&'a dyn Stop>,
+    stop: Option<StopToken>,
     registry: Option<&'a CodecRegistry>,
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
@@ -60,7 +60,7 @@ impl<'a> DecodeRequest<'a> {
     }
 
     /// Set a cancellation token.
-    pub fn with_stop(mut self, stop: &'a dyn Stop) -> Self {
+    pub fn with_stop(mut self, stop: StopToken) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -342,12 +342,12 @@ impl<'a> DecodeRequest<'a> {
     // Internal helpers
     // ═══════════════════════════════════════════════════════════════════
 
-    fn decode_params(&self) -> crate::dyn_dispatch::DecodeParams<'a> {
+    fn decode_params(&self) -> crate::dyn_dispatch::DecodeParams<'_> {
         crate::dyn_dispatch::DecodeParams {
             data: self.data,
             codec_config: self.codec_config,
             limits: self.limits,
-            stop: self.stop,
+            stop: self.stop.clone(),
             preferred: &[],
         }
     }

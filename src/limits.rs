@@ -143,8 +143,11 @@ impl Limits {
 
 /// Get a `&dyn Stop` reference, defaulting to `Unstoppable` if `None`.
 #[cfg(feature = "jpeg-ultrahdr")]
-pub(crate) fn stop_or_default(stop: Option<&dyn Stop>) -> &dyn Stop {
-    stop.unwrap_or(&enough::Unstoppable)
+pub(crate) fn stop_or_default(stop: &Option<zencodec::StopToken>) -> &dyn Stop {
+    match stop {
+        Some(s) => s,
+        None => &enough::Unstoppable,
+    }
 }
 
 /// Convert zencodecs [`Limits`] to zencodec [`ResourceLimits`](zencodec::ResourceLimits).

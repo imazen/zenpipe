@@ -6,7 +6,7 @@ use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{
-    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, Stop,
+    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, StopToken,
 };
 use whereat::at;
 use zencodec::decode::Decode;
@@ -23,7 +23,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<&dyn Stop>,
+    stop: Option<StopToken>,
 ) -> Result<DecodeOutput> {
     let mut dec = zenavif::AvifDecoderConfig::new();
     // Apply codec config if provided

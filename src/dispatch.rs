@@ -6,7 +6,7 @@
 
 use crate::config::CodecConfig;
 use crate::error::Result;
-use crate::{CodecError, ImageFormat, Limits, Metadata, Stop};
+use crate::{CodecError, ImageFormat, Limits, Metadata, StopToken};
 use alloc::boxed::Box;
 use whereat::at;
 use zencodec::encode::EncodeOutput;
@@ -20,7 +20,7 @@ pub(crate) struct EncodeParams<'a> {
     pub metadata: Option<&'a Metadata>,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<&'a dyn Stop>,
+    pub stop: Option<StopToken>,
 }
 
 /// Type-erased one-shot encode closure.
@@ -49,15 +49,11 @@ where
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
             use zencodec::encode::{EncodeJob as _, Encoder as _};
-            // Check cancellation before starting the encode.
-            // The stop parameter is borrowed (&dyn Stop), but with_stop()
-            // requires an owned StopToken. Check at the dispatch level.
-            if let Some(s) = params.stop {
-                s.check()
-                    .map_err(|_| at!(CodecError::Cancelled))?;
-            }
             let config = build_config(&params);
             let mut job = config.job();
+            if let Some(s) = params.stop {
+                job = job.with_stop(s);
+            }
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
@@ -109,7 +105,7 @@ pub trait AnyEncoder: Send + Sync {
         pixels: PixelSlice<'_>,
         metadata: Option<&Metadata>,
         limits: Option<&Limits>,
-        stop: Option<&dyn Stop>,
+        stop: Option<StopToken>,
     ) -> Result<EncodeOutput>;
 
     /// Encode sRGB RGBA8 pixels from an `ImgRef`.
@@ -153,7 +149,7 @@ where
         pixels: PixelSlice<'_>,
         metadata: Option<&Metadata>,
         limits: Option<&Limits>,
-        stop: Option<&dyn Stop>,
+        stop: Option<StopToken>,
     ) -> Result<EncodeOutput> {
         use zencodec::encode::{EncodeJob as _, Encoder as _};
 
@@ -183,13 +179,10 @@ where
         )
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
 
-        // Check cancellation before encoding. Stop token forwarding requires
-        // 'static, but the `stop` parameter is borrowed. Check at dispatch level.
-        if let Some(s) = stop {
-            s.check()
-                .map_err(|_| at!(CodecError::Cancelled))?;
-        }
         let mut job = self.clone().job();
+        if let Some(s) = stop {
+            job = job.with_stop(s);
+        }
         if let Some(m) = metadata {
             job = job.with_metadata(m);
         }
@@ -248,13 +241,11 @@ where
     <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder,
 {
     use zencodec::encode::EncodeJob as _;
-    // Check cancellation before building the encoder.
-    if let Some(s) = params.stop {
-        s.check()
-            .map_err(|_| at!(CodecError::Cancelled))?;
-    }
     let config = build_config(&params);
     let mut job = config.job();
+    if let Some(s) = params.stop {
+        job = job.with_stop(s);
+    }
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
