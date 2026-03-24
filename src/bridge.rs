@@ -471,13 +471,15 @@ pub fn build_pipeline_dag(
             continue;
         };
         for (edge_idx, &input_idx) in dag_node.inputs.iter().enumerate() {
-            let from_gid = dag_to_graph.get(input_idx).copied().flatten().ok_or_else(
-                || {
+            let from_gid = dag_to_graph
+                .get(input_idx)
+                .copied()
+                .flatten()
+                .ok_or_else(|| {
                     PipeError::Op(alloc::format!(
                         "DAG node {i} references input {input_idx} which has no graph node"
                     ))
-                },
-            )?;
+                })?;
             // First input is the primary (Input), second is Canvas (for composites).
             let kind = if edge_idx == 0 {
                 EdgeKind::Input
@@ -1363,8 +1365,7 @@ mod core_tests {
 
     #[test]
     fn compile_constrain_node() {
-        let nodes: Vec<Box<dyn NodeInstance>> =
-            vec![constrain_node(800, 600, "within", "lanczos")];
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(800, 600, "within", "lanczos")];
         let result = compile_nodes(&nodes, &[]).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
@@ -1392,7 +1393,10 @@ mod core_tests {
         // Without fusion, it would be Source → Crop → Constrain → Output (4 nodes).
         // We verify by compiling and checking the output dimensions.
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
 
         // The crop is 2000x2000, then constrain within 800x600 → 600x600
@@ -1404,14 +1408,15 @@ mod core_tests {
     #[test]
     fn geometry_fusion_orient_plus_constrain() {
         // Orient EXIF 6 (rotate 90) then constrain to 800x600.
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![
-            orient_node(6),
-            constrain_node(800, 600, "fit", ""),
-        ];
+        let nodes: Vec<Box<dyn NodeInstance>> =
+            vec![orient_node(6), constrain_node(800, 600, "fit", "")];
 
         let result = compile_nodes_fused(&nodes, &[], 4000, 3000).unwrap();
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
 
         // 4000x3000 rotated 90 → 3000x4000, then fit to 800x600 → 450x600
@@ -1422,15 +1427,15 @@ mod core_tests {
     #[test]
     fn geometry_fusion_flip_rotate_crop() {
         // flip_h + rotate_90 + crop
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![
-            flip_h_node(),
-            rotate_90_node(),
-            crop_node(0, 0, 500, 500),
-        ];
+        let nodes: Vec<Box<dyn NodeInstance>> =
+            vec![flip_h_node(), rotate_90_node(), crop_node(0, 0, 500, 500)];
 
         let result = compile_nodes_fused(&nodes, &[], 1000, 800).unwrap();
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(1000, 800)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(1000, 800)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
 
         // 1000x800, flip_h (still 1000x800), rotate_90 (800x1000), crop 500x500
@@ -1441,12 +1446,14 @@ mod core_tests {
     #[test]
     fn geometry_fusion_single_constrain() {
         // Even a single constrain node should fuse into Layout.
-        let nodes: Vec<Box<dyn NodeInstance>> =
-            vec![constrain_node(200, 150, "fit", "lanczos")];
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(200, 150, "fit", "lanczos")];
 
         let result = compile_nodes_fused(&nodes, &[], 800, 600).unwrap();
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(800, 600)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(800, 600)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
 
         assert_eq!(pipeline.width(), 200);
@@ -1604,13 +1611,7 @@ mod core_tests {
     struct IdentityOp;
 
     impl crate::ops::PixelOp for IdentityOp {
-        fn apply(
-            &mut self,
-            input: &[u8],
-            output: &mut [u8],
-            _width: u32,
-            _height: u32,
-        ) {
+        fn apply(&mut self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
             let len = output.len();
             output[..len].copy_from_slice(&input[..len]);
         }
@@ -1635,7 +1636,10 @@ mod core_tests {
 
         // Should compile successfully — the fused group produces one PixelTransform.
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
         assert_eq!(pipeline.width(), 100);
         assert_eq!(pipeline.height(), 100);
@@ -1650,7 +1654,10 @@ mod core_tests {
 
         let result = compile_nodes(&nodes, converters).unwrap();
         let mut sources = hashbrown::HashMap::new();
-        sources.insert(0, Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>);
+        sources.insert(
+            0,
+            Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>,
+        );
         let pipeline = result.graph.compile(sources).unwrap();
         assert_eq!(pipeline.width(), 100);
     }
