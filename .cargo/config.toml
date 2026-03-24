@@ -1,5 +1,0 @@
-[patch.crates-io]
-
-[env]
-
-# Override relative path deps to resolve from the real repo root
