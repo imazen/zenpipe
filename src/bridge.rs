@@ -35,7 +35,7 @@ use alloc::vec::Vec;
 use zenode::{NodeInstance, NodeRole};
 
 use crate::error::PipeError;
-use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
+use crate::graph::{EdgeKind, NodeId, NodeOp, PipelineGraph};
 
 // ─── Config types ───
 
@@ -220,6 +220,32 @@ pub struct CompileResult {
     pub encode_config: EncodeConfig,
 }
 
+/// Result of building a streaming pipeline from zenode nodes.
+///
+/// Contains a streaming [`Source`] that can be connected directly to an
+/// encoder sink via [`execute()`](crate::execute), plus extracted decode
+/// and encode configuration.
+pub struct PipelineResult {
+    /// Streaming pixel source — connect to an `EncoderSink` via
+    /// [`execute(source, sink)`](crate::execute) for zero-materialization.
+    pub source: Box<dyn crate::Source>,
+    /// Decode configuration extracted from nodes.
+    pub decode_config: DecodeConfig,
+    /// Encode configuration extracted from nodes.
+    pub encode_config: EncodeConfig,
+}
+
+/// A node in a processing DAG.
+///
+/// Used by [`build_pipeline_dag()`] to represent non-linear processing
+/// graphs (e.g., compositing, branching, watermarking).
+pub struct DagNode {
+    /// The node instance.
+    pub instance: Box<dyn NodeInstance>,
+    /// Indices of input nodes in the DAG (empty for source nodes).
+    pub inputs: Vec<usize>,
+}
+
 /// Trait for extending the bridge with crate-specific node conversions.
 ///
 /// Implementations handle nodes that require types from optional dependencies
@@ -237,6 +263,21 @@ pub trait NodeConverter: Send + Sync {
     /// Called when adjacent fusable nodes share a coalesce group and the
     /// converter claims at least one of them.
     fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError>;
+
+    /// Fuse a group of adjacent compatible nodes into a single [`NodeOp`].
+    ///
+    /// This is the preferred fusion API. Unlike [`convert_group`](Self::convert_group)
+    /// which requires nodes to share a coalesce group, `fuse_group` is called
+    /// with any adjacent run of nodes that this converter claims. The converter
+    /// can build an optimized combined operation (e.g., a `zenfilters::Pipeline`
+    /// with `FusedAdjust`).
+    ///
+    /// Returns `Ok(None)` if fusion is not possible for this group — the bridge
+    /// will fall back to converting each node individually.
+    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+        let _ = nodes;
+        Ok(None)
+    }
 }
 
 // ─── Pipeline Step (intermediate representation) ───
@@ -322,6 +363,336 @@ pub fn compile_nodes(
     })
 }
 
+/// Build a streaming pipeline from zenode nodes.
+///
+/// Returns a [`PipelineResult`] containing a streaming [`Source`](crate::Source)
+/// that can be connected directly to an encoder sink via
+/// [`execute()`](crate::execute) for zero-materialization processing.
+///
+/// This is the primary API — prefer it over [`process()`](crate::orchestrate::process)
+/// unless you genuinely need to materialize the full image into memory.
+///
+/// # Arguments
+///
+/// * `source` — decoded pixel source (the caller has already decoded the image)
+/// * `nodes` — zenode node instances in user-declared order
+/// * `converters` — extension converters for crate-specific nodes
+///
+/// # Errors
+///
+/// Returns [`PipeError`] if node compilation or graph compilation fails.
+pub fn build_pipeline(
+    source: Box<dyn crate::Source>,
+    nodes: &[Box<dyn NodeInstance>],
+    converters: &[&dyn NodeConverter],
+) -> Result<PipelineResult, PipeError> {
+    let CompileResult {
+        graph,
+        decode_config,
+        encode_config,
+        ..
+    } = compile_nodes(nodes, converters)?;
+
+    let mut sources = hashbrown::HashMap::new();
+    sources.insert(0, source);
+    let pipeline_source = graph.compile(sources)?;
+
+    Ok(PipelineResult {
+        source: pipeline_source,
+        decode_config,
+        encode_config,
+    })
+}
+
+/// Build a streaming pipeline from a DAG of zenode nodes.
+///
+/// For graphs with multiple inputs (compositing, watermarking), represent
+/// the processing graph as a list of [`DagNode`] values with explicit
+/// input edges. Source nodes have empty `inputs` and must have a
+/// corresponding entry in `sources`.
+///
+/// For linear chains, use [`build_pipeline()`] instead — it's simpler.
+///
+/// # Arguments
+///
+/// * `sources` — map from DAG node index to decoded pixel source
+/// * `dag` — nodes in topological order (sources first, output last)
+/// * `converters` — extension converters for crate-specific nodes
+///
+/// # Errors
+///
+/// Returns [`PipeError`] if compilation fails.
+pub fn build_pipeline_dag(
+    sources: Vec<(usize, Box<dyn crate::Source>)>,
+    dag: &[DagNode],
+    converters: &[&dyn NodeConverter],
+) -> Result<PipelineResult, PipeError> {
+    // Separate decode/encode nodes and collect pixel-processing nodes.
+    let mut decode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+    let mut encode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+
+    let mut graph = PipelineGraph::new();
+
+    // Map from DAG index to graph NodeId.
+    let mut dag_to_graph: Vec<Option<NodeId>> = alloc::vec![None; dag.len()];
+
+    // First pass: create graph nodes.
+    for (i, dag_node) in dag.iter().enumerate() {
+        let role = dag_node.instance.schema().role;
+        match role {
+            NodeRole::Decode => {
+                decode_nodes.push(dag_node.instance.clone_boxed());
+                // Decode nodes don't produce graph nodes — they configure the decoder.
+                continue;
+            }
+            NodeRole::Encode => {
+                encode_nodes.push(dag_node.instance.clone_boxed());
+                continue;
+            }
+            _ => {}
+        }
+
+        // Check if this is a source node (no inputs).
+        let node_op = if dag_node.inputs.is_empty() {
+            NodeOp::Source
+        } else {
+            // Convert using the standard path.
+            let node_ref: &dyn NodeInstance = dag_node.instance.as_ref();
+            convert_single(node_ref, converters)?
+        };
+
+        let gid = graph.add_node(node_op);
+        dag_to_graph[i] = Some(gid);
+    }
+
+    // Second pass: wire edges.
+    for (i, dag_node) in dag.iter().enumerate() {
+        let Some(to_gid) = dag_to_graph[i] else {
+            continue;
+        };
+        for (edge_idx, &input_idx) in dag_node.inputs.iter().enumerate() {
+            let from_gid = dag_to_graph.get(input_idx).copied().flatten().ok_or_else(
+                || {
+                    PipeError::Op(alloc::format!(
+                        "DAG node {i} references input {input_idx} which has no graph node"
+                    ))
+                },
+            )?;
+            // First input is the primary (Input), second is Canvas (for composites).
+            let kind = if edge_idx == 0 {
+                EdgeKind::Input
+            } else {
+                EdgeKind::Canvas
+            };
+            graph.add_edge(from_gid, to_gid, kind);
+        }
+    }
+
+    // Find the last pixel-processing node and add an Output node.
+    let last_gid = dag_to_graph
+        .iter()
+        .rev()
+        .find_map(|opt| *opt)
+        .ok_or_else(|| PipeError::Op("DAG has no pixel-processing nodes".into()))?;
+
+    let output_id = graph.add_node(NodeOp::Output);
+    graph.add_edge(last_gid, output_id, EdgeKind::Input);
+
+    // Compile with provided sources.
+    let mut source_map = hashbrown::HashMap::new();
+    for (dag_idx, src) in sources {
+        if let Some(Some(gid)) = dag_to_graph.get(dag_idx) {
+            source_map.insert(*gid, src);
+        }
+    }
+
+    let decode_config = DecodeConfig::from_nodes(&decode_nodes);
+    let encode_config = EncodeConfig::from_nodes(&encode_nodes);
+
+    let pipeline_source = graph.compile(source_map)?;
+
+    Ok(PipelineResult {
+        source: pipeline_source,
+        decode_config,
+        encode_config,
+    })
+}
+
+// ─── Geometry schema IDs ───
+
+/// Schema IDs that are geometry operations eligible for layout fusion.
+const GEOMETRY_SCHEMA_IDS: &[&str] = &[
+    "zenlayout.crop",
+    "zenlayout.orient",
+    "zenlayout.flip_h",
+    "zenlayout.flip_v",
+    "zenlayout.rotate_90",
+    "zenlayout.rotate_180",
+    "zenlayout.rotate_270",
+    "zenresize.constrain",
+    "zenlayout.constrain",
+];
+
+/// Check if a schema ID is a geometry operation.
+fn is_geometry_node(schema_id: &str) -> bool {
+    GEOMETRY_SCHEMA_IDS.contains(&schema_id)
+}
+
+/// Compile a run of adjacent geometry nodes into a single `NodeOp::Layout`.
+///
+/// Feeds the geometry run through `zenresize::Pipeline` to produce a single
+/// `LayoutPlan`, then emits `NodeOp::Layout { plan, filter }`. This avoids
+/// creating separate Crop, Orient, Resize graph nodes — everything is fused
+/// into one streaming pass.
+///
+/// `source_w` and `source_h` are needed for layout planning but are not
+/// always known at compile time (they depend on the upstream source). When
+/// not available (0, 0), falls back to individual node conversion.
+fn compile_geometry_run(
+    nodes: &[&dyn NodeInstance],
+    source_w: u32,
+    source_h: u32,
+) -> Result<NodeOp, PipeError> {
+    if nodes.is_empty() {
+        return Err(PipeError::Op("empty geometry run".into()));
+    }
+
+    // If source dimensions aren't known, fall back (caller handles this).
+    if source_w == 0 || source_h == 0 {
+        return Err(PipeError::Op(
+            "geometry fusion requires source dimensions".into(),
+        ));
+    }
+
+    let mut pipeline = zenresize::Pipeline::new(source_w, source_h);
+    let mut filter: Option<zenresize::Filter> = None;
+
+    for &node in nodes {
+        let id = node.schema().id;
+        match id {
+            "zenlayout.crop" => {
+                let x = param_u32(node, "x")?;
+                let y = param_u32(node, "y")?;
+                let w = param_u32(node, "w")?;
+                let h = param_u32(node, "h")?;
+                pipeline = pipeline.crop_pixels(x, y, w, h);
+            }
+            "zenlayout.orient" => {
+                let val = param_i32(node, "orientation")?;
+                let exif = u8::try_from(val).unwrap_or(1);
+                pipeline = pipeline.auto_orient(exif);
+            }
+            "zenlayout.flip_h" => {
+                pipeline = pipeline.flip_h();
+            }
+            "zenlayout.flip_v" => {
+                pipeline = pipeline.flip_v();
+            }
+            "zenlayout.rotate_90" => {
+                pipeline = pipeline.rotate_90();
+            }
+            "zenlayout.rotate_180" => {
+                pipeline = pipeline.rotate_180();
+            }
+            "zenlayout.rotate_270" => {
+                pipeline = pipeline.rotate_270();
+            }
+            "zenresize.constrain" => {
+                let w = param_u32(node, "w")?;
+                let h = param_u32(node, "h")?;
+                let mode_str = param_str(node, "mode")?;
+                let filter_str = param_str(node, "filter")?;
+                let mode = parse_constraint_mode(&mode_str)?;
+                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+                if let Some(f) = parse_filter_opt(&filter_str) {
+                    filter = Some(f);
+                }
+            }
+            "zenlayout.constrain" => {
+                let w = param_u32(node, "w")?;
+                let h = param_u32(node, "h")?;
+                let mode_str = param_str(node, "mode")?;
+                let mode = parse_constraint_mode(&mode_str)?;
+                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+            }
+            _ => {
+                return Err(PipeError::Op(alloc::format!(
+                    "unexpected node '{id}' in geometry run"
+                )));
+            }
+        }
+    }
+
+    let (ideal, request) = pipeline
+        .plan()
+        .map_err(|e| PipeError::Op(alloc::format!("geometry fusion plan failed: {e}")))?;
+    let offer = zenresize::DecoderOffer::full_decode(source_w, source_h);
+    let plan = ideal.finalize(&request, &offer);
+    let f = filter.unwrap_or(zenresize::Filter::Robidoux);
+
+    Ok(NodeOp::Layout { plan, filter: f })
+}
+
+/// Compile a linear list of pixel-processing nodes into a [`PipelineGraph`],
+/// performing geometry fusion where possible.
+///
+/// When adjacent geometry nodes are detected, they are fused into a single
+/// `NodeOp::Layout` using [`compile_geometry_run()`]. When source dimensions
+/// are known, the fusion produces an optimal single-pass layout.
+///
+/// When source dimensions are not known (0, 0), geometry nodes are emitted
+/// individually as before.
+pub fn compile_nodes_fused(
+    nodes: &[Box<dyn NodeInstance>],
+    converters: &[&dyn NodeConverter],
+    source_w: u32,
+    source_h: u32,
+) -> Result<CompileResult, PipeError> {
+    // 1. Separate encode/decode nodes from pixel-processing nodes.
+    let mut pixel_nodes: Vec<&dyn NodeInstance> = Vec::new();
+    let mut encode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+    let mut decode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+
+    for node in nodes {
+        match node.schema().role {
+            NodeRole::Encode => encode_nodes.push(node.clone_boxed()),
+            NodeRole::Decode => decode_nodes.push(node.clone_boxed()),
+            _ => pixel_nodes.push(node.as_ref()),
+        }
+    }
+
+    let decode_config = DecodeConfig::from_nodes(&decode_nodes);
+    let encode_config = EncodeConfig::from_nodes(&encode_nodes);
+
+    // 2. Coalesce, then attempt geometry fusion and filter fusion.
+    let steps = coalesce(&pixel_nodes);
+
+    // 3. Build the graph: Source → ops → Output.
+    let mut graph = PipelineGraph::new();
+    let source_id = graph.add_node(NodeOp::Source);
+    let mut prev_id = source_id;
+
+    for step in &steps {
+        let ops = convert_step_fused(step, converters, source_w, source_h)?;
+        for node_op in ops {
+            let node_id = graph.add_node(node_op);
+            graph.add_edge(prev_id, node_id, EdgeKind::Input);
+            prev_id = node_id;
+        }
+    }
+
+    let output_id = graph.add_node(NodeOp::Output);
+    graph.add_edge(prev_id, output_id, EdgeKind::Input);
+
+    Ok(CompileResult {
+        graph,
+        encode_nodes,
+        decode_nodes,
+        decode_config,
+        encode_config,
+    })
+}
+
 // ─── Coalescing ───
 
 /// Group adjacent fusable nodes that share the same coalesce group.
@@ -373,6 +744,69 @@ fn convert_step(
     match step {
         PipelineStep::Single(node) => convert_single(*node, converters),
         PipelineStep::Coalesced { nodes, .. } => convert_coalesced(nodes, converters),
+    }
+}
+
+/// Convert a pipeline step with geometry and filter fusion.
+///
+/// For coalesced groups where all nodes are geometry nodes, attempts
+/// to fuse them via [`compile_geometry_run()`]. For groups handled by
+/// a converter with `fuse_group()`, delegates to that. Falls back to
+/// individual conversion for anything else.
+///
+/// May return multiple `NodeOp`s (e.g., when a coalesced group has mixed
+/// geometry and non-geometry nodes that can't be fused together).
+fn convert_step_fused(
+    step: &PipelineStep<'_>,
+    converters: &[&dyn NodeConverter],
+    source_w: u32,
+    source_h: u32,
+) -> Result<Vec<NodeOp>, PipeError> {
+    match step {
+        PipelineStep::Single(node) => {
+            let schema_id = node.schema().id;
+
+            // Single geometry node: if source dims are known, fuse it.
+            if is_geometry_node(schema_id) && source_w > 0 && source_h > 0 {
+                let nodes = &[*node];
+                match compile_geometry_run(nodes, source_w, source_h) {
+                    Ok(op) => return Ok(alloc::vec![op]),
+                    Err(_) => {} // fall through to individual conversion
+                }
+            }
+
+            Ok(alloc::vec![convert_single(*node, converters)?])
+        }
+
+        PipelineStep::Coalesced { nodes, .. } => {
+            // Check if all nodes in the group are geometry nodes.
+            let all_geometry = nodes.iter().all(|n| is_geometry_node(n.schema().id));
+
+            if all_geometry && source_w > 0 && source_h > 0 {
+                match compile_geometry_run(nodes, source_w, source_h) {
+                    Ok(op) => return Ok(alloc::vec![op]),
+                    Err(_) => {} // fall through
+                }
+            }
+
+            // Try converter fusion (fuse_group).
+            for conv in converters {
+                if nodes.iter().any(|n| conv.can_convert(n.schema().id)) {
+                    if let Some(fused) = conv.fuse_group(nodes)? {
+                        return Ok(alloc::vec![fused]);
+                    }
+                    // fuse_group returned None — try convert_group.
+                    return Ok(alloc::vec![conv.convert_group(nodes)?]);
+                }
+            }
+
+            // No converter — convert each node individually.
+            let mut ops = Vec::new();
+            for &node in nodes {
+                ops.push(convert_single(node, converters)?);
+            }
+            Ok(ops)
+        }
     }
 }
 

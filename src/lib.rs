@@ -32,7 +32,7 @@ pub mod orchestrate;
 
 // Re-export bridge config types at crate root for convenience.
 #[cfg(feature = "zenode")]
-pub use bridge::{DecodeConfig, EncodeConfig};
+pub use bridge::{DagNode, DecodeConfig, EncodeConfig, PipelineResult};
 
 pub mod animation;
 pub mod codec;

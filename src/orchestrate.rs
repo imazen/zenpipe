@@ -42,7 +42,7 @@
 use alloc::boxed::Box;
 
 use crate::Source;
-use crate::bridge::{self, CompileResult, DecodeConfig, EncodeConfig, NodeConverter};
+use crate::bridge::{self, DecodeConfig, EncodeConfig, NodeConverter};
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::sidecar::{ProcessedSidecar, SidecarPlan, SidecarStream};
@@ -224,25 +224,17 @@ pub fn process_with_sidecar(
     config: &ProcessConfig<'_>,
     sidecar: Option<SidecarStream>,
 ) -> Result<ProcessedImage, PipeError> {
-    // 1. Compile nodes: separate decode/encode, coalesce, build graph.
-    let CompileResult {
-        graph,
+    // 1. Build the streaming pipeline via build_pipeline().
+    let bridge::PipelineResult {
+        source: pipeline,
         decode_config,
         encode_config,
-        ..
-    } = bridge::compile_nodes(config.nodes, config.converters)?;
+    } = bridge::build_pipeline(source, config.nodes, config.converters)?;
 
-    // 2. Wire the source into the graph's Source node (always at index 0).
-    let mut sources = hashbrown::HashMap::new();
-    sources.insert(0, source);
-
-    // 3. Compile the graph into an executable Source chain.
-    let pipeline = graph.compile(sources)?;
-
-    // 4. Materialize the primary image.
+    // 2. Materialize the primary image.
     let primary = MaterializedSource::from_source(pipeline)?;
 
-    // 5. Process sidecar if present and HDR mode allows it.
+    // 3. Process sidecar if present and HDR mode allows it.
     let processed_sidecar = if let Some(sidecar_stream) = sidecar {
         if decode_config.hdr_mode != "sdr_only" {
             Some(process_sidecar(
@@ -257,7 +249,7 @@ pub fn process_with_sidecar(
         None
     };
 
-    // 6. Return the processed image.
+    // 4. Return the processed image.
     Ok(ProcessedImage {
         primary,
         sidecar: processed_sidecar,
