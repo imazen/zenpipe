@@ -57,7 +57,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     quality: Option<f32>,
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
-    stop: Option<&dyn crate::Stop>,
+    stop: Option<&zencodec::StopToken>,
 ) -> crate::error::Result<crate::encode::EncodeOutput> {
     use imgref::{Img, ImgExt as _};
     use rgb::{Gray, Rgb};

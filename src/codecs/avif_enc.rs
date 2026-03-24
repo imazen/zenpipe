@@ -82,7 +82,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
     limits: Option<&crate::Limits>,
-    stop: Option<&dyn crate::Stop>,
+    stop: Option<&zencodec::StopToken>,
 ) -> crate::error::Result<crate::EncodeOutput> {
     use crate::{CodecError, ImageFormat};
     use whereat::at;
@@ -140,7 +140,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
     if let Some(s) = stop {
-        job = job.with_stop(s);
+        job = job.with_stop(s.clone());
     }
     job = job.with_canvas_size(width, height);
 

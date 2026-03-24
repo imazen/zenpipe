@@ -806,7 +806,7 @@ impl<'a> EncodeRequest<'a> {
             metadata: self.metadata,
             codec_config: self.codec_config,
             limits: self.limits,
-            stop: self.stop,
+            stop: self.stop.clone(),
         };
 
         let built = crate::dispatch::build_encoder(format, params)?;
@@ -875,7 +875,7 @@ impl<'a> EncodeRequest<'a> {
                     Some(resolved_quality),
                     gain_map,
                     metadata,
-                    self.stop,
+                    self.stop.as_ref(),
                 );
             }
             #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
@@ -891,7 +891,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     self.limits,
-                    self.stop,
+                    self.stop.as_ref(),
                 );
             }
             return Err(at!(CodecError::UnsupportedOperation {
