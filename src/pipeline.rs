@@ -332,7 +332,12 @@ impl Pipeline {
         self.apply_stripped(src, dst, width, height, channels, ctx)
     }
 
-    /// Full-frame path for pipelines with neighborhood filters.
+    /// Full-frame Oklab planes with streamed color conversions.
+    ///
+    /// Neighborhood filters need the complete Oklab planes, but scatter
+    /// (linear RGB → Oklab) and gather (Oklab → linear RGB) can be done
+    /// in L3-cache-friendly strips. Only the filter step operates on the
+    /// full-frame planes.
     fn apply_full_frame(
         &self,
         src: &[f32],
@@ -342,26 +347,73 @@ impl Pipeline {
         channels: u32,
         ctx: &mut FilterContext,
     ) -> Result<(), At<PipelineError>> {
-        let mut planes = if channels == 4 {
+        let ch = channels as usize;
+        let w = width as usize;
+
+        // Full-frame Oklab planes (needed for neighborhood context)
+        let mut planes = if ch == 4 {
             OklabPlanes::from_ctx_with_alpha(ctx, width, height)
         } else {
             OklabPlanes::from_ctx(ctx, width, height)
         };
-        scatter_to_oklab(
-            src,
-            &mut planes,
-            channels,
-            &self.m1,
-            self.config.reference_white,
-        );
+
+        // Scatter in strips for cache locality
+        let scatter_strip = strip_height(width, ch == 4, 0);
+        for y in (0..height as usize).step_by(scatter_strip) {
+            let rows = scatter_strip.min(height as usize - y);
+            let src_off = y * w * ch;
+            let src_len = rows * w * ch;
+            let plane_off = y * w;
+            let plane_len = rows * w;
+
+            // Scatter this strip's worth of rows into the full-frame planes
+            crate::simd::scatter_oklab(
+                &src[src_off..src_off + src_len],
+                &mut planes.l[plane_off..plane_off + plane_len],
+                &mut planes.a[plane_off..plane_off + plane_len],
+                &mut planes.b[plane_off..plane_off + plane_len],
+                channels,
+                &self.m1,
+                self.config.reference_white,
+            );
+            if ch == 4 {
+                if let Some(ref mut alpha) = planes.alpha {
+                    for i in 0..plane_len {
+                        alpha[plane_off + i] = src[src_off + i * ch + 3];
+                    }
+                }
+            }
+        }
+
+        // Apply all filters on full-frame planes
         self.apply_planar(&mut planes, ctx);
-        gather_from_oklab(
-            &planes,
-            dst,
-            channels,
-            &self.m1_inv,
-            self.config.reference_white,
-        );
+
+        // Gather in strips for cache locality
+        for y in (0..height as usize).step_by(scatter_strip) {
+            let rows = scatter_strip.min(height as usize - y);
+            let dst_off = y * w * ch;
+            let dst_len = rows * w * ch;
+            let plane_off = y * w;
+            let plane_len = rows * w;
+
+            crate::simd::gather_oklab(
+                &planes.l[plane_off..plane_off + plane_len],
+                &planes.a[plane_off..plane_off + plane_len],
+                &planes.b[plane_off..plane_off + plane_len],
+                &mut dst[dst_off..dst_off + dst_len],
+                channels,
+                &self.m1_inv,
+                self.config.reference_white,
+            );
+            if ch == 4 {
+                if let Some(ref alpha) = planes.alpha {
+                    for i in 0..plane_len {
+                        dst[dst_off + i * ch + 3] = alpha[plane_off + i];
+                    }
+                }
+            }
+        }
+
         planes.return_to_ctx(ctx);
         Ok(())
     }
