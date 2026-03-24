@@ -46,9 +46,13 @@ use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 pub use config::{DecodeConfig, EncodeConfig};
 pub use dag::{DagNode, build_pipeline_dag};
 
-// Re-export sub-module items used by tests and this module.
+// Sub-module items used by this module.
 use convert::{coalesce, convert_step};
+
+// Re-export for tests.
+#[cfg(test)]
 use geometry::is_geometry_node;
+#[cfg(test)]
 use parse::{parse_constraint_mode, parse_filter_opt};
 
 // ─── CompileResult ───

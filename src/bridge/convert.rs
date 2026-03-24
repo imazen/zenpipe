@@ -1,6 +1,5 @@
 //! Node-to-NodeOp conversion: coalescing, step conversion, and built-in converters.
 
-use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use zenode::NodeInstance;
@@ -147,47 +146,6 @@ pub(crate) fn convert_single(
             "bridge: no converter for node '{schema_id}'"
         ))),
     }
-}
-
-/// Convert a coalesced group to a `NodeOp`.
-///
-/// Tries extension converters first. Falls back to converting only the
-/// first node and logging a warning (via the error) if no converter
-/// handles the group.
-pub(crate) fn convert_coalesced(
-    nodes: &[&dyn NodeInstance],
-    converters: &[&dyn NodeConverter],
-) -> Result<NodeOp, PipeError> {
-    if nodes.is_empty() {
-        return Err(PipeError::Op("bridge: empty coalesced group".to_string()));
-    }
-
-    // Check if any converter handles the group.
-    for conv in converters {
-        // A converter handles the group if it can convert any member.
-        if nodes.iter().any(|n| conv.can_convert(n.schema().id)) {
-            return conv.convert_group(nodes);
-        }
-    }
-
-    // No converter — if it's a single node, convert individually.
-    if nodes.len() == 1 {
-        return convert_single(nodes[0], converters);
-    }
-
-    // Multiple nodes, no converter. Return an error suggesting a converter
-    // is needed for proper fusion.
-    Err(PipeError::Op(alloc::format!(
-        "bridge: coalesced group '{}' with {} nodes has no converter \
-         (nodes: {})",
-        nodes[0].schema().coalesce.as_ref().map_or("?", |c| c.group),
-        nodes.len(),
-        nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect::<Vec<_>>()
-            .join(", "),
-    )))
 }
 
 // ─── Built-in converters ───
