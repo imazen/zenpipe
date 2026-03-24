@@ -22,9 +22,13 @@ std = [
     "dep:zenfilters",
     "dep:moxcms",
 ]
-# zenode bridge: compile zenode NodeInstance objects into PipelineGraph NodeOps.
-# Enables zenode_defs on zenresize and zenlayout for built-in node conversions.
-zenode = ["dep:zenode", "zenresize/zenode", "zenresize/layout"]
+# Bridge from zenode NodeInstance to PipelineGraph NodeOps.
+# When zenresize and zenlayout gain zenode features, add them here:
+#   "zenresize/zenode", "zenlayout/zenode"
+zenode = ["dep:zenode", "zenresize/layout"]
+# Future: enables bridge tests that depend on zenode_defs modules in
+# zenresize and zenlayout (not yet implemented).
+zenode-defs = ["zenode"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
@@ -55,4 +59,4 @@ zenode = { path = "../zenode/zenode", default-features = false, features = ["der
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
-zenlayout = { path = "../zenlayout", default-features = false, features = ["zenode"] }
+zenlayout = { path = "../zenlayout", default-features = false }
