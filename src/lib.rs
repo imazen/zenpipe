@@ -27,9 +27,6 @@ mod strip;
 #[cfg(feature = "zenode")]
 pub mod bridge;
 
-#[cfg(feature = "zenode")]
-pub mod orchestrate;
-
 // Re-export bridge config types at crate root for convenience.
 #[cfg(feature = "zenode")]
 pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};

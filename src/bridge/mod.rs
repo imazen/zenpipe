@@ -991,6 +991,36 @@ mod core_tests {
         assert_eq!(mat.pixels.height(), 64);
         assert!(!mat.pixels.data().is_empty());
     }
+
+    #[test]
+    fn materialize_preserves_configs() {
+        let source = Box::new(SolidSource::new(100, 100));
+        let mut params = zenode::ParamMap::new();
+        params.insert(
+            "hdr_mode".into(),
+            zenode::ParamValue::Str("preserve".into()),
+        );
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![MockNode::boxed(&DECODE_SCHEMA, params)];
+
+        let result = build_pipeline(source, &nodes, &[]).unwrap();
+        let mat = result.materialize().unwrap();
+        assert_eq!(mat.decode_config.hdr_mode, "preserve");
+        assert!(mat.encode_config.quality_profile.is_none());
+    }
+
+    #[test]
+    fn materialize_preserves_pixel_data() {
+        let source = Box::new(SolidSource::new(64, 64));
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+
+        let result = build_pipeline(source, &nodes, &[]).unwrap();
+        let mat = result.materialize().unwrap();
+        // SolidSource fills with 128. Check the materialized data.
+        let expected_size = mat.pixels.stride() * 64;
+        assert_eq!(mat.pixels.data().len(), expected_size);
+        // First pixel should be 128 (the fill value).
+        assert_eq!(mat.pixels.data()[0], 128);
+    }
 }
 
 // Bridge tests requiring `zenode_defs` modules in zenresize and zenlayout.
