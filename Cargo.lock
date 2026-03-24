@@ -395,7 +395,7 @@ version = "0.1.0"
 dependencies = [
  "enough",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
 ]
 
 [[package]]
@@ -407,7 +407,7 @@ dependencies = [
  "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "magetypes",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
  "zenpixels-convert",
 ]
 
@@ -424,7 +424,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
  "zenquant",
 ]
 
@@ -448,7 +448,7 @@ dependencies = [
  "wide",
  "yuv",
  "zencodec",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
 ]
 
 [[package]]
@@ -496,7 +496,7 @@ dependencies = [
  "zenjpeg",
  "zenlayout 0.2.0",
  "zenode",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
  "zenpixels-convert",
  "zenresize",
 ]
@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -522,14 +522,14 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "garb",
  "linear-srgb 0.6.3",
  "moxcms",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
 ]
 
 [[package]]
