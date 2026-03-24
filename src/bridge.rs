@@ -21,7 +21,7 @@
 //! use zenpipe::bridge::{compile_nodes, CompileResult};
 //!
 //! let nodes: Vec<Box<dyn zenode::NodeInstance>> = vec![/* ... */];
-//! let result = compile_nodes(&nodes, &[])?;
+//! let result = compile_nodes(&nodes, &[], source_w, source_h)?;
 //! // result.graph has Source → ops → Output wired up
 //! // result.encode_nodes has any Encode-phase nodes
 //! // result.decode_config has extracted decoder params
@@ -301,6 +301,11 @@ enum PipelineStep<'a> {
 /// encode/decode phase nodes, coalesces adjacent fusable nodes in the same
 /// group, and converts each step to a [`NodeOp`].
 ///
+/// When adjacent geometry nodes are detected and source dimensions are known,
+/// they are fused into a single `NodeOp::Layout` via [`compile_geometry_run()`].
+/// When source dimensions are not known (0, 0), geometry nodes are emitted
+/// individually.
+///
 /// Decode and encode node params are extracted into [`DecodeConfig`] and
 /// [`EncodeConfig`] for convenient typed access.
 ///
@@ -308,6 +313,8 @@ enum PipelineStep<'a> {
 ///
 /// * `nodes` — node instances in user-declared order
 /// * `converters` — optional extension converters for crate-specific nodes
+/// * `source_w` — source image width (0 if unknown)
+/// * `source_h` — source image height (0 if unknown)
 ///
 /// # Errors
 ///
@@ -316,6 +323,8 @@ enum PipelineStep<'a> {
 pub fn compile_nodes(
     nodes: &[Box<dyn NodeInstance>],
     converters: &[&dyn NodeConverter],
+    source_w: u32,
+    source_h: u32,
 ) -> Result<CompileResult, PipeError> {
     // 1. Separate encode/decode nodes from pixel-processing nodes.
     let mut pixel_nodes: Vec<&dyn NodeInstance> = Vec::new();
@@ -330,25 +339,24 @@ pub fn compile_nodes(
         }
     }
 
-    // 2. Extract configs from separated nodes.
     let decode_config = DecodeConfig::from_nodes(&decode_nodes);
     let encode_config = EncodeConfig::from_nodes(&encode_nodes);
 
-    // 3. Coalesce adjacent fusable nodes in the same group.
-    //    Node order is preserved — no sorting. zenode explicitly does NOT
-    //    reorder user-specified node sequences.
+    // 2. Coalesce, then attempt geometry fusion and filter fusion.
     let steps = coalesce(&pixel_nodes);
 
-    // 4. Build the graph: Source → ops → Output.
+    // 3. Build the graph: Source → ops → Output.
     let mut graph = PipelineGraph::new();
     let source_id = graph.add_node(NodeOp::Source);
-
     let mut prev_id = source_id;
+
     for step in &steps {
-        let node_op = convert_step(step, converters)?;
-        let node_id = graph.add_node(node_op);
-        graph.add_edge(prev_id, node_id, EdgeKind::Input);
-        prev_id = node_id;
+        let ops = convert_step(step, converters, source_w, source_h)?;
+        for node_op in ops {
+            let node_id = graph.add_node(node_op);
+            graph.add_edge(prev_id, node_id, EdgeKind::Input);
+            prev_id = node_id;
+        }
     }
 
     let output_id = graph.add_node(NodeOp::Output);
@@ -386,12 +394,15 @@ pub fn build_pipeline(
     nodes: &[Box<dyn NodeInstance>],
     converters: &[&dyn NodeConverter],
 ) -> Result<PipelineResult, PipeError> {
+    let source_w = source.width();
+    let source_h = source.height();
+
     let CompileResult {
         graph,
         decode_config,
         encode_config,
         ..
-    } = compile_nodes(nodes, converters)?;
+    } = compile_nodes(nodes, converters, source_w, source_h)?;
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
@@ -635,65 +646,6 @@ fn compile_geometry_run(
     Ok(NodeOp::Layout { plan, filter: f })
 }
 
-/// Compile a linear list of pixel-processing nodes into a [`PipelineGraph`],
-/// performing geometry fusion where possible.
-///
-/// When adjacent geometry nodes are detected, they are fused into a single
-/// `NodeOp::Layout` using [`compile_geometry_run()`]. When source dimensions
-/// are known, the fusion produces an optimal single-pass layout.
-///
-/// When source dimensions are not known (0, 0), geometry nodes are emitted
-/// individually as before.
-pub fn compile_nodes_fused(
-    nodes: &[Box<dyn NodeInstance>],
-    converters: &[&dyn NodeConverter],
-    source_w: u32,
-    source_h: u32,
-) -> Result<CompileResult, PipeError> {
-    // 1. Separate encode/decode nodes from pixel-processing nodes.
-    let mut pixel_nodes: Vec<&dyn NodeInstance> = Vec::new();
-    let mut encode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-    let mut decode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-
-    for node in nodes {
-        match node.schema().role {
-            NodeRole::Encode => encode_nodes.push(node.clone_boxed()),
-            NodeRole::Decode => decode_nodes.push(node.clone_boxed()),
-            _ => pixel_nodes.push(node.as_ref()),
-        }
-    }
-
-    let decode_config = DecodeConfig::from_nodes(&decode_nodes);
-    let encode_config = EncodeConfig::from_nodes(&encode_nodes);
-
-    // 2. Coalesce, then attempt geometry fusion and filter fusion.
-    let steps = coalesce(&pixel_nodes);
-
-    // 3. Build the graph: Source → ops → Output.
-    let mut graph = PipelineGraph::new();
-    let source_id = graph.add_node(NodeOp::Source);
-    let mut prev_id = source_id;
-
-    for step in &steps {
-        let ops = convert_step_fused(step, converters, source_w, source_h)?;
-        for node_op in ops {
-            let node_id = graph.add_node(node_op);
-            graph.add_edge(prev_id, node_id, EdgeKind::Input);
-            prev_id = node_id;
-        }
-    }
-
-    let output_id = graph.add_node(NodeOp::Output);
-    graph.add_edge(prev_id, output_id, EdgeKind::Input);
-
-    Ok(CompileResult {
-        graph,
-        encode_nodes,
-        decode_nodes,
-        decode_config,
-        encode_config,
-    })
-}
 
 // ─── Coalescing ───
 
@@ -738,18 +690,7 @@ fn coalesce<'a>(nodes: &[&'a dyn NodeInstance]) -> Vec<PipelineStep<'a>> {
 
 // ─── Step conversion ───
 
-/// Convert a pipeline step to a `NodeOp`.
-fn convert_step(
-    step: &PipelineStep<'_>,
-    converters: &[&dyn NodeConverter],
-) -> Result<NodeOp, PipeError> {
-    match step {
-        PipelineStep::Single(node) => convert_single(*node, converters),
-        PipelineStep::Coalesced { nodes, .. } => convert_coalesced(nodes, converters),
-    }
-}
-
-/// Convert a pipeline step with geometry and filter fusion.
+/// Convert a pipeline step to one or more `NodeOp`s, with geometry and filter fusion.
 ///
 /// For coalesced groups where all nodes are geometry nodes, attempts
 /// to fuse them via [`compile_geometry_run()`]. For groups handled by
@@ -758,7 +699,7 @@ fn convert_step(
 ///
 /// May return multiple `NodeOp`s (e.g., when a coalesced group has mixed
 /// geometry and non-geometry nodes that can't be fused together).
-fn convert_step_fused(
+fn convert_step(
     step: &PipelineStep<'_>,
     converters: &[&dyn NodeConverter],
     source_w: u32,
@@ -1343,7 +1284,7 @@ mod core_tests {
     #[test]
     fn compile_empty_nodes() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1351,7 +1292,7 @@ mod core_tests {
     #[test]
     fn compile_single_crop_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node(10, 20, 100, 80)];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1359,21 +1300,21 @@ mod core_tests {
     #[test]
     fn compile_orient_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node(6)];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
     #[test]
     fn compile_constrain_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(800, 600, "within", "lanczos")];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
     #[test]
     fn decode_nodes_separated() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node()];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert_eq!(result.decode_nodes.len(), 1);
     }
 
@@ -1388,7 +1329,7 @@ mod core_tests {
             constrain_node(800, 600, "within", "robidoux"),
         ];
 
-        let result = compile_nodes_fused(&nodes, &[], 4000, 3000).unwrap();
+        let result = compile_nodes(&nodes, &[], 4000, 3000).unwrap();
         // The graph should have Source → Layout → Output (3 nodes, 2 edges).
         // Without fusion, it would be Source → Crop → Constrain → Output (4 nodes).
         // We verify by compiling and checking the output dimensions.
@@ -1411,7 +1352,7 @@ mod core_tests {
         let nodes: Vec<Box<dyn NodeInstance>> =
             vec![orient_node(6), constrain_node(800, 600, "fit", "")];
 
-        let result = compile_nodes_fused(&nodes, &[], 4000, 3000).unwrap();
+        let result = compile_nodes(&nodes, &[], 4000, 3000).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -1430,7 +1371,7 @@ mod core_tests {
         let nodes: Vec<Box<dyn NodeInstance>> =
             vec![flip_h_node(), rotate_90_node(), crop_node(0, 0, 500, 500)];
 
-        let result = compile_nodes_fused(&nodes, &[], 1000, 800).unwrap();
+        let result = compile_nodes(&nodes, &[], 1000, 800).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -1448,7 +1389,7 @@ mod core_tests {
         // Even a single constrain node should fuse into Layout.
         let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(200, 150, "fit", "lanczos")];
 
-        let result = compile_nodes_fused(&nodes, &[], 800, 600).unwrap();
+        let result = compile_nodes(&nodes, &[], 800, 600).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -1469,7 +1410,7 @@ mod core_tests {
         ];
 
         // This should still compile (no fusion, individual nodes).
-        let result = compile_nodes_fused(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -1632,7 +1573,7 @@ mod core_tests {
         let converter = TestFilterConverter;
         let converters: &[&dyn NodeConverter] = &[&converter];
 
-        let result = compile_nodes_fused(&nodes, converters, 100, 100).unwrap();
+        let result = compile_nodes(&nodes, converters, 100, 100).unwrap();
 
         // Should compile successfully — the fused group produces one PixelTransform.
         let mut sources = hashbrown::HashMap::new();
@@ -1652,7 +1593,7 @@ mod core_tests {
         let converter = TestFilterConverter;
         let converters: &[&dyn NodeConverter] = &[&converter];
 
-        let result = compile_nodes(&nodes, converters).unwrap();
+        let result = compile_nodes(&nodes, converters, 100, 100).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -1768,7 +1709,7 @@ mod tests {
     #[test]
     fn compile_empty() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         // Should have Source → Output (2 nodes, 1 edge).
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
@@ -1784,7 +1725,7 @@ mod tests {
 
         let crop_node = zenlayout::zenode_defs::CROP_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1796,7 +1737,7 @@ mod tests {
 
         let orient_node = zenlayout::zenode_defs::ORIENT_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -1810,7 +1751,7 @@ mod tests {
 
         let node = resize_nodes::CONSTRAIN_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -1818,7 +1759,7 @@ mod tests {
     fn decode_nodes_separated() {
         let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert_eq!(result.decode_nodes.len(), 1);
         assert_eq!(result.decode_nodes[0].schema().id, "zenode.decode");
     }
@@ -1842,7 +1783,7 @@ mod tests {
 
         // User declares rotate_270 before rotate_90
         let nodes: Vec<Box<dyn NodeInstance>> = vec![rot270, rot90];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         // Both end up in the graph (not in encode/decode)
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
@@ -1943,7 +1884,7 @@ mod tests {
 
         let decode_node = zenode::nodes::DECODE_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert_eq!(result.decode_config.hdr_mode, "preserve");
         assert_eq!(result.decode_config.min_size, 256);
     }
@@ -1972,7 +1913,7 @@ mod tests {
     #[test]
     fn encode_config_extracted_in_compile_empty() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_config.quality_profile.is_none());
         assert!(result.encode_config.format.is_none());
     }
@@ -1994,7 +1935,7 @@ mod tests {
             .unwrap();
 
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node, crop_node];
-        let result = compile_nodes(&nodes, &[]).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
 
         // Decode separated
         assert_eq!(result.decode_nodes.len(), 1);
