@@ -256,10 +256,9 @@ where
     if let Some(meta) = params.metadata {
         job = job.with_metadata(meta);
     }
-    // Stop token has lifetime 'a which is shorter than 'static.
-    // Job<'static>::with_stop() requires &'static dyn Stop.
-    // For streaming encode the caller controls pacing, so the
-    // stop token is not forwarded into the job.
+    if let Some(s) = params.stop {
+        job = job.with_stop(s);
+    }
     let format = C::format();
     let encoder = job
         .dyn_encoder()
