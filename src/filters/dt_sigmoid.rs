@@ -294,6 +294,7 @@ fn channel_order(pix: &[f32; 3]) -> (usize, usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn default_params_are_reasonable() {

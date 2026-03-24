@@ -157,6 +157,7 @@ pub fn gather_oklab_to_srgb_u8(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
     use zenpixels::ColorPrimaries;
     use zenpixels_convert::oklab;
 

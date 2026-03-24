@@ -252,6 +252,7 @@ fn invert_3x3(m: &[[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn d65_to_d65_is_identity() {

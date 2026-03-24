@@ -82,6 +82,7 @@ pub fn binarize(plane: &mut [f32], threshold: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn bimodal_distribution() {

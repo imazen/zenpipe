@@ -9,17 +9,24 @@ use crate::filter::Filter;
 use crate::gamut_lut::GamutBoundaryLut;
 use crate::gamut_map::GamutMapping;
 use crate::planes::OklabPlanes;
-use crate::scatter_gather::{gather_from_oklab, scatter_to_oklab};
+use crate::scatter_gather::scatter_to_oklab;
 
-/// Compute the number of rows per strip for L3-friendly processing.
+/// Compute the number of core rows per strip for L3-friendly processing.
 ///
 /// Targets keeping all planar data (L + a + b + optional alpha) under
 /// ~4 MB, which fits comfortably in L3 on most CPUs (8–32 MB).
-pub(crate) fn strip_height(width: u32, has_alpha: bool) -> usize {
+/// The `halo` parameter accounts for extra overlap rows needed by
+/// neighborhood filters — the total rows scattered per strip is
+/// `core_rows + 2 * halo`, and this function ensures the total fits
+/// the L3 budget.
+pub(crate) fn strip_height(width: u32, has_alpha: bool, halo: usize) -> usize {
     const TARGET_BYTES: usize = 4 * 1024 * 1024;
     let plane_count = if has_alpha { 4 } else { 3 };
     let bytes_per_row = (width as usize) * plane_count * core::mem::size_of::<f32>();
-    (TARGET_BYTES / bytes_per_row.max(1)).clamp(8, 2048)
+    let max_total_rows = (TARGET_BYTES / bytes_per_row.max(1)).clamp(8, 2048);
+    // Core rows = total budget minus halo on each side.
+    // Ensure at least 8 core rows so we make forward progress.
+    max_total_rows.saturating_sub(2 * halo).max(8)
 }
 
 /// Configuration for the filter pipeline.
@@ -261,6 +268,20 @@ impl Pipeline {
             .unwrap_or(0)
     }
 
+    /// Total neighborhood halo across all filters (sum of radii).
+    ///
+    /// When processing in strips, each strip must be extended by this many
+    /// rows on each side to ensure all neighborhood filters produce correct
+    /// results. The sum (not max) is required because each neighborhood
+    /// filter "consumes" its radius of padding from the correct output of
+    /// the previous filter.
+    pub fn total_halo(&self, width: u32, height: u32) -> u32 {
+        self.filters
+            .iter()
+            .map(|f| f.neighborhood_radius(width, height))
+            .sum()
+    }
+
     /// Apply the full pipeline: scatter → filters → gather.
     ///
     /// `src` is interleaved linear RGB(A) f32 data.
@@ -269,6 +290,12 @@ impl Pipeline {
     /// `channels` is 3 (RGB) or 4 (RGBA).
     /// `ctx` provides reusable scratch buffers — pass a persistent
     /// `FilterContext` to avoid per-call allocations.
+    ///
+    /// Processing uses L3-cache-friendly horizontal strips with overlapping
+    /// halos for neighborhood filters. Each strip is extended by
+    /// [`total_halo()`](Pipeline::total_halo) rows on each side so that
+    /// neighborhood filters (clarity, sharpen, denoise, etc.) produce
+    /// correct results without materializing the entire image.
     #[track_caller]
     pub fn apply(
         &self,
@@ -293,40 +320,16 @@ impl Pipeline {
             }));
         }
 
-        // Strip processing: keep planar data in L3 cache by processing
-        // horizontal strips instead of the full frame.
-        // Neighborhood filters need full-frame access, so fall back then.
-        if !self.has_neighborhood_filter() {
-            return self.apply_stripped(src, dst, width, height, channels, ctx);
-        }
-
-        // Full-frame fallback for pipelines with neighborhood filters
-        let mut planes = if channels == 4 {
-            OklabPlanes::from_ctx_with_alpha(ctx, width, height)
-        } else {
-            OklabPlanes::from_ctx(ctx, width, height)
-        };
-        scatter_to_oklab(
-            src,
-            &mut planes,
-            channels,
-            &self.m1,
-            self.config.reference_white,
-        );
-        self.apply_planar(&mut planes, ctx);
-        gather_from_oklab(
-            &planes,
-            dst,
-            channels,
-            &self.m1_inv,
-            self.config.reference_white,
-        );
-        planes.return_to_ctx(ctx);
-
-        Ok(())
+        self.apply_stripped(src, dst, width, height, channels, ctx)
     }
 
     /// Strip-process: scatter, filter, gather in L3-sized horizontal strips.
+    ///
+    /// Each strip is extended by `total_halo` rows on each side to give
+    /// neighborhood filters enough context. After filtering the extended
+    /// strip, only the core rows are gathered to the output. When there
+    /// are no neighborhood filters, `total_halo` is 0 and behavior is
+    /// identical to non-overlapping strip processing.
     fn apply_stripped(
         &self,
         src: &[f32],
@@ -339,35 +342,62 @@ impl Pipeline {
         let ch = channels as usize;
         let w = width as usize;
         let has_alpha = ch == 4;
-        let strip_h = strip_height(width, has_alpha);
+        let halo = self.total_halo(width, height) as usize;
+        let strip_h = strip_height(width, has_alpha, halo);
 
         for y_start in (0..height as usize).step_by(strip_h) {
             let y_end = (y_start + strip_h).min(height as usize);
-            let strip_rows = (y_end - y_start) as u32;
-            let offset = y_start * w * ch;
-            let len = (strip_rows as usize) * w * ch;
+            let core_rows = y_end - y_start;
+
+            // Extended region: core ± halo, clamped to image bounds
+            let ext_y_start = y_start.saturating_sub(halo);
+            let ext_y_end = (y_end + halo).min(height as usize);
+            let ext_rows = ext_y_end - ext_y_start;
+            let core_offset = y_start - ext_y_start;
+
+            // Scatter the extended strip
+            let ext_src_offset = ext_y_start * w * ch;
+            let ext_src_len = ext_rows * w * ch;
 
             let mut planes = if has_alpha {
-                OklabPlanes::from_ctx_with_alpha(ctx, width, strip_rows)
+                OklabPlanes::from_ctx_with_alpha(ctx, width, ext_rows as u32)
             } else {
-                OklabPlanes::from_ctx(ctx, width, strip_rows)
+                OklabPlanes::from_ctx(ctx, width, ext_rows as u32)
             };
 
             scatter_to_oklab(
-                &src[offset..offset + len],
+                &src[ext_src_offset..ext_src_offset + ext_src_len],
                 &mut planes,
                 channels,
                 &self.m1,
                 self.config.reference_white,
             );
             self.apply_planar(&mut planes, ctx);
-            gather_from_oklab(
-                &planes,
-                &mut dst[offset..offset + len],
+
+            // Gather only the core rows from the filtered extended strip
+            let dst_offset = y_start * w * ch;
+            let dst_len = core_rows * w * ch;
+            let plane_start = core_offset * w;
+            let plane_end = plane_start + core_rows * w;
+
+            crate::simd::gather_oklab(
+                &planes.l[plane_start..plane_end],
+                &planes.a[plane_start..plane_end],
+                &planes.b[plane_start..plane_end],
+                &mut dst[dst_offset..dst_offset + dst_len],
                 channels,
                 &self.m1_inv,
                 self.config.reference_white,
             );
+
+            // Alpha: copy core rows
+            if ch == 4 {
+                let n = core_rows * w;
+                for i in 0..n {
+                    dst[dst_offset + i * ch + 3] =
+                        planes.alpha.as_ref().map_or(1.0, |a| a[plane_start + i]);
+                }
+            }
 
             planes.return_to_ctx(ctx);
         }
@@ -396,6 +426,7 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn empty_pipeline_is_identity() {
@@ -431,5 +462,107 @@ mod tests {
         let mut ctx = FilterContext::new();
         let result = pipeline.apply(&src, &mut dst, 64, 64, 3, &mut ctx);
         assert!(result.is_err());
+    }
+
+    /// Verify that overlapping-strip processing matches full-frame for
+    /// a pipeline containing neighborhood filters (clarity + sharpen).
+    #[test]
+    fn neighborhood_strip_matches_full_frame() {
+        use crate::filters;
+        use crate::scatter_gather::gather_from_oklab;
+        use zenpixels_convert::oklab;
+
+        let (w, h) = (128, 128);
+        let n = (w as usize) * (h as usize);
+        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+
+        // Generate a test image with enough spatial variation to exercise
+        // neighborhood filters meaningfully.
+        let mut src = Vec::with_capacity(n * 3);
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                let t = (y * w as usize + x) as f32 / n as f32;
+                let r = (t * 0.6 + 0.2).clamp(0.01, 0.99);
+                let g = ((1.0 - t) * 0.5 + 0.25).clamp(0.01, 0.99);
+                let b_val = ((x as f32 / w as f32) * 0.4 + 0.3).clamp(0.01, 0.99);
+                src.push(r);
+                src.push(g);
+                src.push(b_val);
+            }
+        }
+
+        // Build pipeline with neighborhood filters
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+        pipeline.push(Box::new(filters::Exposure { stops: 0.3 }));
+        pipeline.push(Box::new(filters::Clarity {
+            sigma: 3.0,
+            amount: 0.4,
+        }));
+        pipeline.push(Box::new(filters::Sharpen {
+            sigma: 1.0,
+            amount: 0.5,
+        }));
+        pipeline.push(Box::new(filters::Contrast { amount: 0.2 }));
+        assert!(pipeline.has_neighborhood_filter());
+        assert!(pipeline.total_halo(w, h) > 0);
+
+        // Full-frame reference: scatter → apply_planar → gather
+        let mut ctx = FilterContext::new();
+        let mut planes = OklabPlanes::from_ctx(&mut ctx, w, h);
+        scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+        pipeline.apply_planar(&mut planes, &mut ctx);
+        let mut full_frame = vec![0.0f32; n * 3];
+        gather_from_oklab(&planes, &mut full_frame, 3, &m1_inv, 1.0);
+        planes.return_to_ctx(&mut ctx);
+
+        // Strip-processed result via apply()
+        let mut stripped = vec![0.0f32; n * 3];
+        pipeline
+            .apply(&src, &mut stripped, w, h, 3, &mut ctx)
+            .unwrap();
+
+        // Compare
+        let mut max_err = 0.0f32;
+        for i in 0..full_frame.len() {
+            max_err = max_err.max((full_frame[i] - stripped[i]).abs());
+        }
+        // Tolerance accounts for edge-replication differences at image
+        // boundaries (full-frame replicates the true image edge; strips
+        // replicate the extended strip edge, which is the same pixel
+        // for interior strips but may differ at the image boundary
+        // due to floating-point ordering).
+        assert!(
+            max_err < 1e-4,
+            "strip vs full-frame max error: {max_err} (should be < 1e-4)"
+        );
+    }
+
+    #[test]
+    fn total_halo_is_sum_of_radii() {
+        use crate::filters;
+
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+        // Per-pixel only: halo should be 0
+        pipeline.push(Box::new(filters::Exposure { stops: 0.5 }));
+        assert_eq!(pipeline.total_halo(64, 64), 0);
+
+        // Add clarity (sigma=4 → coarse blur sigma=16 → radius=48)
+        let clarity = filters::Clarity {
+            sigma: 4.0,
+            amount: 0.3,
+        };
+        let clarity_radius = clarity.neighborhood_radius(64, 64);
+        pipeline.push(Box::new(clarity));
+
+        // Add sharpen (sigma=1 → radius=3)
+        let sharpen = filters::Sharpen {
+            sigma: 1.0,
+            amount: 0.5,
+        };
+        let sharpen_radius = sharpen.neighborhood_radius(64, 64);
+        pipeline.push(Box::new(sharpen));
+
+        assert_eq!(pipeline.total_halo(64, 64), clarity_radius + sharpen_radius);
     }
 }

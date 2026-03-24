@@ -328,6 +328,7 @@ fn srgb_to_linear(v: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn identity_preserves_all_channels() {

@@ -412,6 +412,7 @@ pub fn compute_gradient_magnitude(l_plane: &[f32], grad_mag: &mut [f32], width: 
 mod tests {
     use super::*;
     use crate::context::FilterContext;
+    use crate::prelude::*;
 
     #[test]
     fn constant_plane_no_segments() {

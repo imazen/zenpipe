@@ -223,6 +223,7 @@ impl Describe for Levels {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn default_is_identity() {

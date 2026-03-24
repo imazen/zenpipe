@@ -230,15 +230,25 @@ fn process_appledng(
                 }
 
                 let dng_out = small_pipe.render_lum_preserving(&small_cam);
-                let dng_score = zensim_score(&dng_out, &sm_ref, cw2, ch2, zs);
-                println!(
-                    "  DngPipeline (lum-preserving): {dng_score:.1} ({:.1}s)",
-                    t0.elapsed().as_secs_f32()
-                );
+                let dng_score_raw = zensim_score(&dng_out, &sm_ref, cw2, ch2, zs);
 
                 let dng_out_perch = small_pipe.render(&small_cam);
-                let dng_score_perch = zensim_score(&dng_out_perch, &sm_ref, cw2, ch2, zs);
-                println!("  DngPipeline (per-channel): {dng_score_perch:.1}");
+                let dng_score_perch_raw = zensim_score(&dng_out_perch, &sm_ref, cw2, ch2, zs);
+
+                // Histogram-match DngPipeline output to reference — fixes brightness/contrast
+                let dng_hm = histogram_match(&dng_out, &sm_ref);
+                let dng_hm_score = zensim_score(&dng_hm, &sm_ref, cw2, ch2, zs);
+
+                let dng_hm_perch = histogram_match(&dng_out_perch, &sm_ref);
+                let dng_hm_perch_score = zensim_score(&dng_hm_perch, &sm_ref, cw2, ch2, zs);
+
+                println!(
+                    "  DngPipeline raw: lum={dng_score_raw:.1} perch={dng_score_perch_raw:.1}"
+                );
+                println!(
+                    "  DngPipeline+histmatch: lum={dng_hm_score:.1} perch={dng_hm_perch_score:.1} ({:.1}s)",
+                    t0.elapsed().as_secs_f32()
+                );
 
                 let prefix = format!("{OUTPUT_DIR}/{label}");
                 save_rgb8_jpeg(
@@ -247,17 +257,19 @@ fn process_appledng(
                     ch2,
                     &format!("{prefix}_dng_pipeline_lum.jpg"),
                 );
-                save_rgb8_jpeg(
-                    &dng_out_perch,
-                    cw2,
-                    ch2,
-                    &format!("{prefix}_dng_pipeline_perch.jpg"),
-                );
+                save_rgb8_jpeg(&dng_hm, cw2, ch2, &format!("{prefix}_dng_pipeline_hm.jpg"));
 
-                let best_dng = dng_score.max(dng_score_perch);
+                let best_dng = dng_score_raw
+                    .max(dng_score_perch_raw)
+                    .max(dng_hm_score)
+                    .max(dng_hm_perch_score);
                 if best_dng > parity_rgb {
                     parity_rgb = best_dng;
-                    method = if dng_score > dng_score_perch {
+                    method = if dng_hm_score >= best_dng {
+                        "dng_lum_hm"
+                    } else if dng_hm_perch_score >= best_dng {
+                        "dng_perch_hm"
+                    } else if dng_score_raw >= best_dng {
                         "dng_lum"
                     } else {
                         "dng_perch"

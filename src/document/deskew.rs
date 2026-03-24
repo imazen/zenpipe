@@ -149,6 +149,7 @@ fn projection_variance(binary: &[f32], w: usize, h: usize, angle_degrees: f32) -
 mod tests {
     use super::*;
     use crate::context::FilterContext;
+    use crate::prelude::*;
 
     #[test]
     fn horizontal_text_returns_zero_skew() {

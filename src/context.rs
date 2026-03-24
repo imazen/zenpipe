@@ -108,6 +108,7 @@ impl Default for FilterContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn take_returns_zeroed() {

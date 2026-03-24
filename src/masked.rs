@@ -305,6 +305,7 @@ mod tests {
     use super::*;
     use crate::context::FilterContext;
     use crate::filters::Exposure;
+    use crate::prelude::*;
 
     #[test]
     fn full_mask_applies_completely() {

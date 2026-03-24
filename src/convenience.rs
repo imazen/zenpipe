@@ -143,11 +143,11 @@ pub fn apply_to_buffer(
         && matches!(desc.layout(), ChannelLayout::Rgb | ChannelLayout::Rgba);
 
     let color_ctx = input.color_context().cloned();
-    let can_strip = !pipeline.has_neighborhood_filter();
 
     // Fast path: fused sRGB u8 roundtrip with L3-friendly strip processing.
     // Scatter/filter/gather in horizontal strips so planar data stays in L3.
-    if use_fused && convert_back && can_strip {
+    // Neighborhood filters are handled via overlapping halo rows per strip.
+    if use_fused && convert_back {
         return apply_fused_stripped(
             pipeline,
             input,
@@ -266,7 +266,7 @@ pub fn apply_to_buffer(
 ///
 /// Processes the image in horizontal strips so that planar Oklab data
 /// (L + a + b + optional alpha) stays in L3 cache during scatter → filter → gather.
-/// Only used when all filters are per-pixel (no neighborhood access).
+/// Neighborhood filters are supported via overlapping halo rows per strip.
 #[allow(clippy::too_many_arguments)]
 #[track_caller]
 fn apply_fused_stripped(
@@ -284,11 +284,12 @@ fn apply_fused_stripped(
 ) -> Result<PixelBuffer, At<ConvenienceError>> {
     let w = width as usize;
     let ch = channels as usize;
-    let strip_h = pipeline::strip_height(width, has_alpha);
+    let halo = pipeline.total_halo(width, height) as usize;
+    let strip_h = pipeline::strip_height(width, has_alpha, halo);
 
-    // Allocate strip-sized input buffer and full-frame output
-    let strip_byte_cap = strip_h * w * ch;
-    let mut strip_input = ctx.take_u8(strip_byte_cap);
+    // Allocate extended-strip-sized input buffer and full-frame output
+    let ext_strip_cap = (strip_h + 2 * halo) * w * ch;
+    let mut strip_input = ctx.take_u8(ext_strip_cap);
     let total_out = w * (height as usize) * ch;
     let mut output_bytes = ctx.take_u8(total_out);
 
@@ -296,32 +297,58 @@ fn apply_fused_stripped(
 
     for y_start in (0..height as usize).step_by(strip_h) {
         let y_end = (y_start + strip_h).min(height as usize);
-        let strip_rows = (y_end - y_start) as u32;
-        let strip_len = (strip_rows as usize) * w * ch;
+        let core_rows = y_end - y_start;
 
-        // Copy strip rows from input (handles stride)
-        for dy in 0..(strip_rows as usize) {
-            let row = src_slice.row((y_start + dy) as u32);
+        // Extended region: core ± halo, clamped to image bounds
+        let ext_y_start = y_start.saturating_sub(halo);
+        let ext_y_end = (y_end + halo).min(height as usize);
+        let ext_rows = ext_y_end - ext_y_start;
+        let core_offset = y_start - ext_y_start;
+
+        let ext_len = ext_rows * w * ch;
+
+        // Copy extended rows from input (handles stride)
+        for dy in 0..ext_rows {
+            let row = src_slice.row((ext_y_start + dy) as u32);
             let row_start = dy * w * ch;
             strip_input[row_start..row_start + row.len()].copy_from_slice(row);
         }
 
         let mut planes = if has_alpha {
-            OklabPlanes::from_ctx_with_alpha(ctx, width, strip_rows)
+            OklabPlanes::from_ctx_with_alpha(ctx, width, ext_rows as u32)
         } else {
-            OklabPlanes::from_ctx(ctx, width, strip_rows)
+            OklabPlanes::from_ctx(ctx, width, ext_rows as u32)
         };
 
-        scatter_srgb_u8_to_oklab(&strip_input[..strip_len], &mut planes, channels, m1);
+        scatter_srgb_u8_to_oklab(&strip_input[..ext_len], &mut planes, channels, m1);
         pipeline.apply_planar(&mut planes, ctx);
 
+        // Gather only the core rows from the filtered extended strip
         let out_offset = y_start * w * ch;
-        gather_oklab_to_srgb_u8(
-            &planes,
-            &mut output_bytes[out_offset..out_offset + strip_len],
+        let core_len = core_rows * w * ch;
+        let plane_start = core_offset * w;
+        let plane_end = plane_start + core_rows * w;
+
+        crate::simd::gather_oklab_to_srgb_u8(
+            &planes.l[plane_start..plane_end],
+            &planes.a[plane_start..plane_end],
+            &planes.b[plane_start..plane_end],
+            &mut output_bytes[out_offset..out_offset + core_len],
             channels,
             m1_inv,
         );
+
+        // Alpha: copy core rows
+        if ch == 4 {
+            let n = core_rows * w;
+            for i in 0..n {
+                let a = planes
+                    .alpha
+                    .as_ref()
+                    .map_or(1.0, |alpha| alpha[plane_start + i]);
+                output_bytes[out_offset + i * ch + 3] = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+            }
+        }
 
         planes.return_to_ctx(ctx);
     }

@@ -172,6 +172,7 @@ fn is_in_gamut(l: f32, a: f32, b: f32, m1_inv: &GamutMatrix) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
     use zenpixels::ColorPrimaries;
 
     fn bt709_lut() -> GamutBoundaryLut {

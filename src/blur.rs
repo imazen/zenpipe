@@ -803,9 +803,7 @@ mod tests {
             }
         }
         let rmse = (sum_sq_err / count as f64).sqrt();
-        eprintln!(
-            "stackblur vs FIR sigma={sigma} radius={sb_radius}: max_err={max_err:.6}, rmse={rmse:.6}"
-        );
+        let _ = rmse; // debug: stackblur vs FIR sigma={sigma} radius={sb_radius}: max_err={max_err}, rmse={rmse}
         assert!(
             max_err < 0.06,
             "stackblur vs FIR max error too large: {max_err}"
@@ -915,9 +913,7 @@ mod tests {
             }
         }
         let rmse = (sum_sq_err / count as f64).sqrt();
-        eprintln!(
-            "deriche vs FIR sigma={sigma}: max_err={max_err:.6}, rmse={rmse:.6} (interior only)"
-        );
+        let _ = rmse; // debug: deriche vs FIR sigma={sigma}: max_err={max_err}, rmse={rmse}
         assert!(
             max_err < 0.02,
             "deriche vs FIR max error too large: {max_err}"

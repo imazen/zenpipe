@@ -494,6 +494,7 @@ mod tests {
     use super::*;
     use crate::context::FilterContext;
     use crate::planes::OklabPlanes;
+    use crate::prelude::*;
 
     fn make_uniform_planes(w: u32, h: u32, l: f32, a: f32, b: f32) -> OklabPlanes {
         let n = (w as usize) * (h as usize);

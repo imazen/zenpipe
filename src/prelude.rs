@@ -1,8 +1,10 @@
 //! Crate-internal prelude: alloc re-exports + common imports.
 //!
-//! instead of individual `use alloc::{...}` imports.
+//! Use `use crate::prelude::*;` instead of individual `use alloc::{...}` imports.
 
 pub use alloc::boxed::Box;
+pub use alloc::format;
 pub use alloc::string::String;
+pub use alloc::string::ToString;
 pub use alloc::vec;
 pub use alloc::vec::Vec;
