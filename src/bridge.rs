@@ -1026,6 +1026,727 @@ fn parse_filter_opt(s: &str) -> Option<zenresize::Filter> {
     }
 }
 
+// ─── Tests using mock NodeInstance implementations ───
+
+#[cfg(test)]
+mod core_tests {
+    use super::*;
+    use crate::format::RGBA8_SRGB;
+    use crate::strip::Strip;
+    use core::any::Any;
+
+    // A mock NodeInstance backed by a BTreeMap of params.
+    struct MockNode {
+        schema: &'static zenode::NodeSchema,
+        params: zenode::ParamMap,
+    }
+
+    impl MockNode {
+        fn boxed(
+            schema: &'static zenode::NodeSchema,
+            params: zenode::ParamMap,
+        ) -> Box<dyn NodeInstance> {
+            Box::new(Self { schema, params })
+        }
+    }
+
+    impl NodeInstance for MockNode {
+        fn schema(&self) -> &'static zenode::NodeSchema {
+            self.schema
+        }
+
+        fn to_params(&self) -> zenode::ParamMap {
+            self.params.clone()
+        }
+
+        fn get_param(&self, name: &str) -> Option<zenode::ParamValue> {
+            self.params.get(name).cloned()
+        }
+
+        fn set_param(&mut self, name: &str, value: zenode::ParamValue) -> bool {
+            self.params.insert(name.into(), value);
+            true
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+            Box::new(Self {
+                schema: self.schema,
+                params: self.params.clone(),
+            })
+        }
+    }
+
+    // ─── Static schemas ───
+
+    static CROP_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenlayout.crop",
+        label: "Crop",
+        description: "Crop to rectangle",
+        group: zenode::NodeGroup::Geometry,
+        role: zenode::NodeRole::Geometry,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "layout_plan",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: true,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    static ORIENT_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenlayout.orient",
+        label: "Orient",
+        description: "Auto-orient from EXIF",
+        group: zenode::NodeGroup::Geometry,
+        role: zenode::NodeRole::Geometry,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "layout_plan",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: true,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    static CONSTRAIN_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenresize.constrain",
+        label: "Constrain",
+        description: "Resize within constraints",
+        group: zenode::NodeGroup::Geometry,
+        role: zenode::NodeRole::Geometry,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "layout_plan",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: true,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    static FLIP_H_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenlayout.flip_h",
+        label: "Flip Horizontal",
+        description: "Mirror horizontally",
+        group: zenode::NodeGroup::Geometry,
+        role: zenode::NodeRole::Geometry,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "layout_plan",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: false,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    static ROTATE_90_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenlayout.rotate_90",
+        label: "Rotate 90",
+        description: "Rotate 90 degrees",
+        group: zenode::NodeGroup::Geometry,
+        role: zenode::NodeRole::Geometry,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "layout_plan",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: true,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    static DECODE_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenode.decode",
+        label: "Decode",
+        description: "Decode",
+        group: zenode::NodeGroup::Decode,
+        role: zenode::NodeRole::Decode,
+        params: &[],
+        tags: &[],
+        coalesce: None,
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::Any,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: false,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    // A fake non-geometry schema for testing mixed groups.
+    static FILTER_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+        id: "zenfilters.exposure",
+        label: "Exposure",
+        description: "Adjust exposure",
+        group: zenode::NodeGroup::Tone,
+        role: zenode::NodeRole::Filter,
+        params: &[],
+        tags: &[],
+        coalesce: Some(zenode::CoalesceInfo {
+            group: "filter_pipeline",
+            fusable: true,
+            is_target: false,
+        }),
+        format: zenode::FormatHint {
+            preferred: zenode::PixelFormatPreference::OklabF32,
+            alpha: zenode::AlphaHandling::Process,
+            changes_dimensions: false,
+            is_neighborhood: false,
+        },
+        version: 1,
+        compat_version: 1,
+    };
+
+    // ─── Helper constructors ───
+
+    fn crop_node(x: u32, y: u32, w: u32, h: u32) -> Box<dyn NodeInstance> {
+        let mut params = zenode::ParamMap::new();
+        params.insert("x".into(), zenode::ParamValue::U32(x));
+        params.insert("y".into(), zenode::ParamValue::U32(y));
+        params.insert("w".into(), zenode::ParamValue::U32(w));
+        params.insert("h".into(), zenode::ParamValue::U32(h));
+        MockNode::boxed(&CROP_SCHEMA, params)
+    }
+
+    fn orient_node(orientation: i32) -> Box<dyn NodeInstance> {
+        let mut params = zenode::ParamMap::new();
+        params.insert("orientation".into(), zenode::ParamValue::I32(orientation));
+        MockNode::boxed(&ORIENT_SCHEMA, params)
+    }
+
+    fn constrain_node(w: u32, h: u32, mode: &str, filter: &str) -> Box<dyn NodeInstance> {
+        let mut params = zenode::ParamMap::new();
+        params.insert("w".into(), zenode::ParamValue::U32(w));
+        params.insert("h".into(), zenode::ParamValue::U32(h));
+        params.insert("mode".into(), zenode::ParamValue::Str(mode.into()));
+        params.insert("filter".into(), zenode::ParamValue::Str(filter.into()));
+        MockNode::boxed(&CONSTRAIN_SCHEMA, params)
+    }
+
+    fn flip_h_node() -> Box<dyn NodeInstance> {
+        MockNode::boxed(&FLIP_H_SCHEMA, zenode::ParamMap::new())
+    }
+
+    fn rotate_90_node() -> Box<dyn NodeInstance> {
+        MockNode::boxed(&ROTATE_90_SCHEMA, zenode::ParamMap::new())
+    }
+
+    fn decode_node() -> Box<dyn NodeInstance> {
+        MockNode::boxed(&DECODE_SCHEMA, zenode::ParamMap::new())
+    }
+
+    fn filter_node() -> Box<dyn NodeInstance> {
+        MockNode::boxed(&FILTER_SCHEMA, zenode::ParamMap::new())
+    }
+
+    // ─── Test source ───
+
+    struct SolidSource {
+        width: u32,
+        height: u32,
+        format: crate::PixelFormat,
+        y: u32,
+    }
+
+    impl SolidSource {
+        fn new(width: u32, height: u32) -> Self {
+            Self {
+                width,
+                height,
+                format: RGBA8_SRGB,
+                y: 0,
+            }
+        }
+    }
+
+    impl crate::Source for SolidSource {
+        fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+            if self.y >= self.height {
+                return Ok(None);
+            }
+            let rows = 16.min(self.height - self.y);
+            let stride = self.format.aligned_stride(self.width);
+            let data = alloc::vec![128u8; stride * rows as usize];
+            self.y += rows;
+            let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
+            Ok(Some(Strip::new(
+                leaked,
+                self.width,
+                rows,
+                stride,
+                self.format,
+            )?))
+        }
+
+        fn width(&self) -> u32 {
+            self.width
+        }
+
+        fn height(&self) -> u32 {
+            self.height
+        }
+
+        fn format(&self) -> crate::PixelFormat {
+            self.format
+        }
+    }
+
+    // ─── compile_nodes tests ───
+
+    #[test]
+    fn compile_empty_nodes() {
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+        let result = compile_nodes(&nodes, &[]).unwrap();
+        assert!(result.encode_nodes.is_empty());
+        assert!(result.decode_nodes.is_empty());
+    }
+
+    #[test]
+    fn compile_single_crop_node() {
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node(10, 20, 100, 80)];
+        let result = compile_nodes(&nodes, &[]).unwrap();
+        assert!(result.encode_nodes.is_empty());
+        assert!(result.decode_nodes.is_empty());
+    }
+
+    #[test]
+    fn compile_orient_node() {
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node(6)];
+        let result = compile_nodes(&nodes, &[]).unwrap();
+        assert!(result.encode_nodes.is_empty());
+    }
+
+    #[test]
+    fn compile_constrain_node() {
+        let nodes: Vec<Box<dyn NodeInstance>> =
+            vec![constrain_node(800, 600, "within", "lanczos")];
+        let result = compile_nodes(&nodes, &[]).unwrap();
+        assert!(result.encode_nodes.is_empty());
+    }
+
+    #[test]
+    fn decode_nodes_separated() {
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node()];
+        let result = compile_nodes(&nodes, &[]).unwrap();
+        assert_eq!(result.decode_nodes.len(), 1);
+    }
+
+    // ─── Geometry fusion tests ───
+
+    #[test]
+    fn geometry_fusion_crop_plus_constrain() {
+        // Crop 100,100,2000,2000 then constrain within 800x600
+        // Should produce a single Layout node.
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![
+            crop_node(100, 100, 2000, 2000),
+            constrain_node(800, 600, "within", "robidoux"),
+        ];
+
+        let result = compile_nodes_fused(&nodes, &[], 4000, 3000).unwrap();
+        // The graph should have Source → Layout → Output (3 nodes, 2 edges).
+        // Without fusion, it would be Source → Crop → Constrain → Output (4 nodes).
+        // We verify by compiling and checking the output dimensions.
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+
+        // The crop is 2000x2000, then constrain within 800x600 → 600x600
+        // (square input constrained to 800x600 → 600x600).
+        assert_eq!(pipeline.width(), 600);
+        assert_eq!(pipeline.height(), 600);
+    }
+
+    #[test]
+    fn geometry_fusion_orient_plus_constrain() {
+        // Orient EXIF 6 (rotate 90) then constrain to 800x600.
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![
+            orient_node(6),
+            constrain_node(800, 600, "fit", ""),
+        ];
+
+        let result = compile_nodes_fused(&nodes, &[], 4000, 3000).unwrap();
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(4000, 3000)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+
+        // 4000x3000 rotated 90 → 3000x4000, then fit to 800x600 → 450x600
+        assert_eq!(pipeline.width(), 450);
+        assert_eq!(pipeline.height(), 600);
+    }
+
+    #[test]
+    fn geometry_fusion_flip_rotate_crop() {
+        // flip_h + rotate_90 + crop
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![
+            flip_h_node(),
+            rotate_90_node(),
+            crop_node(0, 0, 500, 500),
+        ];
+
+        let result = compile_nodes_fused(&nodes, &[], 1000, 800).unwrap();
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(1000, 800)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+
+        // 1000x800, flip_h (still 1000x800), rotate_90 (800x1000), crop 500x500
+        assert_eq!(pipeline.width(), 500);
+        assert_eq!(pipeline.height(), 500);
+    }
+
+    #[test]
+    fn geometry_fusion_single_constrain() {
+        // Even a single constrain node should fuse into Layout.
+        let nodes: Vec<Box<dyn NodeInstance>> =
+            vec![constrain_node(200, 150, "fit", "lanczos")];
+
+        let result = compile_nodes_fused(&nodes, &[], 800, 600).unwrap();
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(800, 600)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+
+        assert_eq!(pipeline.width(), 200);
+        assert_eq!(pipeline.height(), 150);
+    }
+
+    #[test]
+    fn geometry_fusion_fallback_without_dimensions() {
+        // When source dimensions are unknown (0, 0), each node converts individually.
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![
+            crop_node(10, 10, 100, 100),
+            constrain_node(50, 50, "fit", ""),
+        ];
+
+        // This should still compile (no fusion, individual nodes).
+        let result = compile_nodes_fused(&nodes, &[], 0, 0).unwrap();
+        assert!(result.encode_nodes.is_empty());
+    }
+
+    // ─── build_pipeline streaming tests ───
+
+    #[test]
+    fn build_pipeline_returns_streaming_source() {
+        // build_pipeline should return a Source, not materialize.
+        let source = Box::new(SolidSource::new(200, 150));
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+
+        let result = build_pipeline(source, &nodes, &[]).unwrap();
+        assert_eq!(result.source.width(), 200);
+        assert_eq!(result.source.height(), 150);
+    }
+
+    #[test]
+    fn build_pipeline_with_crop() {
+        let source = Box::new(SolidSource::new(400, 300));
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node(10, 10, 200, 150)];
+
+        let result = build_pipeline(source, &nodes, &[]).unwrap();
+        assert_eq!(result.source.width(), 200);
+        assert_eq!(result.source.height(), 150);
+    }
+
+    #[test]
+    fn build_pipeline_streams_all_strips() {
+        // Verify we can actually drain the streaming source.
+        let source = Box::new(SolidSource::new(100, 100));
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+
+        let mut result = build_pipeline(source, &nodes, &[]).unwrap();
+        let mut total_rows = 0u32;
+        while let Some(strip) = result.source.next().unwrap() {
+            total_rows += strip.rows();
+        }
+        assert_eq!(total_rows, 100);
+    }
+
+    #[test]
+    fn build_pipeline_decode_config_extracted() {
+        let source = Box::new(SolidSource::new(100, 100));
+        let mut params = zenode::ParamMap::new();
+        params.insert(
+            "hdr_mode".into(),
+            zenode::ParamValue::Str("preserve".into()),
+        );
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![MockNode::boxed(&DECODE_SCHEMA, params)];
+
+        let result = build_pipeline(source, &nodes, &[]).unwrap();
+        assert_eq!(result.decode_config.hdr_mode, "preserve");
+    }
+
+    // ─── DAG tests ───
+
+    #[test]
+    fn dag_simple_linear_chain() {
+        // A simple DAG that is just a linear chain: source(0) → crop(1)
+        let dag = vec![
+            DagNode {
+                instance: crop_node(0, 0, 100, 100), // won't be used — it's a source
+                inputs: vec![],
+            },
+            DagNode {
+                instance: crop_node(10, 10, 50, 50),
+                inputs: vec![0],
+            },
+        ];
+
+        let sources = vec![(
+            0,
+            Box::new(SolidSource::new(200, 200)) as Box<dyn crate::Source>,
+        )];
+
+        let result = build_pipeline_dag(sources, &dag, &[]).unwrap();
+        assert_eq!(result.source.width(), 50);
+        assert_eq!(result.source.height(), 50);
+    }
+
+    #[test]
+    fn dag_with_decode_node() {
+        // Decode nodes should be separated, not added to the graph.
+        let dag = vec![
+            DagNode {
+                instance: decode_node(),
+                inputs: vec![],
+            },
+            DagNode {
+                instance: crop_node(0, 0, 100, 100), // actual source
+                inputs: vec![],
+            },
+            DagNode {
+                instance: crop_node(5, 5, 50, 50),
+                inputs: vec![1],
+            },
+        ];
+
+        let sources = vec![(
+            1,
+            Box::new(SolidSource::new(200, 200)) as Box<dyn crate::Source>,
+        )];
+
+        let result = build_pipeline_dag(sources, &dag, &[]).unwrap();
+        // Decode config should be defaults since MockNode with DECODE_SCHEMA
+        // doesn't have hdr_mode param.
+        assert_eq!(result.decode_config.hdr_mode, "sdr_only");
+    }
+
+    // ─── NodeConverter fuse_group tests ───
+
+    struct TestFilterConverter;
+
+    impl NodeConverter for TestFilterConverter {
+        fn can_convert(&self, schema_id: &str) -> bool {
+            schema_id == "zenfilters.exposure"
+        }
+
+        fn convert(&self, _node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+            // Return a no-op pixel transform for testing.
+            Ok(NodeOp::PixelTransform(Box::new(IdentityOp)))
+        }
+
+        fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+            // Just convert the first node.
+            self.convert(nodes[0])
+        }
+
+        fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+            if nodes.len() > 1 {
+                // Fuse multiple filter nodes into one PixelTransform.
+                Ok(Some(NodeOp::PixelTransform(Box::new(IdentityOp))))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    struct IdentityOp;
+
+    impl crate::ops::PixelOp for IdentityOp {
+        fn apply(
+            &mut self,
+            input: &[u8],
+            output: &mut [u8],
+            _width: u32,
+            _height: u32,
+        ) {
+            let len = output.len();
+            output[..len].copy_from_slice(&input[..len]);
+        }
+
+        fn input_format(&self) -> crate::PixelFormat {
+            RGBA8_SRGB
+        }
+
+        fn output_format(&self) -> crate::PixelFormat {
+            RGBA8_SRGB
+        }
+    }
+
+    #[test]
+    fn fuse_group_called_for_filter_nodes() {
+        // Two adjacent filter nodes should trigger fuse_group.
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![filter_node(), filter_node()];
+        let converter = TestFilterConverter;
+        let converters: &[&dyn NodeConverter] = &[&converter];
+
+        let result = compile_nodes_fused(&nodes, converters, 100, 100).unwrap();
+
+        // Should compile successfully — the fused group produces one PixelTransform.
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+        assert_eq!(pipeline.width(), 100);
+        assert_eq!(pipeline.height(), 100);
+    }
+
+    #[test]
+    fn single_filter_node_uses_convert() {
+        // A single filter node should use convert(), not fuse_group().
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![filter_node()];
+        let converter = TestFilterConverter;
+        let converters: &[&dyn NodeConverter] = &[&converter];
+
+        let result = compile_nodes(&nodes, converters).unwrap();
+        let mut sources = hashbrown::HashMap::new();
+        sources.insert(0, Box::new(SolidSource::new(100, 100)) as Box<dyn crate::Source>);
+        let pipeline = result.graph.compile(sources).unwrap();
+        assert_eq!(pipeline.width(), 100);
+    }
+
+    // ─── parse_filter / parse_constraint_mode tests ───
+
+    #[test]
+    fn parse_filter_variants() {
+        assert!(parse_filter_opt("").is_none());
+        assert_eq!(
+            parse_filter_opt("lanczos"),
+            Some(zenresize::Filter::Lanczos)
+        );
+        assert_eq!(
+            parse_filter_opt("robidoux"),
+            Some(zenresize::Filter::Robidoux)
+        );
+        assert!(parse_filter_opt("unknown_filter").is_none());
+    }
+
+    #[test]
+    fn parse_constraint_mode_aliases() {
+        assert_eq!(
+            parse_constraint_mode("crop").unwrap(),
+            zenresize::ConstraintMode::FitCrop
+        );
+        assert_eq!(
+            parse_constraint_mode("pad").unwrap(),
+            zenresize::ConstraintMode::FitPad
+        );
+        assert_eq!(
+            parse_constraint_mode("within").unwrap(),
+            zenresize::ConstraintMode::Within
+        );
+    }
+
+    #[test]
+    fn unknown_constraint_mode_errors() {
+        let err = parse_constraint_mode("bogus").unwrap_err();
+        assert!(err.to_string().contains("bogus"));
+    }
+
+    // ─── DecodeConfig / EncodeConfig tests ───
+
+    #[test]
+    fn decode_config_defaults() {
+        let config = DecodeConfig::default();
+        assert_eq!(config.hdr_mode, "sdr_only");
+        assert_eq!(config.color_intent, "preserve");
+        assert_eq!(config.min_size, 0);
+    }
+
+    #[test]
+    fn encode_config_defaults() {
+        let config = EncodeConfig::default();
+        assert!(config.quality_profile.is_none());
+        assert!(config.format.is_none());
+        assert_eq!(config.dpr, 1.0);
+        assert!(config.lossless.is_none());
+        assert!(config.codec_params.is_none());
+    }
+
+    #[test]
+    fn decode_config_from_empty_nodes() {
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+        let config = DecodeConfig::from_nodes(&nodes);
+        assert_eq!(config.hdr_mode, "sdr_only");
+    }
+
+    #[test]
+    fn encode_config_from_empty_nodes() {
+        let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+        let config = EncodeConfig::from_nodes(&nodes);
+        assert!(config.quality_profile.is_none());
+    }
+
+    // ─── is_geometry_node tests ───
+
+    #[test]
+    fn geometry_node_detection() {
+        assert!(is_geometry_node("zenlayout.crop"));
+        assert!(is_geometry_node("zenlayout.orient"));
+        assert!(is_geometry_node("zenlayout.flip_h"));
+        assert!(is_geometry_node("zenlayout.flip_v"));
+        assert!(is_geometry_node("zenlayout.rotate_90"));
+        assert!(is_geometry_node("zenlayout.rotate_180"));
+        assert!(is_geometry_node("zenlayout.rotate_270"));
+        assert!(is_geometry_node("zenresize.constrain"));
+        assert!(is_geometry_node("zenlayout.constrain"));
+        assert!(!is_geometry_node("zenfilters.exposure"));
+        assert!(!is_geometry_node("zenode.decode"));
+    }
+}
+
 // Bridge tests require `zenode_defs` modules in zenresize and zenlayout,
 // which are not yet implemented. Enable these tests once those modules exist
 // by adding `zenode-defs` to the feature list and depending on
