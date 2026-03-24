@@ -188,8 +188,10 @@ fn codec_bridge_roundtrip() {
     // Encode via zencodec dyn → EncoderSink.
     // with_canvas_size enables true streaming (no accumulation).
     let enc_config2 = zenjpeg::JpegEncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter);
-    let enc_job =
-        <zenjpeg::JpegEncoderConfig as zencodec::encode::EncoderConfig>::job(&enc_config2);
+    let enc_job = {
+        use zencodec::encode::EncoderConfig as _;
+        enc_config2.job()
+    };
     let enc_job = zencodec::encode::EncodeJob::with_canvas_size(enc_job, w, h);
     let dyn_enc: Box<dyn zencodec::encode::DynEncoder + Send> = {
         let concrete = zencodec::encode::EncodeJob::encoder(enc_job).expect("encoder");
