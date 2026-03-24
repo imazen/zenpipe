@@ -769,9 +769,8 @@ fn convert_step_fused(
             // Single geometry node: if source dims are known, fuse it.
             if is_geometry_node(schema_id) && source_w > 0 && source_h > 0 {
                 let nodes = &[*node];
-                match compile_geometry_run(nodes, source_w, source_h) {
-                    Ok(op) => return Ok(alloc::vec![op]),
-                    Err(_) => {} // fall through to individual conversion
+                if let Ok(op) = compile_geometry_run(nodes, source_w, source_h) {
+                    return Ok(alloc::vec![op]);
                 }
             }
 
@@ -783,9 +782,8 @@ fn convert_step_fused(
             let all_geometry = nodes.iter().all(|n| is_geometry_node(n.schema().id));
 
             if all_geometry && source_w > 0 && source_h > 0 {
-                match compile_geometry_run(nodes, source_w, source_h) {
-                    Ok(op) => return Ok(alloc::vec![op]),
-                    Err(_) => {} // fall through
+                if let Ok(op) = compile_geometry_run(nodes, source_w, source_h) {
+                    return Ok(alloc::vec![op]);
                 }
             }
 
