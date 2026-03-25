@@ -62,7 +62,7 @@ Can the codec estimate the source encoding quality from headers alone?
 | PNG | N/A | Always lossless | -- | -- |
 | WebP | Yes | VP8 base quantizer index reversal | Reliable for libwebp | 0-100 |
 | GIF | N/A | Always lossless | -- | -- |
-| AVIF | Partial | AV1 base_q_idx from OBU headers | Approximate when QP found | 0-100 |
+| AVIF | Yes | AV1 base_q_idx from frame header via zenavif-parse | FromFrameHeader (reliable for still images) | 0-100 |
 | JXL | No | Headers don't expose butteraugli distance | -- | -- |
 | HEIC | No | Can't recover HEVC QP from container | -- | -- |
 | TIFF | N/A | Always lossless | -- | -- |
@@ -80,7 +80,7 @@ Can the codec determine if the source was losslessly encoded?
 | PNG | Yes | Always lossless |
 | WebP | Yes | VP8L bitstream type vs VP8 |
 | GIF | Yes | Always lossless (palette-indexed LZW) |
-| AVIF | No | QP=0 necessary but not sufficient; AV1 lossless flag not in lightweight probe |
+| AVIF | Yes | Frame header: base_q_idx=0, all delta-q=0, no chroma subsampling |
 | JXL | Yes | `!xyb_encoded` — modular pathway = lossless, VarDCT = lossy |
 | HEIC | No | HEVC is always lossy |
 | TIFF | Yes | Always lossless (standard TIFF; JPEG-in-TIFF detectable via compression tag) |
@@ -261,8 +261,8 @@ What can be determined from probe (header-only parse)?
 | Dimensions | All codecs | Always available from header |
 | Has alpha | All codecs | From color type / bitstream header |
 | Has animation | Most codecs | GIF: block scan. WebP: VP8X. AVIF: container. PNG: acTL. JXL: header. |
-| Is lossless source | WebP, JXL, format-based | WebP: bitstream type. JXL: xyb flag. Others: inferred from format. |
-| Source quality | JPEG, WebP, AVIF (partial) | DQT tables, VP8 QP, AV1 QP |
+| Is lossless source | WebP, JXL, AVIF, format-based | WebP: bitstream type. JXL: xyb flag. AVIF: frame header QP+delta-q+subsampling. Others: inferred from format. |
+| Source quality | JPEG, WebP, AVIF | DQT tables, VP8 QP, AV1 base_q_idx from frame header |
 | HDR content | AVIF, JXL, HEIC, PNG | CICP transfer function (PQ/HLG detection) |
 | Gain map present | AVIF, JXL, HEIC, JPEG (UltraHDR) | Container-level detection |
 | Color primaries | AVIF, JXL, HEIC, PNG (CICP) | From CICP/NCLX signaling |
