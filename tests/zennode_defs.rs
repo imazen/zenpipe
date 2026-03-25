@@ -2,7 +2,7 @@
 
 #[cfg(feature = "zennode")]
 mod tests {
-    use zenfilters::zenode_defs::*;
+    use zenfilters::zennode_defs::*;
     use zennode::*;
 
     #[test]

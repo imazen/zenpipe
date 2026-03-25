@@ -95,7 +95,7 @@ pub mod document;
 pub mod segment;
 
 #[cfg(feature = "zennode")]
-pub mod zenode_defs;
+pub mod zennode_defs;
 
 #[cfg(feature = "buffer")]
 mod convenience;
