@@ -168,7 +168,7 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
 // AVIF disabled — zenavif has rav1d API compat issue (lossless/base_q_idx fields)
 
 // === JXL ===
-#[unsafe(no_mangle)] pub extern "C" fn jxl_encode(sp:*const u8,sl:u32,w:u32,h:u32,q:u32)->*mut u8{
+#[unsafe(no_mangle)] pub extern "C" fn jxl_encode(sp:*const u8,sl:u32,w:u32,h:u32,_q:u32)->*mut u8{
     let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)};
     let cfg = zenjxl::JxlEncoderConfig::new();
     let mut job = cfg.dyn_job();
