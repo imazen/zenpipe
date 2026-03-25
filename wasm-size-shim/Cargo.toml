@@ -16,9 +16,8 @@ zenpipe = { path = "..", features = ["std"] }
 zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
 zenblend = { path = "../../zenblend" }
 zenfilters = { path = "../../zenfilters" }
-zencodec = { path = "../../zencodec" }
-zenpixels = { path = "../../zenpixels/zenpixels" }
-archmage = { version = "0.9.12" }
+zencodec = { version = "0.1.2" }
+zenpixels = { version = "0.2.0" }
 hashbrown = "0.15"
 rgb = "0.8"
 bytemuck = { version = "1", features = ["derive"] }
@@ -38,8 +37,7 @@ zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
 # zenbitmaps = { path = "../../zenbitmaps", features = ["zencodec"] }
 
 [patch.crates-io]
-zencodec = { path = "../../zencodec" }
-zenpixels = { path = "../../zenpixels/zenpixels" }
+zencodec = { version = "0.1.2" }
 
 [profile.release]
 lto = true

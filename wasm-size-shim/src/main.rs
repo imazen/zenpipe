@@ -77,13 +77,6 @@ fn decode_via_zencodec(name: &str, cfg: &dyn DynDecoderConfig, data: &[u8]) {
 }
 
 fn main() {
-    // If SCALAR_ONLY env var is set, disable all SIMD tokens to force scalar/wide fallback
-    // This gives a fair comparison: native scalar vs wasmtime scalar
-    if std::env::var("SCALAR_ONLY").is_ok() {
-        let _ = archmage::dangerously_disable_tokens_except_wasm(true);
-        println!("*** SIMD tokens disabled — scalar/wide fallback only ***");
-    }
-
     let w: u32 = 3840;
     let h: u32 = 2160;
     println!("zenpipe WASM demo ({w}x{h} gradient, 4K)");
