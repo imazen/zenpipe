@@ -69,7 +69,6 @@ fn bridge_decode_resize_encode_jpeg() {
     let dst_h = 150u32;
 
     // 1. Build zennode nodes: [Decode, Constrain(w=200, h=150, mode=fit)]
-    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
 
     let mut constrain_params = zennode::ParamMap::new();
     constrain_params.insert("w".into(), zennode::ParamValue::U32(dst_w));
@@ -78,11 +77,11 @@ fn bridge_decode_resize_encode_jpeg() {
     constrain_params.insert("filter".into(), zennode::ParamValue::Str("lanczos".into()));
     let constrain_node = MockConstrainNode::boxed(constrain_params);
 
-    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node, constrain_node];
 
     // 2. Create a gradient source at source dimensions.
     let source = gradient_source(src_w, src_h);
 
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![constrain_node];
     // 3. Build pipeline via bridge.
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
 
@@ -135,9 +134,8 @@ fn bridge_passthrough_encode_jpeg() {
     let h = 96u32;
 
     // Only a decode node — pixel pipeline is passthrough.
-    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
-    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node];
 
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![];
     let source = gradient_source(w, h);
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     assert_eq!(result.source.width(), w);
@@ -170,7 +168,6 @@ fn bridge_materialize_after_resize() {
     let dst_w = 100u32;
     let dst_h = 75u32;
 
-    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
     let mut constrain_params = zennode::ParamMap::new();
     constrain_params.insert("w".into(), zennode::ParamValue::U32(dst_w));
     constrain_params.insert("h".into(), zennode::ParamValue::U32(dst_h));
@@ -178,8 +175,8 @@ fn bridge_materialize_after_resize() {
     constrain_params.insert("filter".into(), zennode::ParamValue::Str("robidoux".into()));
     let constrain_node = MockConstrainNode::boxed(constrain_params);
 
-    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node, constrain_node];
     let source = gradient_source(src_w, src_h);
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![constrain_node];
 
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     let mat = result.materialize().unwrap();
