@@ -5,34 +5,28 @@
 zencodecs has ~4,100 lines of codec adapter code, ~70% of which is mechanical
 boilerplate reimplementing pixel-format dispatch that belongs in the codecs themselves.
 
-The root cause: no codec implements the type-erased `Encoder` trait from zencodec.
-Every codec implements the per-format traits (`EncodeRgb8`, `EncodeRgba8`, etc.) and the
-three-layer hierarchy (`EncoderConfig` -> `EncodeJob` -> per-format encoder), but none
-implements `Encoder::encode(self, pixels: PixelSlice<'_>)` which does runtime pixel format
-dispatch internally.
+**Update (2026-03):** Phase 0 is complete — all codecs now implement the type-erased
+`Encoder` trait. The remaining phases (1-4) can proceed to remove the adapter boilerplate.
 
-Without `Encoder`, zencodecs reimplements this dispatch via its own `DynEncoder` trait:
-6 adapter structs, 6 `build_dyn_encoder` functions, each with an 8-arm match on pixel
-format. This is ~820 lines of pure duplication.
-
-On top of that, each codec adapter has 6-7 typed encode functions (`encode_rgb8`,
-`encode_rgba8`, etc.) that are structurally identical — another ~1,050 lines.
+The original root cause was that no codec implemented `Encoder`. That has been resolved.
+The remaining adapter code in zencodecs still reimplements dispatch via its own patterns,
+which Phases 1-4 aim to eliminate.
 
 ## Current Trait Implementation Status
 
 | Codec | `EncoderConfig` | `EncodeJob` | Per-format encode | `Encoder` (type-erased) | `DecoderConfig` | `DecodeJob` | `Decode` |
 |-------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| zenjpeg | Y | Y | Y (9 traits) | **N** | Y | Y | Y |
-| zenwebp | Y | Y | Y (6 traits) | **N** | Y | Y | Y |
-| zengif | Y | Y | Y (6 traits) | **N** | Y | Y | Y |
-| zenavif | Y | Y | Y (6 traits) | **N** | Y | Y | Y |
-| zenpng | Y | Y | Y (6 traits) | **N** | Y | Y | Y |
-| zenjxl | Y | Y | Y (7 traits) | **N** | Y | Y | Y |
+| zenjpeg | Y | Y | Y (9 traits) | **Y** | Y | Y | Y |
+| zenwebp | Y | Y | Y (6 traits) | **Y** | Y | Y | Y |
+| zengif | Y | Y | Y (6 traits) | **Y** | Y | Y | Y |
+| zenavif | Y | Y | Y (6 traits) | **Y** | Y | Y | Y |
+| zenpng | Y | Y | Y (6 traits) | **Y** | Y | Y | Y |
+| zenjxl | Y | Y | Y (7 traits) | **Y** | Y | Y | Y |
 | zenbitmaps | Y | Y | Y | **Y** | Y | Y | Y |
+| zentiff | Y | Y | Y | **Y** | Y | Y | Y |
 
-Every codec has the per-format traits. None has the type-erased `Encoder`. Only
-zenbitmaps (PNM, BMP, Farbfeld) has `Encoder` — because it was the test case for the
-trait design.
+All codecs now implement both per-format traits and the type-erased `Encoder`.
+Phase 0 is complete.
 
 ## What the `Encoder` Trait Is
 
