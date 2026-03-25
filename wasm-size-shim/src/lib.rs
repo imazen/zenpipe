@@ -165,10 +165,7 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
     generic_decode(&zenwebp::WebpDecoderConfig::default(), unsafe{core::slice::from_raw_parts(p,l as usize)}, ow, oh)
 }
 
-// === AVIF (decode only — encode needs unpublished deps on wasm) ===
-#[unsafe(no_mangle)] pub extern "C" fn avif_decode(p:*const u8,l:u32,ow:*mut u32,oh:*mut u32)->*mut u8{
-    generic_decode(&zenavif::AvifDecoderConfig::default(), unsafe{core::slice::from_raw_parts(p,l as usize)}, ow, oh)
-}
+// AVIF disabled — zenavif has rav1d API compat issue (lossless/base_q_idx fields)
 
 // === JXL ===
 #[unsafe(no_mangle)] pub extern "C" fn jxl_encode(sp:*const u8,sl:u32,w:u32,h:u32,q:u32)->*mut u8{

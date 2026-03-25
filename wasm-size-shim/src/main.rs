@@ -142,6 +142,69 @@ fn main() {
         }
     }
 
+    // --- Zenfilters (exposure + saturation + contrast + blur + sharpen) ---
+    {
+        let t = Instant::now();
+        let fmt = zenpipe::format::RGBA8_SRGB;
+        let config = zenfilters::PipelineConfig::default();
+        if let Ok(mut pipe) = zenfilters::Pipeline::new(config) {
+            let mut e = zenfilters::filters::Exposure::default(); e.stops = 0.5; pipe.push(Box::new(e));
+            let mut sa = zenfilters::filters::Saturation::default(); sa.factor = 1.3; pipe.push(Box::new(sa));
+            let mut c = zenfilters::filters::Contrast::default(); c.amount = 0.3; pipe.push(Box::new(c));
+
+            let mut g = zenpipe::graph::PipelineGraph::new();
+            let sn = g.add_node(zenpipe::graph::NodeOp::Source);
+            let fn_ = g.add_node(zenpipe::graph::NodeOp::Filter(pipe));
+            let on = g.add_node(zenpipe::graph::NodeOp::Output);
+            g.add_edge(sn, fn_, zenpipe::graph::EdgeKind::Input);
+            g.add_edge(fn_, on, zenpipe::graph::EdgeKind::Input);
+
+            let mut sources = hashbrown::HashMap::new();
+            sources.insert(sn, Box::new(zenpipe::sources::CallbackSource::from_data(&pixels, w, h, fmt, 16)) as Box<dyn zenpipe::Source>);
+
+            match g.compile(sources) {
+                Ok(mut pipeline) => {
+                    let mut out_size = 0;
+                    while let Ok(Some(strip)) = pipeline.next() { out_size += strip.as_strided_bytes().len(); }
+                    let ms = t.elapsed().as_secs_f64() * 1000.0;
+                    println!("Filters (exp+sat+con): {} KB, {ms:.2}ms", out_size / 1024);
+                }
+                Err(e) => println!("Filter failed: {e}"),
+            }
+        }
+    }
+
+    // --- Zenfilters with neighborhood (blur + sharpen) ---
+    {
+        let t = Instant::now();
+        let fmt = zenpipe::format::RGBA8_SRGB;
+        let config = zenfilters::PipelineConfig::default();
+        if let Ok(mut pipe) = zenfilters::Pipeline::new(config) {
+            let mut bl = zenfilters::filters::Blur::default(); bl.sigma = 2.0; pipe.push(Box::new(bl));
+            let mut sh = zenfilters::filters::Sharpen::default(); sh.amount = 0.5; pipe.push(Box::new(sh));
+
+            let mut g = zenpipe::graph::PipelineGraph::new();
+            let sn = g.add_node(zenpipe::graph::NodeOp::Source);
+            let fn_ = g.add_node(zenpipe::graph::NodeOp::Filter(pipe));
+            let on = g.add_node(zenpipe::graph::NodeOp::Output);
+            g.add_edge(sn, fn_, zenpipe::graph::EdgeKind::Input);
+            g.add_edge(fn_, on, zenpipe::graph::EdgeKind::Input);
+
+            let mut sources = hashbrown::HashMap::new();
+            sources.insert(sn, Box::new(zenpipe::sources::CallbackSource::from_data(&pixels, w, h, fmt, 16)) as Box<dyn zenpipe::Source>);
+
+            match g.compile(sources) {
+                Ok(mut pipeline) => {
+                    let mut out_size = 0;
+                    while let Ok(Some(strip)) = pipeline.next() { out_size += strip.as_strided_bytes().len(); }
+                    let ms = t.elapsed().as_secs_f64() * 1000.0;
+                    println!("Filters (blur+sharp): {} KB, {ms:.2}ms", out_size / 1024);
+                }
+                Err(e) => println!("Filter failed: {e}"),
+            }
+        }
+    }
+
     println!();
 
     // --- Codec round-trips ---
