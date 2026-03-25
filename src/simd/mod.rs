@@ -15,19 +15,24 @@ mod neon;
 #[cfg(target_arch = "aarch64")]
 use neon::*;
 
+#[cfg(target_arch = "wasm32")]
+mod wasm128;
+#[cfg(target_arch = "wasm32")]
+use wasm128::*;
+
 /// Dispatch: scale every element of a plane by a constant factor.
 pub(crate) fn scale_plane(plane: &mut [f32], factor: f32) {
-    archmage::incant!(scale_plane_impl(plane, factor), [v3, neon]);
+    archmage::incant!(scale_plane_impl(plane, factor), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: add a constant to every element of a plane.
 pub(crate) fn offset_plane(plane: &mut [f32], offset: f32) {
-    archmage::incant!(offset_plane_impl(plane, offset), [v3, neon]);
+    archmage::incant!(offset_plane_impl(plane, offset), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: power-curve contrast on a plane: `v = v^exp * scale` (v > 0).
 pub(crate) fn power_contrast_plane(plane: &mut [f32], exp: f32, scale: f32) {
-    archmage::incant!(power_contrast_plane_impl(plane, exp, scale), [v3, neon]);
+    archmage::incant!(power_contrast_plane_impl(plane, exp, scale), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: sigmoid tone map on L plane.
@@ -36,13 +41,13 @@ pub(crate) fn power_contrast_plane(plane: &mut [f32], exp: f32, scale: f32) {
 pub(crate) fn sigmoid_tone_map_plane(plane: &mut [f32], contrast: f32, bias_a: f32) {
     archmage::incant!(
         sigmoid_tone_map_plane_impl(plane, contrast, bias_a),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
 /// Dispatch: unsharp mask fuse: dst[i] = (src[i] + (src[i] - blurred[i]) * amount).max(0)
 pub(crate) fn unsharp_fuse(src: &[f32], blurred: &[f32], dst: &mut [f32], amount: f32) {
-    archmage::incant!(unsharp_fuse_impl(src, blurred, dst, amount), [v3, neon]);
+    archmage::incant!(unsharp_fuse_impl(src, blurred, dst, amount), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: separable Gaussian blur on a single f32 plane.
@@ -56,7 +61,7 @@ pub(crate) fn gaussian_blur_plane_dispatch(
 ) {
     archmage::incant!(
         gaussian_blur_plane_impl(src, dst, width, height, kernel, ctx),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -78,7 +83,7 @@ pub(crate) fn brilliance_apply(
             shadow_strength,
             highlight_strength
         ),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -96,7 +101,7 @@ pub(crate) fn scatter_oklab(
 ) {
     archmage::incant!(
         scatter_oklab_impl(src, l, a, b, channels, m1, inv_white),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -114,7 +119,7 @@ pub(crate) fn gather_oklab(
 ) {
     archmage::incant!(
         gather_oklab_impl(l, a, b, dst, channels, m1_inv, reference_white),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -133,7 +138,7 @@ pub(crate) fn scatter_srgb_u8_to_oklab(
 ) {
     archmage::incant!(
         scatter_srgb_u8_to_oklab_impl(src, l, a, b, channels, m1),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -152,41 +157,41 @@ pub(crate) fn gather_oklab_to_srgb_u8(
 ) {
     archmage::incant!(
         gather_oklab_to_srgb_u8_impl(l, a, b, dst, channels, m1_inv),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
 /// Dispatch: black point remap on a single plane.
 pub(crate) fn black_point_plane(plane: &mut [f32], bp: f32, inv_range: f32) {
-    archmage::incant!(black_point_plane_impl(plane, bp, inv_range), [v3, neon]);
+    archmage::incant!(black_point_plane_impl(plane, bp, inv_range), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: 2D hue rotation on a/b planes.
 pub(crate) fn hue_rotate(a: &mut [f32], b: &mut [f32], cos_r: f32, sin_r: f32) {
-    archmage::incant!(hue_rotate_impl(a, b, cos_r, sin_r), [v3, neon]);
+    archmage::incant!(hue_rotate_impl(a, b, cos_r, sin_r), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: highlights and shadows recovery on L plane.
 pub(crate) fn highlights_shadows(plane: &mut [f32], shadows: f32, highlights: f32) {
     archmage::incant!(
         highlights_shadows_impl(plane, shadows, highlights),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
 /// Dispatch: vibrance (smart saturation) on a/b planes.
 pub(crate) fn vibrance(a: &mut [f32], b: &mut [f32], amount: f32, protection: f32) {
-    archmage::incant!(vibrance_impl(a, b, amount, protection), [v3, neon]);
+    archmage::incant!(vibrance_impl(a, b, amount, protection), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: subtract two planes. dst[i] = a[i] - b[i]
 pub(crate) fn subtract_planes(a: &[f32], b: &[f32], dst: &mut [f32]) {
-    archmage::incant!(subtract_planes_impl(a, b, dst), [v3, neon]);
+    archmage::incant!(subtract_planes_impl(a, b, dst), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: square a plane. dst[i] = src[i] * src[i]
 pub(crate) fn square_plane(src: &[f32], dst: &mut [f32]) {
-    archmage::incant!(square_plane_impl(src, dst), [v3, neon]);
+    archmage::incant!(square_plane_impl(src, dst), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: wavelet soft-threshold and accumulate.
@@ -199,14 +204,14 @@ pub(crate) fn wavelet_threshold_accumulate(
 ) {
     archmage::incant!(
         wavelet_threshold_accumulate_impl(current, smooth, result, threshold),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
 /// Dispatch: add two planes with clamping to zero.
 /// dst[i] = (a[i] + b[i]).max(0.0)
 pub(crate) fn add_clamped(a: &[f32], b: &[f32], dst: &mut [f32]) {
-    archmage::incant!(add_clamped_impl(a, b, dst), [v3, neon]);
+    archmage::incant!(add_clamped_impl(a, b, dst), [v3, neon, wasm128, scalar]);
 }
 
 /// Dispatch: adaptive sharpen per-pixel (detail extraction + energy gating).
@@ -229,7 +234,7 @@ pub(crate) fn adaptive_sharpen_apply(
             noise_floor,
             masking_threshold
         ),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -261,7 +266,7 @@ pub(crate) fn fused_adjust(
             p.vib_amount,
             p.vib_protection
         ),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
 
@@ -302,6 +307,6 @@ pub(crate) fn fused_interleaved_adjust(
             p.vib_amount,
             p.vib_protection
         ),
-        [v3, neon]
+        [v3, neon, wasm128, scalar]
     );
 }
