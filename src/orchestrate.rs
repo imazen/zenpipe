@@ -164,13 +164,94 @@ impl ProcessedImage {
     }
 }
 
+// ─── Streaming result ───
+
+/// A streaming pipeline ready for encoding, with metadata and sidecar.
+///
+/// The primary pixel source streams — connect it to an `EncoderSink` via
+/// [`execute()`](crate::execute) for zero-materialization encoding.
+/// The sidecar (if any) is materialized (it's small — 1/4 to 1/8 resolution).
+pub struct StreamingOutput {
+    /// Streaming pixel source — connect to an `EncoderSink`.
+    pub source: Box<dyn Source>,
+
+    /// Processed sidecar (gain map), if present and HDR mode allows.
+    /// Materialized because sidecars are small.
+    pub sidecar: Option<ProcessedSidecar>,
+
+    /// Encode configuration extracted from nodes.
+    pub encode_config: EncodeConfig,
+
+    /// Metadata to pass through to the encoder.
+    pub metadata: Option<zencodec::Metadata>,
+}
+
 // ─── Public API ───
 
-/// Process a decoded source through the zenode pipeline.
+/// Build a streaming pipeline from zenode nodes. **Primary API.**
 ///
-/// Compiles the node list into a streaming pixel pipeline, executes it,
-/// and materializes the result. If the source has a gain map and HDR mode
-/// permits, the sidecar is also processed in lockstep.
+/// Returns a [`StreamingOutput`] with a streaming [`Source`] that can be
+/// connected directly to an encoder sink. The primary image is NOT
+/// materialized — strips flow through on demand.
+///
+/// If a sidecar (gain map) is provided and `hdr_mode` permits, the sidecar
+/// is processed and materialized (it's small). The primary always streams.
+///
+/// # Example
+///
+/// ```ignore
+/// let output = stream(decoded_source, &config, gain_map_sidecar)?;
+/// let mut sink = EncoderSink::new(encoder, format);
+/// zenpipe::execute(output.source.as_mut(), &mut sink)?;
+/// // output.sidecar and output.metadata go to the encoder separately
+/// ```
+pub fn stream(
+    source: Box<dyn Source>,
+    config: &ProcessConfig<'_>,
+    sidecar: Option<SidecarStream>,
+) -> Result<StreamingOutput, PipeError> {
+    let CompileResult {
+        graph,
+        encode_config,
+        ..
+    } = bridge::compile_nodes(config.nodes, config.converters, config.source_info.width, config.source_info.height)?;
+
+    let mut sources = hashbrown::HashMap::new();
+    sources.insert(0, source);
+    let pipeline = graph.compile(sources)?;
+
+    // Sidecar: materialize if present and hdr_mode allows (sidecars are small).
+    let processed_sidecar = if let Some(sidecar_stream) = sidecar {
+        if config.hdr_mode != "sdr_only" {
+            // For streaming, we need the primary's planned output dimensions
+            // to derive the sidecar plan. Use the source's compile-time estimate.
+            let primary_w = pipeline.width();
+            let primary_h = pipeline.height();
+            Some(process_sidecar_from_dims(
+                sidecar_stream,
+                config.source_info,
+                primary_w,
+                primary_h,
+            )?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    Ok(StreamingOutput {
+        source: pipeline,
+        sidecar: processed_sidecar,
+        encode_config,
+        metadata: config.source_info.metadata.clone(),
+    })
+}
+
+/// Process and materialize a decoded source. **Use only when you need
+/// random-access pixels** (quality analysis, non-streaming encoder).
+///
+/// For streaming (the common case), use [`stream()`] instead.
 ///
 /// # Steps
 ///
@@ -304,6 +385,34 @@ fn process_sidecar(
     );
 
     // Compile and materialize the sidecar pipeline.
+    let compiled = plan.compile(sidecar_stream.source)?;
+    let materialized = MaterializedSource::from_source(compiled)?;
+
+    Ok(ProcessedSidecar::new(materialized, sidecar_stream.kind))
+}
+
+/// Process a sidecar using primary output dimensions (for the streaming path).
+fn process_sidecar_from_dims(
+    sidecar_stream: SidecarStream,
+    source_info: &SourceImageInfo,
+    primary_w: u32,
+    primary_h: u32,
+) -> Result<ProcessedSidecar, PipeError> {
+    let sidecar_source = Size::new(sidecar_stream.width, sidecar_stream.height);
+
+    let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
+        .fit(primary_w, primary_h)
+        .plan()
+        .map_err(|e| PipeError::Op(alloc::format!("sidecar layout plan failed: {e}")))?;
+
+    let plan = SidecarPlan::derive(
+        &primary_ideal,
+        Size::new(source_info.width, source_info.height),
+        sidecar_source,
+        None,
+        Filter::Robidoux,
+    );
+
     let compiled = plan.compile(sidecar_stream.source)?;
     let materialized = MaterializedSource::from_source(compiled)?;
 
@@ -468,5 +577,64 @@ mod tests {
         assert_eq!(result.width(), 320);
         assert_eq!(result.height(), 240);
         assert_eq!(result.format(), RGBA8_SRGB);
+    }
+
+    // ─── Streaming API ───
+
+    #[test]
+    fn stream_returns_streaming_source() {
+        let source = Box::new(SolidSource::new(200, 150));
+        let info = default_source_info(200, 150);
+        let config = ProcessConfig {
+            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+        };
+        let output = stream(source, &config, None).unwrap();
+        // The source streams — pull strips without materializing
+        let mut src = output.source;
+        let mut total_rows = 0u32;
+        while let Some(strip) = src.next().unwrap() {
+            total_rows += strip.rows();
+            assert_eq!(strip.width(), 200);
+        }
+        assert_eq!(total_rows, 150);
+        assert!(output.sidecar.is_none());
+        assert!(output.metadata.is_none());
+    }
+
+    #[test]
+    fn stream_with_sidecar_preserve() {
+        let source = Box::new(SolidSource::new(400, 300));
+        let info = SourceImageInfo {
+            has_gain_map: true,
+            ..default_source_info(400, 300)
+        };
+        let config = ProcessConfig {
+            nodes: &[], converters: &[], source_info: &info, hdr_mode: "preserve",
+        };
+        let sidecar = SidecarStream {
+            source: Box::new(SolidSource::new(100, 75)),
+            width: 100, height: 75,
+            kind: SidecarKind::GainMap { params: zencodec::GainMapParams::default() },
+        };
+        let output = stream(source, &config, Some(sidecar)).unwrap();
+        // Primary streams
+        assert_eq!(output.source.width(), 400);
+        assert_eq!(output.source.height(), 300);
+        // Sidecar is materialized (small)
+        assert!(output.sidecar.is_some());
+    }
+
+    #[test]
+    fn stream_metadata_passthrough() {
+        let source = Box::new(SolidSource::new(100, 100));
+        let info = SourceImageInfo {
+            metadata: Some(zencodec::Metadata::default()),
+            ..default_source_info(100, 100)
+        };
+        let config = ProcessConfig {
+            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+        };
+        let output = stream(source, &config, None).unwrap();
+        assert!(output.metadata.is_some());
     }
 }

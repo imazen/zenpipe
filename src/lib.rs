@@ -36,7 +36,7 @@ pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, Pipelin
 
 // Re-export orchestration types.
 #[cfg(feature = "zennode")]
-pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo};
+pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
 
 pub mod animation;
 pub mod codec;
