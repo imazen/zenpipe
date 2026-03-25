@@ -18,6 +18,7 @@ zenblend = { path = "../../zenblend" }
 zenfilters = { path = "../../zenfilters" }
 zencodec = { path = "../../zencodec" }
 zenpixels = { path = "../../zenpixels/zenpixels" }
+archmage = { version = "0.9.12" }
 hashbrown = "0.15"
 rgb = "0.8"
 bytemuck = { version = "1", features = ["derive"] }
