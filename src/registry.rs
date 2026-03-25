@@ -29,7 +29,9 @@ const fn compiled_both() -> FormatSet {
     #[cfg(feature = "png")]
     let s = s.with_const(ImageFormat::Png);
     #[cfg(feature = "bitmaps")]
-    let s = s.with_const(ImageFormat::Pnm).with_const(ImageFormat::Farbfeld);
+    let s = s
+        .with_const(ImageFormat::Pnm)
+        .with_const(ImageFormat::Farbfeld);
     #[cfg(feature = "bitmaps-bmp")]
     let s = s.with_const(ImageFormat::Bmp);
     s

@@ -16,7 +16,7 @@ Replaces ~3,950 lines in zenimage. No new trait system — dispatches to `DynEnc
 | No policy | `CodecPolicy` with killbits, allowlist, preferences |
 | No quality profiles | `QualityIntent` with profiles, DPR adjustment, calibration tables |
 | No streaming exposure | `DecodeRequest::streaming_decoder()`, `push_decoder()` |
-| No animation exposure | `DecodeRequest::full_frame_decoder()`, `EncodeRequest::full_frame_encoder()` |
+| No animation exposure | `DecodeRequest::animation_frame_decoder()`, `EncodeRequest::animation_frame_encoder()` |
 | No fallback | Ordered fallback chain on decode error |
 | No decision tracing | `SelectionTrace` with steps |
 
@@ -617,7 +617,7 @@ impl<'a> DecodeRequest<'a> {
     // --- NEW: Animation ---
     /// Returns a full-frame decoder for animated images.
     /// For single-frame images, yields one frame then None.
-    pub fn full_frame_decoder(self) -> Result<Box<dyn DynFullFrameDecoder>>;
+    pub fn animation_frame_decoder(self) -> Result<Box<dyn DynAnimationFrameDecoder>>;
 
     // --- NEW: Probe ---
     /// Probe without decoding. Cheaper than decode().
@@ -697,8 +697,8 @@ impl<'a> EncodeRequest<'a> {
 
     // --- NEW: Animation ---
     /// Create a full-frame encoder for multi-frame output.
-    pub fn full_frame_encoder(self, width: u32, height: u32)
-        -> Result<Box<dyn DynFullFrameEncoder>>;
+    pub fn animation_frame_encoder(self, width: u32, height: u32)
+        -> Result<Box<dyn DynAnimationFrameEncoder>>;
 
     // --- NEW: Trace ---
     /// Encode + return selection trace.
@@ -739,7 +739,7 @@ impl<'a> EncodeRequest<'a> {
 
 7. Encode:
    - job.into_encoder().encode(pixels)
-   - OR job.into_full_frame_encoder() for animation
+   - OR job.into_animation_frame_encoder() for animation
 ```
 
 ---
@@ -806,7 +806,7 @@ if registry.streaming_decode_available(ImageFormat::Jpeg) {
 ```rust
 let registry = CodecRegistry::defaults();
 let mut decoder = DecodeRequest::new(&gif_data, &registry)
-    .full_frame_decoder()?;
+    .animation_frame_decoder()?;
 
 let info = decoder.info();
 println!("{}x{}, {} frames", info.width, info.height,
@@ -823,7 +823,7 @@ while let Some(frame) = decoder.render_next_frame_owned(None)? {
 let registry = CodecRegistry::defaults();
 let mut encoder = EncodeRequest::new(ImageFormat::Gif, &registry)
     .with_quality(80.0)
-    .full_frame_encoder(width, height)?;
+    .animation_frame_encoder(width, height)?;
 
 for frame in frames {
     encoder.push_frame(frame.pixels.as_pixel_slice(), frame.delay_ms, None)?;
@@ -854,9 +854,9 @@ Add new API surface alongside existing:
 
 New methods on existing types:
 - `DecodeRequest::streaming_decoder()`
-- `DecodeRequest::full_frame_decoder()`
+- `DecodeRequest::animation_frame_decoder()`
 - `DecodeRequest::push_decode()`
-- `EncodeRequest::full_frame_encoder()`
+- `EncodeRequest::animation_frame_encoder()`
 
 ### Phase 4: Format Auto-Selection (Enhanced)
 
@@ -908,8 +908,8 @@ pub fn encode_jpeg(img: ImgRef<Rgb<u8>>, quality: f32) -> Result<EncodeOutput> {
 11. **`EncodeRequest::with_quality_profile()` + DPR** — quality mapping
 12. **Format auto-selection v2** — preference engine
 13. **`DecodeRequest::streaming_decoder()`** — streaming exposure
-14. **`DecodeRequest::full_frame_decoder()`** — animation decode
-15. **`EncodeRequest::full_frame_encoder()`** — animation encode
+14. **`DecodeRequest::animation_frame_decoder()`** — animation decode
+15. **`EncodeRequest::animation_frame_encoder()`** — animation encode
 16. **`DecodeRequest::push_decode()`** — push-based decode
 17. **Fallback chains** — multi-decoder retry on error
 18. **Traced variants** — `*_traced()` methods
@@ -931,9 +931,9 @@ After zencodecs v2 is complete, zenimage replaces:
 | `codec_id.rs` | ~200 | `CodecId` |
 | `zenjpeg.rs` | ~700 | `streaming_decoder()` / `push_decode()` |
 | `image_png/` | ~400 | `streaming_decoder()` / `push_decode()` |
-| `webp/` | ~350 | `full_frame_decoder()` |
-| `gif/` | ~300 | `full_frame_decoder()` |
-| `avif/` | ~400 | `full_frame_decoder()` |
+| `webp/` | ~350 | `animation_frame_decoder()` |
+| `gif/` | ~300 | `animation_frame_decoder()` |
+| `avif/` | ~400 | `animation_frame_decoder()` |
 | **Total** | **~4,250** | |
 
 zenimage keeps: `types.rs`, `traits.rs` (strip abstraction), `strip.rs`,

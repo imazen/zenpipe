@@ -176,9 +176,9 @@ The individual codec crates (zenjpeg, zenwebp, etc.) each provide this.
 
 ### Animation: streaming frames
 
-Animation decode is already streaming — `DynFullFrameDecoder::render_next_frame_to_sink`
+Animation decode is already streaming — `DynAnimationFrameDecoder::render_next_frame_to_sink`
 pushes each frame through a `DecodeRowSink`. Animation encode uses
-`DynFullFrameEncoder::push_frame()`. Both avoid materializing all frames simultaneously.
+`DynAnimationFrameEncoder::push_frame()`. Both avoid materializing all frames simultaneously.
 
 ## Container Supplements
 

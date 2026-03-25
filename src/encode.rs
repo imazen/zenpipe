@@ -11,7 +11,7 @@ use crate::pixel::{Bgra, Gray, ImgRef, Rgb, Rgba};
 use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
 use crate::select::ImageFacts;
-use crate::{CodecError, AllowedFormats, ImageFormat, Limits, Metadata, StopToken};
+use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, StopToken};
 use whereat::at;
 use zenpixels::{AlphaMode, PixelDescriptor};
 
@@ -306,16 +306,16 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// let mut encoder = EncodeRequest::new(ImageFormat::Gif)
     ///     .with_quality(80.0)
-    ///     .full_frame_encoder(320, 240)?;
+    ///     .animation_frame_encoder(320, 240)?;
     /// // encoder.push_frame(pixels, delay_ms, None)?;
     /// // let output = encoder.finish(None)?;
     /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
     /// ```
-    pub fn full_frame_encoder(
+    pub fn animation_frame_encoder(
         self,
         width: u32,
         height: u32,
-    ) -> Result<alloc::boxed::Box<dyn zencodec::encode::DynFullFrameEncoder>> {
+    ) -> Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
 
@@ -334,7 +334,7 @@ impl<'a> EncodeRequest<'a> {
 
         let resolved_quality = self.resolve_quality();
 
-        crate::dyn_dispatch::dyn_full_frame_encoder(
+        crate::dyn_dispatch::dyn_animation_frame_encoder(
             format,
             crate::dyn_dispatch::AnimEncodeParams {
                 quality: Some(resolved_quality),

@@ -111,16 +111,16 @@ zencodecs/
 - **SelectionTrace**: audit trail for format/encoder/decoder selection decisions
 - **Format auto-selection engine**: imageflow-derived preference hierarchy (JXL > AVIF > JPEG > WebP > PNG with scenario-specific reordering)
 - **DecodeRequest::push_decode(sink)**: zero-copy streaming decode via DecodeRowSink
-- **DecodeRequest::full_frame_decoder()**: animation decode via DynFullFrameDecoder ('static, data copied)
+- **DecodeRequest::animation_frame_decoder()**: animation decode via DynAnimationFrameDecoder ('static, data copied)
 - **DecodeRequest::probe()**: header-only metadata extraction
-- **EncodeRequest::full_frame_encoder(w, h)**: animation encode via DynFullFrameEncoder (GIF, WebP, PNG)
+- **EncodeRequest::animation_frame_encoder(w, h)**: animation encode via DynAnimationFrameEncoder (GIF, WebP, PNG)
 - **EncodeRequest::with_quality_profile()**: named quality presets instead of raw float
 - **EncodeRequest::with_dpr()**: device pixel ratio quality adjustment
 - **EncodeRequest::with_policy()**: per-request codec/format filtering
 - **EncodeRequest::with_image_facts()**: source image properties for auto-selection
 - **EncodeRequest::quality_intent()**: accessor for resolved per-codec quality values
 - **CodecRegistry capability queries**: streaming_decode_available, animation_decode/encode_available
-- Re-exports: DynFullFrameDecoder, DynFullFrameEncoder, DynStreamingDecoder, DecodeRowSink, OutputInfo, OwnedFullFrame, FullFrame
+- Re-exports: DynAnimationFrameDecoder, DynAnimationFrameEncoder, DynStreamingDecoder, DecodeRowSink, OutputInfo, OwnedAnimationFrame, AnimationFrame
 
 ### Gain Map Support (2026-03-18, simplified 2026-03-22)
 - **gainmap.rs**: Format-agnostic gain map types (ISO 21496-1)
@@ -173,7 +173,7 @@ zencodecs/
 - **exif::from_raw_metadata()**: Convert `zenraw::exif::ExifMetadata` → `ExifData` (feature: raw-decode-exif)
 - **ExifData DNG fields**: `dng_version`, `unique_camera_model`, `color_matrix_1`/`_2`, `forward_matrix_1`/`_2`, `analog_balance`, `as_shot_neutral`, `as_shot_white_xy`, `baseline_exposure`, `calibration_illuminant_1`/`_2`
 - **EXIF parser**: IFD0 now parses all DNG tags (0xC612-0xC715) into ExifData
-- Wired into: decode dispatch, info probe, dyn_dispatch (push_decode, full_frame_decoder), codec_id mapping
+- Wired into: decode dispatch, info probe, dyn_dispatch (push_decode, animation_frame_decoder), codec_id mapping
 - Re-exports: `RawDecodeConfig`, `RawDecoderConfig` from lib.rs
 - 4 new DNG EXIF tests (dng_version, unique_camera_model, color_matrix+white_balance, as_shot_white_xy)
 

@@ -127,7 +127,6 @@ pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use intent::{BoolKeep, CodecIntent, FormatChoice, PerCodecHints};
 pub use limits::{Limits, Stop};
-pub use zencodec::StopToken;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::AllowedFormats;
@@ -141,6 +140,7 @@ pub use transcode::{
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
+pub use zencodec::StopToken;
 
 // Gain map types (format-agnostic)
 #[cfg(feature = "jpeg-ultrahdr")]
@@ -155,10 +155,11 @@ pub use depthmap::{
 
 // zencodec trait re-exports
 pub use zencodec::decode::{
-    DecodeJob, DecodeRowSink, DecoderConfig, DynFullFrameDecoder, DynStreamingDecoder, OutputInfo,
+    DecodeJob, DecodeRowSink, DecoderConfig, DynAnimationFrameDecoder, DynStreamingDecoder,
+    OutputInfo,
 };
-pub use zencodec::encode::{DynEncoder, DynFullFrameEncoder, EncodeJob, EncoderConfig};
-pub use zencodec::{FullFrame, OwnedFullFrame};
+pub use zencodec::encode::{DynAnimationFrameEncoder, DynEncoder, EncodeJob, EncoderConfig};
+pub use zencodec::{AnimationFrame, OwnedAnimationFrame};
 
 // Pixel conversion extension traits
 pub use zenpixels_convert::PixelBufferConvertExt;
@@ -326,10 +327,7 @@ pub fn probe(data: &[u8], registry: &AllowedFormats) -> error::Result<zencodec::
 /// let output = zencodecs::decode_full_frame(&jpeg_bytes, &AllowedFormats::all())?;
 /// println!("{}x{}", output.width(), output.height());
 /// ```
-pub fn decode_full_frame(
-    data: &[u8],
-    registry: &AllowedFormats,
-) -> error::Result<DecodeOutput> {
+pub fn decode_full_frame(data: &[u8], registry: &AllowedFormats) -> error::Result<DecodeOutput> {
     DecodeRequest::new(data)
         .with_registry(registry)
         .decode_full_frame()
@@ -354,10 +352,7 @@ pub fn decode_full_frame(
 pub fn decode_gain_map(
     data: &[u8],
     registry: &AllowedFormats,
-) -> error::Result<(
-    DecodeOutput,
-    Option<gainmap::DecodedGainMap>,
-)> {
+) -> error::Result<(DecodeOutput, Option<gainmap::DecodedGainMap>)> {
     DecodeRequest::new(data)
         .with_registry(registry)
         .decode_gain_map()

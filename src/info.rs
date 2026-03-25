@@ -3,7 +3,7 @@
 pub use zencodec::ImageInfo;
 
 use crate::error::Result;
-use crate::{CodecError, AllowedFormats, ImageFormat};
+use crate::{AllowedFormats, CodecError, ImageFormat};
 use whereat::at;
 
 /// Detect image format from magic bytes using the common format registry.

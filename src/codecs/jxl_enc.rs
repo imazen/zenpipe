@@ -28,9 +28,7 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
     )
 }
 
-pub(crate) fn build_streaming(
-    params: EncodeParams<'_>,
-) -> crate::error::Result<StreamingEncoder> {
+pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
         |p| build_encoding(p.quality, p.effort, p.codec_config),
         params,

@@ -5,7 +5,7 @@ pub use zencodec::decode::DecodeOutput;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::policy::CodecPolicy;
-use crate::{CodecError, AllowedFormats, ImageFormat, ImageInfo, Limits, StopToken};
+use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
 
 /// Image decode request builder.
@@ -313,17 +313,17 @@ impl<'a> DecodeRequest<'a> {
     /// use zencodecs::DecodeRequest;
     ///
     /// let data: &[u8] = &[]; // GIF bytes
-    /// let mut decoder = DecodeRequest::new(data).full_frame_decoder()?;
+    /// let mut decoder = DecodeRequest::new(data).animation_frame_decoder()?;
     /// while let Some(frame) = decoder.render_next_frame_owned(None)? {
     ///     // frame.pixels(), frame.duration_ms(), frame.frame_index()
     /// }
     /// # Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     /// ```
-    pub fn full_frame_decoder(
+    pub fn animation_frame_decoder(
         self,
-    ) -> Result<alloc::boxed::Box<dyn zencodec::decode::DynFullFrameDecoder>> {
+    ) -> Result<alloc::boxed::Box<dyn zencodec::decode::DynAnimationFrameDecoder>> {
         let format = self.resolve_format()?;
-        crate::dyn_dispatch::dyn_full_frame_decoder(format, &self.decode_params())
+        crate::dyn_dispatch::dyn_animation_frame_decoder(format, &self.decode_params())
     }
 
     // ═══════════════════════════════════════════════════════════════════

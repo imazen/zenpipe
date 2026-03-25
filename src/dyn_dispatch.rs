@@ -2,12 +2,12 @@
 //!
 //! # Lifetime design
 //!
-//! `DynFullFrameDecoder` is `'static` — no lifetime parameter — so it works
+//! `DynAnimationFrameDecoder` is `'static` — no lifetime parameter — so it works
 //! through the dyn dispatch layer with `Cow::Owned` data.
 //!
 //! `DynStreamingDecoder + 'a` carries a lifetime tied to the decode job, which
 //! borrows the config. For pull-based streaming, we use a wrapper around
-//! `DynFullFrameDecoder`. For true zero-copy streaming, callers should use
+//! `DynAnimationFrameDecoder`. For true zero-copy streaming, callers should use
 //! `push_decode()` which runs to completion with borrowed data.
 
 use alloc::borrow::Cow;
@@ -203,24 +203,24 @@ pub(crate) fn dyn_push_decode(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Full-frame decode — 'static (DynFullFrameDecoder has no lifetime param)
+// Full-frame decode — 'static (DynAnimationFrameDecoder has no lifetime param)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Full-frame decoder for animation. Data is copied to owned ('static).
 ///
-/// `DynFullFrameDecoder` is `'static` — no lifetime parameter — so the
+/// `DynAnimationFrameDecoder` is `'static` — no lifetime parameter — so the
 /// returned decoder outlives the config and request.
-pub(crate) fn dyn_full_frame_decoder(
+pub(crate) fn dyn_animation_frame_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,
-) -> Result<Box<dyn zencodec::decode::DynFullFrameDecoder>> {
+) -> Result<Box<dyn zencodec::decode::DynAnimationFrameDecoder>> {
     let config = build_dyn_decoder_config(format, params.codec_config, params.limits)?;
     let mut job = config.dyn_job();
     if let Some(lim) = params.limits {
         job.set_limits(to_resource_limits(lim));
     }
     let data = Cow::Owned(params.data.to_vec());
-    job.into_full_frame_decoder(data, params.preferred)
+    job.into_animation_frame_decoder(data, params.preferred)
         .map_err(|e| wrap_boxed(format, e))
 }
 
@@ -291,10 +291,10 @@ pub(crate) struct AnimEncodeParams<'a> {
 }
 
 /// Create a full-frame animation encoder for the specified format.
-pub(crate) fn dyn_full_frame_encoder(
+pub(crate) fn dyn_animation_frame_encoder(
     format: ImageFormat,
     params: AnimEncodeParams<'_>,
-) -> Result<Box<dyn zencodec::encode::DynFullFrameEncoder>> {
+) -> Result<Box<dyn zencodec::encode::DynAnimationFrameEncoder>> {
     macro_rules! build_ffe {
         ($config:expr) => {{
             let config = $config;
@@ -312,7 +312,7 @@ pub(crate) fn dyn_full_frame_encoder(
             if let Some(lc) = params.loop_count {
                 job = job.with_loop_count(Some(lc));
             }
-            job.dyn_full_frame_encoder()
+            job.dyn_animation_frame_encoder()
                 .map_err(|e| wrap_enc_boxed(format, e))
         }};
     }

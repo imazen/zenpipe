@@ -46,9 +46,7 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
     build_from_config(|_p| zenbitmaps::FarbfeldEncoderConfig::new(), params)
 }
 
-pub(crate) fn build_streaming(
-    params: EncodeParams<'_>,
-) -> crate::error::Result<StreamingEncoder> {
+pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
         |_p| zenbitmaps::FarbfeldEncoderConfig::new(),
         params,

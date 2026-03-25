@@ -28,7 +28,7 @@ use zenpixels::{PixelDescriptor, PixelSliceMut};
 
 use crate::decision::FormatDecision;
 use crate::error::Result;
-use crate::{CodecError, AllowedFormats, ImageFormat};
+use crate::{AllowedFormats, CodecError, ImageFormat};
 use whereat::at;
 
 // ═══════════════════════════════════════════════════════════════════════
