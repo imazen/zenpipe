@@ -219,10 +219,12 @@ impl<'a> DecodeRequest<'a> {
     /// containing the depth image pixels and metadata.
     ///
     /// Depth map support by format:
-    /// - **JPEG**: iPhone MPF disparity secondary image.
-    ///   GDepth XMP and Android DDF are recognized but require future
-    ///   codec-level extraction support.
-    /// - **HEIC**: Auxiliary depth image (future — requires heic-decoder support).
+    /// - **JPEG**: Three sources checked in priority order:
+    ///   1. GDepth XMP (Android, base64-encoded depth with near/far/units metadata)
+    ///   2. Dynamic Depth Format / DDF (Android, appended images with XMP container directory)
+    ///   3. MPF Disparity secondary image (iPhone portrait mode)
+    /// - **HEIC**: Auxiliary depth image via heic-decoder.
+    /// - **AVIF**: Auxiliary depth image via zenavif.
     /// - **Other formats**: Returns `None` for depth map.
     ///
     /// # Example
@@ -248,7 +250,7 @@ impl<'a> DecodeRequest<'a> {
 
         let depth = match format {
             #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => extract_jpeg_depth(&output),
+            ImageFormat::Jpeg => extract_jpeg_depth(&output, data),
             #[cfg(feature = "heic-decode")]
             ImageFormat::Heic => extract_heic_depth(data),
             #[cfg(feature = "avif-decode")]
@@ -644,14 +646,24 @@ fn extract_raw_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
 
 /// Extract a depth map from a JPEG DecodeOutput's extras, if present.
 ///
-/// Checks for:
-/// 1. MPF secondary image with Disparity type (iPhone portrait mode)
+/// Uses zenjpeg's [`DecodedExtras::extract_depth_map()`] which checks
+/// three sources in priority order:
+/// 1. GDepth XMP (Android, base64-encoded depth + metadata)
+/// 2. Dynamic Depth Format / DDF (Android, appended images with container directory)
+/// 3. MPF Disparity secondary image (iPhone portrait mode)
 ///
-/// GDepth XMP and Android DDF extraction are not yet implemented at the
-/// codec level — these require XMP parsing and container directory
-/// traversal that will be added to zenjpeg in future.
+/// `file_data` is the original JPEG bytes, needed for DDF offset-based extraction.
+///
+/// # Source mapping to [`DepthSource`]
+///
+/// - [`zenjpeg::decoder::DepthSource::GDepthXmp`] → [`DepthSource::AndroidGDepth`]
+/// - [`zenjpeg::decoder::DepthSource::DynamicDepth`] → [`DepthSource::AndroidDdf`]
+/// - [`zenjpeg::decoder::DepthSource::MpfDisparity`] → [`DepthSource::AppleMpf`]
 #[cfg(feature = "jpeg")]
-fn extract_jpeg_depth(output: &DecodeOutput) -> Option<crate::depthmap::DecodedDepthMap> {
+fn extract_jpeg_depth(
+    output: &DecodeOutput,
+    file_data: &[u8],
+) -> Option<crate::depthmap::DecodedDepthMap> {
     use crate::depthmap::{
         DecodedDepthMap, DepthFormat, DepthImage, DepthMapMetadata, DepthMeasureType,
         DepthPixelFormat, DepthSource, DepthUnits,
@@ -659,11 +671,11 @@ fn extract_jpeg_depth(output: &DecodeOutput) -> Option<crate::depthmap::DecodedD
 
     let extras = output.extras::<zenjpeg::decoder::DecodedExtras>()?;
 
-    // Check for MPF disparity map (iPhone portrait mode)
-    let depth_jpeg = extras.depth_map()?;
+    // Use the unified extraction API that handles GDepth XMP, DDF, and MPF Disparity
+    let depth_data = extras.extract_depth_map(Some(file_data))?;
 
-    // Decode the secondary JPEG to get depth pixels
-    let depth_output = crate::codecs::jpeg::decode(depth_jpeg, None, None, None).ok()?;
+    // Decode the depth image bytes (JPEG or PNG) to get grayscale pixels
+    let depth_output = crate::codecs::jpeg::decode(&depth_data.data, None, None, None).ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gray = depth_output.into_buffer().to_gray8();
     let gray_ref = gray.as_imgref();
@@ -671,28 +683,74 @@ fn extract_jpeg_depth(output: &DecodeOutput) -> Option<crate::depthmap::DecodedD
     let h = gray_ref.height() as u32;
 
     // Extract grayscale bytes
-    let data: alloc::vec::Vec<u8> = gray_ref.buf().iter().map(|g| g.value()).collect();
+    let pixel_data: alloc::vec::Vec<u8> = gray_ref.buf().iter().map(|g| g.value()).collect();
 
-    Some(DecodedDepthMap {
-        depth: DepthImage {
-            data,
-            width: w,
-            height: h,
-            pixel_format: DepthPixelFormat::Gray8,
-        },
-        metadata: DepthMapMetadata {
-            // iPhone MPF disparity maps use inverse depth (disparity)
-            // with normalized 0-255 range. Near/far are not encoded in
-            // the MPF metadata — these are relative values.
+    // Map zenjpeg's DepthSource → zencodecs' DepthSource
+    let source_device = match depth_data.source {
+        zenjpeg::decoder::DepthSource::GDepthXmp => DepthSource::AndroidGDepth,
+        zenjpeg::decoder::DepthSource::DynamicDepth => DepthSource::AndroidDdf,
+        zenjpeg::decoder::DepthSource::MpfDisparity => DepthSource::AppleMpf,
+    };
+
+    // Map GDepth metadata if available, otherwise use defaults for MPF Disparity
+    let metadata = if let Some(ref gd) = depth_data.metadata {
+        let format = match gd.format {
+            zenjpeg::decoder::GDepthFormat::RangeLinear => DepthFormat::RangeLinear,
+            zenjpeg::decoder::GDepthFormat::RangeInverse => DepthFormat::RangeInverse,
+        };
+        let units = match gd.units {
+            zenjpeg::decoder::GDepthUnits::Meters => DepthUnits::Meters,
+            zenjpeg::decoder::GDepthUnits::Diopters => DepthUnits::Diopters,
+        };
+        let measure_type = match gd.measure_type {
+            zenjpeg::decoder::GDepthMeasureType::OpticalAxis => DepthMeasureType::OpticalAxis,
+            zenjpeg::decoder::GDepthMeasureType::OpticRay => DepthMeasureType::OpticRay,
+        };
+        DepthMapMetadata {
+            format,
+            near: gd.near,
+            far: gd.far,
+            units,
+            measure_type,
+        }
+    } else {
+        // MPF Disparity: no structured metadata, use normalized disparity defaults
+        DepthMapMetadata {
             format: DepthFormat::Disparity,
             near: 0.0,
             far: 1.0,
             units: DepthUnits::Normalized,
             measure_type: DepthMeasureType::OpticalAxis,
+        }
+    };
+
+    // Decode confidence map if present
+    let confidence = depth_data.confidence.and_then(|conf_bytes| {
+        let conf_output = crate::codecs::jpeg::decode(&conf_bytes, None, None, None).ok()?;
+        let conf_gray = conf_output.into_buffer().to_gray8();
+        let conf_ref = conf_gray.as_imgref();
+        let conf_w = conf_ref.width() as u32;
+        let conf_h = conf_ref.height() as u32;
+        let conf_data: alloc::vec::Vec<u8> = conf_ref.buf().iter().map(|g| g.value()).collect();
+        Some(DepthImage {
+            data: conf_data,
+            width: conf_w,
+            height: conf_h,
+            pixel_format: DepthPixelFormat::Gray8,
+        })
+    });
+
+    Some(DecodedDepthMap {
+        depth: DepthImage {
+            data: pixel_data,
+            width: w,
+            height: h,
+            pixel_format: DepthPixelFormat::Gray8,
         },
-        confidence: None,
+        metadata,
+        confidence,
         source_format: ImageFormat::Jpeg,
-        source_device: DepthSource::AppleMpf,
+        source_device,
     })
 }
 

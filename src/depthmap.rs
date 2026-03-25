@@ -158,14 +158,41 @@ impl Default for DepthMapMetadata {
 }
 
 /// Source device/format that produced the depth map.
+///
+/// # Relationship to ultrahdr-core container types
+///
+/// When the `jpeg-ultrahdr` feature is enabled, these variants correspond
+/// to typed container abstractions from `ultrahdr_core`:
+///
+/// | `DepthSource`       | ultrahdr-core type                          |
+/// |---------------------|---------------------------------------------|
+/// | `AndroidGDepth`     | GDepth XMP namespace (not in GContainer)    |
+/// | `AndroidDdf`        | `ItemSemantic::DepthMap` in GContainer XMP  |
+/// | `AppleMpf`          | `MpImageType::Disparity` in MPF directory   |
+/// | `AppleHeic`         | HEIC auxiliary depth (ISO BMFF, no mapping) |
+/// | `Avif`              | AVIF auxiliary depth (ISO BMFF, no mapping) |
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DepthSource {
     /// Google Camera GDepth XMP namespace in JPEG.
+    ///
+    /// Depth image is base64-encoded in XMP, with near/far/units metadata.
+    /// This predates the GContainer directory format and uses a separate
+    /// XMP namespace (`http://ns.google.com/photos/1.0/depthmap/`).
     AndroidGDepth,
     /// Android Dynamic Depth Format (DDF) appended to JPEG.
+    ///
+    /// Uses the GContainer XMP directory (`Container:Directory`) to describe
+    /// appended images. Depth items have `ItemSemantic::DepthMap` in the
+    /// container directory. May also include a confidence map
+    /// (`ItemSemantic::ConfidenceMap`).
     AndroidDdf,
     /// iPhone MPF secondary image with Disparity type.
+    ///
+    /// The MPF (Multi-Picture Format) directory contains entries typed by
+    /// `MpImageType`. Depth maps use `MpImageType::Disparity` (type code
+    /// `0x020002`). No structured near/far metadata is available — values
+    /// are normalized disparity.
     AppleMpf,
     /// HEIC auxiliary depth image (Apple or other).
     AppleHeic,
