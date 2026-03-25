@@ -72,6 +72,12 @@ pub enum CodecId {
     /// zenbitmaps Farbfeld encoder
     FarbfeldEncode,
 
+    // TIFF
+    /// zentiff decoder
+    TiffDecode,
+    /// zentiff encoder
+    TiffEncode,
+
     /// Third-party or dynamically registered codec.
     Custom(&'static str),
 }
@@ -93,6 +99,7 @@ impl CodecId {
             Self::PnmDecode | Self::PnmEncode => ImageFormat::Pnm,
             Self::BmpDecode | Self::BmpEncode => ImageFormat::Bmp,
             Self::FarbfeldDecode | Self::FarbfeldEncode => ImageFormat::Farbfeld,
+            Self::TiffDecode | Self::TiffEncode => ImageFormat::Tiff,
             // Custom codecs: caller is responsible for correct format association.
             // We return Jpeg as a fallback but this should never be relied upon.
             Self::Custom(_) => ImageFormat::Jpeg, // TODO: Custom needs format stored
@@ -114,6 +121,7 @@ impl CodecId {
                 | Self::PnmDecode
                 | Self::BmpDecode
                 | Self::FarbfeldDecode
+                | Self::TiffDecode
         )
     }
 
@@ -130,6 +138,7 @@ impl CodecId {
                 | Self::PnmEncode
                 | Self::BmpEncode
                 | Self::FarbfeldEncode
+                | Self::TiffEncode
         )
     }
 
@@ -156,6 +165,8 @@ impl CodecId {
             Self::BmpEncode => "zenbitmaps-bmp (encode)",
             Self::FarbfeldDecode => "zenbitmaps-farbfeld (decode)",
             Self::FarbfeldEncode => "zenbitmaps-farbfeld (encode)",
+            Self::TiffDecode => "zentiff (decode)",
+            Self::TiffEncode => "zentiff (encode)",
             Self::Custom(name) => name,
         }
     }

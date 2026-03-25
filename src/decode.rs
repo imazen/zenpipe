@@ -416,6 +416,11 @@ impl<'a> DecodeRequest<'a> {
             #[cfg(not(feature = "bitmaps"))]
             ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
 
+            #[cfg(feature = "tiff")]
+            ImageFormat::Tiff => crate::codecs::tiff::decode(self.data, self.limits, self.stop),
+            #[cfg(not(feature = "tiff"))]
+            ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
+
             // RAW/DNG: Custom format from zenraw
             #[cfg(feature = "raw-decode")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {

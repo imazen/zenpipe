@@ -104,6 +104,11 @@ fn build_dyn_decoder_config(
         #[cfg(not(feature = "bitmaps"))]
         ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
 
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => Ok(Box::new(zentiff::codec::TiffDecoderCodecConfig::new())),
+        #[cfg(not(feature = "tiff"))]
+        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
+
         // RAW/DNG: Custom format from zenraw
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
@@ -191,6 +196,11 @@ pub(crate) fn dyn_push_decode(
         ImageFormat::Farbfeld => push_dec!(zenbitmaps::FarbfeldDecoderConfig::new()),
         #[cfg(not(feature = "bitmaps"))]
         ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => push_dec!(zentiff::codec::TiffDecoderCodecConfig::new()),
+        #[cfg(not(feature = "tiff"))]
+        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
 
         // RAW/DNG: Custom format from zenraw
         #[cfg(feature = "raw-decode")]
@@ -371,6 +381,7 @@ pub(crate) fn decoder_id_for_format(format: ImageFormat) -> CodecId {
         ImageFormat::Pnm => CodecId::PnmDecode,
         ImageFormat::Bmp => CodecId::BmpDecode,
         ImageFormat::Farbfeld => CodecId::FarbfeldDecode,
+        ImageFormat::Tiff => CodecId::TiffDecode,
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => CodecId::ZenrawDecode,
         _ => CodecId::Custom("unknown"),

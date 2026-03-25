@@ -27,11 +27,12 @@ impl FormatSet {
             ImageFormat::Pnm => Some(1 << 7),
             ImageFormat::Bmp => Some(1 << 8),
             ImageFormat::Farbfeld => Some(1 << 9),
+            ImageFormat::Tiff => Some(1 << 10),
             _ => None,
         }
     }
 
-    const ALL_FORMATS: [ImageFormat; 10] = [
+    const ALL_FORMATS: [ImageFormat; 11] = [
         ImageFormat::Jpeg,
         ImageFormat::WebP,
         ImageFormat::Gif,
@@ -42,13 +43,14 @@ impl FormatSet {
         ImageFormat::Pnm,
         ImageFormat::Bmp,
         ImageFormat::Farbfeld,
+        ImageFormat::Tiff,
     ];
 
     /// All known formats.
     pub fn all() -> Self {
         let mut bits = 0u16;
-        // All 10 formats: bits 0-9
-        bits |= (1 << 10) - 1;
+        // All 11 formats: bits 0-10
+        bits |= (1 << 11) - 1;
         FormatSet(bits)
     }
 
@@ -166,9 +168,10 @@ mod tests {
     fn all_set() {
         let set = FormatSet::all();
         assert!(!set.is_empty());
-        assert_eq!(set.len(), 10);
+        assert_eq!(set.len(), 11);
         assert!(set.contains(ImageFormat::Jpeg));
         assert!(set.contains(ImageFormat::Farbfeld));
+        assert!(set.contains(ImageFormat::Tiff));
     }
 
     #[test]

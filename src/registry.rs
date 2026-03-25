@@ -34,6 +34,8 @@ const fn compiled_both() -> FormatSet {
         .with_const(ImageFormat::Farbfeld);
     #[cfg(feature = "bitmaps-bmp")]
     let s = s.with_const(ImageFormat::Bmp);
+    #[cfg(feature = "tiff")]
+    let s = s.with_const(ImageFormat::Tiff);
     s
 }
 

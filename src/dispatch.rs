@@ -314,6 +314,11 @@ pub(crate) fn build_streaming_encoder(
         #[cfg(not(feature = "bitmaps"))]
         ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
 
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => crate::codecs::tiff::build_streaming(params),
+        #[cfg(not(feature = "tiff"))]
+        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
+
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
 }
@@ -372,6 +377,11 @@ pub(crate) fn build_encoder<'a>(
         ImageFormat::Farbfeld => Ok(crate::codecs::farbfeld::build_trait_encoder(params)),
         #[cfg(not(feature = "bitmaps"))]
         ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => Ok(crate::codecs::tiff::build_trait_encoder(params)),
+        #[cfg(not(feature = "tiff"))]
+        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
 
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }

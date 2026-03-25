@@ -165,7 +165,8 @@ fn finalize_gain_map_presence(info: &mut ImageInfo) {
         | ImageFormat::Gif
         | ImageFormat::Bmp
         | ImageFormat::Pnm
-        | ImageFormat::Farbfeld => {
+        | ImageFormat::Farbfeld
+        | ImageFormat::Tiff => {
             info.gain_map = zencodec::gainmap::GainMapPresence::Absent;
             info.supplements.gain_map = false;
         }
@@ -227,6 +228,11 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
         ImageFormat::Farbfeld => crate::codecs::farbfeld::probe(data)?,
         #[cfg(not(feature = "bitmaps"))]
         ImageFormat::Farbfeld => return Err(at!(CodecError::UnsupportedFormat(format))),
+
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => crate::codecs::tiff::probe(data)?,
+        #[cfg(not(feature = "tiff"))]
+        ImageFormat::Tiff => return Err(at!(CodecError::UnsupportedFormat(format))),
 
         // RAW/DNG: Custom format from zenraw
         #[cfg(feature = "raw-decode")]
