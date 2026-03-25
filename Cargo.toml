@@ -24,9 +24,9 @@ bytemuck = { version = "1.21", default-features = false, features = ["extern_cra
 linear-srgb = "0.6.4"
 magetypes = "0.9.7"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
-zenpixels = { version = "0.2", path = "../zenpixels/zenpixels", features = ["planar"] }
+zenpixels = { version = "0.2.0", features = ["planar"] }
 whereat = "0.1.4"
-zenpixels-convert = { version = "0.2", path = "../zenpixels/zenpixels-convert" }
+zenpixels-convert = { version = "0.2.0" }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
@@ -40,8 +40,8 @@ zenbench = { version = "0.1", path = "../zenbench" }
 libblur = { version = "0.23", default-features = true }
 zenresize = { version = "0.1", path = "../zenresize", default-features = false, features = ["std"] }
 zensim = { version = "0.2", path = "../zensim/zensim", default-features = false }
-zenpixels = { version = "0.2", path = "../zenpixels/zenpixels", features = ["planar", "rgb"] }
-zenpixels-convert = { version = "0.2", path = "../zenpixels/zenpixels-convert", features = ["planar"] }
+zenpixels = { version = "0.2.0", features = ["planar", "rgb"] }
+zenpixels-convert = { version = "0.2.0", features = ["planar"] }
 
 # Keep image only for tests that still need it (reference_validation, quality_validation)
 image = "0.25"
@@ -88,10 +88,6 @@ harness = false
 required-features = ["srgb-filters"]
 
 [patch.crates-io]
-zenpixels = { path = "../zenpixels/zenpixels" }
 zensim = { path = "../zensim/zensim" }
 zencodecs = { path = "../zencodecs" }
-zencodec = { path = "../zencodec" }
 zenresize = { path = "../zenresize" }
-magetypes = { path = "../../archmage/magetypes" }
-archmage = { path = "../../archmage" }
