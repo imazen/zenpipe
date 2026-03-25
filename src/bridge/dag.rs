@@ -13,7 +13,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use zenode::{NodeInstance, NodeRole};
+use zennode::{NodeInstance, NodeRole};
 
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
@@ -33,7 +33,7 @@ pub struct DagNode {
     pub inputs: Vec<usize>,
 }
 
-/// Build a streaming pipeline from a DAG of zenode nodes.
+/// Build a streaming pipeline from a DAG of zennode nodes.
 ///
 /// Linear sub-chains within the DAG receive the same coalescing and
 /// geometry fusion as [`build_pipeline()`](super::build_pipeline).
@@ -378,7 +378,7 @@ fn find_chain_output(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenode::*;
+    use zennode::*;
 
     // Simple test node that accepts any schema.
     fn mock_node(id: &'static str, role: NodeRole) -> Box<dyn NodeInstance> {

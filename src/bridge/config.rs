@@ -1,9 +1,9 @@
-//! Decode and encode configuration types extracted from zenode node params.
+//! Decode and encode configuration types extracted from zennode node params.
 
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use zenode::NodeInstance;
+use zennode::NodeInstance;
 
 /// Decode-time configuration extracted from the Decode node's params.
 ///
@@ -32,11 +32,11 @@ impl Default for DecodeConfig {
 impl DecodeConfig {
     /// Extract decode configuration from a list of decode-phase nodes.
     ///
-    /// Reads params from the first node with schema ID `"zenode.decode"`.
+    /// Reads params from the first node with schema ID `"zennode.decode"`.
     /// If no such node is found, returns defaults.
     pub fn from_nodes(nodes: &[Box<dyn NodeInstance>]) -> Self {
         for node in nodes {
-            if node.schema().id == "zenode.decode" {
+            if node.schema().id == "zennode.decode" {
                 return Self::from_node(node.as_ref());
             }
         }
@@ -71,7 +71,7 @@ impl DecodeConfig {
 /// Encode configuration extracted from encode-phase nodes.
 ///
 /// Reads quality intent and per-codec params from the encode node list.
-/// Handles both `"zenode.quality_intent"` and `"zencodecs.quality_intent"`
+/// Handles both `"zennode.quality_intent"` and `"zencodecs.quality_intent"`
 /// schema IDs so callers don't need to know where QualityIntent is defined.
 pub struct EncodeConfig {
     /// Quality profile string (from QualityIntent node, if present).
@@ -137,14 +137,14 @@ impl EncodeConfig {
     /// Extract encode configuration from a list of encode-phase nodes.
     ///
     /// Looks for:
-    /// - `"zenode.quality_intent"` or `"zencodecs.quality_intent"` for quality/format settings
+    /// - `"zennode.quality_intent"` or `"zencodecs.quality_intent"` for quality/format settings
     /// - Any other encode-phase node as codec-specific params
     pub fn from_nodes(nodes: &[Box<dyn NodeInstance>]) -> Self {
         let mut config = Self::default();
 
         for node in nodes {
             let id = node.schema().id;
-            if id == "zenode.quality_intent" || id == "zencodecs.quality_intent" {
+            if id == "zennode.quality_intent" || id == "zencodecs.quality_intent" {
                 config.quality_profile = node
                     .get_param("profile")
                     .and_then(|v| v.as_str().map(|s| s.to_string()));

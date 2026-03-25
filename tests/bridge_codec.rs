@@ -1,13 +1,13 @@
-//! Integration test: zenode bridge + JPEG codec round-trip.
+//! Integration test: zennode bridge + JPEG codec round-trip.
 //!
-//! Validates the full path from zenode node instances through the bridge
+//! Validates the full path from zennode node instances through the bridge
 //! compiler, streaming through a real JPEG encoder.
 //!
-//! Run: `cargo test --features zenode --test bridge_codec -- --nocapture`
+//! Run: `cargo test --features zennode --test bridge_codec -- --nocapture`
 
-#![cfg(feature = "zenode")]
+#![cfg(feature = "zennode")]
 
-use zenode::NodeDef;
+use zennode::NodeDef;
 use zencodec::decode::{DecodeJob, DecoderConfig};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::encoder::ChromaSubsampling;
@@ -58,7 +58,7 @@ fn make_encoder_sink(w: u32, h: u32) -> EncoderSink<'static> {
 }
 
 // ============================================================================
-// Test: zenode bridge decode → constrain → encode round-trip
+// Test: zennode bridge decode → constrain → encode round-trip
 // ============================================================================
 
 #[test]
@@ -68,17 +68,17 @@ fn bridge_decode_resize_encode_jpeg() {
     let dst_w = 200u32;
     let dst_h = 150u32;
 
-    // 1. Build zenode nodes: [Decode, Constrain(w=200, h=150, mode=fit)]
-    let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
+    // 1. Build zennode nodes: [Decode, Constrain(w=200, h=150, mode=fit)]
+    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
 
-    let mut constrain_params = zenode::ParamMap::new();
-    constrain_params.insert("w".into(), zenode::ParamValue::U32(dst_w));
-    constrain_params.insert("h".into(), zenode::ParamValue::U32(dst_h));
-    constrain_params.insert("mode".into(), zenode::ParamValue::Str("fit".into()));
-    constrain_params.insert("filter".into(), zenode::ParamValue::Str("lanczos".into()));
+    let mut constrain_params = zennode::ParamMap::new();
+    constrain_params.insert("w".into(), zennode::ParamValue::U32(dst_w));
+    constrain_params.insert("h".into(), zennode::ParamValue::U32(dst_h));
+    constrain_params.insert("mode".into(), zennode::ParamValue::Str("fit".into()));
+    constrain_params.insert("filter".into(), zennode::ParamValue::Str("lanczos".into()));
     let constrain_node = MockConstrainNode::boxed(constrain_params);
 
-    let nodes: Vec<Box<dyn zenode::NodeInstance>> = vec![decode_node, constrain_node];
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node, constrain_node];
 
     // 2. Create a gradient source at source dimensions.
     let source = gradient_source(src_w, src_h);
@@ -125,8 +125,8 @@ fn bridge_passthrough_encode_jpeg() {
     let h = 96u32;
 
     // Only a decode node — pixel pipeline is passthrough.
-    let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
-    let nodes: Vec<Box<dyn zenode::NodeInstance>> = vec![decode_node];
+    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node];
 
     let source = gradient_source(w, h);
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
@@ -160,15 +160,15 @@ fn bridge_materialize_after_resize() {
     let dst_w = 100u32;
     let dst_h = 75u32;
 
-    let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
-    let mut constrain_params = zenode::ParamMap::new();
-    constrain_params.insert("w".into(), zenode::ParamValue::U32(dst_w));
-    constrain_params.insert("h".into(), zenode::ParamValue::U32(dst_h));
-    constrain_params.insert("mode".into(), zenode::ParamValue::Str("fit".into()));
-    constrain_params.insert("filter".into(), zenode::ParamValue::Str("robidoux".into()));
+    let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
+    let mut constrain_params = zennode::ParamMap::new();
+    constrain_params.insert("w".into(), zennode::ParamValue::U32(dst_w));
+    constrain_params.insert("h".into(), zennode::ParamValue::U32(dst_h));
+    constrain_params.insert("mode".into(), zennode::ParamValue::Str("fit".into()));
+    constrain_params.insert("filter".into(), zennode::ParamValue::Str("robidoux".into()));
     let constrain_node = MockConstrainNode::boxed(constrain_params);
 
-    let nodes: Vec<Box<dyn zenode::NodeInstance>> = vec![decode_node, constrain_node];
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![decode_node, constrain_node];
     let source = gradient_source(src_w, src_h);
 
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
@@ -181,25 +181,25 @@ fn bridge_materialize_after_resize() {
 }
 
 // ============================================================================
-// Mock constrain node — zenresize doesn't have zenode_defs yet
+// Mock constrain node — zenresize doesn't have zennode_defs yet
 // ============================================================================
 
-static CONSTRAIN_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+static CONSTRAIN_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
     id: "zenresize.constrain",
     label: "Constrain",
     description: "Resize within constraints",
-    group: zenode::NodeGroup::Geometry,
-    role: zenode::NodeRole::Geometry,
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Geometry,
     params: &[],
     tags: &[],
-    coalesce: Some(zenode::CoalesceInfo {
+    coalesce: Some(zennode::CoalesceInfo {
         group: "layout_plan",
         fusable: true,
         is_target: false,
     }),
-    format: zenode::FormatHint {
-        preferred: zenode::PixelFormatPreference::Any,
-        alpha: zenode::AlphaHandling::Process,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Any,
+        alpha: zennode::AlphaHandling::Process,
         changes_dimensions: true,
         is_neighborhood: false,
     },
@@ -208,29 +208,29 @@ static CONSTRAIN_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
 };
 
 struct MockConstrainNode {
-    params: zenode::ParamMap,
+    params: zennode::ParamMap,
 }
 
 impl MockConstrainNode {
-    fn boxed(params: zenode::ParamMap) -> Box<dyn zenode::NodeInstance> {
+    fn boxed(params: zennode::ParamMap) -> Box<dyn zennode::NodeInstance> {
         Box::new(Self { params })
     }
 }
 
-impl zenode::NodeInstance for MockConstrainNode {
-    fn schema(&self) -> &'static zenode::NodeSchema {
+impl zennode::NodeInstance for MockConstrainNode {
+    fn schema(&self) -> &'static zennode::NodeSchema {
         &CONSTRAIN_SCHEMA
     }
 
-    fn to_params(&self) -> zenode::ParamMap {
+    fn to_params(&self) -> zennode::ParamMap {
         self.params.clone()
     }
 
-    fn get_param(&self, name: &str) -> Option<zenode::ParamValue> {
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
         self.params.get(name).cloned()
     }
 
-    fn set_param(&mut self, name: &str, value: zenode::ParamValue) -> bool {
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
         self.params.insert(name.into(), value);
         true
     }
@@ -243,7 +243,7 @@ impl zenode::NodeInstance for MockConstrainNode {
         self
     }
 
-    fn clone_boxed(&self) -> Box<dyn zenode::NodeInstance> {
+    fn clone_boxed(&self) -> Box<dyn zennode::NodeInstance> {
         Box::new(Self {
             params: self.params.clone(),
         })

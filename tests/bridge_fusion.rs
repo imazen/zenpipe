@@ -6,7 +6,7 @@
 //! - Format conversions stream (no full-frame materialization)
 //! - The pipeline output dimensions and pixel data are correct
 
-#![cfg(feature = "zenode")]
+#![cfg(feature = "zennode")]
 
 extern crate alloc;
 
@@ -14,7 +14,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec;
 
-use zenode::*;
+use zennode::*;
 use zenpipe::bridge::{self, NodeConverter};
 use zenpipe::graph::NodeOp;
 use zenpipe::{Source, format, PipeError};

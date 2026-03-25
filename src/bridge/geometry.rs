@@ -1,7 +1,7 @@
 //! Geometry fusion: compile a run of adjacent geometry nodes into a single
 //! `NodeOp::Layout` using `zenresize::Pipeline`.
 
-use zenode::NodeInstance;
+use zennode::NodeInstance;
 
 use crate::error::PipeError;
 use crate::graph::NodeOp;

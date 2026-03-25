@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use zenode::NodeInstance;
+use zennode::NodeInstance;
 
 use crate::error::PipeError;
 use crate::graph::NodeOp;

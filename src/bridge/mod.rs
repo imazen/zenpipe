@@ -1,6 +1,6 @@
-//! Bridge from [`zenode`] node instances to [`PipelineGraph`] node operations.
+//! Bridge from [`zennode`] node instances to [`PipelineGraph`] node operations.
 //!
-//! Converts a list of [`zenode::NodeInstance`] objects into a [`PipelineGraph`]
+//! Converts a list of [`zennode::NodeInstance`] objects into a [`PipelineGraph`]
 //! by coalescing fusable groups and mapping each node to a [`NodeOp`].
 //!
 //! Encode/decode-phase nodes are separated out and returned alongside the graph
@@ -20,7 +20,7 @@
 //! ```ignore
 //! use zenpipe::bridge::{compile_nodes, CompileResult};
 //!
-//! let nodes: Vec<Box<dyn zenode::NodeInstance>> = vec![/* ... */];
+//! let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![/* ... */];
 //! let result = compile_nodes(&nodes, &[], source_w, source_h)?;
 //! // result.graph has Source → ops → Output wired up
 //! // result.encode_nodes has any Encode-phase nodes
@@ -37,7 +37,7 @@ mod parse;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use zenode::{NodeInstance, NodeRole};
+use zennode::{NodeInstance, NodeRole};
 
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
@@ -57,7 +57,7 @@ use parse::{parse_constraint_mode, parse_filter_opt};
 
 // ─── CompileResult ───
 
-/// Result of compiling zenode nodes into a pipeline graph.
+/// Result of compiling zennode nodes into a pipeline graph.
 pub struct CompileResult {
     /// The compiled pipeline graph with Source → ops → Output.
     pub graph: PipelineGraph,
@@ -71,7 +71,7 @@ pub struct CompileResult {
     pub encode_config: EncodeConfig,
 }
 
-/// Result of building a streaming pipeline from zenode nodes.
+/// Result of building a streaming pipeline from zennode nodes.
 ///
 /// Contains a streaming [`Source`](crate::Source) that can be connected directly to an
 /// encoder sink via [`execute()`](crate::execute), plus extracted decode
@@ -161,7 +161,7 @@ pub trait NodeConverter: Send + Sync {
 
 // ─── Public API ───
 
-/// Compile zenode node instances into a [`PipelineGraph`].
+/// Compile zennode node instances into a [`PipelineGraph`].
 ///
 /// Preserves user-specified node order (no reordering). Separates
 /// encode/decode phase nodes, coalesces adjacent fusable nodes in the same
@@ -237,7 +237,7 @@ pub fn compile_nodes(
     })
 }
 
-/// Build a streaming pipeline from zenode nodes.
+/// Build a streaming pipeline from zennode nodes.
 ///
 /// Returns a [`PipelineResult`] containing a streaming [`Source`](crate::Source)
 /// that can be connected directly to an encoder sink via
@@ -249,7 +249,7 @@ pub fn compile_nodes(
 /// # Arguments
 ///
 /// * `source` — decoded pixel source (the caller has already decoded the image)
-/// * `nodes` — zenode node instances in user-declared order
+/// * `nodes` — zennode node instances in user-declared order
 /// * `converters` — extension converters for crate-specific nodes
 ///
 /// # Errors
@@ -292,33 +292,33 @@ mod core_tests {
 
     // A mock NodeInstance backed by a BTreeMap of params.
     struct MockNode {
-        schema: &'static zenode::NodeSchema,
-        params: zenode::ParamMap,
+        schema: &'static zennode::NodeSchema,
+        params: zennode::ParamMap,
     }
 
     impl MockNode {
         fn boxed(
-            schema: &'static zenode::NodeSchema,
-            params: zenode::ParamMap,
+            schema: &'static zennode::NodeSchema,
+            params: zennode::ParamMap,
         ) -> Box<dyn NodeInstance> {
             Box::new(Self { schema, params })
         }
     }
 
     impl NodeInstance for MockNode {
-        fn schema(&self) -> &'static zenode::NodeSchema {
+        fn schema(&self) -> &'static zennode::NodeSchema {
             self.schema
         }
 
-        fn to_params(&self) -> zenode::ParamMap {
+        fn to_params(&self) -> zennode::ParamMap {
             self.params.clone()
         }
 
-        fn get_param(&self, name: &str) -> Option<zenode::ParamValue> {
+        fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
             self.params.get(name).cloned()
         }
 
-        fn set_param(&mut self, name: &str, value: zenode::ParamValue) -> bool {
+        fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
             self.params.insert(name.into(), value);
             true
         }
@@ -341,22 +341,22 @@ mod core_tests {
 
     // ─── Static schemas ───
 
-    static CROP_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static CROP_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenlayout.crop",
         label: "Crop",
         description: "Crop to rectangle",
-        group: zenode::NodeGroup::Geometry,
-        role: zenode::NodeRole::Geometry,
+        group: zennode::NodeGroup::Geometry,
+        role: zennode::NodeRole::Geometry,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "layout_plan",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: true,
             is_neighborhood: false,
         },
@@ -364,22 +364,22 @@ mod core_tests {
         compat_version: 1,
     };
 
-    static ORIENT_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static ORIENT_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenlayout.orient",
         label: "Orient",
         description: "Auto-orient from EXIF",
-        group: zenode::NodeGroup::Geometry,
-        role: zenode::NodeRole::Geometry,
+        group: zennode::NodeGroup::Geometry,
+        role: zennode::NodeRole::Geometry,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "layout_plan",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: true,
             is_neighborhood: false,
         },
@@ -387,22 +387,22 @@ mod core_tests {
         compat_version: 1,
     };
 
-    static CONSTRAIN_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static CONSTRAIN_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenresize.constrain",
         label: "Constrain",
         description: "Resize within constraints",
-        group: zenode::NodeGroup::Geometry,
-        role: zenode::NodeRole::Geometry,
+        group: zennode::NodeGroup::Geometry,
+        role: zennode::NodeRole::Geometry,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "layout_plan",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: true,
             is_neighborhood: false,
         },
@@ -410,22 +410,22 @@ mod core_tests {
         compat_version: 1,
     };
 
-    static FLIP_H_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static FLIP_H_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenlayout.flip_h",
         label: "Flip Horizontal",
         description: "Mirror horizontally",
-        group: zenode::NodeGroup::Geometry,
-        role: zenode::NodeRole::Geometry,
+        group: zennode::NodeGroup::Geometry,
+        role: zennode::NodeRole::Geometry,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "layout_plan",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: false,
             is_neighborhood: false,
         },
@@ -433,22 +433,22 @@ mod core_tests {
         compat_version: 1,
     };
 
-    static ROTATE_90_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static ROTATE_90_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenlayout.rotate_90",
         label: "Rotate 90",
         description: "Rotate 90 degrees",
-        group: zenode::NodeGroup::Geometry,
-        role: zenode::NodeRole::Geometry,
+        group: zennode::NodeGroup::Geometry,
+        role: zennode::NodeRole::Geometry,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "layout_plan",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: true,
             is_neighborhood: false,
         },
@@ -456,18 +456,18 @@ mod core_tests {
         compat_version: 1,
     };
 
-    static DECODE_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
-        id: "zenode.decode",
+    static DECODE_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
+        id: "zennode.decode",
         label: "Decode",
         description: "Decode",
-        group: zenode::NodeGroup::Decode,
-        role: zenode::NodeRole::Decode,
+        group: zennode::NodeGroup::Decode,
+        role: zennode::NodeRole::Decode,
         params: &[],
         tags: &[],
         coalesce: None,
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::Any,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::Any,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: false,
             is_neighborhood: false,
         },
@@ -476,22 +476,22 @@ mod core_tests {
     };
 
     // A fake non-geometry schema for testing mixed groups.
-    static FILTER_SCHEMA: zenode::NodeSchema = zenode::NodeSchema {
+    static FILTER_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
         id: "zenfilters.exposure",
         label: "Exposure",
         description: "Adjust exposure",
-        group: zenode::NodeGroup::Tone,
-        role: zenode::NodeRole::Filter,
+        group: zennode::NodeGroup::Tone,
+        role: zennode::NodeRole::Filter,
         params: &[],
         tags: &[],
-        coalesce: Some(zenode::CoalesceInfo {
+        coalesce: Some(zennode::CoalesceInfo {
             group: "filter_pipeline",
             fusable: true,
             is_target: false,
         }),
-        format: zenode::FormatHint {
-            preferred: zenode::PixelFormatPreference::OklabF32,
-            alpha: zenode::AlphaHandling::Process,
+        format: zennode::FormatHint {
+            preferred: zennode::PixelFormatPreference::OklabF32,
+            alpha: zennode::AlphaHandling::Process,
             changes_dimensions: false,
             is_neighborhood: false,
         },
@@ -502,43 +502,43 @@ mod core_tests {
     // ─── Helper constructors ───
 
     fn crop_node(x: u32, y: u32, w: u32, h: u32) -> Box<dyn NodeInstance> {
-        let mut params = zenode::ParamMap::new();
-        params.insert("x".into(), zenode::ParamValue::U32(x));
-        params.insert("y".into(), zenode::ParamValue::U32(y));
-        params.insert("w".into(), zenode::ParamValue::U32(w));
-        params.insert("h".into(), zenode::ParamValue::U32(h));
+        let mut params = zennode::ParamMap::new();
+        params.insert("x".into(), zennode::ParamValue::U32(x));
+        params.insert("y".into(), zennode::ParamValue::U32(y));
+        params.insert("w".into(), zennode::ParamValue::U32(w));
+        params.insert("h".into(), zennode::ParamValue::U32(h));
         MockNode::boxed(&CROP_SCHEMA, params)
     }
 
     fn orient_node(orientation: i32) -> Box<dyn NodeInstance> {
-        let mut params = zenode::ParamMap::new();
-        params.insert("orientation".into(), zenode::ParamValue::I32(orientation));
+        let mut params = zennode::ParamMap::new();
+        params.insert("orientation".into(), zennode::ParamValue::I32(orientation));
         MockNode::boxed(&ORIENT_SCHEMA, params)
     }
 
     fn constrain_node(w: u32, h: u32, mode: &str, filter: &str) -> Box<dyn NodeInstance> {
-        let mut params = zenode::ParamMap::new();
-        params.insert("w".into(), zenode::ParamValue::U32(w));
-        params.insert("h".into(), zenode::ParamValue::U32(h));
-        params.insert("mode".into(), zenode::ParamValue::Str(mode.into()));
-        params.insert("filter".into(), zenode::ParamValue::Str(filter.into()));
+        let mut params = zennode::ParamMap::new();
+        params.insert("w".into(), zennode::ParamValue::U32(w));
+        params.insert("h".into(), zennode::ParamValue::U32(h));
+        params.insert("mode".into(), zennode::ParamValue::Str(mode.into()));
+        params.insert("filter".into(), zennode::ParamValue::Str(filter.into()));
         MockNode::boxed(&CONSTRAIN_SCHEMA, params)
     }
 
     fn flip_h_node() -> Box<dyn NodeInstance> {
-        MockNode::boxed(&FLIP_H_SCHEMA, zenode::ParamMap::new())
+        MockNode::boxed(&FLIP_H_SCHEMA, zennode::ParamMap::new())
     }
 
     fn rotate_90_node() -> Box<dyn NodeInstance> {
-        MockNode::boxed(&ROTATE_90_SCHEMA, zenode::ParamMap::new())
+        MockNode::boxed(&ROTATE_90_SCHEMA, zennode::ParamMap::new())
     }
 
     fn decode_node() -> Box<dyn NodeInstance> {
-        MockNode::boxed(&DECODE_SCHEMA, zenode::ParamMap::new())
+        MockNode::boxed(&DECODE_SCHEMA, zennode::ParamMap::new())
     }
 
     fn filter_node() -> Box<dyn NodeInstance> {
-        MockNode::boxed(&FILTER_SCHEMA, zenode::ParamMap::new())
+        MockNode::boxed(&FILTER_SCHEMA, zennode::ParamMap::new())
     }
 
     // ─── Test source ───
@@ -752,10 +752,10 @@ mod core_tests {
     #[test]
     fn build_pipeline_decode_config_extracted() {
         let source = Box::new(SolidSource::new(100, 100));
-        let mut params = zenode::ParamMap::new();
+        let mut params = zennode::ParamMap::new();
         params.insert(
             "hdr_mode".into(),
-            zenode::ParamValue::Str("preserve".into()),
+            zennode::ParamValue::Str("preserve".into()),
         );
         let nodes: Vec<Box<dyn NodeInstance>> = vec![MockNode::boxed(&DECODE_SCHEMA, params)];
 
@@ -977,7 +977,7 @@ mod core_tests {
         assert!(is_geometry_node("zenresize.constrain"));
         assert!(is_geometry_node("zenlayout.constrain"));
         assert!(!is_geometry_node("zenfilters.exposure"));
-        assert!(!is_geometry_node("zenode.decode"));
+        assert!(!is_geometry_node("zennode.decode"));
     }
 
     // ─── materialize tests ───
@@ -999,10 +999,10 @@ mod core_tests {
     #[test]
     fn materialize_preserves_configs() {
         let source = Box::new(SolidSource::new(100, 100));
-        let mut params = zenode::ParamMap::new();
+        let mut params = zennode::ParamMap::new();
         params.insert(
             "hdr_mode".into(),
-            zenode::ParamValue::Str("preserve".into()),
+            zennode::ParamValue::Str("preserve".into()),
         );
         let nodes: Vec<Box<dyn NodeInstance>> = vec![MockNode::boxed(&DECODE_SCHEMA, params)];
 
@@ -1027,13 +1027,13 @@ mod core_tests {
     }
 }
 
-// Bridge tests requiring `zenode_defs` modules in zenresize and zenlayout.
-#[cfg(all(test, feature = "zenode-defs"))]
+// Bridge tests requiring `zennode_defs` modules in zenresize and zenlayout.
+#[cfg(all(test, feature = "zennode-defs"))]
 mod tests {
     use super::*;
-    use zenode::NodeDef;
+    use zennode::NodeDef;
 
-    use zenresize::zenode_defs as resize_nodes;
+    use zenresize::zennode_defs as resize_nodes;
 
     #[test]
     fn compile_empty() {
@@ -1045,13 +1045,13 @@ mod tests {
 
     #[test]
     fn compile_single_crop() {
-        let mut params = zenode::ParamMap::new();
-        params.insert("x".into(), zenode::ParamValue::U32(10));
-        params.insert("y".into(), zenode::ParamValue::U32(20));
-        params.insert("w".into(), zenode::ParamValue::U32(100));
-        params.insert("h".into(), zenode::ParamValue::U32(80));
+        let mut params = zennode::ParamMap::new();
+        params.insert("x".into(), zennode::ParamValue::U32(10));
+        params.insert("y".into(), zennode::ParamValue::U32(20));
+        params.insert("w".into(), zennode::ParamValue::U32(100));
+        params.insert("h".into(), zennode::ParamValue::U32(80));
 
-        let crop_node = zenlayout::zenode_defs::CROP_NODE.create(&params).unwrap();
+        let crop_node = zenlayout::zennode_defs::CROP_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node];
         let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
@@ -1060,10 +1060,10 @@ mod tests {
 
     #[test]
     fn compile_orient() {
-        let mut params = zenode::ParamMap::new();
-        params.insert("orientation".into(), zenode::ParamValue::I32(6));
+        let mut params = zennode::ParamMap::new();
+        params.insert("orientation".into(), zennode::ParamValue::I32(6));
 
-        let orient_node = zenlayout::zenode_defs::ORIENT_NODE.create(&params).unwrap();
+        let orient_node = zenlayout::zennode_defs::ORIENT_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node];
         let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());
@@ -1071,11 +1071,11 @@ mod tests {
 
     #[test]
     fn compile_constrain() {
-        let mut params = zenode::ParamMap::new();
-        params.insert("w".into(), zenode::ParamValue::U32(800));
-        params.insert("h".into(), zenode::ParamValue::U32(600));
-        params.insert("mode".into(), zenode::ParamValue::Str("within".into()));
-        params.insert("filter".into(), zenode::ParamValue::Str("lanczos".into()));
+        let mut params = zennode::ParamMap::new();
+        params.insert("w".into(), zennode::ParamValue::U32(800));
+        params.insert("h".into(), zennode::ParamValue::U32(600));
+        params.insert("mode".into(), zennode::ParamValue::Str("within".into()));
+        params.insert("filter".into(), zennode::ParamValue::Str("lanczos".into()));
 
         let node = resize_nodes::CONSTRAIN_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![node];
@@ -1085,11 +1085,11 @@ mod tests {
 
     #[test]
     fn decode_nodes_separated() {
-        let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
+        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
         let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert_eq!(result.decode_nodes.len(), 1);
-        assert_eq!(result.decode_nodes[0].schema().id, "zenode.decode");
+        assert_eq!(result.decode_nodes[0].schema().id, "zennode.decode");
     }
 
     #[test]
@@ -1100,10 +1100,10 @@ mod tests {
 
     #[test]
     fn order_preserved() {
-        let rot90 = zenlayout::zenode_defs::ROTATE90_NODE
+        let rot90 = zenlayout::zennode_defs::ROTATE90_NODE
             .create_default()
             .unwrap();
-        let rot270 = zenlayout::zenode_defs::ROTATE270_NODE
+        let rot270 = zenlayout::zennode_defs::ROTATE270_NODE
             .create_default()
             .unwrap();
 
@@ -1159,7 +1159,7 @@ mod tests {
 
     #[test]
     fn decode_config_from_default_node() {
-        let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
+        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
         let config = DecodeConfig::from_nodes(&nodes);
         assert_eq!(config.hdr_mode, "sdr_only");
@@ -1169,18 +1169,18 @@ mod tests {
 
     #[test]
     fn decode_config_from_custom_params() {
-        let mut params = zenode::ParamMap::new();
+        let mut params = zennode::ParamMap::new();
         params.insert(
             "hdr_mode".into(),
-            zenode::ParamValue::Str("hdr_reconstruct".into()),
+            zennode::ParamValue::Str("hdr_reconstruct".into()),
         );
         params.insert(
             "color_intent".into(),
-            zenode::ParamValue::Str("srgb".into()),
+            zennode::ParamValue::Str("srgb".into()),
         );
-        params.insert("min_size".into(), zenode::ParamValue::U32(400));
+        params.insert("min_size".into(), zennode::ParamValue::U32(400));
 
-        let decode_node = zenode::nodes::DECODE_NODE.create(&params).unwrap();
+        let decode_node = zennode::nodes::DECODE_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
         let config = DecodeConfig::from_nodes(&nodes);
         assert_eq!(config.hdr_mode, "hdr_reconstruct");
@@ -1199,14 +1199,14 @@ mod tests {
 
     #[test]
     fn decode_config_extracted_in_compile() {
-        let mut params = zenode::ParamMap::new();
+        let mut params = zennode::ParamMap::new();
         params.insert(
             "hdr_mode".into(),
-            zenode::ParamValue::Str("preserve".into()),
+            zennode::ParamValue::Str("preserve".into()),
         );
-        params.insert("min_size".into(), zenode::ParamValue::U32(256));
+        params.insert("min_size".into(), zennode::ParamValue::U32(256));
 
-        let decode_node = zenode::nodes::DECODE_NODE.create(&params).unwrap();
+        let decode_node = zennode::nodes::DECODE_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
         let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert_eq!(result.decode_config.hdr_mode, "preserve");
@@ -1246,14 +1246,14 @@ mod tests {
 
     #[test]
     fn full_flow_decode_crop_encode() {
-        let decode_node = zenode::nodes::DECODE_NODE.create_default().unwrap();
+        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
 
-        let mut crop_params = zenode::ParamMap::new();
-        crop_params.insert("x".into(), zenode::ParamValue::U32(0));
-        crop_params.insert("y".into(), zenode::ParamValue::U32(0));
-        crop_params.insert("w".into(), zenode::ParamValue::U32(200));
-        crop_params.insert("h".into(), zenode::ParamValue::U32(150));
-        let crop_node = zenlayout::zenode_defs::CROP_NODE
+        let mut crop_params = zennode::ParamMap::new();
+        crop_params.insert("x".into(), zennode::ParamValue::U32(0));
+        crop_params.insert("y".into(), zennode::ParamValue::U32(0));
+        crop_params.insert("w".into(), zennode::ParamValue::U32(200));
+        crop_params.insert("h".into(), zennode::ParamValue::U32(150));
+        let crop_node = zenlayout::zennode_defs::CROP_NODE
             .create(&crop_params)
             .unwrap();
 

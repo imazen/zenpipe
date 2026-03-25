@@ -1,8 +1,8 @@
-//! Param extraction helpers and string-to-enum parsers for zenode bridge nodes.
+//! Param extraction helpers and string-to-enum parsers for zennode bridge nodes.
 
 use alloc::string::{String, ToString};
 
-use zenode::NodeInstance;
+use zennode::NodeInstance;
 
 use crate::error::PipeError;
 
