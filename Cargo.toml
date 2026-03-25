@@ -21,7 +21,7 @@ archmage = { version = "0.9.7", features = ["avx512"] }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
-linear-srgb = "0.6.4"
+linear-srgb = "0.6.5"
 magetypes = "0.9.7"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
 zenpixels = { version = "0.2.0", features = ["planar"] }
