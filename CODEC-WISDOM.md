@@ -14,7 +14,7 @@ All data verified against source code as of 2026-03-25.
 | Lossy | Y | palette | Y | -- | Y | Y | Y | -- | -- | -- | -- |
 | Lossless | -- | Y | Y | Y | feat | Y | -- | Y | Y | Y | Y |
 | Alpha | -- | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
-| Animation | -- | APNG | Y | Y | dec | Y | -- | -- | -- | -- | -- |
+| Animation | -- | APNG | Y | Y | feat | Y | -- | -- | -- | -- | -- |
 | Progressive | Y | Adam7 dec | -- | -- | -- | -- | -- | -- | -- | -- | -- |
 | HDR (>8bit) | -- | 16 | -- | -- | 10/12 | f32 | 10 | f32 | f32 | -- | 16 |
 | Max depth | 8 | 16 | 8 | 8 | 12 | 32 | 10 | 32 | 32 | 8 | 16 |
