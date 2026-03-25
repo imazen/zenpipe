@@ -2,7 +2,7 @@
 
 Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via [archmage](https://github.com/imazen/archmage).
 
-51 filters covering full Lightroom/darktable parity for tone, color, detail, and effects. 19 built-in presets with intensity blending. Self-describing parameter schemas for automatic UI generation. Serde support for serialization.
+51 stable filters covering full Lightroom/darktable parity for tone, color, detail, and effects, plus additional experimental filters behind the `experimental` feature flag. 19 built-in presets with intensity blending. Self-describing parameter schemas for automatic UI generation. Serde support for serialization.
 
 `#![forbid(unsafe_code)]` — entirely safe Rust.
 
@@ -187,7 +187,7 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 
 ## Filters (51)
 
-### Tone & Exposure (16)
+### Tone & Exposure (17)
 
 | Filter | Description |
 |--------|-------------|
@@ -196,7 +196,8 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 | `Contrast` | Midtone-pivoted power curve |
 | `HighlightsShadows` | Highlight/shadow recovery with quadratic masks |
 | `WhitesBlacks` | Smoothstep-weighted extreme luminance control |
-| `BlackPoint` / `WhitePoint` | Level remapping with optional soft-clip headroom |
+| `BlackPoint` | Level remapping with optional soft-clip headroom (low end) |
+| `WhitePoint` | Level remapping with optional soft-clip headroom (high end) |
 | `HighlightRecovery` | Histogram-adaptive soft-knee compression |
 | `ShadowLift` | Histogram-adaptive toe lift |
 | `ToneCurve` | Monotone cubic Hermite (Fritsch-Carlson) |
@@ -209,7 +210,7 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 | `ToneEqualizer` | 9-zone guided-filter luminance adjustment (darktable equivalent) |
 | `LocalToneMap` | Base/detail decomposition with pivoted gamma |
 
-### Sharpening & Detail (6)
+### Sharpening & Detail (7)
 
 | Filter | Description |
 |--------|-------------|
@@ -219,21 +220,25 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 | `Texture` | Fine detail enhancement (finer scale than clarity) |
 | `Brilliance` | S-curve local adaptation (smoothstep-weighted) |
 | `Bloom` | Soft-knee highlight glow with screen blending |
+| `EdgeDetect` | Sobel / Laplacian / Canny edge detection on L channel |
 
-### Noise Reduction (3)
+### Noise Reduction (4)
 
 | Filter | Description |
 |--------|-------------|
 | `NoiseReduction` | Wavelet (à trous) with BayesShrink optimal thresholding |
 | `Bilateral` | Guided filter (O(1)/pixel, edge-preserving) |
 | `Blur` | Gaussian blur (SIMD stackblur for σ≥6, FIR for small σ) |
+| `MedianBlur` | Neighborhood median for salt-and-pepper noise; L-only or all channels |
 
-### Color (13)
+### Color (12)
 
 | Filter | Description |
 |--------|-------------|
-| `Temperature` / `Tint` | Oklab b/a channel offsets |
-| `Saturation` / `Vibrance` | Uniform and chroma-protective saturation |
+| `Temperature` | Oklab b channel offset (warm/cool) |
+| `Tint` | Oklab a channel offset (green/magenta) |
+| `Saturation` | Uniform chroma scale |
+| `Vibrance` | Chroma-protective saturation (boosts muted colors, protects skin) |
 | `HueRotate` | 2D rotation in a/b plane |
 | `HslAdjust` | Per-hue H/S/L adjustments (8 ranges) |
 | `ColorGrading` | Shadow/midtone/highlight split-toning |
@@ -243,21 +248,37 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 | `GamutExpand` | Hue-selective P3 chroma expansion |
 | `BwMixer` | Chroma-aware B&W channel mixer (8 weights) |
 
-### Effects (8)
+### Effects (9)
 
 | Filter | Description |
 |--------|-------------|
 | `Grain` | Deterministic film grain with midtone response curve |
-| `Vignette` / `Devignette` | Radial darkening / lens correction |
+| `Vignette` | Radial luminance darkening |
+| `Devignette` | Radial lens correction (brightening) |
 | `Dehaze` | Dark channel prior analog in Oklab |
 | `ChromaticAberration` | Radial chroma plane shift (bilinear) |
-| `Grayscale` / `Sepia` / `Invert` | Standard effects |
+| `Grayscale` | Luminance-only conversion |
+| `Sepia` | Warm monotone toning |
+| `Invert` | Luminance and chroma inversion |
+| `Alpha` | Alpha channel multiplier (fade / transparency) |
+
+### Compositing & Masking (1)
+
+| Filter | Description |
+|--------|-------------|
+| `MaskedFilter` | Wraps any filter with a spatial mask: linear gradient, radial gradient, or luminance range |
 
 ### Performance (1)
 
 | Filter | Description |
 |--------|-------------|
 | `FusedAdjust` | 11 per-pixel ops in one SIMD pass (exposure, contrast, H/S, dehaze, temp, tint, sat, vibrance, BP/WP) |
+
+### Experimental (feature = `"experimental"`)
+
+| Filter | Description |
+|--------|-------------|
+| `Warp` | 3×3 projective matrix transform (rotation, deskew, affine, perspective); bilinear / Catmull-Rom / Lanczos-3 |
 
 ## Performance
 
