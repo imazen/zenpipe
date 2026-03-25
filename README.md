@@ -7,7 +7,7 @@ Unified image codec dispatch for Rust. Thin layer over format-specific encoders 
 [zenavif](https://github.com/imazen/zenavif),
 [zenpng](https://github.com/imazen/zenpng),
 [zenjxl](https://github.com/imazen/zenjxl),
-and [heic-decoder](https://github.com/nicksrandall/heic-decoder-rs).
+and [heic-decoder](https://github.com/imazen/heic-decoder-rs) (Imazen fork).
 
 ## Usage
 
@@ -120,20 +120,35 @@ Every codec is feature-gated. Enable only what you need:
 zencodecs = { version = "0.1", features = ["jpeg", "webp", "png"] }
 ```
 
-| Feature | Codec | Decode | Encode |
-|---------|-------|--------|--------|
-| `jpeg` | zenjpeg | Yes | Yes |
-| `webp` | zenwebp | Yes | Yes |
-| `gif` | zengif | Yes | Yes |
-| `png` | zenpng | Yes | Yes |
-| `avif-decode` | zenavif | Yes | No |
-| `avif-encode` | zenavif + ravif | No | Yes |
-| `jxl-decode` | zenjxl | Yes | No |
-| `jxl-encode` | zenjxl | No | Yes |
-| `heic-decode` | heic-decoder | Yes | No |
-| `all` | Everything above | | |
+| Feature | Codec | Decode | Encode | Notes |
+|---------|-------|--------|--------|-------|
+| `jpeg` | zenjpeg | Yes | Yes | |
+| `jpeg-ultrahdr` | zenjpeg | Yes | Yes | UltraHDR gain map support |
+| `webp` | zenwebp | Yes | Yes | |
+| `gif` | zengif | Yes | Yes | |
+| `gif-zenquant` | zengif + zenquant | Yes | Yes | Palette quantization via zenquant |
+| `gif-quantizr` | zengif + quantizr | Yes | Yes | Palette quantization via quantizr |
+| `gif-imagequant` | zengif + imagequant | Yes | Yes | Palette quantization via imagequant |
+| `png` | zenpng | Yes | Yes | |
+| `png-zenquant` | zenpng + zenquant | Yes | Yes | Palette quantization |
+| `avif-decode` | zenavif | Yes | No | |
+| `avif-encode` | zenavif | No | Yes | |
+| `jxl-decode` | zenjxl | Yes | No | |
+| `jxl-encode` | zenjxl | No | Yes | |
+| `heic-decode` | heic-decoder (Imazen fork) | Yes | No | |
+| `bitmaps` | zenbitmaps | Yes | Yes | PNM/PAM/PFM, BMP, Farbfeld |
+| `bitmaps-bmp` | zenbitmaps | Yes | Yes | BMP only |
+| `tiff` | zentiff | Yes | Yes | |
+| `raw-decode` | zenraw | Yes | No | RAW/DNG via rawloader (LGPL) |
+| `raw-decode-exif` | zenraw | Yes | No | EXIF metadata for RAW/DNG |
+| `raw-decode-xmp` | zenraw | Yes | No | XMP metadata for RAW/DNG |
+| `raw-decode-gainmap` | zenraw | Yes | No | Gain map from DNG/AMPF |
+| `riapi` | — | — | — | RIAPI codec key parsing |
+| `zennode` | zennode | — | — | Pipeline node definitions |
+| `calibrate` | (meta) | — | — | All lossy encoders for quality calibration |
+| `all` | (meta) | Yes | Yes | All codecs and features |
 
-Default features: `jpeg`, `webp`, `gif`, `gif-quantizr`.
+Default features: `jpeg`, `webp`, `gif`, `gif-zenquant`, `png`, `png-zenquant`, `avif-decode`, `avif-encode`, `jxl-decode`, `heic-decode`, `bitmaps-bmp`.
 
 ## What This Crate Does
 
@@ -147,8 +162,6 @@ Default features: `jpeg`, `webp`, `gif`, `gif-quantizr`.
 ## What This Crate Does Not Do
 
 - Image processing (resize, crop, rotate)
-- Streaming or incremental decode
-- Animation (first frame only for animated formats)
 - Color management (ICC profile application)
 
 ## License
