@@ -1,5 +1,7 @@
 # zencodecs API Design
 
+> **Historical document.** This early API proposal was superseded before implementation. See README.md for the current API.
+
 Unified codec API for zenjpeg, zenwebp, zengif, zenavif, png, ravif.
 
 ## Crate Architecture
