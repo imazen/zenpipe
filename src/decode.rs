@@ -419,12 +419,13 @@ impl<'a> DecodeRequest<'a> {
                 self.codec_config,
                 self.limits,
                 self.stop,
+                dp,
             ),
             #[cfg(not(feature = "avif-decode"))]
             ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
 
             #[cfg(feature = "jxl-decode")]
-            ImageFormat::Jxl => crate::codecs::jxl_dec::decode(self.data, self.limits, self.stop),
+            ImageFormat::Jxl => crate::codecs::jxl_dec::decode(self.data, self.limits, self.stop, dp),
             #[cfg(not(feature = "jxl-decode"))]
             ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
 

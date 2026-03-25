@@ -24,6 +24,7 @@ pub(crate) fn decode(
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<StopToken>,
+    decode_policy: Option<zencodec::decode::DecodePolicy>,
 ) -> Result<DecodeOutput> {
     let mut dec = zenavif::AvifDecoderConfig::new();
     // Apply codec config if provided
@@ -37,6 +38,9 @@ pub(crate) fn decode(
     let mut job = dec.job();
     if let Some(s) = stop {
         job = job.with_stop(s);
+    }
+    if let Some(dp) = decode_policy {
+        job = job.with_policy(dp);
     }
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?
