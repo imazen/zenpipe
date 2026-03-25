@@ -130,7 +130,7 @@ fn main() {
     eprintln!("Pipeline: exposure(0.5) + clarity + sharpen");
     eprintln!(
         "{:<12} {:>12} {:>12} {:>8}",
-        "Resolution", "Windowed", "FullFrame", "Ratio"
+        "Resolution", "Windowed", "AnimationFrame", "Ratio"
     );
     eprintln!("{}", "-".repeat(48));
 

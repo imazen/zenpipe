@@ -1063,7 +1063,9 @@ mod tests {
         let mut params = zennode::ParamMap::new();
         params.insert("orientation".into(), zennode::ParamValue::I32(6));
 
-        let orient_node = zenlayout::zennode_defs::ORIENT_NODE.create(&params).unwrap();
+        let orient_node = zenlayout::zennode_defs::ORIENT_NODE
+            .create(&params)
+            .unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node];
         let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
         assert!(result.encode_nodes.is_empty());

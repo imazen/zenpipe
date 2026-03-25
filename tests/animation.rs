@@ -6,8 +6,8 @@
 use std::borrow::Cow;
 
 use hashbrown::HashMap;
-use zencodec::decode::{DecodeJob as _, DecoderConfig as _, FullFrameDecoder as _};
-use zencodec::encode::{EncodeJob as _, EncoderConfig as _, FullFrameEncoder as _};
+use zencodec::decode::{AnimationFrameDecoder as _, DecodeJob as _, DecoderConfig as _};
+use zencodec::encode::{AnimationFrameEncoder as _, EncodeJob as _, EncoderConfig as _};
 use zengif::{GifDecoderConfig, GifEncoderConfig};
 use zenpixels::PixelDescriptor;
 
@@ -23,7 +23,7 @@ fn build_test_gif(frame_count: usize, width: u16, height: u16) -> Vec<u8> {
     let mut encoder = config
         .job()
         .with_canvas_size(width as u32, height as u32)
-        .full_frame_encoder()
+        .animation_frame_encoder()
         .unwrap();
 
     let bpp = 4usize;
@@ -59,19 +59,22 @@ fn drain(source: &mut dyn Source) -> Vec<u8> {
     out
 }
 
-fn make_gif_decoder(data: Vec<u8>) -> Box<dyn zencodec::decode::DynFullFrameDecoder> {
+fn make_gif_decoder(data: Vec<u8>) -> Box<dyn zencodec::decode::DynAnimationFrameDecoder> {
     let dec = GifDecoderConfig::new();
     dec.job()
-        .dyn_full_frame_decoder(Cow::Owned(data), &[PixelDescriptor::RGBA8_SRGB])
+        .dyn_animation_frame_decoder(Cow::Owned(data), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap()
 }
 
-fn make_gif_encoder(width: u16, height: u16) -> Box<dyn zencodec::encode::DynFullFrameEncoder> {
+fn make_gif_encoder(
+    width: u16,
+    height: u16,
+) -> Box<dyn zencodec::encode::DynAnimationFrameEncoder> {
     let config = GifEncoderConfig::new();
     config
         .job()
         .with_canvas_size(width as u32, height as u32)
-        .dyn_full_frame_encoder()
+        .dyn_animation_frame_encoder()
         .unwrap()
 }
 
@@ -158,7 +161,7 @@ fn frame_sink_encode_2_frames() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .full_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap();
 
     assert!(verify.render_next_frame_owned(None).unwrap().is_some());
@@ -190,7 +193,7 @@ fn transcode_gif_passthrough() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .full_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap();
 
     for i in 0..3 {
@@ -237,7 +240,7 @@ fn transcode_gif_with_crop() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .full_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap();
 
     assert_eq!(verify.info().width, 4);

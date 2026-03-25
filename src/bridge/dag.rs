@@ -179,8 +179,8 @@ pub fn build_pipeline_dag(
             }
             // Find the graph ID for the predecessor.
             // For chain nodes, use the last node in the chain.
-            let from_gid = find_chain_output(input_idx, &dag_to_graph, &chains)
-                .ok_or_else(|| {
+            let from_gid =
+                find_chain_output(input_idx, &dag_to_graph, &chains).ok_or_else(|| {
                     PipeError::Op(alloc::format!(
                         "DAG node {i} references input {input_idx} which has no graph node"
                     ))
@@ -262,13 +262,11 @@ fn identify_chains(dag: &[DagNode], successor_count: &[usize]) -> Vec<Chain> {
         // A chain starts at: multi-input nodes, or nodes whose predecessor
         // has fan-out (more than one successor), or nodes whose predecessor
         // is a source (no inputs — already processed as Single).
-        let pred_is_source = dag[start].inputs.len() == 1
-            && dag[dag[start].inputs[0]].inputs.is_empty();
-        let pred_has_fanout = dag[start].inputs.len() == 1
-            && successor_count[dag[start].inputs[0]] > 1;
-        let is_chain_start = dag[start].inputs.len() > 1
-            || pred_has_fanout
-            || pred_is_source;
+        let pred_is_source =
+            dag[start].inputs.len() == 1 && dag[dag[start].inputs[0]].inputs.is_empty();
+        let pred_has_fanout =
+            dag[start].inputs.len() == 1 && successor_count[dag[start].inputs[0]] > 1;
+        let is_chain_start = dag[start].inputs.len() > 1 || pred_has_fanout || pred_is_source;
 
         if !is_chain_start && !visited[start] {
             // This node will be picked up as part of another chain.
@@ -442,14 +440,28 @@ mod tests {
     }
 
     impl NodeInstance for MockNode {
-        fn schema(&self) -> &'static NodeSchema { self.schema }
-        fn to_params(&self) -> ParamMap { ParamMap::new() }
-        fn get_param(&self, _: &str) -> Option<ParamValue> { None }
-        fn set_param(&mut self, _: &str, _: ParamValue) -> bool { false }
-        fn as_any(&self) -> &dyn core::any::Any { self }
-        fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
+        fn schema(&self) -> &'static NodeSchema {
+            self.schema
+        }
+        fn to_params(&self) -> ParamMap {
+            ParamMap::new()
+        }
+        fn get_param(&self, _: &str) -> Option<ParamValue> {
+            None
+        }
+        fn set_param(&mut self, _: &str, _: ParamValue) -> bool {
+            false
+        }
+        fn as_any(&self) -> &dyn core::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+            self
+        }
         fn clone_boxed(&self) -> Box<dyn NodeInstance> {
-            Box::new(Self { schema: self.schema })
+            Box::new(Self {
+                schema: self.schema,
+            })
         }
     }
 
@@ -465,63 +477,114 @@ mod tests {
     fn dag_linear_chain_identified() {
         // Source → A → B: linear chain should be detected.
         let dag = vec![
-            DagNode { instance: mock_node("source", NodeRole::Filter), inputs: vec![] },
-            DagNode { instance: mock_node("zenlayout.crop", NodeRole::Geometry), inputs: vec![0] },
-            DagNode { instance: mock_node("zenlayout.crop", NodeRole::Geometry), inputs: vec![1] },
+            DagNode {
+                instance: mock_node("source", NodeRole::Filter),
+                inputs: vec![],
+            },
+            DagNode {
+                instance: mock_node("zenlayout.crop", NodeRole::Geometry),
+                inputs: vec![0],
+            },
+            DagNode {
+                instance: mock_node("zenlayout.crop", NodeRole::Geometry),
+                inputs: vec![1],
+            },
         ];
 
         let sc = {
             let mut sc = alloc::vec![0usize; dag.len()];
-            for dn in &dag { for &i in &dn.inputs { sc[i] += 1; } }
+            for dn in &dag {
+                for &i in &dn.inputs {
+                    sc[i] += 1;
+                }
+            }
             sc
         };
 
         let chains = identify_chains(&dag, &sc);
         // Node 0 is source (Single). Nodes 1-2 should form a Linear chain.
-        let has_linear = chains.iter().any(|c| matches!(c, Chain::Linear(v) if v.len() == 2));
-        assert!(has_linear, "expected a 2-node linear chain, chains: {}", chains.len());
+        let has_linear = chains
+            .iter()
+            .any(|c| matches!(c, Chain::Linear(v) if v.len() == 2));
+        assert!(
+            has_linear,
+            "expected a 2-node linear chain, chains: {}",
+            chains.len()
+        );
     }
 
     #[test]
     fn dag_fan_out_breaks_chain() {
         // A → B, A → C: fan-out at A breaks the chain.
         let dag = vec![
-            DagNode { instance: mock_node("source", NodeRole::Decode), inputs: vec![] },
-            DagNode { instance: mock_node("test.filter", NodeRole::Filter), inputs: vec![0] },
-            DagNode { instance: mock_node("test.filter", NodeRole::Filter), inputs: vec![0] },
+            DagNode {
+                instance: mock_node("source", NodeRole::Decode),
+                inputs: vec![],
+            },
+            DagNode {
+                instance: mock_node("test.filter", NodeRole::Filter),
+                inputs: vec![0],
+            },
+            DagNode {
+                instance: mock_node("test.filter", NodeRole::Filter),
+                inputs: vec![0],
+            },
         ];
 
         let chains = identify_chains(&dag, &{
             let mut sc = alloc::vec![0usize; dag.len()];
-            for dn in &dag { for &i in &dn.inputs { sc[i] += 1; } }
+            for dn in &dag {
+                for &i in &dn.inputs {
+                    sc[i] += 1;
+                }
+            }
             sc
         });
 
         // Node 0 has 2 successors → not a linear chain start for extension.
         // Should produce 3 singles (or 1 single + 2 singles).
         let chain_count = chains.len();
-        assert!(chain_count >= 2, "fan-out should break chains, got {chain_count}");
+        assert!(
+            chain_count >= 2,
+            "fan-out should break chains, got {chain_count}"
+        );
     }
 
     #[test]
     fn dag_multi_input_breaks_chain() {
         // A, B → C (composite): multi-input at C breaks the chain.
         let dag = vec![
-            DagNode { instance: mock_node("source1", NodeRole::Decode), inputs: vec![] },
-            DagNode { instance: mock_node("source2", NodeRole::Decode), inputs: vec![] },
-            DagNode { instance: mock_node("test.filter", NodeRole::Filter), inputs: vec![0, 1] },
+            DagNode {
+                instance: mock_node("source1", NodeRole::Decode),
+                inputs: vec![],
+            },
+            DagNode {
+                instance: mock_node("source2", NodeRole::Decode),
+                inputs: vec![],
+            },
+            DagNode {
+                instance: mock_node("test.filter", NodeRole::Filter),
+                inputs: vec![0, 1],
+            },
         ];
 
         let chains = identify_chains(&dag, &{
             let mut sc = alloc::vec![0usize; dag.len()];
-            for dn in &dag { for &i in &dn.inputs { sc[i] += 1; } }
+            for dn in &dag {
+                for &i in &dn.inputs {
+                    sc[i] += 1;
+                }
+            }
             sc
         });
 
         // Node 2 has 2 inputs → must be a Single, not part of a Linear chain.
         for chain in &chains {
             if let Chain::Linear(indices) = chain {
-                assert!(!indices.contains(&2), "multi-input node should not be in a linear chain");
+                assert!(
+                    !indices.contains(&2),
+                    "multi-input node should not be in a linear chain"
+                );
             }
         }
     }

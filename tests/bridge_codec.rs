@@ -7,10 +7,10 @@
 
 #![cfg(feature = "zennode")]
 
-use zennode::NodeDef;
 use zencodec::decode::{DecodeJob, DecoderConfig};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::encoder::ChromaSubsampling;
+use zennode::NodeDef;
 
 use zenpipe::bridge;
 use zenpipe::codec::EncoderSink;
@@ -101,16 +101,26 @@ fn bridge_decode_resize_encode_jpeg() {
     // 5. Get output and verify it's valid JPEG.
     let output = sink.take_output().expect("encoder output");
     let out_bytes = output.into_vec();
-    assert!(out_bytes.len() > 100, "output too small: {} bytes", out_bytes.len());
+    assert!(
+        out_bytes.len() > 100,
+        "output too small: {} bytes",
+        out_bytes.len()
+    );
 
     let verify_config = JpegDecoderConfig::default();
-    let verify_info = verify_config.job().probe(&out_bytes).expect("output should be valid JPEG");
+    let verify_info = verify_config
+        .job()
+        .probe(&out_bytes)
+        .expect("output should be valid JPEG");
     assert_eq!(verify_info.width, dst_w);
     assert_eq!(verify_info.height, dst_h);
 
     eprintln!(
         "Bridge codec: {}x{} → {}x{}, output {} KB",
-        src_w, src_h, dst_w, dst_h,
+        src_w,
+        src_h,
+        dst_w,
+        dst_h,
         out_bytes.len() / 1024,
     );
 }

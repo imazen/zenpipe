@@ -640,11 +640,19 @@ fn graph_composite_with_offset() {
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
     // Pixel (0, 0): should be black (bg only)
-    assert!(floats[0] < 0.01, "R at (0,0) should be ~0, got {}", floats[0]);
+    assert!(
+        floats[0] < 0.01,
+        "R at (0,0) should be ~0, got {}",
+        floats[0]
+    );
 
     // Pixel (2, 2): should be red (fg over bg)
     let offset = (2 * 8 + 2) * 4;
-    assert!(floats[offset] > 0.9, "R at (2,2) should be ~1.0, got {}", floats[offset]);
+    assert!(
+        floats[offset] > 0.9,
+        "R at (2,2) should be ~1.0, got {}",
+        floats[offset]
+    );
     assert!(floats[offset + 1] < 0.01, "G at (2,2) should be ~0");
 }
 
@@ -697,7 +705,11 @@ fn graph_overlay_watermark() {
 
     // Pixel (2, 2): should have some red from overlay blended over black
     let offset = (2 * 8 + 2) * 4;
-    assert!(floats[offset] > 0.05, "R at (2,2) should be > 0, got {}", floats[offset]);
+    assert!(
+        floats[offset] > 0.05,
+        "R at (2,2) should be > 0, got {}",
+        floats[offset]
+    );
 }
 
 #[test]
@@ -749,9 +761,7 @@ fn graph_overlay_with_reduced_opacity() {
 fn graph_remove_alpha_semi_transparent() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let rm = g.add_node(NodeOp::RemoveAlpha {
-        matte: [0, 0, 0],
-    });
+    let rm = g.add_node(NodeOp::RemoveAlpha { matte: [0, 0, 0] });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
     g.add_edge(rm, out, EdgeKind::Input);
@@ -769,7 +779,11 @@ fn graph_remove_alpha_semi_transparent() {
     assert_eq!(data.len(), 4 * 4 * 3);
     // Should be blended: some value between 0 and 255
     for px in data.chunks_exact(3) {
-        assert!(px[0] > 50 && px[0] < 200, "R should be mid-range, got {}", px[0]);
+        assert!(
+            px[0] > 50 && px[0] < 200,
+            "R should be mid-range, got {}",
+            px[0]
+        );
     }
 }
 
@@ -906,15 +920,19 @@ fn graph_crop_whitespace_removes_border() {
     for y in 2..6usize {
         for x in 2..6usize {
             let i = (y * width as usize + x) * bpp;
-            data[i] = 255;     // R
-            data[i + 1] = 0;   // G
-            data[i + 2] = 0;   // B
+            data[i] = 255; // R
+            data[i + 1] = 0; // G
+            data[i + 2] = 0; // B
             data[i + 3] = 255; // A
         }
     }
 
     let src = Box::new(CallbackSource::from_data(
-        &data, width, height, format::RGBA8_SRGB, 16,
+        &data,
+        width,
+        height,
+        format::RGBA8_SRGB,
+        16,
     ));
 
     let mut g = PipelineGraph::new();
@@ -1159,13 +1177,22 @@ fn estimate_overlay() {
 fn estimate_remove_alpha() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let rm = g.add_node(NodeOp::RemoveAlpha { matte: [255, 255, 255] });
+    let rm = g.add_node(NodeOp::RemoveAlpha {
+        matte: [255, 255, 255],
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
     g.add_edge(rm, out, EdgeKind::Input);
 
     let mut info = HashMap::new();
-    info.insert(src, SourceInfo { width: 100, height: 100, format: format::RGBA8_SRGB });
+    info.insert(
+        src,
+        SourceInfo {
+            width: 100,
+            height: 100,
+            format: format::RGBA8_SRGB,
+        },
+    );
 
     let est = g.estimate(&info).unwrap();
     assert_eq!(est.output_format, format::RGB8_SRGB);
@@ -1182,7 +1209,14 @@ fn estimate_add_alpha() {
     g.add_edge(add, out, EdgeKind::Input);
 
     let mut info = HashMap::new();
-    info.insert(src, SourceInfo { width: 100, height: 100, format: format::RGB8_SRGB });
+    info.insert(
+        src,
+        SourceInfo {
+            width: 100,
+            height: 100,
+            format: format::RGB8_SRGB,
+        },
+    );
 
     let est = g.estimate(&info).unwrap();
     assert_eq!(est.output_format, format::RGBA8_SRGB);
@@ -1200,7 +1234,14 @@ fn estimate_materialize() {
     g.add_edge(mat, out, EdgeKind::Input);
 
     let mut info = HashMap::new();
-    info.insert(src, SourceInfo { width: 100, height: 100, format: format::RGBA8_SRGB });
+    info.insert(
+        src,
+        SourceInfo {
+            width: 100,
+            height: 100,
+            format: format::RGBA8_SRGB,
+        },
+    );
 
     let est = g.estimate(&info).unwrap();
     assert!(est.materializes);
@@ -1211,13 +1252,23 @@ fn estimate_materialize() {
 fn estimate_crop_whitespace() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let crop = g.add_node(NodeOp::CropWhitespace { threshold: 10, percent_padding: 0.0 });
+    let crop = g.add_node(NodeOp::CropWhitespace {
+        threshold: 10,
+        percent_padding: 0.0,
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, crop, EdgeKind::Input);
     g.add_edge(crop, out, EdgeKind::Input);
 
     let mut info = HashMap::new();
-    info.insert(src, SourceInfo { width: 100, height: 100, format: format::RGBA8_SRGB });
+    info.insert(
+        src,
+        SourceInfo {
+            width: 100,
+            height: 100,
+            format: format::RGBA8_SRGB,
+        },
+    );
 
     let est = g.estimate(&info).unwrap();
     // Worst case: no crop, pass through full dimensions
@@ -1238,7 +1289,14 @@ fn estimate_analyze() {
     g.add_edge(analyze, out, EdgeKind::Input);
 
     let mut info = HashMap::new();
-    info.insert(src, SourceInfo { width: 80, height: 60, format: format::RGBA8_SRGB });
+    info.insert(
+        src,
+        SourceInfo {
+            width: 80,
+            height: 60,
+            format: format::RGBA8_SRGB,
+        },
+    );
 
     let est = g.estimate(&info).unwrap();
     assert!(est.materializes);
@@ -1254,7 +1312,12 @@ fn estimate_analyze() {
 fn graph_validate_cycle_detected() {
     let mut g = PipelineGraph::new();
     let a = g.add_node(NodeOp::Source);
-    let b = g.add_node(NodeOp::Crop { x: 0, y: 0, w: 4, h: 4 });
+    let b = g.add_node(NodeOp::Crop {
+        x: 0,
+        y: 0,
+        w: 4,
+        h: 4,
+    });
     let c = g.add_node(NodeOp::Output);
     // Create cycle: a→b, b→a
     g.add_edge(a, b, EdgeKind::Input);
@@ -1278,7 +1341,10 @@ fn graph_validate_self_loop_rejected() {
     let result = g.validate();
     assert!(result.is_err());
     let msg = format!("{}", result.unwrap_err());
-    assert!(msg.contains("self-loop"), "expected self-loop error, got: {msg}");
+    assert!(
+        msg.contains("self-loop"),
+        "expected self-loop error, got: {msg}"
+    );
 }
 
 #[test]
@@ -1293,7 +1359,10 @@ fn graph_validate_multiple_outputs_rejected() {
     let result = g.validate();
     assert!(result.is_err());
     let msg = format!("{}", result.unwrap_err());
-    assert!(msg.contains("Output nodes"), "expected multiple outputs error, got: {msg}");
+    assert!(
+        msg.contains("Output nodes"),
+        "expected multiple outputs error, got: {msg}"
+    );
 }
 
 #[test]
@@ -1302,7 +1371,10 @@ fn graph_validate_empty_graph_rejected() {
     let result = g.validate();
     assert!(result.is_err());
     let msg = format!("{}", result.unwrap_err());
-    assert!(msg.contains("no nodes"), "expected no nodes error, got: {msg}");
+    assert!(
+        msg.contains("no nodes"),
+        "expected no nodes error, got: {msg}"
+    );
 }
 
 #[test]
@@ -1316,7 +1388,10 @@ fn graph_validate_out_of_range_edge_rejected() {
     let result = g.validate();
     assert!(result.is_err());
     let msg = format!("{}", result.unwrap_err());
-    assert!(msg.contains("out of range"), "expected out of range error, got: {msg}");
+    assert!(
+        msg.contains("out of range"),
+        "expected out of range error, got: {msg}"
+    );
 }
 
 // =============================================================================

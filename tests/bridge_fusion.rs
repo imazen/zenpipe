@@ -17,8 +17,8 @@ use alloc::vec;
 use zennode::*;
 use zenpipe::bridge::{self, NodeConverter};
 use zenpipe::graph::NodeOp;
-use zenpipe::{Source, format, PipeError};
 use zenpipe::sources::MaterializedSource;
+use zenpipe::{PipeError, Source, format};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Test infrastructure
@@ -27,7 +27,12 @@ use zenpipe::sources::MaterializedSource;
 fn solid_source(w: u32, h: u32) -> Box<dyn Source> {
     let bpp = format::RGBA8_SRGB.bytes_per_pixel() as usize;
     let data = vec![128u8; w as usize * h as usize * bpp];
-    Box::new(MaterializedSource::from_data(data, w, h, format::RGBA8_SRGB))
+    Box::new(MaterializedSource::from_data(
+        data,
+        w,
+        h,
+        format::RGBA8_SRGB,
+    ))
 }
 
 fn make_node(schema: &'static NodeSchema, params: ParamMap) -> Box<dyn NodeInstance> {
@@ -40,110 +45,263 @@ struct TestNode {
 }
 
 impl NodeInstance for TestNode {
-    fn schema(&self) -> &'static NodeSchema { self.schema }
-    fn to_params(&self) -> ParamMap { self.params.clone() }
-    fn get_param(&self, name: &str) -> Option<ParamValue> { self.params.get(name).cloned() }
+    fn schema(&self) -> &'static NodeSchema {
+        self.schema
+    }
+    fn to_params(&self) -> ParamMap {
+        self.params.clone()
+    }
+    fn get_param(&self, name: &str) -> Option<ParamValue> {
+        self.params.get(name).cloned()
+    }
     fn set_param(&mut self, name: &str, value: ParamValue) -> bool {
         self.params.insert(name.into(), value);
         true
     }
-    fn as_any(&self) -> &dyn core::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
     fn clone_boxed(&self) -> Box<dyn NodeInstance> {
-        Box::new(TestNode { schema: self.schema, params: self.params.clone() })
+        Box::new(TestNode {
+            schema: self.schema,
+            params: self.params.clone(),
+        })
     }
 }
 
 // ─── Schemas ───
 
 static CROP_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.crop", label: "Crop", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Geometry,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: true, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.crop",
+    label: "Crop",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Geometry,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static ORIENT_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.orient", label: "Orient", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.orient",
+    label: "Orient",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static FLIP_H_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.flip_h", label: "Flip H", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.flip_h",
+    label: "Flip H",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static FLIP_V_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.flip_v", label: "Flip V", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.flip_v",
+    label: "Flip V",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static ROT90_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.rotate_90", label: "Rotate 90", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: true, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.rotate_90",
+    label: "Rotate 90",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static ROT180_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.rotate_180", label: "Rotate 180", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.rotate_180",
+    label: "Rotate 180",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static ROT270_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenlayout.rotate_270", label: "Rotate 270", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Orient,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::Any, alpha: AlphaHandling::Process, changes_dimensions: true, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenlayout.rotate_270",
+    label: "Rotate 270",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Orient,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::Any,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static CONSTRAIN_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenresize.constrain", label: "Constrain", description: "",
-    group: NodeGroup::Geometry, role: NodeRole::Resize,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "layout_plan", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::LinearF32, alpha: AlphaHandling::Process, changes_dimensions: true, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenresize.constrain",
+    label: "Constrain",
+    description: "",
+    group: NodeGroup::Geometry,
+    role: NodeRole::Resize,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::LinearF32,
+        alpha: AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static FILTER_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenfilters.exposure", label: "Exposure", description: "",
-    group: NodeGroup::Tone, role: NodeRole::Filter,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "fused_adjust", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::OklabF32, alpha: AlphaHandling::Skip, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenfilters.exposure",
+    label: "Exposure",
+    description: "",
+    group: NodeGroup::Tone,
+    role: NodeRole::Filter,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "fused_adjust",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::OklabF32,
+        alpha: AlphaHandling::Skip,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 static FILTER2_SCHEMA: NodeSchema = NodeSchema {
-    id: "zenfilters.contrast", label: "Contrast", description: "",
-    group: NodeGroup::Tone, role: NodeRole::Filter,
-    params: &[], tags: &[],
-    coalesce: Some(CoalesceInfo { group: "fused_adjust", fusable: true, is_target: false }),
-    format: FormatHint { preferred: PixelFormatPreference::OklabF32, alpha: AlphaHandling::Skip, changes_dimensions: false, is_neighborhood: false },
-    version: 1, compat_version: 1,
+    id: "zenfilters.contrast",
+    label: "Contrast",
+    description: "",
+    group: NodeGroup::Tone,
+    role: NodeRole::Filter,
+    params: &[],
+    tags: &[],
+    coalesce: Some(CoalesceInfo {
+        group: "fused_adjust",
+        fusable: true,
+        is_target: false,
+    }),
+    format: FormatHint {
+        preferred: PixelFormatPreference::OklabF32,
+        alpha: AlphaHandling::Skip,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
 };
 
 fn constrain_params(w: u32, h: u32, mode: &str) -> ParamMap {
@@ -270,9 +428,10 @@ fn fuse_crop_orient_constrain_three_way() {
 #[test]
 fn single_constrain_fuses() {
     let source = solid_source(1000, 800);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&CONSTRAIN_SCHEMA, constrain_params(500, 400, "fit")),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(
+        &CONSTRAIN_SCHEMA,
+        constrain_params(500, 400, "fit"),
+    )];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     assert_eq!(result.source.width(), 500);
     assert_eq!(result.source.height(), 400);
@@ -290,8 +449,12 @@ impl zenpipe::ops::PixelOp for IdentityOp {
     fn apply(&mut self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
         output[..input.len()].copy_from_slice(input);
     }
-    fn input_format(&self) -> zenpipe::PixelFormat { format::RGBA8_SRGB }
-    fn output_format(&self) -> zenpipe::PixelFormat { format::RGBA8_SRGB }
+    fn input_format(&self) -> zenpipe::PixelFormat {
+        format::RGBA8_SRGB
+    }
+    fn output_format(&self) -> zenpipe::PixelFormat {
+        format::RGBA8_SRGB
+    }
 }
 
 impl NodeConverter for TestFilterConverter {
@@ -332,9 +495,7 @@ fn adjacent_filters_fuse_via_converter() {
 fn single_filter_not_fused_falls_back_to_convert() {
     let source = solid_source(100, 100);
     let converters: Vec<&dyn NodeConverter> = vec![&TestFilterConverter];
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&FILTER_SCHEMA, ParamMap::new()),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(&FILTER_SCHEMA, ParamMap::new())];
     let result = bridge::build_pipeline(source, &nodes, &converters).unwrap();
     assert_eq!(result.source.width(), 100);
 }
@@ -378,9 +539,10 @@ fn filter_between_geometry_breaks_fusion() {
 #[test]
 fn pipeline_streams_all_strips() {
     let source = solid_source(200, 200);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&CONSTRAIN_SCHEMA, constrain_params(100, 100, "fit")),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(
+        &CONSTRAIN_SCHEMA,
+        constrain_params(100, 100, "fit"),
+    )];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
 
     // Pull strips one at a time — this IS streaming
@@ -397,9 +559,10 @@ fn pipeline_streams_all_strips() {
 fn format_conversion_streams() {
     // Source is RGBA8_SRGB. Resize needs linear. Conversion should stream, not materialize.
     let source = solid_source(400, 300);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&CONSTRAIN_SCHEMA, constrain_params(200, 150, "fit")),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(
+        &CONSTRAIN_SCHEMA,
+        constrain_params(200, 150, "fit"),
+    )];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
 
     let mut src = result.source;
@@ -408,7 +571,10 @@ fn format_conversion_streams() {
         strips += 1;
     }
     // Should produce multiple strips (streaming), not 1 (materialized)
-    assert!(strips >= 2, "expected streaming (multiple strips), got {strips}");
+    assert!(
+        strips >= 2,
+        "expected streaming (multiple strips), got {strips}"
+    );
 }
 
 #[test]

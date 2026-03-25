@@ -148,4 +148,3 @@ impl From<whereat::At<BufferError>> for PipeError {
         PipeError::Op(alloc::format!("pixel buffer: {e}"))
     }
 }
-

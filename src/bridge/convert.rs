@@ -168,9 +168,7 @@ pub(crate) fn convert_orient(node: &dyn NodeInstance) -> Result<NodeOp, PipeErro
 }
 
 /// Convert a `zenresize.constrain` node to `NodeOp::Constrain`.
-pub(crate) fn convert_zenresize_constrain(
-    node: &dyn NodeInstance,
-) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;
@@ -190,9 +188,7 @@ pub(crate) fn convert_zenresize_constrain(
 }
 
 /// Convert a `zenlayout.constrain` node to `NodeOp::Constrain`.
-pub(crate) fn convert_zenlayout_constrain(
-    node: &dyn NodeInstance,
-) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;

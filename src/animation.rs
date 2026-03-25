@@ -1,6 +1,6 @@
 //! Animation support — frame-by-frame decode, process, and encode.
 //!
-//! Wraps zencodec's `DynFullFrameDecoder` / `DynFullFrameEncoder` for
+//! Wraps zencodec's `DynAnimationFrameDecoder` / `DynAnimationFrameEncoder` for
 //! frame-at-a-time animation processing through zenpipe's streaming pipeline.
 //!
 //! # Architecture
@@ -41,8 +41,8 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use zencodec::decode::DynFullFrameDecoder;
-use zencodec::encode::{DynFullFrameEncoder, EncodeOutput};
+use zencodec::decode::DynAnimationFrameDecoder;
+use zencodec::encode::{DynAnimationFrameEncoder, EncodeOutput};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use crate::Source;
@@ -64,12 +64,12 @@ pub struct FrameInfo {
 }
 
 // =========================================================================
-// FrameSource — wraps DynFullFrameDecoder
+// FrameSource — wraps DynAnimationFrameDecoder
 // =========================================================================
 
 /// A [`Source`] that yields one animation frame's pixel data as strips.
 ///
-/// Wraps a [`DynFullFrameDecoder`] and renders one frame at a time.
+/// Wraps a [`DynAnimationFrameDecoder`] and renders one frame at a time.
 /// Each frame is materialized internally (animation decoders produce
 /// full-canvas composited frames), then replayed as strips.
 ///
@@ -77,7 +77,7 @@ pub struct FrameInfo {
 /// Returns `None` from [`next()`](Source::next) when the current frame is
 /// exhausted. Returns `None` from `advance_frame()` when all frames are done.
 pub struct FrameSource {
-    decoder: Box<dyn DynFullFrameDecoder>,
+    decoder: Box<dyn DynAnimationFrameDecoder>,
     /// Current frame's pixel data.
     data: Vec<u8>,
     width: u32,
@@ -98,7 +98,7 @@ impl FrameSource {
     ///
     /// The first frame is automatically loaded. If the animation has zero
     /// frames, `frame_info()` returns `None`.
-    pub fn new(decoder: Box<dyn DynFullFrameDecoder>) -> Result<Self, PipeError> {
+    pub fn new(decoder: Box<dyn DynAnimationFrameDecoder>) -> Result<Self, PipeError> {
         let info = decoder.info().clone();
         let w = info.width;
         let h = info.height;
@@ -234,17 +234,17 @@ impl Source for FrameSource {
 }
 
 // =========================================================================
-// FrameSink — wraps DynFullFrameEncoder
+// FrameSink — wraps DynAnimationFrameEncoder
 // =========================================================================
 
 /// A [`Sink`](crate::Sink) that accumulates one frame's strips, then pushes
-/// the complete frame to a [`DynFullFrameEncoder`].
+/// the complete frame to a [`DynAnimationFrameEncoder`].
 ///
 /// Call [`finish_frame()`](Self::finish_frame) after pipeline execution to
 /// push the accumulated frame with its duration. Call [`finish()`](Self::finish_animation)
 /// after all frames to finalize the encoded output.
 pub struct FrameSink {
-    encoder: Option<Box<dyn DynFullFrameEncoder>>,
+    encoder: Option<Box<dyn DynAnimationFrameEncoder>>,
     output: Option<EncodeOutput>,
     /// Accumulated pixel data for the current frame.
     frame_buf: Vec<u8>,
@@ -263,7 +263,7 @@ impl FrameSink {
     /// `width` and `height` are the canvas dimensions for the animation.
     /// `format` is the pixel format that strips will arrive in (typically RGBA8_SRGB).
     pub fn new(
-        encoder: Box<dyn DynFullFrameEncoder>,
+        encoder: Box<dyn DynAnimationFrameEncoder>,
         width: u32,
         height: u32,
         format: PixelFormat,
@@ -388,8 +388,8 @@ impl crate::Sink for FrameSink {
 /// )?;
 /// ```
 pub fn transcode(
-    decoder: Box<dyn DynFullFrameDecoder>,
-    encoder: Box<dyn DynFullFrameEncoder>,
+    decoder: Box<dyn DynAnimationFrameDecoder>,
+    encoder: Box<dyn DynAnimationFrameEncoder>,
     out_width: u32,
     out_height: u32,
     out_format: PixelFormat,
