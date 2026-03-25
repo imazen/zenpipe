@@ -395,7 +395,7 @@ version = "0.1.0"
 dependencies = [
  "enough",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
 ]
 
 [[package]]
@@ -407,7 +407,7 @@ dependencies = [
  "linear-srgb 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "magetypes",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
  "zenpixels-convert",
 ]
 
@@ -424,7 +424,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
  "zenquant",
 ]
 
@@ -448,7 +448,14 @@ dependencies = [
  "wide",
  "yuv",
  "zencodec",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
+]
+
+[[package]]
+name = "zenlayout"
+version = "0.2.0"
+dependencies = [
+ "whereat",
 ]
 
 [[package]]
@@ -456,6 +463,22 @@ name = "zenlayout"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e136195598f6c1dc769200888ad1f9071f99d54ac3a91b80be6ba0b164e6b5b"
+
+[[package]]
+name = "zenode"
+version = "0.1.0"
+dependencies = [
+ "zenode-derive",
+]
+
+[[package]]
+name = "zenode-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "zenpipe"
@@ -471,7 +494,9 @@ dependencies = [
  "zenfilters",
  "zengif",
  "zenjpeg",
- "zenpixels 0.1.1",
+ "zenlayout 0.2.0",
+ "zenode",
+ "zenpixels 0.2.0",
  "zenpixels-convert",
  "zenresize",
 ]
@@ -487,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -497,14 +522,14 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "garb",
  "linear-srgb 0.6.3",
  "moxcms",
  "whereat",
- "zenpixels 0.1.1",
+ "zenpixels 0.2.0",
 ]
 
 [[package]]
@@ -534,6 +559,6 @@ dependencies = [
  "whereat",
  "wide",
  "zenblend",
- "zenlayout",
+ "zenlayout 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenpixels 0.1.0",
 ]

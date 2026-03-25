@@ -1,0 +1,209 @@
+//! Node-to-NodeOp conversion: coalescing, step conversion, and built-in converters.
+
+use alloc::vec::Vec;
+
+use zenode::NodeInstance;
+
+use crate::error::PipeError;
+use crate::graph::NodeOp;
+
+use super::geometry::{compile_geometry_run, is_geometry_node};
+use super::parse::{
+    param_f32_opt, param_i32, param_str, param_u32, parse_constraint_mode, parse_filter_opt,
+};
+use super::{NodeConverter, PipelineStep};
+
+// ─── Coalescing ───
+
+/// Group adjacent fusable nodes that share the same coalesce group.
+///
+/// Non-fusable nodes pass through as `Single` steps. Adjacent fusable nodes
+/// with the same group name are merged into `Coalesced` steps.
+pub(crate) fn coalesce<'a>(nodes: &[&'a dyn NodeInstance]) -> Vec<PipelineStep<'a>> {
+    let mut steps: Vec<PipelineStep<'a>> = Vec::new();
+
+    for &node in nodes {
+        let coalesce = node.schema().coalesce.as_ref();
+
+        if let Some(info) = coalesce {
+            if info.fusable || info.is_target {
+                // Try to merge with the previous step if same group.
+                if let Some(PipelineStep::Coalesced {
+                    group,
+                    nodes: group_nodes,
+                }) = steps.last_mut()
+                {
+                    if *group == info.group {
+                        group_nodes.push(node);
+                        continue;
+                    }
+                }
+                // Start a new coalesced group.
+                steps.push(PipelineStep::Coalesced {
+                    group: info.group,
+                    nodes: alloc::vec![node],
+                });
+                continue;
+            }
+        }
+
+        // Not fusable — emit as a single step.
+        steps.push(PipelineStep::Single(node));
+    }
+
+    steps
+}
+
+// ─── Step conversion ───
+
+/// Convert a pipeline step to one or more `NodeOp`s, with geometry and filter fusion.
+///
+/// For coalesced groups where all nodes are geometry nodes, attempts
+/// to fuse them via [`compile_geometry_run()`]. For groups handled by
+/// a converter with `fuse_group()`, delegates to that. Falls back to
+/// individual conversion for anything else.
+///
+/// May return multiple `NodeOp`s (e.g., when a coalesced group has mixed
+/// geometry and non-geometry nodes that can't be fused together).
+pub(crate) fn convert_step(
+    step: &PipelineStep<'_>,
+    converters: &[&dyn NodeConverter],
+    source_w: u32,
+    source_h: u32,
+) -> Result<Vec<NodeOp>, PipeError> {
+    match step {
+        PipelineStep::Single(node) => {
+            let schema_id = node.schema().id;
+
+            // Single geometry node: if source dims are known, fuse it.
+            if is_geometry_node(schema_id) && source_w > 0 && source_h > 0 {
+                let nodes = &[*node];
+                if let Ok(op) = compile_geometry_run(nodes, source_w, source_h) {
+                    return Ok(alloc::vec![op]);
+                }
+            }
+
+            Ok(alloc::vec![convert_single(*node, converters)?])
+        }
+
+        PipelineStep::Coalesced { nodes, .. } => {
+            // Check if all nodes in the group are geometry nodes.
+            let all_geometry = nodes.iter().all(|n| is_geometry_node(n.schema().id));
+
+            if all_geometry && source_w > 0 && source_h > 0 {
+                if let Ok(op) = compile_geometry_run(nodes, source_w, source_h) {
+                    return Ok(alloc::vec![op]);
+                }
+            }
+
+            // Try converter fusion (fuse_group).
+            for conv in converters {
+                if nodes.iter().any(|n| conv.can_convert(n.schema().id)) {
+                    if let Some(fused) = conv.fuse_group(nodes)? {
+                        return Ok(alloc::vec![fused]);
+                    }
+                    // fuse_group returned None — try convert_group.
+                    return Ok(alloc::vec![conv.convert_group(nodes)?]);
+                }
+            }
+
+            // No converter — convert each node individually.
+            let mut ops = Vec::new();
+            for &node in nodes {
+                ops.push(convert_single(node, converters)?);
+            }
+            Ok(ops)
+        }
+    }
+}
+
+/// Convert a single node to a `NodeOp`.
+pub(crate) fn convert_single(
+    node: &dyn NodeInstance,
+    converters: &[&dyn NodeConverter],
+) -> Result<NodeOp, PipeError> {
+    let schema_id = node.schema().id;
+
+    // Try extension converters first.
+    for conv in converters {
+        if conv.can_convert(schema_id) {
+            return conv.convert(node);
+        }
+    }
+
+    // Built-in conversions for geometry/layout nodes.
+    match schema_id {
+        "zenlayout.crop" => convert_crop(node),
+        "zenlayout.orient" => convert_orient(node),
+        "zenlayout.flip_h" => Ok(NodeOp::Orient(zenresize::Orientation::FlipH)),
+        "zenlayout.flip_v" => Ok(NodeOp::Orient(zenresize::Orientation::FlipV)),
+        "zenlayout.rotate_90" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate90)),
+        "zenlayout.rotate_180" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate180)),
+        "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate270)),
+        "zenresize.constrain" => convert_zenresize_constrain(node),
+        "zenlayout.constrain" => convert_zenlayout_constrain(node),
+        _ => Err(PipeError::Op(alloc::format!(
+            "bridge: no converter for node '{schema_id}'"
+        ))),
+    }
+}
+
+// ─── Built-in converters ───
+
+/// Convert a `zenlayout.crop` node to `NodeOp::Crop`.
+pub(crate) fn convert_crop(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let x = param_u32(node, "x")?;
+    let y = param_u32(node, "y")?;
+    let w = param_u32(node, "w")?;
+    let h = param_u32(node, "h")?;
+    Ok(NodeOp::Crop { x, y, w, h })
+}
+
+/// Convert a `zenlayout.orient` node to `NodeOp::AutoOrient`.
+pub(crate) fn convert_orient(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let orientation = param_i32(node, "orientation")?;
+    // Clamp to u8 range — AutoOrient handles values outside 1-8 as identity.
+    let value = u8::try_from(orientation).unwrap_or(1);
+    Ok(NodeOp::AutoOrient(value))
+}
+
+/// Convert a `zenresize.constrain` node to `NodeOp::Constrain`.
+pub(crate) fn convert_zenresize_constrain(
+    node: &dyn NodeInstance,
+) -> Result<NodeOp, PipeError> {
+    let w = param_u32(node, "w")?;
+    let h = param_u32(node, "h")?;
+    let mode_str = param_str(node, "mode")?;
+    let filter_str = param_str(node, "filter")?;
+    let _sharpen = param_f32_opt(node, "sharpen");
+
+    let mode = parse_constraint_mode(&mode_str)?;
+    let filter = parse_filter_opt(&filter_str);
+
+    Ok(NodeOp::Constrain {
+        mode,
+        w,
+        h,
+        orientation: None,
+        filter,
+    })
+}
+
+/// Convert a `zenlayout.constrain` node to `NodeOp::Constrain`.
+pub(crate) fn convert_zenlayout_constrain(
+    node: &dyn NodeInstance,
+) -> Result<NodeOp, PipeError> {
+    let w = param_u32(node, "w")?;
+    let h = param_u32(node, "h")?;
+    let mode_str = param_str(node, "mode")?;
+
+    let mode = parse_constraint_mode(&mode_str)?;
+
+    Ok(NodeOp::Constrain {
+        mode,
+        w,
+        h,
+        orientation: None,
+        filter: None,
+    })
+}

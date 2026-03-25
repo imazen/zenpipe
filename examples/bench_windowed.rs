@@ -28,7 +28,13 @@ impl SyntheticSource {
         for chunk in buf.chunks_exact_mut(4) {
             chunk.copy_from_slice(&bytes);
         }
-        Self { width, height, y: 0, strip_h, buf }
+        Self {
+            width,
+            height,
+            y: 0,
+            strip_h,
+            buf,
+        }
     }
 }
 
@@ -41,11 +47,23 @@ impl Source for SyntheticSource {
         let stride = self.width as usize * 16;
         let len = rows as usize * stride;
         self.y += rows;
-        Ok(Some(Strip::new(&self.buf[..len], self.width, rows, stride, format::RGBAF32_LINEAR)?))
+        Ok(Some(Strip::new(
+            &self.buf[..len],
+            self.width,
+            rows,
+            stride,
+            format::RGBAF32_LINEAR,
+        )?))
     }
-    fn width(&self) -> u32 { self.width }
-    fn height(&self) -> u32 { self.height }
-    fn format(&self) -> PixelFormat { format::RGBAF32_LINEAR }
+    fn width(&self) -> u32 {
+        self.width
+    }
+    fn height(&self) -> u32 {
+        self.height
+    }
+    fn format(&self) -> PixelFormat {
+        format::RGBAF32_LINEAR
+    }
 }
 
 fn drain(source: &mut dyn Source) -> Result<u32, PipeError> {
@@ -95,18 +113,25 @@ fn bench_full_frame(width: u32, height: u32, iters: u32) -> f64 {
     let mut dst = vec![0.0f32; n];
 
     // Warm up
-    pipeline.apply(&src, &mut dst, width, height, 4, &mut ctx).unwrap();
+    pipeline
+        .apply(&src, &mut dst, width, height, 4, &mut ctx)
+        .unwrap();
 
     let t0 = Instant::now();
     for _ in 0..iters {
-        pipeline.apply(&src, &mut dst, width, height, 4, &mut ctx).unwrap();
+        pipeline
+            .apply(&src, &mut dst, width, height, 4, &mut ctx)
+            .unwrap();
     }
     t0.elapsed().as_secs_f64() * 1000.0 / iters as f64
 }
 
 fn main() {
     eprintln!("Pipeline: exposure(0.5) + clarity + sharpen");
-    eprintln!("{:<12} {:>12} {:>12} {:>8}", "Resolution", "Windowed", "FullFrame", "Ratio");
+    eprintln!(
+        "{:<12} {:>12} {:>12} {:>8}",
+        "Resolution", "Windowed", "FullFrame", "Ratio"
+    );
     eprintln!("{}", "-".repeat(48));
 
     for &(w, h, iters) in &[(640, 480, 20), (1920, 1080, 5), (3840, 2160, 3)] {
@@ -114,7 +139,11 @@ fn main() {
         let fms = bench_full_frame(w, h, iters);
         eprintln!(
             "{:>4}x{:<6} {:>8.1} ms {:>8.1} ms {:>7.2}x",
-            w, h, wms, fms, wms / fms
+            w,
+            h,
+            wms,
+            fms,
+            wms / fms
         );
     }
 }

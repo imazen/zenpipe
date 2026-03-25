@@ -24,8 +24,16 @@ pub mod ops;
 pub mod sources;
 mod strip;
 
+#[cfg(feature = "zenode")]
+pub mod bridge;
+
+// Re-export bridge config types at crate root for convenience.
+#[cfg(feature = "zenode")]
+pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};
+
 pub mod animation;
 pub mod codec;
+pub mod sidecar;
 
 pub use error::PipeError;
 pub use format::PixelFormat;

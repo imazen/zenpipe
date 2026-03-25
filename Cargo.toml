@@ -22,6 +22,13 @@ std = [
     "dep:zenfilters",
     "dep:moxcms",
 ]
+# Bridge from zenode NodeInstance to PipelineGraph NodeOps.
+# When zenresize and zenlayout gain zenode features, add them here:
+#   "zenresize/zenode", "zenlayout/zenode"
+zenode = ["dep:zenode", "zenresize/layout"]
+# Future: enables bridge tests that depend on zenode_defs modules in
+# zenresize and zenlayout (not yet implemented).
+zenode-defs = ["zenode"]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
@@ -46,7 +53,10 @@ hashbrown = "0.15"
 zenfilters = { path = "../zenfilters", optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
 moxcms = { version = "0.8", optional = true }
+# Self-documenting node definitions — bridges zenode types into PipelineGraph
+zenode = { path = "../zenode/zenode", default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
+zenlayout = { path = "../zenlayout", default-features = false }
