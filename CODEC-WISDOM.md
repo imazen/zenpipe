@@ -118,7 +118,7 @@ generic 96 → speed 3 (slowest).
 | WebP | 0-10 | Method 0-6 mapped | (1,1) | Single-threaded |
 | GIF | -- | No effort knob | (1,1) | -- |
 | AVIF | 0-10 | rav1e speed (inverted) | (1,256) | Real multi-threading |
-| JXL | 1-10 | Encoder effort | (1,65535) enc / (1,2) dec | Encode: per-thread. Decode: serial/parallel binary |
+| JXL | 1-10 | Encoder effort | (1,65535) enc / (1,65535) dec | Encode: per-thread. Decode: rayon parallel via `threads` feature |
 | HEIC | -- | Decode only | (1,N) | Parallel tile decode behind feature |
 | TIFF | -- | No effort knob | (1,1) | -- |
 | Bitmaps | -- | No effort knob | (1,1) | -- |
