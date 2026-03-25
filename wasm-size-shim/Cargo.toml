@@ -1,0 +1,46 @@
+[package]
+name = "wasm-size-shim"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+[[bin]]
+name = "wasm-demo"
+path = "src/main.rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zenpipe = { path = "..", features = ["std"] }
+zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
+zenblend = { path = "../../zenblend" }
+zenfilters = { path = "../../zenfilters" }
+zencodec = { version = "0.1.1" }
+zenpixels = { version = "0.2.0" }
+hashbrown = "0.15"
+rgb = "0.8"
+bytemuck = { version = "1", features = ["derive"] }
+imgref = "1"
+
+# Codecs
+zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["std", "yuv", "trellis", "zencodec"] }
+zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr", "zencodec"] }
+zenpng = { path = "../../zenpng" }
+zenwebp = { path = "../../zenwebp", features = ["zencodec"] }
+zenavif = { path = "../../zenavif", features = ["zencodec"] }
+zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
+# zentiff: build error with tiff crate version mismatch (color_map, DeflateLevel)
+# zenbitmaps: included if zentiff compiles
+# zentiff = { path = "../../zentiff", features = ["zencodec"] }
+# zenbitmaps = { path = "../../zenbitmaps", features = ["zencodec"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+strip = true
+
+[profile.release-names]
+inherits = "release"
+strip = false
