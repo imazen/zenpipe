@@ -60,7 +60,7 @@ zenpixels-convert = { version = "0.2.0", default-features = false }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
 zenpixels = { version = "0.2.0", default-features = false }
 # Codec trait abstraction (decode/encode, animation, streaming)
-zencodec = { version = "0.1.2", default-features = false }
+zencodec = { version = "0.1.4", default-features = false }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
