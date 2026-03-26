@@ -71,6 +71,7 @@ pub(crate) const LUT_MAX: usize = LUT_SIZE - 1;
 mod access;
 mod blur;
 mod context;
+pub(crate) mod fast_math;
 mod filter;
 pub mod filter_compat;
 pub mod filters;

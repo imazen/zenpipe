@@ -1,6 +1,7 @@
 use crate::access::ChannelAccess;
 use crate::blur::{GaussianKernel, gaussian_blur_plane};
 use crate::context::FilterContext;
+use crate::fast_math::fast_atan2;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
@@ -235,7 +236,7 @@ fn canny(
             // 1 = diagonal 45° (compare TL/BR)
             // 2 = vertical (compare top/bottom)
             // 3 = diagonal 135° (compare TR/BL)
-            let angle = gy.atan2(gx); // -π to π
+            let angle = fast_atan2(gy, gx); // -π to π
             let normalized = ((angle * 4.0 / core::f32::consts::PI) + 4.5) as usize % 4;
             dir[idx] = normalized as f32;
         }

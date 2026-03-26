@@ -1,5 +1,6 @@
 use crate::access::ChannelAccess;
 use crate::context::FilterContext;
+use crate::fast_math::{fast_atan2, fast_sincos};
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
@@ -182,7 +183,7 @@ impl Filter for HslAdjust {
                 continue;
             }
 
-            let hue_rad = b.atan2(a);
+            let hue_rad = fast_atan2(b, a);
             let mut hue_deg = hue_rad.to_degrees();
             if hue_deg < 0.0 {
                 hue_deg += 360.0;
@@ -218,8 +219,9 @@ impl Filter for HslAdjust {
             let new_hue_rad = hue_rad + hue_shift.to_radians();
             let new_chroma = (chroma * sat_scale).max(0.0);
 
-            planes.a[i] = new_chroma * new_hue_rad.cos();
-            planes.b[i] = new_chroma * new_hue_rad.sin();
+            let (sin_h, cos_h) = fast_sincos(new_hue_rad);
+            planes.a[i] = new_chroma * cos_h;
+            planes.b[i] = new_chroma * sin_h;
             planes.l[i] = (planes.l[i] + lum_offset).max(0.0);
         }
     }
