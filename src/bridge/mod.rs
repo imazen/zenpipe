@@ -387,6 +387,66 @@ pub fn build_pipeline_traced(
 
 // ─── Tests using mock NodeInstance implementations ───
 
+/// Build a [`RiapiTrace`](crate::trace::RiapiTrace) from a registry parse result.
+///
+/// Call this after `NodeRegistry::from_querystring()` with the `KvPairs`
+/// snapshot to record which keys were consumed by which nodes.
+///
+/// # Arguments
+///
+/// * `querystring` — The original RIAPI querystring.
+/// * `snapshots` — Key-value snapshots from `KvPairs::snapshot()`.
+/// * `instances` — Node instances created by the registry.
+/// * `warnings` — Warnings from the registry parse.
+#[cfg(feature = "std")]
+pub fn build_riapi_trace(
+    querystring: &str,
+    snapshots: &[zennode::KvEntrySnapshot],
+    instances: &[Box<dyn NodeInstance>],
+    warnings: &[zennode::KvWarning],
+) -> crate::trace::RiapiTrace {
+    use alloc::string::ToString;
+
+    let keys = snapshots
+        .iter()
+        .map(|s| crate::trace::RiapiKeyTrace {
+            key: s.key.clone(),
+            value: s.value.clone(),
+            consumed_by: s.consumed_by.map(|c| c.to_string()),
+        })
+        .collect();
+
+    let created_nodes = instances
+        .iter()
+        .map(|inst| {
+            let schema_id = inst.schema().id;
+            // Find keys consumed by this node's schema.
+            let consumed_keys = snapshots
+                .iter()
+                .filter(|s| s.consumed_by == Some(schema_id))
+                .map(|s| s.key.clone())
+                .collect();
+            crate::trace::RiapiNodeTrace {
+                schema_id: schema_id.to_string(),
+                consumed_keys,
+                is_identity: inst.is_identity(),
+            }
+        })
+        .collect();
+
+    let warn_strs = warnings
+        .iter()
+        .map(|w| alloc::format!("{:?}: {} (key={})", w.kind, w.message, w.key))
+        .collect();
+
+    crate::trace::RiapiTrace {
+        querystring: querystring.to_string(),
+        keys,
+        warnings: warn_strs,
+        created_nodes,
+    }
+}
+
 #[cfg(test)]
 mod core_tests {
     use super::*;
