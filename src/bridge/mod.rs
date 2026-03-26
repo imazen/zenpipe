@@ -71,6 +71,9 @@ pub struct CompileResult {
     pub decode_config: DecodeConfig,
     /// Encode settings extracted from encode-phase nodes (quality, format, dpr).
     pub encode_config: EncodeConfig,
+    /// Bridge-layer trace (populated when trace_config enables bridge tracing).
+    #[cfg(feature = "std")]
+    pub bridge_trace: Option<crate::trace::BridgeTrace>,
 }
 
 /// Result of building a streaming pipeline from zennode nodes.
@@ -193,11 +196,20 @@ pub fn compile_nodes(
     converters: &[&dyn NodeConverter],
     source_w: u32,
     source_h: u32,
+    #[cfg(feature = "std")] trace_config: Option<&crate::trace::TraceConfig>,
 ) -> Result<CompileResult, PipeError> {
     let sep = convert::separate_by_role(nodes.iter().map(|n| n.as_ref()));
 
     let decode_config = DecodeConfig::from_nodes(&sep.decode);
     let encode_config = EncodeConfig::from_nodes(&sep.encode);
+
+    // Build bridge trace if enabled.
+    #[cfg(feature = "std")]
+    let bridge_trace = if trace_config.is_some_and(|c| c.bridge) {
+        Some(build_bridge_trace(&sep, source_w, source_h))
+    } else {
+        None
+    };
 
     let mut graph = PipelineGraph::new();
     let source_id = graph.add_node(NodeOp::Source);
@@ -221,7 +233,68 @@ pub fn compile_nodes(
         decode_nodes: sep.decode,
         decode_config,
         encode_config,
+        #[cfg(feature = "std")]
+        bridge_trace,
     })
+}
+
+/// Build a BridgeTrace from the separated nodes.
+#[cfg(feature = "std")]
+fn build_bridge_trace(
+    sep: &convert::SeparatedNodes<'_>,
+    source_w: u32,
+    source_h: u32,
+) -> crate::trace::BridgeTrace {
+    use alloc::string::ToString;
+
+    let node_to_info = |n: &dyn NodeInstance| -> crate::trace::BridgeNodeInfo {
+        let schema = n.schema();
+        crate::trace::BridgeNodeInfo {
+            schema_id: schema.id.to_string(),
+            role: alloc::format!("{:?}", schema.role),
+            coalesce_group: schema.coalesce.as_ref().map(|c| c.group.to_string()),
+        }
+    };
+
+    let mut input_nodes: Vec<crate::trace::BridgeNodeInfo> =
+        sep.pixel.iter().map(|n| node_to_info(*n)).collect();
+    input_nodes.extend(sep.decode.iter().map(|n| node_to_info(n.as_ref())));
+    input_nodes.extend(sep.encode.iter().map(|n| node_to_info(n.as_ref())));
+
+    let decode_nodes = sep.decode.iter().map(|n| n.schema().id.to_string()).collect();
+    let encode_nodes = sep.encode.iter().map(|n| n.schema().id.to_string()).collect();
+    let pixel_nodes = sep.pixel.iter().map(|n| n.schema().id.to_string()).collect();
+
+    // Record coalescing steps.
+    let coalesced = convert::coalesce(&sep.pixel);
+    let steps = coalesced
+        .iter()
+        .map(|step| match step {
+            PipelineStep::Single(node) => crate::trace::BridgeStepTrace {
+                kind: "single".to_string(),
+                source_nodes: alloc::vec![node.schema().id.to_string()],
+                converter: String::new(),
+                produced_ops: Vec::new(),
+                notes: Vec::new(),
+            },
+            PipelineStep::Coalesced { group, nodes } => crate::trace::BridgeStepTrace {
+                kind: alloc::format!("coalesced:{group}"),
+                source_nodes: nodes.iter().map(|n| n.schema().id.to_string()).collect(),
+                converter: String::new(),
+                produced_ops: Vec::new(),
+                notes: Vec::new(),
+            },
+        })
+        .collect();
+
+    crate::trace::BridgeTrace {
+        input_nodes,
+        decode_nodes,
+        encode_nodes,
+        pixel_nodes,
+        source_dims: (source_w, source_h),
+        steps,
+    }
 }
 
 /// Build a streaming pipeline from zennode nodes.
@@ -255,7 +328,8 @@ pub fn build_pipeline(
         decode_config,
         encode_config,
         ..
-    } = compile_nodes(nodes, converters, source_w, source_h)?;
+    } = compile_nodes(nodes, converters, source_w, source_h,
+        #[cfg(feature = "std")] None)?;
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
@@ -266,6 +340,49 @@ pub fn build_pipeline(
         decode_config,
         encode_config,
     })
+}
+
+/// Build a streaming pipeline with tracing enabled.
+///
+/// Like [`build_pipeline`], but records decisions at all layers and returns
+/// a [`FullPipelineTrace`](crate::trace::FullPipelineTrace) alongside the pipeline.
+#[cfg(feature = "std")]
+pub fn build_pipeline_traced(
+    source: Box<dyn crate::Source>,
+    nodes: &[Box<dyn NodeInstance>],
+    converters: &[&dyn NodeConverter],
+    trace_config: &crate::trace::TraceConfig,
+) -> Result<(PipelineResult, crate::trace::FullPipelineTrace), PipeError> {
+    let source_w = source.width();
+    let source_h = source.height();
+
+    let CompileResult {
+        graph,
+        decode_config,
+        encode_config,
+        bridge_trace,
+        ..
+    } = compile_nodes(nodes, converters, source_w, source_h, Some(trace_config))?;
+
+    let mut sources = hashbrown::HashMap::new();
+    sources.insert(0, source);
+    let (pipeline_source, graph_trace) = graph.compile_traced(sources, trace_config)?;
+
+    let trace = crate::trace::FullPipelineTrace {
+        riapi: None,
+        bridge: bridge_trace,
+        graph: graph_trace.lock().unwrap().clone(),
+        execution: None,
+    };
+
+    Ok((
+        PipelineResult {
+            source: pipeline_source,
+            decode_config,
+            encode_config,
+        },
+        trace,
+    ))
 }
 
 // ─── Tests using mock NodeInstance implementations ───
@@ -601,7 +718,7 @@ mod core_tests {
     #[test]
     fn compile_empty_nodes() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -609,7 +726,7 @@ mod core_tests {
     #[test]
     fn compile_single_crop_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node(10, 20, 100, 80)];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -617,21 +734,21 @@ mod core_tests {
     #[test]
     fn compile_orient_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node(6)];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
     #[test]
     fn compile_constrain_node() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(800, 600, "within", "lanczos")];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
     #[test]
     fn decode_nodes_separated() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node()];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert_eq!(result.decode_nodes.len(), 1);
     }
 
@@ -644,7 +761,7 @@ mod core_tests {
             constrain_node(800, 600, "within", "robidoux"),
         ];
 
-        let result = compile_nodes(&nodes, &[], 4000, 3000).unwrap();
+        let result = compile_nodes(&nodes, &[], 4000, 3000, None).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -661,7 +778,7 @@ mod core_tests {
         let nodes: Vec<Box<dyn NodeInstance>> =
             vec![orient_node(6), constrain_node(800, 600, "fit", "")];
 
-        let result = compile_nodes(&nodes, &[], 4000, 3000).unwrap();
+        let result = compile_nodes(&nodes, &[], 4000, 3000, None).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -678,7 +795,7 @@ mod core_tests {
         let nodes: Vec<Box<dyn NodeInstance>> =
             vec![flip_h_node(), rotate_90_node(), crop_node(0, 0, 500, 500)];
 
-        let result = compile_nodes(&nodes, &[], 1000, 800).unwrap();
+        let result = compile_nodes(&nodes, &[], 1000, 800, None).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -694,7 +811,7 @@ mod core_tests {
     fn geometry_fusion_single_constrain() {
         let nodes: Vec<Box<dyn NodeInstance>> = vec![constrain_node(200, 150, "fit", "lanczos")];
 
-        let result = compile_nodes(&nodes, &[], 800, 600).unwrap();
+        let result = compile_nodes(&nodes, &[], 800, 600, None).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -713,7 +830,7 @@ mod core_tests {
             constrain_node(50, 50, "fit", ""),
         ];
 
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -866,7 +983,7 @@ mod core_tests {
         let converter = TestFilterConverter;
         let converters: &[&dyn NodeConverter] = &[&converter];
 
-        let result = compile_nodes(&nodes, converters, 100, 100).unwrap();
+        let result = compile_nodes(&nodes, converters, 100, 100, None).unwrap();
 
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
@@ -884,7 +1001,7 @@ mod core_tests {
         let converter = TestFilterConverter;
         let converters: &[&dyn NodeConverter] = &[&converter];
 
-        let result = compile_nodes(&nodes, converters, 100, 100).unwrap();
+        let result = compile_nodes(&nodes, converters, 100, 100, None).unwrap();
         let mut sources = hashbrown::HashMap::new();
         sources.insert(
             0,
@@ -1041,7 +1158,7 @@ mod tests {
     #[test]
     fn compile_empty() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1056,7 +1173,7 @@ mod tests {
 
         let crop_node = zenlayout::zennode_defs::CROP_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1070,7 +1187,7 @@ mod tests {
             .create(&params)
             .unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -1084,7 +1201,7 @@ mod tests {
 
         let node = resize_nodes::CONSTRAIN_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
     }
 
@@ -1092,7 +1209,7 @@ mod tests {
     fn decode_nodes_separated() {
         let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert_eq!(result.decode_nodes.len(), 1);
         assert_eq!(result.decode_nodes[0].schema().id, "zennode.decode");
     }
@@ -1113,7 +1230,7 @@ mod tests {
             .unwrap();
 
         let nodes: Vec<Box<dyn NodeInstance>> = vec![rot270, rot90];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
         assert!(result.decode_nodes.is_empty());
     }
@@ -1213,7 +1330,7 @@ mod tests {
 
         let decode_node = zennode::nodes::DECODE_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert_eq!(result.decode_config.hdr_mode, "preserve");
         assert_eq!(result.decode_config.min_size, 256);
     }
@@ -1242,7 +1359,7 @@ mod tests {
     #[test]
     fn encode_config_extracted_in_compile_empty() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_config.quality_profile.is_none());
         assert!(result.encode_config.format.is_none());
     }
@@ -1263,7 +1380,7 @@ mod tests {
             .unwrap();
 
         let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node, crop_node];
-        let result = compile_nodes(&nodes, &[], 0, 0).unwrap();
+        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
 
         assert_eq!(result.decode_nodes.len(), 1);
         assert!(result.encode_nodes.is_empty());

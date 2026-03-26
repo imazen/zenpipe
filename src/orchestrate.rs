@@ -219,6 +219,7 @@ pub fn stream(
         config.converters,
         config.source_info.width,
         config.source_info.height,
+        None,
     )?;
 
     let mut sources = hashbrown::HashMap::new();
@@ -323,6 +324,7 @@ pub fn process_with_sidecar(
         config.converters,
         config.source_info.width,
         config.source_info.height,
+        None,
     )?;
 
     // 2. Wire the source into the graph's Source node (always at index 0).
