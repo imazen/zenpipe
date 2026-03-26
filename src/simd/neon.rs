@@ -115,7 +115,14 @@ pub(super) fn gather_oklab_impl_neon(
     reference_white: f32,
 ) {
     super::wide_simd::gather_oklab_simd_neon(
-        token, l, a, b, dst, channels, m1_inv, reference_white,
+        token,
+        l,
+        a,
+        b,
+        dst,
+        channels,
+        m1_inv,
+        reference_white,
     );
 }
 
@@ -229,7 +236,14 @@ pub(super) fn adaptive_sharpen_apply_impl_neon(
     masking_threshold: f32,
 ) {
     super::wide_simd::adaptive_sharpen_apply_simd_neon(
-        token, l, detail, energy, dst, amount, noise_floor, masking_threshold,
+        token,
+        l,
+        detail,
+        energy,
+        dst,
+        amount,
+        noise_floor,
+        masking_threshold,
     );
 }
 

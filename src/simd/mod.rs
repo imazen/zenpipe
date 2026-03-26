@@ -30,12 +30,18 @@ pub(crate) fn scale_plane(plane: &mut [f32], factor: f32) {
 
 /// Dispatch: add a constant to every element of a plane.
 pub(crate) fn offset_plane(plane: &mut [f32], offset: f32) {
-    archmage::incant!(offset_plane_impl(plane, offset), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        offset_plane_impl(plane, offset),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: power-curve contrast on a plane: `v = v^exp * scale` (v > 0).
 pub(crate) fn power_contrast_plane(plane: &mut [f32], exp: f32, scale: f32) {
-    archmage::incant!(power_contrast_plane_impl(plane, exp, scale), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        power_contrast_plane_impl(plane, exp, scale),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: sigmoid tone map on L plane.
@@ -50,7 +56,10 @@ pub(crate) fn sigmoid_tone_map_plane(plane: &mut [f32], contrast: f32, bias_a: f
 
 /// Dispatch: unsharp mask fuse: dst[i] = (src[i] + (src[i] - blurred[i]) * amount).max(0)
 pub(crate) fn unsharp_fuse(src: &[f32], blurred: &[f32], dst: &mut [f32], amount: f32) {
-    archmage::incant!(unsharp_fuse_impl(src, blurred, dst, amount), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        unsharp_fuse_impl(src, blurred, dst, amount),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: separable Gaussian blur on a single f32 plane.
@@ -166,12 +175,18 @@ pub(crate) fn gather_oklab_to_srgb_u8(
 
 /// Dispatch: black point remap on a single plane.
 pub(crate) fn black_point_plane(plane: &mut [f32], bp: f32, inv_range: f32) {
-    archmage::incant!(black_point_plane_impl(plane, bp, inv_range), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        black_point_plane_impl(plane, bp, inv_range),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: 2D hue rotation on a/b planes.
 pub(crate) fn hue_rotate(a: &mut [f32], b: &mut [f32], cos_r: f32, sin_r: f32) {
-    archmage::incant!(hue_rotate_impl(a, b, cos_r, sin_r), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        hue_rotate_impl(a, b, cos_r, sin_r),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: highlights and shadows recovery on L plane.
@@ -184,7 +199,10 @@ pub(crate) fn highlights_shadows(plane: &mut [f32], shadows: f32, highlights: f3
 
 /// Dispatch: vibrance (smart saturation) on a/b planes.
 pub(crate) fn vibrance(a: &mut [f32], b: &mut [f32], amount: f32, protection: f32) {
-    archmage::incant!(vibrance_impl(a, b, amount, protection), [v3, neon, wasm128, scalar]);
+    archmage::incant!(
+        vibrance_impl(a, b, amount, protection),
+        [v3, neon, wasm128, scalar]
+    );
 }
 
 /// Dispatch: subtract two planes. dst[i] = a[i] - b[i]

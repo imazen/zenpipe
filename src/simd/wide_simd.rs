@@ -392,8 +392,7 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             sum_out -= old_val;
 
             let new_y = (y + r + 1).min(h - 1);
-            let new_chunk: &[f32; 8] =
-                h_buf[new_y * w + x..new_y * w + x + 8].try_into().unwrap();
+            let new_chunk: &[f32; 8] = h_buf[new_y * w + x..new_y * w + x + 8].try_into().unwrap();
             let new_val = V::<T>::load(token, new_chunk);
             stack_v[sp] = new_val.to_array();
             sum_in += new_val;
@@ -902,7 +901,12 @@ pub(super) fn hue_rotate_simd(token: Token, a: &mut [f32], b: &mut [f32], cos_r:
 }
 
 #[magetypes(neon, wasm128)]
-pub(super) fn highlights_shadows_simd(token: Token, plane: &mut [f32], shadows: f32, highlights: f32) {
+pub(super) fn highlights_shadows_simd(
+    token: Token,
+    plane: &mut [f32],
+    shadows: f32,
+    highlights: f32,
+) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
     let shadows_half = f32x8::splat(token, shadows * 0.5);
@@ -932,7 +936,13 @@ pub(super) fn highlights_shadows_simd(token: Token, plane: &mut [f32], shadows: 
 }
 
 #[magetypes(neon, wasm128)]
-pub(super) fn vibrance_simd(token: Token, a: &mut [f32], b: &mut [f32], amount: f32, protection: f32) {
+pub(super) fn vibrance_simd(
+    token: Token,
+    a: &mut [f32],
+    b: &mut [f32],
+    amount: f32,
+    protection: f32,
+) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
     const MAX_CHROMA: f32 = 0.4;
@@ -1275,12 +1285,28 @@ pub(super) fn fused_adjust_simd(
     vib_protection: f32,
 ) {
     fused_adjust_l_generic(
-        token, l, bp, inv_range, wp_exp, contrast_exp, contrast_scale,
-        shadows, highlights, dehaze_contrast,
+        token,
+        l,
+        bp,
+        inv_range,
+        wp_exp,
+        contrast_exp,
+        contrast_scale,
+        shadows,
+        highlights,
+        dehaze_contrast,
     );
     fused_adjust_ab_generic(
-        token, a, b, dehaze_chroma, exposure_chroma, temp_offset,
-        tint_offset, sat, vib_amount, vib_protection,
+        token,
+        a,
+        b,
+        dehaze_chroma,
+        exposure_chroma,
+        temp_offset,
+        tint_offset,
+        sat,
+        vib_amount,
+        vib_protection,
     );
 }
 
@@ -1445,14 +1471,11 @@ pub(super) fn fused_interleaved_adjust_simd(
         let lms_s2 = s2 * s2 * s2;
 
         let r_out =
-            (im1_00.mul_add(lms_l2, im1_01.mul_add(lms_m2, im1_02 * lms_s2)) * white_v)
-                .max(zero_v);
+            (im1_00.mul_add(lms_l2, im1_01.mul_add(lms_m2, im1_02 * lms_s2)) * white_v).max(zero_v);
         let g_out =
-            (im1_10.mul_add(lms_l2, im1_11.mul_add(lms_m2, im1_12 * lms_s2)) * white_v)
-                .max(zero_v);
+            (im1_10.mul_add(lms_l2, im1_11.mul_add(lms_m2, im1_12 * lms_s2)) * white_v).max(zero_v);
         let b_out =
-            (im1_20.mul_add(lms_l2, im1_21.mul_add(lms_m2, im1_22 * lms_s2)) * white_v)
-                .max(zero_v);
+            (im1_20.mul_add(lms_l2, im1_21.mul_add(lms_m2, im1_22 * lms_s2)) * white_v).max(zero_v);
 
         let r_a = r_out.to_array();
         let g_a = g_out.to_array();

@@ -113,7 +113,14 @@ pub(super) fn gather_oklab_impl_wasm128(
     reference_white: f32,
 ) {
     super::wide_simd::gather_oklab_simd_wasm128(
-        token, l, a, b, dst, channels, m1_inv, reference_white,
+        token,
+        l,
+        a,
+        b,
+        dst,
+        channels,
+        m1_inv,
+        reference_white,
     );
 }
 
@@ -140,9 +147,7 @@ pub(super) fn gather_oklab_to_srgb_u8_impl_wasm128(
     channels: u32,
     m1_inv: &GamutMatrix,
 ) {
-    super::wide_simd::gather_oklab_to_srgb_u8_simd_wasm128(
-        token, l, a, b, dst, channels, m1_inv,
-    );
+    super::wide_simd::gather_oklab_to_srgb_u8_simd_wasm128(token, l, a, b, dst, channels, m1_inv);
 }
 
 #[archmage::arcane]
@@ -198,11 +203,7 @@ pub(super) fn subtract_planes_impl_wasm128(
 }
 
 #[archmage::arcane]
-pub(super) fn square_plane_impl_wasm128(
-    token: Wasm128Token,
-    src: &[f32],
-    dst: &mut [f32],
-) {
+pub(super) fn square_plane_impl_wasm128(token: Wasm128Token, src: &[f32], dst: &mut [f32]) {
     super::wide_simd::square_plane_simd_wasm128(token, src, dst);
 }
 
@@ -220,12 +221,7 @@ pub(super) fn wavelet_threshold_accumulate_impl_wasm128(
 }
 
 #[archmage::arcane]
-pub(super) fn add_clamped_impl_wasm128(
-    token: Wasm128Token,
-    a: &[f32],
-    b: &[f32],
-    dst: &mut [f32],
-) {
+pub(super) fn add_clamped_impl_wasm128(token: Wasm128Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     super::wide_simd::add_clamped_simd_wasm128(token, a, b, dst);
 }
 
@@ -241,7 +237,14 @@ pub(super) fn adaptive_sharpen_apply_impl_wasm128(
     masking_threshold: f32,
 ) {
     super::wide_simd::adaptive_sharpen_apply_simd_wasm128(
-        token, l, detail, energy, dst, amount, noise_floor, masking_threshold,
+        token,
+        l,
+        detail,
+        energy,
+        dst,
+        amount,
+        noise_floor,
+        masking_threshold,
     );
 }
 

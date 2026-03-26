@@ -427,10 +427,7 @@ mod tests {
             Some(ParamValue::F32(0.4))
         );
 
-        assert!(node.set_param(
-            "preset",
-            ParamValue::Str("nikon_d7000".to_string())
-        ));
+        assert!(node.set_param("preset", ParamValue::Str("nikon_d7000".to_string())));
         assert_eq!(node.preset, "nikon_d7000");
 
         assert!(node.set_param("chroma_compression", ParamValue::F32(0.8)));
