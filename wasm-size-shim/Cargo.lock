@@ -98,6 +98,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
+name = "cfg-if"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
 name = "enough"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -162,6 +174,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -195,8 +218,10 @@ dependencies = [
  "bytemuck",
  "enough",
  "hashbrown 0.16.1",
+ "imgref",
  "jxl-encoder-simd",
  "once_cell",
+ "rgb",
  "thiserror",
  "whereat",
 ]
@@ -244,39 +269,6 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
-]
-
-[[package]]
-name = "multiversed"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dabf9b113e96ba60fa3958fdaf4aba3d8ed9f9b67c14fbcb1b0e99708715ca8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "multiversion"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edb7f0ff51249dfda9ab96b5823695e15a052dc15074c9dbf3d118afaf2c201"
-dependencies = [
- "multiversion-macros",
- "target-features",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b093064383341eb3271f42e381cb8f10a01459478446953953c75d24bd339fc0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "target-features",
 ]
 
 [[package]]
@@ -412,12 +404,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "target-features"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
-
-[[package]]
 name = "thiserror"
 version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -451,6 +437,17 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "ultrahdr-core"
+version = "0.2.0"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "half",
+ "thiserror",
+ "wide",
+]
 
 [[package]]
 name = "unicode-ident"
@@ -523,9 +520,9 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99ba55a38b9c8fcd685bddc640c6b9891108c026aa24ee8af206628d1a3e561b"
+checksum = "16a3e836a037c010fe01f7a5f7c66bf16138194856ef96f2ae2697a9e71e6f70"
 dependencies = [
  "almost-enough",
  "enough",
@@ -583,12 +580,11 @@ dependencies = [
  "enough",
  "imgref",
  "magetypes",
- "multiversed",
- "multiversion",
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
  "tinyvec",
+ "ultrahdr-core",
  "whereat",
  "wide",
  "yuv",
@@ -600,7 +596,6 @@ dependencies = [
 name = "zenjxl"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "enough",
  "imgref",
  "jxl-encoder",
@@ -655,6 +650,22 @@ name = "zenlayout"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e136195598f6c1dc769200888ad1f9071f99d54ac3a91b80be6ba0b164e6b5b"
+
+[[package]]
+name = "zennode"
+version = "0.1.0"
+dependencies = [
+ "zennode-derive",
+]
+
+[[package]]
+name = "zennode-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "zenpipe"
@@ -752,6 +763,7 @@ dependencies = [
  "wide",
  "zenblend",
  "zenlayout",
+ "zennode",
  "zenpixels",
 ]
 
@@ -775,4 +787,24 @@ dependencies = [
  "yuv",
  "zencodec",
  "zenpixels",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.47"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.47"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]

@@ -36,8 +36,6 @@ zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
 # zentiff = { path = "../../zentiff", features = ["zencodec"] }
 # zenbitmaps = { path = "../../zenbitmaps", features = ["zencodec"] }
 
-[patch.crates-io]
-zencodec = { version = "0.1.2" }
 
 [profile.release]
 lto = true
