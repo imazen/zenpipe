@@ -38,7 +38,7 @@ mod parse;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use zennode::{NodeInstance, NodeRole};
+use zennode::NodeInstance;
 
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
@@ -49,7 +49,7 @@ pub use dag::{DagNode, build_pipeline_dag};
 pub use ordering::{OptimizationLevel, canonical_sort, optimize_node_order};
 
 // Sub-module items used by this module.
-use convert::{coalesce, convert_step};
+use convert::coalesce_and_append_chain;
 
 // Re-export for tests.
 #[cfg(test)]
@@ -194,46 +194,31 @@ pub fn compile_nodes(
     source_w: u32,
     source_h: u32,
 ) -> Result<CompileResult, PipeError> {
-    // 1. Separate encode/decode nodes from pixel-processing nodes.
-    let mut pixel_nodes: Vec<&dyn NodeInstance> = Vec::new();
-    let mut encode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
-    let mut decode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
+    let sep = convert::separate_by_role(nodes.iter().map(|n| n.as_ref()));
 
-    for node in nodes {
-        match node.schema().role {
-            NodeRole::Encode => encode_nodes.push(node.clone_boxed()),
-            NodeRole::Decode => decode_nodes.push(node.clone_boxed()),
-            _ => pixel_nodes.push(node.as_ref()),
-        }
-    }
+    let decode_config = DecodeConfig::from_nodes(&sep.decode);
+    let encode_config = EncodeConfig::from_nodes(&sep.encode);
 
-    let decode_config = DecodeConfig::from_nodes(&decode_nodes);
-    let encode_config = EncodeConfig::from_nodes(&encode_nodes);
-
-    // 2. Coalesce, then attempt geometry fusion and filter fusion.
-    let steps = coalesce(&pixel_nodes);
-
-    // 3. Build the graph: Source → ops → Output.
     let mut graph = PipelineGraph::new();
     let source_id = graph.add_node(NodeOp::Source);
-    let mut prev_id = source_id;
 
-    for step in &steps {
-        let ops = convert_step(step, converters, source_w, source_h)?;
-        for node_op in ops {
-            let node_id = graph.add_node(node_op);
-            graph.add_edge(prev_id, node_id, EdgeKind::Input);
-            prev_id = node_id;
-        }
-    }
+    let last_id =
+        if let Some((first, last)) =
+            coalesce_and_append_chain(&sep.pixel, converters, source_w, source_h, &mut graph)?
+        {
+            graph.add_edge(source_id, first, EdgeKind::Input);
+            last
+        } else {
+            source_id
+        };
 
     let output_id = graph.add_node(NodeOp::Output);
-    graph.add_edge(prev_id, output_id, EdgeKind::Input);
+    graph.add_edge(last_id, output_id, EdgeKind::Input);
 
     Ok(CompileResult {
         graph,
-        encode_nodes,
-        decode_nodes,
+        encode_nodes: sep.encode,
+        decode_nodes: sep.decode,
         decode_config,
         encode_config,
     })

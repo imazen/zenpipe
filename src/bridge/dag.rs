@@ -20,7 +20,7 @@ use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 
 use super::config::{DecodeConfig, EncodeConfig};
-use super::convert::{coalesce, convert_step};
+use super::convert::{coalesce_and_append_chain, separate_by_role};
 use super::{NodeConverter, PipelineResult};
 
 /// A node in a processing DAG.
@@ -113,53 +113,25 @@ pub fn build_pipeline_dag(
                 dag_to_graph[*idx] = Some(gid);
             }
             Chain::Linear(indices) => {
-                // Collect node instances for this chain.
-                let chain_nodes: Vec<&dyn NodeInstance> = indices
-                    .iter()
-                    .filter_map(|&idx| {
-                        let role = dag[idx].instance.schema().role;
-                        match role {
-                            NodeRole::Decode => {
-                                decode_nodes.push(dag[idx].instance.clone_boxed());
-                                None
-                            }
-                            NodeRole::Encode => {
-                                encode_nodes.push(dag[idx].instance.clone_boxed());
-                                None
-                            }
-                            _ => Some(dag[idx].instance.as_ref()),
-                        }
-                    })
-                    .collect();
+                let sep = separate_by_role(
+                    indices.iter().map(|&idx| dag[idx].instance.as_ref()),
+                );
+                decode_nodes.extend(sep.decode);
+                encode_nodes.extend(sep.encode);
 
-                if chain_nodes.is_empty() {
+                if sep.pixel.is_empty() {
                     continue;
                 }
 
-                // Apply the same coalesce + convert_step logic as the linear path.
-                let steps = coalesce(&chain_nodes);
-                let mut first_gid = None;
-                let mut prev_gid = None;
-
-                for step in &steps {
-                    let ops = convert_step(step, converters, source_w, source_h)?;
-                    for node_op in ops {
-                        let gid = graph.add_node(node_op);
-                        if let Some(prev) = prev_gid {
-                            graph.add_edge(prev, gid, EdgeKind::Input);
-                        }
-                        if first_gid.is_none() {
-                            first_gid = Some(gid);
-                        }
-                        prev_gid = Some(gid);
-                    }
-                }
-
-                // Map the first and last chain node to their graph IDs for edge wiring.
-                if let (Some(first), Some(last)) = (first_gid, prev_gid) {
+                if let Some((first, last)) = coalesce_and_append_chain(
+                    &sep.pixel,
+                    converters,
+                    source_w,
+                    source_h,
+                    &mut graph,
+                )? {
                     dag_to_graph[indices[0]] = Some(first);
                     dag_to_graph[*indices.last().unwrap()] = Some(last);
-                    // Also map intermediate nodes to last (for edge wiring from successors).
                     for &idx in &indices[1..indices.len() - 1] {
                         dag_to_graph[idx] = Some(last);
                     }

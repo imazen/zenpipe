@@ -4,14 +4,86 @@ use alloc::vec::Vec;
 
 use zennode::NodeInstance;
 
+use alloc::boxed::Box;
+use zennode::NodeRole;
+
 use crate::error::PipeError;
-use crate::graph::NodeOp;
+use crate::graph::{EdgeKind, NodeId, NodeOp, PipelineGraph};
 
 use super::geometry::{compile_geometry_run, is_geometry_node};
 use super::parse::{
     param_f32_opt, param_i32, param_str, param_u32, parse_constraint_mode, parse_filter_opt,
 };
 use super::{NodeConverter, PipelineStep};
+
+// ─── Shared helpers ───
+
+/// Nodes separated by role into pixel-processing, encode, and decode groups.
+pub(crate) struct SeparatedNodes<'a> {
+    pub pixel: Vec<&'a dyn NodeInstance>,
+    pub encode: Vec<Box<dyn NodeInstance>>,
+    pub decode: Vec<Box<dyn NodeInstance>>,
+}
+
+/// Separate nodes by role into pixel-processing, encode, and decode groups.
+///
+/// Encode and decode nodes are cloned into owned boxes; pixel-processing
+/// nodes are borrowed from the input.
+pub(crate) fn separate_by_role<'a>(
+    nodes: impl Iterator<Item = &'a dyn NodeInstance>,
+) -> SeparatedNodes<'a> {
+    let mut pixel = Vec::new();
+    let mut encode = Vec::new();
+    let mut decode = Vec::new();
+    for node in nodes {
+        match node.schema().role {
+            NodeRole::Encode => encode.push(node.clone_boxed()),
+            NodeRole::Decode => decode.push(node.clone_boxed()),
+            _ => pixel.push(node),
+        }
+    }
+    SeparatedNodes {
+        pixel,
+        encode,
+        decode,
+    }
+}
+
+/// Coalesce and convert nodes into graph nodes wired as a linear chain.
+///
+/// Calls [`coalesce`] then [`convert_step`] for each step, adding nodes
+/// to the graph and wiring them sequentially. Returns `(first, last)` node
+/// IDs, or `None` if no nodes were produced.
+pub(crate) fn coalesce_and_append_chain(
+    pixel_nodes: &[&dyn NodeInstance],
+    converters: &[&dyn NodeConverter],
+    source_w: u32,
+    source_h: u32,
+    graph: &mut PipelineGraph,
+) -> Result<Option<(NodeId, NodeId)>, PipeError> {
+    let steps = coalesce(pixel_nodes);
+    let mut first_id = None;
+    let mut prev_id = None;
+
+    for step in &steps {
+        let ops = convert_step(step, converters, source_w, source_h)?;
+        for node_op in ops {
+            let gid = graph.add_node(node_op);
+            if let Some(prev) = prev_id {
+                graph.add_edge(prev, gid, EdgeKind::Input);
+            }
+            if first_id.is_none() {
+                first_id = Some(gid);
+            }
+            prev_id = Some(gid);
+        }
+    }
+
+    match (first_id, prev_id) {
+        (Some(f), Some(l)) => Ok(Some((f, l))),
+        _ => Ok(None),
+    }
+}
 
 // ─── Coalescing ───
 
