@@ -126,4 +126,7 @@ required-features = ["std"]
 name = "quality_calibrate"
 required-features = ["calibrate"]
 
+[patch.crates-io]
+zenavif-parse = { path = "../zenavif-parse" }
+
 
