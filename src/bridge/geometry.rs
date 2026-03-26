@@ -105,6 +105,34 @@ pub(crate) fn compile_geometry_run(
                 let mode = parse_constraint_mode(&mode_str)?;
                 pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
             }
+            "zenlayout.crop_percent" => {
+                // Percentage-based crop: x1/y1/x2/y2 are fractions of source size.
+                let x1 = super::parse::param_f32_opt(node, "x1").unwrap_or(0.0);
+                let y1 = super::parse::param_f32_opt(node, "y1").unwrap_or(0.0);
+                let x2 = super::parse::param_f32_opt(node, "x2").unwrap_or(100.0);
+                let y2 = super::parse::param_f32_opt(node, "y2").unwrap_or(100.0);
+                // Convert percentages to pixel coords based on source size.
+                let px = (x1 / 100.0 * source_w as f32) as u32;
+                let py = (y1 / 100.0 * source_h as f32) as u32;
+                let pw = ((x2 - x1) / 100.0 * source_w as f32).max(1.0) as u32;
+                let ph = ((y2 - y1) / 100.0 * source_h as f32).max(1.0) as u32;
+                pipeline = pipeline.crop_pixels(px, py, pw, ph);
+            }
+            "zenlayout.region" => {
+                // Region is a superset of crop + expand. Signed coordinates:
+                // Negative = crop inward, positive = expand outward.
+                let x1 = param_i32(node, "x1")?;
+                let y1 = param_i32(node, "y1")?;
+                let x2 = param_i32(node, "x2")?;
+                let y2 = param_i32(node, "y2")?;
+                // Clamp to valid crop region within source dimensions.
+                let crop_x = (-x1).max(0) as u32;
+                let crop_y = (-y1).max(0) as u32;
+                let crop_w = ((x2 - x1) as u32).min(source_w.saturating_sub(crop_x));
+                let crop_h = ((y2 - y1) as u32).min(source_h.saturating_sub(crop_y));
+                pipeline = pipeline.crop_pixels(crop_x, crop_y, crop_w, crop_h);
+                // TODO: handle expand (positive x1/y1) via padding in LayoutPlan
+            }
             _ => {
                 return Err(PipeError::Op(alloc::format!(
                     "unexpected node '{id}' in geometry run"
