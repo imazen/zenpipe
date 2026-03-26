@@ -23,6 +23,8 @@ pub mod limits;
 pub mod ops;
 pub mod sources;
 mod strip;
+#[cfg(feature = "std")]
+pub mod trace;
 
 #[cfg(feature = "zennode")]
 pub mod bridge;

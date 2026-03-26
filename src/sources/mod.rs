@@ -13,6 +13,8 @@ mod resize;
 mod tee;
 mod transform;
 #[cfg(feature = "std")]
+mod tracing;
+#[cfg(feature = "std")]
 mod windowed_filter;
 
 pub use callback::CallbackSource;
@@ -29,5 +31,7 @@ pub use materialize::MaterializedSource;
 pub use resize::{ResizeF32Source, ResizeSource};
 pub use tee::{TeeCursor, TeeSource};
 pub use transform::TransformSource;
+#[cfg(feature = "std")]
+pub use tracing::TracingSource;
 #[cfg(feature = "std")]
 pub use windowed_filter::{DEFAULT_OVERLAP, WindowedFilterSource};
