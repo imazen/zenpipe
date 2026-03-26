@@ -48,7 +48,7 @@ zennode = { path = "../zennode/zennode", default-features = false, features = ["
 png = "0.18"
 zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
-fast-ssim2 = { path = "../fast-ssim2/ssimulacra2", features = ["imgref"] }
+fast-ssim2 = { path = "../fast-ssim2/fast-ssim2", features = ["imgref"] }
 rayon = "1"
 turbojpeg = "1.4"
 
