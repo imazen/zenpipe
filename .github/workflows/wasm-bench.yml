@@ -49,6 +49,20 @@ jobs:
               || echo "::warning::Failed to clone private repo $repo — set ZEN_REPOS_PAT secret"
           done
 
+          # Fix subcrate paths that differ between local and remote
+          # zenjxl-decoder: remote has jxl/, local expects zenjxl-decoder/
+          if [ -d zenjxl-decoder/jxl ] && [ ! -d zenjxl-decoder/zenjxl-decoder ]; then
+            ln -s jxl zenjxl-decoder/zenjxl-decoder
+          fi
+          # jxl-encoder: remote has jxl_encoder/, local expects jxl-encoder/
+          if [ -d jxl-encoder/jxl_encoder ] && [ ! -d jxl-encoder/jxl-encoder ]; then
+            ln -s jxl_encoder jxl-encoder/jxl-encoder
+          fi
+          # jxl-encoder also has jxl_simd expected by zenjxl
+          if [ -d jxl-encoder/jxl_simd ] && [ ! -d jxl-encoder/jxl-simd ]; then
+            ln -s jxl_simd jxl-encoder/jxl-simd
+          fi
+
           ls -d */
 
       - uses: dtolnay/rust-toolchain@stable
