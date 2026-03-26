@@ -1,4 +1,5 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use zenbench::criterion_compat::*;
+use zenbench::{criterion_group, criterion_main};
 use zenpixels::buffer::PixelBuffer;
 use zenpixels::{ChannelLayout, ChannelType, PixelDescriptor, TransferFunction};
 use zenpixels_convert::RowConverter;
