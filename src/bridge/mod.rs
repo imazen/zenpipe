@@ -310,12 +310,25 @@ fn build_bridge_trace(
 /// canonical_sort(&mut nodes);
 /// record_snapshot(&mut trace, "after canonical_sort", &nodes);
 /// ```
+/// Record a DAG snapshot of the current node topology.
+///
+/// Assigns stable u32 UIDs starting from `uid_counter`. Returns the
+/// updated counter. For linear chains, edges are implicitly `i → i+1`.
+///
+/// ```ignore
+/// let mut uid = 0;
+/// uid = record_snapshot(&mut trace, "input", &nodes, uid, "");
+/// canonical_sort(&mut nodes);
+/// uid = record_snapshot(&mut trace, "after canonical_sort", &nodes, uid, "RIAPI keys have no order");
+/// ```
 #[cfg(feature = "std")]
 pub fn record_snapshot(
     trace: &mut crate::trace::BridgeTrace,
     label: &str,
     nodes: &[Box<dyn NodeInstance>],
-) {
+    uid_start: u32,
+    reason: &str,
+) -> u32 {
     use alloc::string::ToString;
 
     let dag_nodes: Vec<crate::trace::DagSnapshotNode> = nodes
@@ -324,40 +337,44 @@ pub fn record_snapshot(
         .map(|(i, n)| {
             let schema = n.schema();
             crate::trace::DagSnapshotNode {
-                id: i,
+                uid: uid_start + i as u32,
+                position: i,
                 label: schema.id.to_string(),
                 kind: alloc::format!("{:?}", schema.role),
+                merged_from: Vec::new(),
+                added: false,
+                removed: false,
             }
         })
         .collect();
 
-    // Default to linear chain edges.
     let edges: Vec<crate::trace::DagSnapshotEdge> = (0..nodes.len().saturating_sub(1))
-        .map(|i| crate::trace::DagSnapshotEdge {
-            from: i,
-            to: i + 1,
-            kind: alloc::string::String::from("input"),
-        })
+        .map(|i| crate::trace::DagSnapshotEdge::input(
+            uid_start + i as u32,
+            uid_start + (i + 1) as u32,
+        ))
         .collect();
 
     trace.snapshots.push(crate::trace::DagSnapshot {
         label: label.to_string(),
+        reason: reason.to_string(),
         nodes: dag_nodes,
         edges,
     });
+
+    uid_start + nodes.len() as u32
 }
 
-/// Record a DAG snapshot with explicit edge topology.
-///
-/// Use this for non-linear pipelines (compositing, fan-out, watermarks)
-/// where edges aren't just `i → i+1`.
+/// Record a DAG snapshot with explicit edge topology and stable UIDs.
 #[cfg(feature = "std")]
 pub fn record_dag_snapshot(
     trace: &mut crate::trace::BridgeTrace,
     label: &str,
     nodes: &[Box<dyn NodeInstance>],
-    edges: Vec<(usize, usize, &str)>,
-) {
+    edges: Vec<(u32, u32, &str)>,
+    uid_start: u32,
+    reason: &str,
+) -> u32 {
     use alloc::string::ToString;
 
     let dag_nodes: Vec<crate::trace::DagSnapshotNode> = nodes
@@ -366,9 +383,13 @@ pub fn record_dag_snapshot(
         .map(|(i, n)| {
             let schema = n.schema();
             crate::trace::DagSnapshotNode {
-                id: i,
+                uid: uid_start + i as u32,
+                position: i,
                 label: schema.id.to_string(),
                 kind: alloc::format!("{:?}", schema.role),
+                merged_from: Vec::new(),
+                added: false,
+                removed: false,
             }
         })
         .collect();
@@ -384,9 +405,12 @@ pub fn record_dag_snapshot(
 
     trace.snapshots.push(crate::trace::DagSnapshot {
         label: label.to_string(),
+        reason: reason.to_string(),
         nodes: dag_nodes,
         edges: dag_edges,
     });
+
+    uid_start + nodes.len() as u32
 }
 
 /// Build a streaming pipeline from zennode nodes.

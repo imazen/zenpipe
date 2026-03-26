@@ -173,14 +173,16 @@ pub struct BridgeTrace {
 
 /// A DAG snapshot at a point in the pipeline transformation.
 ///
-/// Captures both nodes and edges so the full graph topology is preserved,
-/// not just a linear ordering. Even for linear pipelines, storing edges
-/// makes compositing/fan-out/watermark branches visible.
+/// Captures nodes, edges, and change reasons so the full graph topology
+/// and mutation history are preserved across snapshots. Nodes carry stable
+/// UIDs that persist across snapshots for tracking movement/coalescence.
 #[derive(Clone, Debug)]
 pub struct DagSnapshot {
     /// Label for this snapshot (e.g., "input", "after canonical_sort", "compiled graph").
     pub label: String,
-    /// Nodes in the DAG. Index = node ID.
+    /// Why this snapshot differs from the previous one.
+    pub reason: String,
+    /// Nodes in the DAG.
     pub nodes: Vec<DagSnapshotNode>,
     /// Edges connecting nodes.
     pub edges: Vec<DagSnapshotEdge>,
@@ -189,23 +191,54 @@ pub struct DagSnapshot {
 /// A node in a DAG snapshot.
 #[derive(Clone, Debug)]
 pub struct DagSnapshotNode {
-    /// Node ID (index in the snapshot's node list).
-    pub id: usize,
+    /// Stable unique ID (monotonic u32) that persists across snapshots.
+    /// When a node is reordered, its uid stays the same.
+    /// When nodes are coalesced, the new node gets a new uid
+    /// and `merged_from` lists the source uids.
+    pub uid: u32,
+    /// Position index within this snapshot (for layout).
+    pub position: usize,
     /// Short label (schema ID, NodeOp name, or description).
     pub label: String,
     /// Node kind for rendering (e.g., "source", "geometry", "filter", "encode", "implicit").
     pub kind: String,
+    /// UIDs of nodes that were merged into this one (empty if not coalesced).
+    pub merged_from: Vec<u32>,
+    /// True if this node was added in this snapshot (not present in previous).
+    pub added: bool,
+    /// True if this node was removed in this snapshot (present in previous, gone now).
+    pub removed: bool,
 }
 
 /// An edge in a DAG snapshot.
 #[derive(Clone, Debug)]
 pub struct DagSnapshotEdge {
-    /// Source node ID.
-    pub from: usize,
-    /// Target node ID.
-    pub to: usize,
+    /// Source node UID.
+    pub from: u32,
+    /// Target node UID.
+    pub to: u32,
     /// Edge kind ("input" or "canvas").
     pub kind: String,
+}
+
+impl DagSnapshotEdge {
+    /// Create an input edge.
+    pub fn input(from: u32, to: u32) -> Self {
+        Self {
+            from,
+            to,
+            kind: String::from("input"),
+        }
+    }
+
+    /// Create a canvas edge.
+    pub fn canvas(from: u32, to: u32) -> Self {
+        Self {
+            from,
+            to,
+            kind: String::from("canvas"),
+        }
+    }
 }
 
 /// Info about a node before bridge processing.
@@ -654,11 +687,11 @@ impl PipelineTrace {
         }
 
         // Draw edges from the graph topology.
-        // Build a map from node graph-index to trace_order for positioning.
-        let index_to_order: hashbrown::HashMap<usize, usize> = self
+        // Build a map from node graph-index (as u32) to trace_order for positioning.
+        let index_to_order: hashbrown::HashMap<u32, usize> = self
             .entries
             .iter()
-            .map(|e| (e.index, e.trace_order))
+            .map(|e| (e.index as u32, e.trace_order))
             .collect();
 
         if !self.edges.is_empty() {
@@ -794,25 +827,30 @@ impl FullPipelineTrace {
             if !bridge.snapshots.is_empty() {
                 out.push_str("Pipeline DAG timeline:\n");
                 for snap in &bridge.snapshots {
-                    let node_labels: Vec<&str> =
-                        snap.nodes.iter().map(|n| n.label.as_str()).collect();
-                    out.push_str(&format!("  {}:\n", snap.label));
+                    let node_labels: Vec<String> = snap
+                        .nodes
+                        .iter()
+                        .map(|n| format!("{}(#{})", n.label, n.uid))
+                        .collect();
+                    out.push_str(&format!("  {}:", snap.label));
+                    if !snap.reason.is_empty() {
+                        out.push_str(&format!(" — {}", snap.reason));
+                    }
+                    out.push('\n');
                     out.push_str(&format!("    nodes: [{}]\n", node_labels.join(", ")));
                     if !snap.edges.is_empty() {
+                        // Build UID → label lookup.
+                        let uid_to_label: hashbrown::HashMap<u32, &str> = snap
+                            .nodes
+                            .iter()
+                            .map(|n| (n.uid, n.label.as_str()))
+                            .collect();
                         let edge_strs: Vec<String> = snap
                             .edges
                             .iter()
                             .map(|e| {
-                                let from = snap
-                                    .nodes
-                                    .get(e.from)
-                                    .map(|n| n.label.as_str())
-                                    .unwrap_or("?");
-                                let to = snap
-                                    .nodes
-                                    .get(e.to)
-                                    .map(|n| n.label.as_str())
-                                    .unwrap_or("?");
+                                let from = uid_to_label.get(&e.from).copied().unwrap_or("?");
+                                let to = uid_to_label.get(&e.to).copied().unwrap_or("?");
                                 if e.kind == "canvas" {
                                     format!("{from} =canvas=> {to}")
                                 } else {
@@ -958,6 +996,204 @@ impl FullPipelineTrace {
         s.push(']');
 
         s.push('}');
+        s
+    }
+}
+
+// ─── Animated SVG ───
+
+#[cfg(feature = "std")]
+impl FullPipelineTrace {
+    /// Generate an animated SVG showing pipeline transformation over time.
+    ///
+    /// Each `DagSnapshot` in `bridge.snapshots` becomes a frame. Nodes with
+    /// the same UID slide to new positions; new nodes fade in; removed nodes
+    /// fade out. Edges follow their endpoints. A timeline bar shows frame labels.
+    ///
+    /// Uses CSS `@keyframes` — no JavaScript required. Works in browsers and
+    /// `feh`/`eog` for static frames.
+    pub fn to_animated_svg(&self) -> String {
+        use alloc::collections::BTreeMap;
+        use core::fmt::Write;
+
+        let snapshots: Vec<&DagSnapshot> = self
+            .bridge
+            .as_ref()
+            .map(|b| b.snapshots.iter().collect())
+            .unwrap_or_default();
+
+        if snapshots.is_empty() {
+            return String::from("<svg xmlns='http://www.w3.org/2000/svg'><text>No snapshots</text></svg>");
+        }
+
+        let node_w = 180u32;
+        let node_h = 40u32;
+        let gap_x = 30u32;
+        let gap_y = 60u32;
+        let margin = 30u32;
+        let timeline_h = 50u32;
+        let frame_dur_s = 2.0f32;
+        let num_frames = snapshots.len();
+        let total_dur = frame_dur_s * num_frames as f32;
+
+        // Collect all unique UIDs across all snapshots for global positioning.
+        let mut all_uids: Vec<u32> = Vec::new();
+        for snap in &snapshots {
+            for node in &snap.nodes {
+                if !all_uids.contains(&node.uid) {
+                    all_uids.push(node.uid);
+                }
+            }
+        }
+
+        // Find max nodes in any single snapshot for width.
+        let max_nodes_per_snap = snapshots.iter().map(|s| s.nodes.len()).max().unwrap_or(1);
+        let svg_w = margin * 2 + max_nodes_per_snap as u32 * (node_w + gap_x);
+        let svg_h = margin * 2 + node_h + gap_y + timeline_h;
+
+        let mut s = String::with_capacity(8192);
+        let _ = write!(
+            s,
+            "<svg xmlns='http://www.w3.org/2000/svg' width='{svg_w}' height='{svg_h}' \
+             font-family='monospace' font-size='11'>\n"
+        );
+
+        // Color map for node kinds.
+        let kind_color = |kind: &str| -> &str {
+            match kind {
+                k if k.contains("Geometry") => "#e3f2fd"
+                , k if k.contains("Filter") => "#f3e5f5"
+                , k if k.contains("Encode") => "#fff3e0"
+                , k if k.contains("Decode") => "#e8f5e9"
+                , k if k.contains("implicit") => "#fafafa"
+                , _ => "#f5f5f5"
+            }
+        };
+
+        // Build per-UID keyframes: for each frame, record (x, y, opacity).
+        // A node's x is its position index * (node_w + gap_x), y is constant for linear.
+        #[derive(Clone)]
+        struct NodeFrame {
+            x: u32,
+            y: u32,
+            opacity: f32,
+            label: String,
+            kind: String,
+        }
+
+        let mut uid_frames: BTreeMap<u32, Vec<Option<NodeFrame>>> = BTreeMap::new();
+        for uid in &all_uids {
+            uid_frames.insert(*uid, vec![None; num_frames]);
+        }
+
+        for (fi, snap) in snapshots.iter().enumerate() {
+            for node in &snap.nodes {
+                let x = margin + node.position as u32 * (node_w + gap_x);
+                let y = margin;
+                if let Some(frames) = uid_frames.get_mut(&node.uid) {
+                    frames[fi] = Some(NodeFrame {
+                        x,
+                        y,
+                        opacity: if node.removed { 0.3 } else { 1.0 },
+                        label: node.label.clone(),
+                        kind: node.kind.clone(),
+                    });
+                }
+            }
+        }
+
+        // Generate CSS keyframes for each UID.
+        let _ = write!(s, "<defs><style>\n");
+        for (uid, frames) in &uid_frames {
+            let _ = write!(s, "@keyframes n{uid} {{\n");
+            for (fi, frame) in frames.iter().enumerate() {
+                let pct_start = (fi as f32 / num_frames as f32 * 100.0) as u32;
+                let pct_end = ((fi as f32 + 0.9) / num_frames as f32 * 100.0).min(100.0) as u32;
+                let (x, y, opacity) = match frame {
+                    Some(f) => (f.x, f.y, f.opacity),
+                    None => (0, 0, 0.0), // not present in this frame
+                };
+                let _ = write!(
+                    s,
+                    "  {pct_start}%,{pct_end}% {{ transform:translate({x}px,{y}px); opacity:{opacity}; }}\n"
+                );
+            }
+            let _ = write!(s, "}}\n");
+        }
+
+        // Timeline indicator animation.
+        let _ = write!(s, "@keyframes timeline {{");
+        for fi in 0..num_frames {
+            let pct = (fi as f32 / num_frames as f32 * 100.0) as u32;
+            let x = margin + fi as u32 * (svg_w - margin * 2) / num_frames.max(1) as u32;
+            let _ = write!(s, " {pct}% {{ transform:translateX({x}px); }}");
+        }
+        let _ = write!(s, " }}\n");
+
+        let _ = write!(s, ".node {{ animation-duration:{total_dur}s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }}\n");
+        let _ = write!(s, ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}\n");
+        let _ = write!(s, "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}\n");
+        let _ = write!(s, "</style></defs>\n");
+
+        // Render nodes — each is a group with CSS animation.
+        for (uid, frames) in &uid_frames {
+            // Use the first visible frame for the label and color.
+            let first_visible = frames.iter().flatten().next();
+            let Some(fv) = first_visible else {
+                continue;
+            };
+            let fill = kind_color(&fv.kind);
+            let label = &fv.label;
+            // Truncate label for display.
+            let display_label = if label.len() > 22 {
+                &label[..22]
+            } else {
+                label
+            };
+
+            let _ = write!(
+                s,
+                "<g class='node' style='animation-name:n{uid}'>\
+                 <rect class='nb' x='0' y='0' width='{node_w}' height='{node_h}' fill='{fill}'/>\
+                 <text x='6' y='15' font-weight='bold' font-size='10'>{display_label}</text>\
+                 <text x='6' y='30' fill='#888' font-size='9'>#{uid}</text>\
+                 </g>\n"
+            );
+        }
+
+        // Timeline bar at bottom.
+        let tl_y = svg_h - timeline_h;
+        let _ = write!(
+            s,
+            "<rect x='{margin}' y='{tl_y}' width='{}' height='30' fill='#f0f0f0' rx='4'/>\n",
+            svg_w - margin * 2
+        );
+
+        // Frame labels on timeline.
+        for (fi, snap) in snapshots.iter().enumerate() {
+            let x = margin
+                + fi as u32 * (svg_w - margin * 2) / num_frames.max(1) as u32
+                + 4;
+            let label = if snap.label.len() > 16 {
+                &snap.label[..16]
+            } else {
+                &snap.label
+            };
+            let _ = write!(
+                s,
+                "<text x='{x}' y='{}' font-size='9' fill='#666'>{label}</text>\n",
+                tl_y + 18
+            );
+        }
+
+        // Animated timeline marker.
+        let _ = write!(
+            s,
+            "<circle class='tmark' cx='0' cy='{}' r='5' fill='#e63946'/>\n",
+            tl_y + 15
+        );
+
+        s.push_str("</svg>\n");
         s
     }
 }

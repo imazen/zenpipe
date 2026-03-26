@@ -956,8 +956,8 @@ impl PipelineGraph {
                 .edges
                 .iter()
                 .map(|e| crate::trace::DagSnapshotEdge {
-                    from: e.from,
-                    to: e.to,
+                    from: e.from as u32,
+                    to: e.to as u32,
                     kind: match e.kind {
                         EdgeKind::Input => alloc::string::String::from("input"),
                         EdgeKind::Canvas => alloc::string::String::from("canvas"),
