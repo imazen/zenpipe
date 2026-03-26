@@ -424,6 +424,232 @@ impl TraceAppender {
     }
 }
 
+// ─── Tracer (aspect-oriented trace facade) ───
+
+/// Zero-cost trace facade for the graph compiler.
+///
+/// When inactive (`inner: None`), all methods are no-ops with zero allocations.
+/// When active, records nodes, implicit format conversions, and runtime notes
+/// into a shared `PipelineTrace`.
+///
+/// This replaces scattered `#[cfg(feature = "std")]` blocks and `if let Some(trace)`
+/// checks throughout graph compilation. The compiler sees through the `is_none()`
+/// early returns and eliminates dead code.
+#[cfg(feature = "std")]
+#[derive(Clone)]
+pub struct Tracer {
+    inner: Option<alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>>,
+    timing: bool,
+}
+
+#[cfg(feature = "std")]
+impl Tracer {
+    /// Inactive tracer — all methods are no-ops, zero allocations.
+    pub fn inactive() -> Self {
+        Self {
+            inner: None,
+            timing: false,
+        }
+    }
+
+    /// Active tracer backed by a shared `PipelineTrace`.
+    pub fn active(
+        trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>,
+        timing: bool,
+    ) -> Self {
+        Self {
+            inner: Some(trace),
+            timing,
+        }
+    }
+
+    /// Whether tracing is active.
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.inner.is_some()
+    }
+
+    /// Get a `TraceAppender` for content-adaptive closures. Returns `None` if inactive.
+    pub fn appender(&self) -> Option<TraceAppender> {
+        self.inner.as_ref().map(|t| TraceAppender::new(t.clone()))
+    }
+
+    /// Record a compiled node in the trace.
+    ///
+    /// Called by `compile_node` after `compile_node_inner` returns.
+    /// Only allocates (name string, description, timing arc) when active.
+    /// Returns a `TracingSource`-wrapped source when active, or the source unchanged.
+    pub fn wrap_compiled_node(
+        &self,
+        source: Box<dyn crate::Source>,
+        node_id: usize,
+        op_name: &'static str,
+        op_desc_fn: impl FnOnce() -> String,
+        materializes: bool,
+        upstream: Option<&UpstreamMeta>,
+    ) -> Box<dyn crate::Source> {
+        let Some(trace_arc) = &self.inner else {
+            return source;
+        };
+
+        let (in_fmt, in_w, in_h) = match upstream {
+            Some(meta) => (meta.format, meta.width, meta.height),
+            None => (source.format(), source.width(), source.height()),
+        };
+
+        let timing_arc = if self.timing {
+            Some(alloc::sync::Arc::new(std::sync::Mutex::new(
+                NodeTiming::default(),
+            )))
+        } else {
+            None
+        };
+
+        let trace_order = trace_arc.lock().unwrap().len();
+        let entry = TraceEntry {
+            index: node_id,
+            trace_order,
+            name: alloc::string::String::from(op_name),
+            description: op_desc_fn(), // only called when active
+            implicit: false,
+            implicit_reason: None,
+            input_format: in_fmt,
+            input_width: in_w,
+            input_height: in_h,
+            output_format: source.format(),
+            output_width: source.width(),
+            output_height: source.height(),
+            materializes,
+            notes: Vec::new(),
+            timing: timing_arc.clone(),
+        };
+        trace_arc.lock().unwrap().push(entry.clone());
+        let mut wrapped = crate::sources::TracingSource::new(source, &entry, None);
+        if let Some(timing) = timing_arc {
+            wrapped = wrapped.with_timing(timing);
+        }
+        Box::new(wrapped)
+    }
+
+    /// Insert a format conversion, recording an implicit trace entry when active.
+    ///
+    /// When inactive, equivalent to a plain `ensure_format` — checks if conversion
+    /// is needed and inserts a `RowConverterOp` if so. Zero allocations when inactive.
+    pub fn ensure_format(
+        &self,
+        source: Box<dyn crate::Source>,
+        target: crate::format::PixelFormat,
+        reason: &str,
+    ) -> Result<Box<dyn crate::Source>, crate::error::PipeError> {
+        let current = source.format();
+        if current == target {
+            return Ok(source);
+        }
+
+        let in_w = source.width();
+        let in_h = source.height();
+
+        let op = crate::ops::RowConverterOp::new(current, target).ok_or_else(|| {
+            crate::error::PipeError::Op(alloc::format!(
+                "no conversion path from {current} to {target}"
+            ))
+        })?;
+        let result: Box<dyn crate::Source> =
+            Box::new(crate::sources::TransformSource::new(source).push(op));
+
+        // Record implicit conversion — only allocates when active.
+        if let Some(trace_arc) = &self.inner {
+            let mut trace = trace_arc.lock().unwrap();
+            let trace_order = trace.len();
+            trace.push(TraceEntry {
+                index: usize::MAX,
+                trace_order,
+                name: alloc::string::String::from("ConvertFormat"),
+                description: alloc::format!(
+                    "{} -> {} (for {})",
+                    format_short(&current),
+                    format_short(&target),
+                    reason
+                ),
+                implicit: true,
+                implicit_reason: Some(alloc::format!(
+                    "{reason} requires {}",
+                    format_short(&target)
+                )),
+                input_format: current,
+                input_width: in_w,
+                input_height: in_h,
+                output_format: target,
+                output_width: in_w,
+                output_height: in_h,
+                materializes: false,
+                notes: Vec::new(),
+                timing: None,
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Add a runtime note to the trace (e.g., content-adaptive detection results).
+    ///
+    /// Pushes an implicit entry with the given name and description. No-op when inactive.
+    pub fn note_implicit(
+        &self,
+        name: &str,
+        description: String,
+        reason: &str,
+        input_format: crate::format::PixelFormat,
+        input_w: u32,
+        input_h: u32,
+        output_w: u32,
+        output_h: u32,
+        materializes: bool,
+    ) {
+        let Some(trace_arc) = &self.inner else {
+            return;
+        };
+        let mut trace = trace_arc.lock().unwrap();
+        let trace_order = trace.len();
+        trace.push(TraceEntry {
+            index: usize::MAX,
+            trace_order,
+            name: alloc::string::String::from(name),
+            description,
+            implicit: true,
+            implicit_reason: Some(alloc::string::String::from(reason)),
+            input_format,
+            input_width: input_w,
+            input_height: input_h,
+            output_format: input_format,
+            output_width: output_w,
+            output_height: output_h,
+            materializes,
+            notes: Vec::new(),
+            timing: None,
+        });
+    }
+}
+
+/// Metadata about a node's upstream state, captured before ensure_format.
+pub struct UpstreamMeta {
+    pub format: crate::format::PixelFormat,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl UpstreamMeta {
+    /// Capture from a Source reference.
+    #[inline]
+    pub fn from_source(source: &dyn crate::Source) -> Self {
+        Self {
+            format: source.format(),
+            width: source.width(),
+            height: source.height(),
+        }
+    }
+}
+
 // ─── Collected trace ───
 
 /// Collected pipeline trace data (graph layer).

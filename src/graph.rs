@@ -421,8 +421,12 @@ struct Edge {
 /// Prevents stack overflow from cycles or pathologically deep graphs.
 const MAX_GRAPH_DEPTH: usize = 256;
 
-/// Metadata about a node's upstream state, captured before ensure_format.
-/// Used by the tracing system to record pre-node format/dims.
+// Re-export UpstreamMeta from trace module when std is available.
+#[cfg(feature = "std")]
+use crate::trace::UpstreamMeta;
+
+// Minimal UpstreamMeta for no_std builds.
+#[cfg(not(feature = "std"))]
 struct UpstreamMeta {
     format: PixelFormat,
     width: u32,
@@ -436,12 +440,9 @@ struct UpstreamMeta {
 pub struct PipelineGraph {
     nodes: Vec<GraphNode>,
     edges: Vec<Edge>,
-    /// Active trace state (set during compile_traced).
+    /// Trace facade — inactive by default, zero-cost no-ops.
     #[cfg(feature = "std")]
-    trace: Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>>,
-    /// Whether timing is enabled (from TraceConfig).
-    #[cfg(feature = "std")]
-    trace_timing: bool,
+    tracer: crate::trace::Tracer,
 }
 
 impl PipelineGraph {
@@ -450,9 +451,7 @@ impl PipelineGraph {
             nodes: Vec::new(),
             edges: Vec::new(),
             #[cfg(feature = "std")]
-            trace: None,
-            #[cfg(feature = "std")]
-            trace_timing: false,
+            tracer: crate::trace::Tracer::inactive(),
         }
     }
 
@@ -943,14 +942,8 @@ impl PipelineGraph {
     ) -> Result<(Box<dyn Source>, alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>), PipeError> {
         self.validate()?;
         let trace = alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
-        self.trace = Some(trace.clone());
-        self.trace_timing = config.timing;
 
-        let output_id = self.nodes.iter()
-            .position(|n| matches!(&n.op, Some(NodeOp::Output)))
-            .unwrap();
-
-        // Capture graph edges into the trace before compilation consumes nodes.
+        // Capture graph edges into the trace.
         {
             let edge_traces: Vec<crate::trace::DagSnapshotEdge> = self
                 .edges
@@ -966,6 +959,12 @@ impl PipelineGraph {
                 .collect();
             trace.lock().unwrap().edges = edge_traces;
         }
+
+        self.tracer = crate::trace::Tracer::active(trace.clone(), config.timing);
+
+        let output_id = self.nodes.iter()
+            .position(|n| matches!(&n.op, Some(NodeOp::Output)))
+            .unwrap();
 
         let source = self.compile_node(output_id, &mut sources, 0)?;
         Ok((source, trace))
@@ -1003,65 +1002,36 @@ impl PipelineGraph {
         sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
         depth: usize,
     ) -> Result<Box<dyn Source>, PipeError> {
-        // Capture node metadata for tracing before the op is consumed.
+        // Capture op metadata before it's consumed — only when tracer is active.
+        // Description is computed eagerly here (before take_op consumes it),
+        // but only when tracing is on — zero alloc when inactive.
         #[cfg(feature = "std")]
-        let trace_meta = self.peek_op(node_id).map(|op| {
-            (
-                crate::trace::node_op_name(op),
-                crate::trace::node_op_description(op),
-                crate::trace::node_op_materializes(op),
-            )
-        });
+        let trace_meta = if self.tracer.is_active() {
+            self.peek_op(node_id).map(|op| {
+                (
+                    crate::trace::node_op_name(op),
+                    crate::trace::node_op_description(op),
+                    crate::trace::node_op_materializes(op),
+                )
+            })
+        } else {
+            None
+        };
 
         let result = self.compile_node_inner(node_id, sources, depth);
 
-        // Wrap with TracingSource if tracing is active.
         #[cfg(feature = "std")]
         if let Ok((source, upstream_meta)) = result {
-            if let (Some(trace_arc), Some((name, description, materializes))) =
-                (&self.trace, trace_meta)
-            {
-                // Use upstream metadata for input fields (pre-node state).
-                // Use compiled source for output fields (post-node state).
-                let (in_fmt, in_w, in_h) = match upstream_meta {
-                    Some(meta) => (meta.format, meta.width, meta.height),
-                    // Source/Output nodes have no upstream — use output as input
-                    None => (source.format(), source.width(), source.height()),
-                };
-
-                // Create shared timing handle if timing is enabled.
-                let timing = if self.trace_timing {
-                    Some(alloc::sync::Arc::new(std::sync::Mutex::new(
-                        crate::trace::NodeTiming::default(),
-                    )))
-                } else {
-                    None
-                };
-
-                let trace_order = trace_arc.lock().unwrap().len();
-                let entry = crate::trace::TraceEntry {
-                    index: node_id,
-                    trace_order,
-                    name: alloc::string::String::from(name),
-                    description,
-                    implicit: false,
-                    implicit_reason: None,
-                    input_format: in_fmt,
-                    input_width: in_w,
-                    input_height: in_h,
-                    output_format: source.format(),
-                    output_width: source.width(),
-                    output_height: source.height(),
+            if let Some((name, description, materializes)) = trace_meta {
+                let source = self.tracer.wrap_compiled_node(
+                    source,
+                    node_id,
+                    name,
+                    || description,
                     materializes,
-                    notes: Vec::new(),
-                    timing: timing.clone(),
-                };
-                trace_arc.lock().unwrap().push(entry.clone());
-                let mut wrapped = crate::sources::TracingSource::new(source, &entry, None);
-                if let Some(timing) = timing {
-                    wrapped = wrapped.with_timing(timing);
-                }
-                return Ok(Box::new(wrapped));
+                    upstream_meta.as_ref(),
+                );
+                return Ok(source);
             }
             return Ok(source);
         }
@@ -1086,28 +1056,29 @@ impl PipelineGraph {
         }
         let op = self.take_op(node_id)?;
 
-        // Clone trace context to avoid borrow conflicts with &mut self.
+        // Clone tracer to avoid borrow conflicts with &mut self.
         #[cfg(feature = "std")]
-        let trace_ctx = self.trace.clone();
+        let tracer = self.tracer.clone();
 
         /// Capture upstream metadata before any ensure_format.
         macro_rules! capture_meta {
             ($source:expr) => {{
-                let s: &dyn Source = $source.as_ref();
-                UpstreamMeta {
-                    format: s.format(),
-                    width: s.width(),
-                    height: s.height(),
+                #[cfg(feature = "std")]
+                { Some(UpstreamMeta::from_source($source.as_ref())) }
+                #[cfg(not(feature = "std"))]
+                {
+                    let s: &dyn Source = $source.as_ref();
+                    Some(UpstreamMeta { format: s.format(), width: s.width(), height: s.height() })
                 }
             }};
         }
 
-        /// Call ensure_format, recording implicit entries in trace when active.
+        /// Call ensure_format through the tracer (no-op recording when inactive).
         macro_rules! ensure_fmt {
             ($source:expr, $target:expr, $reason:expr) => {{
                 #[cfg(feature = "std")]
                 {
-                    ensure_format_traced($source, $target, &trace_ctx, $reason)
+                    tracer.ensure_format($source, $target, $reason)
                 }
                 #[cfg(not(feature = "std"))]
                 {
@@ -1128,7 +1099,7 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                Ok((upstream, Some(meta)))
+                Ok((upstream, meta))
             }
 
             NodeOp::Layout { plan, filter } => {
@@ -1160,7 +1131,7 @@ impl PipelineGraph {
                     }
                 }
 
-                Ok((source, Some(meta)))
+                Ok((source, meta))
             }
 
             NodeOp::LayoutComposite { mut plan, filter } => {
@@ -1189,14 +1160,14 @@ impl PipelineGraph {
                 let fg = ensure_fmt!(fg, format::RGBAF32_LINEAR_PREMUL, "LayoutComposite")?;
                 let bg = ensure_fmt!(bg, format::RGBAF32_LINEAR_PREMUL, "LayoutComposite")?;
 
-                Ok((Box::new(CompositeSource::over_at(bg, fg, 0, 0)?), Some(meta)))
+                Ok((Box::new(CompositeSource::over_at(bg, fg, 0, 0)?), meta))
             }
 
             NodeOp::Crop { x, y, w, h } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                Ok((Box::new(CropSource::new(upstream, x, y, w, h)?), Some(meta)))
+                Ok((Box::new(CropSource::new(upstream, x, y, w, h)?), meta))
             }
 
             NodeOp::Resize {
@@ -1218,7 +1189,7 @@ impl PipelineGraph {
                     builder = builder.resize_sharpen(pct);
                 }
                 let config = builder.build();
-                Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), Some(meta)))
+                Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), meta))
             }
 
             NodeOp::Constrain {
@@ -1269,7 +1240,7 @@ impl PipelineGraph {
                     }
                 }
 
-                Ok((source, Some(meta)))
+                Ok((source, meta))
             }
 
             NodeOp::ResizeAdvanced(mut config) => {
@@ -1279,19 +1250,19 @@ impl PipelineGraph {
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "ResizeAdvanced")?;
                 config.in_width = upstream.width();
                 config.in_height = upstream.height();
-                Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), Some(meta)))
+                Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), meta))
             }
 
             NodeOp::Orient(orientation) => {
                 compile_orient(self, node_id, sources, orientation, depth,
-                    #[cfg(feature = "std")] &trace_ctx)
+                    #[cfg(feature = "std")] &tracer)
             }
 
             NodeOp::AutoOrient(exif) => {
                 let orientation = zenresize::Orientation::from_exif(exif)
                     .unwrap_or(zenresize::Orientation::Identity);
                 compile_orient(self, node_id, sources, orientation, depth,
-                    #[cfg(feature = "std")] &trace_ctx)
+                    #[cfg(feature = "std")] &tracer)
             }
 
             NodeOp::PixelTransform(pixel_op) => {
@@ -1304,7 +1275,7 @@ impl PipelineGraph {
                 for op in ops {
                     transform = transform.push_boxed(op);
                 }
-                Ok((Box::new(transform), Some(meta)))
+                Ok((Box::new(transform), meta))
             }
 
             NodeOp::Composite {
@@ -1323,7 +1294,7 @@ impl PipelineGraph {
                 if let Some(mode) = blend_mode {
                     comp = comp.with_blend_mode(mode);
                 }
-                Ok((Box::new(comp), Some(meta)))
+                Ok((Box::new(comp), meta))
             }
 
             #[cfg(feature = "std")]
@@ -1376,7 +1347,7 @@ impl PipelineGraph {
                 } else {
                     Box::new(FilterSource::new(upstream, pipeline)?)
                 };
-                Ok((result, Some(meta)))
+                Ok((result, meta))
             }
 
             #[cfg(feature = "std")]
@@ -1391,7 +1362,7 @@ impl PipelineGraph {
                         &dst_icc,
                         &zenpixels_convert::cms_moxcms::MoxCms,
                     )?),
-                    Some(meta),
+                    meta,
                 ))
             }
 
@@ -1411,14 +1382,14 @@ impl PipelineGraph {
                         .ok_or_else(|| {
                         PipeError::Op("no conversion path for alpha removal".to_string())
                     })?;
-                Ok((Box::new(TransformSource::new(upstream).push(op)), Some(meta)))
+                Ok((Box::new(TransformSource::new(upstream).push(op)), meta))
             }
 
             NodeOp::AddAlpha => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                Ok((ensure_fmt!(upstream, format::RGBA8_SRGB, "AddAlpha")?, Some(meta)))
+                Ok((ensure_fmt!(upstream, format::RGBA8_SRGB, "AddAlpha")?, meta))
             }
 
             NodeOp::Overlay {
@@ -1453,7 +1424,7 @@ impl PipelineGraph {
                 if let Some(mode) = blend_mode {
                     comp = comp.with_blend_mode(mode);
                 }
-                Ok((Box::new(comp), Some(meta)))
+                Ok((Box::new(comp), meta))
             }
 
             NodeOp::Analyze(builder) => {
@@ -1463,13 +1434,10 @@ impl PipelineGraph {
                 let mat = MaterializedSource::from_source(upstream)?;
                 #[cfg(feature = "std")]
                 {
-                    let appender = trace_ctx
-                        .as_ref()
-                        .map(|t| crate::trace::TraceAppender::new(t.clone()));
-                    Ok((builder(mat, appender)?, Some(meta)))
+                    Ok((builder(mat, tracer.appender())?, meta))
                 }
                 #[cfg(not(feature = "std"))]
-                Ok((builder(mat)?, Some(meta)))
+                Ok((builder(mat)?, meta))
             }
 
             NodeOp::CropWhitespace {
@@ -1485,10 +1453,10 @@ impl PipelineGraph {
                 let orig_h = mat.height();
                 let (x, y, w, h) = detect_content_bounds(&mat, threshold, percent_padding);
 
-                // Record detection result in trace.
+                // Record detection result in trace — no-op when tracer is inactive.
                 #[cfg(feature = "std")]
-                if let Some(trace_arc) = &trace_ctx {
-                    let note = if w == orig_w && h == orig_h && x == 0 && y == 0 {
+                {
+                    let desc = if w == orig_w && h == orig_h && x == 0 && y == 0 {
                         alloc::format!(
                             "no whitespace detected ({}x{}, threshold={})",
                             orig_w, orig_h, threshold
@@ -1500,31 +1468,17 @@ impl PipelineGraph {
                             x, y, orig_w - w - x, orig_h - h - y
                         )
                     };
-                    // This note will be attached to the CropWhitespace entry
-                    // when compile_node pushes it.
-                    trace_arc.lock().unwrap().push(crate::trace::TraceEntry {
-                        index: usize::MAX,
-                        trace_order: 0,
-                        name: alloc::string::String::from("WhitespaceDetect"),
-                        description: note,
-                        implicit: true,
-                        implicit_reason: Some(alloc::string::String::from("CropWhitespace detection result")),
-                        input_format: format::RGBA8_SRGB,
-                        input_width: orig_w,
-                        input_height: orig_h,
-                        output_format: format::RGBA8_SRGB,
-                        output_width: w,
-                        output_height: h,
-                        materializes: true,
-                        notes: Vec::new(),
-                        timing: None,
-                    });
+                    tracer.note_implicit(
+                        "WhitespaceDetect", desc,
+                        "CropWhitespace detection result",
+                        format::RGBA8_SRGB, orig_w, orig_h, w, h, true,
+                    );
                 }
 
                 if w == orig_w && h == orig_h && x == 0 && y == 0 {
-                    return Ok((Box::new(mat), Some(meta)));
+                    return Ok((Box::new(mat), meta));
                 }
-                Ok((Box::new(CropSource::new(Box::new(mat), x, y, w, h)?), Some(meta)))
+                Ok((Box::new(CropSource::new(Box::new(mat), x, y, w, h)?), meta))
             }
 
             NodeOp::ExpandCanvas {
@@ -1540,7 +1494,7 @@ impl PipelineGraph {
                 Ok((Box::new(ExpandCanvasSource::new(
                     upstream, canvas_w, canvas_h,
                     left as i32, top as i32, bg_color,
-                )), Some(meta)))
+                )), meta))
             }
 
             NodeOp::FillRect {
@@ -1569,7 +1523,7 @@ impl PipelineGraph {
                         }
                     }
                 }
-                Ok((Box::new(mat), Some(meta)))
+                Ok((Box::new(mat), meta))
             }
 
             NodeOp::Materialize(transform_fn) => {
@@ -1579,7 +1533,7 @@ impl PipelineGraph {
                 Ok((Box::new(MaterializedSource::from_source_with_transform(
                     upstream,
                     transform_fn,
-                )?), Some(meta)))
+                )?), meta))
             }
         }
     }
@@ -1623,20 +1577,20 @@ fn compile_orient(
     orientation: zenresize::Orientation,
     depth: usize,
     #[cfg(feature = "std")]
-    trace_ctx: &Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>>,
-) -> Result<(Box<dyn Source>, Option<UpstreamMeta>), PipeError> {
+    tracer: &crate::trace::Tracer,
+) -> Result<(Box<dyn Source>, Option<crate::trace::UpstreamMeta>), PipeError> {
     let input_id = graph.find_input(node_id, EdgeKind::Input)?;
     let upstream = graph.compile_node(input_id, sources, depth + 1)?;
-    let meta = UpstreamMeta {
-        format: upstream.format(),
-        width: upstream.width(),
-        height: upstream.height(),
-    };
+    #[cfg(feature = "std")]
+    let meta = Some(crate::trace::UpstreamMeta::from_source(upstream.as_ref()));
+    #[cfg(not(feature = "std"))]
+    let meta = None;
+
     if orientation.is_identity() {
-        return Ok((upstream, Some(meta)));
+        return Ok((upstream, meta));
     }
     #[cfg(feature = "std")]
-    let upstream = ensure_format_traced(upstream, format::RGBA8_SRGB, trace_ctx, "Orient")?;
+    let upstream = tracer.ensure_format(upstream, format::RGBA8_SRGB, "Orient")?;
     #[cfg(not(feature = "std"))]
     let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
 
@@ -1650,7 +1604,7 @@ fn compile_orient(
             *w = new_w;
             *h = new_h;
         },
-    )?), Some(meta)))
+    )?), meta))
 }
 
 /// Insert a format conversion source if needed (no-std path).
@@ -1671,59 +1625,7 @@ fn ensure_format(
     Ok(Box::new(TransformSource::new(source).push(op)))
 }
 
-/// Insert a format conversion source, recording an implicit trace entry when active.
-#[cfg(feature = "std")]
-fn ensure_format_traced(
-    source: Box<dyn Source>,
-    target: PixelFormat,
-    trace: &Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>>,
-    reason: &str,
-) -> Result<Box<dyn Source>, PipeError> {
-    let current = source.format();
-    if current == target {
-        return Ok(source);
-    }
-
-    let in_w = source.width();
-    let in_h = source.height();
-
-    let op = RowConverterOp::new(current, target).ok_or_else(|| {
-        PipeError::Op(alloc::format!(
-            "no conversion path from {current} to {target}"
-        ))
-    })?;
-    let result: Box<dyn Source> = Box::new(TransformSource::new(source).push(op));
-
-    // Record implicit conversion in trace.
-    if let Some(trace_arc) = trace {
-        let mut trace = trace_arc.lock().unwrap();
-        let trace_order = trace.len();
-        trace.push(crate::trace::TraceEntry {
-            index: usize::MAX,
-            trace_order,
-            name: alloc::string::String::from("ConvertFormat"),
-            description: alloc::format!(
-                "{} -> {} (for {})",
-                crate::trace::format_short(&current),
-                crate::trace::format_short(&target),
-                reason
-            ),
-            implicit: true,
-            implicit_reason: Some(alloc::format!("{reason} requires {}", crate::trace::format_short(&target))),
-            input_format: current,
-            input_width: in_w,
-            input_height: in_h,
-            output_format: target,
-            output_width: in_w,
-            output_height: in_h,
-            materializes: false,
-            notes: Vec::new(),
-            timing: None,
-        });
-    }
-
-    Ok(result)
-}
+// ensure_format_traced is now Tracer::ensure_format — see trace.rs
 
 // =============================================================================
 // Estimation helper
