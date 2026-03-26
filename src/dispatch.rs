@@ -214,6 +214,9 @@ where
 /// [`adapt_for_encode`]: zenpixels_convert::adapt::adapt_for_encode
 pub struct StreamingEncoder {
     /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
+    ///
+    /// `DynEncoder: Send`, so `Box<dyn DynEncoder>` is `Send` and can be
+    /// moved across thread boundaries (e.g., into a pipeline sink).
     pub encoder: Box<dyn zencodec::encode::DynEncoder>,
     /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
     /// Pass to `adapt_for_encode` to pick the cheapest conversion.
