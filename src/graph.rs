@@ -424,6 +424,9 @@ pub struct PipelineGraph {
     /// Active trace state (set during compile_traced).
     #[cfg(feature = "std")]
     trace: Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>>,
+    /// Whether timing is enabled (from TraceConfig).
+    #[cfg(feature = "std")]
+    trace_timing: bool,
 }
 
 impl PipelineGraph {
@@ -433,6 +436,8 @@ impl PipelineGraph {
             edges: Vec::new(),
             #[cfg(feature = "std")]
             trace: None,
+            #[cfg(feature = "std")]
+            trace_timing: false,
         }
     }
 
@@ -919,11 +924,12 @@ impl PipelineGraph {
     pub fn compile_traced(
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
-        _config: &crate::trace::TraceConfig,
+        config: &crate::trace::TraceConfig,
     ) -> Result<(Box<dyn Source>, alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>), PipeError> {
         self.validate()?;
         let trace = alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
         self.trace = Some(trace.clone());
+        self.trace_timing = config.timing;
 
         let output_id = self.nodes.iter()
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
@@ -991,6 +997,15 @@ impl PipelineGraph {
                     None => (source.format(), source.width(), source.height()),
                 };
 
+                // Create shared timing handle if timing is enabled.
+                let timing = if self.trace_timing {
+                    Some(alloc::sync::Arc::new(std::sync::Mutex::new(
+                        crate::trace::NodeTiming::default(),
+                    )))
+                } else {
+                    None
+                };
+
                 let trace_order = trace_arc.lock().unwrap().len();
                 let entry = crate::trace::TraceEntry {
                     index: node_id,
@@ -1006,10 +1021,13 @@ impl PipelineGraph {
                     output_width: source.width(),
                     output_height: source.height(),
                     materializes,
-                    timing: None,
+                    timing: timing.clone(),
                 };
                 trace_arc.lock().unwrap().push(entry.clone());
-                let wrapped = crate::sources::TracingSource::new(source, &entry, None);
+                let mut wrapped = crate::sources::TracingSource::new(source, &entry, None);
+                if let Some(timing) = timing {
+                    wrapped = wrapped.with_timing(timing);
+                }
                 return Ok(Box::new(wrapped));
             }
             return Ok(source);
