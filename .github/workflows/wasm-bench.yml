@@ -29,24 +29,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ZEN_REPOS_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          # Public repos — always available
-          for repo in zenresize zencodec zenpng zenwebp zengif zenjxl \
-                      zenpixels archmage zenjxl-decoder zenjpeg jxl-encoder; do
-            echo "::group::Clone $repo"
-            gh repo clone "imazen/$repo" "$repo" -- --depth=1 --single-branch
-            echo "::endgroup::"
+          # All repos needed by the transitive path dep graph.
+          # Public repos clone with GITHUB_TOKEN; private repos need ZEN_REPOS_PAT.
+          public=(
+            zenresize zencodec zenpng zenwebp zengif zenjxl zenpixels
+            archmage zenjxl-decoder zenjpeg jxl-encoder zenquant
+            zenlayout zentiff zenbitmaps zenavif zenraw zencodecs
+            zensim ultrahdr zennode
+          )
+          private=(zenblend zenfilters)
+
+          for repo in "${public[@]}"; do
+            gh repo clone "imazen/$repo" "$repo" -- --depth=1 -q 2>/dev/null \
+              || echo "::warning::Failed to clone $repo"
           done
 
-          # Private repos — need ZEN_REPOS_PAT
-          for repo in zenblend zenfilters; do
-            echo "::group::Clone $repo (private)"
-            gh repo clone "imazen/$repo" "$repo" -- --depth=1 --single-branch \
+          for repo in "${private[@]}"; do
+            gh repo clone "imazen/$repo" "$repo" -- --depth=1 -q 2>/dev/null \
               || echo "::warning::Failed to clone private repo $repo — set ZEN_REPOS_PAT secret"
-            echo "::endgroup::"
           done
 
-          echo "Directory layout:"
           ls -d */
 
       - uses: dtolnay/rust-toolchain@stable
