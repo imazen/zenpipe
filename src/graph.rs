@@ -334,11 +334,18 @@ pub enum NodeOp {
     // === Content-adaptive (materialize + analyze) ===
     /// Analyze materialized pixels, then build a downstream source chain.
     ///
-    /// The closure receives the fully materialized upstream image and must
-    /// return a [`Source`] to continue the pipeline. This is the low-level
-    /// primitive for content-adaptive operations — face detection, image
-    /// classification, or any analysis that needs full-frame pixel access
-    /// before deciding what operations to apply.
+    /// The closure receives the fully materialized upstream image and a
+    /// mutable reference to [`AnalysisOutputs`] where it can store
+    /// structured results (face detections, saliency scores, classification
+    /// labels) for the caller to retrieve after pipeline execution.
+    ///
+    /// ```ignore
+    /// NodeOp::Analyze(Box::new(|mat, outputs| {
+    ///     let faces = detect_faces(&mat);
+    ///     outputs.insert("faces", faces);
+    ///     Ok(Box::new(mat)) // pass pixels through unchanged
+    /// }))
+    /// ```
     ///
     /// Not representable in JSON — use named variants like [`CropWhitespace`]
     /// for declarative pipelines.
@@ -352,6 +359,10 @@ pub enum NodeOp {
     /// Materializes the upstream image, scans inward from each edge to find
     /// where pixel values diverge from the border color by more than
     /// `threshold`, then crops to the content bounds plus `percent_padding`.
+    ///
+    /// Writes a [`CropWhitespaceResult`] to [`AnalysisOutputs`] under key
+    /// `"crop_whitespace"` with the detected content bounds, regardless of
+    /// whether any trimming occurred.
     ///
     /// During [`estimate()`](PipelineGraph::estimate), treated as worst-case
     /// no-op (dimensions unchanged — actual crop can only be smaller).
@@ -398,6 +409,40 @@ pub enum NodeOp {
 
     /// Terminal output node. `compile()` returns the Source feeding this node.
     Output,
+}
+
+// ─── Analysis output types ───
+
+/// Result of whitespace detection, stored in [`AnalysisOutputs`] under key
+/// `"crop_whitespace"`.
+///
+/// Always written by [`CropWhitespace`](NodeOp::CropWhitespace), even when
+/// no trimming occurs (`trimmed == false`). Retrieve after pipeline execution:
+///
+/// ```ignore
+/// if let Some(crop) = result.outputs.get::<CropWhitespaceResult>("crop_whitespace") {
+///     println!("content at ({}, {}), {}x{}", crop.content_x, crop.content_y,
+///              crop.content_width, crop.content_height);
+/// }
+/// ```
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CropWhitespaceResult {
+    /// Source image width before trimming.
+    pub source_width: u32,
+    /// Source image height before trimming.
+    pub source_height: u32,
+    /// X offset of detected content bounds.
+    pub content_x: u32,
+    /// Y offset of detected content bounds.
+    pub content_y: u32,
+    /// Width of detected content bounds.
+    pub content_width: u32,
+    /// Height of detected content bounds.
+    pub content_height: u32,
+    /// Whether any trimming was applied. `false` means the entire image
+    /// was content (or entirely uniform).
+    pub trimmed: bool,
 }
 
 struct GraphNode {
@@ -1294,8 +1339,22 @@ impl PipelineGraph {
                 let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let mat = MaterializedSource::from_source(upstream)?;
+                let source_w = mat.width();
+                let source_h = mat.height();
                 let (x, y, w, h) = detect_content_bounds(&mat, threshold, percent_padding);
-                if w == mat.width() && h == mat.height() && x == 0 && y == 0 {
+                outputs.insert(
+                    "crop_whitespace",
+                    CropWhitespaceResult {
+                        source_width: source_w,
+                        source_height: source_h,
+                        content_x: x,
+                        content_y: y,
+                        content_width: w,
+                        content_height: h,
+                        trimmed: !(w == source_w && h == source_h && x == 0 && y == 0),
+                    },
+                );
+                if w == source_w && h == source_h && x == 0 && y == 0 {
                     // No whitespace found — pass through without re-cropping.
                     return Ok(Box::new(mat));
                 }

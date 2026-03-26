@@ -948,10 +948,23 @@ fn graph_crop_whitespace_removes_border() {
     let mut sources = HashMap::new();
     sources.insert(src_node, src as Box<dyn Source>);
 
-    let mut pipeline = g.compile(sources).unwrap();
+    let mut outputs = zenpipe::AnalysisOutputs::new();
+    let mut pipeline = g.compile_with_outputs(sources, &mut outputs).unwrap();
     // Should crop down to 4x4
     assert_eq!(pipeline.width(), 4, "width should be cropped");
     assert_eq!(pipeline.height(), 4, "height should be cropped");
+
+    // Verify analysis output
+    let crop_result = outputs
+        .get::<zenpipe::CropWhitespaceResult>("crop_whitespace")
+        .expect("crop_whitespace output should be present");
+    assert_eq!(crop_result.source_width, 8);
+    assert_eq!(crop_result.source_height, 8);
+    assert_eq!(crop_result.content_x, 2);
+    assert_eq!(crop_result.content_y, 2);
+    assert_eq!(crop_result.content_width, 4);
+    assert_eq!(crop_result.content_height, 4);
+    assert!(crop_result.trimmed);
 
     let out_data = drain(pipeline.as_mut());
     // All pixels should be red
@@ -978,10 +991,19 @@ fn graph_crop_whitespace_uniform_image_noop() {
     let mut sources = HashMap::new();
     sources.insert(src_node, solid_source(8, 8, [255, 255, 255, 255]));
 
-    let pipeline = g.compile(sources).unwrap();
+    let mut outputs = zenpipe::AnalysisOutputs::new();
+    let pipeline = g.compile_with_outputs(sources, &mut outputs).unwrap();
     // Uniform image: no content found, should return full dimensions
     assert_eq!(pipeline.width(), 8);
     assert_eq!(pipeline.height(), 8);
+
+    // Verify analysis output — should report no trimming
+    let crop_result = outputs
+        .get::<zenpipe::CropWhitespaceResult>("crop_whitespace")
+        .expect("crop_whitespace output should be present");
+    assert!(!crop_result.trimmed);
+    assert_eq!(crop_result.content_width, 8);
+    assert_eq!(crop_result.content_height, 8);
 }
 
 // =============================================================================
@@ -1041,6 +1063,36 @@ fn graph_analyze_modifies_pipeline() {
     // Pixel (0,0) should be original (1,1)
     assert_eq!(data[0], 1);
     assert_eq!(data[1], 1);
+}
+
+#[test]
+fn graph_analyze_writes_to_outputs() {
+    // Verify that an Analyze node can write structured data to AnalysisOutputs
+    let mut g = PipelineGraph::new();
+    let src_node = g.add_node(NodeOp::Source);
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, outputs| {
+        let avg_brightness = {
+            let data = mat.data();
+            let pixel_count = (mat.width() * mat.height()) as usize;
+            let sum: u64 = data.chunks_exact(4).map(|px| px[0] as u64).sum();
+            sum as f64 / pixel_count as f64
+        };
+        outputs.insert("brightness", avg_brightness);
+        Ok(Box::new(mat) as Box<dyn Source>)
+    })));
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src_node, analyze, EdgeKind::Input);
+    g.add_edge(analyze, out, EdgeKind::Input);
+
+    let mut sources = HashMap::new();
+    sources.insert(src_node, solid_source(4, 4, [128, 128, 128, 255]));
+
+    let mut outputs = zenpipe::AnalysisOutputs::new();
+    let pipeline = g.compile_with_outputs(sources, &mut outputs).unwrap();
+    assert_eq!(pipeline.width(), 4);
+
+    let brightness = outputs.get::<f64>("brightness").expect("brightness output");
+    assert!((brightness - 128.0).abs() < 0.01);
 }
 
 // =============================================================================

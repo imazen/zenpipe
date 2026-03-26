@@ -8,6 +8,32 @@
 //! upstream source, transforms them, and yields output strips. Only the
 //! rows needed by the current kernel window are buffered.
 //!
+//! # Analysis outputs
+//!
+//! Pipeline nodes can produce structured data alongside pixel strips via
+//! [`AnalysisOutputs`]. Content-adaptive nodes like
+//! [`CropWhitespace`](graph::NodeOp::CropWhitespace) write their results
+//! automatically. Custom [`Analyze`](graph::NodeOp::Analyze) nodes receive
+//! `&mut AnalysisOutputs` and can store arbitrary typed data (face
+//! detections, saliency scores, classification labels).
+//!
+//! Results are returned in [`ProcessedImage::outputs`](orchestrate::ProcessedImage)
+//! / [`StreamingOutput::outputs`](orchestrate::StreamingOutput) and can be
+//! retrieved by key:
+//!
+//! ```ignore
+//! let result = zenpipe::process(source, &config)?;
+//! if let Some(crop) = result.outputs.get::<CropWhitespaceResult>("crop_whitespace") {
+//!     println!("trimmed: {}", crop.trimmed);
+//! }
+//! ```
+//!
+//! # Feature: `serde`
+//!
+//! Enables the [`job_info`] module with [`JobResultInfo`](job_info::JobResultInfo)
+//! — a JSON-friendly summary of pipeline results (dimensions, format, config,
+//! metadata, analysis keys) without pixel data.
+//!
 //! # Feature: `std` (default)
 //!
 //! Enables zenfilters (photo filters) and moxcms (ICC color management).
@@ -58,7 +84,7 @@ pub mod sidecar;
 pub use analysis::AnalysisOutputs;
 pub use error::PipeError;
 pub use format::PixelFormat;
-pub use graph::{ResourceEstimate, SourceInfo};
+pub use graph::{CropWhitespaceResult, ResourceEstimate, SourceInfo};
 pub use limits::Limits;
 pub use strip::{Strip, StripBuf};
 
