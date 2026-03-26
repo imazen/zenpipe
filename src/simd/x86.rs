@@ -70,7 +70,7 @@ fn power_contrast_plane_simd(token: X64V3Token, plane: &mut [f32], exp: f32, sca
     }
     for v in tail {
         if *v > 0.0 {
-            *v = crate::fast_math::fast_powf(*v, exp) * scale;
+            *v = v.powf(exp) * scale;
         }
     }
 }
@@ -127,7 +127,7 @@ fn sigmoid_tone_map_plane_simd(token: X64V3Token, plane: &mut [f32], contrast: f
         } else if x >= 1.0 {
             1.0
         } else {
-            let ratio = crate::fast_math::fast_powf((1.0 - x) / x, contrast);
+            let ratio = ((1.0 - x) / x).powf(contrast);
             1.0 / (1.0 + ratio)
         };
     }
@@ -952,7 +952,7 @@ fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, p
         let bv = *b_val;
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = crate::fast_math::fast_powf(1.0 - normalized, protection);
+        let pf = (1.0 - normalized).powf(protection);
         let scale = 1.0 + amount * pf;
         *a_val = av * scale;
         *b_val = bv * scale;
@@ -1059,7 +1059,7 @@ fn fused_adjust_l_rite(
         lv = ((lv - bp) * inv_range).max(0.0);
         lv *= wp_exp;
         if lv > 0.0 {
-            lv = crate::fast_math::fast_powf(lv, contrast_exp) * contrast_scale;
+            lv = lv.powf(contrast_exp) * contrast_scale;
         }
         let sm = (1.0 - lv * 2.0).max(0.0);
         lv += sm * sm * shadows * 0.5;
@@ -1131,7 +1131,7 @@ fn fused_adjust_ab_rite(
         bv *= sat;
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = crate::fast_math::fast_powf(1.0 - normalized, vib_protection);
+        let pf = (1.0 - normalized).powf(vib_protection);
         let scale = 1.0 + vib_amount * pf;
         *a_val = av * scale;
         *b_val = bv * scale;
@@ -1610,7 +1610,7 @@ fn fused_interleaved_adjust_rite(
         ok_l = ((ok_l - bp) * inv_range).max(0.0);
         ok_l *= wp_exp;
         if ok_l > 0.0 {
-            ok_l = crate::fast_math::fast_powf(ok_l, contrast_exp) * contrast_scale;
+            ok_l = ok_l.powf(contrast_exp) * contrast_scale;
         }
         let sm = (1.0 - ok_l * 2.0).max(0.0);
         ok_l += sm * sm * shadows * 0.5;
@@ -1626,7 +1626,7 @@ fn fused_interleaved_adjust_rite(
         ok_a *= sat;
         ok_b *= sat;
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
-        let pf = crate::fast_math::fast_powf(1.0 - (chroma / 0.4).min(1.0), vib_protection);
+        let pf = (1.0 - (chroma / 0.4).min(1.0)).powf(vib_protection);
         let vib_scale = 1.0 + vib_amount * pf;
         ok_a *= vib_scale;
         ok_b *= vib_scale;
