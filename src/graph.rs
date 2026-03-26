@@ -68,6 +68,21 @@ pub type MaterializeTransform =
 /// Used by [`NodeOp::Analyze`] for content-adaptive operations (e.g., face
 /// detection, image classification) that need full-frame pixel access to
 /// decide what downstream operations to apply.
+///
+/// The optional [`TraceAppender`](crate::trace::TraceAppender) allows the
+/// closure to record internal decisions and sub-chain nodes in the trace.
+/// When tracing is disabled, the appender is `None`.
+#[cfg(feature = "std")]
+pub type AnalyzeBuilder = Box<
+    dyn FnOnce(
+            MaterializedSource,
+            Option<crate::trace::TraceAppender>,
+        ) -> Result<Box<dyn Source>, PipeError>
+        + Send,
+>;
+
+/// A closure that analyzes a materialized buffer and returns a new source chain (no-std).
+#[cfg(not(feature = "std"))]
 pub type AnalyzeBuilder =
     Box<dyn FnOnce(MaterializedSource) -> Result<Box<dyn Source>, PipeError> + Send>;
 
@@ -1021,6 +1036,7 @@ impl PipelineGraph {
                     output_width: source.width(),
                     output_height: source.height(),
                     materializes,
+                    notes: Vec::new(),
                     timing: timing.clone(),
                 };
                 trace_arc.lock().unwrap().push(entry.clone());
@@ -1428,6 +1444,14 @@ impl PipelineGraph {
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
                 let mat = MaterializedSource::from_source(upstream)?;
+                #[cfg(feature = "std")]
+                {
+                    let appender = trace_ctx
+                        .as_ref()
+                        .map(|t| crate::trace::TraceAppender::new(t.clone()));
+                    Ok((builder(mat, appender)?, Some(meta)))
+                }
+                #[cfg(not(feature = "std"))]
                 Ok((builder(mat)?, Some(meta)))
             }
 
@@ -1440,8 +1464,47 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "CropWhitespace")?;
                 let mat = MaterializedSource::from_source(upstream)?;
+                let orig_w = mat.width();
+                let orig_h = mat.height();
                 let (x, y, w, h) = detect_content_bounds(&mat, threshold, percent_padding);
-                if w == mat.width() && h == mat.height() && x == 0 && y == 0 {
+
+                // Record detection result in trace.
+                #[cfg(feature = "std")]
+                if let Some(trace_arc) = &trace_ctx {
+                    let note = if w == orig_w && h == orig_h && x == 0 && y == 0 {
+                        alloc::format!(
+                            "no whitespace detected ({}x{}, threshold={})",
+                            orig_w, orig_h, threshold
+                        )
+                    } else {
+                        alloc::format!(
+                            "detected content at ({},{}) {}x{} from {}x{} (borders: L={} T={} R={} B={})",
+                            x, y, w, h, orig_w, orig_h,
+                            x, y, orig_w - w - x, orig_h - h - y
+                        )
+                    };
+                    // This note will be attached to the CropWhitespace entry
+                    // when compile_node pushes it.
+                    trace_arc.lock().unwrap().push(crate::trace::TraceEntry {
+                        index: usize::MAX,
+                        trace_order: 0,
+                        name: alloc::string::String::from("WhitespaceDetect"),
+                        description: note,
+                        implicit: true,
+                        implicit_reason: Some(alloc::string::String::from("CropWhitespace detection result")),
+                        input_format: format::RGBA8_SRGB,
+                        input_width: orig_w,
+                        input_height: orig_h,
+                        output_format: format::RGBA8_SRGB,
+                        output_width: w,
+                        output_height: h,
+                        materializes: true,
+                        notes: Vec::new(),
+                        timing: None,
+                    });
+                }
+
+                if w == orig_w && h == orig_h && x == 0 && y == 0 {
                     return Ok((Box::new(mat), Some(meta)));
                 }
                 Ok((Box::new(CropSource::new(Box::new(mat), x, y, w, h)?), Some(meta)))
@@ -1637,6 +1700,7 @@ fn ensure_format_traced(
             output_width: in_w,
             output_height: in_h,
             materializes: false,
+            notes: Vec::new(),
             timing: None,
         });
     }

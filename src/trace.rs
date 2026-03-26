@@ -223,6 +223,10 @@ pub struct TraceEntry {
     /// Whether this node materializes (full-frame buffer).
     pub materializes: bool,
 
+    /// Runtime notes — content-adaptive decisions, detection results, etc.
+    /// Populated during compilation for nodes like CropWhitespace, Analyze.
+    pub notes: Vec<String>,
+
     /// Execution timing (populated after pipeline drains).
     #[cfg(feature = "std")]
     pub timing: Option<alloc::sync::Arc<std::sync::Mutex<NodeTiming>>>,
@@ -271,6 +275,75 @@ pub struct ExecutionTrace {
     pub total_duration: std::time::Duration,
     /// Total strips produced.
     pub total_strips: u32,
+}
+
+// ─── Trace appender (for runtime annotations) ───
+
+/// Lightweight handle for pushing trace entries and notes during compilation.
+///
+/// Passed to content-adaptive closures (e.g., `AnalyzeBuilder`) so they can
+/// record internal decisions and sub-chains. Cloneable and `Send` — safe to
+/// move into closures.
+#[cfg(feature = "std")]
+#[derive(Clone)]
+pub struct TraceAppender {
+    trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>,
+}
+
+#[cfg(feature = "std")]
+impl TraceAppender {
+    /// Create from a shared trace.
+    pub fn new(trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>) -> Self {
+        Self { trace }
+    }
+
+    /// Push a trace entry for a runtime-created node.
+    pub fn push_entry(&self, mut entry: TraceEntry) {
+        let mut t = self.trace.lock().unwrap();
+        entry.trace_order = t.len();
+        t.push(entry);
+    }
+
+    /// Add a note to the most recent trace entry.
+    ///
+    /// Used by content-adaptive nodes to record detection results
+    /// (e.g., "detected 10px border left, reference=#FFFFFF").
+    pub fn add_note(&self, note: String) {
+        let mut t = self.trace.lock().unwrap();
+        if let Some(last) = t.entries.last_mut() {
+            last.notes.push(note);
+        }
+    }
+
+    /// Push a sub-chain entry (implicit, with the given name and reason).
+    pub fn push_sub_node(
+        &self,
+        name: &str,
+        description: String,
+        source: &dyn crate::Source,
+    ) {
+        let fmt = source.format();
+        let w = source.width();
+        let h = source.height();
+        self.push_entry(TraceEntry {
+            index: usize::MAX,
+            trace_order: 0, // assigned by push_entry
+            name: alloc::string::String::from(name),
+            description,
+            implicit: true,
+            implicit_reason: Some(alloc::string::String::from("Analyze sub-chain")),
+            input_format: fmt,
+            input_width: w,
+            input_height: h,
+            output_format: fmt,
+            output_width: w,
+            output_height: h,
+            materializes: false,
+            notes: Vec::new(),
+            #[cfg(feature = "std")]
+            timing: None,
+        });
+    }
 }
 
 // ─── Collected trace ───
@@ -378,6 +451,11 @@ impl PipelineTrace {
                 "[{prefix}{:2}] {:<20} {:>20}  {}{}{}\n",
                 e.trace_order, e.name, dims, fmt, flags, desc
             ));
+
+            // Show runtime notes indented below the entry.
+            for note in &e.notes {
+                out.push_str(&format!("        note: {note}\n"));
+            }
         }
 
         out.push_str(&"=".repeat(90));
