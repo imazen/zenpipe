@@ -516,19 +516,25 @@ pub struct HslAdjust {
     /// Hue shift per color range in degrees
     #[param(range(-180.0..=180.0), default = 0.0, identity = 0.0, step = 1.0)]
     #[param(unit = "°", section = "Hue", slider = NotSlider)]
-    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    #[param(labels(
+        "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"
+    ))]
     pub hue: [f32; 8],
 
     /// Saturation multiplier per color range
     #[param(range(0.0..=3.0), default = 1.0, identity = 1.0, step = 0.05)]
     #[param(unit = "×", section = "Saturation", slider = NotSlider)]
-    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    #[param(labels(
+        "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"
+    ))]
     pub saturation: [f32; 8],
 
     /// Luminance offset per color range
     #[param(range(-0.5..=0.5), default = 0.0, identity = 0.0, step = 0.01)]
     #[param(section = "Luminance", slider = NotSlider)]
-    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    #[param(labels(
+        "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"
+    ))]
     pub luminance: [f32; 8],
 }
 
@@ -656,7 +662,9 @@ pub struct BwMixer {
     /// Weight per color range (proportional to chroma)
     #[param(range(0.0..=2.0), default = 1.0, identity = 1.0, step = 0.05)]
     #[param(unit = "×", section = "Main", slider = NotSlider)]
-    #[param(labels("Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"))]
+    #[param(labels(
+        "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Magenta"
+    ))]
     pub weights: [f32; 8],
 }
 
@@ -1094,6 +1102,13 @@ pub struct Invert {}
 // ═══════════════════════════════════════════════════════════════════
 
 /// Register all zenfilters nodes with the given registry.
+///
+/// Alias: [`register_all`] (same function, kept for backwards compatibility).
+pub fn register(registry: &mut NodeRegistry) {
+    register_all(registry);
+}
+
+/// Register all zenfilters nodes with the given registry.
 pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(&EXPOSURE_NODE);
     registry.register(&CONTRAST_NODE);
@@ -1132,6 +1147,46 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(&DEHAZE_NODE);
     registry.register(&INVERT_NODE);
 }
+
+/// All zenfilters node definitions.
+pub static ALL: &[&dyn NodeDef] = &[
+    &EXPOSURE_NODE,
+    &CONTRAST_NODE,
+    &BLACK_POINT_NODE,
+    &WHITE_POINT_NODE,
+    &WHITES_BLACKS_NODE,
+    &SIGMOID_NODE,
+    &PARAMETRIC_CURVE_NODE,
+    &TONE_CURVE_NODE,
+    &DT_SIGMOID_NODE,
+    &BASECURVE_TONE_MAP_NODE,
+    &LEVELS_NODE,
+    &HIGHLIGHTS_SHADOWS_NODE,
+    &SHADOW_LIFT_NODE,
+    &HIGHLIGHT_RECOVERY_NODE,
+    &SATURATION_NODE,
+    &VIBRANCE_NODE,
+    &TEMPERATURE_NODE,
+    &TINT_NODE,
+    &HSL_ADJUST_NODE,
+    &COLOR_GRADING_NODE,
+    &CAMERA_CALIBRATION_NODE,
+    &BW_MIXER_NODE,
+    &GRAYSCALE_NODE,
+    &HUE_ROTATE_NODE,
+    &SEPIA_NODE,
+    &CLARITY_NODE,
+    &BRILLIANCE_NODE,
+    &ADAPTIVE_SHARPEN_NODE,
+    &SHARPEN_NODE,
+    &NOISE_REDUCTION_NODE,
+    &TEXTURE_NODE,
+    &VIGNETTE_NODE,
+    &BLOOM_NODE,
+    &GRAIN_NODE,
+    &DEHAZE_NODE,
+    &INVERT_NODE,
+];
 
 // ═══════════════════════════════════════════════════════════════════
 // Tests
@@ -1487,10 +1542,7 @@ mod tests {
             Some(ParamValue::F32(0.4))
         );
 
-        assert!(node.set_param(
-            "preset",
-            ParamValue::Str("nikon_d7000".to_string())
-        ));
+        assert!(node.set_param("preset", ParamValue::Str("nikon_d7000".to_string())));
         assert_eq!(node.preset, "nikon_d7000");
 
         assert!(node.set_param("chroma_compression", ParamValue::F32(0.8)));
