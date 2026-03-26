@@ -146,7 +146,8 @@ pub struct RiapiNodeTrace {
 
 /// Trace of the bridge layer (NodeInstance → PipelineGraph conversion).
 ///
-/// Records node separation, coalescing decisions, and converter selection.
+/// Records node separation, coalescing decisions, converter selection,
+/// and optimization snapshots showing node order at each transformation step.
 #[derive(Clone, Debug, Default)]
 pub struct BridgeTrace {
     /// Input nodes before separation.
@@ -161,6 +162,21 @@ pub struct BridgeTrace {
     pub source_dims: (u32, u32),
     /// Steps after coalescing, with converter info.
     pub steps: Vec<BridgeStepTrace>,
+    /// Snapshots of node order at each optimization pass.
+    ///
+    /// Each snapshot records the node list after a transformation
+    /// (e.g., "after canonical_sort", "after optimize(Speed)").
+    /// Enables diff-style visualization of how nodes were reordered.
+    pub snapshots: Vec<BridgeSnapshot>,
+}
+
+/// A snapshot of the node list at a point in the bridge pipeline.
+#[derive(Clone, Debug)]
+pub struct BridgeSnapshot {
+    /// Label for this snapshot (e.g., "input", "after canonical_sort", "after optimize(Speed)").
+    pub label: String,
+    /// Schema IDs in order at this point.
+    pub nodes: Vec<String>,
 }
 
 /// Info about a node before bridge processing.
@@ -688,6 +704,14 @@ impl FullPipelineTrace {
                 "Pixel nodes: {} total\n",
                 bridge.pixel_nodes.len()
             ));
+
+            // Optimization snapshots (show node reordering timeline).
+            if !bridge.snapshots.is_empty() {
+                out.push_str("Node order timeline:\n");
+                for snap in &bridge.snapshots {
+                    out.push_str(&format!("  {}: [{}]\n", snap.label, snap.nodes.join(" → ")));
+                }
+            }
 
             if !bridge.steps.is_empty() {
                 out.push_str("Steps:\n");

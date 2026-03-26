@@ -294,7 +294,33 @@ fn build_bridge_trace(
         pixel_nodes,
         source_dims: (source_w, source_h),
         steps,
+        snapshots: Vec::new(),
     }
+}
+
+/// Record a snapshot of the current node order in a bridge trace.
+///
+/// Call this before and after optimization passes to track how nodes
+/// were reordered. Example:
+///
+/// ```ignore
+/// record_snapshot(&mut trace, "input", &nodes);
+/// canonical_sort(&mut nodes);
+/// record_snapshot(&mut trace, "after canonical_sort", &nodes);
+/// optimize_node_order(OptimizationLevel::Speed, &mut nodes);
+/// record_snapshot(&mut trace, "after optimize(Speed)", &nodes);
+/// ```
+#[cfg(feature = "std")]
+pub fn record_snapshot(
+    trace: &mut crate::trace::BridgeTrace,
+    label: &str,
+    nodes: &[Box<dyn NodeInstance>],
+) {
+    use alloc::string::ToString;
+    trace.snapshots.push(crate::trace::BridgeSnapshot {
+        label: label.to_string(),
+        nodes: nodes.iter().map(|n| n.schema().id.to_string()).collect(),
+    });
 }
 
 /// Build a streaming pipeline from zennode nodes.
