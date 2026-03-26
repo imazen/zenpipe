@@ -52,8 +52,8 @@ use crate::ops::{PixelOp, RowConverterOp};
 #[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CompositeSource, CropSource, EdgeReplicateSource, MaterializedSource, ResizeSource,
-    TransformSource,
+    CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource,
+    MaterializedSource, ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -354,6 +354,32 @@ pub enum NodeOp {
         /// Padding to add around detected content, as a percentage of the
         /// content dimensions (0.0 = tight crop, 0.05 = 5% padding).
         percent_padding: f32,
+    },
+
+    // === Canvas ===
+    /// Expand the canvas by adding padding around the content.
+    ///
+    /// Streaming — no materialization. Uses [`ExpandCanvasSource`] internally.
+    /// Background color is RGBA [u8; 4].
+    ExpandCanvas {
+        left: u32,
+        top: u32,
+        right: u32,
+        bottom: u32,
+        /// Background color as RGBA bytes.
+        bg_color: [u8; 4],
+    },
+
+    /// Fill a rectangle on the image with a solid color.
+    ///
+    /// Materializes the upstream, draws the rectangle, re-streams.
+    FillRect {
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        /// Fill color as RGBA bytes.
+        color: [u8; 4],
     },
 
     // === Barriers ===
@@ -805,6 +831,27 @@ impl PipelineGraph {
                 })
             }
 
+            NodeOp::ExpandCanvas { left, top, right, bottom, .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                Ok(SourceInfo {
+                    width: upstream.width + left + right,
+                    height: upstream.height + top + bottom,
+                    format: upstream.format,
+                })
+            }
+
+            NodeOp::FillRect { .. } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                est.materializes = true;
+                let mat = upstream.width as u64
+                    * upstream.height as u64
+                    * upstream.format.bytes_per_pixel() as u64;
+                est.materialization_bytes = est.materialization_bytes.max(mat);
+                Ok(upstream)
+            }
+
             // Worst case: dimensions unchanged, full materialization
             NodeOp::CropWhitespace { .. } | NodeOp::Analyze(_) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
@@ -1231,6 +1278,49 @@ impl PipelineGraph {
                     return Ok(Box::new(mat));
                 }
                 Ok(Box::new(CropSource::new(Box::new(mat), x, y, w, h)?))
+            }
+
+            NodeOp::ExpandCanvas {
+                left, top, right, bottom, bg_color,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let src_w = upstream.width();
+                let src_h = upstream.height();
+                let canvas_w = src_w + left + right;
+                let canvas_h = src_h + top + bottom;
+                Ok(Box::new(ExpandCanvasSource::new(
+                    upstream, canvas_w, canvas_h,
+                    left as i32, top as i32, bg_color,
+                )))
+            }
+
+            NodeOp::FillRect {
+                x1, y1, x2, y2, color,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let mut mat = MaterializedSource::from_source(upstream)?;
+                let w = mat.width();
+                let h = mat.height();
+                let bpp = mat.format().bytes_per_pixel();
+                let data = mat.data_mut();
+                let x1 = (x1 as usize).min(w as usize);
+                let x2 = (x2 as usize).min(w as usize);
+                let y1 = (y1 as usize).min(h as usize);
+                let y2 = (y2 as usize).min(h as usize);
+                let stride = w as usize * bpp;
+                for y in y1..y2 {
+                    for x in x1..x2 {
+                        let off = y * stride + x * bpp;
+                        if off + bpp <= data.len() {
+                            for c in 0..bpp.min(4) {
+                                data[off + c] = color[c];
+                            }
+                        }
+                    }
+                }
+                Ok(Box::new(mat))
             }
 
             NodeOp::Materialize(transform_fn) => {

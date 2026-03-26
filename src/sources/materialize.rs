@@ -110,6 +110,11 @@ impl MaterializedSource {
         &self.data
     }
 
+    /// Mutable raw pixel data (row-major, `stride × height` bytes).
+    pub fn data_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
     /// Stride (bytes per row, may include padding).
     pub fn stride(&self) -> usize {
         self.format.aligned_stride(self.width)
