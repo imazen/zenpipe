@@ -16,7 +16,7 @@ zenpipe = { path = "..", features = ["std"] }
 zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
 zenblend = { path = "../../zenblend" }
 zenfilters = { path = "../../zenfilters" }
-zencodec = { version = "0.1.3" }
+zencodec = { version = "0.1.4" }
 zenpixels = { version = "0.2.0" }
 hashbrown = "0.15"
 rgb = "0.8"
