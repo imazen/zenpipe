@@ -45,7 +45,7 @@ pub(crate) fn build_from_config<'a, C, F>(
 where
     C: zencodec::encode::EncoderConfig + 'a,
     F: FnOnce(&EncodeParams<'a>) -> C + 'a,
-    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
 {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
@@ -138,7 +138,7 @@ pub trait AnyEncoder: Send + Sync {
 impl<C> AnyEncoder for C
 where
     C: zencodec::encode::EncoderConfig,
-    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
 {
     fn format(&self) -> ImageFormat {
         C::format()
@@ -215,9 +215,9 @@ where
 pub struct StreamingEncoder {
     /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
     ///
-    /// `DynEncoder: Send`, so `Box<dyn DynEncoder>` is `Send` and can be
-    /// moved across thread boundaries (e.g., into a pipeline sink).
-    pub encoder: Box<dyn zencodec::encode::DynEncoder>,
+    /// `DynEncoder: Send` (zencodec 0.1.4+), so this can be moved across threads
+    /// or used in `zenpipe::codec::EncoderSink`.
+    pub encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
     /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
     /// Pass to `adapt_for_encode` to pick the cheapest conversion.
     pub supported: &'static [PixelDescriptor],
@@ -245,7 +245,7 @@ pub(crate) fn build_streaming_from_config<C, F>(
 where
     C: zencodec::encode::EncoderConfig + 'static,
     F: FnOnce(&EncodeParams<'_>) -> C,
-    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
 {
     use zencodec::encode::EncodeJob as _;
     let config = build_config(&params);
