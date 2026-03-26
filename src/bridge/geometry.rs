@@ -12,7 +12,6 @@ use super::parse::{param_i32, param_str, param_u32, parse_constraint_mode, parse
 pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
     "zenlayout.crop",
     "zenlayout.crop_percent",
-    "zenlayout.region",
     "zenlayout.orient",
     "zenlayout.flip_h",
     "zenlayout.flip_v",
@@ -121,21 +120,7 @@ pub(crate) fn compile_geometry_run(
                 let ph = ((y2 - y1) / 100.0 * source_h as f32).max(1.0) as u32;
                 pipeline = pipeline.crop_pixels(px, py, pw, ph);
             }
-            "zenlayout.region" => {
-                // Region is a superset of crop + expand. Signed coordinates:
-                // Negative = crop inward, positive = expand outward.
-                let x1 = param_i32(node, "x1")?;
-                let y1 = param_i32(node, "y1")?;
-                let x2 = param_i32(node, "x2")?;
-                let y2 = param_i32(node, "y2")?;
-                // Clamp to valid crop region within source dimensions.
-                let crop_x = (-x1).max(0) as u32;
-                let crop_y = (-y1).max(0) as u32;
-                let crop_w = ((x2 - x1) as u32).min(source_w.saturating_sub(crop_x));
-                let crop_h = ((y2 - y1) as u32).min(source_h.saturating_sub(crop_y));
-                pipeline = pipeline.crop_pixels(crop_x, crop_y, crop_w, crop_h);
-                // TODO: handle expand (positive x1/y1) via padding in LayoutPlan
-            }
+            // zenlayout.region is handled by the RegionConverter (needs ExpandCanvas).
             _ => {
                 return Err(PipeError::Op(alloc::format!(
                     "unexpected node '{id}' in geometry run"
