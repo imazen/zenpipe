@@ -530,6 +530,44 @@ impl Default for OutputLimits {
     }
 }
 
+// ─── CropWhitespace ───
+
+/// Detect and crop uniform borders (whitespace trimming).
+///
+/// Scans inward from each edge to find where pixel values diverge
+/// from the border color by more than `threshold`, then crops to the
+/// content bounds plus `percent_padding`.
+///
+/// Requires full-frame materialization — cannot be fused with
+/// streaming geometry nodes.
+///
+/// RIAPI: `?trim.threshold=80&trim.percentpadding=0.5`
+/// JSON: `{ "threshold": 80, "percent_padding": 0.5 }`
+#[derive(Node, Clone, Debug, Default)]
+#[node(id = "zenlayout.crop_whitespace", group = Geometry, role = Resize)]
+#[node(changes_dimensions)]
+#[node(tags("crop", "whitespace", "trim", "content"))]
+pub struct CropWhitespace {
+    /// Color distance threshold (0–255).
+    ///
+    /// Pixels within this distance of the border color are considered
+    /// "whitespace". Lower values detect only near-identical borders;
+    /// higher values tolerate slight color variation (e.g., JPEG artifacts).
+    #[param(range(0..=255), default = 80, step = 1)]
+    #[param(section = "Main", label = "Threshold")]
+    #[kv("trim.threshold")]
+    pub threshold: u32,
+
+    /// Padding around detected content as a percentage of content dimensions.
+    ///
+    /// 0.0 = tight crop, 0.5 = add 0.5% padding on each side. Prevents
+    /// overly tight trims that clip into content edges.
+    #[param(range(0.0..=50.0), default = 0.0, step = 0.1)]
+    #[param(unit = "%", section = "Main", label = "Padding")]
+    #[kv("trim.percentpadding")]
+    pub percent_padding: f32,
+}
+
 // ─── Registration ───
 
 /// Register all zenlayout nodes with a registry.
@@ -545,6 +583,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &CROP_NODE,
     &CROP_PERCENT_NODE,
     &CROP_MARGINS_NODE,
+    &CROP_WHITESPACE_NODE,
     // Orientation operations
     &ORIENT_NODE,
     &FLIP_H_NODE,
