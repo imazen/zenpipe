@@ -35,6 +35,9 @@ mod geometry;
 pub mod ordering;
 mod parse;
 
+#[cfg(feature = "nodes-faces")]
+pub mod smart_crop;
+
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
