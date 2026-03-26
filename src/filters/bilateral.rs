@@ -83,7 +83,8 @@ impl Filter for Bilateral {
         let strength = self.strength;
 
         // Guided filter each channel with L as guide
-        let guide = planes.l.clone(); // L is the edge guide
+        let mut guide = ctx.take_f32(n);
+        guide.copy_from_slice(&planes.l);
 
         // Filter L (self-guided)
         let mut filtered = ctx.take_f32(n);
@@ -132,6 +133,7 @@ impl Filter for Bilateral {
         }
 
         ctx.return_f32(filtered);
+        ctx.return_f32(guide);
     }
 }
 

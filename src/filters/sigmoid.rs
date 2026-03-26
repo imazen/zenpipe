@@ -3,7 +3,6 @@ use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
-use crate::prelude::*;
 use crate::simd;
 
 /// Sigmoid tone mapper: maps scene luminance through an S-curve for display.
@@ -67,7 +66,7 @@ impl Filter for Sigmoid {
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::Sigmoid
     }
-    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
+    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         if (self.contrast - 1.0).abs() < 1e-6 && (self.skew - 0.5).abs() < 1e-6 {
             return;
         }
@@ -78,7 +77,8 @@ impl Filter for Sigmoid {
         if self.chroma_compression > 1e-6 {
             // Save L before tone mapping, then apply chroma compression
             let n = planes.pixel_count();
-            let l_old: Vec<f32> = planes.l.clone();
+            let mut l_old = ctx.take_f32(n);
+            l_old.copy_from_slice(&planes.l);
 
             simd::sigmoid_tone_map_plane(&mut planes.l, self.contrast, bias_a);
 
@@ -91,6 +91,7 @@ impl Filter for Sigmoid {
                     planes.b[idx] *= scale;
                 }
             }
+            ctx.return_f32(l_old);
         } else {
             simd::sigmoid_tone_map_plane(&mut planes.l, self.contrast, bias_a);
         }
@@ -183,6 +184,7 @@ impl Describe for Sigmoid {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec::Vec;
 
     #[test]
     fn identity_at_contrast_1() {
