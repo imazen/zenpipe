@@ -1,0 +1,108 @@
+name: WASM Benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-size-shim/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1' # Weekly Monday 6am UTC
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  wasm-bench:
+    name: Build + Measure
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wasm-size-shim
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wasm-size-shim
+
+      - name: Install tools
+        run: |
+          cargo install wasm-tools --locked || true
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+
+      - name: Patch path deps to git refs
+        run: |
+          sed \
+            -e 's|path = "\.\./\.\./zenresize"|git = "https://github.com/imazen/zenresize"|g' \
+            -e 's|path = "\.\./\.\./zenblend"|git = "https://github.com/imazen/zenblend"|g' \
+            -e 's|path = "\.\./\.\./zenfilters"|git = "https://github.com/imazen/zenfilters"|g' \
+            -e 's|path = "\.\./\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
+            -e 's|path = "\.\./\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
+            -e 's|path = "\.\./\.\./zenpng"|git = "https://github.com/imazen/zenpng"|g' \
+            -e 's|path = "\.\./\.\./zenwebp"|git = "https://github.com/imazen/zenwebp"|g' \
+            -e 's|path = "\.\./\.\./zenjxl"|git = "https://github.com/imazen/zenjxl"|g' \
+            -e 's|path = "\.\./\.\./zencodec"|git = "https://github.com/imazen/zencodec"|g' \
+            -e 's|path = "\.\./\.\./zenavif"|git = "https://github.com/imazen/zenavif"|g' \
+            -e 's|path = "\.\."|git = "https://github.com/imazen/zenpipe"|g' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
+
+      - name: Build cdylib
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+            cargo build --target wasm32-unknown-unknown --release --lib
+
+      - name: Build wasip1 binary
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+            cargo build --target wasm32-wasip1 --release --bin wasm-demo
+
+      - name: Measure binary size
+        run: |
+          RAW=$(wc -c < target/wasm32-unknown-unknown/release/wasm_size_shim.wasm)
+          gzip -9 -k -f target/wasm32-unknown-unknown/release/wasm_size_shim.wasm
+          GZ=$(wc -c < target/wasm32-unknown-unknown/release/wasm_size_shim.wasm.gz)
+          EXPORTS=$(wasm-tools print target/wasm32-unknown-unknown/release/wasm_size_shim.wasm 2>/dev/null \
+            | grep '(export' | grep -v '__' | wc -l)
+
+          {
+            echo "### WASM Binary Size"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            printf "| Raw | %'d bytes (%.1f MB) |\n" "$RAW" "$(echo "$RAW / 1048576" | bc -l)"
+            printf "| Gzip | %'d bytes (%.1f MB) |\n" "$GZ" "$(echo "$GZ / 1048576" | bc -l)"
+            echo "| Exports | $EXPORTS functions |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run 4K benchmark
+        run: |
+          {
+            echo "### 4K Benchmark (3840×2160 → codecs, wasmtime simd128)"
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 3 runs, take best
+          for i in 1 2 3; do
+            echo "--- Run $i ---" >> "$GITHUB_STEP_SUMMARY"
+            ~/.wasmtime/bin/wasmtime --wasm simd \
+              target/wasm32-wasip1/release/wasm-demo.wasm 2>&1 \
+              | tee /tmp/run$i.txt \
+              | grep -E 'Resize|Convert|Filters|JPEG|PNG|WebP|JXL|GIF' \
+              >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          {
+            echo '```'
+            echo ""
+            echo "Codecs: JPEG, PNG, WebP, JXL, GIF (encode+decode)"
+            echo "Pipeline: resize, composite, convert, filter, layout, overlay, crop, alpha"
+          } >> "$GITHUB_STEP_SUMMARY"
