@@ -9,7 +9,7 @@ use crate::filter::Filter;
 use crate::gamut_lut::GamutBoundaryLut;
 use crate::gamut_map::GamutMapping;
 use crate::planes::OklabPlanes;
-use crate::scatter_gather::{gather_from_oklab, scatter_to_oklab};
+use crate::scatter_gather::scatter_to_oklab;
 
 /// Compute the number of core rows per strip for L3-friendly processing.
 ///
