@@ -214,7 +214,12 @@ pub fn stream(
         graph,
         encode_config,
         ..
-    } = bridge::compile_nodes(config.nodes, config.converters, config.source_info.width, config.source_info.height)?;
+    } = bridge::compile_nodes(
+        config.nodes,
+        config.converters,
+        config.source_info.width,
+        config.source_info.height,
+    )?;
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
@@ -313,7 +318,12 @@ pub fn process_with_sidecar(
         decode_config,
         encode_config,
         ..
-    } = bridge::compile_nodes(config.nodes, config.converters, config.source_info.width, config.source_info.height)?;
+    } = bridge::compile_nodes(
+        config.nodes,
+        config.converters,
+        config.source_info.width,
+        config.source_info.height,
+    )?;
 
     // 2. Wire the source into the graph's Source node (always at index 0).
     let mut sources = hashbrown::HashMap::new();
@@ -425,30 +435,52 @@ mod tests {
     use crate::format::RGBA8_SRGB;
     use crate::sidecar::{SidecarKind, SidecarStream};
 
-    struct SolidSource { w: u32, h: u32, y: u32 }
+    struct SolidSource {
+        w: u32,
+        h: u32,
+        y: u32,
+    }
     impl SolidSource {
-        fn new(w: u32, h: u32) -> Self { Self { w, h, y: 0 } }
+        fn new(w: u32, h: u32) -> Self {
+            Self { w, h, y: 0 }
+        }
     }
     impl crate::Source for SolidSource {
         fn next(&mut self) -> Result<Option<crate::Strip<'_>>, PipeError> {
-            if self.y >= self.h { return Ok(None); }
+            if self.y >= self.h {
+                return Ok(None);
+            }
             let rows = 16.min(self.h - self.y);
             let stride = RGBA8_SRGB.aligned_stride(self.w);
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
-            Ok(Some(crate::strip::Strip::new(leaked, self.w, rows, stride, RGBA8_SRGB)?))
+            Ok(Some(crate::strip::Strip::new(
+                leaked, self.w, rows, stride, RGBA8_SRGB,
+            )?))
         }
-        fn width(&self) -> u32 { self.w }
-        fn height(&self) -> u32 { self.h }
-        fn format(&self) -> PixelFormat { RGBA8_SRGB }
+        fn width(&self) -> u32 {
+            self.w
+        }
+        fn height(&self) -> u32 {
+            self.h
+        }
+        fn format(&self) -> PixelFormat {
+            RGBA8_SRGB
+        }
     }
 
     fn default_source_info(w: u32, h: u32) -> SourceImageInfo {
         SourceImageInfo {
-            width: w, height: h, format: RGBA8_SRGB,
-            has_alpha: false, has_animation: false, has_gain_map: false,
-            is_hdr: false, exif_orientation: 1, metadata: None,
+            width: w,
+            height: h,
+            format: RGBA8_SRGB,
+            has_alpha: false,
+            has_animation: false,
+            has_gain_map: false,
+            is_hdr: false,
+            exif_orientation: 1,
+            metadata: None,
         }
     }
 
@@ -457,7 +489,10 @@ mod tests {
         let source = Box::new(SolidSource::new(200, 150));
         let info = default_source_info(200, 150);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 200);
@@ -470,7 +505,10 @@ mod tests {
         let source = Box::new(SolidSource::new(64, 64));
         let info = default_source_info(64, 64);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert!(!result.primary.data().is_empty());
@@ -481,7 +519,10 @@ mod tests {
         let source = Box::new(SolidSource::new(100, 100));
         let info = default_source_info(100, 100);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert!(result.encode_config.quality_profile.is_none());
@@ -497,7 +538,10 @@ mod tests {
             ..default_source_info(100, 100)
         };
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_some());
@@ -508,7 +552,10 @@ mod tests {
         let source = Box::new(SolidSource::new(100, 100));
         let info = default_source_info(100, 100);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_none());
@@ -522,12 +569,18 @@ mod tests {
             ..default_source_info(400, 300)
         };
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
-            width: 100, height: 75,
-            kind: SidecarKind::GainMap { params: zencodec::GainMapParams::default() },
+            width: 100,
+            height: 75,
+            kind: SidecarKind::GainMap {
+                params: zencodec::GainMapParams::default(),
+            },
         };
         let result = process_with_sidecar(source, &config, Some(sidecar)).unwrap();
         assert!(result.sidecar.is_none()); // sdr_only skips sidecar
@@ -541,12 +594,18 @@ mod tests {
             ..default_source_info(400, 300)
         };
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "preserve",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "preserve",
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
-            width: 100, height: 75,
-            kind: SidecarKind::GainMap { params: zencodec::GainMapParams::default() },
+            width: 100,
+            height: 75,
+            kind: SidecarKind::GainMap {
+                params: zencodec::GainMapParams::default(),
+            },
         };
         let result = process_with_sidecar(source, &config, Some(sidecar)).unwrap();
         assert!(result.sidecar.is_some());
@@ -560,7 +619,10 @@ mod tests {
         let source = Box::new(SolidSource::new(400, 300));
         let info = default_source_info(400, 300);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "preserve",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "preserve",
         };
         let result = process_with_sidecar(source, &config, None).unwrap();
         assert!(result.sidecar.is_none());
@@ -571,7 +633,10 @@ mod tests {
         let source = Box::new(SolidSource::new(320, 240));
         let info = default_source_info(320, 240);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 320);
@@ -586,7 +651,10 @@ mod tests {
         let source = Box::new(SolidSource::new(200, 150));
         let info = default_source_info(200, 150);
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let output = stream(source, &config, None).unwrap();
         // The source streams — pull strips without materializing
@@ -609,12 +677,18 @@ mod tests {
             ..default_source_info(400, 300)
         };
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "preserve",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "preserve",
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
-            width: 100, height: 75,
-            kind: SidecarKind::GainMap { params: zencodec::GainMapParams::default() },
+            width: 100,
+            height: 75,
+            kind: SidecarKind::GainMap {
+                params: zencodec::GainMapParams::default(),
+            },
         };
         let output = stream(source, &config, Some(sidecar)).unwrap();
         // Primary streams
@@ -632,7 +706,10 @@ mod tests {
             ..default_source_info(100, 100)
         };
         let config = ProcessConfig {
-            nodes: &[], converters: &[], source_info: &info, hdr_mode: "sdr_only",
+            nodes: &[],
+            converters: &[],
+            source_info: &info,
+            hdr_mode: "sdr_only",
         };
         let output = stream(source, &config, None).unwrap();
         assert!(output.metadata.is_some());

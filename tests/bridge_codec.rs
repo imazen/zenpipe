@@ -77,7 +77,6 @@ fn bridge_decode_resize_encode_jpeg() {
     constrain_params.insert("filter".into(), zennode::ParamValue::Str("lanczos".into()));
     let constrain_node = MockConstrainNode::boxed(constrain_params);
 
-
     // 2. Create a gradient source at source dimensions.
     let source = gradient_source(src_w, src_h);
 
