@@ -30,7 +30,7 @@ zenpng = { path = "../../zenpng" }
 zenwebp = { path = "../../zenwebp", features = ["zencodec"] }
 # zenavif: rav1d API change (lossless/base_q_idx fields removed from AV1Metadata)
 # zenavif = { path = "../../zenavif", features = ["zencodec"] }
-# zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
+zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
 # zentiff: build error with tiff crate version mismatch (color_map, DeflateLevel)
 # zenbitmaps: included if zentiff compiles
 # zentiff = { path = "../../zentiff", features = ["zencodec"] }

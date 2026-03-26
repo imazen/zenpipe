@@ -32,6 +32,7 @@ mod config;
 mod convert;
 mod dag;
 mod geometry;
+pub mod ordering;
 mod parse;
 
 use alloc::boxed::Box;
@@ -45,6 +46,7 @@ use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 // Re-export public types.
 pub use config::{DecodeConfig, EncodeConfig};
 pub use dag::{DagNode, build_pipeline_dag};
+pub use ordering::{OptimizationLevel, canonical_sort, optimize_node_order};
 
 // Sub-module items used by this module.
 use convert::{coalesce, convert_step};
@@ -286,6 +288,8 @@ pub fn build_pipeline(
 #[cfg(test)]
 mod core_tests {
     use super::*;
+    use alloc::string::ToString;
+    use alloc::vec;
     use crate::format::RGBA8_SRGB;
     use crate::strip::Strip;
     use core::any::Any;
@@ -362,6 +366,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static ORIENT_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -385,6 +391,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static CONSTRAIN_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -408,6 +416,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static FLIP_H_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -431,6 +441,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static ROTATE_90_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -454,6 +466,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static DECODE_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -473,6 +487,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     // A fake non-geometry schema for testing mixed groups.
@@ -497,6 +513,8 @@ mod core_tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     // ─── Helper constructors ───

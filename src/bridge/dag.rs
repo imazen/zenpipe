@@ -11,6 +11,7 @@
 //! materialized by the underlying graph compiler automatically.
 
 use alloc::boxed::Box;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use zennode::{NodeInstance, NodeRole};
@@ -404,6 +405,8 @@ mod tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     static CROP_SCHEMA: NodeSchema = NodeSchema {
@@ -427,6 +430,8 @@ mod tests {
         },
         version: 1,
         compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
     };
 
     impl MockNode {

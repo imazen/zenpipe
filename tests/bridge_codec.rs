@@ -211,6 +211,8 @@ static CONSTRAIN_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
     },
     version: 1,
     compat_version: 1,
+        json_key: "",
+        deny_unknown_fields: false,
 };
 
 struct MockConstrainNode {

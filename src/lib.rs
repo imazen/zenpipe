@@ -39,6 +39,10 @@ pub use node_registry::full_registry;
 #[cfg(feature = "zennode")]
 pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};
 
+// Re-export ordering types for callers that need to control node order.
+#[cfg(feature = "zennode")]
+pub use bridge::{OptimizationLevel, canonical_sort, optimize_node_order};
+
 // Re-export orchestration types.
 #[cfg(feature = "zennode")]
 pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
