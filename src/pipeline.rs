@@ -376,11 +376,11 @@ impl Pipeline {
                 &self.m1,
                 self.config.reference_white,
             );
-            if ch == 4 {
-                if let Some(ref mut alpha) = planes.alpha {
-                    for i in 0..plane_len {
-                        alpha[plane_off + i] = src[src_off + i * ch + 3];
-                    }
+            if ch == 4
+                && let Some(ref mut alpha) = planes.alpha
+            {
+                for i in 0..plane_len {
+                    alpha[plane_off + i] = src[src_off + i * ch + 3];
                 }
             }
         }
@@ -405,11 +405,11 @@ impl Pipeline {
                 &self.m1_inv,
                 self.config.reference_white,
             );
-            if ch == 4 {
-                if let Some(ref alpha) = planes.alpha {
-                    for i in 0..plane_len {
-                        dst[dst_off + i * ch + 3] = alpha[plane_off + i];
-                    }
+            if ch == 4
+                && let Some(ref alpha) = planes.alpha
+            {
+                for i in 0..plane_len {
+                    dst[dst_off + i * ch + 3] = alpha[plane_off + i];
                 }
             }
         }
