@@ -413,6 +413,9 @@ const MAX_GRAPH_DEPTH: usize = 256;
 pub struct PipelineGraph {
     nodes: Vec<GraphNode>,
     edges: Vec<Edge>,
+    /// Active trace state (set during compile_traced).
+    #[cfg(feature = "std")]
+    trace: Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>>,
 }
 
 impl PipelineGraph {
@@ -420,6 +423,8 @@ impl PipelineGraph {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
+            #[cfg(feature = "std")]
+            trace: None,
         }
     }
 
@@ -897,6 +902,29 @@ impl PipelineGraph {
         self.compile_node(output_id, &mut sources, 0)
     }
 
+    /// Compile with tracing enabled. Returns the pipeline source and collected trace.
+    ///
+    /// Every node boundary gets a `TracingSource` wrapper that records format,
+    /// dimensions, and alpha changes. The trace is collected in a shared
+    /// `PipelineTrace` accessible after the pipeline is drained.
+    #[cfg(feature = "std")]
+    pub fn compile_traced(
+        mut self,
+        mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
+        _config: &crate::trace::TraceConfig,
+    ) -> Result<(Box<dyn Source>, alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>), PipeError> {
+        self.validate()?;
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
+        self.trace = Some(trace.clone());
+
+        let output_id = self.nodes.iter()
+            .position(|n| matches!(&n.op, Some(NodeOp::Output)))
+            .unwrap();
+
+        let source = self.compile_node(output_id, &mut sources, 0)?;
+        Ok((source, trace))
+    }
+
     fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> Result<NodeId, PipeError> {
         for e in &self.edges {
             if e.to == node_id && e.kind == kind {
@@ -924,6 +952,44 @@ impl PipelineGraph {
     }
 
     fn compile_node(
+        &mut self,
+        node_id: NodeId,
+        sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
+        depth: usize,
+    ) -> Result<Box<dyn Source>, PipeError> {
+        // Capture node name for tracing before the op is consumed.
+        #[cfg(feature = "std")]
+        let trace_name = self.peek_op(node_id).map(crate::trace::node_op_name);
+
+        let result = self.compile_node_inner(node_id, sources, depth);
+
+        // Wrap with TracingSource if tracing is active.
+        #[cfg(feature = "std")]
+        if let Ok(source) = result {
+            if let (Some(trace_arc), Some(name)) = (&self.trace, trace_name) {
+                let entry = crate::trace::TraceEntry {
+                    index: node_id,
+                    name: alloc::string::String::from(name),
+                    description: alloc::string::String::new(),
+                    input_format: source.format(),
+                    input_width: source.width(),
+                    input_height: source.height(),
+                    output_format: source.format(),
+                    output_width: source.width(),
+                    output_height: source.height(),
+                    materializes: false,
+                };
+                trace_arc.lock().unwrap().push(entry.clone());
+                let wrapped = crate::sources::TracingSource::new(source, &entry, None);
+                return Ok(Box::new(wrapped));
+            }
+            return Ok(source);
+        }
+
+        result
+    }
+
+    fn compile_node_inner(
         &mut self,
         node_id: NodeId,
         sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
