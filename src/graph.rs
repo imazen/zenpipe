@@ -892,7 +892,7 @@ impl PipelineGraph {
             .nodes
             .iter()
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
-            .unwrap(); // safe: validate() ensures exactly one Output
+            .unwrap();
 
         self.compile_node(output_id, &mut sources, 0)
     }
