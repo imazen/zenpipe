@@ -101,7 +101,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
             gain_map.width as usize,
             gain_map.height as usize,
         );
-        let result = zenavif::encode_rgb8(img.as_ref(), &gm_enc, &enough::Unstoppable, None)
+        let result = zenavif::encode_rgb8(img.as_ref(), &gm_enc, &enough::Unstoppable)
             .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
         // Extract AV1 data from the AVIF file by re-parsing
         extract_av1_from_avif(&result.avif_file)?
@@ -113,7 +113,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
             gain_map.width as usize,
             gain_map.height as usize,
         );
-        let result = zenavif::encode_rgb8(img, &gm_enc, &enough::Unstoppable, None)
+        let result = zenavif::encode_rgb8(img, &gm_enc, &enough::Unstoppable)
             .map_err(|e| at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
         extract_av1_from_avif(&result.avif_file)?
     };
