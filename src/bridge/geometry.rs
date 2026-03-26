@@ -11,6 +11,8 @@ use super::parse::{param_i32, param_str, param_u32, parse_constraint_mode, parse
 /// Schema IDs that are geometry operations eligible for layout fusion.
 pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
     "zenlayout.crop",
+    "zenlayout.crop_percent",
+    "zenlayout.region",
     "zenlayout.orient",
     "zenlayout.flip_h",
     "zenlayout.flip_v",
