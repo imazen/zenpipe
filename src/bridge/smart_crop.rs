@@ -67,9 +67,9 @@ impl NodeConverter for SmartCropConverter {
             // Convert pixel format
             let pixel_format = pixel_format_from_zenpipe(fmt);
 
-            // Run detection if enabled
+            // Run detection — fails with helpful message if plugin missing
             let analysis = if enable_faces || enable_saliency {
-                run_detection(mat.data(), w, h, pixel_format, enable_faces, enable_saliency)
+                run_detection(mat.data(), w, h, pixel_format, enable_faces, enable_saliency)?
             } else {
                 AnalysisOutput {
                     faces: Vec::new(),
@@ -181,6 +181,9 @@ fn pixel_format_from_zenpipe(fmt: crate::format::PixelFormat) -> PixelFormat {
 }
 
 /// Run face detection + saliency through the zentract plugin.
+///
+/// Fails with a clear error (including build instructions) if the
+/// zentract plugin is not found at any search location.
 fn run_detection(
     pixels: &[u8],
     width: u32,
@@ -188,31 +191,17 @@ fn run_detection(
     format: PixelFormat,
     faces: bool,
     saliency: bool,
-) -> AnalysisOutput {
-    let image = match ImageRef::new(pixels, width, height, format) {
-        Ok(img) => img,
-        Err(_) => {
-            return AnalysisOutput {
-                faces: Vec::new(),
-                saliency: None,
-            };
-        }
-    };
+) -> Result<AnalysisOutput, PipeError> {
+    let image = ImageRef::new(pixels, width, height, format)
+        .map_err(|e| PipeError::Op(format!("smart_crop: {e}")))?;
 
-    let mut analyzer = match ContentAnalyzer::new() {
-        Ok(a) => a,
-        Err(_) => {
-            return AnalysisOutput {
-                faces: Vec::new(),
-                saliency: None,
-            };
-        }
-    };
+    let mut analyzer = ContentAnalyzer::new()
+        .map_err(|e| PipeError::Op(format!("{e}")))?;
 
     let result = analyzer.analyze(&image);
 
-    AnalysisOutput {
+    Ok(AnalysisOutput {
         faces: if faces { result.faces } else { Vec::new() },
         saliency: if saliency { result.saliency } else { None },
-    }
+    })
 }
