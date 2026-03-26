@@ -70,6 +70,61 @@ pub(crate) fn fast_sincos(x: f32) -> (f32, f32) {
     (sin_val, cos_val)
 }
 
+/// Fast scalar powf approximation: `base.powf(exp)` via `exp2(exp * log2(base))`.
+///
+/// Uses the same polynomial approach as magetypes `pow_lowp_unchecked` but in
+/// scalar form. For use in SIMD tail loops (0-7 remaining pixels) where the
+/// full SIMD path isn't available.
+///
+/// Max relative error: ~1% (same as magetypes lowp tier).
+/// Only valid for `base > 0.0`. Returns 0.0 for `base <= 0.0`.
+#[inline]
+#[allow(clippy::approx_constant)]
+pub(crate) fn fast_powf(base: f32, exp: f32) -> f32 {
+    if base <= 0.0 {
+        return 0.0;
+    }
+    // Scalar port of magetypes pow_lowp: exp2(n * log2(base))
+    //
+    // log2_lowp: rational polynomial on mantissa, same coefficients as magetypes
+    let log2_base = {
+        const P0: f32 = -1.850_383_3e-6;
+        const P1: f32 = 1.428_716_1;
+        const P2: f32 = 0.742_458_7;
+        const Q0: f32 = 0.990_328_14;
+        const Q1: f32 = 1.009_671_8;
+        const Q2: f32 = 0.174_093_43;
+
+        let x_bits = base.to_bits() as i32;
+        let offset = 0x3f2a_aaab_u32 as i32;
+        let exp_bits = x_bits.wrapping_sub(offset);
+        let exp_shifted = exp_bits >> 23; // arithmetic shift
+        let mantissa_bits = x_bits.wrapping_sub(exp_shifted << 23);
+        let mantissa = f32::from_bits(mantissa_bits as u32);
+        let exp_val = exp_shifted as f32;
+
+        let m = mantissa - 1.0;
+        let yp = P2 * m + P1;
+        let yp = yp * m + P0;
+        let yq = Q2 * m + Q1;
+        let yq = yq * m + Q0;
+
+        yp / yq + exp_val
+    };
+
+    // exp2_lowp: polynomial on fractional part, same coefficients as magetypes
+    let product = (exp * log2_base).clamp(-126.0, 126.0);
+    let xi = product.floor();
+    let xf = product - xi;
+
+    let poly = 0.055_504_11 * xf + 0.240_226_5;
+    let poly = poly * xf + core::f32::consts::LN_2;
+    let poly = poly * xf + 1.0;
+
+    let scale_bits = ((xi as i32 + 127) << 23) as u32;
+    poly * f32::from_bits(scale_bits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,5 +303,36 @@ mod tests {
                 "roundtrip b: {b} vs {b_recon} (hue={hue})"
             );
         }
+    }
+
+    #[test]
+    fn fast_powf_accuracy() {
+        let bases: [f32; 12] = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0, 1.5, 2.0, 5.0, 10.0];
+        let exponents: [f32; 8] = [0.5, 1.0, 1.5, 2.0, 2.4, 0.1, 0.01, 3.0];
+        let mut max_rel_err: f32 = 0.0;
+        for &base in &bases {
+            for &exp in &exponents {
+                let std_val = base.powf(exp);
+                let fast_val = fast_powf(base, exp);
+                if std_val > 1e-6 {
+                    let rel_err = ((std_val - fast_val) / std_val).abs();
+                    if rel_err > max_rel_err {
+                        max_rel_err = rel_err;
+                    }
+                }
+            }
+        }
+        assert!(
+            max_rel_err < 0.02,
+            "fast_powf max relative error {max_rel_err} exceeds 2%"
+        );
+    }
+
+    #[test]
+    fn fast_powf_edge_cases() {
+        assert_eq!(fast_powf(0.0, 2.0), 0.0);
+        assert_eq!(fast_powf(-1.0, 2.0), 0.0);
+        let v = fast_powf(1.0, 100.0);
+        assert!((v - 1.0).abs() < 0.01, "1^100 = {v}");
     }
 }

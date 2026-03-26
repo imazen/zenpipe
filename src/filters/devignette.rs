@@ -61,7 +61,7 @@ impl Filter for Devignette {
                 let r2 = dx * dx + dy * dy;
                 // cos^n falloff approximation: correction = 1 / (1 - strength * r^exp)
                 // Simplified: factor = 1 + strength * r^(exp/2)
-                let r_pow = r2.powf(exp * 0.5);
+                let r_pow = crate::fast_math::fast_powf(r2, exp * 0.5);
                 let factor = 1.0 + self.strength * r_pow;
 
                 let idx = y * w + x;

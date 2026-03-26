@@ -25,7 +25,7 @@ pub(super) fn power_contrast_plane_impl_scalar(
 ) {
     for v in plane.iter_mut() {
         if *v > 0.0 {
-            *v = v.powf(exp) * scale;
+            *v = crate::fast_math::fast_powf(*v, exp) * scale;
         }
     }
 }
@@ -49,7 +49,7 @@ pub(super) fn sigmoid_tone_map_plane_impl_scalar(
         } else if x >= 1.0 {
             1.0
         } else {
-            let ratio = ((1.0 - x) / x).powf(contrast);
+            let ratio = crate::fast_math::fast_powf((1.0 - x) / x, contrast);
             1.0 / (1.0 + ratio)
         };
     }
@@ -250,7 +250,7 @@ pub(super) fn vibrance_impl_scalar(
         let bv = *b_val;
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = (1.0 - normalized).powf(protection);
+        let pf = crate::fast_math::fast_powf(1.0 - normalized, protection);
         let scale = 1.0 + amount * pf;
         *a_val = av * scale;
         *b_val = bv * scale;
@@ -285,7 +285,7 @@ pub(super) fn fused_adjust_impl_scalar(
         lv = ((lv - bp) * inv_range).max(0.0);
         lv *= wp_exp;
         if lv > 0.0 {
-            lv = lv.powf(contrast_exp) * contrast_scale;
+            lv = crate::fast_math::fast_powf(lv, contrast_exp) * contrast_scale;
         }
         let sm = (1.0 - lv * 2.0).max(0.0);
         lv += sm * sm * shadows * 0.5;
@@ -307,7 +307,7 @@ pub(super) fn fused_adjust_impl_scalar(
         bv *= sat;
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = (1.0 - normalized).powf(vib_protection);
+        let pf = crate::fast_math::fast_powf(1.0 - normalized, vib_protection);
         let scale = 1.0 + vib_amount * pf;
         *a_val = av * scale;
         *b_val = bv * scale;
@@ -420,7 +420,7 @@ pub(super) fn fused_interleaved_adjust_impl_scalar(
         ok_l = ((ok_l - bp) * inv_range).max(0.0);
         ok_l *= wp_exp;
         if ok_l > 0.0 {
-            ok_l = ok_l.powf(contrast_exp) * contrast_scale;
+            ok_l = crate::fast_math::fast_powf(ok_l, contrast_exp) * contrast_scale;
         }
         let sm = (1.0 - ok_l * 2.0).max(0.0);
         ok_l += sm * sm * shadows * 0.5;
@@ -435,7 +435,7 @@ pub(super) fn fused_interleaved_adjust_impl_scalar(
         ok_a *= sat;
         ok_b *= sat;
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
-        let pf = (1.0 - (chroma / MAX_CHROMA).min(1.0)).powf(vib_protection);
+        let pf = crate::fast_math::fast_powf(1.0 - (chroma / MAX_CHROMA).min(1.0), vib_protection);
         let vib_scale = 1.0 + vib_amount * pf;
         ok_a *= vib_scale;
         ok_b *= vib_scale;

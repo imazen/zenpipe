@@ -82,7 +82,7 @@ impl Filter for ShadowLift {
             if *v < toe && *v > 0.0 {
                 // Normalized position in shadow region
                 let t = *v * inv_toe;
-                *v = toe * t.powf(gamma);
+                *v = toe * crate::fast_math::fast_powf(t, gamma);
             }
         }
     }

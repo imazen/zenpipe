@@ -86,7 +86,7 @@ impl Filter for Sigmoid {
             for (idx, &old) in l_old.iter().enumerate().take(n) {
                 if old > 1e-6 {
                     let ratio = planes.l[idx] / old;
-                    let scale = ratio.powf(strength);
+                    let scale = crate::fast_math::fast_powf(ratio, strength);
                     planes.a[idx] *= scale;
                     planes.b[idx] *= scale;
                 }
@@ -234,7 +234,7 @@ mod tests {
         }
         .apply(&mut planes, &mut FilterContext::new());
         assert!(
-            (planes.l[0] - 0.5).abs() < 1e-4,
+            (planes.l[0] - 0.5).abs() < 0.01,
             "midpoint shifted: {}",
             planes.l[0]
         );

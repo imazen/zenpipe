@@ -122,7 +122,7 @@ impl Filter for LocalToneMap {
             // Pivoted gamma: base' = pivot * (base/pivot)^gamma
             // This keeps the pivot unchanged while compressing range around it.
             let compressed = if b > 0.0 {
-                pivot * (b / pivot).powf(gamma)
+                pivot * crate::fast_math::fast_powf(b / pivot, gamma)
             } else {
                 0.0
             };
