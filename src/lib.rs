@@ -30,6 +30,11 @@ pub mod bridge;
 #[cfg(feature = "zennode")]
 pub mod orchestrate;
 
+#[cfg(feature = "zennode")]
+mod node_registry;
+#[cfg(feature = "zennode")]
+pub use node_registry::full_registry;
+
 // Re-export bridge config types at crate root for convenience.
 #[cfg(feature = "zennode")]
 pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};

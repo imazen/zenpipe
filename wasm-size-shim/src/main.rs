@@ -230,8 +230,8 @@ fn main() {
     // WebP
     encode_via_zencodec("WebP", &zenwebp::WebpEncoderConfig::lossy().with_quality(80.0), &pixels, w, h);
 
-    // JXL
-    encode_via_zencodec("JXL", &zenjxl::JxlEncoderConfig::new(), &pixels, w, h);
+    // JXL — local zenjxl behind published zencodec 0.1.3
+    // encode_via_zencodec("JXL", &zenjxl::JxlEncoderConfig::new(), &pixels, w, h);
 
     // GIF (use smaller size since quantization is expensive at 4K)
     {

@@ -30,6 +30,26 @@ zennode = ["dep:zennode", "zenresize/layout"]
 # zenresize and zenlayout (not yet implemented).
 zennode-defs = ["zennode"]
 
+# ── Node registry features ──
+# Each enables that crate's zennode_defs::register() in full_registry().
+nodes-jpeg = ["zennode", "dep:zenjpeg"]
+nodes-png = ["zennode", "dep:zenpng"]
+nodes-webp = ["zennode", "dep:zenwebp"]
+nodes-gif = ["zennode", "dep:zengif"]
+nodes-avif = ["zennode", "dep:zenavif"]
+nodes-jxl = ["zennode", "dep:zenjxl"]
+nodes-tiff = ["zennode", "dep:zentiff"]
+nodes-bmp = ["zennode", "dep:zenbitmaps"]
+nodes-resize = ["zennode", "zenresize/zennode"]
+nodes-layout = ["zennode", "dep:zenlayout", "zenlayout/zennode"]
+nodes-quant = ["zennode", "dep:zenquant"]
+nodes-filters = ["zennode", "std", "zenfilters/zennode"]
+nodes-all = [
+    "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif",
+    "nodes-avif", "nodes-jxl", "nodes-tiff", "nodes-bmp",
+    "nodes-resize", "nodes-layout", "nodes-quant", "nodes-filters",
+]
+
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
@@ -56,7 +76,22 @@ moxcms = { version = "0.8", optional = true }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
 zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 
+# ── Optional codec crates for node registry ──
+zenjpeg = { path = "../zenjpeg/zenjpeg", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zenpng = { path = "../zenpng", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zengif = { path = "../zengif", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zenavif = { path = "../zenavif", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec", "zennode"], optional = true }
+zentiff = { path = "../zentiff", default-features = false, features = ["zennode"], optional = true }
+zenbitmaps = { path = "../zenbitmaps", default-features = false, features = ["zennode"], optional = true }
+zenlayout = { path = "../zenlayout", default-features = false, features = ["zennode"], optional = true }
+zenquant = { path = "../zenquant", default-features = false, features = ["zennode"], optional = true }
+
 [dev-dependencies]
+# Dev-deps enable extra features on the optional codec crates above.
+# zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
 zenlayout = { path = "../zenlayout", default-features = false }
+zennode = { path = "../zennode/zennode", features = ["derive"] }
