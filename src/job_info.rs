@@ -41,6 +41,13 @@ pub struct JobResultInfo {
     /// Metadata summary (presence and sizes of ICC/EXIF/XMP, plus structured fields).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<MetadataSummary>,
+    /// Keys of analysis outputs produced by Analyze nodes during pipeline execution.
+    ///
+    /// The actual typed values are in [`ProcessedImage::outputs`] or
+    /// [`StreamingOutput::outputs`] — retrieve them via
+    /// [`AnalysisOutputs::get::<T>(key)`](crate::AnalysisOutputs::get).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub analysis_keys: alloc::vec::Vec<String>,
 }
 
 // ─── Image summary ───
@@ -342,6 +349,7 @@ impl From<&crate::orchestrate::ProcessedImage> for JobResultInfo {
             decode_config,
             encode_config,
             metadata,
+            analysis_keys: img.outputs.key_list(),
         }
     }
 }
@@ -399,6 +407,7 @@ impl From<&crate::orchestrate::StreamingOutput> for JobResultInfo {
             },
             encode_config,
             metadata,
+            analysis_keys: out.outputs.key_list(),
         }
     }
 }
@@ -497,6 +506,7 @@ mod tests {
                 codec_params_schema: None,
             },
             metadata: None,
+            analysis_keys: alloc::vec![],
         };
 
         // Serialize to JSON string (using serde_json would be ideal,

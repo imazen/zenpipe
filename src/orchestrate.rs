@@ -42,6 +42,7 @@
 use alloc::boxed::Box;
 
 use crate::Source;
+use crate::analysis::AnalysisOutputs;
 use crate::bridge::{self, CompileResult, DecodeConfig, EncodeConfig, NodeConverter};
 use crate::error::PipeError;
 use crate::format::PixelFormat;
@@ -145,6 +146,13 @@ pub struct ProcessedImage {
     /// Cloned from [`SourceImageInfo::metadata`]. The caller should pass
     /// this to the encoder for ICC/EXIF/XMP/CICP preservation.
     pub metadata: Option<zencodec::Metadata>,
+
+    /// Structured analysis outputs collected during pipeline execution.
+    ///
+    /// Populated by [`Analyze`](crate::graph::NodeOp::Analyze) nodes that
+    /// perform content analysis (face detection, saliency, classification).
+    /// Empty if no analysis nodes were in the pipeline.
+    pub outputs: AnalysisOutputs,
 }
 
 impl ProcessedImage {
@@ -184,6 +192,9 @@ pub struct StreamingOutput {
 
     /// Metadata to pass through to the encoder.
     pub metadata: Option<zencodec::Metadata>,
+
+    /// Structured analysis outputs collected during pipeline execution.
+    pub outputs: AnalysisOutputs,
 }
 
 // ─── Public API ───
@@ -223,7 +234,8 @@ pub fn stream(
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
-    let pipeline = graph.compile(sources)?;
+    let mut outputs = AnalysisOutputs::new();
+    let pipeline = graph.compile_with_outputs(sources, &mut outputs)?;
 
     // Sidecar: materialize if present and hdr_mode allows (sidecars are small).
     let processed_sidecar = if let Some(sidecar_stream) = sidecar {
@@ -250,6 +262,7 @@ pub fn stream(
         sidecar: processed_sidecar,
         encode_config,
         metadata: config.source_info.metadata.clone(),
+        outputs,
     })
 }
 
@@ -330,7 +343,8 @@ pub fn process_with_sidecar(
     sources.insert(0, source);
 
     // 3. Compile the graph into an executable Source chain.
-    let pipeline = graph.compile(sources)?;
+    let mut outputs = AnalysisOutputs::new();
+    let pipeline = graph.compile_with_outputs(sources, &mut outputs)?;
 
     // 4. Materialize the primary image.
     let primary = MaterializedSource::from_source(pipeline)?;
@@ -357,6 +371,7 @@ pub fn process_with_sidecar(
         decode_config,
         encode_config,
         metadata: config.source_info.metadata.clone(),
+        outputs,
     })
 }
 
