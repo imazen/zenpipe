@@ -91,10 +91,13 @@ pub(crate) fn compile_geometry_run(
                 let w = param_u32(node, "w")?;
                 let h = param_u32(node, "h")?;
                 let mode_str = param_str(node, "mode")?;
-                let filter_str = param_str(node, "filter")?;
                 let mode = parse_constraint_mode(&mode_str)?;
                 pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
-                if let Some(f) = parse_filter_opt(&filter_str) {
+                // down_filter is optional — absent means auto (Robidoux).
+                if let Some(f) = node.get_param("down_filter")
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .and_then(|s| parse_filter_opt(&s))
+                {
                     filter = Some(f);
                 }
             }

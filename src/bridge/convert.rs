@@ -169,17 +169,21 @@ pub(crate) fn convert_step(
             }
 
             // Try converter fusion (fuse_group).
-            for conv in converters {
-                if nodes.iter().any(|n| conv.can_convert(n.schema().id)) {
-                    if let Some(fused) = conv.fuse_group(nodes)? {
-                        return Ok(alloc::vec![fused]);
+            let all_same_converter = converters.iter().any(|conv| {
+                nodes.iter().all(|n| conv.can_convert(n.schema().id))
+            });
+            if all_same_converter {
+                for conv in converters {
+                    if nodes.iter().all(|n| conv.can_convert(n.schema().id)) {
+                        if let Some(fused) = conv.fuse_group(nodes)? {
+                            return Ok(alloc::vec![fused]);
+                        }
+                        return Ok(alloc::vec![conv.convert_group(nodes)?]);
                     }
-                    // fuse_group returned None — try convert_group.
-                    return Ok(alloc::vec![conv.convert_group(nodes)?]);
                 }
             }
 
-            // No converter — convert each node individually.
+            // Mixed group or no fusion — convert each node individually.
             let mut ops = Vec::new();
             for &node in nodes {
                 ops.push(convert_single(node, converters)?);
