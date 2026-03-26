@@ -2,26 +2,10 @@
 //!
 //! Provides [`DecoderSource`] (wraps a streaming decoder as a [`Source`]) and
 //! [`EncoderSink`] (wraps an encoder as a [`Sink`]).
-//!
-//! # Codec-specific parameters
-//!
-//! All codec configuration goes through zencodec's `Dyn*` traits. For
-//! codec-specific options, use `extensions()` → `Any` downcast on the
-//! job before creating the decoder/encoder:
-//!
-//! ```rust,ignore
-//! let mut job = decoder_config.dyn_job();
-//! if let Some(ext) = job.extensions_mut() {
-//!     if let Some(jpeg) = ext.downcast_mut::<JpegDecodeExtensions>() {
-//!         jpeg.fancy_upsampling = true;
-//!     }
-//! }
-//! let streaming = job.into_streaming_decoder(data, &[PixelDescriptor::RGBA8_SRGB])?;
-//! let source = DecoderSource::new(streaming, PixelDescriptor::RGBA8_SRGB)?;
-//! ```
 
 use alloc::boxed::Box;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 
 use zencodec::decode::DynStreamingDecoder;
 use zencodec::encode::DynEncoder;
@@ -39,24 +23,77 @@ use crate::strip::{Strip, StripBuf};
 /// Wraps a zencodec [`DynStreamingDecoder`] as a zenpipe [`Source`].
 ///
 /// Pulls scanline batches from the decoder and yields them as [`Strip`]s.
-/// The decoder's pixel data is copied into an internal buffer so the strip
-/// lifetime is tied to this source, not the decoder.
+/// The output pixel format is discovered by eagerly decoding the first batch
+/// during construction — `format()` is accurate from the start.
 pub struct DecoderSource<'a> {
     decoder: Box<dyn DynStreamingDecoder + 'a>,
     width: u32,
     height: u32,
     format: PixelFormat,
     buf: StripBuf,
+    /// First batch, eagerly decoded during `new()` to discover the format.
+    /// Served on the first `next()` call, then `None`.
+    first_batch: Option<(u32, Vec<u8>, u32)>, // (rows, data, row_bytes)
     y: u32,
 }
 
 impl<'a> DecoderSource<'a> {
     /// Create a `DecoderSource` from a streaming decoder.
     ///
-    /// `format` is the expected output pixel format — it must match the
-    /// `preferred` descriptors used when creating the streaming decoder.
-    /// Width and height are read from the decoder's [`ImageInfo`].
+    /// Eagerly decodes the first batch to discover the output pixel format.
+    /// This ensures `format()`, `width()`, and `height()` are all accurate
+    /// before any `next()` call — required by `build_pipeline` which reads
+    /// format during graph compilation.
     pub fn new(
+        mut decoder: Box<dyn DynStreamingDecoder + 'a>,
+    ) -> Result<Self, PipeError> {
+        let info = decoder.info();
+        let w = info.width;
+        let h = info.height;
+
+        // Eagerly decode first batch to discover output pixel format.
+        let first = decoder
+            .next_batch()
+            .map_err(|e| PipeError::Op(e.to_string()))?;
+
+        let (format, first_batch) = match first {
+            Some((_batch_y, pixels)) => {
+                let fmt = pixels.descriptor();
+                let rows = pixels.rows();
+                let bpp = fmt.bytes_per_pixel();
+                let row_bytes = w as usize * bpp;
+
+                // Copy first batch data for replay on first next() call.
+                let mut data = Vec::with_capacity(rows as usize * row_bytes);
+                for r in 0..rows {
+                    let row = pixels.row(r);
+                    data.extend_from_slice(&row[..row_bytes]);
+                }
+                (fmt, Some((rows, data, row_bytes as u32)))
+            }
+            None => {
+                // Empty image — use a sensible default.
+                (crate::format::RGBA8_SRGB, None)
+            }
+        };
+
+        let sh = 16u32.min(h);
+
+        Ok(Self {
+            decoder,
+            width: w,
+            height: h,
+            format,
+            buf: StripBuf::new(w, sh, format),
+            first_batch,
+            y: 0,
+        })
+    }
+
+    /// Create a `DecoderSource` with an explicit pixel format (no eager decode).
+    ///
+    /// Use when you know the decoder's output format ahead of time.
+    pub fn with_format(
         decoder: Box<dyn DynStreamingDecoder + 'a>,
         format: PixelFormat,
     ) -> Result<Self, PipeError> {
@@ -71,6 +108,7 @@ impl<'a> DecoderSource<'a> {
             height: h,
             format,
             buf: StripBuf::new(w, sh, format),
+            first_batch: None,
             y: 0,
         })
     }
@@ -82,6 +120,19 @@ impl Source for DecoderSource<'_> {
             return Ok(None);
         }
 
+        // Serve the eagerly-decoded first batch if available.
+        if let Some((rows, data, row_bytes)) = self.first_batch.take() {
+            self.buf.reconfigure(self.width, rows, self.format);
+            self.buf.reset();
+            let rb = row_bytes as usize;
+            for r in 0..rows as usize {
+                self.buf.push_row(&data[r * rb..(r + 1) * rb]);
+            }
+            self.y += rows;
+            return Ok(Some(self.buf.as_strip()));
+        }
+
+        // Pull subsequent batches from the decoder.
         let batch = self
             .decoder
             .next_batch()

@@ -244,11 +244,14 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;
-    let filter_str = param_str(node, "filter")?;
+    // down_filter is Option<String> — absent means auto (Robidoux).
+    let filter = node
+        .get_param("down_filter")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .and_then(|s| parse_filter_opt(&s));
     let _sharpen = param_f32_opt(node, "sharpen");
 
     let mode = parse_constraint_mode(&mode_str)?;
-    let filter = parse_filter_opt(&filter_str);
 
     Ok(NodeOp::Constrain {
         mode,
