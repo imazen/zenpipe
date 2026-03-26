@@ -22,6 +22,8 @@ std = [
     "dep:zenfilters",
     "dep:moxcms",
 ]
+# Serde serialization for job result info.
+serde = ["dep:serde"]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
 # When zenresize and zenlayout gain zennode features, add them here:
 #   "zenresize/zennode", "zenlayout/zennode"
@@ -69,6 +71,8 @@ whereat = { version = "0.1.4", default-features = false }
 bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation
 hashbrown = "0.15"
+# Serialization (optional)
+serde = { version = "1", optional = true, default-features = false, features = ["derive", "alloc"] }
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
 zenfilters = { path = "../zenfilters", optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std

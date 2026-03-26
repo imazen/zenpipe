@@ -47,6 +47,9 @@ pub use bridge::{OptimizationLevel, canonical_sort, optimize_node_order};
 #[cfg(feature = "zennode")]
 pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
 
+#[cfg(feature = "serde")]
+pub mod job_info;
+
 pub mod animation;
 pub mod codec;
 pub mod sidecar;
