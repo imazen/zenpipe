@@ -202,6 +202,8 @@ pub struct DagSnapshotNode {
     pub label: String,
     /// Node kind for rendering (e.g., "source", "geometry", "filter", "encode", "implicit").
     pub kind: String,
+    /// Where this node originated (e.g., "Ir4Expand:Resample2D", "RIAPI:w=800").
+    pub origin: Option<String>,
     /// UIDs of nodes that were merged into this one (empty if not coalesced).
     pub merged_from: Vec<u32>,
     /// True if this node was added in this snapshot (not present in previous).
@@ -280,6 +282,10 @@ pub struct TraceEntry {
     pub name: String,
     /// Detailed description (e.g., "800x600 → 400x300 Robidoux").
     pub description: String,
+
+    /// Where this node originated — provenance chain.
+    /// E.g., "Ir4Expand:Resample2D → translate:Resample2DNode → bridge:Resize"
+    pub origin: Option<String>,
 
     /// Whether this is an implicit node (inserted by ensure_format).
     pub implicit: bool,
@@ -408,6 +414,7 @@ impl TraceAppender {
             trace_order: 0, // assigned by push_entry
             name: alloc::string::String::from(name),
             description,
+            origin: None,
             implicit: true,
             implicit_reason: Some(alloc::string::String::from("Analyze sub-chain")),
             input_format: fmt,
@@ -511,6 +518,7 @@ impl Tracer {
             trace_order,
             name: alloc::string::String::from(op_name),
             description: op_desc_fn(), // only called when active
+            origin: None,
             implicit: false,
             implicit_reason: None,
             input_format: in_fmt,
@@ -571,6 +579,7 @@ impl Tracer {
                     format_short(&target),
                     reason
                 ),
+                origin: None,
                 implicit: true,
                 implicit_reason: Some(alloc::format!(
                     "{reason} requires {}",
@@ -616,6 +625,7 @@ impl Tracer {
             trace_order,
             name: alloc::string::String::from(name),
             description,
+            origin: None,
             implicit: true,
             implicit_reason: Some(alloc::string::String::from(reason)),
             input_format,
@@ -764,6 +774,10 @@ impl PipelineTrace {
                 e.trace_order, e.name, dims, fmt, flags, desc
             ));
 
+            // Show origin (provenance) if present.
+            if let Some(ref origin) = e.origin {
+                out.push_str(&format!("        origin: {origin}\n"));
+            }
             // Show runtime notes indented below the entry.
             for note in &e.notes {
                 out.push_str(&format!("        note: {note}\n"));
