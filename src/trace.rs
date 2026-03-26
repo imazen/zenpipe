@@ -162,21 +162,50 @@ pub struct BridgeTrace {
     pub source_dims: (u32, u32),
     /// Steps after coalescing, with converter info.
     pub steps: Vec<BridgeStepTrace>,
-    /// Snapshots of node order at each optimization pass.
+    /// DAG snapshots at each transformation step.
     ///
-    /// Each snapshot records the node list after a transformation
-    /// (e.g., "after canonical_sort", "after optimize(Speed)").
-    /// Enables diff-style visualization of how nodes were reordered.
-    pub snapshots: Vec<BridgeSnapshot>,
+    /// Each snapshot captures the full graph topology (nodes + edges)
+    /// after a transformation (e.g., "input", "after canonical_sort",
+    /// "compiled graph"). Enables timeline visualization of how the
+    /// pipeline was built and optimized.
+    pub snapshots: Vec<DagSnapshot>,
 }
 
-/// A snapshot of the node list at a point in the bridge pipeline.
+/// A DAG snapshot at a point in the pipeline transformation.
+///
+/// Captures both nodes and edges so the full graph topology is preserved,
+/// not just a linear ordering. Even for linear pipelines, storing edges
+/// makes compositing/fan-out/watermark branches visible.
 #[derive(Clone, Debug)]
-pub struct BridgeSnapshot {
-    /// Label for this snapshot (e.g., "input", "after canonical_sort", "after optimize(Speed)").
+pub struct DagSnapshot {
+    /// Label for this snapshot (e.g., "input", "after canonical_sort", "compiled graph").
     pub label: String,
-    /// Schema IDs in order at this point.
-    pub nodes: Vec<String>,
+    /// Nodes in the DAG. Index = node ID.
+    pub nodes: Vec<DagSnapshotNode>,
+    /// Edges connecting nodes.
+    pub edges: Vec<DagSnapshotEdge>,
+}
+
+/// A node in a DAG snapshot.
+#[derive(Clone, Debug)]
+pub struct DagSnapshotNode {
+    /// Node ID (index in the snapshot's node list).
+    pub id: usize,
+    /// Short label (schema ID, NodeOp name, or description).
+    pub label: String,
+    /// Node kind for rendering (e.g., "source", "geometry", "filter", "encode", "implicit").
+    pub kind: String,
+}
+
+/// An edge in a DAG snapshot.
+#[derive(Clone, Debug)]
+pub struct DagSnapshotEdge {
+    /// Source node ID.
+    pub from: usize,
+    /// Target node ID.
+    pub to: usize,
+    /// Edge kind ("input" or "canvas").
+    pub kind: String,
 }
 
 /// Info about a node before bridge processing.
@@ -367,15 +396,23 @@ impl TraceAppender {
 /// Collected pipeline trace data (graph layer).
 ///
 /// This is the primary trace type, populated during `compile_traced()`.
-/// Contains per-node entries with format/dims transitions.
+/// Contains per-node entries with format/dims transitions and the
+/// graph edge topology.
 #[derive(Clone, Debug, Default)]
 pub struct PipelineTrace {
+    /// Per-node trace entries (in compile order).
     pub entries: Vec<TraceEntry>,
+    /// Graph edges capturing the DAG topology.
+    /// Populated from `PipelineGraph.edges` during `compile_traced()`.
+    pub edges: Vec<DagSnapshotEdge>,
 }
 
 impl PipelineTrace {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+            edges: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, entry: TraceEntry) {
@@ -614,10 +651,58 @@ impl PipelineTrace {
                 );
             }
 
-            if i + 1 < self.entries.len() {
-                let x1 = x + node_w;
-                let x2 = x + node_w + gap;
-                let cy = y + node_h / 2;
+        }
+
+        // Draw edges from the graph topology.
+        // Build a map from node graph-index to trace_order for positioning.
+        let index_to_order: hashbrown::HashMap<usize, usize> = self
+            .entries
+            .iter()
+            .map(|e| (e.index, e.trace_order))
+            .collect();
+
+        if !self.edges.is_empty() {
+            // Use explicit edges from the graph.
+            for edge in &self.edges {
+                let Some(&from_order) = index_to_order.get(&edge.from) else {
+                    continue;
+                };
+                let Some(&to_order) = index_to_order.get(&edge.to) else {
+                    continue;
+                };
+                let from_entry = &self.entries[from_order];
+                let x1 = margin + from_order as u32 * (node_w + gap) + node_w;
+                let x2 = margin + to_order as u32 * (node_w + gap);
+                let cy = margin + node_h / 2;
+
+                let color = if from_entry.alpha_changed() {
+                    "#e63946"
+                } else if from_entry.format_changed() {
+                    "#f4a261"
+                } else {
+                    "#999"
+                };
+
+                let dash = if edge.kind == "canvas" {
+                    " stroke-dasharray='4,2'"
+                } else {
+                    ""
+                };
+
+                let _ = write!(
+                    s,
+                    "<line x1='{x1}' y1='{cy}' x2='{x2}' y2='{cy}' \
+                     stroke='{color}' stroke-width='2'{dash}/>"
+                );
+            }
+        } else {
+            // Fallback: draw linear edges between adjacent entries.
+            for i in 0..self.entries.len().saturating_sub(1) {
+                let e = &self.entries[i];
+                let x1 = margin + i as u32 * (node_w + gap) + node_w;
+                let x2 = margin + (i as u32 + 1) * (node_w + gap);
+                let cy = margin + node_h / 2;
+
                 let color = if e.alpha_changed() {
                     "#e63946"
                 } else if e.format_changed() {
@@ -705,11 +790,38 @@ impl FullPipelineTrace {
                 bridge.pixel_nodes.len()
             ));
 
-            // Optimization snapshots (show node reordering timeline).
+            // DAG snapshots (show pipeline topology at each transformation step).
             if !bridge.snapshots.is_empty() {
-                out.push_str("Node order timeline:\n");
+                out.push_str("Pipeline DAG timeline:\n");
                 for snap in &bridge.snapshots {
-                    out.push_str(&format!("  {}: [{}]\n", snap.label, snap.nodes.join(" → ")));
+                    let node_labels: Vec<&str> =
+                        snap.nodes.iter().map(|n| n.label.as_str()).collect();
+                    out.push_str(&format!("  {}:\n", snap.label));
+                    out.push_str(&format!("    nodes: [{}]\n", node_labels.join(", ")));
+                    if !snap.edges.is_empty() {
+                        let edge_strs: Vec<String> = snap
+                            .edges
+                            .iter()
+                            .map(|e| {
+                                let from = snap
+                                    .nodes
+                                    .get(e.from)
+                                    .map(|n| n.label.as_str())
+                                    .unwrap_or("?");
+                                let to = snap
+                                    .nodes
+                                    .get(e.to)
+                                    .map(|n| n.label.as_str())
+                                    .unwrap_or("?");
+                                if e.kind == "canvas" {
+                                    format!("{from} =canvas=> {to}")
+                                } else {
+                                    format!("{from} -> {to}")
+                                }
+                            })
+                            .collect();
+                        out.push_str(&format!("    edges: [{}]\n", edge_strs.join(", ")));
+                    }
                 }
             }
 

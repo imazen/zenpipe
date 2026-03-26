@@ -950,6 +950,23 @@ impl PipelineGraph {
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
             .unwrap();
 
+        // Capture graph edges into the trace before compilation consumes nodes.
+        {
+            let edge_traces: Vec<crate::trace::DagSnapshotEdge> = self
+                .edges
+                .iter()
+                .map(|e| crate::trace::DagSnapshotEdge {
+                    from: e.from,
+                    to: e.to,
+                    kind: match e.kind {
+                        EdgeKind::Input => alloc::string::String::from("input"),
+                        EdgeKind::Canvas => alloc::string::String::from("canvas"),
+                    },
+                })
+                .collect();
+            trace.lock().unwrap().edges = edge_traces;
+        }
+
         let source = self.compile_node(output_id, &mut sources, 0)?;
         Ok((source, trace))
     }

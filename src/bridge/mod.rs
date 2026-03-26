@@ -298,17 +298,17 @@ fn build_bridge_trace(
     }
 }
 
-/// Record a snapshot of the current node order in a bridge trace.
+/// Record a DAG snapshot of the current node topology in a bridge trace.
 ///
-/// Call this before and after optimization passes to track how nodes
-/// were reordered. Example:
+/// For a linear chain of nodes, edges are implicitly `i → i+1`.
+/// For DAG inputs, pass the edges explicitly via [`record_dag_snapshot`].
+///
+/// Call before and after optimization passes:
 ///
 /// ```ignore
 /// record_snapshot(&mut trace, "input", &nodes);
 /// canonical_sort(&mut nodes);
 /// record_snapshot(&mut trace, "after canonical_sort", &nodes);
-/// optimize_node_order(OptimizationLevel::Speed, &mut nodes);
-/// record_snapshot(&mut trace, "after optimize(Speed)", &nodes);
 /// ```
 #[cfg(feature = "std")]
 pub fn record_snapshot(
@@ -317,9 +317,75 @@ pub fn record_snapshot(
     nodes: &[Box<dyn NodeInstance>],
 ) {
     use alloc::string::ToString;
-    trace.snapshots.push(crate::trace::BridgeSnapshot {
+
+    let dag_nodes: Vec<crate::trace::DagSnapshotNode> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| {
+            let schema = n.schema();
+            crate::trace::DagSnapshotNode {
+                id: i,
+                label: schema.id.to_string(),
+                kind: alloc::format!("{:?}", schema.role),
+            }
+        })
+        .collect();
+
+    // Default to linear chain edges.
+    let edges: Vec<crate::trace::DagSnapshotEdge> = (0..nodes.len().saturating_sub(1))
+        .map(|i| crate::trace::DagSnapshotEdge {
+            from: i,
+            to: i + 1,
+            kind: alloc::string::String::from("input"),
+        })
+        .collect();
+
+    trace.snapshots.push(crate::trace::DagSnapshot {
         label: label.to_string(),
-        nodes: nodes.iter().map(|n| n.schema().id.to_string()).collect(),
+        nodes: dag_nodes,
+        edges,
+    });
+}
+
+/// Record a DAG snapshot with explicit edge topology.
+///
+/// Use this for non-linear pipelines (compositing, fan-out, watermarks)
+/// where edges aren't just `i → i+1`.
+#[cfg(feature = "std")]
+pub fn record_dag_snapshot(
+    trace: &mut crate::trace::BridgeTrace,
+    label: &str,
+    nodes: &[Box<dyn NodeInstance>],
+    edges: Vec<(usize, usize, &str)>,
+) {
+    use alloc::string::ToString;
+
+    let dag_nodes: Vec<crate::trace::DagSnapshotNode> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| {
+            let schema = n.schema();
+            crate::trace::DagSnapshotNode {
+                id: i,
+                label: schema.id.to_string(),
+                kind: alloc::format!("{:?}", schema.role),
+            }
+        })
+        .collect();
+
+    let dag_edges = edges
+        .into_iter()
+        .map(|(from, to, kind)| crate::trace::DagSnapshotEdge {
+            from,
+            to,
+            kind: kind.to_string(),
+        })
+        .collect();
+
+    trace.snapshots.push(crate::trace::DagSnapshot {
+        label: label.to_string(),
+        nodes: dag_nodes,
+        edges: dag_edges,
     });
 }
 
