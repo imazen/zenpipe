@@ -48,18 +48,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "array-init"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
-
-[[package]]
-name = "atomic_refcell"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e67cd8309bbd06cd603a9e693a784ac2e5d1e955f11286e355089fcab3047c"
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -84,12 +72,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "byteorder"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "byteorder-lite"
@@ -211,30 +193,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c5cedc30da3a610cac6b4ba17597bdf7152cf974e8aab3afb3d54455e371c8"
 
 [[package]]
-name = "jxl-encoder"
-version = "0.2.0"
-dependencies = [
- "archmage",
- "bytemuck",
- "enough",
- "hashbrown 0.16.1",
- "imgref",
- "jxl-encoder-simd",
- "once_cell",
- "rgb",
- "thiserror",
- "whereat",
-]
-
-[[package]]
-name = "jxl-encoder-simd"
-version = "0.2.0"
-dependencies = [
- "archmage",
- "magetypes",
-]
-
-[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -272,17 +230,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -293,38 +240,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "once_cell"
-version = "1.21.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-
-[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "proc-macro2"
@@ -385,12 +304,6 @@ name = "self_cell"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b12e76d157a900eb52e81bc6e9f3069344290341720e9178cde2407113ac8d89"
-
-[[package]]
-name = "smallvec"
-version = "1.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "syn"
@@ -464,11 +377,10 @@ dependencies = [
  "imgref",
  "rgb",
  "zenblend",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenfilters",
  "zengif",
  "zenjpeg",
- "zenjxl",
  "zenpipe",
  "zenpixels",
  "zenpng",
@@ -521,16 +433,6 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.3"
-dependencies = [
- "almost-enough",
- "enough",
- "whereat",
- "zenpixels",
-]
-
-[[package]]
-name = "zencodec"
-version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84fcdf5bc9ea9f0b8d35d51cf6b94e21d4c4aadff62ec986764f3944aed77b2a"
 dependencies = [
@@ -576,7 +478,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
@@ -598,61 +500,8 @@ dependencies = [
  "whereat",
  "wide",
  "yuv",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
-]
-
-[[package]]
-name = "zenjxl"
-version = "0.1.0"
-dependencies = [
- "enough",
- "imgref",
- "jxl-encoder",
- "linear-srgb",
- "rgb",
- "thiserror",
- "whereat",
- "zencodec 0.1.3",
- "zenjxl-decoder",
- "zenpixels",
-]
-
-[[package]]
-name = "zenjxl-decoder"
-version = "0.3.0"
-dependencies = [
- "aligned-vec",
- "array-init",
- "atomic_refcell",
- "bytemuck",
- "byteorder",
- "enough",
- "num-derive",
- "num-traits",
- "paste",
- "smallvec",
- "thiserror",
- "zenjxl-decoder-macros",
- "zenjxl-decoder-simd",
-]
-
-[[package]]
-name = "zenjxl-decoder-macros"
-version = "0.3.0"
-dependencies = [
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "zenjxl-decoder-simd"
-version = "0.3.0"
-dependencies = [
- "archmage",
- "paste",
 ]
 
 [[package]]
@@ -687,7 +536,7 @@ dependencies = [
  "moxcms",
  "whereat",
  "zenblend",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenfilters",
  "zenpixels",
  "zenpixels-convert",
@@ -736,7 +585,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror",
  "whereat",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenflate",
  "zenpixels",
  "zenpixels-convert",
@@ -794,7 +643,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "yuv",
- "zencodec 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
