@@ -75,6 +75,10 @@ pub struct ProcessConfig<'a> {
 
     /// Source image metadata from probing (dimensions, format, supplements).
     pub source_info: &'a SourceImageInfo,
+
+    /// Optional tracing configuration. When `Some`, the pipeline records
+    /// decisions at each layer and returns a trace alongside the output.
+    pub trace_config: Option<&'a crate::trace::TraceConfig>,
 }
 
 /// Probed source image information.
@@ -145,6 +149,9 @@ pub struct ProcessedImage {
     /// Cloned from [`SourceImageInfo::metadata`]. The caller should pass
     /// this to the encoder for ICC/EXIF/XMP/CICP preservation.
     pub metadata: Option<zencodec::Metadata>,
+
+    /// Pipeline trace (populated when `ProcessConfig.trace_config` is `Some`).
+    pub trace: Option<crate::trace::FullPipelineTrace>,
 }
 
 impl ProcessedImage {
@@ -184,6 +191,9 @@ pub struct StreamingOutput {
 
     /// Metadata to pass through to the encoder.
     pub metadata: Option<zencodec::Metadata>,
+
+    /// Pipeline trace (populated when `ProcessConfig.trace_config` is `Some`).
+    pub trace: Option<crate::trace::FullPipelineTrace>,
 }
 
 // ─── Public API ───
@@ -213,24 +223,36 @@ pub fn stream(
     let CompileResult {
         graph,
         encode_config,
+        bridge_trace,
         ..
     } = bridge::compile_nodes(
         config.nodes,
         config.converters,
         config.source_info.width,
         config.source_info.height,
-        None,
+        config.trace_config,
     )?;
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
-    let pipeline = graph.compile(sources)?;
+
+    // Compile with or without tracing.
+    let (pipeline, trace) = if let Some(tc) = config.trace_config {
+        let (pipeline, graph_trace) = graph.compile_traced(sources, tc)?;
+        let full_trace = crate::trace::FullPipelineTrace {
+            riapi: None,
+            bridge: bridge_trace,
+            graph: graph_trace.lock().unwrap().clone(),
+            execution: None,
+        };
+        (pipeline, Some(full_trace))
+    } else {
+        (graph.compile(sources)?, None)
+    };
 
     // Sidecar: materialize if present and hdr_mode allows (sidecars are small).
     let processed_sidecar = if let Some(sidecar_stream) = sidecar {
         if config.hdr_mode != "sdr_only" {
-            // For streaming, we need the primary's planned output dimensions
-            // to derive the sidecar plan. Use the source's compile-time estimate.
             let primary_w = pipeline.width();
             let primary_h = pipeline.height();
             Some(process_sidecar_from_dims(
@@ -251,6 +273,7 @@ pub fn stream(
         sidecar: processed_sidecar,
         encode_config,
         metadata: config.source_info.metadata.clone(),
+        trace,
     })
 }
 
@@ -318,21 +341,33 @@ pub fn process_with_sidecar(
         graph,
         decode_config,
         encode_config,
+        bridge_trace,
         ..
     } = bridge::compile_nodes(
         config.nodes,
         config.converters,
         config.source_info.width,
         config.source_info.height,
-        None,
+        config.trace_config,
     )?;
 
     // 2. Wire the source into the graph's Source node (always at index 0).
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
 
-    // 3. Compile the graph into an executable Source chain.
-    let pipeline = graph.compile(sources)?;
+    // 3. Compile with or without tracing.
+    let (pipeline, trace) = if let Some(tc) = config.trace_config {
+        let (pipeline, graph_trace) = graph.compile_traced(sources, tc)?;
+        let full_trace = crate::trace::FullPipelineTrace {
+            riapi: None,
+            bridge: bridge_trace,
+            graph: graph_trace.lock().unwrap().clone(),
+            execution: None,
+        };
+        (pipeline, Some(full_trace))
+    } else {
+        (graph.compile(sources)?, None)
+    };
 
     // 4. Materialize the primary image.
     let primary = MaterializedSource::from_source(pipeline)?;
@@ -359,6 +394,7 @@ pub fn process_with_sidecar(
         decode_config,
         encode_config,
         metadata: config.source_info.metadata.clone(),
+        trace,
     })
 }
 
@@ -495,6 +531,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 200);
@@ -511,6 +548,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert!(!result.primary.data().is_empty());
@@ -525,6 +563,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.encode_config.quality_profile.is_none());
@@ -544,6 +583,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_some());
@@ -558,6 +598,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_none());
@@ -575,6 +616,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -600,6 +642,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "preserve",
+            trace_config: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -625,6 +668,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "preserve",
+            trace_config: None,
         };
         let result = process_with_sidecar(source, &config, None).unwrap();
         assert!(result.sidecar.is_none());
@@ -639,6 +683,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 320);
@@ -657,6 +702,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let output = stream(source, &config, None).unwrap();
         // The source streams — pull strips without materializing
@@ -683,6 +729,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "preserve",
+            trace_config: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -712,6 +759,7 @@ mod tests {
             converters: &[],
             source_info: &info,
             hdr_mode: "sdr_only",
+            trace_config: None,
         };
         let output = stream(source, &config, None).unwrap();
         assert!(output.metadata.is_some());
