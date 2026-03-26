@@ -218,6 +218,7 @@ pub(crate) fn convert_single(
         "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate270)),
         "zenresize.constrain" => convert_zenresize_constrain(node),
         "zenlayout.constrain" => convert_zenlayout_constrain(node),
+        "zenlayout.crop_whitespace" => convert_crop_whitespace(node),
         _ => Err(PipeError::Op(alloc::format!(
             "bridge: no converter for node '{schema_id}'"
         ))),
@@ -280,5 +281,15 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter: None,
+    })
+}
+
+/// Convert a `zenlayout.crop_whitespace` node to `NodeOp::CropWhitespace`.
+pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let threshold = param_u32(node, "threshold")?.min(255) as u8;
+    let percent_padding = param_f32_opt(node, "percent_padding").unwrap_or(0.0);
+    Ok(NodeOp::CropWhitespace {
+        threshold,
+        percent_padding,
     })
 }
