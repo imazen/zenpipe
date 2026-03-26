@@ -20,6 +20,8 @@
 //!
 //! Requires the `srgb-filters` feature.
 
+use alloc::vec;
+use alloc::vec::Vec;
 use rgb::Rgba;
 use zenpixels::buffer::{PixelBuffer, PixelSliceMut};
 use zenpixels::{PixelDescriptor, TransferFunction};
@@ -247,7 +249,7 @@ fn collect_rgba(pixels: &PixelBuffer) -> Vec<Rgba<u8>> {
 
     let rgba_desc = PixelDescriptor::RGBA8_SRGB;
     let need_convert = desc != rgba_desc;
-    let converter = need_convert
+    let mut converter = need_convert
         .then(|| RowConverter::new(desc, rgba_desc).expect("conversion to RGBA8 should succeed"));
 
     let mut packed = Vec::with_capacity(w * h);
@@ -255,7 +257,7 @@ fn collect_rgba(pixels: &PixelBuffer) -> Vec<Rgba<u8>> {
 
     for y in 0..h as u32 {
         let src_row = slice.row(y);
-        let rgba_row = if let Some(conv) = &converter {
+        let rgba_row = if let Some(conv) = &mut converter {
             conv.convert_row(src_row, &mut row_buf, width);
             &row_buf[..w * 4]
         } else {
@@ -297,9 +299,9 @@ fn with_rows_rgba(slice: &mut PixelSliceMut<'_>, mut f: impl FnMut(&mut [Rgba<u8
         }
     } else {
         // Convert each row to RGBA8, process, convert back
-        let to_rgba =
+        let mut to_rgba =
             RowConverter::new(desc, rgba_desc).expect("conversion to RGBA8 should succeed");
-        let from_rgba =
+        let mut from_rgba =
             RowConverter::new(rgba_desc, desc).expect("conversion from RGBA8 should succeed");
 
         let mut rgba_buf = vec![0u8; w * 4];

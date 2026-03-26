@@ -193,7 +193,7 @@ pub fn apply_to_buffer(
         let linear_bytes = convert_buffer_bytes_pooled(input, linear_desc, ctx)
             .map_err(|e| at!(e).map_error(|e| ConvenienceError::Convert(e.into_inner())))?;
         let linear_f32 = as_f32_slice(&linear_bytes);
-        scatter_to_oklab(linear_f32, &mut planes, channels, &m1, reference_white);
+        scatter_to_oklab(&linear_f32, &mut planes, channels, &m1, reference_white);
         ctx.return_u8(linear_bytes);
     }
 
@@ -222,7 +222,7 @@ pub fn apply_to_buffer(
         planes.return_to_ctx(ctx);
 
         if convert_back && desc != linear_desc {
-            let converter = RowConverter::new(linear_desc, desc)
+            let mut converter = RowConverter::new(linear_desc, desc)
                 .map_err(|e| at!(e).map_error(|e| ConvenienceError::Convert(e.into_inner())))?;
             let dst_bpp = desc.bytes_per_pixel();
             let dst_stride = (width as usize) * dst_bpp;
@@ -403,7 +403,7 @@ fn convert_buffer_bytes_pooled(
             output[dst_start..dst_start + src_row.len()].copy_from_slice(src_row);
         }
     } else {
-        let converter = RowConverter::new(desc, target).at()?;
+        let mut converter = RowConverter::new(desc, target).at()?;
         let src_slice = input.as_slice();
         for y in 0..height {
             let src_row = src_slice.row(y);
