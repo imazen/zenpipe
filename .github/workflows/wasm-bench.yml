@@ -22,26 +22,32 @@ jobs:
         with:
           path: zenpipe
 
-      # Clone all sibling repos into the expected directory layout.
-      # Path deps in Cargo.toml expect ../zenresize, ../zenblend, etc.
+      # Clone sibling repos into the layout expected by path deps.
+      # Public repos use GITHUB_TOKEN. Private repos (zenblend, zenfilters)
+      # need ZEN_REPOS_PAT with org-wide read access.
       - name: Clone sibling repos
         env:
-          GH_TOKEN: ${{ secrets.ZEN_REPOS_PAT || github.token }}
+          GH_TOKEN: ${{ secrets.ZEN_REPOS_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          repos=(
-            zenresize zenblend zenfilters zencodec zenpng zenwebp
-            zengif zenjxl zenpixels archmage jxl-encoder-rs
-            zenjxl-decoder
-          )
-          for repo in "${repos[@]}"; do
-            echo "Cloning $repo..."
-            gh repo clone "imazen/$repo" "$repo" -- --depth=1 --single-branch 2>/dev/null \
-              || echo "::warning::Failed to clone $repo (may be private)"
+          set -e
+          # Public repos — always available
+          for repo in zenresize zencodec zenpng zenwebp zengif zenjxl \
+                      zenpixels archmage zenjxl-decoder zenjpeg jxl-encoder; do
+            echo "::group::Clone $repo"
+            gh repo clone "imazen/$repo" "$repo" -- --depth=1 --single-branch
+            echo "::endgroup::"
           done
-          # zenjpeg needs special handling (Cargo.toml references ../../zenjpeg/zenjpeg)
-          gh repo clone "imazen/zenjpeg" "zenjpeg" -- --depth=1 --single-branch 2>/dev/null \
-            || echo "::warning::Failed to clone zenjpeg"
-          ls -d */ | head -20
+
+          # Private repos — need ZEN_REPOS_PAT
+          for repo in zenblend zenfilters; do
+            echo "::group::Clone $repo (private)"
+            gh repo clone "imazen/$repo" "$repo" -- --depth=1 --single-branch \
+              || echo "::warning::Failed to clone private repo $repo — set ZEN_REPOS_PAT secret"
+            echo "::endgroup::"
+          done
+
+          echo "Directory layout:"
+          ls -d */
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -76,13 +82,6 @@ jobs:
           gzip -9 -k -f "$WASM"
           GZ=$(wc -c < "$WASM.gz")
 
-          # Count exports (needs wasm-tools or fallback)
-          if command -v wasm-tools &>/dev/null; then
-            EXPORTS=$(wasm-tools print "$WASM" 2>/dev/null | grep -c '(export' || echo 0)
-          else
-            EXPORTS="?"
-          fi
-
           {
             echo "### WASM Binary Size"
             echo ""
@@ -90,7 +89,6 @@ jobs:
             echo "|--------|-------|"
             echo "| Raw | ${RAW} bytes ($((RAW / 1048576)).$((RAW % 1048576 * 10 / 1048576)) MB) |"
             echo "| Gzip | ${GZ} bytes ($((GZ / 1048576)).$((GZ % 1048576 * 10 / 1048576)) MB) |"
-            echo "| Exports | ${EXPORTS} |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
