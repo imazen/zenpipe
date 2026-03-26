@@ -16,6 +16,7 @@
 
 extern crate alloc;
 
+pub mod analysis;
 mod error;
 pub mod format;
 pub mod graph;
@@ -54,6 +55,7 @@ pub mod animation;
 pub mod codec;
 pub mod sidecar;
 
+pub use analysis::AnalysisOutputs;
 pub use error::PipeError;
 pub use format::PixelFormat;
 pub use graph::{ResourceEstimate, SourceInfo};

@@ -68,8 +68,16 @@ pub type MaterializeTransform =
 /// Used by [`NodeOp::Analyze`] for content-adaptive operations (e.g., face
 /// detection, image classification) that need full-frame pixel access to
 /// decide what downstream operations to apply.
-pub type AnalyzeBuilder =
-    Box<dyn FnOnce(MaterializedSource) -> Result<Box<dyn Source>, PipeError> + Send>;
+///
+/// The closure receives the materialized pixels and a mutable reference to
+/// [`AnalysisOutputs`] where it can store structured results (detections,
+/// scores, regions) for the caller to retrieve after pipeline execution.
+pub type AnalyzeBuilder = Box<
+    dyn FnOnce(MaterializedSource, &mut AnalysisOutputs) -> Result<Box<dyn Source>, PipeError>
+        + Send,
+>;
+
+use crate::analysis::AnalysisOutputs;
 
 /// Metadata about a source, used by [`PipelineGraph::estimate`].
 ///
@@ -884,8 +892,21 @@ impl PipelineGraph {
     ///
     /// The graph must have exactly one [`Output`](NodeOp::Output) node.
     pub fn compile(
+        self,
+        sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
+    ) -> Result<Box<dyn Source>, PipeError> {
+        self.compile_with_outputs(sources, &mut AnalysisOutputs::new())
+    }
+
+    /// Compile the graph into an executable source chain, collecting analysis outputs.
+    ///
+    /// Like [`compile()`](Self::compile), but passes an [`AnalysisOutputs`] bag
+    /// to [`Analyze`](NodeOp::Analyze) nodes so they can store structured results
+    /// (face detections, saliency scores, etc.) alongside the pixel pipeline.
+    pub fn compile_with_outputs(
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
+        outputs: &mut AnalysisOutputs,
     ) -> Result<Box<dyn Source>, PipeError> {
         self.validate()?;
         let output_id = self
@@ -894,7 +915,7 @@ impl PipelineGraph {
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
             .unwrap(); // safe: validate() ensures exactly one Output
 
-        self.compile_node(output_id, &mut sources, 0)
+        self.compile_node(output_id, &mut sources, outputs, 0)
     }
 
     fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> Result<NodeId, PipeError> {
@@ -927,6 +948,7 @@ impl PipelineGraph {
         &mut self,
         node_id: NodeId,
         sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
+        outputs: &mut AnalysisOutputs,
         depth: usize,
     ) -> Result<Box<dyn Source>, PipeError> {
         if depth > MAX_GRAPH_DEPTH {
@@ -943,12 +965,12 @@ impl PipelineGraph {
 
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                self.compile_node(input_id, sources, depth + 1)
+                self.compile_node(input_id, sources, outputs, depth + 1)
             }
 
             NodeOp::Layout { plan, filter } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let mut source = self.compile_node(input_id, sources, depth + 1)?;
+                let mut source = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 source = ensure_format(source, format::RGBA8_SRGB)?;
 
                 let content_size = plan.content_size;
@@ -991,7 +1013,7 @@ impl PipelineGraph {
                 // then composite over the background — fully streaming.
                 plan.canvas_color = zenresize::CanvasColor::Transparent;
 
-                let mut fg = self.compile_node(fg_id, sources, depth + 1)?;
+                let mut fg = self.compile_node(fg_id, sources, outputs, depth + 1)?;
                 fg = ensure_format(fg, format::RGBA8_SRGB)?;
                 let fg_w = fg.width();
                 let fg_h = fg.height();
@@ -1005,7 +1027,7 @@ impl PipelineGraph {
                 );
                 fg = Box::new(ResizeSource::from_streaming(fg, resizer, 16)?);
 
-                let bg = self.compile_node(bg_id, sources, depth + 1)?;
+                let bg = self.compile_node(bg_id, sources, outputs, depth + 1)?;
 
                 // Composite foreground over background in premultiplied linear space.
                 let fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
@@ -1016,7 +1038,7 @@ impl PipelineGraph {
 
             NodeOp::Crop { x, y, w, h } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 Ok(Box::new(CropSource::new(upstream, x, y, w, h)?))
             }
 
@@ -1027,7 +1049,7 @@ impl PipelineGraph {
                 sharpen_percent,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let mut builder =
                     zenresize::ResizeConfig::builder(upstream.width(), upstream.height(), w, h);
@@ -1049,7 +1071,7 @@ impl PipelineGraph {
                 filter,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let in_w = upstream.width();
                 let in_h = upstream.height();
@@ -1093,7 +1115,7 @@ impl PipelineGraph {
 
             NodeOp::ResizeAdvanced(mut config) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 config.in_width = upstream.width();
                 config.in_height = upstream.height();
@@ -1101,20 +1123,20 @@ impl PipelineGraph {
             }
 
             NodeOp::Orient(orientation) => {
-                compile_orient(self, node_id, sources, orientation, depth)
+                compile_orient(self, node_id, sources, outputs, orientation, depth)
             }
 
             NodeOp::AutoOrient(exif) => {
                 let orientation = zenresize::Orientation::from_exif(exif)
                     .unwrap_or(zenresize::Orientation::Identity);
-                compile_orient(self, node_id, sources, orientation, depth)
+                compile_orient(self, node_id, sources, outputs, orientation, depth)
             }
 
             NodeOp::PixelTransform(pixel_op) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let (upstream_id, mut ops) = self.collect_pixel_op_chain(input_id);
                 ops.push(pixel_op);
-                let upstream = self.compile_node(upstream_id, sources, depth + 1)?;
+                let upstream = self.compile_node(upstream_id, sources, outputs, depth + 1)?;
                 let mut transform = TransformSource::new(upstream);
                 for op in ops {
                     transform = transform.push_boxed(op);
@@ -1129,8 +1151,8 @@ impl PipelineGraph {
             } => {
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
-                let bg = self.compile_node(bg_id, sources, depth + 1)?;
-                let fg = self.compile_node(fg_id, sources, depth + 1)?;
+                let bg = self.compile_node(bg_id, sources, outputs, depth + 1)?;
+                let fg = self.compile_node(fg_id, sources, outputs, depth + 1)?;
                 let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
                 let fg = ensure_format(fg, format::RGBAF32_LINEAR_PREMUL)?;
                 let mut comp = CompositeSource::over_at(bg, fg, fg_x, fg_y)?;
@@ -1154,7 +1176,7 @@ impl PipelineGraph {
                         unreachable!()
                     };
                     let resize_input_id = self.find_input(input_id, EdgeKind::Input)?;
-                    let resize_upstream = self.compile_node(resize_input_id, sources, depth + 1)?;
+                    let resize_upstream = self.compile_node(resize_input_id, sources, outputs, depth + 1)?;
                     let resize_upstream = ensure_format(resize_upstream, format::RGBAF32_LINEAR)?;
                     let config = zenresize::ResizeConfig::builder(
                         resize_upstream.width(),
@@ -1170,7 +1192,7 @@ impl PipelineGraph {
                         16,
                     )?) as Box<dyn Source>
                 } else {
-                    let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                    let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                     ensure_format(upstream, format::RGBAF32_LINEAR)?
                 };
 
@@ -1188,7 +1210,7 @@ impl PipelineGraph {
             #[cfg(feature = "std")]
             NodeOp::IccTransform { src_icc, dst_icc } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 Ok(Box::new(crate::sources::IccTransformSource::new(
                     upstream,
                     &src_icc,
@@ -1199,7 +1221,7 @@ impl PipelineGraph {
 
             NodeOp::RemoveAlpha { matte } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let options = zenpixels_convert::policy::ConvertOptions::permissive()
                     .with_alpha_policy(zenpixels_convert::policy::AlphaPolicy::CompositeOnto {
@@ -1217,7 +1239,7 @@ impl PipelineGraph {
 
             NodeOp::AddAlpha => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 // If already RGBA, this is a no-op. ensure_format handles
                 // RGB→RGBA via RowConverter (adds opaque alpha).
                 ensure_format(upstream, format::RGBA8_SRGB)
@@ -1234,7 +1256,7 @@ impl PipelineGraph {
                 blend_mode,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let bg = self.compile_node(input_id, sources, depth + 1)?;
+                let bg = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let bg = ensure_format(bg, format::RGBAF32_LINEAR_PREMUL)?;
 
                 let mut fg: Box<dyn Source> = Box::new(MaterializedSource::from_data(
@@ -1259,9 +1281,9 @@ impl PipelineGraph {
 
             NodeOp::Analyze(builder) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let mat = MaterializedSource::from_source(upstream)?;
-                builder(mat)
+                builder(mat, outputs)
             }
 
             NodeOp::CropWhitespace {
@@ -1269,7 +1291,7 @@ impl PipelineGraph {
                 percent_padding,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let upstream = ensure_format(upstream, format::RGBA8_SRGB)?;
                 let mat = MaterializedSource::from_source(upstream)?;
                 let (x, y, w, h) = detect_content_bounds(&mat, threshold, percent_padding);
@@ -1284,7 +1306,7 @@ impl PipelineGraph {
                 left, top, right, bottom, bg_color,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let src_w = upstream.width();
                 let src_h = upstream.height();
                 let canvas_w = src_w + left + right;
@@ -1299,7 +1321,7 @@ impl PipelineGraph {
                 x1, y1, x2, y2, color,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 let mut mat = MaterializedSource::from_source(upstream)?;
                 let w = mat.width();
                 let h = mat.height();
@@ -1325,7 +1347,7 @@ impl PipelineGraph {
 
             NodeOp::Materialize(transform_fn) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let upstream = self.compile_node(input_id, sources, outputs, depth + 1)?;
                 Ok(Box::new(MaterializedSource::from_source_with_transform(
                     upstream,
                     transform_fn,
@@ -1372,11 +1394,12 @@ fn compile_orient(
     graph: &mut PipelineGraph,
     node_id: NodeId,
     sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
+    outputs: &mut AnalysisOutputs,
     orientation: zenresize::Orientation,
     depth: usize,
 ) -> Result<Box<dyn Source>, PipeError> {
     let input_id = graph.find_input(node_id, EdgeKind::Input)?;
-    let upstream = graph.compile_node(input_id, sources, depth + 1)?;
+    let upstream = graph.compile_node(input_id, sources, outputs, depth + 1)?;
     if orientation.is_identity() {
         return Ok(upstream);
     }
