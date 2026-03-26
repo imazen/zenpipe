@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 zencodecs = { path = "..", features = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "std"] }
-zencodec = { version = "0.1.2" }
+zencodec = { version = "0.1.4" }
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
 rayon = "1.10"
 indicatif = "0.17"
