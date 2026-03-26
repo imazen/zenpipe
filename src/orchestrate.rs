@@ -257,11 +257,21 @@ pub fn stream(
         None
     };
 
+    // If the graph contains an ICC transform, update the output metadata to
+    // carry the destination profile instead of the source's original ICC.
+    let mut metadata = config.source_info.metadata.clone();
+    #[cfg(feature = "std")]
+    if let Some(dst_icc) = graph.last_icc_transform_dst() {
+        if let Some(ref mut meta) = metadata {
+            meta.icc_profile = Some(dst_icc.clone());
+        }
+    }
+
     Ok(StreamingOutput {
         source: pipeline,
         sidecar: processed_sidecar,
         encode_config,
-        metadata: config.source_info.metadata.clone(),
+        metadata,
         outputs,
     })
 }
@@ -364,13 +374,21 @@ pub fn process_with_sidecar(
         None
     };
 
-    // 6. Return the processed image.
+    // 6. If the graph has an ICC transform, update metadata to match the output.
+    let mut metadata = config.source_info.metadata.clone();
+    #[cfg(feature = "std")]
+    if let Some(dst_icc) = graph.last_icc_transform_dst() {
+        if let Some(ref mut meta) = metadata {
+            meta.icc_profile = Some(dst_icc.clone());
+        }
+    }
+
     Ok(ProcessedImage {
         primary,
         sidecar: processed_sidecar,
         decode_config,
         encode_config,
-        metadata: config.source_info.metadata.clone(),
+        metadata,
         outputs,
     })
 }

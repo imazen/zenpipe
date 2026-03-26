@@ -488,6 +488,23 @@ impl PipelineGraph {
         self.edges.push(Edge { from, to, kind });
     }
 
+    /// Find the destination ICC profile from the last `IccTransform` node in the graph.
+    ///
+    /// Returns `None` if no `IccTransform` nodes exist. When the pipeline applies an
+    /// ICC transform, the output metadata should use this profile instead of the
+    /// source's original ICC profile.
+    #[cfg(feature = "std")]
+    pub fn last_icc_transform_dst(&self) -> Option<&alloc::sync::Arc<[u8]>> {
+        self.nodes
+            .iter()
+            .rev()
+            .filter_map(|node| match &node.op {
+                Some(NodeOp::IccTransform { dst_icc, .. }) => Some(dst_icc),
+                _ => None,
+            })
+            .next()
+    }
+
     /// Validate graph structure: no cycles, valid node references, exactly one output.
     ///
     /// Called automatically by [`estimate()`](Self::estimate) and [`compile()`](Self::compile).
