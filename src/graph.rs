@@ -1180,6 +1180,13 @@ impl PipelineGraph {
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "Resize")?;
+
+                // Skip identity resize (same dimensions, no sharpening).
+                // ensure_format already ran, so format conversion is preserved.
+                if upstream.width() == w && upstream.height() == h && sharpen_percent.is_none() {
+                    return Ok((upstream, meta));
+                }
+
                 let mut builder =
                     zenresize::ResizeConfig::builder(upstream.width(), upstream.height(), w, h);
                 if let Some(f) = filter {
