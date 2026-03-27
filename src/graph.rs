@@ -52,8 +52,8 @@ use crate::ops::{PixelOp, RowConverterOp};
 #[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource,
-    MaterializedSource, ResizeSource, TransformSource,
+    CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource, MaterializedSource,
+    ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -863,7 +863,13 @@ impl PipelineGraph {
                 })
             }
 
-            NodeOp::ExpandCanvas { left, top, right, bottom, .. } => {
+            NodeOp::ExpandCanvas {
+                left,
+                top,
+                right,
+                bottom,
+                ..
+            } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 Ok(SourceInfo {
@@ -939,9 +945,16 @@ impl PipelineGraph {
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
         config: &crate::trace::TraceConfig,
-    ) -> Result<(Box<dyn Source>, alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>), PipeError> {
+    ) -> Result<
+        (
+            Box<dyn Source>,
+            alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
+        ),
+        PipeError,
+    > {
         self.validate()?;
-        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
+        let trace =
+            alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
 
         // Capture graph edges into the trace.
         {
@@ -962,7 +975,9 @@ impl PipelineGraph {
 
         self.tracer = crate::trace::Tracer::active(trace.clone(), config.timing);
 
-        let output_id = self.nodes.iter()
+        let output_id = self
+            .nodes
+            .iter()
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
             .unwrap();
 
@@ -1064,11 +1079,17 @@ impl PipelineGraph {
         macro_rules! capture_meta {
             ($source:expr) => {{
                 #[cfg(feature = "std")]
-                { Some(UpstreamMeta::from_source($source.as_ref())) }
+                {
+                    Some(UpstreamMeta::from_source($source.as_ref()))
+                }
                 #[cfg(not(feature = "std"))]
                 {
                     let s: &dyn Source = $source.as_ref();
-                    Some(UpstreamMeta { format: s.format(), width: s.width(), height: s.height() })
+                    Some(UpstreamMeta {
+                        format: s.format(),
+                        width: s.width(),
+                        height: s.height(),
+                    })
                 }
             }};
         }
@@ -1260,16 +1281,28 @@ impl PipelineGraph {
                 Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), meta))
             }
 
-            NodeOp::Orient(orientation) => {
-                compile_orient(self, node_id, sources, orientation, depth,
-                    #[cfg(feature = "std")] &tracer)
-            }
+            NodeOp::Orient(orientation) => compile_orient(
+                self,
+                node_id,
+                sources,
+                orientation,
+                depth,
+                #[cfg(feature = "std")]
+                &tracer,
+            ),
 
             NodeOp::AutoOrient(exif) => {
                 let orientation = zenresize::Orientation::from_exif(exif)
                     .unwrap_or(zenresize::Orientation::Identity);
-                compile_orient(self, node_id, sources, orientation, depth,
-                    #[cfg(feature = "std")] &tracer)
+                compile_orient(
+                    self,
+                    node_id,
+                    sources,
+                    orientation,
+                    depth,
+                    #[cfg(feature = "std")]
+                    &tracer,
+                )
             }
 
             NodeOp::PixelTransform(pixel_op) => {
@@ -1466,19 +1499,35 @@ impl PipelineGraph {
                     let desc = if w == orig_w && h == orig_h && x == 0 && y == 0 {
                         alloc::format!(
                             "no whitespace detected ({}x{}, threshold={})",
-                            orig_w, orig_h, threshold
+                            orig_w,
+                            orig_h,
+                            threshold
                         )
                     } else {
                         alloc::format!(
                             "detected content at ({},{}) {}x{} from {}x{} (borders: L={} T={} R={} B={})",
-                            x, y, w, h, orig_w, orig_h,
-                            x, y, orig_w - w - x, orig_h - h - y
+                            x,
+                            y,
+                            w,
+                            h,
+                            orig_w,
+                            orig_h,
+                            x,
+                            y,
+                            orig_w - w - x,
+                            orig_h - h - y
                         )
                     };
                     tracer.note_implicit(
-                        "WhitespaceDetect", desc,
+                        "WhitespaceDetect",
+                        desc,
                         "CropWhitespace detection result",
-                        format::RGBA8_SRGB, orig_w, orig_h, w, h, true,
+                        format::RGBA8_SRGB,
+                        orig_w,
+                        orig_h,
+                        w,
+                        h,
+                        true,
                     );
                 }
 
@@ -1489,7 +1538,11 @@ impl PipelineGraph {
             }
 
             NodeOp::ExpandCanvas {
-                left, top, right, bottom, bg_color,
+                left,
+                top,
+                right,
+                bottom,
+                bg_color,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
@@ -1498,14 +1551,25 @@ impl PipelineGraph {
                 let src_h = upstream.height();
                 let canvas_w = src_w + left + right;
                 let canvas_h = src_h + top + bottom;
-                Ok((Box::new(ExpandCanvasSource::new(
-                    upstream, canvas_w, canvas_h,
-                    left as i32, top as i32, bg_color,
-                )), meta))
+                Ok((
+                    Box::new(ExpandCanvasSource::new(
+                        upstream,
+                        canvas_w,
+                        canvas_h,
+                        left as i32,
+                        top as i32,
+                        bg_color,
+                    )),
+                    meta,
+                ))
             }
 
             NodeOp::FillRect {
-                x1, y1, x2, y2, color,
+                x1,
+                y1,
+                x2,
+                y2,
+                color,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
@@ -1537,10 +1601,13 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                Ok((Box::new(MaterializedSource::from_source_with_transform(
-                    upstream,
-                    transform_fn,
-                )?), meta))
+                Ok((
+                    Box::new(MaterializedSource::from_source_with_transform(
+                        upstream,
+                        transform_fn,
+                    )?),
+                    meta,
+                ))
             }
         }
     }
@@ -1583,8 +1650,7 @@ fn compile_orient(
     sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
     orientation: zenresize::Orientation,
     depth: usize,
-    #[cfg(feature = "std")]
-    tracer: &crate::trace::Tracer,
+    #[cfg(feature = "std")] tracer: &crate::trace::Tracer,
 ) -> Result<(Box<dyn Source>, Option<crate::trace::UpstreamMeta>), PipeError> {
     let input_id = graph.find_input(node_id, EdgeKind::Input)?;
     let upstream = graph.compile_node(input_id, sources, depth + 1)?;
@@ -1603,15 +1669,19 @@ fn compile_orient(
 
     let in_w = upstream.width();
     let in_h = upstream.height();
-    Ok((Box::new(MaterializedSource::from_source_with_transform(
-        upstream,
-        move |data, w, h, _fmt| {
-            let (result, new_w, new_h) = zenresize::orient_image(data, in_w, in_h, orientation, 4);
-            *data = result;
-            *w = new_w;
-            *h = new_h;
-        },
-    )?), meta))
+    Ok((
+        Box::new(MaterializedSource::from_source_with_transform(
+            upstream,
+            move |data, w, h, _fmt| {
+                let (result, new_w, new_h) =
+                    zenresize::orient_image(data, in_w, in_h, orientation, 4);
+                *data = result;
+                *w = new_w;
+                *h = new_h;
+            },
+        )?),
+        meta,
+    ))
 }
 
 /// Insert a format conversion source if needed (no-std path).

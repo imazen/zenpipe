@@ -214,15 +214,14 @@ pub fn compile_nodes(
     let mut graph = PipelineGraph::new();
     let source_id = graph.add_node(NodeOp::Source);
 
-    let last_id =
-        if let Some((first, last)) =
-            coalesce_and_append_chain(&sep.pixel, converters, source_w, source_h, &mut graph)?
-        {
-            graph.add_edge(source_id, first, EdgeKind::Input);
-            last
-        } else {
-            source_id
-        };
+    let last_id = if let Some((first, last)) =
+        coalesce_and_append_chain(&sep.pixel, converters, source_w, source_h, &mut graph)?
+    {
+        graph.add_edge(source_id, first, EdgeKind::Input);
+        last
+    } else {
+        source_id
+    };
 
     let output_id = graph.add_node(NodeOp::Output);
     graph.add_edge(last_id, output_id, EdgeKind::Input);
@@ -261,9 +260,21 @@ fn build_bridge_trace(
     input_nodes.extend(sep.decode.iter().map(|n| node_to_info(n.as_ref())));
     input_nodes.extend(sep.encode.iter().map(|n| node_to_info(n.as_ref())));
 
-    let decode_nodes = sep.decode.iter().map(|n| n.schema().id.to_string()).collect();
-    let encode_nodes = sep.encode.iter().map(|n| n.schema().id.to_string()).collect();
-    let pixel_nodes = sep.pixel.iter().map(|n| n.schema().id.to_string()).collect();
+    let decode_nodes = sep
+        .decode
+        .iter()
+        .map(|n| n.schema().id.to_string())
+        .collect();
+    let encode_nodes = sep
+        .encode
+        .iter()
+        .map(|n| n.schema().id.to_string())
+        .collect();
+    let pixel_nodes = sep
+        .pixel
+        .iter()
+        .map(|n| n.schema().id.to_string())
+        .collect();
 
     // Record coalescing steps.
     let coalesced = convert::coalesce(&sep.pixel);
@@ -350,10 +361,9 @@ pub fn record_snapshot(
         .collect();
 
     let edges: Vec<crate::trace::DagSnapshotEdge> = (0..nodes.len().saturating_sub(1))
-        .map(|i| crate::trace::DagSnapshotEdge::input(
-            uid_start + i as u32,
-            uid_start + (i + 1) as u32,
-        ))
+        .map(|i| {
+            crate::trace::DagSnapshotEdge::input(uid_start + i as u32, uid_start + (i + 1) as u32)
+        })
         .collect();
 
     trace.snapshots.push(crate::trace::DagSnapshot {
@@ -446,8 +456,14 @@ pub fn build_pipeline(
         decode_config,
         encode_config,
         ..
-    } = compile_nodes(nodes, converters, source_w, source_h,
-        #[cfg(feature = "std")] None)?;
+    } = compile_nodes(
+        nodes,
+        converters,
+        source_w,
+        source_h,
+        #[cfg(feature = "std")]
+        None,
+    )?;
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
@@ -568,10 +584,10 @@ pub fn build_riapi_trace(
 #[cfg(test)]
 mod core_tests {
     use super::*;
-    use alloc::string::ToString;
-    use alloc::vec;
     use crate::format::RGBA8_SRGB;
     use crate::strip::Strip;
+    use alloc::string::ToString;
+    use alloc::vec;
     use core::any::Any;
 
     // A mock NodeInstance backed by a BTreeMap of params.

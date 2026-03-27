@@ -11,9 +11,9 @@ mod mask_transform;
 mod materialize;
 mod resize;
 mod tee;
-mod transform;
 #[cfg(feature = "std")]
 mod tracing;
+mod transform;
 #[cfg(feature = "std")]
 mod windowed_filter;
 
@@ -30,8 +30,8 @@ pub use mask_transform::MaskTransformSource;
 pub use materialize::MaterializedSource;
 pub use resize::{ResizeF32Source, ResizeSource};
 pub use tee::{TeeCursor, TeeSource};
-pub use transform::TransformSource;
 #[cfg(feature = "std")]
 pub use tracing::TracingSource;
+pub use transform::TransformSource;
 #[cfg(feature = "std")]
 pub use windowed_filter::{DEFAULT_OVERLAP, WindowedFilterSource};

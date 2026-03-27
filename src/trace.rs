@@ -400,12 +400,7 @@ impl TraceAppender {
     }
 
     /// Push a sub-chain entry (implicit, with the given name and reason).
-    pub fn push_sub_node(
-        &self,
-        name: &str,
-        description: String,
-        source: &dyn crate::Source,
-    ) {
+    pub fn push_sub_node(&self, name: &str, description: String, source: &dyn crate::Source) {
         let fmt = source.format();
         let w = source.width();
         let h = source.height();
@@ -460,10 +455,7 @@ impl Tracer {
     }
 
     /// Active tracer backed by a shared `PipelineTrace`.
-    pub fn active(
-        trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>,
-        timing: bool,
-    ) -> Self {
+    pub fn active(trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>, timing: bool) -> Self {
         Self {
             inner: Some(trace),
             timing,
@@ -923,7 +915,6 @@ impl PipelineTrace {
                     y + 16
                 );
             }
-
         }
 
         // Draw edges from the graph topology.
@@ -1053,10 +1044,16 @@ impl FullPipelineTrace {
             ));
 
             if !bridge.decode_nodes.is_empty() {
-                out.push_str(&format!("Decode nodes: {}\n", bridge.decode_nodes.join(", ")));
+                out.push_str(&format!(
+                    "Decode nodes: {}\n",
+                    bridge.decode_nodes.join(", ")
+                ));
             }
             if !bridge.encode_nodes.is_empty() {
-                out.push_str(&format!("Encode nodes: {}\n", bridge.encode_nodes.join(", ")));
+                out.push_str(&format!(
+                    "Encode nodes: {}\n",
+                    bridge.encode_nodes.join(", ")
+                ));
             }
             out.push_str(&format!(
                 "Pixel nodes: {} total\n",
@@ -1156,7 +1153,11 @@ impl FullPipelineTrace {
                 for (name, order, timing) in &timed {
                     out.push_str(&format!(
                         "  [{:2}] {:<20} {:>10?}  {} strips  {} bytes\n",
-                        order, name, timing.total_duration, timing.strip_count, timing.bytes_processed
+                        order,
+                        name,
+                        timing.total_duration,
+                        timing.strip_count,
+                        timing.bytes_processed
                     ));
                 }
             }
@@ -1263,7 +1264,9 @@ impl FullPipelineTrace {
             .unwrap_or_default();
 
         if snapshots.is_empty() {
-            return String::from("<svg xmlns='http://www.w3.org/2000/svg'><text>No snapshots</text></svg>");
+            return String::from(
+                "<svg xmlns='http://www.w3.org/2000/svg'><text>No snapshots</text></svg>",
+            );
         }
 
         let node_w = 180u32;
@@ -1301,12 +1304,12 @@ impl FullPipelineTrace {
         // Color map for node kinds.
         let kind_color = |kind: &str| -> &str {
             match kind {
-                k if k.contains("Geometry") => "#e3f2fd"
-                , k if k.contains("Filter") => "#f3e5f5"
-                , k if k.contains("Encode") => "#fff3e0"
-                , k if k.contains("Decode") => "#e8f5e9"
-                , k if k.contains("implicit") => "#fafafa"
-                , _ => "#f5f5f5"
+                k if k.contains("Geometry") => "#e3f2fd",
+                k if k.contains("Filter") => "#f3e5f5",
+                k if k.contains("Encode") => "#fff3e0",
+                k if k.contains("Decode") => "#e8f5e9",
+                k if k.contains("implicit") => "#fafafa",
+                _ => "#f5f5f5",
             }
         };
 
@@ -1370,9 +1373,18 @@ impl FullPipelineTrace {
         }
         let _ = write!(s, " }}\n");
 
-        let _ = write!(s, ".node {{ animation-duration:{total_dur}s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }}\n");
-        let _ = write!(s, ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}\n");
-        let _ = write!(s, "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}\n");
+        let _ = write!(
+            s,
+            ".node {{ animation-duration:{total_dur}s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }}\n"
+        );
+        let _ = write!(
+            s,
+            ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}\n"
+        );
+        let _ = write!(
+            s,
+            "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}\n"
+        );
         let _ = write!(s, "</style></defs>\n");
 
         // Render nodes — each is a group with CSS animation.
@@ -1411,9 +1423,7 @@ impl FullPipelineTrace {
 
         // Frame labels on timeline.
         for (fi, snap) in snapshots.iter().enumerate() {
-            let x = margin
-                + fi as u32 * (svg_w - margin * 2) / num_frames.max(1) as u32
-                + 4;
+            let x = margin + fi as u32 * (svg_w - margin * 2) / num_frames.max(1) as u32 + 4;
             let label = if snap.label.len() > 16 {
                 &snap.label[..16]
             } else {
@@ -1565,9 +1575,7 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
         } => {
             format!("L={left} T={top} R={right} B={bottom}")
         }
-        NodeOp::FillRect {
-            x1, y1, x2, y2, ..
-        } => {
+        NodeOp::FillRect { x1, y1, x2, y2, .. } => {
             format!("({x1},{y1})-({x2},{y2})")
         }
         NodeOp::Materialize(_) => "custom transform".into(),

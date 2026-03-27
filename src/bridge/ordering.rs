@@ -143,9 +143,7 @@ fn should_swap(a: &dyn NodeInstance, b: &dyn NodeInstance, level: OptimizationLe
                 && !a_fmt.is_neighborhood
                 && !b_fmt.is_neighborhood
             {
-                if let (Some(a_coal), Some(b_coal)) =
-                    (&a_schema.coalesce, &b_schema.coalesce)
-                {
+                if let (Some(a_coal), Some(b_coal)) = (&a_schema.coalesce, &b_schema.coalesce) {
                     // Only swap if same group — purpose is to cluster for fusion.
                     // Swap to sort by group name, so scattered same-group nodes cluster.
                     if a_coal.group > b_coal.group {
@@ -246,7 +244,9 @@ mod tests {
             self
         }
         fn clone_boxed(&self) -> Box<dyn NodeInstance> {
-            Box::new(TestNode { schema: self.schema })
+            Box::new(TestNode {
+                schema: self.schema,
+            })
         }
     }
 
@@ -447,7 +447,10 @@ mod tests {
 
         canonical_sort(&mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(
             ids,
             &[
@@ -472,7 +475,10 @@ mod tests {
         canonical_sort(&mut nodes);
 
         // All are Filter — original relative order preserved (stable sort).
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.contrast", "test.exposure", "test.sharpen"]);
     }
 
@@ -488,89 +494,98 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::None, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.exposure", "test.crop", "test.resize"]);
     }
 
     #[test]
     fn optimize_lossless_moves_orient_before_crop() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&CROP_SCHEMA),
-            make_node(&ORIENT_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&CROP_SCHEMA), make_node(&ORIENT_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Lossless, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.orient", "test.crop"]);
     }
 
     #[test]
     fn optimize_lossless_does_not_move_crop_before_resize() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&RESIZE_SCHEMA),
-            make_node(&CROP_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&RESIZE_SCHEMA), make_node(&CROP_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Lossless, &mut nodes);
 
         // Crop before resize is a Speed-level optimization, not Lossless.
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.resize", "test.crop"]);
     }
 
     #[test]
     fn optimize_speed_moves_crop_before_resize() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&RESIZE_SCHEMA),
-            make_node(&CROP_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&RESIZE_SCHEMA), make_node(&CROP_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.crop", "test.resize"]);
     }
 
     #[test]
     fn optimize_speed_moves_crop_before_per_pixel_filter() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&EXPOSURE_SCHEMA),
-            make_node(&CROP_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&EXPOSURE_SCHEMA), make_node(&CROP_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.crop", "test.exposure"]);
     }
 
     #[test]
     fn optimize_speed_does_not_move_crop_before_neighborhood_filter() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&SHARPEN_SCHEMA),
-            make_node(&CROP_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&SHARPEN_SCHEMA), make_node(&CROP_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
         // Sharpen is a neighborhood filter — crop after sharpen changes output.
         // The rule only applies to non-neighborhood filters.
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.sharpen", "test.crop"]);
     }
 
     #[test]
     fn optimize_speed_does_not_move_resize_before_sharpen() {
-        let mut nodes: Vec<Box<dyn NodeInstance>> = vec![
-            make_node(&SHARPEN_SCHEMA),
-            make_node(&RESIZE_SCHEMA),
-        ];
+        let mut nodes: Vec<Box<dyn NodeInstance>> =
+            vec![make_node(&SHARPEN_SCHEMA), make_node(&RESIZE_SCHEMA)];
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
         // Moving resize before sharpen destroys detail — unsafe reordering.
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(ids, &["test.sharpen", "test.resize"]);
     }
 
@@ -592,7 +607,10 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
         assert_eq!(
             ids,
             &[
@@ -620,7 +638,13 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes.iter().map(|n: &Box<dyn NodeInstance>| n.schema().id).collect();
-        assert_eq!(ids, &["test.crop", "test.resize", "test.exposure", "test.sharpen"]);
+        let ids: Vec<&str> = nodes
+            .iter()
+            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .collect();
+        assert_eq!(
+            ids,
+            &["test.crop", "test.resize", "test.exposure", "test.sharpen"]
+        );
     }
 }

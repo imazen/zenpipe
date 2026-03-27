@@ -95,8 +95,8 @@ static CROP_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static ORIENT_SCHEMA: NodeSchema = NodeSchema {
@@ -120,8 +120,8 @@ static ORIENT_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static FLIP_H_SCHEMA: NodeSchema = NodeSchema {
@@ -145,8 +145,8 @@ static FLIP_H_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static FLIP_V_SCHEMA: NodeSchema = NodeSchema {
@@ -170,8 +170,8 @@ static FLIP_V_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static ROT90_SCHEMA: NodeSchema = NodeSchema {
@@ -195,8 +195,8 @@ static ROT90_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static ROT180_SCHEMA: NodeSchema = NodeSchema {
@@ -220,8 +220,8 @@ static ROT180_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static ROT270_SCHEMA: NodeSchema = NodeSchema {
@@ -245,8 +245,8 @@ static ROT270_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static CONSTRAIN_SCHEMA: NodeSchema = NodeSchema {
@@ -270,8 +270,8 @@ static CONSTRAIN_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static FILTER_SCHEMA: NodeSchema = NodeSchema {
@@ -295,8 +295,8 @@ static FILTER_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 static FILTER2_SCHEMA: NodeSchema = NodeSchema {
@@ -320,8 +320,8 @@ static FILTER2_SCHEMA: NodeSchema = NodeSchema {
     },
     version: 1,
     compat_version: 1,
-        json_key: "",
-        deny_unknown_fields: false,
+    json_key: "",
+    deny_unknown_fields: false,
 };
 
 fn constrain_params(w: u32, h: u32, mode: &str) -> ParamMap {

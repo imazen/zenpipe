@@ -113,9 +113,7 @@ pub fn build_pipeline_dag(
                 dag_to_graph[*idx] = Some(gid);
             }
             Chain::Linear(indices) => {
-                let sep = separate_by_role(
-                    indices.iter().map(|&idx| dag[idx].instance.as_ref()),
-                );
+                let sep = separate_by_role(indices.iter().map(|&idx| dag[idx].instance.as_ref()));
                 decode_nodes.extend(sep.decode);
                 encode_nodes.extend(sep.encode);
 
@@ -124,11 +122,7 @@ pub fn build_pipeline_dag(
                 }
 
                 if let Some((first, last)) = coalesce_and_append_chain(
-                    &sep.pixel,
-                    converters,
-                    source_w,
-                    source_h,
-                    &mut graph,
+                    &sep.pixel, converters, source_w, source_h, &mut graph,
                 )? {
                     dag_to_graph[indices[0]] = Some(first);
                     dag_to_graph[*indices.last().unwrap()] = Some(last);

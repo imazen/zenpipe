@@ -44,9 +44,7 @@ impl<'a> DecoderSource<'a> {
     /// This ensures `format()`, `width()`, and `height()` are all accurate
     /// before any `next()` call — required by `build_pipeline` which reads
     /// format during graph compilation.
-    pub fn new(
-        mut decoder: Box<dyn DynStreamingDecoder + 'a>,
-    ) -> Result<Self, PipeError> {
+    pub fn new(mut decoder: Box<dyn DynStreamingDecoder + 'a>) -> Result<Self, PipeError> {
         let info = decoder.info();
         let w = info.width;
         let h = info.height;
