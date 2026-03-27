@@ -48,6 +48,7 @@ pub(crate) fn decode(
 pub(crate) fn build_encoding(
     quality: Option<f32>,
     effort: Option<u32>,
+    lossless: bool,
     codec_config: Option<&CodecConfig>,
 ) -> zenpng::PngEncoderConfig {
     let mut enc = zenpng::PngEncoderConfig::new();
@@ -64,6 +65,11 @@ pub(crate) fn build_encoding(
     if let Some(q) = quality {
         enc = enc.with_generic_quality(q);
     }
+    // Restore lossless if explicitly requested — with_generic_quality may
+    // have overridden it when quality < 100.
+    if lossless {
+        enc = enc.with_lossless(true);
+    }
     enc
 }
 
@@ -75,14 +81,14 @@ use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_c
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
         params,
     )
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
         params,
     )
 }

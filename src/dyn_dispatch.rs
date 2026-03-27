@@ -504,6 +504,7 @@ pub(crate) fn dyn_animation_frame_encoder(
             build_ffe!(crate::codecs::png::build_encoding(
                 params.quality,
                 params.effort,
+                params.lossless,
                 params.codec_config,
             ))
         }
