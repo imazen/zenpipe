@@ -13,6 +13,7 @@
 //! and optional `#[kv]` annotations for RIAPI querystring parsing.
 
 extern crate alloc;
+use alloc::string::String;
 
 use zennode::*;
 
@@ -134,15 +135,35 @@ impl RemoveAlpha {
 /// alpha channel. Transparent corners reveal the background color, or
 /// remain transparent for PNG/WebP/AVIF output.
 ///
+/// Supports uniform radius, per-corner radii, percentage-based radii,
+/// and circle mode (elliptical crop for non-square images).
+///
 /// JSON: `{ "radius": 20.0, "bg_color": [0, 0, 0, 0] }`
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenpipe.round_corners", group = Canvas, role = Filter)]
 #[node(tags("corners", "rounded", "mask", "border-radius"))]
 pub struct RoundCorners {
-    /// Corner radius in pixels. Clamped to min(width, height) / 2.
+    /// Corner radius in pixels (uniform). Clamped to min(width, height) / 2.
+    /// Used when mode is "pixels" (default) or as fallback.
     #[param(range(0.0..=10000.0), default = 0.0, step = 1.0)]
     #[param(unit = "px", section = "Main", label = "Radius")]
     pub radius: f32,
+    /// Top-left corner radius (for per-corner modes).
+    #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
+    pub radius_tl: f32,
+    /// Top-right corner radius (for per-corner modes).
+    #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
+    pub radius_tr: f32,
+    /// Bottom-left corner radius (for per-corner modes).
+    #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
+    pub radius_bl: f32,
+    /// Bottom-right corner radius (for per-corner modes).
+    #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
+    pub radius_br: f32,
+    /// Rounding mode: "pixels" (default), "percentage", "circle",
+    /// "pixels_custom", "percentage_custom".
+    #[param(default = "pixels")]
+    pub mode: String,
     /// Background color red channel (for compositing transparent corners).
     #[param(range(0..=255), default = 0)]
     pub bg_r: u32,
@@ -160,7 +181,12 @@ pub struct RoundCorners {
 impl RoundCorners {
     /// Get the background color as [R, G, B, A] bytes.
     pub fn bg_color(&self) -> [u8; 4] {
-        [self.bg_r as u8, self.bg_g as u8, self.bg_b as u8, self.bg_a as u8]
+        [
+            self.bg_r as u8,
+            self.bg_g as u8,
+            self.bg_b as u8,
+            self.bg_a as u8,
+        ]
     }
 }
 
