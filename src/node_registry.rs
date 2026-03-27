@@ -76,5 +76,8 @@ pub fn full_registry() -> NodeRegistry {
     #[cfg(feature = "nodes-filters")]
     zenfilters::zennode_defs::register(&mut r);
 
+    // zenpipe's own pipeline-level nodes (always available when zennode is on).
+    crate::zennode_defs::register(&mut r);
+
     r
 }

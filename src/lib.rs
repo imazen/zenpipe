@@ -37,6 +37,9 @@ mod node_registry;
 #[cfg(feature = "zennode")]
 pub use node_registry::full_registry;
 
+#[cfg(feature = "zennode")]
+pub mod zennode_defs;
+
 // Re-export bridge config types at crate root for convenience.
 #[cfg(feature = "zennode")]
 pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};

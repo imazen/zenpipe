@@ -218,6 +218,17 @@ pub(crate) fn convert_single(
         "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate270)),
         "zenresize.constrain" => convert_zenresize_constrain(node),
         "zenlayout.constrain" => convert_zenlayout_constrain(node),
+
+        // zenpipe native nodes + zenresize.resize
+        "zenpipe.crop_whitespace" => convert_crop_whitespace(node),
+        "zenpipe.fill_rect" => convert_fill_rect(node),
+        "zenpipe.remove_alpha" => convert_remove_alpha(node),
+        "zenpipe.round_corners" => convert_round_corners(node),
+        "zenresize.resize" => convert_resize(node),
+
+        // Legacy aliases (zenlayout had crop_whitespace before it moved to zenpipe)
+        "zenlayout.crop_whitespace" => convert_crop_whitespace(node),
+
         _ => Err(PipeError::Op(alloc::format!(
             "bridge: no converter for node '{schema_id}'"
         ))),
@@ -280,5 +291,139 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter: None,
+    })
+}
+
+// ─── zenpipe native node converters ───
+
+/// Convert a `zenpipe.crop_whitespace` node to `NodeOp::CropWhitespace`.
+pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let threshold = param_u32(node, "threshold").unwrap_or(80) as u8;
+    let percent_padding = param_f32_opt(node, "percent_padding").unwrap_or(0.0);
+    Ok(NodeOp::CropWhitespace {
+        threshold,
+        percent_padding,
+    })
+}
+
+/// Convert a `zenpipe.fill_rect` node to `NodeOp::FillRect`.
+pub(crate) fn convert_fill_rect(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let x1 = param_u32(node, "x1")?;
+    let y1 = param_u32(node, "y1")?;
+    let x2 = param_u32(node, "x2")?;
+    let y2 = param_u32(node, "y2")?;
+    let color = [
+        param_u32(node, "color_r").unwrap_or(0) as u8,
+        param_u32(node, "color_g").unwrap_or(0) as u8,
+        param_u32(node, "color_b").unwrap_or(0) as u8,
+        param_u32(node, "color_a").unwrap_or(255) as u8,
+    ];
+    Ok(NodeOp::FillRect {
+        x1,
+        y1,
+        x2,
+        y2,
+        color,
+    })
+}
+
+/// Convert a `zenpipe.remove_alpha` node to `NodeOp::RemoveAlpha`.
+pub(crate) fn convert_remove_alpha(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let matte = [
+        param_u32(node, "matte_r").unwrap_or(255) as u8,
+        param_u32(node, "matte_g").unwrap_or(255) as u8,
+        param_u32(node, "matte_b").unwrap_or(255) as u8,
+    ];
+    Ok(NodeOp::RemoveAlpha { matte })
+}
+
+/// Convert a `zenpipe.round_corners` node to `NodeOp::Materialize` with mask application.
+pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let radius = param_f32_opt(node, "radius").unwrap_or(0.0);
+    let bg = [
+        param_u32(node, "bg_r").unwrap_or(0) as u8,
+        param_u32(node, "bg_g").unwrap_or(0) as u8,
+        param_u32(node, "bg_b").unwrap_or(0) as u8,
+        param_u32(node, "bg_a").unwrap_or(0) as u8,
+    ];
+
+    Ok(NodeOp::Materialize(Box::new(move |data, w, h, fmt| {
+        let width = *w;
+        let height = *h;
+        let bpp = fmt.bytes_per_pixel();
+        if radius <= 0.0 || width == 0 || height == 0 {
+            return;
+        }
+
+        use zenblend::mask::MaskSource as _;
+        let mask = zenblend::mask::RoundedRectMask::uniform(width, height, radius);
+        let mut mask_row_buf = alloc::vec![0.0f32; width as usize];
+
+        for y in 0..height {
+            let fill = mask.fill_mask_row(&mut mask_row_buf, y);
+            let row_start = y as usize * width as usize * bpp;
+
+            match fill {
+                zenblend::mask::MaskFill::AllOpaque => {} // no-op
+                zenblend::mask::MaskFill::AllTransparent => {
+                    // Fill with bg color
+                    for x in 0..width as usize {
+                        let off = row_start + x * bpp;
+                        for c in 0..bpp.min(4) {
+                            data[off + c] = bg[c];
+                        }
+                    }
+                }
+                zenblend::mask::MaskFill::Partial => {
+                    for x in 0..width as usize {
+                        let alpha = mask_row_buf[x];
+                        if alpha >= 1.0 {
+                            continue;
+                        }
+                        let off = row_start + x * bpp;
+                        if alpha <= 0.0 {
+                            for c in 0..bpp.min(4) {
+                                data[off + c] = bg[c];
+                            }
+                        } else {
+                            // Blend: pixel * alpha + bg * (1 - alpha)
+                            for c in 0..bpp.min(4) {
+                                let src = data[off + c] as f32;
+                                let dst = bg[c] as f32;
+                                data[off + c] =
+                                    (src * alpha + dst * (1.0 - alpha)).round() as u8;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    })))
+}
+
+/// Convert a `zenresize.resize` node to `NodeOp::Resize`.
+pub(crate) fn convert_resize(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    let w = param_u32(node, "w")?;
+    let h = param_u32(node, "h")?;
+    let filter_str = node
+        .get_param("filter")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_default();
+    let filter = if filter_str.is_empty() {
+        None
+    } else {
+        parse_filter_opt(&filter_str)
+    };
+    let sharpen = param_f32_opt(node, "sharpen");
+    let sharpen_percent = if sharpen.unwrap_or(0.0) > 0.0 {
+        sharpen
+    } else {
+        None
+    };
+    Ok(NodeOp::Resize {
+        w,
+        h,
+        filter,
+        sharpen_percent,
     })
 }
