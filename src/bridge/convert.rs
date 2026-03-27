@@ -355,9 +355,17 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
             return;
         }
 
-        use zenblend::mask::MaskSource as _;
-        let mask = zenblend::mask::RoundedRectMask::uniform(width, height, radius);
-        let mut mask_row_buf = alloc::vec![0.0f32; width as usize];
+        // Volumetric offset: radius of a circle with the surface area of a 1x1 square.
+        // Ensures correct average pixel coverage at any angle. Matches imageflow v2.
+        let volumetric_offset: f32 = 0.56419; // sqrt(1/pi)
+
+        let r = radius.min(width as f32 / 2.0).min(height as f32 / 2.0);
+        let radius_of_influence = r + (1.0 - volumetric_offset);
+        let radius_of_solid = r - volumetric_offset;
+        let alias_width = radius_of_influence - radius_of_solid;
+
+        let ri2 = radius_of_influence * radius_of_influence;
+        let rs2 = radius_of_solid * radius_of_solid;
 
         // Pre-convert bg color to linear space for gamma-correct blending.
         let bg_linear: [f32; 4] = [
@@ -367,57 +375,95 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
             bg[3] as f32 / 255.0,
         ];
 
-        for y in 0..height {
-            let fill = mask.fill_mask_row(&mut mask_row_buf, y);
-            let row_start = y as usize * width as usize * bpp;
+        // Corner centers.
+        let centers: [(f32, f32); 4] = [
+            (r, r),                                   // top-left
+            (width as f32 - r, r),                    // top-right
+            (r, height as f32 - r),                   // bottom-left
+            (width as f32 - r, height as f32 - r),    // bottom-right
+        ];
 
-            match fill {
-                zenblend::mask::MaskFill::AllOpaque => {} // no-op
-                zenblend::mask::MaskFill::AllTransparent => {
-                    for x in 0..width as usize {
+        let radius_ceil = r.ceil() as usize;
+
+        for (ci, &(cx, cy)) in centers.iter().enumerate() {
+            let is_top = ci < 2;
+            let is_left = ci % 2 == 0;
+
+            let y_start = if is_top { 0 } else { height as usize - radius_ceil };
+            let y_end = if is_top { radius_ceil } else { height as usize };
+            let x_start = if is_left { 0 } else { width as usize - radius_ceil };
+            let x_end = if is_left { radius_ceil } else { width as usize };
+
+            for y in y_start..y_end {
+                let yf = y as f32 + 0.5;
+                let dy = cy - yf;
+                let dy2 = dy * dy;
+                let row_start = y * width as usize * bpp;
+
+                // Clear columns outside influence on this row's side.
+                let x_inf = (ri2 - dy2).max(0.0).sqrt();
+                let clear_boundary = if is_left {
+                    (cx - x_inf).ceil().max(0.0) as usize
+                } else {
+                    (cx + x_inf).floor().min(width as f32) as usize
+                };
+
+                if is_left {
+                    for x in x_start..clear_boundary.min(x_end) {
                         let off = row_start + x * bpp;
-                        for c in 0..bpp.min(4) {
-                            data[off + c] = bg[c];
-                        }
+                        for c in 0..bpp.min(4) { data[off + c] = bg[c]; }
+                    }
+                } else {
+                    for x in clear_boundary.max(x_start)..x_end {
+                        let off = row_start + x * bpp;
+                        for c in 0..bpp.min(4) { data[off + c] = bg[c]; }
                     }
                 }
-                zenblend::mask::MaskFill::Partial => {
-                    for x in 0..width as usize {
-                        let coverage = mask_row_buf[x];
-                        if coverage >= 1.0 {
-                            continue;
-                        }
+
+                // Alias pixels in the transition band.
+                let x_sol = (rs2 - dy2).max(0.0).sqrt();
+                let (alias_from, alias_to) = if is_left {
+                    let from = (cx - x_inf).floor().max(0.0) as usize;
+                    let to = (cx - x_sol).ceil().max(0.0).min(width as f32) as usize;
+                    (from.max(x_start), to.min(x_end))
+                } else {
+                    let from = (cx + x_sol).floor().max(0.0) as usize;
+                    let to = (cx + x_inf).ceil().min(width as f32) as usize;
+                    (from.max(x_start), to.min(x_end))
+                };
+
+                for x in alias_from..alias_to {
+                    let xf = x as f32 + 0.5;
+                    let dx = cx - xf;
+                    let dist = (dx * dx + dy2).sqrt();
+
+                    if dist > radius_of_influence {
                         let off = row_start + x * bpp;
-                        if coverage <= 0.0 {
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = bg[c];
+                        for c in 0..bpp.min(4) { data[off + c] = bg[c]; }
+                    } else if dist > radius_of_solid {
+                        let intensity = (dist - radius_of_solid) / alias_width;
+                        let off = row_start + x * bpp;
+
+                        let pixel_a = if bpp >= 4 {
+                            data[off + 3] as f32 / 255.0 * (1.0 - intensity)
+                        } else {
+                            1.0 - intensity
+                        };
+                        let matte_a = (1.0 - pixel_a) * bg_linear[3];
+                        let final_a = matte_a + pixel_a;
+
+                        if final_a > 0.0 {
+                            for c in 0..bpp.min(3) {
+                                let src_lin = srgb_byte_to_linear(data[off + c]);
+                                let blended = (src_lin * pixel_a + bg_linear[c] * matte_a)
+                                    / final_a;
+                                data[off + c] = linear_to_srgb_byte(blended);
+                            }
+                            if bpp >= 4 {
+                                data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
                             }
                         } else {
-                            // Gamma-correct blending in linear space.
-                            let pixel_a = if bpp >= 4 {
-                                data[off + 3] as f32 / 255.0
-                            } else {
-                                1.0
-                            };
-                            let pixel_a_adj = pixel_a * coverage;
-                            let matte_a = (1.0 - pixel_a_adj) * bg_linear[3];
-                            let final_a = matte_a + pixel_a_adj;
-
-                            if final_a > 0.0 {
-                                for c in 0..bpp.min(3) {
-                                    let src_lin = srgb_byte_to_linear(data[off + c]);
-                                    let blended = (src_lin * pixel_a_adj + bg_linear[c] * matte_a)
-                                        / final_a;
-                                    data[off + c] = linear_to_srgb_byte(blended);
-                                }
-                                if bpp >= 4 {
-                                    data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
-                                }
-                            } else {
-                                for c in 0..bpp.min(4) {
-                                    data[off + c] = bg[c];
-                                }
-                            }
+                            for c in 0..bpp.min(4) { data[off + c] = bg[c]; }
                         }
                     }
                 }
