@@ -93,6 +93,10 @@ pub fn build_pipeline_dag(
                 match role {
                     NodeRole::Decode => {
                         decode_nodes.push(dag_node.instance.clone_boxed());
+                        // Still register a Source graph node so downstream
+                        // nodes can reference this decode position.
+                        let gid = graph.add_node(NodeOp::Source);
+                        dag_to_graph[*idx] = Some(gid);
                         continue;
                     }
                     NodeRole::Encode => {

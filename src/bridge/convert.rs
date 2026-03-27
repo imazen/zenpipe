@@ -370,7 +370,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
 
         // Resolve per-corner radii from mode + parameters.
         // Returns [top_left, top_right, bottom_left, bottom_right] clamped to valid range.
-        let has_custom = radius_tl >= 0.0 || radius_tr >= 0.0 || radius_bl >= 0.0 || radius_br >= 0.0;
+        let has_custom =
+            radius_tl >= 0.0 || radius_tr >= 0.0 || radius_bl >= 0.0 || radius_br >= 0.0;
         let is_circle = mode == "circle";
         let is_percentage = mode == "percentage" || mode == "percentage_custom";
 
@@ -485,43 +486,61 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
         // Quadrant definitions: [top_left, top_right, bottom_left, bottom_right]
         // Each: (qx, qy, qw, qh, radius, center_x, center_y, is_top, is_left)
         struct Quadrant {
-            qx: u32, qy: u32, qw: u32, qh: u32,
-            radius: f32, cx: f32, cy: f32,
-            is_top: bool, is_left: bool,
+            qx: u32,
+            qy: u32,
+            qw: u32,
+            qh: u32,
+            radius: f32,
+            cx: f32,
+            cy: f32,
+            is_top: bool,
+            is_left: bool,
         }
 
         let quadrants = [
             Quadrant {
-                qx: offset_x, qy: offset_y,
-                qw: left_half_width, qh: top_half_height,
+                qx: offset_x,
+                qy: offset_y,
+                qw: left_half_width,
+                qh: top_half_height,
                 radius: corner_radii[0],
                 cx: offset_x as f32 + corner_radii[0],
                 cy: offset_y as f32 + corner_radii[0],
-                is_top: true, is_left: true,
+                is_top: true,
+                is_left: true,
             },
             Quadrant {
-                qx: offset_x + left_half_width, qy: offset_y,
-                qw: right_half_width, qh: top_half_height,
+                qx: offset_x + left_half_width,
+                qy: offset_y,
+                qw: right_half_width,
+                qh: top_half_height,
                 radius: corner_radii[1],
                 cx: offset_x as f32 + eff_w as f32 - corner_radii[1],
                 cy: offset_y as f32 + corner_radii[1],
-                is_top: true, is_left: false,
+                is_top: true,
+                is_left: false,
             },
             Quadrant {
-                qx: offset_x, qy: offset_y + top_half_height,
-                qw: left_half_width, qh: bottom_half_height,
+                qx: offset_x,
+                qy: offset_y + top_half_height,
+                qw: left_half_width,
+                qh: bottom_half_height,
                 radius: corner_radii[2],
                 cx: offset_x as f32 + corner_radii[2],
                 cy: offset_y as f32 + eff_h as f32 - corner_radii[2],
-                is_top: false, is_left: true,
+                is_top: false,
+                is_left: true,
             },
             Quadrant {
-                qx: offset_x + left_half_width, qy: offset_y + top_half_height,
-                qw: right_half_width, qh: bottom_half_height,
+                qx: offset_x + left_half_width,
+                qy: offset_y + top_half_height,
+                qw: right_half_width,
+                qh: bottom_half_height,
                 radius: corner_radii[3],
                 cx: offset_x as f32 + eff_w as f32 - corner_radii[3],
                 cy: offset_y as f32 + eff_h as f32 - corner_radii[3],
-                is_top: false, is_left: false,
+                is_top: false,
+                is_left: false,
             },
         ];
 
@@ -593,7 +612,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
                 let edge_solid_x1 = (q.cx - x_dist_solid).ceil().max(0.0) as usize;
                 let edge_solid_x2 = (q.cx + x_dist_solid).floor().min(width as f32) as usize;
                 let edge_influence_x1 = (q.cx - x_dist_influenced).floor().max(0.0) as usize;
-                let edge_influence_x2 = (q.cx + x_dist_influenced).ceil().min(width as f32) as usize;
+                let edge_influence_x2 =
+                    (q.cx + x_dist_influenced).ceil().min(width as f32) as usize;
 
                 // Clear what we don't need to alias (outside influence region).
                 if q.is_left {
