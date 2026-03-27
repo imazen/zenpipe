@@ -116,6 +116,8 @@ pub mod zennode_defs;
 
 // Re-exports
 pub use codec_id::CodecId;
+#[cfg(feature = "jpeg")]
+pub use codecs::jpeg::codec_config_for_preset as jpeg_codec_config_for_preset;
 pub use decision::FormatDecision;
 pub use decode::{DecodeOutput, DecodeRequest};
 pub use dispatch::{AnyEncoder, StreamingEncoder};

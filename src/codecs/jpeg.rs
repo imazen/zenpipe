@@ -4,6 +4,7 @@
 //! UltraHDR decode uses the native API (needs mid-decode extras access).
 
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 
 use crate::config::CodecConfig;
 use crate::error::Result;
@@ -107,6 +108,20 @@ pub(crate) fn decode_info(data: &[u8], _codec_config: Option<&CodecConfig>) -> R
 /// Build a JpegEncoderConfig from codec config or generic quality.
 ///
 /// Uses `EncoderConfig` trait methods for generic params, with
+/// Build a `CodecConfig` for a named JPEG encoder preset.
+///
+/// Supported presets: `mozjpeg_baseline`, `mozjpeg_progressive`, `mozjpeg_max`,
+/// `jpegli_baseline`, `jpegli_progressive`, `hybrid_baseline`, `hybrid_progressive`,
+/// `hybrid_max`.
+///
+/// Returns `None` for unrecognized preset names.
+pub fn codec_config_for_preset(preset_name: &str, quality: f32) -> Option<CodecConfig> {
+    let enc = zenjpeg::JpegEncoderConfig::from_preset(preset_name, quality)?;
+    let mut config = CodecConfig::default();
+    config.jpeg_encoder = Some(Box::new(enc.inner().clone()));
+    Some(config)
+}
+
 /// codec_config taking priority for format-specific overrides.
 pub(crate) fn build_encoding(
     quality: Option<f32>,
