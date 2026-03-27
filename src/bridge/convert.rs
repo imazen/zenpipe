@@ -359,6 +359,14 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
         let mask = zenblend::mask::RoundedRectMask::uniform(width, height, radius);
         let mut mask_row_buf = alloc::vec![0.0f32; width as usize];
 
+        // Pre-convert bg color to linear space for gamma-correct blending.
+        let bg_linear: [f32; 4] = [
+            srgb_byte_to_linear(bg[0]),
+            srgb_byte_to_linear(bg[1]),
+            srgb_byte_to_linear(bg[2]),
+            bg[3] as f32 / 255.0,
+        ];
+
         for y in 0..height {
             let fill = mask.fill_mask_row(&mut mask_row_buf, y);
             let row_start = y as usize * width as usize * bpp;
@@ -366,7 +374,6 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
             match fill {
                 zenblend::mask::MaskFill::AllOpaque => {} // no-op
                 zenblend::mask::MaskFill::AllTransparent => {
-                    // Fill with bg color
                     for x in 0..width as usize {
                         let off = row_start + x * bpp;
                         for c in 0..bpp.min(4) {
@@ -376,22 +383,40 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
                 }
                 zenblend::mask::MaskFill::Partial => {
                     for x in 0..width as usize {
-                        let alpha = mask_row_buf[x];
-                        if alpha >= 1.0 {
+                        let coverage = mask_row_buf[x];
+                        if coverage >= 1.0 {
                             continue;
                         }
                         let off = row_start + x * bpp;
-                        if alpha <= 0.0 {
+                        if coverage <= 0.0 {
                             for c in 0..bpp.min(4) {
                                 data[off + c] = bg[c];
                             }
                         } else {
-                            // Blend: pixel * alpha + bg * (1 - alpha)
-                            for c in 0..bpp.min(4) {
-                                let src = data[off + c] as f32;
-                                let dst = bg[c] as f32;
-                                data[off + c] =
-                                    (src * alpha + dst * (1.0 - alpha)).round() as u8;
+                            // Gamma-correct blending in linear space.
+                            let pixel_a = if bpp >= 4 {
+                                data[off + 3] as f32 / 255.0
+                            } else {
+                                1.0
+                            };
+                            let pixel_a_adj = pixel_a * coverage;
+                            let matte_a = (1.0 - pixel_a_adj) * bg_linear[3];
+                            let final_a = matte_a + pixel_a_adj;
+
+                            if final_a > 0.0 {
+                                for c in 0..bpp.min(3) {
+                                    let src_lin = srgb_byte_to_linear(data[off + c]);
+                                    let blended = (src_lin * pixel_a_adj + bg_linear[c] * matte_a)
+                                        / final_a;
+                                    data[off + c] = linear_to_srgb_byte(blended);
+                                }
+                                if bpp >= 4 {
+                                    data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
+                                }
+                            } else {
+                                for c in 0..bpp.min(4) {
+                                    data[off + c] = bg[c];
+                                }
                             }
                         }
                     }
@@ -399,6 +424,26 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
             }
         }
     })))
+}
+
+// ─── Linear/sRGB conversion helpers for gamma-correct blending ───
+
+fn srgb_byte_to_linear(b: u8) -> f32 {
+    let s = b as f32 / 255.0;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb_byte(l: f32) -> u8 {
+    let s = if l <= 0.0031308 {
+        l * 12.92
+    } else {
+        1.055 * l.powf(1.0 / 2.4) - 0.055
+    };
+    (s * 255.0 + 0.5).clamp(0.0, 255.0) as u8
 }
 
 /// Convert a `zenresize.resize` node to `NodeOp::Resize`.
