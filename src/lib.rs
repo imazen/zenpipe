@@ -52,6 +52,9 @@ pub use bridge::{OptimizationLevel, canonical_sort, optimize_node_order};
 #[cfg(feature = "zennode")]
 pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
 
+// Re-export zencodecs quality types for callers resolving encode quality.
+pub use zencodecs::quality::{QualityIntent, QualityProfile};
+
 pub mod animation;
 pub mod codec;
 pub mod sidecar;
@@ -59,7 +62,9 @@ pub mod sidecar;
 pub use error::PipeError;
 pub use format::PixelFormat;
 pub use graph::{ResourceEstimate, SourceInfo};
-pub use limits::Limits;
+#[cfg(feature = "std")]
+pub use limits::Deadline;
+pub use limits::{AllocationGuard, AllocationTracker, Limits};
 pub use strip::{Strip, StripBuf};
 
 // Re-export key zenpixels-convert types.
