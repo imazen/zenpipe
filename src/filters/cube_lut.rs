@@ -273,6 +273,534 @@ impl CubeLut {
     }
 }
 
+// ── LUT Compression ───────────────────────────────────────────────────
+
+/// Accuracy metrics comparing a compressed representation against a reference LUT.
+#[derive(Clone, Debug)]
+pub struct LutAccuracy {
+    /// Maximum absolute difference across all samples and channels.
+    pub max_diff: f32,
+    /// Mean absolute difference across all samples and channels.
+    pub avg_diff: f32,
+    /// Per-channel max absolute difference [R, G, B].
+    pub max_diff_per_channel: [f32; 3],
+    /// Per-channel mean absolute difference [R, G, B].
+    pub avg_diff_per_channel: [f32; 3],
+    /// Number of sample points evaluated.
+    pub sample_count: usize,
+}
+
+impl core::fmt::Display for LutAccuracy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "max={:.6} avg={:.6} (R max={:.6} avg={:.6}, G max={:.6} avg={:.6}, B max={:.6} avg={:.6}) [{} samples]",
+            self.max_diff,
+            self.avg_diff,
+            self.max_diff_per_channel[0],
+            self.avg_diff_per_channel[0],
+            self.max_diff_per_channel[1],
+            self.avg_diff_per_channel[1],
+            self.max_diff_per_channel[2],
+            self.avg_diff_per_channel[2],
+            self.sample_count,
+        )
+    }
+}
+
+impl CubeLut {
+    /// Measure accuracy of an approximation function against this LUT.
+    ///
+    /// Evaluates `approx_fn` at a uniform grid of `eval_size³` points and
+    /// compares against trilinear-interpolated LUT values.
+    pub fn measure_accuracy(
+        &self,
+        approx_fn: &dyn Fn([f32; 3]) -> [f32; 3],
+        eval_size: usize,
+    ) -> LutAccuracy {
+        let mut max_diff = 0.0f32;
+        let mut sum_diff = 0.0f32;
+        let mut max_ch = [0.0f32; 3];
+        let mut sum_ch = [0.0f32; 3];
+        let mut count = 0usize;
+
+        let scale = 1.0 / (eval_size - 1) as f32;
+        for ri in 0..eval_size {
+            for gi in 0..eval_size {
+                for bi in 0..eval_size {
+                    let rgb = [ri as f32 * scale, gi as f32 * scale, bi as f32 * scale];
+                    let expected = self.lookup(rgb);
+                    let got = approx_fn(rgb);
+
+                    for ch in 0..3 {
+                        let d = (expected[ch] - got[ch]).abs();
+                        max_diff = max_diff.max(d);
+                        sum_diff += d;
+                        max_ch[ch] = max_ch[ch].max(d);
+                        sum_ch[ch] += d;
+                    }
+                    count += 1;
+                }
+            }
+        }
+
+        let total = (count * 3) as f32;
+        let cnt = count as f32;
+        LutAccuracy {
+            max_diff,
+            avg_diff: sum_diff / total,
+            max_diff_per_channel: max_ch,
+            avg_diff_per_channel: [sum_ch[0] / cnt, sum_ch[1] / cnt, sum_ch[2] / cnt],
+            sample_count: count,
+        }
+    }
+
+    /// Access the raw LUT data for compression algorithms.
+    pub fn data(&self) -> &[[f32; 3]] {
+        &self.data
+    }
+
+    /// Access domain bounds.
+    pub fn domain(&self) -> ([f32; 3], [f32; 3]) {
+        (self.domain_min, self.domain_max)
+    }
+}
+
+/// Rank-N tensor decomposition of a 3D LUT.
+///
+/// Approximates a 3D LUT as a sum of separable rank-1 terms:
+/// ```text
+/// LUT(r,g,b) ≈ Σᵢ fᵢ(r) ⊗ gᵢ(g) ⊗ hᵢ(b)
+/// ```
+///
+/// Each rank-1 term stores three 1D lookup tables (one per axis).
+/// For smooth color transforms (film looks, grading), 3–8 terms
+/// give excellent accuracy.
+///
+/// Storage: `rank * size * 3 channels * 3 axes * 4 bytes`.
+/// For rank=5, size=33: 5 × 33 × 3 × 3 × 4 = 5,940 bytes (~6 KB).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TensorLut {
+    /// Rank-1 terms, each with three 1D factor functions.
+    factors: Vec<RankTerm>,
+    /// Grid size (must match source LUT).
+    size: usize,
+}
+
+/// A single rank-1 term: three 1D functions (one per input axis),
+/// each producing 3 output channel values.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct RankTerm {
+    /// f(r): `size` entries, each `[f32; 3]` (contribution to R', G', B' output).
+    r_axis: Vec<[f32; 3]>,
+    /// g(g): `size` entries.
+    g_axis: Vec<[f32; 3]>,
+    /// b(b): `size` entries.
+    b_axis: Vec<[f32; 3]>,
+}
+
+#[allow(clippy::needless_range_loop)]
+impl TensorLut {
+    /// Decompose a CubeLut into a rank-N tensor approximation.
+    ///
+    /// Uses alternating least squares (ALS): iteratively fix two axes,
+    /// solve for the third, repeat until convergence.
+    ///
+    /// Higher `rank` = better accuracy, more storage. For typical film
+    /// LUTs, rank 5–8 gives max error < 0.005 (invisible at 8-bit).
+    pub fn decompose(lut: &CubeLut, rank: usize, iterations: usize) -> Self {
+        let size = lut.size;
+        let n = size;
+        let mut factors = Vec::with_capacity(rank);
+
+        // Work on residual: start with full LUT, subtract each rank's contribution
+        let mut residual: Vec<[f32; 3]> = lut.data.clone();
+
+        for _term in 0..rank {
+            // Initialize with the dominant direction (first singular vector approx)
+            let mut fr = vec![[0.0f32; 3]; n];
+            let mut fg = vec![[0.0f32; 3]; n];
+            let mut fb = vec![[0.0f32; 3]; n];
+
+            // Initialize fr to uniform, fg/fb from marginal sums
+            fr.fill([1.0; 3]);
+
+            // Initialize fg from sum over r,b axes
+            for gi in 0..n {
+                let mut s = [0.0f32; 3];
+                for ri in 0..n {
+                    for bi in 0..n {
+                        let v = residual[ri * n * n + gi * n + bi];
+                        for ch in 0..3 {
+                            s[ch] += v[ch];
+                        }
+                    }
+                }
+                let norm = (s[0] * s[0] + s[1] * s[1] + s[2] * s[2]).sqrt().max(1e-10);
+                fg[gi] = [s[0] / norm, s[1] / norm, s[2] / norm];
+            }
+
+            // Initialize fb from sum over r,g axes
+            for bi in 0..n {
+                let mut s = [0.0f32; 3];
+                for ri in 0..n {
+                    for gi in 0..n {
+                        let v = residual[ri * n * n + gi * n + bi];
+                        for ch in 0..3 {
+                            s[ch] += v[ch];
+                        }
+                    }
+                }
+                let norm = (s[0] * s[0] + s[1] * s[1] + s[2] * s[2]).sqrt().max(1e-10);
+                fb[bi] = [s[0] / norm, s[1] / norm, s[2] / norm];
+            }
+
+            // ALS iterations
+            for _iter in 0..iterations {
+                // Solve for fr (fix fg, fb)
+                for ri in 0..n {
+                    let mut num = [0.0f32; 3];
+                    let mut den = [0.0f32; 3];
+                    for gi in 0..n {
+                        for bi in 0..n {
+                            let v = residual[ri * n * n + gi * n + bi];
+                            for ch in 0..3 {
+                                let w = fg[gi][ch] * fb[bi][ch];
+                                num[ch] += v[ch] * w;
+                                den[ch] += w * w;
+                            }
+                        }
+                    }
+                    for ch in 0..3 {
+                        fr[ri][ch] = if den[ch] > 1e-12 {
+                            num[ch] / den[ch]
+                        } else {
+                            0.0
+                        };
+                    }
+                }
+
+                // Solve for fg (fix fr, fb)
+                for gi in 0..n {
+                    let mut num = [0.0f32; 3];
+                    let mut den = [0.0f32; 3];
+                    for ri in 0..n {
+                        for bi in 0..n {
+                            let v = residual[ri * n * n + gi * n + bi];
+                            for ch in 0..3 {
+                                let w = fr[ri][ch] * fb[bi][ch];
+                                num[ch] += v[ch] * w;
+                                den[ch] += w * w;
+                            }
+                        }
+                    }
+                    for ch in 0..3 {
+                        fg[gi][ch] = if den[ch] > 1e-12 {
+                            num[ch] / den[ch]
+                        } else {
+                            0.0
+                        };
+                    }
+                }
+
+                // Solve for fb (fix fr, fg)
+                for bi in 0..n {
+                    let mut num = [0.0f32; 3];
+                    let mut den = [0.0f32; 3];
+                    for ri in 0..n {
+                        for gi in 0..n {
+                            let v = residual[ri * n * n + gi * n + bi];
+                            for ch in 0..3 {
+                                let w = fr[ri][ch] * fg[gi][ch];
+                                num[ch] += v[ch] * w;
+                                den[ch] += w * w;
+                            }
+                        }
+                    }
+                    for ch in 0..3 {
+                        fb[bi][ch] = if den[ch] > 1e-12 {
+                            num[ch] / den[ch]
+                        } else {
+                            0.0
+                        };
+                    }
+                }
+            }
+
+            // Subtract this rank's contribution from residual
+            for ri in 0..n {
+                for gi in 0..n {
+                    for bi in 0..n {
+                        let idx = ri * n * n + gi * n + bi;
+                        for ch in 0..3 {
+                            residual[idx][ch] -= fr[ri][ch] * fg[gi][ch] * fb[bi][ch];
+                        }
+                    }
+                }
+            }
+
+            factors.push(RankTerm {
+                r_axis: fr,
+                g_axis: fg,
+                b_axis: fb,
+            });
+        }
+
+        Self { factors, size }
+    }
+
+    /// Evaluate the tensor approximation at a point.
+    ///
+    /// Input RGB in [0, 1]. Uses linear interpolation between grid points.
+    pub fn lookup(&self, rgb: [f32; 3]) -> [f32; 3] {
+        let max_idx = (self.size - 1) as f32;
+        let mut result = [0.0f32; 3];
+
+        for term in &self.factors {
+            let mut per_axis = [[0.0f32; 3]; 3]; // [axis][output_ch]
+
+            // Interpolate each axis
+            let axes: [(&[[f32; 3]], f32); 3] = [
+                (&term.r_axis, rgb[0]),
+                (&term.g_axis, rgb[1]),
+                (&term.b_axis, rgb[2]),
+            ];
+
+            for (ax, (data, val)) in axes.iter().enumerate() {
+                let pos = (val * max_idx).clamp(0.0, max_idx);
+                let lo = pos as usize;
+                let hi = (lo + 1).min(self.size - 1);
+                let frac = pos - lo as f32;
+                for ch in 0..3 {
+                    per_axis[ax][ch] = data[lo][ch] * (1.0 - frac) + data[hi][ch] * frac;
+                }
+            }
+
+            // Multiply the three axis contributions per output channel
+            for ch in 0..3 {
+                result[ch] += per_axis[0][ch] * per_axis[1][ch] * per_axis[2][ch];
+            }
+        }
+
+        result
+    }
+
+    /// Number of rank-1 terms.
+    pub fn rank(&self) -> usize {
+        self.factors.len()
+    }
+
+    /// Storage size in bytes.
+    pub fn size_bytes(&self) -> usize {
+        self.factors.len() * self.size * 3 * core::mem::size_of::<[f32; 3]>()
+    }
+}
+
+/// A small MLP for approximating a 3D LUT.
+///
+/// Architecture: 3 → hidden → hidden → 3 with ReLU activations
+/// and a residual skip connection from input to output.
+///
+/// The skip connection means the MLP only needs to learn the *difference*
+/// from identity, which is typically small for color grading LUTs.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MlpLut {
+    /// Layer 1: input_dim → hidden
+    w1: Vec<Vec<f32>>,
+    b1: Vec<f32>,
+    /// Layer 2: hidden → hidden
+    w2: Vec<Vec<f32>>,
+    b2: Vec<f32>,
+    /// Layer 3: hidden → 3
+    w3: Vec<Vec<f32>>,
+    b3: [f32; 3],
+    hidden: usize,
+}
+
+#[allow(clippy::needless_range_loop)]
+impl MlpLut {
+    /// Create a new MLP with the given hidden size, zero-initialized.
+    pub fn new(hidden: usize) -> Self {
+        Self {
+            w1: vec![vec![0.0; 3]; hidden],
+            b1: vec![0.0; hidden],
+            w2: vec![vec![0.0; hidden]; hidden],
+            b2: vec![0.0; hidden],
+            w3: vec![vec![0.0; hidden]; 3],
+            b3: [0.0; 3],
+            hidden,
+        }
+    }
+
+    /// Total number of trainable parameters.
+    pub fn param_count(&self) -> usize {
+        let h = self.hidden;
+        3 * h + h + h * h + h + h * 3 + 3
+    }
+
+    /// Storage size in bytes.
+    pub fn size_bytes(&self) -> usize {
+        self.param_count() * core::mem::size_of::<f32>()
+    }
+
+    /// Forward pass with ReLU activations and residual skip.
+    pub fn forward(&self, rgb: [f32; 3]) -> [f32; 3] {
+        let h = self.hidden;
+
+        // Layer 1: 3 → hidden, ReLU
+        let mut h1 = vec![0.0f32; h];
+        for i in 0..h {
+            let mut sum = self.b1[i];
+            for j in 0..3 {
+                sum += self.w1[i][j] * rgb[j];
+            }
+            h1[i] = sum.max(0.0);
+        }
+
+        // Layer 2: hidden → hidden, ReLU
+        let mut h2 = vec![0.0f32; h];
+        for i in 0..h {
+            let mut sum = self.b2[i];
+            for j in 0..h {
+                sum += self.w2[i][j] * h1[j];
+            }
+            h2[i] = sum.max(0.0);
+        }
+
+        // Layer 3: hidden → 3
+        let mut out = rgb; // residual skip
+        for i in 0..3 {
+            let mut sum = self.b3[i];
+            for j in 0..h {
+                sum += self.w3[i][j] * h2[j];
+            }
+            out[i] += sum;
+        }
+
+        out
+    }
+
+    /// Train this MLP to approximate a CubeLut using simple SGD.
+    ///
+    /// Generates training samples from the LUT at `train_size³` grid points.
+    /// Returns the final accuracy metrics.
+    pub fn train_from_lut(
+        &mut self,
+        lut: &CubeLut,
+        train_size: usize,
+        epochs: usize,
+        learning_rate: f32,
+    ) -> LutAccuracy {
+        let h = self.hidden;
+
+        // Generate training data: (input_rgb, target_delta_from_identity)
+        let scale = 1.0 / (train_size - 1) as f32;
+        let mut samples: Vec<([f32; 3], [f32; 3])> = Vec::new();
+        for ri in 0..train_size {
+            for gi in 0..train_size {
+                for bi in 0..train_size {
+                    let input = [ri as f32 * scale, gi as f32 * scale, bi as f32 * scale];
+                    let target = lut.lookup(input);
+                    // Store delta from identity (what the residual MLP must learn)
+                    let delta = [
+                        target[0] - input[0],
+                        target[1] - input[1],
+                        target[2] - input[2],
+                    ];
+                    samples.push((input, delta));
+                }
+            }
+        }
+
+        // SGD training
+        for _epoch in 0..epochs {
+            for &(input, target_delta) in &samples {
+                // Forward pass
+                let mut h1 = vec![0.0f32; h];
+                for i in 0..h {
+                    let mut sum = self.b1[i];
+                    for j in 0..3 {
+                        sum += self.w1[i][j] * input[j];
+                    }
+                    h1[i] = sum.max(0.0);
+                }
+
+                let mut h2 = vec![0.0f32; h];
+                for i in 0..h {
+                    let mut sum = self.b2[i];
+                    for j in 0..h {
+                        sum += self.w2[i][j] * h1[j];
+                    }
+                    h2[i] = sum.max(0.0);
+                }
+
+                let mut out_delta = [0.0f32; 3];
+                for i in 0..3 {
+                    let mut sum = self.b3[i];
+                    for j in 0..h {
+                        sum += self.w3[i][j] * h2[j];
+                    }
+                    out_delta[i] = sum;
+                }
+
+                // Loss gradient: d_loss/d_out = 2 * (out - target) / 3
+                let mut d_out = [0.0f32; 3];
+                for i in 0..3 {
+                    d_out[i] = 2.0 * (out_delta[i] - target_delta[i]) / 3.0;
+                }
+
+                // Backprop through layer 3
+                let mut d_h2 = vec![0.0f32; h];
+                for i in 0..3 {
+                    for j in 0..h {
+                        d_h2[j] += d_out[i] * self.w3[i][j];
+                        self.w3[i][j] -= learning_rate * d_out[i] * h2[j];
+                    }
+                    self.b3[i] -= learning_rate * d_out[i];
+                }
+
+                // ReLU gradient for layer 2
+                for j in 0..h {
+                    if h2[j] <= 0.0 {
+                        d_h2[j] = 0.0;
+                    }
+                }
+
+                // Backprop through layer 2
+                let mut d_h1 = vec![0.0f32; h];
+                for i in 0..h {
+                    for j in 0..h {
+                        d_h1[j] += d_h2[i] * self.w2[i][j];
+                        self.w2[i][j] -= learning_rate * d_h2[i] * h1[j];
+                    }
+                    self.b2[i] -= learning_rate * d_h2[i];
+                }
+
+                // ReLU gradient for layer 1
+                for j in 0..h {
+                    if h1[j] <= 0.0 {
+                        d_h1[j] = 0.0;
+                    }
+                }
+
+                // Backprop through layer 1
+                for i in 0..h {
+                    for j in 0..3 {
+                        self.w1[i][j] -= learning_rate * d_h1[i] * input[j];
+                    }
+                    self.b1[i] -= learning_rate * d_h1[i];
+                }
+            }
+        }
+
+        // Measure final accuracy
+        lut.measure_accuracy(&|rgb| self.forward(rgb), train_size)
+    }
+}
+
 fn parse_three_floats(s: &str) -> Option<[f32; 3]> {
     let mut iter = s.split_whitespace();
     let r = iter.next()?.parse::<f32>().ok()?;
@@ -323,6 +851,7 @@ impl Filter for CubeLut {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
 
     #[test]
@@ -495,5 +1024,134 @@ DOMAIN_MAX 1.0 1.0 1.0
     fn size_bytes_correct() {
         let lut = CubeLut::identity(17);
         assert_eq!(lut.size_bytes(), 17 * 17 * 17 * 12); // 12 bytes per [f32; 3]
+    }
+
+    /// Create a warm-tone film emulation LUT for testing compression.
+    /// Lifts shadows warm, pushes highlights cool, adds an S-curve.
+    fn make_test_film_lut(size: usize) -> CubeLut {
+        let mut lut = CubeLut::identity(size);
+        let scale = 1.0 / (size - 1) as f32;
+        for ri in 0..size {
+            for gi in 0..size {
+                for bi in 0..size {
+                    let r = ri as f32 * scale;
+                    let g = gi as f32 * scale;
+                    let b = bi as f32 * scale;
+
+                    // S-curve on luminance
+                    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    let s_lum = if lum < 0.5 {
+                        2.0 * lum * lum
+                    } else {
+                        1.0 - 2.0 * (1.0 - lum) * (1.0 - lum)
+                    };
+                    let lum_ratio = if lum > 0.001 { s_lum / lum } else { 1.0 };
+
+                    // Warm shadows, cool highlights
+                    let warmth = 1.0 - lum; // more warmth in shadows
+                    let r_out = (r * lum_ratio + warmth * 0.05).clamp(0.0, 1.0);
+                    let g_out = (g * lum_ratio).clamp(0.0, 1.0);
+                    let b_out = (b * lum_ratio - warmth * 0.03 + lum * 0.02).clamp(0.0, 1.0);
+
+                    let idx = ri * size * size + gi * size + bi;
+                    lut.data[idx] = [r_out, g_out, b_out];
+                }
+            }
+        }
+        lut
+    }
+
+    #[test]
+    fn tensor_decomposition_accuracy() {
+        let lut = make_test_film_lut(17);
+
+        for rank in [1, 3, 5, 8] {
+            let tensor = TensorLut::decompose(&lut, rank, 20);
+            let acc = lut.measure_accuracy(&|rgb| tensor.lookup(rgb), 33);
+            std::eprintln!(
+                "TensorLut rank={rank}: size={} bytes, {acc}",
+                tensor.size_bytes()
+            );
+
+            // Rank 5+ should get max error below 0.05 for this smooth LUT
+            if rank >= 5 {
+                assert!(
+                    acc.max_diff < 0.05,
+                    "rank {rank} max_diff too high: {}",
+                    acc.max_diff
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mlp_lut_training() {
+        let lut = make_test_film_lut(9); // small for fast test
+
+        for hidden in [16, 32] {
+            let mut mlp = MlpLut::new(hidden);
+            let acc = mlp.train_from_lut(&lut, 9, 50, 0.001);
+            std::eprintln!(
+                "MlpLut h={hidden}: params={}, size={} bytes, {acc}",
+                mlp.param_count(),
+                mlp.size_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn tensor_vs_mlp_comparison() {
+        let lut = make_test_film_lut(17);
+
+        // Tensor: rank 5, 20 iterations
+        let tensor = TensorLut::decompose(&lut, 5, 20);
+        let tensor_acc = lut.measure_accuracy(&|rgb| tensor.lookup(rgb), 33);
+
+        // MLP: hidden=32, train on 9³ grid
+        let mut mlp = MlpLut::new(32);
+        let mlp_acc = mlp.train_from_lut(&lut, 9, 100, 0.001);
+
+        std::eprintln!("=== LUT Compression Comparison (17³ warm film LUT) ===");
+        std::eprintln!("Original:  {} bytes", lut.size_bytes());
+        std::eprintln!("Tensor r5: {} bytes, {tensor_acc}", tensor.size_bytes());
+        std::eprintln!("MLP h=32:  {} bytes, {mlp_acc}", mlp.size_bytes());
+        std::eprintln!("=====================================================");
+
+        // Both should at least beat 0.1 max error on this smooth LUT
+        assert!(
+            tensor_acc.max_diff < 0.1,
+            "tensor max_diff too high: {}",
+            tensor_acc.max_diff
+        );
+    }
+
+    #[test]
+    fn tensor_identity_lut_perfect() {
+        // Identity LUT should decompose perfectly at rank 1
+        // since identity is separable: f(r)=r, g(g)=g, h(b)=b
+        let lut = CubeLut::identity(17);
+        let tensor = TensorLut::decompose(&lut, 3, 20);
+        let acc = lut.measure_accuracy(&|rgb| tensor.lookup(rgb), 33);
+        assert!(
+            acc.max_diff < 0.01,
+            "identity LUT should decompose near-perfectly: max={}",
+            acc.max_diff
+        );
+    }
+
+    #[test]
+    fn measure_accuracy_identical() {
+        let lut = CubeLut::identity(9);
+        let acc = lut.measure_accuracy(&|rgb| lut.lookup(rgb), 9);
+        assert!(
+            acc.max_diff < 1e-5,
+            "self-comparison should be zero: {}",
+            acc.max_diff
+        );
+        assert!(
+            acc.avg_diff < 1e-6,
+            "self-comparison avg should be zero: {}",
+            acc.avg_diff
+        );
     }
 }

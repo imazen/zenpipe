@@ -82,7 +82,7 @@ pub use clarity::Clarity;
 pub use color_grading::ColorGrading;
 pub use color_matrix::ColorMatrix;
 pub use contrast::Contrast;
-pub use cube_lut::{CubeLut, CubeParseError};
+pub use cube_lut::{CubeLut, CubeParseError, LutAccuracy, MlpLut, TensorLut};
 pub use dehaze::Dehaze;
 pub use devignette::Devignette;
 pub use edge_detect::{EdgeDetect, EdgeMode};
