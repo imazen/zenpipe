@@ -41,6 +41,14 @@ pub struct TraceConfig {
     #[cfg(feature = "std")]
     pub timing: bool,
 
+    /// Enable memory snapshot tracking.
+    #[cfg(feature = "std")]
+    pub memory: bool,
+
+    /// Enable per-strip event recording (opt-in, can be verbose).
+    #[cfg(feature = "std")]
+    pub strip_events: bool,
+
     /// Directory to dump pixel snapshots per node.
     #[cfg(feature = "std")]
     pub pixel_dump_dir: Option<std::path::PathBuf>,
@@ -58,18 +66,24 @@ impl TraceConfig {
             #[cfg(feature = "std")]
             timing: false,
             #[cfg(feature = "std")]
+            memory: false,
+            #[cfg(feature = "std")]
+            strip_events: false,
+            #[cfg(feature = "std")]
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
     }
 
-    /// Trace all layers including bridge decisions and execution timing.
+    /// Trace all layers including bridge decisions, execution timing, and memory.
     #[cfg(feature = "std")]
     pub fn full() -> Self {
         Self {
             metadata: true,
             bridge: true,
             timing: true,
+            memory: true,
+            strip_events: false,
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
@@ -82,9 +96,25 @@ impl TraceConfig {
             metadata: true,
             bridge: true,
             timing: true,
+            memory: true,
+            strip_events: false,
             pixel_dump_dir: Some(dir.into()),
             dump_nodes: Vec::new(),
         }
+    }
+
+    /// Enable memory snapshot tracking on this config.
+    #[cfg(feature = "std")]
+    pub fn with_memory_tracking(mut self) -> Self {
+        self.memory = true;
+        self
+    }
+
+    /// Enable per-strip event recording on this config.
+    #[cfg(feature = "std")]
+    pub fn with_strip_events(mut self) -> Self {
+        self.strip_events = true;
+        self
     }
 
     /// Should node at this index dump pixels?
@@ -363,6 +393,74 @@ pub struct ExecutionTrace {
     pub total_duration: std::time::Duration,
     /// Total strips produced.
     pub total_strips: u32,
+    /// Peak allocated bytes observed during execution.
+    pub peak_memory_bytes: u64,
+    /// Memory snapshots taken during execution (when `TraceConfig::memory` is enabled).
+    pub memory_snapshots: Vec<MemorySnapshot>,
+    /// Per-strip events (when `TraceConfig::strip_events` is enabled).
+    pub strip_events: Vec<StripEvent>,
+    /// Phase transitions during execution.
+    pub phases: Vec<PhaseTransition>,
+}
+
+/// A memory snapshot at a point during execution.
+///
+/// Snapshots are recorded by calling [`Tracer::record_memory_snapshot`] at
+/// significant points (buffer allocations, materializations, frees). The
+/// tracer accepts raw values — it does not own or query an allocation tracker.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug)]
+pub struct MemorySnapshot {
+    /// Total allocated bytes at this point.
+    pub allocated_bytes: u64,
+    /// Number of active allocations.
+    pub allocation_count: u32,
+    /// Time since execution start.
+    pub elapsed: std::time::Duration,
+    /// What triggered this snapshot (e.g., "materialize node 3", "strip 12 of resize").
+    pub event: String,
+}
+
+/// A per-strip execution event.
+///
+/// Recorded when `TraceConfig::strip_events` is enabled. Captures the duration
+/// and output size of each strip pull through a node, enabling fine-grained
+/// profiling of strip processing times and throughput.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug)]
+pub struct StripEvent {
+    /// Node index in the graph.
+    pub node_index: usize,
+    /// Strip number (0-based).
+    pub strip_num: u32,
+    /// Time spent producing this strip (wall-clock).
+    pub duration: std::time::Duration,
+    /// Bytes produced by this strip.
+    pub bytes_produced: u64,
+}
+
+/// Pipeline execution phase.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutionPhase {
+    /// Graph estimation (resolving dimensions, formats).
+    Estimation,
+    /// DAG compilation (building source chain).
+    Compilation,
+    /// Strip-by-strip execution (pulling data through the pipeline).
+    Execution,
+    /// Post-execution finalization (encoding flush, cleanup).
+    Finalization,
+}
+
+/// A phase transition timestamp.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug)]
+pub struct PhaseTransition {
+    /// The phase being entered.
+    pub phase: ExecutionPhase,
+    /// Time since execution start when this phase began.
+    pub timestamp: std::time::Duration,
 }
 
 // ─── Trace appender (for runtime annotations) ───
@@ -447,6 +545,12 @@ impl TraceAppender {
 pub struct Tracer {
     inner: Option<alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>>,
     timing: bool,
+    memory: bool,
+    strip_events: bool,
+    /// Execution trace accumulator (shared with the final `FullPipelineTrace`).
+    execution: alloc::sync::Arc<std::sync::Mutex<ExecutionTrace>>,
+    /// Start time for computing elapsed durations in snapshots.
+    start_time: Option<std::time::Instant>,
 }
 
 #[cfg(feature = "std")]
@@ -456,6 +560,10 @@ impl Tracer {
         Self {
             inner: None,
             timing: false,
+            memory: false,
+            strip_events: false,
+            execution: alloc::sync::Arc::new(std::sync::Mutex::new(ExecutionTrace::default())),
+            start_time: None,
         }
     }
 
@@ -464,6 +572,25 @@ impl Tracer {
         Self {
             inner: Some(trace),
             timing,
+            memory: false,
+            strip_events: false,
+            execution: alloc::sync::Arc::new(std::sync::Mutex::new(ExecutionTrace::default())),
+            start_time: None,
+        }
+    }
+
+    /// Active tracer with full config control.
+    pub fn from_config(
+        trace: alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>,
+        config: &TraceConfig,
+    ) -> Self {
+        Self {
+            inner: Some(trace),
+            timing: config.timing,
+            memory: config.memory,
+            strip_events: config.strip_events,
+            execution: alloc::sync::Arc::new(std::sync::Mutex::new(ExecutionTrace::default())),
+            start_time: None,
         }
     }
 
@@ -471,6 +598,106 @@ impl Tracer {
     #[inline]
     pub fn is_active(&self) -> bool {
         self.inner.is_some()
+    }
+
+    /// Whether memory tracking is enabled.
+    #[inline]
+    pub fn tracks_memory(&self) -> bool {
+        self.memory && self.inner.is_some()
+    }
+
+    /// Whether per-strip event recording is enabled.
+    #[inline]
+    pub fn tracks_strip_events(&self) -> bool {
+        self.strip_events && self.inner.is_some()
+    }
+
+    /// Mark the start of execution (resets the elapsed clock).
+    pub fn start_clock(&mut self) {
+        self.start_time = Some(std::time::Instant::now());
+    }
+
+    /// Elapsed time since `start_clock()`, or zero if not started.
+    fn elapsed(&self) -> std::time::Duration {
+        self.start_time
+            .map(|t| t.elapsed())
+            .unwrap_or(std::time::Duration::ZERO)
+    }
+
+    /// Record a memory snapshot.
+    ///
+    /// No-op when memory tracking is disabled or tracing is inactive.
+    /// The caller provides raw values — the tracer does not own or query
+    /// an allocation tracker.
+    pub fn record_memory_snapshot(&self, allocated_bytes: u64, allocation_count: u32, event: &str) {
+        if !self.tracks_memory() {
+            return;
+        }
+        let snapshot = MemorySnapshot {
+            allocated_bytes,
+            allocation_count,
+            elapsed: self.elapsed(),
+            event: alloc::string::String::from(event),
+        };
+        let mut exec = self.execution.lock().unwrap();
+        if allocated_bytes > exec.peak_memory_bytes {
+            exec.peak_memory_bytes = allocated_bytes;
+        }
+        exec.memory_snapshots.push(snapshot);
+    }
+
+    /// Record a per-strip event.
+    ///
+    /// No-op when strip event tracking is disabled or tracing is inactive.
+    pub fn record_strip_event(
+        &self,
+        node_index: usize,
+        strip_num: u32,
+        duration: std::time::Duration,
+        bytes_produced: u64,
+    ) {
+        if !self.tracks_strip_events() {
+            return;
+        }
+        let event = StripEvent {
+            node_index,
+            strip_num,
+            duration,
+            bytes_produced,
+        };
+        self.execution.lock().unwrap().strip_events.push(event);
+    }
+
+    /// Record a phase transition.
+    ///
+    /// No-op when tracing is inactive.
+    pub fn record_phase(&self, phase: ExecutionPhase) {
+        if self.inner.is_none() {
+            return;
+        }
+        let transition = PhaseTransition {
+            phase,
+            timestamp: self.elapsed(),
+        };
+        self.execution.lock().unwrap().phases.push(transition);
+    }
+
+    /// Finalize execution trace with total duration and strip count.
+    ///
+    /// Call after the pipeline has been fully drained.
+    pub fn finalize_execution(&self, total_duration: std::time::Duration, total_strips: u32) {
+        let mut exec = self.execution.lock().unwrap();
+        exec.total_duration = total_duration;
+        exec.total_strips = total_strips;
+    }
+
+    /// Take the accumulated `ExecutionTrace`.
+    ///
+    /// Returns the execution trace and replaces it with a default.
+    /// Call once after the pipeline has been fully drained.
+    pub fn take_execution_trace(&self) -> ExecutionTrace {
+        let mut exec = self.execution.lock().unwrap();
+        core::mem::take(&mut *exec)
     }
 
     /// Get a `TraceAppender` for content-adaptive closures. Returns `None` if inactive.
@@ -604,6 +831,25 @@ impl Tracer {
         }
 
         Ok(result)
+    }
+
+    /// Cost-aware format conversion via [`zenpixels_convert::ideal_format`].
+    ///
+    /// Instead of forcing a specific target format, uses the intent to determine
+    /// the ideal working format for the downstream operation. If the source
+    /// already satisfies the intent (e.g., f32 linear source for a LinearLight
+    /// resize), no conversion is inserted — avoiding unnecessary round-trips.
+    ///
+    /// Falls back to `ensure_format` with the ideal target when conversion is needed.
+    pub fn ensure_format_negotiated(
+        &self,
+        source: Box<dyn crate::Source>,
+        intent: zenpixels_convert::ConvertIntent,
+        reason: &str,
+    ) -> Result<Box<dyn crate::Source>, crate::error::PipeError> {
+        let current = source.format();
+        let ideal = zenpixels_convert::ideal_format(current, intent);
+        self.ensure_format(source, ideal, reason)
     }
 
     /// Add a runtime note to the trace (e.g., content-adaptive detection results).
@@ -1157,6 +1403,21 @@ impl FullPipelineTrace {
                 exec.total_duration, exec.total_strips
             ));
 
+            if exec.peak_memory_bytes > 0 {
+                out.push_str(&format!(
+                    "Peak memory: {}\n",
+                    format_bytes(exec.peak_memory_bytes)
+                ));
+            }
+
+            // Phase transitions
+            if !exec.phases.is_empty() {
+                out.push_str("Phases:\n");
+                for pt in &exec.phases {
+                    out.push_str(&format!("  {:>8.1?}  {:?}\n", pt.timestamp, pt.phase));
+                }
+            }
+
             // Per-node timing (differential)
             let timed: Vec<_> = self
                 .graph
@@ -1182,6 +1443,22 @@ impl FullPipelineTrace {
                         timing.bytes_processed
                     ));
                 }
+            }
+
+            // Strip event summary
+            if !exec.strip_events.is_empty() {
+                out.push_str(&format!(
+                    "Strip events: {} recorded\n",
+                    exec.strip_events.len()
+                ));
+            }
+
+            // Memory snapshot summary
+            if !exec.memory_snapshots.is_empty() {
+                out.push_str(&format!(
+                    "Memory snapshots: {} recorded\n",
+                    exec.memory_snapshots.len()
+                ));
             }
         }
 
@@ -1470,7 +1747,98 @@ impl FullPipelineTrace {
     }
 }
 
+// ─── Memory timeline ───
+
+#[cfg(feature = "std")]
+impl FullPipelineTrace {
+    /// Human-readable memory timeline from execution trace snapshots.
+    ///
+    /// Produces a compact summary showing memory usage at each recorded
+    /// event, with the peak highlighted. Returns an empty string if no
+    /// memory snapshots were recorded.
+    ///
+    /// ```text
+    /// Memory Timeline:
+    ///   0.0ms [  0 KB] Start
+    ///   1.2ms [384 KB] materialize node 2
+    ///   2.5ms [512 KB] strip buffer allocation (peak)
+    ///   5.1ms [128 KB] materialize freed
+    /// ```
+    pub fn memory_timeline(&self) -> String {
+        let Some(ref exec) = self.execution else {
+            return String::new();
+        };
+        if exec.memory_snapshots.is_empty() {
+            return String::new();
+        }
+
+        let mut out = String::with_capacity(512);
+        out.push_str("Memory Timeline:\n");
+
+        for snap in &exec.memory_snapshots {
+            let is_peak =
+                snap.allocated_bytes == exec.peak_memory_bytes && exec.peak_memory_bytes > 0;
+            let peak_marker = if is_peak { " (peak)" } else { "" };
+            let elapsed_ms = snap.elapsed.as_secs_f64() * 1000.0;
+            out.push_str(&format!(
+                "  {elapsed_ms:>7.1}ms [{:>8}] {}{peak_marker}\n",
+                format_bytes(snap.allocated_bytes),
+                snap.event,
+            ));
+        }
+
+        out
+    }
+
+    /// Detailed per-strip event listing.
+    ///
+    /// Produces a table of strip events grouped by node. Returns an empty
+    /// string if no strip events were recorded.
+    pub fn strip_event_details(&self) -> String {
+        let Some(ref exec) = self.execution else {
+            return String::new();
+        };
+        if exec.strip_events.is_empty() {
+            return String::new();
+        }
+
+        let mut out = String::with_capacity(1024);
+        out.push_str("Strip Events:\n");
+        out.push_str(&format!(
+            "  {:>5}  {:>4}  {:>10}  {:>10}\n",
+            "node", "strip", "duration", "bytes"
+        ));
+        out.push_str(&format!("  {}\n", "-".repeat(38)));
+
+        for ev in &exec.strip_events {
+            out.push_str(&format!(
+                "  {:>5}  {:>4}  {:>10.1?}  {:>10}\n",
+                ev.node_index,
+                ev.strip_num,
+                ev.duration,
+                format_bytes(ev.bytes_produced),
+            ));
+        }
+
+        out
+    }
+}
+
 // ─── Helpers ───
+
+/// Format a byte count as a human-readable string (KB, MB, GB).
+#[cfg(feature = "std")]
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 * 1024 {
+        format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    } else if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else if bytes >= 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{bytes} B")
+    }
+}
 
 /// Short human-readable format description.
 pub fn format_short(fmt: &PixelFormat) -> String {
@@ -1642,4 +2010,343 @@ fn json_string(out: &mut String, s: &str) {
         }
     }
     out.push('"');
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_snapshot_creation() {
+        let snap = MemorySnapshot {
+            allocated_bytes: 1024 * 512,
+            allocation_count: 3,
+            elapsed: std::time::Duration::from_millis(5),
+            event: String::from("materialize node 2"),
+        };
+        assert_eq!(snap.allocated_bytes, 512 * 1024);
+        assert_eq!(snap.allocation_count, 3);
+        assert_eq!(snap.event, "materialize node 2");
+    }
+
+    #[test]
+    fn strip_event_creation() {
+        let ev = StripEvent {
+            node_index: 3,
+            strip_num: 7,
+            duration: std::time::Duration::from_micros(250),
+            bytes_produced: 4096,
+        };
+        assert_eq!(ev.node_index, 3);
+        assert_eq!(ev.strip_num, 7);
+        assert_eq!(ev.bytes_produced, 4096);
+    }
+
+    #[test]
+    fn execution_trace_default_has_empty_vecs() {
+        let exec = ExecutionTrace::default();
+        assert!(exec.memory_snapshots.is_empty());
+        assert!(exec.strip_events.is_empty());
+        assert!(exec.phases.is_empty());
+        assert_eq!(exec.peak_memory_bytes, 0);
+        assert_eq!(exec.total_strips, 0);
+    }
+
+    #[test]
+    fn tracer_inactive_records_nothing() {
+        let tracer = Tracer::inactive();
+        assert!(!tracer.is_active());
+        assert!(!tracer.tracks_memory());
+        assert!(!tracer.tracks_strip_events());
+
+        // These should be no-ops.
+        tracer.record_memory_snapshot(1024, 1, "test alloc");
+        tracer.record_strip_event(0, 0, std::time::Duration::from_millis(1), 100);
+        tracer.record_phase(ExecutionPhase::Execution);
+
+        // Execution trace should still be empty.
+        let exec = tracer.take_execution_trace();
+        assert!(exec.memory_snapshots.is_empty());
+        assert!(exec.strip_events.is_empty());
+        assert!(exec.phases.is_empty());
+    }
+
+    #[test]
+    fn tracer_records_memory_snapshots() {
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(PipelineTrace::new()));
+        let config = TraceConfig::full().with_memory_tracking();
+        let mut tracer = Tracer::from_config(trace, &config);
+        tracer.start_clock();
+
+        tracer.record_memory_snapshot(0, 0, "start");
+        tracer.record_memory_snapshot(384 * 1024, 2, "materialize node 2");
+        tracer.record_memory_snapshot(512 * 1024, 3, "strip buffer allocation");
+        tracer.record_memory_snapshot(128 * 1024, 1, "materialize freed");
+
+        let exec = tracer.take_execution_trace();
+        assert_eq!(exec.memory_snapshots.len(), 4);
+        assert_eq!(exec.peak_memory_bytes, 512 * 1024);
+        assert_eq!(exec.memory_snapshots[0].event, "start");
+        assert_eq!(exec.memory_snapshots[1].event, "materialize node 2");
+        assert_eq!(exec.memory_snapshots[2].event, "strip buffer allocation");
+        assert_eq!(exec.memory_snapshots[3].event, "materialize freed");
+
+        // Elapsed should be monotonically non-decreasing.
+        for i in 1..exec.memory_snapshots.len() {
+            assert!(exec.memory_snapshots[i].elapsed >= exec.memory_snapshots[i - 1].elapsed);
+        }
+    }
+
+    #[test]
+    fn tracer_records_strip_events() {
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(PipelineTrace::new()));
+        let config = TraceConfig::full().with_strip_events();
+        let mut tracer = Tracer::from_config(trace, &config);
+        tracer.start_clock();
+
+        tracer.record_strip_event(0, 0, std::time::Duration::from_micros(100), 4096);
+        tracer.record_strip_event(0, 1, std::time::Duration::from_micros(120), 4096);
+        tracer.record_strip_event(1, 0, std::time::Duration::from_micros(200), 2048);
+
+        let exec = tracer.take_execution_trace();
+        assert_eq!(exec.strip_events.len(), 3);
+        assert_eq!(exec.strip_events[0].node_index, 0);
+        assert_eq!(exec.strip_events[0].strip_num, 0);
+        assert_eq!(exec.strip_events[2].node_index, 1);
+    }
+
+    #[test]
+    fn tracer_records_phases() {
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(PipelineTrace::new()));
+        let config = TraceConfig::full();
+        let mut tracer = Tracer::from_config(trace, &config);
+        tracer.start_clock();
+
+        tracer.record_phase(ExecutionPhase::Estimation);
+        tracer.record_phase(ExecutionPhase::Compilation);
+        tracer.record_phase(ExecutionPhase::Execution);
+        tracer.record_phase(ExecutionPhase::Finalization);
+
+        let exec = tracer.take_execution_trace();
+        assert_eq!(exec.phases.len(), 4);
+        assert_eq!(exec.phases[0].phase, ExecutionPhase::Estimation);
+        assert_eq!(exec.phases[1].phase, ExecutionPhase::Compilation);
+        assert_eq!(exec.phases[2].phase, ExecutionPhase::Execution);
+        assert_eq!(exec.phases[3].phase, ExecutionPhase::Finalization);
+
+        // Timestamps should be non-decreasing.
+        for i in 1..exec.phases.len() {
+            assert!(exec.phases[i].timestamp >= exec.phases[i - 1].timestamp);
+        }
+    }
+
+    #[test]
+    fn disabled_flags_produce_empty_vectors() {
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(PipelineTrace::new()));
+        // full() enables memory but not strip_events.
+        let config = TraceConfig::full();
+        let tracer = Tracer::from_config(trace, &config);
+
+        assert!(tracer.tracks_memory());
+        assert!(!tracer.tracks_strip_events());
+
+        // Strip events should be no-ops.
+        tracer.record_strip_event(0, 0, std::time::Duration::from_millis(1), 100);
+        let exec = tracer.take_execution_trace();
+        assert!(exec.strip_events.is_empty());
+    }
+
+    #[test]
+    fn memory_timeline_output_format() {
+        let exec = ExecutionTrace {
+            total_duration: std::time::Duration::from_millis(10),
+            total_strips: 5,
+            peak_memory_bytes: 512 * 1024,
+            memory_snapshots: vec![
+                MemorySnapshot {
+                    allocated_bytes: 0,
+                    allocation_count: 0,
+                    elapsed: std::time::Duration::from_millis(0),
+                    event: String::from("start"),
+                },
+                MemorySnapshot {
+                    allocated_bytes: 384 * 1024,
+                    allocation_count: 2,
+                    elapsed: std::time::Duration::from_micros(1200),
+                    event: String::from("materialize node 2"),
+                },
+                MemorySnapshot {
+                    allocated_bytes: 512 * 1024,
+                    allocation_count: 3,
+                    elapsed: std::time::Duration::from_micros(2500),
+                    event: String::from("strip buffer allocation"),
+                },
+                MemorySnapshot {
+                    allocated_bytes: 128 * 1024,
+                    allocation_count: 1,
+                    elapsed: std::time::Duration::from_micros(5100),
+                    event: String::from("materialize freed"),
+                },
+            ],
+            strip_events: Vec::new(),
+            phases: Vec::new(),
+        };
+
+        let full = FullPipelineTrace {
+            riapi: None,
+            bridge: None,
+            graph: PipelineTrace::new(),
+            execution: Some(exec),
+        };
+
+        let timeline = full.memory_timeline();
+        assert!(timeline.contains("Memory Timeline:"));
+        assert!(timeline.contains("start"));
+        assert!(timeline.contains("materialize node 2"));
+        assert!(timeline.contains("strip buffer allocation"));
+        assert!(timeline.contains("(peak)"));
+        assert!(timeline.contains("materialize freed"));
+        // The peak event should be the 512 KB one.
+        assert!(timeline.contains("512.0 KB"));
+    }
+
+    #[test]
+    fn memory_timeline_empty_when_no_snapshots() {
+        let full = FullPipelineTrace {
+            riapi: None,
+            bridge: None,
+            graph: PipelineTrace::new(),
+            execution: None,
+        };
+        assert!(full.memory_timeline().is_empty());
+
+        let full_with_empty = FullPipelineTrace {
+            riapi: None,
+            bridge: None,
+            graph: PipelineTrace::new(),
+            execution: Some(ExecutionTrace::default()),
+        };
+        assert!(full_with_empty.memory_timeline().is_empty());
+    }
+
+    #[test]
+    fn to_text_includes_peak_memory() {
+        let exec = ExecutionTrace {
+            total_duration: std::time::Duration::from_millis(42),
+            total_strips: 10,
+            peak_memory_bytes: 2 * 1024 * 1024,
+            memory_snapshots: vec![MemorySnapshot {
+                allocated_bytes: 2 * 1024 * 1024,
+                allocation_count: 1,
+                elapsed: std::time::Duration::from_millis(1),
+                event: String::from("alloc"),
+            }],
+            strip_events: Vec::new(),
+            phases: vec![
+                PhaseTransition {
+                    phase: ExecutionPhase::Estimation,
+                    timestamp: std::time::Duration::from_millis(0),
+                },
+                PhaseTransition {
+                    phase: ExecutionPhase::Execution,
+                    timestamp: std::time::Duration::from_millis(1),
+                },
+            ],
+        };
+
+        let full = FullPipelineTrace {
+            riapi: None,
+            bridge: None,
+            graph: PipelineTrace::new(),
+            execution: Some(exec),
+        };
+
+        let text = full.to_text();
+        assert!(text.contains("Peak memory: 2.0 MB"));
+        assert!(text.contains("Phases:"));
+        assert!(text.contains("Estimation"));
+        assert!(text.contains("Execution"));
+        assert!(text.contains("Memory snapshots: 1 recorded"));
+    }
+
+    #[test]
+    fn format_bytes_formatting() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1024), "1.0 KB");
+        assert_eq!(format_bytes(1536), "1.5 KB");
+        assert_eq!(format_bytes(1024 * 1024), "1.0 MB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(
+            format_bytes(1024 * 1024 * 1024 + 512 * 1024 * 1024),
+            "1.5 GB"
+        );
+    }
+
+    #[test]
+    fn trace_config_builder_methods() {
+        let config = TraceConfig::metadata_only()
+            .with_memory_tracking()
+            .with_strip_events();
+        assert!(config.memory);
+        assert!(config.strip_events);
+        assert!(config.metadata);
+
+        // full() should include memory but not strip_events.
+        let full = TraceConfig::full();
+        assert!(full.memory);
+        assert!(!full.strip_events);
+    }
+
+    #[test]
+    fn strip_event_details_output() {
+        let exec = ExecutionTrace {
+            total_duration: std::time::Duration::from_millis(10),
+            total_strips: 3,
+            peak_memory_bytes: 0,
+            memory_snapshots: Vec::new(),
+            strip_events: vec![
+                StripEvent {
+                    node_index: 0,
+                    strip_num: 0,
+                    duration: std::time::Duration::from_micros(100),
+                    bytes_produced: 4096,
+                },
+                StripEvent {
+                    node_index: 0,
+                    strip_num: 1,
+                    duration: std::time::Duration::from_micros(120),
+                    bytes_produced: 4096,
+                },
+            ],
+            phases: Vec::new(),
+        };
+
+        let full = FullPipelineTrace {
+            riapi: None,
+            bridge: None,
+            graph: PipelineTrace::new(),
+            execution: Some(exec),
+        };
+
+        let details = full.strip_event_details();
+        assert!(details.contains("Strip Events:"));
+        assert!(details.contains("4.0 KB"));
+    }
+
+    #[test]
+    fn tracer_finalize_execution() {
+        let trace = alloc::sync::Arc::new(std::sync::Mutex::new(PipelineTrace::new()));
+        let config = TraceConfig::full();
+        let mut tracer = Tracer::from_config(trace, &config);
+        tracer.start_clock();
+
+        tracer.record_memory_snapshot(1024, 1, "alloc");
+        tracer.finalize_execution(std::time::Duration::from_millis(50), 20);
+
+        let exec = tracer.take_execution_trace();
+        assert_eq!(exec.total_duration, std::time::Duration::from_millis(50));
+        assert_eq!(exec.total_strips, 20);
+        assert_eq!(exec.memory_snapshots.len(), 1);
+    }
 }
