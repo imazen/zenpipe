@@ -731,6 +731,43 @@ impl Default for AscCdl {
     }
 }
 
+/// 3D color lookup table loaded from Adobe .cube format.
+///
+/// The universal LUT exchange format. Maps linear RGB → linear RGB via
+/// trilinear interpolation on a uniform 3D grid. Typical sizes: 17³, 33³, 65³.
+///
+/// The LUT data itself is loaded via `CubeLut::parse()` or `CubeLut::identity()`.
+/// This node exposes only the blend strength parameter.
+#[derive(Node, Clone, Debug, Default)]
+#[node(id = "zenfilters.cube_lut", group = Color, role = Filter)]
+#[node(label = "Cube LUT")]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("color", "lut", "grading"))]
+pub struct CubeLut {
+    /// Blend strength (0 = bypass, 1 = full LUT)
+    #[param(range(0.0..=1.0), default = 1.0, identity = 0.0, step = 0.05)]
+    #[param(unit = "", section = "Main", slider = Linear)]
+    pub strength: f32,
+}
+
+/// DaVinci Resolve-style hue-qualified curves.
+///
+/// Four independent 1D curves for targeted per-hue and per-luminance control:
+/// - Hue vs Saturation: per-hue chroma multiplier
+/// - Hue vs Hue: per-hue hue offset
+/// - Hue vs Luminance: per-hue luminance offset
+/// - Luminance vs Saturation: per-luminance chroma multiplier
+///
+/// Curves are set programmatically via control points or raw LUTs.
+/// Oklab's perceptually uniform hue eliminates the skew artifacts
+/// inherent in HSL-based implementations.
+#[derive(Node, Clone, Debug, Default)]
+#[node(id = "zenfilters.hue_curves", group = Color, role = Filter)]
+#[node(label = "Hue Curves")]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("color", "curves", "grading", "hue"))]
+pub struct HueCurves {}
+
 /// Grayscale conversion with per-color luminance weights
 #[derive(Node, Clone, Debug)]
 #[node(id = "zenfilters.bw_mixer", group = Color, role = Filter)]
