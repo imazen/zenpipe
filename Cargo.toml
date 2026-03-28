@@ -78,7 +78,9 @@ moxcms = { version = "0.8", optional = true }
 zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 
 # ── Optional codec crates for node registry ──
-zenjpeg = { path = "../zenjpeg/zenjpeg", default-features = false, features = ["zencodec", "zennode"], optional = true }
+# Note: default-features enabled because zenjpeg's codec.rs unconditionally
+# references search::ExpertConfig which requires the `trellis` default feature.
+zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec", "zennode"], optional = true }
 zenpng = { path = "../zenpng", default-features = false, features = ["zencodec", "zennode"], optional = true }
 zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec", "zennode"], optional = true }
 zengif = { path = "../zengif", default-features = false, features = ["zencodec", "zennode"], optional = true }
