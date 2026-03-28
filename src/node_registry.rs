@@ -5,11 +5,10 @@
 //!
 //! # Features
 //!
-//! Each crate's nodes are gated behind an optional feature:
+//! Codec and filter nodes are gated behind optional features:
 //! - `nodes-jpeg`, `nodes-png`, `nodes-webp`, `nodes-gif`
 //! - `nodes-avif`, `nodes-jxl`, `nodes-tiff`, `nodes-bmp`
-//! - `nodes-resize`, `nodes-layout`, `nodes-quant`
-//! - `nodes-filters` (requires std)
+//! - `nodes-quant`, `nodes-filters` (requires std)
 //!
 //! `nodes-all` enables everything.
 
@@ -62,13 +61,6 @@ pub fn full_registry() -> NodeRegistry {
 
     #[cfg(feature = "nodes-bmp")]
     zenbitmaps::zennode_defs::register(&mut r);
-
-    // Processing nodes
-    #[cfg(feature = "nodes-resize")]
-    zenresize::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-layout")]
-    zenlayout::zennode_defs::register(&mut r);
 
     #[cfg(feature = "nodes-quant")]
     zenquant::zennode_defs::register(&mut r);

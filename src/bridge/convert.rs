@@ -217,7 +217,6 @@ pub(crate) fn convert_single(
         "zenlayout.rotate_180" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate180)),
         "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate270)),
         "zenresize.constrain" => convert_zenresize_constrain(node),
-        "zenlayout.constrain" => convert_zenlayout_constrain(node),
 
         // zenpipe native nodes + zenresize.resize
         "zenpipe.crop_whitespace" => convert_crop_whitespace(node),
@@ -225,9 +224,6 @@ pub(crate) fn convert_single(
         "zenpipe.remove_alpha" => convert_remove_alpha(node),
         "zenpipe.round_corners" => convert_round_corners(node),
         "zenresize.resize" => convert_resize(node),
-
-        // Legacy aliases (zenlayout had crop_whitespace before it moved to zenpipe)
-        "zenlayout.crop_whitespace" => convert_crop_whitespace(node),
 
         _ => Err(PipeError::Op(alloc::format!(
             "bridge: no converter for node '{schema_id}'"
@@ -264,7 +260,7 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         .get_param("down_filter")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .and_then(|s| parse_filter_opt(&s));
-    let _sharpen = param_f32_opt(node, "sharpen");
+    let _sharpen = param_f32_opt(node, "sharpen_percent");
 
     let mode = parse_constraint_mode(&mode_str)?;
 
@@ -274,23 +270,6 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter,
-    })
-}
-
-/// Convert a `zenlayout.constrain` node to `NodeOp::Constrain`.
-pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
-    let w = param_u32(node, "w")?;
-    let h = param_u32(node, "h")?;
-    let mode_str = param_str(node, "mode")?;
-
-    let mode = parse_constraint_mode(&mode_str)?;
-
-    Ok(NodeOp::Constrain {
-        mode,
-        w,
-        h,
-        orientation: None,
-        filter: None,
     })
 }
 
@@ -358,329 +337,332 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
         param_u32(node, "bg_a").unwrap_or(0) as u8,
     ];
 
-    Ok(NodeOp::Materialize { label: "round_corners", transform: Box::new(move |data, w, h, fmt| {
-        let width = *w;
-        let height = *h;
-        let bpp = fmt.bytes_per_pixel();
-        if width == 0 || height == 0 {
-            return;
-        }
-
-        let smallest = width.min(height) as f32;
-
-        // Resolve per-corner radii from mode + parameters.
-        // Returns [top_left, top_right, bottom_left, bottom_right] clamped to valid range.
-        let has_custom =
-            radius_tl >= 0.0 || radius_tr >= 0.0 || radius_bl >= 0.0 || radius_br >= 0.0;
-        let is_circle = mode == "circle";
-        let is_percentage = mode == "percentage" || mode == "percentage_custom";
-
-        let corner_radii: [f32; 4] = if is_circle {
-            let r = smallest / 2.0;
-            [r, r, r, r]
-        } else if has_custom {
-            let tl = if radius_tl >= 0.0 { radius_tl } else { radius };
-            let tr = if radius_tr >= 0.0 { radius_tr } else { radius };
-            let bl = if radius_bl >= 0.0 { radius_bl } else { radius };
-            let br = if radius_br >= 0.0 { radius_br } else { radius };
-            if is_percentage {
-                [
-                    smallest * tl.clamp(0.0, 100.0) / 200.0,
-                    smallest * tr.clamp(0.0, 100.0) / 200.0,
-                    smallest * bl.clamp(0.0, 100.0) / 200.0,
-                    smallest * br.clamp(0.0, 100.0) / 200.0,
-                ]
-            } else {
-                let half = smallest / 2.0;
-                [
-                    tl.clamp(0.0, half),
-                    tr.clamp(0.0, half),
-                    bl.clamp(0.0, half),
-                    br.clamp(0.0, half),
-                ]
-            }
-        } else if is_percentage {
-            let r = smallest * radius.clamp(0.0, 100.0) / 200.0;
-            [r, r, r, r]
-        } else {
-            let r = radius.clamp(0.0, smallest / 2.0);
-            [r, r, r, r]
-        };
-
-        // Check if all radii are zero — nothing to do.
-        if corner_radii.iter().all(|&r| r <= 0.0) {
-            return;
-        }
-
-        // For circle mode on non-square canvases, compute offsets to center the circle.
-        // This matches V2's plan_quadrants Circle logic: the quadrants are offset so the
-        // circular region is centered in the larger dimension.
-        let (offset_x, offset_y) = if is_circle {
-            let ox = ((width as i64 - height as i64).max(0) / 2) as u32;
-            let oy = ((height as i64 - width as i64).max(0) / 2) as u32;
-            (ox, oy)
-        } else {
-            (0, 0)
-        };
-
-        // The effective canvas for quadrant computation (smallest dimension for circle).
-        let eff_w = if is_circle { smallest as u32 } else { width };
-        let eff_h = if is_circle { smallest as u32 } else { height };
-
-        // Integer division to avoid quadrant overlap on odd dimensions (matches V2).
-        let right_half_width = eff_w / 2;
-        let bottom_half_height = eff_h / 2;
-        let left_half_width = eff_w - right_half_width;
-        let top_half_height = eff_h - bottom_half_height;
-
-        // Volumetric offset: radius of a circle with the surface area of a 1x1 square.
-        let volumetric_offset: f32 = 0.56419; // sqrt(1/pi)
-
-        // Pre-convert bg color to linear space for gamma-correct blending.
-        let bg_linear: [f32; 4] = [
-            srgb_byte_to_linear(bg[0]),
-            srgb_byte_to_linear(bg[1]),
-            srgb_byte_to_linear(bg[2]),
-            bg[3] as f32 / 255.0,
-        ];
-
-        // Fill a rectangular region with the background color.
-        let fill_rect = |data: &mut [u8], x1: u32, y1: u32, x2: u32, y2: u32| {
-            let x1 = x1 as usize;
-            let y1 = y1 as usize;
-            let x2 = (x2 as usize).min(width as usize);
-            let y2 = (y2 as usize).min(height as usize);
-            for y in y1..y2 {
-                let row_start = y * width as usize * bpp;
-                for x in x1..x2 {
-                    let off = row_start + x * bpp;
-                    for c in 0..bpp.min(4) {
-                        data[off + c] = bg[c];
-                    }
-                }
-            }
-        };
-
-        // For circle mode: clear the top/bottom/left/right strips outside the circle region.
-        if is_circle {
-            // Clear top rows (above the circle region).
-            if offset_y > 0 {
-                fill_rect(data, 0, 0, width, offset_y);
-            }
-            // Clear bottom rows (below the circle region).
-            let circle_bottom = offset_y + eff_h;
-            if circle_bottom < height {
-                fill_rect(data, 0, circle_bottom, width, height);
-            }
-            // Clear left columns (left of the circle region) within the circle rows.
-            if offset_x > 0 {
-                fill_rect(data, 0, offset_y, offset_x, offset_y + eff_h);
-            }
-            // Clear right columns (right of the circle region) within the circle rows.
-            let circle_right = offset_x + eff_w;
-            if circle_right < width {
-                fill_rect(data, circle_right, offset_y, width, offset_y + eff_h);
-            }
-        }
-
-        // Quadrant definitions: [top_left, top_right, bottom_left, bottom_right]
-        // Each: (qx, qy, qw, qh, radius, center_x, center_y, is_top, is_left)
-        struct Quadrant {
-            qx: u32,
-            qy: u32,
-            qw: u32,
-            qh: u32,
-            radius: f32,
-            cx: f32,
-            cy: f32,
-            is_top: bool,
-            is_left: bool,
-        }
-
-        let quadrants = [
-            Quadrant {
-                qx: offset_x,
-                qy: offset_y,
-                qw: left_half_width,
-                qh: top_half_height,
-                radius: corner_radii[0],
-                cx: offset_x as f32 + corner_radii[0],
-                cy: offset_y as f32 + corner_radii[0],
-                is_top: true,
-                is_left: true,
-            },
-            Quadrant {
-                qx: offset_x + left_half_width,
-                qy: offset_y,
-                qw: right_half_width,
-                qh: top_half_height,
-                radius: corner_radii[1],
-                cx: offset_x as f32 + eff_w as f32 - corner_radii[1],
-                cy: offset_y as f32 + corner_radii[1],
-                is_top: true,
-                is_left: false,
-            },
-            Quadrant {
-                qx: offset_x,
-                qy: offset_y + top_half_height,
-                qw: left_half_width,
-                qh: bottom_half_height,
-                radius: corner_radii[2],
-                cx: offset_x as f32 + corner_radii[2],
-                cy: offset_y as f32 + eff_h as f32 - corner_radii[2],
-                is_top: false,
-                is_left: true,
-            },
-            Quadrant {
-                qx: offset_x + left_half_width,
-                qy: offset_y + top_half_height,
-                qw: right_half_width,
-                qh: bottom_half_height,
-                radius: corner_radii[3],
-                cx: offset_x as f32 + eff_w as f32 - corner_radii[3],
-                cy: offset_y as f32 + eff_h as f32 - corner_radii[3],
-                is_top: false,
-                is_left: false,
-            },
-        ];
-
-        for q in &quadrants {
-            if q.radius <= 0.0 {
-                continue;
+    Ok(NodeOp::Materialize {
+        label: "round_corners",
+        transform: Box::new(move |data, w, h, fmt| {
+            let width = *w;
+            let height = *h;
+            let bpp = fmt.bytes_per_pixel();
+            if width == 0 || height == 0 {
+                return;
             }
 
-            let radius_of_influence = q.radius + (1.0 - volumetric_offset);
-            let radius_of_solid = q.radius - volumetric_offset;
-            let alias_width = radius_of_influence - radius_of_solid;
-            let ri2 = radius_of_influence * radius_of_influence;
-            let rs2 = radius_of_solid * radius_of_solid;
+            let smallest = width.min(height) as f32;
 
-            let radius_ceil = q.radius.ceil() as u32;
+            // Resolve per-corner radii from mode + parameters.
+            // Returns [top_left, top_right, bottom_left, bottom_right] clamped to valid range.
+            let has_custom =
+                radius_tl >= 0.0 || radius_tr >= 0.0 || radius_bl >= 0.0 || radius_br >= 0.0;
+            let is_circle = mode == "circle";
+            let is_percentage = mode == "percentage" || mode == "percentage_custom";
 
-            let start_y = if q.is_top {
-                q.qy as usize
-            } else {
-                (q.qy + q.qh).saturating_sub(radius_ceil) as usize
-            };
-            let end_y = if q.is_top {
-                (q.qy as usize + radius_ceil as usize).min(q.qy as usize + q.qh as usize)
-            } else {
-                (q.qy + q.qh) as usize
-            };
-            let start_x = if q.is_left {
-                q.qx as usize
-            } else {
-                (q.qx + q.qw).saturating_sub(radius_ceil) as usize
-            };
-            let end_x = if q.is_left {
-                (q.qx as usize + radius_ceil as usize).min(q.qx as usize + q.qw as usize)
-            } else {
-                (q.qx + q.qw) as usize
-            };
-
-            // Clear edges for rows where the quadrant is not rendering an arc.
-            // This handles the non-arc rows in each quadrant that still need to be
-            // cleared outside the circle region (for non-zero offset scenarios).
-            let (clear_x_from, clear_x_to) = if q.is_left {
-                (0u32, q.qx)
-            } else {
-                (q.qx + q.qw, width)
-            };
-
-            if clear_x_from != clear_x_to {
-                // Rows in the quadrant above/below the arc range.
-                for y in (q.qy..start_y as u32).chain(end_y as u32..(q.qy + q.qh)) {
-                    let row_start = y as usize * width as usize * bpp;
-                    for x in clear_x_from as usize..clear_x_to as usize {
-                        let off = row_start + x * bpp;
-                        for c in 0..bpp.min(4) {
-                            data[off + c] = bg[c];
-                        }
-                    }
-                }
-            }
-
-            for y in start_y..end_y {
-                let yf = y as f32 + 0.5;
-                let y_dist = (q.cy - yf).abs();
-                let y_dist_sq = y_dist * y_dist;
-                let row_start = y * width as usize * bpp;
-
-                let x_dist_solid = (rs2 - y_dist_sq).max(0.0).sqrt();
-                let x_dist_influenced = (ri2 - y_dist_sq).max(0.0).sqrt();
-
-                let edge_solid_x1 = (q.cx - x_dist_solid).ceil().max(0.0) as usize;
-                let edge_solid_x2 = (q.cx + x_dist_solid).floor().min(width as f32) as usize;
-                let edge_influence_x1 = (q.cx - x_dist_influenced).floor().max(0.0) as usize;
-                let edge_influence_x2 =
-                    (q.cx + x_dist_influenced).ceil().min(width as f32) as usize;
-
-                // Clear what we don't need to alias (outside influence region).
-                if q.is_left {
-                    for x in start_x..edge_influence_x1.min(end_x) {
-                        let off = row_start + x * bpp;
-                        for c in 0..bpp.min(4) {
-                            data[off + c] = bg[c];
-                        }
-                    }
+            let corner_radii: [f32; 4] = if is_circle {
+                let r = smallest / 2.0;
+                [r, r, r, r]
+            } else if has_custom {
+                let tl = if radius_tl >= 0.0 { radius_tl } else { radius };
+                let tr = if radius_tr >= 0.0 { radius_tr } else { radius };
+                let bl = if radius_bl >= 0.0 { radius_bl } else { radius };
+                let br = if radius_br >= 0.0 { radius_br } else { radius };
+                if is_percentage {
+                    [
+                        smallest * tl.clamp(0.0, 100.0) / 200.0,
+                        smallest * tr.clamp(0.0, 100.0) / 200.0,
+                        smallest * bl.clamp(0.0, 100.0) / 200.0,
+                        smallest * br.clamp(0.0, 100.0) / 200.0,
+                    ]
                 } else {
-                    for x in edge_influence_x2.max(start_x)..end_x {
+                    let half = smallest / 2.0;
+                    [
+                        tl.clamp(0.0, half),
+                        tr.clamp(0.0, half),
+                        bl.clamp(0.0, half),
+                        br.clamp(0.0, half),
+                    ]
+                }
+            } else if is_percentage {
+                let r = smallest * radius.clamp(0.0, 100.0) / 200.0;
+                [r, r, r, r]
+            } else {
+                let r = radius.clamp(0.0, smallest / 2.0);
+                [r, r, r, r]
+            };
+
+            // Check if all radii are zero — nothing to do.
+            if corner_radii.iter().all(|&r| r <= 0.0) {
+                return;
+            }
+
+            // For circle mode on non-square canvases, compute offsets to center the circle.
+            // This matches V2's plan_quadrants Circle logic: the quadrants are offset so the
+            // circular region is centered in the larger dimension.
+            let (offset_x, offset_y) = if is_circle {
+                let ox = ((width as i64 - height as i64).max(0) / 2) as u32;
+                let oy = ((height as i64 - width as i64).max(0) / 2) as u32;
+                (ox, oy)
+            } else {
+                (0, 0)
+            };
+
+            // The effective canvas for quadrant computation (smallest dimension for circle).
+            let eff_w = if is_circle { smallest as u32 } else { width };
+            let eff_h = if is_circle { smallest as u32 } else { height };
+
+            // Integer division to avoid quadrant overlap on odd dimensions (matches V2).
+            let right_half_width = eff_w / 2;
+            let bottom_half_height = eff_h / 2;
+            let left_half_width = eff_w - right_half_width;
+            let top_half_height = eff_h - bottom_half_height;
+
+            // Volumetric offset: radius of a circle with the surface area of a 1x1 square.
+            let volumetric_offset: f32 = 0.56419; // sqrt(1/pi)
+
+            // Pre-convert bg color to linear space for gamma-correct blending.
+            let bg_linear: [f32; 4] = [
+                srgb_byte_to_linear(bg[0]),
+                srgb_byte_to_linear(bg[1]),
+                srgb_byte_to_linear(bg[2]),
+                bg[3] as f32 / 255.0,
+            ];
+
+            // Fill a rectangular region with the background color.
+            let fill_rect = |data: &mut [u8], x1: u32, y1: u32, x2: u32, y2: u32| {
+                let x1 = x1 as usize;
+                let y1 = y1 as usize;
+                let x2 = (x2 as usize).min(width as usize);
+                let y2 = (y2 as usize).min(height as usize);
+                for y in y1..y2 {
+                    let row_start = y * width as usize * bpp;
+                    for x in x1..x2 {
                         let off = row_start + x * bpp;
                         for c in 0..bpp.min(4) {
                             data[off + c] = bg[c];
                         }
                     }
                 }
+            };
 
-                // Alias pixels in the transition band.
-                let (alias_from, alias_to) = if q.is_left {
-                    (edge_influence_x1.max(start_x), edge_solid_x1.min(end_x))
+            // For circle mode: clear the top/bottom/left/right strips outside the circle region.
+            if is_circle {
+                // Clear top rows (above the circle region).
+                if offset_y > 0 {
+                    fill_rect(data, 0, 0, width, offset_y);
+                }
+                // Clear bottom rows (below the circle region).
+                let circle_bottom = offset_y + eff_h;
+                if circle_bottom < height {
+                    fill_rect(data, 0, circle_bottom, width, height);
+                }
+                // Clear left columns (left of the circle region) within the circle rows.
+                if offset_x > 0 {
+                    fill_rect(data, 0, offset_y, offset_x, offset_y + eff_h);
+                }
+                // Clear right columns (right of the circle region) within the circle rows.
+                let circle_right = offset_x + eff_w;
+                if circle_right < width {
+                    fill_rect(data, circle_right, offset_y, width, offset_y + eff_h);
+                }
+            }
+
+            // Quadrant definitions: [top_left, top_right, bottom_left, bottom_right]
+            // Each: (qx, qy, qw, qh, radius, center_x, center_y, is_top, is_left)
+            struct Quadrant {
+                qx: u32,
+                qy: u32,
+                qw: u32,
+                qh: u32,
+                radius: f32,
+                cx: f32,
+                cy: f32,
+                is_top: bool,
+                is_left: bool,
+            }
+
+            let quadrants = [
+                Quadrant {
+                    qx: offset_x,
+                    qy: offset_y,
+                    qw: left_half_width,
+                    qh: top_half_height,
+                    radius: corner_radii[0],
+                    cx: offset_x as f32 + corner_radii[0],
+                    cy: offset_y as f32 + corner_radii[0],
+                    is_top: true,
+                    is_left: true,
+                },
+                Quadrant {
+                    qx: offset_x + left_half_width,
+                    qy: offset_y,
+                    qw: right_half_width,
+                    qh: top_half_height,
+                    radius: corner_radii[1],
+                    cx: offset_x as f32 + eff_w as f32 - corner_radii[1],
+                    cy: offset_y as f32 + corner_radii[1],
+                    is_top: true,
+                    is_left: false,
+                },
+                Quadrant {
+                    qx: offset_x,
+                    qy: offset_y + top_half_height,
+                    qw: left_half_width,
+                    qh: bottom_half_height,
+                    radius: corner_radii[2],
+                    cx: offset_x as f32 + corner_radii[2],
+                    cy: offset_y as f32 + eff_h as f32 - corner_radii[2],
+                    is_top: false,
+                    is_left: true,
+                },
+                Quadrant {
+                    qx: offset_x + left_half_width,
+                    qy: offset_y + top_half_height,
+                    qw: right_half_width,
+                    qh: bottom_half_height,
+                    radius: corner_radii[3],
+                    cx: offset_x as f32 + eff_w as f32 - corner_radii[3],
+                    cy: offset_y as f32 + eff_h as f32 - corner_radii[3],
+                    is_top: false,
+                    is_left: false,
+                },
+            ];
+
+            for q in &quadrants {
+                if q.radius <= 0.0 {
+                    continue;
+                }
+
+                let radius_of_influence = q.radius + (1.0 - volumetric_offset);
+                let radius_of_solid = q.radius - volumetric_offset;
+                let alias_width = radius_of_influence - radius_of_solid;
+                let ri2 = radius_of_influence * radius_of_influence;
+                let rs2 = radius_of_solid * radius_of_solid;
+
+                let radius_ceil = q.radius.ceil() as u32;
+
+                let start_y = if q.is_top {
+                    q.qy as usize
                 } else {
-                    (edge_solid_x2.max(start_x), edge_influence_x2.min(end_x))
+                    (q.qy + q.qh).saturating_sub(radius_ceil) as usize
+                };
+                let end_y = if q.is_top {
+                    (q.qy as usize + radius_ceil as usize).min(q.qy as usize + q.qh as usize)
+                } else {
+                    (q.qy + q.qh) as usize
+                };
+                let start_x = if q.is_left {
+                    q.qx as usize
+                } else {
+                    (q.qx + q.qw).saturating_sub(radius_ceil) as usize
+                };
+                let end_x = if q.is_left {
+                    (q.qx as usize + radius_ceil as usize).min(q.qx as usize + q.qw as usize)
+                } else {
+                    (q.qx + q.qw) as usize
                 };
 
-                for x in alias_from..alias_to {
-                    let xf = x as f32 + 0.5;
-                    let diff_x = q.cx - xf;
-                    let distance = (diff_x * diff_x + y_dist_sq).sqrt();
+                // Clear edges for rows where the quadrant is not rendering an arc.
+                // This handles the non-arc rows in each quadrant that still need to be
+                // cleared outside the circle region (for non-zero offset scenarios).
+                let (clear_x_from, clear_x_to) = if q.is_left {
+                    (0u32, q.qx)
+                } else {
+                    (q.qx + q.qw, width)
+                };
 
-                    if distance > radius_of_influence {
-                        let off = row_start + x * bpp;
-                        for c in 0..bpp.min(4) {
-                            data[off + c] = bg[c];
-                        }
-                    } else if distance > radius_of_solid {
-                        let intensity = (distance - radius_of_solid) / alias_width;
-                        let off = row_start + x * bpp;
-
-                        let pixel_a = if bpp >= 4 {
-                            data[off + 3] as f32 / 255.0 * (1.0 - intensity)
-                        } else {
-                            1.0 - intensity
-                        };
-                        let matte_a = (1.0 - pixel_a) * bg_linear[3];
-                        let final_a = matte_a + pixel_a;
-
-                        if final_a > 0.0 {
-                            for c in 0..bpp.min(3) {
-                                let src_lin = srgb_byte_to_linear(data[off + c]);
-                                let blended =
-                                    (src_lin * pixel_a + bg_linear[c] * matte_a) / final_a;
-                                data[off + c] = linear_to_srgb_byte(blended);
-                            }
-                            if bpp >= 4 {
-                                data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
-                            }
-                        } else {
+                if clear_x_from != clear_x_to {
+                    // Rows in the quadrant above/below the arc range.
+                    for y in (q.qy..start_y as u32).chain(end_y as u32..(q.qy + q.qh)) {
+                        let row_start = y as usize * width as usize * bpp;
+                        for x in clear_x_from as usize..clear_x_to as usize {
+                            let off = row_start + x * bpp;
                             for c in 0..bpp.min(4) {
                                 data[off + c] = bg[c];
                             }
                         }
                     }
                 }
+
+                for y in start_y..end_y {
+                    let yf = y as f32 + 0.5;
+                    let y_dist = (q.cy - yf).abs();
+                    let y_dist_sq = y_dist * y_dist;
+                    let row_start = y * width as usize * bpp;
+
+                    let x_dist_solid = (rs2 - y_dist_sq).max(0.0).sqrt();
+                    let x_dist_influenced = (ri2 - y_dist_sq).max(0.0).sqrt();
+
+                    let edge_solid_x1 = (q.cx - x_dist_solid).ceil().max(0.0) as usize;
+                    let edge_solid_x2 = (q.cx + x_dist_solid).floor().min(width as f32) as usize;
+                    let edge_influence_x1 = (q.cx - x_dist_influenced).floor().max(0.0) as usize;
+                    let edge_influence_x2 =
+                        (q.cx + x_dist_influenced).ceil().min(width as f32) as usize;
+
+                    // Clear what we don't need to alias (outside influence region).
+                    if q.is_left {
+                        for x in start_x..edge_influence_x1.min(end_x) {
+                            let off = row_start + x * bpp;
+                            for c in 0..bpp.min(4) {
+                                data[off + c] = bg[c];
+                            }
+                        }
+                    } else {
+                        for x in edge_influence_x2.max(start_x)..end_x {
+                            let off = row_start + x * bpp;
+                            for c in 0..bpp.min(4) {
+                                data[off + c] = bg[c];
+                            }
+                        }
+                    }
+
+                    // Alias pixels in the transition band.
+                    let (alias_from, alias_to) = if q.is_left {
+                        (edge_influence_x1.max(start_x), edge_solid_x1.min(end_x))
+                    } else {
+                        (edge_solid_x2.max(start_x), edge_influence_x2.min(end_x))
+                    };
+
+                    for x in alias_from..alias_to {
+                        let xf = x as f32 + 0.5;
+                        let diff_x = q.cx - xf;
+                        let distance = (diff_x * diff_x + y_dist_sq).sqrt();
+
+                        if distance > radius_of_influence {
+                            let off = row_start + x * bpp;
+                            for c in 0..bpp.min(4) {
+                                data[off + c] = bg[c];
+                            }
+                        } else if distance > radius_of_solid {
+                            let intensity = (distance - radius_of_solid) / alias_width;
+                            let off = row_start + x * bpp;
+
+                            let pixel_a = if bpp >= 4 {
+                                data[off + 3] as f32 / 255.0 * (1.0 - intensity)
+                            } else {
+                                1.0 - intensity
+                            };
+                            let matte_a = (1.0 - pixel_a) * bg_linear[3];
+                            let final_a = matte_a + pixel_a;
+
+                            if final_a > 0.0 {
+                                for c in 0..bpp.min(3) {
+                                    let src_lin = srgb_byte_to_linear(data[off + c]);
+                                    let blended =
+                                        (src_lin * pixel_a + bg_linear[c] * matte_a) / final_a;
+                                    data[off + c] = linear_to_srgb_byte(blended);
+                                }
+                                if bpp >= 4 {
+                                    data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
+                                }
+                            } else {
+                                for c in 0..bpp.min(4) {
+                                    data[off + c] = bg[c];
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        }
-    })})
+        }),
+    })
 }
 
 // ─── Linear/sRGB conversion helpers for gamma-correct blending ───

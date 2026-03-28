@@ -40,6 +40,11 @@ pub use node_registry::full_registry;
 #[cfg(feature = "zennode")]
 pub mod zennode_defs;
 
+#[cfg(feature = "lossless-jpeg")]
+pub mod lossless;
+#[cfg(feature = "lossless-jpeg")]
+pub use lossless::{LosslessResult, try_lossless_jpeg};
+
 // Re-export bridge config types at crate root for convenience.
 #[cfg(feature = "zennode")]
 pub use bridge::{DagNode, DecodeConfig, EncodeConfig, MaterializedImage, PipelineResult};

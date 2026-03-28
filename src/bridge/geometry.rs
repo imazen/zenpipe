@@ -19,7 +19,6 @@ pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
     "zenlayout.rotate_180",
     "zenlayout.rotate_270",
     "zenresize.constrain",
-    "zenlayout.constrain",
 ];
 
 /// Check if a schema ID is a geometry operation.
@@ -101,24 +100,16 @@ pub(crate) fn compile_geometry_run(
                     filter = Some(f);
                 }
             }
-            "zenlayout.constrain" => {
-                let w = param_u32(node, "w")?;
-                let h = param_u32(node, "h")?;
-                let mode_str = param_str(node, "mode")?;
-                let mode = parse_constraint_mode(&mode_str)?;
-                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
-            }
             "zenlayout.crop_percent" => {
-                // Percentage-based crop: x1/y1/x2/y2 are fractions of source size.
-                let x1 = super::parse::param_f32_opt(node, "x1").unwrap_or(0.0);
-                let y1 = super::parse::param_f32_opt(node, "y1").unwrap_or(0.0);
-                let x2 = super::parse::param_f32_opt(node, "x2").unwrap_or(100.0);
-                let y2 = super::parse::param_f32_opt(node, "y2").unwrap_or(100.0);
-                // Convert percentages to pixel coords based on source size.
-                let px = (x1 / 100.0 * source_w as f32) as u32;
-                let py = (y1 / 100.0 * source_h as f32) as u32;
-                let pw = ((x2 - x1) / 100.0 * source_w as f32).max(1.0) as u32;
-                let ph = ((y2 - y1) / 100.0 * source_h as f32).max(1.0) as u32;
+                // Percentage-based crop: x/y are origin fractions, w/h are dimension fractions (0.0–1.0).
+                let x = super::parse::param_f32_opt(node, "x").unwrap_or(0.0);
+                let y = super::parse::param_f32_opt(node, "y").unwrap_or(0.0);
+                let w = super::parse::param_f32_opt(node, "w").unwrap_or(1.0);
+                let h = super::parse::param_f32_opt(node, "h").unwrap_or(1.0);
+                let px = (x * source_w as f32) as u32;
+                let py = (y * source_h as f32) as u32;
+                let pw = (w * source_w as f32).max(1.0) as u32;
+                let ph = (h * source_h as f32).max(1.0) as u32;
                 pipeline = pipeline.crop_pixels(px, py, pw, ph);
             }
             // zenlayout.region is handled by the RegionConverter (needs ExpandCanvas).

@@ -1289,7 +1289,6 @@ mod core_tests {
         assert!(is_geometry_node("zenlayout.rotate_180"));
         assert!(is_geometry_node("zenlayout.rotate_270"));
         assert!(is_geometry_node("zenresize.constrain"));
-        assert!(is_geometry_node("zenlayout.constrain"));
         assert!(!is_geometry_node("zenfilters.exposure"));
         assert!(!is_geometry_node("zennode.decode"));
     }
@@ -1341,13 +1340,13 @@ mod core_tests {
     }
 }
 
-// Bridge tests requiring `zennode_defs` modules in zenresize and zenlayout.
-#[cfg(all(test, feature = "zennode-defs"))]
+// Bridge tests using zenpipe's own zennode_defs.
+#[cfg(all(test, feature = "zennode"))]
 mod tests {
     use super::*;
     use zennode::NodeDef;
 
-    use zenresize::zennode_defs as resize_nodes;
+    use crate::zennode_defs as defs;
 
     #[test]
     fn compile_empty() {
@@ -1365,7 +1364,7 @@ mod tests {
         params.insert("w".into(), zennode::ParamValue::U32(100));
         params.insert("h".into(), zennode::ParamValue::U32(80));
 
-        let crop_node = zenlayout::zennode_defs::CROP_NODE.create(&params).unwrap();
+        let crop_node = defs::CROP_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node];
         let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
@@ -1377,9 +1376,7 @@ mod tests {
         let mut params = zennode::ParamMap::new();
         params.insert("orientation".into(), zennode::ParamValue::I32(6));
 
-        let orient_node = zenlayout::zennode_defs::ORIENT_NODE
-            .create(&params)
-            .unwrap();
+        let orient_node = defs::ORIENT_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![orient_node];
         let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
@@ -1393,19 +1390,10 @@ mod tests {
         params.insert("mode".into(), zennode::ParamValue::Str("within".into()));
         params.insert("filter".into(), zennode::ParamValue::Str("lanczos".into()));
 
-        let node = resize_nodes::CONSTRAIN_NODE.create(&params).unwrap();
+        let node = defs::CONSTRAIN_NODE.create(&params).unwrap();
         let nodes: Vec<Box<dyn NodeInstance>> = vec![node];
         let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
         assert!(result.encode_nodes.is_empty());
-    }
-
-    #[test]
-    fn decode_nodes_separated() {
-        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
-        assert_eq!(result.decode_nodes.len(), 1);
-        assert_eq!(result.decode_nodes[0].schema().id, "zennode.decode");
     }
 
     #[test]
@@ -1416,12 +1404,8 @@ mod tests {
 
     #[test]
     fn order_preserved() {
-        let rot90 = zenlayout::zennode_defs::ROTATE90_NODE
-            .create_default()
-            .unwrap();
-        let rot270 = zenlayout::zennode_defs::ROTATE270_NODE
-            .create_default()
-            .unwrap();
+        let rot90 = defs::ROTATE90_NODE.create_default().unwrap();
+        let rot270 = defs::ROTATE270_NODE.create_default().unwrap();
 
         let nodes: Vec<Box<dyn NodeInstance>> = vec![rot270, rot90];
         let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
@@ -1474,59 +1458,12 @@ mod tests {
     }
 
     #[test]
-    fn decode_config_from_default_node() {
-        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let config = DecodeConfig::from_nodes(&nodes);
-        assert_eq!(config.hdr_mode, "sdr_only");
-        assert_eq!(config.color_intent, "preserve");
-        assert_eq!(config.min_size, 0);
-    }
-
-    #[test]
-    fn decode_config_from_custom_params() {
-        let mut params = zennode::ParamMap::new();
-        params.insert(
-            "hdr_mode".into(),
-            zennode::ParamValue::Str("hdr_reconstruct".into()),
-        );
-        params.insert(
-            "color_intent".into(),
-            zennode::ParamValue::Str("srgb".into()),
-        );
-        params.insert("min_size".into(), zennode::ParamValue::U32(400));
-
-        let decode_node = zennode::nodes::DECODE_NODE.create(&params).unwrap();
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let config = DecodeConfig::from_nodes(&nodes);
-        assert_eq!(config.hdr_mode, "hdr_reconstruct");
-        assert_eq!(config.color_intent, "srgb");
-        assert_eq!(config.min_size, 400);
-    }
-
-    #[test]
     fn decode_config_no_decode_node_returns_defaults() {
         let nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
         let config = DecodeConfig::from_nodes(&nodes);
         assert_eq!(config.hdr_mode, "sdr_only");
         assert_eq!(config.color_intent, "preserve");
         assert_eq!(config.min_size, 0);
-    }
-
-    #[test]
-    fn decode_config_extracted_in_compile() {
-        let mut params = zennode::ParamMap::new();
-        params.insert(
-            "hdr_mode".into(),
-            zennode::ParamValue::Str("preserve".into()),
-        );
-        params.insert("min_size".into(), zennode::ParamValue::U32(256));
-
-        let decode_node = zennode::nodes::DECODE_NODE.create(&params).unwrap();
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node];
-        let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
-        assert_eq!(result.decode_config.hdr_mode, "preserve");
-        assert_eq!(result.decode_config.min_size, 256);
     }
 
     // ─── EncodeConfig tests ───
@@ -1561,23 +1498,19 @@ mod tests {
     // ─── Full flow tests ───
 
     #[test]
-    fn full_flow_decode_crop_encode() {
-        let decode_node = zennode::nodes::DECODE_NODE.create_default().unwrap();
-
+    fn full_flow_crop_only() {
         let mut crop_params = zennode::ParamMap::new();
         crop_params.insert("x".into(), zennode::ParamValue::U32(0));
         crop_params.insert("y".into(), zennode::ParamValue::U32(0));
         crop_params.insert("w".into(), zennode::ParamValue::U32(200));
         crop_params.insert("h".into(), zennode::ParamValue::U32(150));
-        let crop_node = zenlayout::zennode_defs::CROP_NODE
-            .create(&crop_params)
-            .unwrap();
+        let crop_node = defs::CROP_NODE.create(&crop_params).unwrap();
 
-        let nodes: Vec<Box<dyn NodeInstance>> = vec![decode_node, crop_node];
+        let nodes: Vec<Box<dyn NodeInstance>> = vec![crop_node];
         let result = compile_nodes(&nodes, &[], 0, 0, None).unwrap();
 
-        assert_eq!(result.decode_nodes.len(), 1);
         assert!(result.encode_nodes.is_empty());
+        assert!(result.decode_nodes.is_empty());
         assert_eq!(result.decode_config.hdr_mode, "sdr_only");
         assert!(result.encode_config.quality_profile.is_none());
     }

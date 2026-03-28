@@ -10,7 +10,7 @@ keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 
 [features]
-default = ["std"]
+default = ["std", "lossless-jpeg"]
 # Enables zenfilters, moxcms ICC CMS, and std on all deps.
 # Without this feature, the core pipeline still works (resize, blend, codec,
 # animation, format conversion) in a no_std + alloc environment.
@@ -23,12 +23,10 @@ std = [
     "dep:moxcms",
 ]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
-# When zenresize and zenlayout gain zennode features, add them here:
-#   "zenresize/zennode", "zenlayout/zennode"
 zennode = ["dep:zennode", "zenresize/layout"]
-# Future: enables bridge tests that depend on zennode_defs modules in
-# zenresize and zenlayout (not yet implemented).
-zennode-defs = ["zennode"]
+# Lossless JPEG fast path: skip pixel decode for orient-only JPEG→JPEG pipelines.
+# Uses zenjpeg::lossless::transform() on DCT coefficients (~10x faster, zero gen loss).
+lossless-jpeg = ["zennode", "dep:zenjpeg"]
 
 # ── Node registry features ──
 # Each enables that crate's zennode_defs::register() in full_registry().
@@ -40,11 +38,13 @@ nodes-avif = ["zennode", "dep:zenavif"]
 nodes-jxl = ["zennode", "dep:zenjxl"]
 nodes-tiff = ["zennode", "dep:zentiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps"]
-nodes-resize = ["zennode", "zenresize/zennode"]
-nodes-layout = ["zennode", "dep:zenlayout", "zenlayout/zennode"]
+# Geometry and resize nodes now live in zenpipe's own zennode_defs.
+# These features are kept as backward-compatible aliases.
+nodes-resize = ["zennode"]
+nodes-layout = ["zennode"]
 nodes-quant = ["zennode", "dep:zenquant"]
 nodes-filters = ["zennode", "std", "zenfilters/zennode"]
-nodes-faces = ["zennode", "std", "nodes-layout", "dep:zensally", "dep:zensally-zentract"]
+nodes-faces = ["zennode", "std", "dep:zensally", "dep:zensally-zentract"]
 nodes-all = [
     "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif",
     "nodes-avif", "nodes-jxl", "nodes-tiff", "nodes-bmp",
@@ -86,7 +86,6 @@ zenavif = { path = "../zenavif", default-features = false, features = ["zencodec
 zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec", "zennode"], optional = true }
 zentiff = { path = "../zentiff", default-features = false, features = ["zennode"], optional = true }
 zenbitmaps = { path = "../zenbitmaps", default-features = false, features = ["zennode"], optional = true }
-zenlayout = { path = "../zenlayout", default-features = false, features = ["zennode"], optional = true }
 zenquant = { path = "../zenquant", default-features = false, features = ["zennode"], optional = true }
 # Face detection + saliency via zentract plugin (optional)
 zensally = { path = "../zenfaces/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true }
@@ -97,5 +96,4 @@ zensally-zentract = { path = "../zenfaces/crates/zensally-zentract", default-fea
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
-zenlayout = { path = "../zenlayout", default-features = false }
 zennode = { path = "../zennode/zennode", features = ["derive"] }

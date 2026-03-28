@@ -53,11 +53,11 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.12"
+version = "0.9.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b31252c47e70c7056709e9f98842aef4f709056c2b3a4f666c584f8cc37f7ca0"
+checksum = "04abfbadff681a305ecd3db04ce891981aa9696d8c13058237e6a6417108fcfe"
 dependencies = [
- "archmage-macros 0.9.12",
+ "archmage-macros 0.9.13",
  "safe_unaligned_simd",
 ]
 
@@ -74,9 +74,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.12"
+version = "0.9.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a97189db9dffc2e13364c6f56461085d65743ff4d17890d6b80744203aae92b"
+checksum = "50a1d7ac60f40ab79a2b06f49d3863a4da7569ce8ed708c1eae163d30ce41d28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -261,7 +261,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61ee8d8f5e43a45183480ea077c4e046e43ab9604928c87d6ad2080e666dc519"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "paste",
 ]
@@ -374,7 +374,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4b75067bc1e8c2c28413cab5777c0fe8473499e55f2e09076b9076f344ce9d5"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "magetypes",
  "num-traits",
@@ -401,7 +401,7 @@ version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c805c315148e092279cd19d011ce4b22ff9d3cc593cca089364f6501d12087b1"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
 ]
 
 [[package]]
@@ -799,7 +799,7 @@ name = "zenavif"
 version = "0.1.0"
 dependencies = [
  "almost-enough",
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "enough",
  "imgref",
@@ -847,7 +847,7 @@ dependencies = [
 name = "zenblend"
 version = "0.1.0"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "magetypes",
  "safe_unaligned_simd",
  "wide",
@@ -869,7 +869,7 @@ dependencies = [
 name = "zenfilters"
 version = "0.1.0"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "linear-srgb",
  "magetypes",
@@ -885,7 +885,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3ab3b331bb33391f2ac0a0716b5a5a06c634c3726f7a69b68d3052dbd2602f8"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "enough",
  "libm",
 ]
@@ -895,7 +895,7 @@ name = "zenflate"
 version = "0.3.2"
 source = "git+https://github.com/imazen/zenflate#67987f71379722e52106fca50e1717113e46d384"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "enough",
  "libm",
 ]
@@ -923,7 +923,7 @@ name = "zenjpeg"
 version = "0.6.1"
 dependencies = [
  "aligned-vec",
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "enough",
  "imgref",
@@ -961,7 +961,6 @@ name = "zenlayout"
 version = "0.2.0"
 dependencies = [
  "whereat",
- "zennode",
 ]
 
 [[package]]
@@ -1003,7 +1002,6 @@ dependencies = [
  "zengif",
  "zenjpeg",
  "zenjxl",
- "zenlayout 0.2.0",
  "zennode",
  "zenpixels",
  "zenpixels-convert",
@@ -1034,7 +1032,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15525e70fac3b3a6c2f7e3826c4e11376dd3ae885eaa7fe0aa252238381c3732"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "garb",
  "linear-srgb",
@@ -1049,7 +1047,7 @@ name = "zenpng"
 version = "0.1.0"
 dependencies = [
  "almost-enough",
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "bytemuck",
  "enough",
  "imgref",
@@ -1069,7 +1067,7 @@ dependencies = [
 name = "zenquant"
 version = "0.1.1"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "imgref",
  "linear-srgb",
  "magetypes",
@@ -1085,7 +1083,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88a5766f917b4a5e3321e7e64401fa3158e6db006996f83fb511b40f39b405cd"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "imgref",
  "linear-srgb",
  "magetypes",
@@ -1098,7 +1096,7 @@ dependencies = [
 name = "zenresize"
 version = "0.1.0"
 dependencies = [
- "archmage 0.9.12",
+ "archmage 0.9.13",
  "imgref",
  "libm",
  "linear-srgb",
@@ -1161,6 +1159,7 @@ version = "0.1.0"
 name = "zenwebp"
 version = "0.3.2"
 dependencies = [
+ "archmage 0.9.13",
  "bytemuck",
  "byteorder-lite",
  "enough",
@@ -1168,6 +1167,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "libm",
  "linear-srgb",
+ "magetypes",
  "self_cell",
  "thiserror",
  "whereat",
