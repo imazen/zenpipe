@@ -1493,7 +1493,7 @@ pub fn node_op_name(op: &crate::graph::NodeOp) -> &'static str {
         NodeOp::CropWhitespace { .. } => "CropWhitespace",
         NodeOp::ExpandCanvas { .. } => "ExpandCanvas",
         NodeOp::FillRect { .. } => "FillRect",
-        NodeOp::Materialize(_) => "Materialize",
+        NodeOp::Materialize { .. } => "Materialize",
     }
 }
 
@@ -1578,7 +1578,7 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
         NodeOp::FillRect { x1, y1, x2, y2, .. } => {
             format!("({x1},{y1})-({x2},{y2})")
         }
-        NodeOp::Materialize(_) => "custom transform".into(),
+        NodeOp::Materialize { label, .. } => alloc::string::String::from(*label),
     }
 }
 
@@ -1592,7 +1592,7 @@ pub fn node_op_materializes(op: &crate::graph::NodeOp) -> bool {
             | NodeOp::CropWhitespace { .. }
             | NodeOp::Analyze(_)
             | NodeOp::FillRect { .. }
-            | NodeOp::Materialize(_)
+            | NodeOp::Materialize { .. }
     )
 }
 

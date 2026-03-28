@@ -401,7 +401,11 @@ pub enum NodeOp {
     /// Custom materialization barrier — drain upstream, transform, re-stream.
     ///
     /// The closure receives `(data, width, height, format)` and may mutate all.
-    Materialize(MaterializeTransform),
+    /// The label is shown in pipeline traces (e.g., "watermark_overlay", "white_balance").
+    Materialize {
+        label: &'static str,
+        transform: MaterializeTransform,
+    },
 
     /// Terminal output node. `compile()` returns the Source feeding this node.
     Output,
@@ -902,7 +906,7 @@ impl PipelineGraph {
                 Ok(upstream)
             }
 
-            NodeOp::Materialize(_) => {
+            NodeOp::Materialize { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 est.materializes = true;
@@ -1597,14 +1601,14 @@ impl PipelineGraph {
                 Ok((Box::new(mat), meta))
             }
 
-            NodeOp::Materialize(transform_fn) => {
+            NodeOp::Materialize { transform, .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
                 Ok((
                     Box::new(MaterializedSource::from_source_with_transform(
                         upstream,
-                        transform_fn,
+                        transform,
                     )?),
                     meta,
                 ))

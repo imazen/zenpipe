@@ -358,7 +358,7 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
         param_u32(node, "bg_a").unwrap_or(0) as u8,
     ];
 
-    Ok(NodeOp::Materialize(Box::new(move |data, w, h, fmt| {
+    Ok(NodeOp::Materialize { label: "round_corners", transform: Box::new(move |data, w, h, fmt| {
         let width = *w;
         let height = *h;
         let bpp = fmt.bytes_per_pixel();
@@ -680,7 +680,7 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
                 }
             }
         }
-    })))
+    })})
 }
 
 // ─── Linear/sRGB conversion helpers for gamma-correct blending ───
