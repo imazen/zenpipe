@@ -1793,14 +1793,18 @@ fn detect_content_bounds(
     let content_w = right - left;
     let content_h = bottom - top;
 
-    // Apply padding
+    // Apply padding.
+    // percent_padding is in percentage units (0.5 = 0.5%), matching imageflow v2's
+    // RIAPI trim.percentpadding parameter. V2 divides by 100 and uses the average
+    // of content dimensions as the base: padding = (pct/100) * (w+h)/2.
+    // Padding is uniform (same for all sides).
     if percent_padding > 0.0 {
-        let pad_x = (content_w as f32 * percent_padding).round() as u32;
-        let pad_y = (content_h as f32 * percent_padding).round() as u32;
-        let x = left.saturating_sub(pad_x);
-        let y = top.saturating_sub(pad_y);
-        let r = (right + pad_x).min(w);
-        let b = (bottom + pad_y).min(h);
+        let avg_dim = (content_w + content_h) as f32 / 2.0;
+        let pad = (percent_padding / 100.0 * avg_dim).ceil() as u32;
+        let x = left.saturating_sub(pad);
+        let y = top.saturating_sub(pad);
+        let r = (right + pad).min(w);
+        let b = (bottom + pad).min(h);
         (x, y, r - x, b - y)
     } else {
         (left, top, content_w, content_h)
