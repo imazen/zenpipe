@@ -1,5 +1,6 @@
 mod adaptive_sharpen;
 mod alpha;
+mod asc_cdl;
 mod auto_exposure;
 #[cfg(feature = "experimental")]
 mod auto_tune;
@@ -19,6 +20,7 @@ mod clarity;
 mod color_grading;
 mod color_matrix;
 mod contrast;
+mod cube_lut;
 mod dehaze;
 mod devignette;
 pub mod dt_sigmoid;
@@ -32,6 +34,7 @@ pub(crate) mod guided_filter;
 mod highlight_recovery;
 mod highlights_shadows;
 mod hsl_adjust;
+mod hue_curves;
 mod hue_rotate;
 mod invert;
 mod levels;
@@ -58,6 +61,7 @@ mod whites_blacks;
 
 pub use adaptive_sharpen::AdaptiveSharpen;
 pub use alpha::Alpha;
+pub use asc_cdl::AscCdl;
 pub use auto_exposure::AutoExposure;
 #[cfg(feature = "experimental")]
 pub use auto_tune::{
@@ -78,6 +82,7 @@ pub use clarity::Clarity;
 pub use color_grading::ColorGrading;
 pub use color_matrix::ColorMatrix;
 pub use contrast::Contrast;
+pub use cube_lut::{CubeLut, CubeParseError};
 pub use dehaze::Dehaze;
 pub use devignette::Devignette;
 pub use edge_detect::{EdgeDetect, EdgeMode};
@@ -89,6 +94,7 @@ pub use grayscale::Grayscale;
 pub use highlight_recovery::HighlightRecovery;
 pub use highlights_shadows::HighlightsShadows;
 pub use hsl_adjust::HslAdjust;
+pub use hue_curves::HueCurves;
 pub use hue_rotate::HueRotate;
 pub use invert::Invert;
 pub use levels::Levels;

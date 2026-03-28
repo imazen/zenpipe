@@ -653,6 +653,84 @@ impl Default for CameraCalibration {
     }
 }
 
+/// ASC CDL (Color Decision List) -- industry-standard per-channel
+/// slope/offset/power correction with global saturation.
+///
+/// Formula per channel: `out = clamp(pow(max(slope * in + offset, 0), power), 0, 1)`
+/// Applied in linear RGB space with Oklab round-trip.
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenfilters.asc_cdl", group = Color, role = Filter)]
+#[node(label = "ASC CDL")]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+pub struct AscCdl {
+    /// Red channel gain
+    #[param(range(0.0..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "×", section = "Slope", slider = Linear)]
+    pub slope_r: f32,
+
+    /// Green channel gain
+    #[param(range(0.0..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "×", section = "Slope", slider = Linear)]
+    pub slope_g: f32,
+
+    /// Blue channel gain
+    #[param(range(0.0..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "×", section = "Slope", slider = Linear)]
+    pub slope_b: f32,
+
+    /// Red channel offset (lift)
+    #[param(range(-1.0..=1.0), default = 0.0, identity = 0.0, step = 0.005)]
+    #[param(unit = "", section = "Offset", slider = Linear)]
+    pub offset_r: f32,
+
+    /// Green channel offset (lift)
+    #[param(range(-1.0..=1.0), default = 0.0, identity = 0.0, step = 0.005)]
+    #[param(unit = "", section = "Offset", slider = Linear)]
+    pub offset_g: f32,
+
+    /// Blue channel offset (lift)
+    #[param(range(-1.0..=1.0), default = 0.0, identity = 0.0, step = 0.005)]
+    #[param(unit = "", section = "Offset", slider = Linear)]
+    pub offset_b: f32,
+
+    /// Red channel gamma
+    #[param(range(0.1..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "", section = "Power", slider = Linear)]
+    pub power_r: f32,
+
+    /// Green channel gamma
+    #[param(range(0.1..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "", section = "Power", slider = Linear)]
+    pub power_g: f32,
+
+    /// Blue channel gamma
+    #[param(range(0.1..=4.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(unit = "", section = "Power", slider = Linear)]
+    pub power_b: f32,
+
+    /// Global saturation (0 = mono, 1 = unchanged)
+    #[param(range(0.0..=4.0), default = 1.0, identity = 1.0, step = 0.05)]
+    #[param(unit = "×", section = "Main", slider = Linear)]
+    pub saturation: f32,
+}
+
+impl Default for AscCdl {
+    fn default() -> Self {
+        Self {
+            slope_r: 1.0,
+            slope_g: 1.0,
+            slope_b: 1.0,
+            offset_r: 0.0,
+            offset_g: 0.0,
+            offset_b: 0.0,
+            power_r: 1.0,
+            power_g: 1.0,
+            power_b: 1.0,
+            saturation: 1.0,
+        }
+    }
+}
+
 /// Grayscale conversion with per-color luminance weights
 #[derive(Node, Clone, Debug)]
 #[node(id = "zenfilters.bw_mixer", group = Color, role = Filter)]
