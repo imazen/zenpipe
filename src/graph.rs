@@ -627,16 +627,22 @@ impl PipelineGraph {
             NodeOp::Resize { w, h, .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                // Cost-aware: f32 linear sources use ResizeF32Source (no u8 roundtrip).
+                let out_fmt = if upstream.format == format::RGBAF32_LINEAR {
+                    format::RGBAF32_LINEAR
+                } else {
+                    format::RGBA8_SRGB
+                };
                 // Resize ring buffer: kernel_height rows of input width
                 let kernel_rows = 16u64; // conservative for most filters
                 est.streaming_bytes +=
                     kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 // Output strip buffer
-                est.streaming_bytes += strip_mem(*w, format::RGBA8_SRGB);
+                est.streaming_bytes += strip_mem(*w, out_fmt);
                 Ok(SourceInfo {
                     width: *w,
                     height: *h,
-                    format: format::RGBA8_SRGB,
+                    format: out_fmt,
                 })
             }
 
@@ -1099,6 +1105,7 @@ impl PipelineGraph {
         }
 
         /// Call ensure_format through the tracer (no-op recording when inactive).
+        /// Use for operations that require an exact format (MustBe).
         macro_rules! ensure_fmt {
             ($source:expr, $target:expr, $reason:expr) => {{
                 #[cfg(feature = "std")]
@@ -1108,6 +1115,24 @@ impl PipelineGraph {
                 #[cfg(not(feature = "std"))]
                 {
                     ensure_format($source, $target)
+                }
+            }};
+        }
+
+        /// Cost-aware format conversion via intent negotiation.
+        /// Uses [`ideal_format()`](zenpixels_convert::ideal_format) to pick the
+        /// cheapest compatible format instead of forcing a specific target.
+        /// If the source already satisfies the intent, no conversion is inserted.
+        #[allow(unused_macros)]
+        macro_rules! ensure_fmt_negotiated {
+            ($source:expr, $intent:expr, $reason:expr) => {{
+                #[cfg(feature = "std")]
+                {
+                    tracer.ensure_format_negotiated($source, $intent, $reason)
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    ensure_format_negotiated($source, $intent)
                 }
             }};
         }
@@ -1204,7 +1229,16 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "Resize")?;
+
+                // Cost-aware format selection: if upstream is already f32 linear
+                // (4 channels), use ResizeF32Source to avoid an unnecessary
+                // f32->u8->resize roundtrip. Otherwise convert to RGBA8_SRGB.
+                let use_f32 = upstream.format() == format::RGBAF32_LINEAR;
+                let upstream = if use_f32 {
+                    upstream
+                } else {
+                    ensure_fmt!(upstream, format::RGBA8_SRGB, "Resize")?
+                };
 
                 // Skip identity resize (same dimensions, no sharpening).
                 // ensure_format already ran, so format conversion is preserved.
@@ -1220,8 +1254,19 @@ impl PipelineGraph {
                 if let Some(pct) = sharpen_percent {
                     builder = builder.resize_sharpen(pct);
                 }
-                let config = builder.build();
-                Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), meta))
+
+                if use_f32 {
+                    let config = builder
+                        .format(zenresize::PixelDescriptor::RGBAF32_LINEAR)
+                        .build();
+                    Ok((
+                        Box::new(crate::sources::ResizeF32Source::new(upstream, &config, 16)?),
+                        meta,
+                    ))
+                } else {
+                    let config = builder.build();
+                    Ok((Box::new(ResizeSource::new(upstream, &config, 16)?), meta))
+                }
             }
 
             NodeOp::Constrain {
@@ -1607,8 +1652,7 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 Ok((
                     Box::new(MaterializedSource::from_source_with_transform(
-                        upstream,
-                        transform,
+                        upstream, transform,
                     )?),
                     meta,
                 ))
@@ -1704,6 +1748,20 @@ fn ensure_format(
         ))
     })?;
     Ok(Box::new(TransformSource::new(source).push(op)))
+}
+
+/// Cost-aware format conversion using [`zenpixels_convert::ideal_format`] (no-std path).
+///
+/// Computes the ideal working format for the given intent and only converts
+/// if the source doesn't already satisfy the requirement.
+#[cfg(not(feature = "std"))]
+fn ensure_format_negotiated(
+    source: Box<dyn Source>,
+    intent: zenpixels_convert::ConvertIntent,
+) -> Result<Box<dyn Source>, PipeError> {
+    let current = source.format();
+    let ideal = zenpixels_convert::ideal_format(current, intent);
+    ensure_format(source, ideal)
 }
 
 // ensure_format_traced is now Tracer::ensure_format — see trace.rs

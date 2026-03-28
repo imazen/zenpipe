@@ -307,6 +307,10 @@ pub struct TraceEntry {
     /// Whether this node materializes (full-frame buffer).
     pub materializes: bool,
 
+    /// Two-axis conversion cost (effort + loss) for implicit format conversions.
+    /// `None` for explicit nodes and identity conversions.
+    pub conversion_cost: Option<zenpixels_convert::ConversionCost>,
+
     /// Runtime notes — content-adaptive decisions, detection results, etc.
     /// Populated during compilation for nodes like CropWhitespace, Analyze.
     pub notes: Vec<String>,
@@ -419,6 +423,7 @@ impl TraceAppender {
             output_width: w,
             output_height: h,
             materializes: false,
+            conversion_cost: None,
             notes: Vec::new(),
             #[cfg(feature = "std")]
             timing: None,
@@ -520,6 +525,7 @@ impl Tracer {
             output_width: source.width(),
             output_height: source.height(),
             materializes,
+            conversion_cost: None,
             notes: Vec::new(),
             timing: timing_arc.clone(),
         };
@@ -535,6 +541,9 @@ impl Tracer {
     ///
     /// When inactive, equivalent to a plain `ensure_format` — checks if conversion
     /// is needed and inserts a `RowConverterOp` if so. Zero allocations when inactive.
+    ///
+    /// Computes and records [`ConversionCost`](zenpixels_convert::ConversionCost)
+    /// (effort + loss) in the trace entry when tracing is active.
     pub fn ensure_format(
         &self,
         source: Box<dyn crate::Source>,
@@ -548,6 +557,8 @@ impl Tracer {
 
         let in_w = source.width();
         let in_h = source.height();
+
+        let cost = zenpixels_convert::conversion_cost(current, target);
 
         let op = crate::ops::RowConverterOp::new(current, target).ok_or_else(|| {
             crate::error::PipeError::Op(alloc::format!(
@@ -566,10 +577,12 @@ impl Tracer {
                 trace_order,
                 name: alloc::string::String::from("ConvertFormat"),
                 description: alloc::format!(
-                    "{} -> {} (for {})",
+                    "{} -> {} (for {}, effort={} loss={})",
                     format_short(&current),
                     format_short(&target),
-                    reason
+                    reason,
+                    cost.effort,
+                    cost.loss,
                 ),
                 origin: None,
                 implicit: true,
@@ -584,12 +597,32 @@ impl Tracer {
                 output_width: in_w,
                 output_height: in_h,
                 materializes: false,
+                conversion_cost: Some(cost),
                 notes: Vec::new(),
                 timing: None,
             });
         }
 
         Ok(result)
+    }
+
+    /// Cost-aware format conversion via [`zenpixels_convert::ideal_format`].
+    ///
+    /// Instead of forcing a specific target format, uses the intent to determine
+    /// the ideal working format for the downstream operation. If the source
+    /// already satisfies the intent (e.g., f32 linear source for a LinearLight
+    /// resize), no conversion is inserted — avoiding unnecessary round-trips.
+    ///
+    /// Falls back to `ensure_format` with the ideal target when conversion is needed.
+    pub fn ensure_format_negotiated(
+        &self,
+        source: Box<dyn crate::Source>,
+        intent: zenpixels_convert::ConvertIntent,
+        reason: &str,
+    ) -> Result<Box<dyn crate::Source>, crate::error::PipeError> {
+        let current = source.format();
+        let ideal = zenpixels_convert::ideal_format(current, intent);
+        self.ensure_format(source, ideal, reason)
     }
 
     /// Add a runtime note to the trace (e.g., content-adaptive detection results).
@@ -627,6 +660,7 @@ impl Tracer {
             output_width: output_w,
             output_height: output_h,
             materializes,
+            conversion_cost: None,
             notes: Vec::new(),
             timing: None,
         });
@@ -769,6 +803,13 @@ impl PipelineTrace {
             // Show origin (provenance) if present.
             if let Some(ref origin) = e.origin {
                 out.push_str(&format!("        origin: {origin}\n"));
+            }
+            // Show conversion cost for implicit format conversions.
+            if let Some(ref cost) = e.conversion_cost {
+                out.push_str(&format!(
+                    "        cost: effort={} loss={}\n",
+                    cost.effort, cost.loss
+                ));
             }
             // Show runtime notes indented below the entry.
             for note in &e.notes {
