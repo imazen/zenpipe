@@ -62,6 +62,8 @@ zenpixels-convert = { version = "0.2.0", default-features = false }
 zenpixels = { version = "0.2.0", default-features = false }
 # Codec trait abstraction (decode/encode, animation, streaming)
 zencodec = { version = "0.1.5", default-features = false }
+# Quality profiles, per-codec calibration, format selection (no codec impls)
+zencodecs = { path = "../zencodecs", default-features = false }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
