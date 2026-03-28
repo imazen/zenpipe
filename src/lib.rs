@@ -88,6 +88,7 @@ whereat::define_at_crate_info!();
 
 pub mod codec_id;
 mod codecs;
+pub mod color;
 pub mod config;
 pub mod decision;
 mod decode;
@@ -142,7 +143,11 @@ pub use transcode::{
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
+pub use zencodec::decode::SourceColor;
 pub use zencodec::StopToken;
+
+// Color / ICC profile classification
+pub use color::{SourceColorExt, icc_profile_is_srgb};
 
 // Gain map types (format-agnostic)
 pub use gainmap::decode_gain_map_source;
