@@ -10,7 +10,7 @@ keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 
 [features]
-default = ["std"]
+default = ["std", "lossless-jpeg"]
 # Enables zenfilters, moxcms ICC CMS, and std on all deps.
 # Without this feature, the core pipeline still works (resize, blend, codec,
 # animation, format conversion) in a no_std + alloc environment.
@@ -53,6 +53,9 @@ nodes-layout = ["zennode"]
 nodes-quant = ["zennode", "dep:zenquant"]
 nodes-filters = ["zennode", "std", "zenfilters/zennode"]
 nodes-faces = ["zennode", "std", "dep:zensally", "dep:zensally-zentract"]
+# Lossless JPEG fast path for orient-only pipelines (~10x faster, zero gen loss).
+# Uses zenjpeg::lossless::transform() on DCT coefficients.
+lossless-jpeg = ["zennode", "dep:zenjpeg"]
 nodes-heic = ["zennode", "zencodecs/heic-decode"]
 nodes-all = [
     "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif",
@@ -94,7 +97,9 @@ zennode = { path = "../zennode/zennode", default-features = false, features = ["
 zencodecs = { path = "../zencodecs", default-features = false, optional = true }
 
 # ── Optional codec crates for node registry ──
-zenjpeg = { path = "../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"], optional = true }
+# Note: default-features enabled because zenjpeg's codec.rs unconditionally
+# references search::ExpertConfig which requires the `trellis` default feature.
+zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"], optional = true }
 zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true }
 zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec"], optional = true }
 zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true }

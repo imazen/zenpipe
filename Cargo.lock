@@ -2291,7 +2291,7 @@ dependencies = [
 [[package]]
 name = "zenflate"
 version = "0.3.3"
-source = "git+https://github.com/imazen/zenflate#f9f0d74746a83dd466e0943ad4b543fc8f137c32"
+source = "git+https://github.com/imazen/zenflate#a66be03daf438931091c08acff622e0bb096ffa2"
 dependencies = [
  "archmage",
  "enough",

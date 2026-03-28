@@ -75,6 +75,8 @@ pub mod animation;
 pub mod codec;
 #[cfg(feature = "json-schema")]
 pub mod codec_info;
+#[cfg(feature = "lossless-jpeg")]
+pub mod lossless;
 #[cfg(feature = "imageflow-compat")]
 pub mod imageflow_compat;
 pub mod sidecar;
