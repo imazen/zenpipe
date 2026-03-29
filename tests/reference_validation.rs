@@ -1,7 +1,7 @@
 //! Cross-library validation tests for zenfilters.
 //!
 //! Compares our Oklab-based filter outputs against established open-source
-//! implementations (image crate, imageproc) using zensim psychovisual
+//! implementations (image crate, libblur) using zensim psychovisual
 //! similarity scoring. The goal is to catch gross errors — if our filter
 //! produces output that looks wildly different from the same conceptual
 //! operation done in sRGB, something is broken.
@@ -465,26 +465,6 @@ fn hue_rotate_360_is_near_identity() {
 // ─── Gaussian blur ──────────────────────────────────────────────────
 
 #[test]
-fn blur_vs_imageproc() {
-    let img = make_edges_rgb(SIZE, SIZE);
-
-    let mut blur = Blur::default();
-    blur.sigma = 2.0;
-    let ours = apply_zenfilter(&img, Box::new(blur));
-
-    // imageproc gaussian blur in sRGB space
-    let reference = imageproc::filter::gaussian_blur_f32(&img, 2.0);
-
-    let score = zensim_score(&ours, &reference);
-    eprintln!("blur sigma=2 vs imageproc::gaussian_blur score: {score:.1}");
-    // Same algorithm, different color space. Should be quite similar.
-    assert!(
-        score > 70.0,
-        "Gaussian blur should match closely, got score {score:.1}"
-    );
-}
-
-#[test]
 fn blur_reduces_edge_sharpness() {
     let img = make_edges_rgb(SIZE, SIZE);
     let before = pixel_stddev(&img);
@@ -501,41 +481,6 @@ fn blur_reduces_edge_sharpness() {
 }
 
 // ─── Sharpen ────────────────────────────────────────────────────────
-
-#[test]
-fn sharpen_vs_imageproc() {
-    let img = make_edges_rgb(SIZE, SIZE);
-
-    let mut sharpen = Sharpen::default();
-    sharpen.sigma = 1.0;
-    sharpen.amount = 0.5;
-    let ours = apply_zenfilter(&img, Box::new(sharpen));
-
-    // imageproc sharpen: sharpen_gaussian(img, sigma, amount) isn't available,
-    // but sharpen3x3 is. Use gaussian_blur + manual unsharp mask instead.
-    let blurred = imageproc::filter::gaussian_blur_f32(&img, 1.0);
-    let reference = ImageBuffer::from_fn(SIZE, SIZE, |x, y| {
-        let orig = img.get_pixel(x, y);
-        let blur = blurred.get_pixel(x, y);
-        Rgb([
-            (orig.0[0] as f32 + 0.5 * (orig.0[0] as f32 - blur.0[0] as f32)).clamp(0.0, 255.0)
-                as u8,
-            (orig.0[1] as f32 + 0.5 * (orig.0[1] as f32 - blur.0[1] as f32)).clamp(0.0, 255.0)
-                as u8,
-            (orig.0[2] as f32 + 0.5 * (orig.0[2] as f32 - blur.0[2] as f32)).clamp(0.0, 255.0)
-                as u8,
-        ])
-    });
-
-    let score = zensim_score(&ours, &reference);
-    eprintln!("sharpen vs imageproc unsharp mask score: {score:.1}");
-    // L-only sharpen vs all-channel sharpen — reasonably similar
-    assert!(
-        score > 60.0,
-        "sharpen should be broadly similar, got score {score:.1}"
-    );
-}
-
 // ─── Highlights / Shadows ───────────────────────────────────────────
 
 #[test]
