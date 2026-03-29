@@ -18,25 +18,42 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build-gallery:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Patch path deps for CI
+        shell: bash
+        run: |
+          sed \
+            -e 's|, path = "\.\./zenpixels/zenpixels"||g' \
+            -e 's|, path = "\.\./zenpixels/zenpixels-convert"||g' \
+            -e 's|, path = "\.\./whereat"||g' \
+            -e 's|, path = "\.\./zensim/zensim"||g' \
+            -e 's|, path = "\.\./zenresize"||g' \
+            -e 's|, path = "\.\./zennode/zennode"||g' \
+            -e '/zencodecs/d' \
+            -e '/zenraw/d' \
+            -e '/zenbench/d' \
+            -e '/\[patch.crates-io\]/,$d' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
 
       - name: Build gallery tool
         run: cargo build --release --features experimental --example film_look_gallery
 
       - name: Download sample images
         run: |
-          mkdir -p /tmp/clic-samples
-          # CLIC 2025 professional validation set (publicly available)
-          # Using a small curated subset for the gallery
+          mkdir -p /tmp/samples
           URLS=(
             "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/46015ab1f51bbca0cdc97d9d58fcee23.png"
             "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/a2aa38c9f3c17f6821c0fa39a3ae2cf3.png"
@@ -47,20 +64,20 @@ jobs:
           for url in "${URLS[@]}"; do
             name=$(basename "$url")
             echo "Downloading $name..."
-            curl -sL "$url" -o "/tmp/clic-samples/$name" || echo "Failed: $url"
+            curl -sfL "$url" -o "/tmp/samples/$name" || echo "Warning: failed $url"
           done
-          ls -la /tmp/clic-samples/
+          ls -la /tmp/samples/
 
       - name: Generate gallery
         run: |
           mkdir -p _site/gallery
-          ./target/release/examples/film_look_gallery /tmp/clic-samples _site/gallery
+          ./target/release/examples/film_look_gallery /tmp/samples _site/gallery
 
       - name: Copy site files
         run: cp site/index.html _site/
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
 
   deploy:
     needs: build-gallery

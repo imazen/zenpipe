@@ -1,10 +1,15 @@
 # zenfilters
 
+[![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenfilters/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/imazen/zenfilters/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-AGPL--3.0%20OR%20Commercial-blue?style=for-the-badge)](LICENSE-AGPL3)
+
 Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via [archmage](https://github.com/imazen/archmage).
 
-51 stable filters covering full Lightroom/darktable parity for tone, color, detail, and effects, plus additional experimental filters behind the `experimental` feature flag. 19 built-in presets with intensity blending. Self-describing parameter schemas for automatic UI generation. Serde support for serialization.
+60+ filters covering Lightroom/darktable parity for tone, color, detail, and effects. 34 built-in film look presets using tensor-compressed 3D LUTs (163 KB total). ASC CDL, .cube LUT loading, hue-qualified curves. Self-describing parameter schemas for automatic UI generation.
 
 `#![forbid(unsafe_code)]` — entirely safe Rust.
+
+**[Browse the Film Look Gallery](https://imazen.github.io/zenfilters/)** — interactive before/after comparisons for all 34 presets.
 
 ## Architecture
 
@@ -74,6 +79,33 @@ Categories: Enhance (Vivid, Enhance, Clean), Warm (Warm, Golden Hour), Cool, Por
 Presets support tone curves, sigmoid, clarity, sharpening, grain, vignette, bloom, and B&W modes. Intensity blending lerps each parameter toward its identity value.
 
 Presets serialize to JSON (with the `serde` feature) for storage and sharing.
+
+## Film looks
+
+34 built-in film look presets, each a mathematical RGB→RGB transform stored as a rank-8 tensor decomposition (~5 KB per look, 163 KB total). Max error across all presets: 8 levels @8bit; 22 of 34 are indistinguishable from the source LUT.
+
+```rust
+use zenfilters::filters::{FilmLook, FilmPreset};
+use zenfilters::{Filter, FilterContext, OklabPlanes};
+
+let mut look = FilmLook::new(FilmPreset::Kodachrome);
+look.strength = 0.8;
+look.apply(&mut planes, &mut FilterContext::new());
+```
+
+**Classic negative:** Portra, Kodak Gold, Ektar, Superia, Pro 400H
+
+**Slide film:** Velvia, Provia, Kodachrome, Ektachrome
+
+**Cinema:** Print 2383, 500T Tungsten
+
+**Digital:** Classic Chrome, Classic Negative, Cool Chrome
+
+**Creative:** Bleach Bypass, Cross Process, Teal & Orange, Faded Film, Golden Hour, Noir, Technicolor, Matte
+
+**Cinematic moods:** Cyberpunk Neon, Desert Crush, Green Code, French Whimsy, Arctic Light, Neon Noir, Dusty Americana, Moonlit Blue, Cold Case, Desert Spice, Candy Pop, Blockbuster
+
+Also supports loading arbitrary .cube 3D LUTs, ASC CDL color correction, and hue-qualified curves (Hue vs Sat, Hue vs Hue, Hue vs Lum, Lum vs Sat).
 
 ## Parameter schemas
 
@@ -318,9 +350,9 @@ All LUTs use 1024 entries (10-bit, 4 KB each) — balances curve fidelity agains
 | Feature | Description |
 |---------|-------------|
 | `serde` | Serialize/deserialize all filter structs, schemas, presets, compat types |
-| `buffer` | Convenience API for `PixelBuffer` format conversion |
 | `srgb-filters` | Direct sRGB u8 per-pixel filters (no Oklab roundtrip) |
-| `experimental` | Auto-tuning, fused interleaved path, blur benchmarks |
+| `experimental` | Auto-tuning, fused interleaved path, film look gallery tool |
+| `zennode` | Node graph definitions for zenpipe integration |
 
 ## License
 

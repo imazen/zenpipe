@@ -54,9 +54,6 @@ jobs:
       - name: Test (default features)
         run: cargo test --lib --tests
 
-      - name: Test (buffer)
-        run: cargo test --lib --tests --features buffer
-
       - name: Test (serde)
         run: cargo test --lib --tests --features serde
 
@@ -64,7 +61,7 @@ jobs:
         run: cargo test --lib --tests --features srgb-filters
 
       - name: Test (all features)
-        run: cargo test --lib --tests --features "buffer,experimental,serde,srgb-filters"
+        run: cargo test --lib --tests --features "experimental,serde,srgb-filters"
 
   clippy:
     name: Clippy
@@ -93,7 +90,7 @@ jobs:
           rm -f Cargo.lock
 
       - name: Clippy (all features)
-        run: cargo clippy --lib --tests --features "buffer,experimental,serde,srgb-filters" -- -D warnings
+        run: cargo clippy --lib --tests --features "experimental,serde,srgb-filters" -- -D warnings
 
   fmt:
     name: Format
