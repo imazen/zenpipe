@@ -81,7 +81,7 @@ fn inspect_file(path: &Path, parse_metadata: bool) -> anyhow::Result<ImageInfoDi
         frame_count: info.frame_count(),
         bit_depth: info.source_color.bit_depth,
         channel_count: info.source_color.channel_count,
-        orientation: info.orientation.exif_value() as u8,
+        orientation: info.orientation.to_exif(),
         icc_profile_size: info.source_color.icc_profile.as_ref().map(|p| p.len()),
         exif_size: info.embedded_metadata.exif.as_ref().map(|e| e.len()),
         xmp_size: info.embedded_metadata.xmp.as_ref().map(|x| x.len()),
