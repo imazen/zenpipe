@@ -57,7 +57,8 @@ pub(crate) fn parse_constraint_mode(s: &str) -> Result<zenresize::ConstraintMode
         "within_pad" => Ok(zenresize::ConstraintMode::WithinPad),
         "pad_within" => Ok(zenresize::ConstraintMode::PadWithin),
         "aspect_crop" => Ok(zenresize::ConstraintMode::AspectCrop),
-        "larger_than" => Ok(zenresize::ConstraintMode::LargerThan),
+        // "larger_than" not yet in zenresize
+        "larger_than" => Err(PipeError::Op(alloc::format!("larger_than mode not yet supported"))),
         _ => Err(PipeError::Op(alloc::format!(
             "bridge: unknown constraint mode '{s}'"
         ))),

@@ -24,6 +24,8 @@ std = [
 ]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
 zennode = ["dep:zennode", "zenresize/layout", "dep:zencodecs", "zencodecs/zennode"]
+# High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS).
+job = ["zennode", "std", "zencodecs/cms"]
 
 # ── Node registry features ──
 # Each enables zennode + the codec dep for pipeline use.

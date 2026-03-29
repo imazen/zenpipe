@@ -29,6 +29,9 @@ pub mod trace;
 #[cfg(feature = "zennode")]
 pub mod bridge;
 
+#[cfg(feature = "job")]
+pub mod job;
+
 #[cfg(feature = "zennode")]
 pub mod orchestrate;
 
