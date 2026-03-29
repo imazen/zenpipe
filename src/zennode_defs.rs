@@ -1133,10 +1133,11 @@ mod tests {
     fn registry_all_nodes() {
         let mut registry = NodeRegistry::new();
         register(&mut registry);
-        assert_eq!(registry.all().len(), 13);
+        assert_eq!(registry.all().len(), 14);
         assert!(registry.get("zenlayout.crop").is_some());
         assert!(registry.get("zenlayout.crop_percent").is_some());
         assert!(registry.get("zenlayout.crop_margins").is_some());
+        assert!(registry.get("zenlayout.crop_whitespace").is_some());
         assert!(registry.get("zenlayout.orient").is_some());
         assert!(registry.get("zenlayout.flip_h").is_some());
         assert!(registry.get("zenlayout.flip_v").is_some());
