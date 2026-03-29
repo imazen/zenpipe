@@ -265,7 +265,7 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         .get_param("down_filter")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .and_then(|s| parse_filter_opt(&s));
-    let sharpen = param_f32_opt(node, "sharpen");
+    let unsharp = param_f32_opt(node, "unsharp_percent");
     let gravity_x = param_f32_opt(node, "gravity_x");
     let gravity_y = param_f32_opt(node, "gravity_y");
     let gravity = match (gravity_x, gravity_y) {
@@ -284,12 +284,17 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .filter(|s| !s.is_empty())
         .and_then(|s| parse_canvas_color(&s));
+    let matte_color = node
+        .get_param("matte_color")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty())
+        .and_then(|s| parse_canvas_color(&s));
     let scaling_linear = node
         .get_param("scaling_colorspace")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .map(|s| s != "srgb"); // "linear" or anything else = true, "srgb" = false
     let kernel_width_scale = param_f32_opt(node, "kernel_width_scale");
-    let lobe_ratio = param_f32_opt(node, "lobe_ratio");
+    let kernel_lobe_ratio = param_f32_opt(node, "kernel_lobe_ratio");
     let post_blur = param_f32_opt(node, "post_blur");
     let up_filter = node
         .get_param("up_filter")
@@ -312,12 +317,13 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter,
-        sharpen_percent: sharpen.filter(|&v| v > 0.0),
+        unsharp_percent: unsharp.filter(|&v| v > 0.0),
         gravity,
         canvas_color,
+        matte_color,
         scaling_linear,
         kernel_width_scale,
-        lobe_ratio,
+        kernel_lobe_ratio,
         post_blur,
         up_filter,
         resample_when,
@@ -357,12 +363,13 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter: None,
-        sharpen_percent: None,
+        unsharp_percent: None,
         gravity,
         canvas_color,
+        matte_color: None,
         scaling_linear: None,
         kernel_width_scale: None,
-        lobe_ratio: None,
+        kernel_lobe_ratio: None,
         post_blur: None,
         up_filter: None,
         resample_when: None,

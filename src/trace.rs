@@ -1525,7 +1525,7 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
             h,
             orientation,
             filter,
-            sharpen_percent,
+            unsharp_percent,
             ..
         } => {
             let f = filter
@@ -1534,8 +1534,8 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
             let orient = orientation
                 .map(|o| format!(" orient={o}"))
                 .unwrap_or_default();
-            let s = sharpen_percent
-                .map(|p| format!(" sharpen={p:.0}%"))
+            let s = unsharp_percent
+                .map(|p| format!(" unsharp={p:.0}%"))
                 .unwrap_or_default();
             format!("{mode:?} {w}x{h} {f}{orient}{s}")
         }

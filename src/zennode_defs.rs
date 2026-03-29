@@ -487,7 +487,7 @@ impl Default for OutputLimits {
 /// {
 ///   "w": 800, "h": 600, "mode": "fit_crop",
 ///   "gravity_x": 0.33, "gravity_y": 0.0,
-///   "down_filter": "lanczos", "sharpen": 15.0
+///   "down_filter": "lanczos", "unsharp_percent": 15.0
 /// }
 /// ```
 ///
@@ -560,14 +560,30 @@ pub struct Constrain {
     #[param(section = "Position", label = "Gravity Y")]
     pub gravity_y: Option<f32>,
 
-    /// Canvas background color for pad modes.
+    /// Fill color for exterior padding regions added around the image.
     ///
-    /// None = transparent. Accepts CSS-style hex or named colors:
-    /// "white", "#FF0000", "000000FF".
+    /// Used by pad modes (fit_pad, within_pad, pad_within) to fill the
+    /// canvas area outside the image content. Does NOT affect pixels
+    /// inside the image — use `matte_color` for alpha compositing.
+    ///
+    /// None = transparent. Accepts "transparent", "white", "black", or hex "#RRGGBB" / "#RRGGBBAA".
     #[param(default = "")]
     #[param(section = "Position", label = "Canvas Color")]
     #[kv("bgcolor", "canvas_color")]
     pub canvas_color: Option<String>,
+
+    /// Background color for alpha compositing (matte behind transparent pixels).
+    ///
+    /// Applied during resize to prevent halo artifacts at transparent edges.
+    /// Separate from `canvas_color` which fills exterior padding regions.
+    /// When set, transparent pixels are composited against this color before
+    /// the resampling kernel samples them.
+    ///
+    /// None = no matte (preserve transparency). "white" is common for JPEG output.
+    #[param(default = "")]
+    #[param(section = "Alpha", label = "Matte Color")]
+    #[kv("matte", "matte_color", "s.matte")]
+    pub matte_color: Option<String>,
 
     // ─── Resampling ───
     /// Downscale resampling filter. None = auto (Robidoux).
@@ -598,37 +614,48 @@ pub struct Constrain {
     #[param(section = "Quality", label = "Scaling Colorspace")]
     pub scaling_colorspace: Option<String>,
 
-    // ─── Sharpening & Blur ───
-    /// Post-resize sharpening amount (0 = none, 100 = maximum).
+    // ─── Post-Processing ───
+    /// Post-resize unsharp mask strength (0 = none, 100 = maximum).
     ///
-    /// None = no sharpening. Applied as an unsharp mask after resize.
+    /// Applied as a separate pass AFTER resampling. Adds real computational
+    /// cost proportional to output dimensions. For zero-cost sharpening
+    /// that adjusts the resampling kernel itself, use `kernel_lobe_ratio`.
+    ///
+    /// None = no unsharp mask.
     #[param(range(0.0..=100.0), default = 0.0, step = 1.0)]
-    #[param(unit = "%", section = "Quality", label = "Sharpen")]
-    #[kv("f.sharpen")]
-    pub sharpen: Option<f32>,
+    #[param(unit = "%", section = "Post-Processing", label = "Unsharp Mask")]
+    #[kv("f.sharpen", "unsharp")]
+    pub unsharp_percent: Option<f32>,
 
-    /// Negative-lobe ratio for in-kernel sharpening.
+    // ─── Kernel Shape ───
+    /// Negative-lobe ratio for kernel sharpening (zero-cost).
     ///
-    /// None = use filter's natural ratio. 0.0 = flatten (maximum smoothness).
-    /// Above natural = sharpen. This is zero-cost (applied during weight computation).
+    /// Adjusts the resampling kernel's negative lobes during weight
+    /// computation. 0.0 = flatten (maximum smoothness), above filter's
+    /// natural ratio = sharpen. Zero additional cost — changes the
+    /// filter shape, not a separate processing step.
+    ///
+    /// For post-resize unsharp mask (separate pass), use `unsharp_percent`.
     #[param(range(0.0..=1.0), default = 0.0, step = 0.01)]
-    #[param(section = "Advanced", label = "Lobe Ratio")]
-    pub lobe_ratio: Option<f32>,
+    #[param(section = "Kernel Shape", label = "Lobe Ratio")]
+    #[kv("lobe_ratio", "kernel_lobe_ratio")]
+    pub kernel_lobe_ratio: Option<f32>,
 
-    /// Kernel width scale factor. None = auto (1.0).
+    /// Kernel width scale factor (zero-cost).
     ///
-    /// > 1.0 = softer (widens filter window), < 1.0 = sharper (aliasing risk).
-    /// > Combined with blur. This is zero-cost (applied during weight computation).
+    /// Multiplies the resampling kernel window width. >1.0 = softer
+    /// (wider window, less aliasing), <1.0 = sharper (narrower, aliasing risk).
+    /// Combined with blur. Zero additional cost.
     #[param(range(0.1..=4.0), default = 1.0, step = 0.01)]
-    #[param(section = "Advanced", label = "Kernel Width Scale")]
+    #[param(section = "Kernel Shape", label = "Width Scale")]
     pub kernel_width_scale: Option<f32>,
 
-    /// Post-resize Gaussian blur sigma. None = no blur.
+    /// Post-resize Gaussian blur sigma (real cost).
     ///
-    /// Applied as a separable H+V pass after resize. Not equivalent to
-    /// kernel_width_scale (which changes the resampling kernel itself).
+    /// Applied as a separable H+V pass after resize. NOT equivalent to
+    /// `kernel_width_scale` (which changes the kernel itself at zero cost).
     #[param(range(0.0..=100.0), default = 0.0, step = 0.1)]
-    #[param(section = "Advanced", label = "Post Blur")]
+    #[param(section = "Post-Processing", label = "Gaussian Blur")]
     pub post_blur: Option<f32>,
 
     /// When to apply resampling.
@@ -664,11 +691,12 @@ impl Default for Constrain {
             gravity_x: None,
             gravity_y: None,
             canvas_color: None,
+            matte_color: None,
             down_filter: None,
             up_filter: None,
             scaling_colorspace: None,
-            sharpen: None,
-            lobe_ratio: None,
+            unsharp_percent: None,
+            kernel_lobe_ratio: None,
             kernel_width_scale: None,
             post_blur: None,
             resample_when: None,

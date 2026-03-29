@@ -230,19 +230,22 @@ pub enum NodeOp {
         orientation: Option<u8>,
         /// Resampling filter (default Robidoux if None).
         filter: Option<zenresize::Filter>,
-        /// Post-resize sharpening percentage (0-100). None = no sharpening.
-        sharpen_percent: Option<f32>,
+        /// Post-resize unsharp mask percentage (0-100). None = no unsharp mask.
+        unsharp_percent: Option<f32>,
         /// Gravity for crop/pad modes (x: 0.0=left..1.0=right, y: 0.0=top..1.0=bottom).
         /// None = center (0.5, 0.5).
         gravity: Option<(f32, f32)>,
         /// Canvas fill color for pad modes. None = transparent.
         canvas_color: Option<zenresize::CanvasColor>,
+        /// Matte color for alpha compositing during resize. None = no matte.
+        /// Execution pending zenresize support for matte compositing during resize.
+        matte_color: Option<zenresize::CanvasColor>,
         /// Scaling colorspace: true = linear light, false = sRGB gamma. None = linear (default).
         scaling_linear: Option<bool>,
         /// Kernel width scale factor (>1.0 = softer, <1.0 = sharper). None = 1.0.
         kernel_width_scale: Option<f32>,
-        /// Negative-lobe ratio for in-kernel sharpening. None = filter default.
-        lobe_ratio: Option<f32>,
+        /// Negative-lobe ratio for kernel sharpening (zero-cost). None = filter default.
+        kernel_lobe_ratio: Option<f32>,
         /// Post-resize Gaussian blur sigma. None = no blur.
         post_blur: Option<f32>,
         /// Upscale resampling filter. None = use the main `filter` for both directions.
@@ -251,18 +254,16 @@ pub enum NodeOp {
         up_filter: Option<zenresize::Filter>,
         /// When to resample: None = when size differs (default).
         /// Values: "size_differs", "size_differs_or_sharpening_requested", "always".
-        /// TODO: requires execution-layer integration to honor non-default values.
         resample_when: Option<String>,
         /// When to sharpen: None = when downscaling (default).
         /// Values: "downscaling", "upscaling", "size_differs", "always".
-        /// TODO: requires execution-layer integration to honor non-default values.
         sharpen_when: Option<String>,
     },
 
     /// Advanced resize with a pre-built [`ResizeConfig`](zenresize::ResizeConfig).
     ///
     /// Provides access to all zenresize options: kernel_width_scale,
-    /// post_blur, lobe_ratio, padding, source_region, etc.
+    /// post_blur, kernel_lobe_ratio, padding, source_region, etc.
     /// The config's `in_width`/`in_height` are overridden from upstream at compile time.
     ResizeAdvanced(zenresize::ResizeConfig),
 
@@ -1257,16 +1258,17 @@ impl PipelineGraph {
                 h,
                 orientation,
                 filter,
-                sharpen_percent,
+                unsharp_percent,
                 gravity,
                 canvas_color,
+                matte_color: _, // TODO: pending zenresize support for matte compositing
                 scaling_linear,
                 kernel_width_scale,
-                lobe_ratio,
+                kernel_lobe_ratio,
                 post_blur,
                 up_filter,
-                resample_when: _, // TODO: wire through to execution layer
-                sharpen_when: _, // TODO: wire through to execution layer
+                resample_when,
+                sharpen_when,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
@@ -1297,12 +1299,49 @@ impl PipelineGraph {
                 let plan = ideal.finalize(&request, &offer);
                 let f = filter.unwrap_or(zenresize::Filter::Robidoux);
 
+                // ── resample_when: skip resize if not needed ──
+                let plan_out_w = plan.canvas.width;
+                let plan_out_h = plan.canvas.height;
+                let size_differs = plan_out_w != in_w || plan_out_h != in_h;
+                let has_padding = plan.content_size.is_some()
+                    || plan.placement != (0, 0)
+                    || plan.trim.is_some();
+                let should_resample = match resample_when.as_deref() {
+                    Some("always") => true,
+                    Some("size_differs_or_sharpening_requested") => {
+                        size_differs || unsharp_percent.filter(|&v| v > 0.0).is_some()
+                    }
+                    _ => size_differs, // "size_differs" is the default
+                };
+
+                if !should_resample && !has_padding {
+                    return Ok((upstream, meta));
+                }
+
+                // ── sharpen_when: conditionally disable sharpening ──
+                let is_downscaling = (plan_out_w as u64 * plan_out_h as u64)
+                    < (in_w as u64 * in_h as u64);
+                let is_upscaling = (plan_out_w as u64 * plan_out_h as u64)
+                    > (in_w as u64 * in_h as u64);
+                let effective_sharpen = unsharp_percent.and_then(|pct| {
+                    if pct <= 0.0 {
+                        return None;
+                    }
+                    let should_sharpen = match sharpen_when.as_deref() {
+                        Some("upscaling") => is_upscaling,
+                        Some("size_differs") => size_differs,
+                        Some("always") => true,
+                        _ => is_downscaling, // "downscaling" is the default
+                    };
+                    if should_sharpen { Some(pct) } else { None }
+                });
+
                 // Check if we need advanced resize params beyond what
                 // streaming_from_plan_batched supports
-                let has_advanced = sharpen_percent.is_some()
+                let has_advanced = effective_sharpen.is_some()
                     || scaling_linear.is_some()
                     || kernel_width_scale.is_some()
-                    || lobe_ratio.is_some()
+                    || kernel_lobe_ratio.is_some()
                     || post_blur.is_some()
                     || up_filter.is_some();
 
@@ -1315,7 +1354,7 @@ impl PipelineGraph {
                         zenresize::PixelDescriptor::RGBA8_SRGB,
                         f,
                     );
-                    if let Some(pct) = sharpen_percent {
+                    if let Some(pct) = effective_sharpen {
                         config.post_sharpen = pct;
                     }
                     if let Some(false) = scaling_linear {
@@ -1324,7 +1363,7 @@ impl PipelineGraph {
                     if let Some(kws) = kernel_width_scale {
                         config.kernel_width_scale = Some(kws as f64);
                     }
-                    if let Some(lr) = lobe_ratio {
+                    if let Some(lr) = kernel_lobe_ratio {
                         config.lobe_ratio = zenresize::LobeRatio::Exact(lr);
                     }
                     if let Some(blur) = post_blur {
