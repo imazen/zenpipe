@@ -256,17 +256,11 @@ fn quality_profile() {
 }
 
 #[test]
-fn quality_legacy_consumed() {
-    // The `quality` key is shared by multiple nodes (EncodePng, EncodeJxl, Quantize,
-    // QualityIntentNode). The first node in registry order consumes it.
-    // Verify it's consumed by at least one node (no unrecognized warning).
+fn quality_legacy_fallback() {
+    // Only QualityIntentNode should consume the bare `quality` key.
     let r = parse("quality=85");
-    let unrecognized: Vec<_> = r.warnings.iter()
-        .filter(|w| matches!(w.kind, zennode::kv::KvWarningKind::UnrecognizedKey))
-        .filter(|w| w.key == "quality")
-        .collect();
-    assert!(unrecognized.is_empty(), "`quality` key should be consumed by some node");
-    assert!(!r.instances.is_empty(), "should produce at least one node");
+    let q = find_node(&r.instances, "zencodecs.quality_intent").expect("QualityIntent node");
+    assert_eq!(get_f32(q, "quality_fallback"), Some(85.0));
 }
 
 #[test]

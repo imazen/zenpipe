@@ -1062,7 +1062,7 @@ dependencies = [
  "whereat",
  "zencodec",
  "zenpixels",
- "zenquant 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenquant 0.1.1",
 ]
 
 [[package]]
@@ -1191,7 +1191,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpng",
- "zenquant 0.1.1",
+ "zenquant 0.1.2",
  "zenresize",
  "zensally",
  "zensally-zentract",
@@ -1245,12 +1245,14 @@ dependencies = [
  "zenflate 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenpixels",
  "zenpixels-convert",
- "zenquant 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenquant 0.1.1",
 ]
 
 [[package]]
 name = "zenquant"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a5766f917b4a5e3321e7e64401fa3158e6db006996f83fb511b40f39b405cd"
 dependencies = [
  "archmage 0.9.15",
  "imgref",
@@ -1263,9 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "zenquant"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a5766f917b4a5e3321e7e64401fa3158e6db006996f83fb511b40f39b405cd"
+version = "0.1.2"
 dependencies = [
  "archmage 0.9.15",
  "imgref",
