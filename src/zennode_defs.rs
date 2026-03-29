@@ -30,8 +30,13 @@ use zennode::*;
 #[node(coalesce = "fused_adjust")]
 pub struct Exposure {
     /// Exposure compensation in stops (+/-)
+    ///
+    /// Note: RIAPI `s.brightness` historically used a -1..1 sRGB offset, not
+    /// photographic stops. The kv alias is provided for discoverability; callers
+    /// should be aware of the different scale.
     #[param(range(-5.0..=5.0), default = 0.0, identity = 0.0, step = 0.1)]
     #[param(unit = "EV", section = "Main", slider = Linear)]
+    #[kv("s.brightness")]
     pub stops: f32,
 }
 
@@ -48,6 +53,7 @@ pub struct Contrast {
     /// Contrast strength (positive = increase, negative = flatten)
     #[param(range(-1.0..=1.0), default = 0.0, identity = 0.0, step = 0.05)]
     #[param(unit = "", section = "Main", slider = SquareFromSlider)]
+    #[kv("s.contrast")]
     pub amount: f32,
 }
 
@@ -437,6 +443,7 @@ pub struct Saturation {
     /// Saturation multiplier (0 = grayscale, 1 = unchanged, 2 = double)
     #[param(range(0.0..=2.0), default = 1.0, identity = 1.0, step = 0.05)]
     #[param(unit = "\u{d7}", section = "Main", slider = FactorCentered)]
+    #[kv("s.saturation")]
     pub factor: f32,
 }
 
@@ -858,6 +865,7 @@ pub struct Sepia {
     /// Sepia strength (0 = grayscale, 1 = full sepia)
     #[param(range(0.0..=1.0), default = 1.0, identity = 1.0, step = 0.05)]
     #[param(unit = "", section = "Main", slider = Linear)]
+    #[kv("s.sepia")]
     pub amount: f32,
 }
 
@@ -1256,6 +1264,7 @@ pub struct Alpha {
     /// Alpha multiplier (0 = fully transparent, 1 = unchanged)
     #[param(range(0.0..=1.0), default = 1.0, identity = 1.0, step = 0.05)]
     #[param(unit = "", section = "Main", slider = Linear)]
+    #[kv("s.alpha")]
     pub factor: f32,
 }
 

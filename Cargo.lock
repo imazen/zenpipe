@@ -2770,6 +2770,16 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.9"
+dependencies = [
+ "almost-enough",
+ "enough",
+ "whereat",
+ "zenpixels",
+]
+
+[[package]]
+name = "zencodec"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d055b475f345ab30e82f582cc1e54be97fcdf8a2ab6d427106a4195c2b899f2"
 dependencies = [
@@ -2790,7 +2800,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zencodec",
+ "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenjpeg",
  "zenpixels",
  "zenpixels-convert",
@@ -2854,7 +2864,7 @@ dependencies = [
  "whereat",
  "wide",
  "yuv",
- "zencodec",
+ "zencodec 0.1.9",
  "zenpixels",
 ]
 
@@ -2921,7 +2931,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror",
  "whereat",
- "zencodec",
+ "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenflate",
  "zenpixels",
  "zenpixels-convert",

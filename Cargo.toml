@@ -94,6 +94,3 @@ required-features = ["srgb-filters"]
 name = "color_grading"
 harness = false
 
-[patch.crates-io]
-zencodecs = { path = "../zencodecs" }
-zenresize = { path = "../zenresize" }
