@@ -59,6 +59,7 @@ pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingO
 pub mod animation;
 pub mod codec;
 pub mod sidecar;
+pub mod watermark;
 
 pub use error::PipeError;
 pub use format::PixelFormat;
