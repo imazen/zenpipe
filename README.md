@@ -1,8 +1,15 @@
-# zenlayout
+# zenlayout ![ci](https://img.shields.io/github/actions/workflow/status/imazen/zenlayout/ci.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/zenlayout?style=flat-square) ![docs.rs](https://img.shields.io/docsrs/zenlayout?style=flat-square) ![msrv](https://img.shields.io/badge/MSRV-1.89-blue?style=flat-square) ![license](https://img.shields.io/crates/l/zenlayout?style=flat-square)
 
-Image layout computation with constraint modes, orientation, and decoder negotiation.
+zenlayout is a pure-geometry image layout engine for computing resize dimensions, crop regions, and canvas placement.
 
-Pure geometry — no pixel operations, `no_std` compatible, `#![forbid(unsafe_code)]`.
+`no_std` compatible, `#![forbid(unsafe_code)]`.
+
+```toml
+[dependencies]
+zenlayout = "0.2"
+# With RIAPI query string parsing:
+zenlayout = { version = "0.2", features = ["riapi"] }
+```
 
 ## What it does
 
@@ -330,6 +337,13 @@ The core API (`Pipeline`, `Constraint::compute()`, `compute_layout()`) works wit
 | `NonFiniteFloat` | A float parameter is NaN or infinity |
 
 NaN/Inf values are rejected at all API boundaries — in the RIAPI parser, at `Constraint::compute()` entry, and at `Instructions::to_pipeline()` entry.
+
+## Limitations
+
+- Only integer coordinates (no subpixel positioning)
+- Sequential mode requires `alloc` feature
+- `smart-crop` feature is experimental, API unstable
+- No pixel operations — geometry only
 
 ## License
 
