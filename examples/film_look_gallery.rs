@@ -66,6 +66,14 @@ fn main() {
         }
     }
     images.sort();
+
+    // Skip non-photographic images by hash prefix
+    let skip_prefixes = ["2a760bf1", "86127fbd"];
+    images.retain(|p| {
+        let stem = p.file_stem().unwrap().to_str().unwrap();
+        !skip_prefixes.iter().any(|pfx| stem.starts_with(pfx))
+    });
+
     images.truncate(MAX_IMAGES);
 
     if images.is_empty() {
@@ -168,10 +176,17 @@ fn main() {
         .map(|s| format!("    \"{}\"", s))
         .collect();
 
+    // Default to image starting with "a2a946cc" if present
+    let default_idx = manifest_images
+        .iter()
+        .position(|s| s.starts_with("a2a946cc"))
+        .unwrap_or(0);
+
     let manifest = format!(
-        "{{\n  \"presets\": [\n{}\n  ],\n  \"images\": [\n{}\n  ]\n}}\n",
+        "{{\n  \"presets\": [\n{}\n  ],\n  \"images\": [\n{}\n  ],\n  \"default_image\": {}\n}}\n",
         presets_json.join(",\n"),
         images_json.join(",\n"),
+        default_idx,
     );
 
     fs::write(output_dir.join("manifest.json"), &manifest).unwrap();

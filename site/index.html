@@ -84,6 +84,10 @@ body {
   cursor: pointer; white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
+@media (min-width: 768px) {
+  #filter-grid button { padding: 8px 14px; font-size: 14px; border-radius: 6px; }
+  #filter-grid { gap: 6px; }
+}
 #filter-grid button:hover { background: #2a2a2a; color: #ccc; }
 #filter-grid button:active { background: #444; }
 #filter-grid button.active { background: #1a3a5a; color: #4af; border-color: #4af; }
@@ -146,9 +150,27 @@ async function init() {
     return;
   }
   loading.style.display = 'none';
+  imageIdx = manifest.default_image || 0;
+  sortPresetsByAwesomeness();
   buildFilterGrid();
   setupControls();
   updateView();
+}
+
+// Sort presets: most visually striking first, subtle last
+function sortPresetsByAwesomeness() {
+  const order = [
+    'kodachrome', 'velvia', 'cyberpunk_neon', 'teal_orange', 'desert_crush',
+    'neon_noir', 'green_code', 'noir', 'bleach_bypass', 'technicolor',
+    'moonlit_blue', 'print_2383', 'portra', 'kodak_gold', 'cross_process',
+    'candy_pop', 'french_whimsy', 'classic_neg', 'golden_hour', 'ektar',
+    'tungsten_500t', 'cold_case', 'arctic_light', 'dusty_americana',
+    'faded_film', 'classic_chrome', 'ektachrome', 'superia', 'cool_chrome',
+    'pro_400h', 'provia', 'matte', 'desert_spice', 'blockbuster',
+  ];
+  const rank = {};
+  order.forEach((id, i) => rank[id] = i);
+  manifest.presets.sort((a, b) => (rank[a.id] ?? 99) - (rank[b.id] ?? 99));
 }
 
 function buildFilterGrid() {
