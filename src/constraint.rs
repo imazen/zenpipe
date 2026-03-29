@@ -79,6 +79,11 @@ pub enum ConstraintMode {
 
     /// Crop to target aspect ratio without any scaling.
     AspectCrop,
+
+    /// Ensure the result is at least the given dimensions. Upscale if needed,
+    /// never downscale. Images already larger than target pass through unchanged.
+    /// Preserves aspect ratio. If only one dimension is specified, behaves like [`Fit`].
+    LargerThan,
 }
 
 /// Where to position the image when cropping or padding.
@@ -721,6 +726,32 @@ impl Constraint {
                     canvas: Size::new(combined.width, combined.height),
                     placement: (0, 0),
                     canvas_color: self.canvas_color,
+                }
+            }
+
+            LargerThan => {
+                // Upscale if source is smaller than target on both axes.
+                // If source already meets or exceeds target on either axis,
+                // pass through unchanged.
+                if sw < tw && sh < th {
+                    let (rw, rh) = fit_inside(sw, sh, tw, th);
+                    Layout {
+                        source: Size::new(source_w, source_h),
+                        source_crop: user_crop,
+                        resize_to: Size::new(rw, rh),
+                        canvas: Size::new(rw, rh),
+                        placement: (0, 0),
+                        canvas_color: self.canvas_color,
+                    }
+                } else {
+                    Layout {
+                        source: Size::new(source_w, source_h),
+                        source_crop: user_crop,
+                        resize_to: Size::new(sw, sh),
+                        canvas: Size::new(sw, sh),
+                        placement: (0, 0),
+                        canvas_color: self.canvas_color,
+                    }
                 }
             }
         };
@@ -1638,6 +1669,7 @@ mod tests {
                 use ConstraintMode::*;
                 let modes = [
                     Distort, Fit, Within, FitCrop, WithinCrop, FitPad, WithinPad, AspectCrop,
+                    LargerThan,
                 ];
                 for mode in modes {
                     let c = Constraint::new(mode, tw, th);
@@ -1867,6 +1899,42 @@ mod tests {
                                 failures.push(format!(
                                     "{tag}: no crop but resize ({rw},{rh}) != source ({sw},{sh})"
                                 ));
+                            }
+                            if (cw, ch) != (rw, rh) {
+                                failures.push(format!(
+                                    "{tag}: canvas ({cw},{ch}) != resize_to ({rw},{rh})"
+                                ));
+                            }
+                        }
+                        LargerThan => {
+                            // Never downscales
+                            if rw < sw || rh < sh {
+                                failures.push(format!(
+                                    "{tag}: downscaled: resize ({rw},{rh}) < source ({sw},{sh})"
+                                ));
+                            }
+                            if sw < tw && sh < th {
+                                // Source smaller on both axes → upscale to fit
+                                if rw < tw && rh < th {
+                                    failures.push(format!(
+                                        "{tag}: didn't upscale: ({rw},{rh}) < target ({tw},{th})"
+                                    ));
+                                }
+                                if rw != tw && rh != th {
+                                    failures.push(format!(
+                                        "{tag}: doesn't touch either edge: ({rw},{rh}) vs ({tw},{th})"
+                                    ));
+                                }
+                            } else {
+                                // Already large enough → identity
+                                if (rw, rh) != (sw, sh) {
+                                    failures.push(format!(
+                                        "{tag}: should be identity: ({rw},{rh}) != source ({sw},{sh})"
+                                    ));
+                                }
+                            }
+                            if layout.source_crop.is_some() {
+                                failures.push(format!("{tag}: unexpected source_crop"));
                             }
                             if (cw, ch) != (rw, rh) {
                                 failures.push(format!(
@@ -2590,6 +2658,9 @@ mod tests {
 
                 // AspectCrop → crop_aspect (always)
                 CM::AspectCrop => vec![Step::CropAspect],
+
+                // LargerThan has no imageflow equivalent — not used in parity tests.
+                CM::LargerThan => vec![Step::ScaleToInner],
             }
         }
 

@@ -1105,6 +1105,14 @@ impl Pipeline {
         self.constrain(Constraint::new(ConstraintMode::AspectCrop, width, height))
     }
 
+    /// Ensure the image is at least the given dimensions, upscaling if needed.
+    /// Never downscales. See [`ConstraintMode::LargerThan`].
+    ///
+    /// Replaces any previous constraint.
+    pub fn larger_than(self, width: u32, height: u32) -> Self {
+        self.constrain(Constraint::new(ConstraintMode::LargerThan, width, height))
+    }
+
     /// Apply a pre-built [`Constraint`] for advanced cases (gravity, canvas color, single-axis).
     ///
     /// Replaces any previous constraint.
