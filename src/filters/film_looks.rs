@@ -29,49 +29,95 @@ pub struct FilmLook {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum FilmPreset {
+    // ── Creative grades ──────────────────────────────────────────
     /// Bleach bypass: high contrast, desaturated, gritty.
-    /// Emulates skipping the bleach step in film processing.
     BleachBypass,
     /// Cross-processed: shifted color channels, saturated, punchy.
-    /// Emulates developing film in the wrong chemistry.
     CrossProcess,
     /// Teal and orange: cinematic complementary color grade.
-    /// Shadows pushed teal, highlights pushed warm.
     TealOrange,
     /// Faded film: lifted blacks, low contrast, muted colors.
-    /// The "Instagram vintage" look done properly.
     FadedFilm,
     /// Golden hour: warm light, soft contrast, glowing highlights.
     GoldenHour,
-    /// Cool chrome: slight blue-green cast, punchy contrast.
-    /// Chrome slide film character.
-    CoolChrome,
-    /// Print film: warm shadows, soft shoulder rolloff.
-    /// Motion picture print film character.
-    PrintFilm,
     /// Noir: high contrast, heavy desaturation, deep blacks.
     Noir,
-    /// Technicolor: vivid, saturated, slightly warm.
-    /// Two-strip Technicolor-inspired color rendering.
+    /// Technicolor: vivid, two-strip Technicolor-inspired rendering.
     Technicolor,
-    /// Matte: lifted blacks, reduced highlights, low saturation.
-    /// Fashion/editorial look.
+    /// Matte: lifted blacks, reduced highlights, editorial look.
     Matte,
+
+    // ── Classic negative film ────────────────────────────────────
+    /// Portra-inspired: warm skin tones, soft contrast, muted greens.
+    /// The portrait film aesthetic.
+    Portra,
+    /// Gold-inspired: warm, saturated consumer film. Nostalgic.
+    KodakGold,
+    /// Ektar-inspired: ultra-saturated, punchy, fine-grain colors.
+    Ektar,
+    /// Superia-inspired: cool-toned consumer film, slight green cast.
+    Superia,
+    /// Pro 400H-inspired: clean, slightly cool, beautiful skin tones.
+    Pro400H,
+
+    // ── Slide film (reversal) ────────────────────────────────────
+    /// Velvia-inspired: hyper-saturated, vivid greens and blues.
+    /// The landscape photographer's film.
+    Velvia,
+    /// Provia-inspired: neutral, accurate slide film.
+    Provia,
+    /// Kodachrome-inspired: deep reds, vivid yellows, rich blacks.
+    /// Legendary color rendering.
+    Kodachrome,
+    /// Ektachrome-inspired: clean, slightly warm modern slide film.
+    Ektachrome,
+
+    // ── Motion picture ───────────────────────────────────────────
+    /// 2383 print-inspired: warm shadows, soft shoulder rolloff.
+    /// The Hollywood print stock character.
+    Print2383,
+    /// 500T-inspired: tungsten-balanced cinema negative. Warm, cinematic.
+    Tungsten500T,
+
+    // ── Digital era / Fuji sim-inspired ──────────────────────────
+    /// Classic Chrome-inspired: muted, desaturated, documentary feel.
+    ClassicChrome,
+    /// Classic Negative-inspired: high contrast, warm highlights, cool shadows.
+    ClassicNeg,
+    /// Cool chrome: slight blue-green cast, punchy contrast.
+    CoolChrome,
 }
 
 impl FilmPreset {
     /// All available presets.
     pub const ALL: &[FilmPreset] = &[
-        FilmPreset::BleachBypass,
-        FilmPreset::CrossProcess,
-        FilmPreset::TealOrange,
-        FilmPreset::FadedFilm,
-        FilmPreset::GoldenHour,
-        FilmPreset::CoolChrome,
-        FilmPreset::PrintFilm,
-        FilmPreset::Noir,
-        FilmPreset::Technicolor,
-        FilmPreset::Matte,
+        // Creative
+        Self::BleachBypass,
+        Self::CrossProcess,
+        Self::TealOrange,
+        Self::FadedFilm,
+        Self::GoldenHour,
+        Self::Noir,
+        Self::Technicolor,
+        Self::Matte,
+        // Classic negative
+        Self::Portra,
+        Self::KodakGold,
+        Self::Ektar,
+        Self::Superia,
+        Self::Pro400H,
+        // Slide
+        Self::Velvia,
+        Self::Provia,
+        Self::Kodachrome,
+        Self::Ektachrome,
+        // Motion picture
+        Self::Print2383,
+        Self::Tungsten500T,
+        // Digital era
+        Self::ClassicChrome,
+        Self::ClassicNeg,
+        Self::CoolChrome,
     ];
 
     /// Human-readable name.
@@ -82,11 +128,23 @@ impl FilmPreset {
             Self::TealOrange => "Teal & Orange",
             Self::FadedFilm => "Faded Film",
             Self::GoldenHour => "Golden Hour",
-            Self::CoolChrome => "Cool Chrome",
-            Self::PrintFilm => "Print Film",
             Self::Noir => "Noir",
             Self::Technicolor => "Technicolor",
             Self::Matte => "Matte",
+            Self::Portra => "Portra",
+            Self::KodakGold => "Kodak Gold",
+            Self::Ektar => "Ektar",
+            Self::Superia => "Superia",
+            Self::Pro400H => "Pro 400H",
+            Self::Velvia => "Velvia",
+            Self::Provia => "Provia",
+            Self::Kodachrome => "Kodachrome",
+            Self::Ektachrome => "Ektachrome",
+            Self::Print2383 => "Print 2383",
+            Self::Tungsten500T => "500T Tungsten",
+            Self::ClassicChrome => "Classic Chrome",
+            Self::ClassicNeg => "Classic Negative",
+            Self::CoolChrome => "Cool Chrome",
         }
     }
 
@@ -98,11 +156,23 @@ impl FilmPreset {
             Self::TealOrange => "teal_orange",
             Self::FadedFilm => "faded_film",
             Self::GoldenHour => "golden_hour",
-            Self::CoolChrome => "cool_chrome",
-            Self::PrintFilm => "print_film",
             Self::Noir => "noir",
             Self::Technicolor => "technicolor",
             Self::Matte => "matte",
+            Self::Portra => "portra",
+            Self::KodakGold => "kodak_gold",
+            Self::Ektar => "ektar",
+            Self::Superia => "superia",
+            Self::Pro400H => "pro_400h",
+            Self::Velvia => "velvia",
+            Self::Provia => "provia",
+            Self::Kodachrome => "kodachrome",
+            Self::Ektachrome => "ektachrome",
+            Self::Print2383 => "print_2383",
+            Self::Tungsten500T => "tungsten_500t",
+            Self::ClassicChrome => "classic_chrome",
+            Self::ClassicNeg => "classic_neg",
+            Self::CoolChrome => "cool_chrome",
         }
     }
 
@@ -264,11 +334,23 @@ fn generate_preset_lut(preset: FilmPreset) -> CubeLut {
                     FilmPreset::TealOrange => teal_orange(r, g, b),
                     FilmPreset::FadedFilm => faded_film(r, g, b),
                     FilmPreset::GoldenHour => golden_hour(r, g, b),
-                    FilmPreset::CoolChrome => cool_chrome(r, g, b),
-                    FilmPreset::PrintFilm => print_film(r, g, b),
                     FilmPreset::Noir => noir(r, g, b),
                     FilmPreset::Technicolor => technicolor(r, g, b),
                     FilmPreset::Matte => matte(r, g, b),
+                    FilmPreset::Portra => portra(r, g, b),
+                    FilmPreset::KodakGold => kodak_gold(r, g, b),
+                    FilmPreset::Ektar => ektar(r, g, b),
+                    FilmPreset::Superia => superia(r, g, b),
+                    FilmPreset::Pro400H => pro_400h(r, g, b),
+                    FilmPreset::Velvia => velvia(r, g, b),
+                    FilmPreset::Provia => provia(r, g, b),
+                    FilmPreset::Kodachrome => kodachrome(r, g, b),
+                    FilmPreset::Ektachrome => ektachrome(r, g, b),
+                    FilmPreset::Print2383 => print_2383(r, g, b),
+                    FilmPreset::Tungsten500T => tungsten_500t(r, g, b),
+                    FilmPreset::ClassicChrome => classic_chrome(r, g, b),
+                    FilmPreset::ClassicNeg => classic_neg(r, g, b),
+                    FilmPreset::CoolChrome => cool_chrome(r, g, b),
                 };
             }
         }
@@ -413,23 +495,6 @@ fn cool_chrome(r: f32, g: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-fn print_film(r: f32, g: f32, b: f32) -> [f32; 3] {
-    // Warm shadows, soft shoulder, slight desaturation in highlights
-    let l = luma(r, g, b);
-    let shadow = (1.0 - l * 2.5).max(0.0);
-    let r_out = shoulder(r + shadow * 0.04, 0.82);
-    let g_out = shoulder(g + shadow * 0.01, 0.85);
-    let b_out = shoulder(b - shadow * 0.02, 0.88);
-    // Desaturate highlights
-    let highlight = ((l - 0.6) * 2.5).max(0.0).min(1.0);
-    let [r_out, g_out, b_out] = desat(r_out, g_out, b_out, highlight * 0.2);
-    [
-        r_out.clamp(0.0, 1.0),
-        g_out.clamp(0.0, 1.0),
-        b_out.clamp(0.0, 1.0),
-    ]
-}
-
 fn noir(r: f32, g: f32, b: f32) -> [f32; 3] {
     // Heavy desat, strong S-curve, crush blacks
     let [r, g, b] = desat(r, g, b, 0.85);
@@ -466,6 +531,258 @@ fn matte(r: f32, g: f32, b: f32) -> [f32; 3] {
     let g_out = lift + inv_s_curve(g, 0.2) * range;
     let b_out = lift + inv_s_curve(b, 0.2) * range;
     let [r_out, g_out, b_out] = desat(r_out, g_out, b_out, 0.25);
+    [
+        r_out.clamp(0.0, 1.0),
+        g_out.clamp(0.0, 1.0),
+        b_out.clamp(0.0, 1.0),
+    ]
+}
+
+// ── Classic negative film stocks ─────────────────────────────────────
+
+fn portra(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Warm skin tones, soft contrast, muted greens, wide latitude
+    let l = luma(r, g, b);
+    // Soft S-curve (low contrast negative film)
+    let r_out = inv_s_curve(r, -0.15) + 0.01; // slight warm push
+    let g_out = inv_s_curve(g, -0.15) * 0.97; // mute greens slightly
+    let b_out = inv_s_curve(b, -0.15) - 0.005;
+    // Warm shadows
+    let shadow = (1.0 - l * 2.5).max(0.0);
+    let r_out = r_out + shadow * 0.025;
+    let b_out = b_out - shadow * 0.015;
+    // Soft shoulder
+    [
+        shoulder(r_out, 0.88).clamp(0.0, 1.0),
+        shoulder(g_out, 0.90).clamp(0.0, 1.0),
+        shoulder(b_out, 0.92).clamp(0.0, 1.0),
+    ]
+}
+
+fn kodak_gold(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Warm, saturated consumer film. Golden tones, punchy.
+    let l = luma(r, g, b);
+    // Warm overall push
+    let r_out = r * 1.06 + 0.015;
+    let g_out = g * 1.01;
+    let b_out = b * 0.92 - 0.01;
+    // Moderate S-curve for consumer punch
+    let r_out = s_curve(r_out, 0.25);
+    let g_out = s_curve(g_out, 0.2);
+    let b_out = s_curve(b_out, 0.2);
+    // Warm shadow lift
+    let shadow = (1.0 - l * 3.0).max(0.0);
+    [
+        (r_out + shadow * 0.02).clamp(0.0, 1.0),
+        g_out.clamp(0.0, 1.0),
+        (b_out - shadow * 0.01).clamp(0.0, 1.0),
+    ]
+}
+
+fn ektar(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Ultra-saturated, punchy, fine grain. Boost everything.
+    // Strong S-curve, vivid colors
+    let r_out = s_curve(r * 1.05, 0.35);
+    let g_out = s_curve(g * 1.04, 0.3);
+    let b_out = s_curve(b * 1.06, 0.3);
+    // Slight warm bias
+    [
+        (r_out + 0.01).clamp(0.0, 1.0),
+        g_out.clamp(0.0, 1.0),
+        b_out.clamp(0.0, 1.0),
+    ]
+}
+
+fn superia(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Cool-toned consumer film, slight green cast, moderate contrast
+    let r_out = s_curve(r * 0.97, 0.2);
+    let g_out = s_curve(g * 1.02 + 0.008, 0.2); // slight green push
+    let b_out = s_curve(b * 1.01, 0.2);
+    // Cool shadow tint
+    let l = luma(r, g, b);
+    let shadow = (1.0 - l * 2.5).max(0.0);
+    [
+        (r_out - shadow * 0.01).clamp(0.0, 1.0),
+        (g_out + shadow * 0.005).clamp(0.0, 1.0),
+        (b_out + shadow * 0.01).clamp(0.0, 1.0),
+    ]
+}
+
+fn pro_400h(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Clean, slightly cool, beautiful skin tones. Low contrast.
+    // Distinctive pastel quality
+    let r_out = inv_s_curve(r, -0.1);
+    let g_out = inv_s_curve(g * 1.01, -0.1);
+    let b_out = inv_s_curve(b * 1.03 + 0.005, -0.1); // slight cool push
+    // Slight desaturation for pastel quality
+    let [r_out, g_out, b_out] = desat(r_out, g_out, b_out, 0.12);
+    [
+        shoulder(r_out, 0.90).clamp(0.0, 1.0),
+        shoulder(g_out, 0.91).clamp(0.0, 1.0),
+        shoulder(b_out, 0.92).clamp(0.0, 1.0),
+    ]
+}
+
+// ── Slide film stocks ────────────────────────────────────────────────
+
+fn velvia(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Hyper-saturated, vivid greens and blues, crushed blacks
+    // The landscape photographer's film
+    let l = luma(r, g, b);
+    // Strong saturation boost (opposite of desat)
+    let boost = 0.3;
+    let r_out = r + boost * (r - l);
+    let g_out = g + boost * (g - l) + 0.01; // extra green boost
+    let b_out = b + boost * (b - l) + 0.005;
+    // Strong S-curve, crushed blacks
+    let r_out = s_curve((r_out - 0.01).max(0.0), 0.5);
+    let g_out = s_curve((g_out - 0.01).max(0.0), 0.45);
+    let b_out = s_curve((b_out - 0.01).max(0.0), 0.45);
+    [
+        r_out.clamp(0.0, 1.0),
+        g_out.clamp(0.0, 1.0),
+        b_out.clamp(0.0, 1.0),
+    ]
+}
+
+fn provia(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Neutral, accurate, slight saturation boost. The versatile slide film.
+    let l = luma(r, g, b);
+    // Gentle saturation boost
+    let boost = 0.08;
+    let r_out = r + boost * (r - l);
+    let g_out = g + boost * (g - l);
+    let b_out = b + boost * (b - l);
+    // Mild S-curve
+    [
+        s_curve(r_out, 0.15).clamp(0.0, 1.0),
+        s_curve(g_out, 0.15).clamp(0.0, 1.0),
+        s_curve(b_out, 0.15).clamp(0.0, 1.0),
+    ]
+}
+
+fn kodachrome(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Deep reds, vivid yellows, rich blacks, cyan-shifted shadows
+    let l = luma(r, g, b);
+    // Strong contrast
+    let r_out = s_curve(r * 1.04, 0.45);
+    let g_out = s_curve(g * 0.98, 0.4);
+    let b_out = s_curve(b * 0.94, 0.4);
+    // Warm highlights, cyan-ish shadows
+    let shadow = (1.0 - l * 2.0).max(0.0);
+    let highlight = ((l - 0.5) * 2.0).max(0.0);
+    let r_out = r_out + highlight * 0.02 - shadow * 0.02;
+    let g_out = g_out;
+    let b_out = b_out + shadow * 0.02 - highlight * 0.01;
+    // Crush blacks slightly
+    [
+        ((r_out - 0.01).max(0.0)).clamp(0.0, 1.0),
+        ((g_out - 0.01).max(0.0)).clamp(0.0, 1.0),
+        ((b_out - 0.01).max(0.0)).clamp(0.0, 1.0),
+    ]
+}
+
+fn ektachrome(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Clean, slightly warm modern slide film. Less saturated than Velvia.
+    let l = luma(r, g, b);
+    let boost = 0.12;
+    let r_out = r + boost * (r - l) + 0.005;
+    let g_out = g + boost * (g - l);
+    let b_out = b + boost * (b - l) - 0.003;
+    // Moderate S-curve
+    [
+        s_curve(r_out, 0.2).clamp(0.0, 1.0),
+        s_curve(g_out, 0.2).clamp(0.0, 1.0),
+        s_curve(b_out, 0.2).clamp(0.0, 1.0),
+    ]
+}
+
+// ── Motion picture stocks ────────────────────────────────────────────
+
+fn print_2383(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // THE Hollywood print stock. Warm shadows, soft highlight shoulder,
+    // flattering skin tones, ~13 stops of DR feeling.
+    let l = luma(r, g, b);
+    let shadow = (1.0 - l * 2.0).max(0.0);
+    let highlight = ((l - 0.5) * 2.0).max(0.0);
+    // Warm shadow push, slightly cool highlights
+    let r_out = r + shadow * 0.04 + highlight * 0.01;
+    let g_out = g + shadow * 0.01;
+    let b_out = b - shadow * 0.025 + highlight * 0.005;
+    // Soft shoulder rolloff (the signature 2383 characteristic)
+    let r_out = shoulder(r_out, 0.78);
+    let g_out = shoulder(g_out, 0.82);
+    let b_out = shoulder(b_out, 0.85);
+    // Mild highlight desaturation
+    let [r_out, g_out, b_out] = desat(r_out, g_out, b_out, highlight * 0.15);
+    // Slight S-curve for body
+    [
+        s_curve(r_out, 0.15).clamp(0.0, 1.0),
+        s_curve(g_out, 0.12).clamp(0.0, 1.0),
+        s_curve(b_out, 0.12).clamp(0.0, 1.0),
+    ]
+}
+
+fn tungsten_500t(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Cinema negative balanced for tungsten (3200K). Under daylight
+    // gives a cool blue cast. Warm, cinematic, wide DR.
+    let l = luma(r, g, b);
+    // Warm overall (tungsten WB on daylight-lit scenes)
+    let r_out = r * 1.03 + 0.01;
+    let g_out = g * 0.99;
+    let b_out = b * 0.93;
+    // Low contrast negative character
+    let r_out = inv_s_curve(r_out, -0.1);
+    let g_out = inv_s_curve(g_out, -0.1);
+    let b_out = inv_s_curve(b_out, -0.1);
+    // Soft shoulder
+    let r_out = shoulder(r_out, 0.84);
+    let g_out = shoulder(g_out, 0.86);
+    let b_out = shoulder(b_out, 0.88);
+    // Warm shadow lift
+    let shadow = (1.0 - l * 2.5).max(0.0);
+    [
+        (r_out + shadow * 0.02).clamp(0.0, 1.0),
+        g_out.clamp(0.0, 1.0),
+        (b_out - shadow * 0.01).clamp(0.0, 1.0),
+    ]
+}
+
+// ── Digital era looks ────────────────────────────────────────────────
+
+fn classic_chrome(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // Muted, desaturated, documentary feel. Understated.
+    let l = luma(r, g, b);
+    // Desaturate
+    let [r, g, b] = desat(r, g, b, 0.25);
+    // Slightly warm midtones, cool shadows
+    let shadow = (1.0 - l * 2.5).max(0.0);
+    let r_out = r + 0.005 - shadow * 0.01;
+    let g_out = g;
+    let b_out = b - 0.005 + shadow * 0.01;
+    // Mild contrast
+    [
+        s_curve(r_out, 0.2).clamp(0.0, 1.0),
+        s_curve(g_out, 0.2).clamp(0.0, 1.0),
+        s_curve(b_out, 0.2).clamp(0.0, 1.0),
+    ]
+}
+
+fn classic_neg(r: f32, g: f32, b: f32) -> [f32; 3] {
+    // High contrast, warm highlights, cool shadows. Distinctive split.
+    let l = luma(r, g, b);
+    let shadow = (1.0 - l * 2.0).max(0.0);
+    let highlight = ((l - 0.5) * 2.0).max(0.0);
+    // Cool shadows, warm highlights
+    let r_out = r - shadow * 0.04 + highlight * 0.03;
+    let g_out = g - shadow * 0.01;
+    let b_out = b + shadow * 0.03 - highlight * 0.04;
+    // Strong contrast
+    let r_out = s_curve(r_out, 0.4);
+    let g_out = s_curve(g_out, 0.35);
+    let b_out = s_curve(b_out, 0.35);
+    // Slight desaturation
+    let [r_out, g_out, b_out] = desat(r_out, g_out, b_out, 0.15);
     [
         r_out.clamp(0.0, 1.0),
         g_out.clamp(0.0, 1.0),
@@ -576,7 +893,7 @@ mod tests {
             total,
             total as f64 / 1024.0,
         );
-        // Should be well under 100 KB total
-        assert!(total < 100_000, "presets too large: {} bytes", total);
+        // Should be well under 200 KB total for 22 presets (~5 KB each)
+        assert!(total < 200_000, "presets too large: {} bytes", total);
     }
 }
