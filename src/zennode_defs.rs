@@ -499,34 +499,60 @@ impl Default for OutputLimits {
 pub struct Constrain {
     // ─── Dimensions ───
     /// Target width in pixels. None = unconstrained (derive from height + aspect ratio).
+    ///
+    /// RIAPI: `?w=800` or `?width=800` or `?maxwidth=800` (legacy, implies mode=within).
     #[param(range(0..=65535), default = 0, step = 1)]
     #[param(unit = "px", section = "Dimensions", label = "Width")]
-    #[kv("w", "width")]
+    #[kv("w", "width", "maxwidth")]
     pub w: Option<u32>,
 
     /// Target height in pixels. None = unconstrained (derive from width + aspect ratio).
+    ///
+    /// RIAPI: `?h=600` or `?height=600` or `?maxheight=600` (legacy, implies mode=within).
     #[param(range(0..=65535), default = 0, step = 1)]
     #[param(unit = "px", section = "Dimensions", label = "Height")]
-    #[kv("h", "height")]
+    #[kv("h", "height", "maxheight")]
     pub h: Option<u32>,
 
     // ─── Layout ───
     /// Constraint mode controlling how the image fits the target dimensions.
     ///
-    /// - "distort" — stretch to exact dimensions, ignoring aspect ratio
-    /// - "within" — fit inside target, never upscale (default)
+    /// - "distort" / "stretch" — stretch to exact dimensions, ignoring aspect ratio
+    /// - "within" / "max" — fit inside target, never upscale (default)
     /// - "fit" — fit inside target, may upscale
-    /// - "within_crop" — fill target by cropping, never upscale
+    /// - "within_crop" / "crop" — fill target by cropping, never upscale
     /// - "fit_crop" — fill target by cropping, may upscale
-    /// - "fit_pad" — fit inside target, pad to exact dimensions
+    /// - "fit_pad" / "pad" — fit inside target, pad to exact dimensions
     /// - "within_pad" — fit inside target without upscale, pad to exact dimensions
     /// - "pad_within" — never upscale, always pad to exact canvas
-    /// - "aspect_crop" — crop to target aspect ratio without resizing
+    /// - "aspect_crop" / "aspectcrop" — crop to target aspect ratio without resizing
     /// - "larger_than" — upscale if needed to meet target, never downscale
     #[param(default = "within")]
     #[param(section = "Layout", label = "Mode")]
     #[kv("mode")]
     pub mode: String,
+
+    /// Scale control: when to allow scaling.
+    ///
+    /// - "down" / "downscaleonly" — only downscale, never upscale
+    /// - "up" / "upscaleonly" — only upscale, never downscale
+    /// - "both" — allow both (default)
+    /// - "canvas" / "upscalecanvas" — upscale canvas (pad) only
+    ///
+    /// RIAPI: `?scale=down`
+    #[param(default = "")]
+    #[param(section = "Layout", label = "Scale")]
+    #[kv("scale")]
+    pub scale: Option<String>,
+
+    /// Device pixel ratio / zoom multiplier.
+    ///
+    /// Multiplies target dimensions. 2.0 means w and h are doubled.
+    /// RIAPI: `?zoom=2`, `?dpr=2x`, `?dppx=1.5`
+    #[param(range(0.1..=10.0), default = 1.0, step = 0.1)]
+    #[param(section = "Layout", label = "DPR / Zoom")]
+    #[kv("zoom", "dpr", "dppx")]
+    pub zoom: Option<f32>,
 
     /// Named anchor for crop/pad positioning.
     ///
@@ -609,8 +635,11 @@ pub struct Constrain {
     ///
     /// - "linear" — resize in linear light (gamma-correct, default)
     /// - "srgb" — resize in sRGB gamma space (faster, less correct)
+    ///
+    /// RIAPI: `?down.colorspace=linear` or `?up.colorspace=srgb`
     #[param(default = "")]
     #[param(section = "Quality", label = "Scaling Colorspace")]
+    #[kv("down.colorspace", "up.colorspace")]
     pub scaling_colorspace: Option<String>,
 
     // ─── Post-Processing ───
@@ -686,6 +715,8 @@ impl Default for Constrain {
             w: None,
             h: None,
             mode: String::from("within"),
+            scale: None,
+            zoom: None,
             gravity: String::from("center"),
             gravity_x: None,
             gravity_y: None,
@@ -877,8 +908,11 @@ impl RemoveAlpha {
 pub struct RoundCorners {
     /// Corner radius in pixels (uniform). Clamped to min(width, height) / 2.
     /// Used when mode is "pixels" (default) or as fallback.
+    ///
+    /// RIAPI: `?s.roundcorners=20` (single value) or `?s.roundcorners=10,20,30,40` (TL,TR,BR,BL)
     #[param(range(0.0..=10000.0), default = 0.0, step = 1.0)]
     #[param(unit = "px", section = "Main", label = "Radius")]
+    #[kv("s.roundcorners")]
     pub radius: f32,
     /// Top-left corner radius (for per-corner modes).
     #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
