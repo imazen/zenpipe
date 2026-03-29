@@ -7,8 +7,8 @@
 //! Usage:
 //!   cargo run --release --features experimental --example film_look_gallery -- <output_dir> [dataset]
 //!
-//! dataset defaults to "clic2025/training" (32 high-res photographic images).
-//! Other options: "CID22/CID22-512/validation", "gb82".
+//! dataset defaults to "clic2025/final-test" (30 high-res photographic images).
+//! Other options: "clic2025/training", "CID22/CID22-512/validation", "gb82".
 //!
 //! The output directory will contain:
 //!   originals/    — resized input images (max 1024px long edge)
@@ -30,7 +30,7 @@ use zenpixels_convert::oklab;
 
 const MAX_DIM: u32 = 1024;
 const JPEG_QUALITY: u8 = 88;
-const MAX_IMAGES: usize = 8;
+const MAX_IMAGES: usize = 20;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -41,7 +41,10 @@ fn main() {
     }
 
     let output_dir = PathBuf::from(&args[1]);
-    let dataset = args.get(2).map(|s| s.as_str()).unwrap_or("clic2025/training");
+    let dataset = args
+        .get(2)
+        .map(|s| s.as_str())
+        .unwrap_or("clic2025/final-test");
 
     // Get images via codec-corpus
     let corpus = codec_corpus::Corpus::new().expect("failed to init codec-corpus");
@@ -128,6 +131,7 @@ fn main() {
 
         // Scatter to Oklab once
         let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
         let mut base_planes = OklabPlanes::new(rw, rh);
         scatter_srgb_u8_to_oklab(srgb_u8, &mut base_planes, 3, &m1);
 
@@ -138,7 +142,7 @@ fn main() {
 
             // Gather to sRGB u8
             let mut out = vec![0u8; (rw as usize) * (rh as usize) * 3];
-            gather_oklab_to_srgb_u8(&planes, &mut out, 3, &m1);
+            gather_oklab_to_srgb_u8(&planes, &mut out, 3, &m1_inv);
 
             let out_img = RgbImage::from_raw(rw, rh, out).unwrap();
             save_jpeg(

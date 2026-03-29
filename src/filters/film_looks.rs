@@ -1237,4 +1237,45 @@ mod tests {
         // Should be well under 250 KB total for 34 presets (~5 KB each)
         assert!(total < 250_000, "presets too large: {} bytes", total);
     }
+
+    #[test]
+    fn all_presets_visibly_change_pixels() {
+        // Feed colorful sRGB pixels through scatter→filter→gather and verify
+        // the output differs from input for every preset.
+        use zenpixels_convert::oklab;
+
+        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709).unwrap();
+        let srgb: Vec<u8> = vec![
+            200, 50, 50, // red
+            50, 200, 50, // green
+            50, 50, 200, // blue
+            128, 128, 128, // grey
+        ];
+
+        let mut base = OklabPlanes::new(2, 2);
+        crate::scatter_srgb_u8_to_oklab(&srgb, &mut base, 3, &m1);
+
+        for &preset in FilmPreset::ALL {
+            let look = FilmLook::new(preset);
+            let mut planes = base.clone();
+            look.apply(&mut planes, &mut FilterContext::new());
+
+            let mut out = vec![0u8; 12];
+            crate::gather_oklab_to_srgb_u8(&planes, &mut out, 3, &m1);
+
+            let diff: u32 = srgb
+                .iter()
+                .zip(out.iter())
+                .map(|(a, b)| a.abs_diff(*b) as u32)
+                .sum();
+
+            std::eprintln!("{:20} total_pixel_diff={}", preset.name(), diff);
+            assert!(
+                diff > 10,
+                "{}: filter produced no visible change (diff={})",
+                preset.name(),
+                diff
+            );
+        }
+    }
 }
