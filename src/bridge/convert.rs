@@ -291,6 +291,18 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
     let kernel_width_scale = param_f32_opt(node, "kernel_width_scale");
     let lobe_ratio = param_f32_opt(node, "lobe_ratio");
     let post_blur = param_f32_opt(node, "post_blur");
+    let up_filter = node
+        .get_param("up_filter")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .and_then(|s| parse_filter_opt(&s));
+    let resample_when = node
+        .get_param("resample_when")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty() && s != "size_differs");
+    let sharpen_when = node
+        .get_param("sharpen_when")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty() && s != "downscaling");
 
     let mode = parse_constraint_mode(&mode_str)?;
 
@@ -307,6 +319,9 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         kernel_width_scale,
         lobe_ratio,
         post_blur,
+        up_filter,
+        resample_when,
+        sharpen_when,
     })
 }
 
@@ -349,6 +364,9 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         kernel_width_scale: None,
         lobe_ratio: None,
         post_blur: None,
+        up_filter: None,
+        resample_when: None,
+        sharpen_when: None,
     })
 }
 

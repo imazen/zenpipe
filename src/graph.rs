@@ -245,6 +245,18 @@ pub enum NodeOp {
         lobe_ratio: Option<f32>,
         /// Post-resize Gaussian blur sigma. None = no blur.
         post_blur: Option<f32>,
+        /// Upscale resampling filter. None = use down_filter or default.
+        /// TODO: zenresize does not yet support separate up/down filters in a single
+        /// LayoutPlan. When it does, this will be wired through to the upscale pass.
+        up_filter: Option<zenresize::Filter>,
+        /// When to resample: None = when size differs (default).
+        /// Values: "size_differs", "size_differs_or_sharpening_requested", "always".
+        /// TODO: requires execution-layer integration to honor non-default values.
+        resample_when: Option<String>,
+        /// When to sharpen: None = when downscaling (default).
+        /// Values: "downscaling", "upscaling", "size_differs", "always".
+        /// TODO: requires execution-layer integration to honor non-default values.
+        sharpen_when: Option<String>,
     },
 
     /// Advanced resize with a pre-built [`ResizeConfig`](zenresize::ResizeConfig).
@@ -1252,6 +1264,9 @@ impl PipelineGraph {
                 kernel_width_scale,
                 lobe_ratio,
                 post_blur,
+                up_filter: _, // TODO: wire through when zenresize supports separate up/down filters
+                resample_when: _, // TODO: wire through to execution layer
+                sharpen_when: _, // TODO: wire through to execution layer
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;

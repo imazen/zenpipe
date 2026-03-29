@@ -630,6 +630,28 @@ pub struct Constrain {
     #[param(range(0.0..=100.0), default = 0.0, step = 0.1)]
     #[param(section = "Advanced", label = "Post Blur")]
     pub post_blur: Option<f32>,
+
+    /// When to apply resampling.
+    ///
+    /// - "size_differs" — only resample when dimensions change (default)
+    /// - "size_differs_or_sharpening_requested" — resample when dimensions change
+    ///   or when sharpening is requested (allows sharpening without resize)
+    /// - "always" — always resample, even at identity dimensions
+    #[param(default = "size_differs")]
+    #[param(section = "Advanced", label = "Resample When")]
+    #[kv("resample_when")]
+    pub resample_when: Option<String>,
+
+    /// When to apply sharpening.
+    ///
+    /// - "downscaling" — sharpen only when downscaling (default)
+    /// - "upscaling" — sharpen only when upscaling
+    /// - "size_differs" — sharpen whenever dimensions change
+    /// - "always" — always sharpen, even at identity dimensions
+    #[param(default = "downscaling")]
+    #[param(section = "Advanced", label = "Sharpen When")]
+    #[kv("sharpen_when")]
+    pub sharpen_when: Option<String>,
 }
 
 impl Default for Constrain {
@@ -649,6 +671,8 @@ impl Default for Constrain {
             lobe_ratio: None,
             kernel_width_scale: None,
             post_blur: None,
+            resample_when: None,
+            sharpen_when: None,
         }
     }
 }

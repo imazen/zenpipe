@@ -125,17 +125,42 @@ pub(crate) fn parse_filter_opt(s: &str) -> Option<zenresize::Filter> {
         return None;
     }
     match s {
+        // Robidoux family
         "robidoux" => Some(zenresize::Filter::Robidoux),
         "robidoux_sharp" => Some(zenresize::Filter::RobidouxSharp),
+        "robidoux_fast" => Some(zenresize::Filter::RobidouxFast),
+        // Lanczos family
         "lanczos" | "lanczos3" => Some(zenresize::Filter::Lanczos),
+        "lanczos_sharp" => Some(zenresize::Filter::LanczosSharp),
         "lanczos2" => Some(zenresize::Filter::Lanczos2),
+        "lanczos2_sharp" => Some(zenresize::Filter::Lanczos2Sharp),
+        "raw_lanczos3" => Some(zenresize::Filter::RawLanczos3),
+        "raw_lanczos3_sharp" => Some(zenresize::Filter::RawLanczos3Sharp),
+        "raw_lanczos2" => Some(zenresize::Filter::RawLanczos2),
+        "raw_lanczos2_sharp" => Some(zenresize::Filter::RawLanczos2Sharp),
+        // Cubic family
+        "cubic" => Some(zenresize::Filter::Cubic),
+        "cubic_sharp" => Some(zenresize::Filter::CubicSharp),
+        "cubic_fast" => Some(zenresize::Filter::CubicFast),
+        "cubic_b_spline" | "cubic_bspline" => Some(zenresize::Filter::CubicBSpline),
         "mitchell" => Some(zenresize::Filter::Mitchell),
+        "mitchell_fast" => Some(zenresize::Filter::MitchellFast),
         "catmull_rom" | "catrom" => Some(zenresize::Filter::CatmullRom),
+        "catmull_rom_fast" => Some(zenresize::Filter::CatmullRomFast),
+        "catmull_rom_fast_sharp" => Some(zenresize::Filter::CatmullRomFastSharp),
         "hermite" => Some(zenresize::Filter::Hermite),
+        "n_cubic" | "ncubic" => Some(zenresize::Filter::NCubic),
+        "n_cubic_sharp" | "ncubic_sharp" => Some(zenresize::Filter::NCubicSharp),
+        // Ginseng / Jinc
+        "ginseng" => Some(zenresize::Filter::Ginseng),
+        "ginseng_sharp" => Some(zenresize::Filter::GinsengSharp),
+        "jinc" => Some(zenresize::Filter::Jinc),
+        // Simple filters
         "box" | "nearest" => Some(zenresize::Filter::Box),
         "triangle" | "linear" | "bilinear" => Some(zenresize::Filter::Triangle),
-        "ginseng" => Some(zenresize::Filter::Ginseng),
-        "cubic" => Some(zenresize::Filter::CubicBSpline),
+        "fastest" => Some(zenresize::Filter::Fastest),
+        // Legacy
+        "legacy_idct" => Some(zenresize::Filter::LegacyIDCTFilter),
         _ => None,
     }
 }
