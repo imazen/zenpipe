@@ -509,3 +509,52 @@ fn complex_query() {
     assert_eq!(get_bool(q, "allow_webp"), Some(true));
     assert_eq!(get_bool(q, "allow_avif"), Some(true));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CROP (RIAPI adapter)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn crop_default_units() {
+    // crop=10,10,90,90 with default cropxunits=100, cropyunits=100
+    let r = parse("crop=10,10,90,90");
+    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
+    let x = get_f32(c, "x").unwrap();
+    let y = get_f32(c, "y").unwrap();
+    let w = get_f32(c, "w").unwrap();
+    let h = get_f32(c, "h").unwrap();
+    assert!((x - 0.1).abs() < 0.001, "x={x}, expected 0.1");
+    assert!((y - 0.1).abs() < 0.001, "y={y}, expected 0.1");
+    assert!((w - 0.8).abs() < 0.001, "w={w}, expected 0.8");
+    assert!((h - 0.8).abs() < 0.001, "h={h}, expected 0.8");
+}
+
+#[test]
+fn crop_c_shorthand() {
+    // c=25,25,75,75 → auto units=100
+    let r = parse("c=25,25,75,75");
+    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
+    let x = get_f32(c, "x").unwrap();
+    let y = get_f32(c, "y").unwrap();
+    let w = get_f32(c, "w").unwrap();
+    let h = get_f32(c, "h").unwrap();
+    assert!((x - 0.25).abs() < 0.001, "x={x}, expected 0.25");
+    assert!((y - 0.25).abs() < 0.001, "y={y}, expected 0.25");
+    assert!((w - 0.5).abs() < 0.001, "w={w}, expected 0.5");
+    assert!((h - 0.5).abs() < 0.001, "h={h}, expected 0.5");
+}
+
+#[test]
+fn crop_custom_units() {
+    // crop=0,0,200,200 with cropxunits=200, cropyunits=200 → full image
+    let r = parse("crop=0,0,200,200&cropxunits=200&cropyunits=200");
+    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
+    let x = get_f32(c, "x").unwrap();
+    let y = get_f32(c, "y").unwrap();
+    let w = get_f32(c, "w").unwrap();
+    let h = get_f32(c, "h").unwrap();
+    assert!((x - 0.0).abs() < 0.001, "x={x}, expected 0.0");
+    assert!((y - 0.0).abs() < 0.001, "y={y}, expected 0.0");
+    assert!((w - 1.0).abs() < 0.001, "w={w}, expected 1.0");
+    assert!((h - 1.0).abs() < 0.001, "h={h}, expected 1.0");
+}

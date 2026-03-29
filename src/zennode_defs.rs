@@ -972,6 +972,7 @@ impl RoundCorners {
 #[node(id = "zenpipe.composite", group = Composite, role = Composite)]
 #[node(changes_dimensions)]
 #[node(tags("composite", "blend", "overlay"))]
+#[node(inputs(canvas("Background canvas"), input("Foreground image")))]
 pub struct Composite {
     /// X position of the foreground on the background canvas.
     #[param(range(0..=65535), default = 0, step = 1)]
@@ -999,6 +1000,7 @@ pub struct Composite {
 #[derive(Node, Clone, Debug)]
 #[node(id = "zenpipe.overlay", group = Composite, role = Composite)]
 #[node(tags("overlay", "watermark", "logo", "composite"))]
+#[node(inputs(input("Background image"), from_io("Overlay image (io_id)")))]
 pub struct Overlay {
     /// I/O ID of the overlay image source.
     #[param(range(0..=1000), default = 0, step = 1)]
@@ -1351,6 +1353,112 @@ impl NodeDef for FrameRiapiDef {
     }
 }
 
+/// RIAPI `crop` / `c` keys → CropPercent node.
+///
+/// `crop=x1,y1,x2,y2` — four comma-separated coordinates, interpreted
+/// in units defined by `cropxunits` / `cropyunits` (default 100).
+/// `c=x1,y1,x2,y2` — strict alias that auto-sets units to 100.
+///
+/// Coordinates are edge-based: (x1,y1) = top-left, (x2,y2) = bottom-right.
+/// Converted to CropPercent (origin + size as fractions of source).
+static CROP_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.crop",
+    label: "Crop (RIAPI)",
+    description: "Crop image to rectangle via querystring coordinates",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["crop", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct CropRiapiDef;
+pub static CROP_RIAPI_DEF: CropRiapiDef = CropRiapiDef;
+
+impl NodeDef for CropRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &CROP_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI crop".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.crop";
+
+        // Try `c` first (strict format, auto-sets units to 100), then `crop`.
+        let (val, force_100) = if let Some(v) = kv.take_owned("c", consumer) {
+            (v, true)
+        } else if let Some(v) = kv.take_owned("crop", consumer) {
+            (v, false)
+        } else {
+            return Ok(None);
+        };
+
+        // Parse "x1,y1,x2,y2" — four comma-separated floats.
+        let parts: Vec<&str> = val.split(',').collect();
+        if parts.len() != 4 {
+            kv.warn("crop", zennode::kv::KvWarningKind::InvalidValue,
+                &alloc::format!("crop requires 4 comma-separated values, got {}", parts.len()));
+            return Ok(None);
+        }
+
+        let parse_f = |s: &str, idx: usize| -> core::result::Result<f32, NodeError> {
+            s.trim().parse::<f32>().map_err(|_| {
+                NodeError::Other(alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32").into())
+            })
+        };
+
+        let x1 = parse_f(parts[0], 0)?;
+        let y1 = parse_f(parts[1], 1)?;
+        let x2 = parse_f(parts[2], 2)?;
+        let y2 = parse_f(parts[3], 3)?;
+
+        // Read coordinate units (default 100). `c` always uses 100.
+        let cropxunits = if force_100 {
+            // Consume but ignore if present.
+            let _ = kv.take_f32("cropxunits", consumer);
+            100.0
+        } else {
+            kv.take_f32("cropxunits", consumer).unwrap_or(100.0)
+        };
+        let cropyunits = if force_100 {
+            let _ = kv.take_f32("cropyunits", consumer);
+            100.0
+        } else {
+            kv.take_f32("cropyunits", consumer).unwrap_or(100.0)
+        };
+
+        if cropxunits == 0.0 || cropyunits == 0.0 {
+            kv.warn("crop", zennode::kv::KvWarningKind::InvalidValue,
+                "cropxunits and cropyunits must be non-zero");
+            return Ok(None);
+        }
+
+        let x = x1 / cropxunits;
+        let y = y1 / cropyunits;
+        let w = (x2 - x1) / cropxunits;
+        let h = (y2 - y1) / cropyunits;
+
+        Ok(Some(Box::new(CropPercent { x, y, w, h })))
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  REGISTRATION
 // ═══════════════════════════════════════════════════════════════════════
@@ -1398,4 +1506,5 @@ pub static ALL: &[&dyn NodeDef] = &[
     &ROTATE_RIAPI_DEF,
     &AUTOROTATE_RIAPI_DEF,
     &FRAME_RIAPI_DEF,
+    &CROP_RIAPI_DEF,
 ];

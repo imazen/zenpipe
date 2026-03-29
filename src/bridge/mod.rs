@@ -664,6 +664,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static ORIENT_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -689,6 +690,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static CONSTRAIN_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -714,6 +716,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static FLIP_H_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -739,6 +742,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static ROTATE_90_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -764,6 +768,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static DECODE_SCHEMA: zennode::NodeSchema = zennode::NodeSchema {
@@ -785,6 +790,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     // A fake non-geometry schema for testing mixed groups.
@@ -811,6 +817,7 @@ mod core_tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     // ─── Helper constructors ───
