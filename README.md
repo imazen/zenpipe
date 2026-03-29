@@ -4,7 +4,7 @@ Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via
 
 55+ filters with broad coverage of Lightroom and darktable adjustments for tone, color, detail, and effects. 34 built-in film look presets using tensor-compressed 3D LUTs (163 KB total). ASC CDL, .cube LUT loading, hue-qualified curves. Self-describing parameter schemas for automatic UI generation.
 
-`#![forbid(unsafe_code)]` — entirely safe Rust.
+Rust 1.93+, 2024 edition. `#![forbid(unsafe_code)]` — entirely safe Rust.
 
 **[Browse the Film Look Gallery](https://imazen.github.io/zenfilters/)** — interactive before/after comparisons for all 34 presets.
 
@@ -350,6 +350,13 @@ All LUTs use 1024 entries (10-bit, 4 KB each) — balances curve fidelity agains
 | `srgb-filters` | Direct sRGB u8 per-pixel filters (no Oklab roundtrip) |
 | `experimental` | Auto-tuning, fused interleaved path, film look gallery tool |
 | `zennode` | Node graph definitions for zenpipe integration |
+
+## Limitations
+
+- **Single-threaded.** No rayon, no threading. Callers handle parallelism.
+- **Full-frame materialization** for neighborhood filters (clarity, sharpen, noise reduction) when strip processing is not used.
+- **DtSigmoid and Cat16** are utility modules with free functions, not Pipeline-composable filters.
+- **Not yet implemented:** Lens Blur (depth-based bokeh), Transform/Upright (perspective correction), Lens Distortion (barrel/pincushion), Blend Layers (compositing).
 
 ## License
 
