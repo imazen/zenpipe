@@ -153,7 +153,7 @@ pub struct Orient {
     /// EXIF orientation value (1-8). 1 = no transformation.
     #[param(range(1..=8), default = 1, step = 1)]
     #[param(section = "Main", label = "Orientation")]
-    #[kv("autorotate", "srotate")]
+    #[kv("srotate")]
     pub orientation: i32,
 }
 
@@ -957,6 +957,319 @@ impl RoundCorners {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  RIAPI ADAPTERS — multi-value keys that produce different node types
+// ═══════════════════════════════════════════════════════════════════════
+//
+// These implement NodeDef manually because the #[derive(Node)] macro
+// can't handle keys that map to multiple different node structs
+// (e.g., `flip=h` → FlipH, `flip=v` → FlipV, `flip=both` → both).
+
+use zennode::{NodeDef, NodeError, NodeInstance, KvPairs, ParamMap};
+
+/// RIAPI `flip` and `sflip` keys → FlipH / FlipV nodes.
+///
+/// Values: `h`/`x` (horizontal), `v`/`y` (vertical), `both`/`xy`, `none`.
+static FLIP_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.flip",
+    label: "Flip (RIAPI)",
+    description: "Flip image horizontally and/or vertically via querystring",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["flip", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct FlipRiapiDef;
+pub static FLIP_RIAPI_DEF: FlipRiapiDef = FlipRiapiDef;
+
+impl NodeDef for FlipRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &FLIP_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI flip".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.flip";
+        let val = kv
+            .take_owned("flip", consumer)
+            .or_else(|| kv.take_owned("sflip", consumer));
+
+        let Some(val) = val else {
+            return Ok(None);
+        };
+
+        match val.to_ascii_lowercase().as_str() {
+            "h" | "x" => Ok(Some(Box::new(FlipH {}))),
+            "v" | "y" => Ok(Some(Box::new(FlipV {}))),
+            "both" | "xy" | "hv" => {
+                // flip-H + flip-V = rotate 180°
+                Ok(Some(Box::new(Rotate180 {})))
+            }
+            "none" | "" => Ok(None),
+            _ => {
+                kv.warn("flip", zennode::kv::KvWarningKind::InvalidValue,
+                    &alloc::format!("unknown flip value '{val}', expected h/v/both/none"));
+                Ok(None)
+            }
+        }
+    }
+}
+
+// FlipBoth is an alias: the bridge converts it to FlipH + FlipV at compile time.
+// (Or the bridge handles "flip_both" as Rotate180 equivalent.)
+// For now it maps to Rotate180 which is semantically identical to flip-H + flip-V.
+
+/// RIAPI `rotate` key → Rotate90 / Rotate180 / Rotate270 nodes.
+///
+/// Values: `90`, `180`, `270`, `360`/`0` (no-op).
+static ROTATE_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.rotate",
+    label: "Rotate (RIAPI)",
+    description: "Rotate image by 90/180/270 degrees via querystring",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["rotate", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct RotateRiapiDef;
+pub static ROTATE_RIAPI_DEF: RotateRiapiDef = RotateRiapiDef;
+
+impl NodeDef for RotateRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &ROTATE_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI rotate".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.rotate";
+        let val = kv.take_owned("rotate", consumer);
+
+        let Some(val) = val else {
+            return Ok(None);
+        };
+
+        // Parse as float, round to nearest 90.
+        let degrees = val
+            .parse::<f32>()
+            .unwrap_or_else(|_| {
+                kv.warn("rotate", zennode::kv::KvWarningKind::InvalidValue,
+                    &alloc::format!("cannot parse '{val}' as degrees"));
+                0.0
+            });
+
+        let normalized = ((degrees % 360.0 + 360.0) % 360.0).round() as i32;
+
+        match normalized {
+            0 | 360 => Ok(None),
+            90 => Ok(Some(Box::new(Rotate90 {}))),
+            180 => Ok(Some(Box::new(Rotate180 {}))),
+            270 => Ok(Some(Box::new(Rotate270 {}))),
+            _ => {
+                // Round to nearest 90.
+                let snapped = ((normalized + 45) / 90) * 90;
+                match snapped % 360 {
+                    90 => Ok(Some(Box::new(Rotate90 {}))),
+                    180 => Ok(Some(Box::new(Rotate180 {}))),
+                    270 => Ok(Some(Box::new(Rotate270 {}))),
+                    _ => Ok(None),
+                }
+            }
+        }
+    }
+}
+
+/// RIAPI `autorotate` key → Orient node with EXIF auto-orientation.
+///
+/// `autorotate=true` means "apply EXIF orientation tag". The actual
+/// EXIF value is read at decode time, not from the querystring.
+/// We emit Orient with orientation=0 as a sentinel meaning "auto".
+static AUTOROTATE_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.autorotate",
+    label: "Auto-Rotate (RIAPI)",
+    description: "Apply EXIF orientation correction via querystring",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["autorotate", "exif", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct AutorotateRiapiDef;
+pub static AUTOROTATE_RIAPI_DEF: AutorotateRiapiDef = AutorotateRiapiDef;
+
+impl NodeDef for AutorotateRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &AUTOROTATE_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI autorotate".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.autorotate";
+        let val = kv.take_bool("autorotate", consumer);
+
+        match val {
+            Some(true) => {
+                // orientation=0 is a sentinel for "use EXIF orientation at decode time"
+                Ok(Some(Box::new(Orient { orientation: 0 })))
+            }
+            Some(false) | None => Ok(None),
+        }
+    }
+}
+
+/// RIAPI `frame` / `page` key → frame selection hint for the decoder.
+///
+/// Produces an Orient node with a special sentinel, or a dedicated
+/// FrameSelect node if one is defined. For now, we store it as a
+/// Decode-phase hint.
+static FRAME_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.frame",
+    label: "Frame Select (RIAPI)",
+    description: "Select a specific frame from animated/multi-page images",
+    group: zennode::NodeGroup::Decode,
+    role: zennode::NodeRole::Decode,
+    params: &[],
+    tags: &["frame", "page", "animation", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+/// Frame selection node — carries the frame index for the decoder.
+#[derive(Clone)]
+pub struct FrameSelect {
+    pub frame: u32,
+}
+
+impl NodeInstance for FrameSelect {
+    fn schema(&self) -> &'static NodeSchema {
+        &FRAME_RIAPI_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert("frame".into(), zennode::ParamValue::U32(self.frame));
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "frame" => Some(zennode::ParamValue::U32(self.frame)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        match name {
+            "frame" => {
+                if let Some(v) = value.as_u32() {
+                    self.frame = v;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+    fn as_any(&self) -> &dyn core::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> { Box::new(self.clone()) }
+}
+
+pub struct FrameRiapiDef;
+pub static FRAME_RIAPI_DEF: FrameRiapiDef = FrameRiapiDef;
+
+impl NodeDef for FrameRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &FRAME_RIAPI_SCHEMA
+    }
+
+    fn create(&self, params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        let frame = params
+            .get("frame")
+            .and_then(|v| v.as_u32())
+            .unwrap_or(0);
+        Ok(Box::new(FrameSelect { frame }))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.frame";
+        let frame = kv
+            .take_u32("frame", consumer)
+            .or_else(|| kv.take_u32("page", consumer));
+
+        match frame {
+            Some(f) => Ok(Some(Box::new(FrameSelect { frame: f }))),
+            None => Ok(None),
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  REGISTRATION
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -971,7 +1284,7 @@ pub fn register(registry: &mut NodeRegistry) {
     }
 }
 
-/// All zenpipe zennode definitions (geometry, resize, pipeline).
+/// All zenpipe zennode definitions (geometry, resize, pipeline, RIAPI adapters).
 pub static ALL: &[&dyn NodeDef] = &[
     // Geometry
     &CROP_NODE,
@@ -995,4 +1308,9 @@ pub static ALL: &[&dyn NodeDef] = &[
     &FILL_RECT_NODE,
     &REMOVE_ALPHA_NODE,
     &ROUND_CORNERS_NODE,
+    // RIAPI adapters (multi-value keys → specific node types)
+    &FLIP_RIAPI_DEF,
+    &ROTATE_RIAPI_DEF,
+    &AUTOROTATE_RIAPI_DEF,
+    &FRAME_RIAPI_DEF,
 ];

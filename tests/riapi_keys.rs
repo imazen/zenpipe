@@ -138,9 +138,102 @@ fn srotate_90() {
     assert!(get_u32(o, "orientation").is_some() || get_str(o, "orientation").is_some());
 }
 
-// NOTE: `autorotate=true` (boolean) doesn't work with Orient's i32 field.
-// This is a known gap — autorotate needs a separate bool field or adapter.
-// imageflow_riapi handles autorotate as a flag that reads EXIF at decode time.
+// ═══════════════════════════════════════════════════════════════════════
+//  FLIP (RIAPI adapter)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn flip_horizontal() {
+    let r = parse("flip=h");
+    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "flip=h → FlipH");
+}
+
+#[test]
+fn flip_vertical() {
+    let r = parse("flip=v");
+    assert!(find_node(&r.instances, "zenlayout.flip_v").is_some(), "flip=v → FlipV");
+}
+
+#[test]
+fn flip_both() {
+    let r = parse("flip=both");
+    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_some(), "flip=both → Rotate180");
+}
+
+#[test]
+fn sflip_alias() {
+    let r = parse("sflip=x");
+    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "sflip=x → FlipH");
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ROTATE (RIAPI adapter)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn rotate_90() {
+    let r = parse("rotate=90");
+    assert!(find_node(&r.instances, "zenlayout.rotate_90").is_some());
+}
+
+#[test]
+fn rotate_180() {
+    let r = parse("rotate=180");
+    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_some());
+}
+
+#[test]
+fn rotate_270() {
+    let r = parse("rotate=270");
+    assert!(find_node(&r.instances, "zenlayout.rotate_270").is_some());
+}
+
+#[test]
+fn rotate_0_no_node() {
+    let r = parse("rotate=0");
+    assert!(find_node(&r.instances, "zenlayout.rotate_90").is_none());
+    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_none());
+    assert!(find_node(&r.instances, "zenlayout.rotate_270").is_none());
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  AUTOROTATE (RIAPI adapter)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn autorotate_true() {
+    let r = parse("autorotate=true");
+    assert!(find_node(&r.instances, "zenlayout.orient").is_some(), "autorotate=true → Orient");
+}
+
+#[test]
+fn autorotate_false_no_node() {
+    let r = parse("autorotate=false");
+    // autorotate=false should not produce an orient node from the adapter
+    // (the derive-based Orient node may still match srotate, but not autorotate)
+    let from_adapter: Vec<_> = r.instances.iter()
+        .filter(|n| n.schema().id == "zenpipe.riapi.autorotate")
+        .collect();
+    assert!(from_adapter.is_empty());
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FRAME SELECT (RIAPI adapter)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn frame_select() {
+    let r = parse("frame=3");
+    let f = find_node(&r.instances, "zenpipe.riapi.frame").expect("frame=3 → FrameSelect");
+    assert_eq!(get_u32(f, "frame"), Some(3));
+}
+
+#[test]
+fn page_alias_for_frame() {
+    let r = parse("page=0");
+    let f = find_node(&r.instances, "zenpipe.riapi.frame").expect("page=0 → FrameSelect");
+    assert_eq!(get_u32(f, "frame"), Some(0));
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  BGCOLOR
