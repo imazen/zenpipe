@@ -1,29 +1,27 @@
-//! Full node registry collecting all zennode definitions across the ecosystem.
+//! Full node registry collecting all zennode definitions.
 //!
 //! Geometry, resize, and pipeline-level nodes are defined in
-//! [`crate::zennode_defs`] and always available when `zennode` is enabled.
-//!
-//! Codec and filter nodes are registered from their own crates behind
-//! feature flags.
+//! [`crate::zennode_defs`]. Codec, quantize, and quality-intent nodes
+//! are defined in [`zencodecs::zennode_defs`]. Filter nodes come from
+//! zenfilters. All are registered into a single [`NodeRegistry`].
 //!
 //! # Features
 //!
-//! Each codec crate's nodes are gated behind an optional feature:
-//! - `nodes-jpeg`, `nodes-png`, `nodes-webp`, `nodes-gif`
-//! - `nodes-avif`, `nodes-jxl`, `nodes-tiff`, `nodes-bmp`
-//! - `nodes-quant`, `nodes-filters` (requires std)
-//!
-//! `nodes-all` enables everything.
+//! - `zennode` — enables all node registries (zencodecs nodes included automatically)
+//! - `nodes-filters` (requires std) — zenfilters' own zennode definitions
+//! - `nodes-all` enables everything.
 
 #[cfg(feature = "zennode")]
 use zennode::NodeRegistry;
 
 /// Build a [`NodeRegistry`] with all node definitions enabled by features.
 ///
-/// Each crate's `register()` function is called if its feature is active.
-/// The resulting registry contains every node schema — encode, decode,
-/// geometry, filter, quantize — with full param metadata for
-/// documentation, validation, and RIAPI parsing.
+/// - [`zencodecs::zennode_defs::register`] registers codec, quantize,
+///   and quality-intent nodes.
+/// - [`zenfilters::zennode_defs::register`] adds filter nodes when
+///   `nodes-filters` is active.
+/// - [`crate::zennode_defs::register`] registers geometry, resize, and
+///   pipeline-level nodes.
 ///
 /// # Example
 ///
@@ -40,40 +38,14 @@ use zennode::NodeRegistry;
 pub fn full_registry() -> NodeRegistry {
     let mut r = NodeRegistry::new();
 
-    // Codec encode/decode nodes
-    #[cfg(feature = "nodes-jpeg")]
-    zenjpeg::zennode_defs::register(&mut r);
+    // Codec, quantize, and quality-intent nodes (from zencodecs)
+    zencodecs::zennode_defs::register(&mut r);
 
-    #[cfg(feature = "nodes-png")]
-    zenpng::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-webp")]
-    zenwebp::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-gif")]
-    zengif::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-avif")]
-    zenavif::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-jxl")]
-    zenjxl::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-tiff")]
-    zentiff::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-bmp")]
-    zenbitmaps::zennode_defs::register(&mut r);
-
-    // Quantization
-    #[cfg(feature = "nodes-quant")]
-    zenquant::zennode_defs::register(&mut r);
-
-    // Filters (requires std)
+    // Filters (still external — zenfilters keeps its own zennode_defs)
     #[cfg(feature = "nodes-filters")]
     zenfilters::zennode_defs::register(&mut r);
 
-    // Geometry, resize, and pipeline-level nodes (always available with zennode).
+    // Geometry, resize, and pipeline-level nodes (this crate)
     crate::zennode_defs::register(&mut r);
 
     r

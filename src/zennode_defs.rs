@@ -1,18 +1,15 @@
-//! Zennode definitions for all pipeline operations compiled by zenpipe.
+//! Zennode definitions for resize and pipeline-specific operations.
 //!
-//! This is the single source of truth for every node that zenpipe's bridge
-//! and graph compiler know how to handle. Geometry, resize, and pipeline-level
-//! nodes all live here — no cross-crate schema ID races, no silent key
-//! consumption conflicts.
+//! Geometry nodes (crop, orient, flip, rotate, expand canvas, region
+//! viewport, output limits) are defined in `zenlayout::zennode_defs` and
+//! registered separately in `full_registry()`.
 //!
-//! Codec nodes (zenjpeg, zenpng, zenwebp, …) and filter nodes (zenfilters)
-//! remain in their own crates because zenpipe doesn't own those algorithms.
+//! Codec encode/decode, quantization, and quality-intent nodes live in
+//! `zencodecs::zennode_defs`. Filter nodes live in zenfilters.
 //!
 //! # Sections
 //!
-//! - **Geometry** — crop, orient, flip, rotate, expand canvas, region viewport
-//! - **Layout** — constrain, output limits
-//! - **Resize** — forced resize to exact dimensions
+//! - **Resize** — constrain (layout + resize), forced resize
 //! - **Pipeline** — crop whitespace, fill rect, remove alpha, round corners
 
 extern crate alloc;
@@ -881,15 +878,15 @@ impl RoundCorners {
 /// Register all zenpipe-owned node definitions with a registry.
 ///
 /// This includes geometry, resize, and pipeline-level nodes.
-/// Codec nodes (JPEG, PNG, …) and filter nodes (zenfilters) register
-/// themselves from their own crates.
+/// Codec, quantization, and quality-intent nodes are in zencodecs.
+/// Filter nodes are in zenfilters.
 pub fn register(registry: &mut NodeRegistry) {
     for node in ALL {
         registry.register(*node);
     }
 }
 
-/// All zenpipe zennode definitions.
+/// All zenpipe zennode definitions (geometry, resize, pipeline).
 pub static ALL: &[&dyn NodeDef] = &[
     // Geometry
     &CROP_NODE,

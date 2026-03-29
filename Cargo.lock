@@ -824,7 +824,6 @@ dependencies = [
  "yuv",
  "zenavif-parse",
  "zencodec",
- "zennode 0.1.0",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -850,7 +849,6 @@ version = "0.1.0"
 dependencies = [
  "enough",
  "thiserror",
- "zennode 0.1.0",
 ]
 
 [[package]]
@@ -876,6 +874,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zencodecs"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zennode",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "zenfilters"
 version = "0.1.0"
 dependencies = [
@@ -884,7 +899,7 @@ dependencies = [
  "linear-srgb 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "magetypes",
  "whereat",
- "zennode 0.1.0",
+ "zennode",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -923,7 +938,6 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zennode 0.1.0",
  "zenpixels",
  "zenquant 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -947,7 +961,6 @@ dependencies = [
  "wide",
  "yuv",
  "zencodec",
- "zennode 0.1.0",
  "zenpixels",
 ]
 
@@ -962,7 +975,6 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zennode 0.1.0",
  "zenpixels",
 ]
 
@@ -971,7 +983,6 @@ name = "zenlayout"
 version = "0.2.0"
 dependencies = [
  "whereat",
- "zennode 0.1.0",
 ]
 
 [[package]]
@@ -984,30 +995,12 @@ checksum = "1e136195598f6c1dc769200888ad1f9071f99d54ac3a91b80be6ba0b164e6b5b"
 name = "zennode"
 version = "0.1.0"
 dependencies = [
- "zennode-derive 0.1.0",
-]
-
-[[package]]
-name = "zennode"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zennode.git#a5d818944f2d824de1d93a146d4ef45d29308294"
-dependencies = [
- "zennode-derive 0.1.0 (git+https://github.com/imazen/zennode.git)",
+ "zennode-derive",
 ]
 
 [[package]]
 name = "zennode-derive"
 version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "zennode-derive"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zennode.git#a5d818944f2d824de1d93a146d4ef45d29308294"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1028,12 +1021,12 @@ dependencies = [
  "zenbitmaps",
  "zenblend",
  "zencodec",
+ "zencodecs",
  "zenfilters",
  "zengif",
  "zenjpeg",
  "zenjxl",
- "zenlayout 0.2.0",
- "zennode 0.1.0",
+ "zennode",
  "zenpixels",
  "zenpixels-convert",
  "zenpng",
@@ -1047,9 +1040,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0828926cd37f826702d167dc46e15dde519279d20a30d458acabc122043c8325"
+checksum = "4705187b555bc476109a2113ca007282fdf327bcc9edb4c692ae1e4d489bc9b2"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1059,9 +1052,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15525e70fac3b3a6c2f7e3826c4e11376dd3ae885eaa7fe0aa252238381c3732"
+checksum = "45c79098f78c1ea6bb065f28c633f7ad42c93c0a58e1a2d1c3bcdeeac444d360"
 dependencies = [
  "archmage 0.9.14",
  "bytemuck",
@@ -1089,7 +1082,6 @@ dependencies = [
  "whereat",
  "zencodec",
  "zenflate 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "zennode 0.1.0 (git+https://github.com/imazen/zennode.git)",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -1105,7 +1097,6 @@ dependencies = [
  "num-traits",
  "rgb",
  "thiserror",
- "zennode 0.1.0",
 ]
 
 [[package]]
@@ -1137,7 +1128,6 @@ dependencies = [
  "whereat",
  "zenblend",
  "zenlayout 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zennode 0.1.0",
  "zenpixels",
 ]
 
@@ -1169,7 +1159,6 @@ dependencies = [
  "thiserror",
  "tiff",
  "whereat",
- "zennode 0.1.0",
  "zenpixels",
 ]
 
@@ -1203,7 +1192,6 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zennode 0.1.0",
  "zenpixels",
 ]
 
