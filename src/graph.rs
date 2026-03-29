@@ -1303,9 +1303,8 @@ impl PipelineGraph {
                 let plan_out_w = plan.canvas.width;
                 let plan_out_h = plan.canvas.height;
                 let size_differs = plan_out_w != in_w || plan_out_h != in_h;
-                let has_padding = plan.content_size.is_some()
-                    || plan.placement != (0, 0)
-                    || plan.trim.is_some();
+                let has_padding =
+                    plan.content_size.is_some() || plan.placement != (0, 0) || plan.trim.is_some();
                 let should_resample = match resample_when.as_deref() {
                     Some("always") => true,
                     Some("size_differs_or_sharpening_requested") => {
@@ -1319,10 +1318,10 @@ impl PipelineGraph {
                 }
 
                 // ── sharpen_when: conditionally disable sharpening ──
-                let is_downscaling = (plan_out_w as u64 * plan_out_h as u64)
-                    < (in_w as u64 * in_h as u64);
-                let is_upscaling = (plan_out_w as u64 * plan_out_h as u64)
-                    > (in_w as u64 * in_h as u64);
+                let is_downscaling =
+                    (plan_out_w as u64 * plan_out_h as u64) < (in_w as u64 * in_h as u64);
+                let is_upscaling =
+                    (plan_out_w as u64 * plan_out_h as u64) > (in_w as u64 * in_h as u64);
                 let effective_sharpen = unsharp_percent.and_then(|pct| {
                     if pct <= 0.0 {
                         return None;

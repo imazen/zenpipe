@@ -125,10 +125,7 @@ mod tests {
         let qs = export_querystring_schema();
         let props = qs.get("properties").unwrap();
         let t = props.get("thumbnail").expect("should have 'thumbnail' key");
-        assert_eq!(
-            str_val(t, "x-zennode-alias-of").as_deref(),
-            Some("format")
-        );
+        assert_eq!(str_val(t, "x-zennode-alias-of").as_deref(), Some("format"));
     }
 
     #[test]
@@ -157,10 +154,7 @@ mod tests {
             .find(|k| str_val(k, "key").as_deref() == Some("w"))
             .expect("should have 'w' key");
         let aliases = w_entry.get("aliases").map(|a| a.as_array()).flatten();
-        assert!(
-            aliases.is_some(),
-            "w should have aliases (width, maxwidth)"
-        );
+        assert!(aliases.is_some(), "w should have aliases (width, maxwidth)");
     }
 
     #[test]

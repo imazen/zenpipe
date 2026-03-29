@@ -170,7 +170,7 @@ impl PixelOp for ScaleAlphaOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::{RGBA8_SRGB, RGB8_SRGB, RGBAF32_LINEAR_PREMUL};
+    use crate::format::{RGB8_SRGB, RGBA8_SRGB, RGBAF32_LINEAR_PREMUL};
 
     // ── RowConverterOp::new ─────────────────────────────────────────────
 
@@ -223,7 +223,11 @@ mod tests {
 
         op.apply(&input, &mut output, 1, 1);
 
-        assert_eq!(output, [10, 20, 30], "RGB channels should be copied, alpha dropped");
+        assert_eq!(
+            output,
+            [10, 20, 30],
+            "RGB channels should be copied, alpha dropped"
+        );
     }
 
     // ── ScaleAlphaOp::new — clamping ────────────────────────────────────

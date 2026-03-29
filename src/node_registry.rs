@@ -23,6 +23,18 @@ use zennode::NodeRegistry;
 /// - [`crate::zennode_defs::register`] registers geometry, resize, and
 ///   pipeline-level nodes.
 ///
+/// # Srcset support
+///
+/// Querystrings may contain `srcset=...` or `short=...` shorthand.
+/// Use [`crate::srcset::expand_srcset`] to expand these before calling
+/// [`NodeRegistry::from_querystring`]:
+///
+/// ```ignore
+/// let registry = zenpipe::full_registry();
+/// let qs = zenpipe::srcset::expand_srcset("srcset=300w,webp-90&other=yes");
+/// let result = registry.from_querystring(&qs);
+/// ```
+///
 /// # Example
 ///
 /// ```ignore

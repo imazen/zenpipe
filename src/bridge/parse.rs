@@ -58,7 +58,9 @@ pub(crate) fn parse_constraint_mode(s: &str) -> Result<zenresize::ConstraintMode
         "pad_within" => Ok(zenresize::ConstraintMode::PadWithin),
         "aspect_crop" => Ok(zenresize::ConstraintMode::AspectCrop),
         // "larger_than" not yet in zenresize
-        "larger_than" => Err(PipeError::Op(alloc::format!("larger_than mode not yet supported"))),
+        "larger_than" => Err(PipeError::Op(alloc::format!(
+            "larger_than mode not yet supported"
+        ))),
         _ => Err(PipeError::Op(alloc::format!(
             "bridge: unknown constraint mode '{s}'"
         ))),
@@ -100,7 +102,10 @@ pub(crate) fn parse_canvas_color(s: &str) -> Option<zenresize::CanvasColor> {
             let hex = &hex[1..];
             let bytes: alloc::vec::Vec<u8> = (0..hex.len())
                 .step_by(2)
-                .filter_map(|i| hex.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
+                .filter_map(|i| {
+                    hex.get(i..i + 2)
+                        .and_then(|h| u8::from_str_radix(h, 16).ok())
+                })
                 .collect();
             match bytes.len() {
                 3 => zenresize::CanvasColor::Srgb {

@@ -166,8 +166,7 @@ mod tests {
             }
         }
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt)
-            .with_strip_height(1);
+        let upstream = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(1);
 
         // Crop center 2x2: x=1, y=1, w=2, h=2.
         let mut crop = CropSource::new(Box::new(upstream), 1, 1, 2, 2).unwrap();
@@ -193,8 +192,7 @@ mod tests {
         let data: Vec<u8> = (0..stride * h as usize).map(|i| i as u8).collect();
         let data_copy = data.clone();
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt)
-            .with_strip_height(1);
+        let upstream = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(1);
 
         // Crop the entire image.
         let mut crop = CropSource::new(Box::new(upstream), 0, 0, w, h).unwrap();

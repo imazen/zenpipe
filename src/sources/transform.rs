@@ -162,7 +162,7 @@ impl Source for TransformSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::{RGBA8_SRGB, RGB8_SRGB};
+    use crate::format::{RGB8_SRGB, RGBA8_SRGB};
     use crate::ops::RowConverterOp;
     use crate::sources::materialize::MaterializedSource;
 
@@ -182,8 +182,7 @@ mod tests {
             0, 0, 255, 255,   255, 255, 255, 255,
         ];
 
-        let upstream = MaterializedSource::from_data(data.clone(), w, h, fmt)
-            .with_strip_height(h);
+        let upstream = MaterializedSource::from_data(data.clone(), w, h, fmt).with_strip_height(h);
 
         let mut ts = TransformSource::new(Box::new(upstream));
 
@@ -214,8 +213,7 @@ mod tests {
             255, 0, 0, 255,   0, 255, 0, 255,
         ];
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt_in)
-            .with_strip_height(h);
+        let upstream = MaterializedSource::from_data(data, w, h, fmt_in).with_strip_height(h);
 
         let converter = RowConverterOp::must(fmt_in, RGB8_SRGB);
         let mut ts = TransformSource::new(Box::new(upstream)).push(converter);

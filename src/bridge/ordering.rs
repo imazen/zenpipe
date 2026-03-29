@@ -275,6 +275,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static ORIENT_SCHEMA: NodeSchema = NodeSchema {
@@ -296,6 +297,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static RESIZE_SCHEMA: NodeSchema = NodeSchema {
@@ -317,6 +319,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static EXPOSURE_SCHEMA: NodeSchema = NodeSchema {
@@ -342,6 +345,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static CONTRAST_SCHEMA: NodeSchema = NodeSchema {
@@ -367,6 +371,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static SHARPEN_SCHEMA: NodeSchema = NodeSchema {
@@ -388,6 +393,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static ENCODE_SCHEMA: NodeSchema = NodeSchema {
@@ -409,6 +415,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static DECODE_SCHEMA: NodeSchema = NodeSchema {
@@ -430,6 +437,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     // ─── canonical_sort tests ───

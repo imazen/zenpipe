@@ -89,11 +89,7 @@ fn csharp_type(schema: &Value, optional: bool) -> String {
         "number" => "float",
         "integer" => {
             let min = schema.get("minimum").and_then(|v| v.as_i64()).unwrap_or(0);
-            if min >= 0 {
-                "uint"
-            } else {
-                "int"
-            }
+            if min >= 0 { "uint" } else { "int" }
         }
         "boolean" => "bool",
         "string" => "string",
@@ -114,7 +110,9 @@ fn csharp_default(schema: &Value, cs_type: &str) -> Option<String> {
         "float" | "float?" => def.as_f64().map(|v| format!("{v}f")),
         "int" | "int?" => def.as_i64().map(|v| format!("{v}")),
         "uint" | "uint?" => def.as_u64().map(|v| format!("{v}")),
-        "bool" | "bool?" => def.as_bool().map(|v| if v { "true".into() } else { "false".into() }),
+        "bool" | "bool?" => def
+            .as_bool()
+            .map(|v| if v { "true".into() } else { "false".into() }),
         "string" => def.as_str().map(|s| format!("\"{s}\"")),
         _ => None,
     }
@@ -246,7 +244,10 @@ fn generate_node_class(node_id: &str, class_name: &str, schema: &Value) -> Strin
 
         // Property with default.
         if let Some(def) = default {
-            let _ = writeln!(out, "    public {cs_type} {cs_name} {{ get; set; }} = {def};");
+            let _ = writeln!(
+                out,
+                "    public {cs_type} {cs_name} {{ get; set; }} = {def};"
+            );
         } else {
             let _ = writeln!(out, "    public {cs_type} {cs_name} {{ get; set; }}");
         }
@@ -366,13 +367,12 @@ fn generate_querystring_builder(qs_keys: &Value) -> String {
                 );
                 let _ = writeln!(out, "    {{");
                 if cs_param_type == "bool" {
-                    let _ =
-                        writeln!(out, "        _params[\"{key}\"] = value ? \"true\" : \"false\";");
-                } else {
                     let _ = writeln!(
                         out,
-                        "        _params[\"{key}\"] = value.ToString();",
+                        "        _params[\"{key}\"] = value ? \"true\" : \"false\";"
                     );
+                } else {
+                    let _ = writeln!(out, "        _params[\"{key}\"] = value.ToString();",);
                 }
                 let _ = writeln!(out, "        return this;");
                 let _ = writeln!(out, "    }}\n");
@@ -390,15 +390,9 @@ fn generate_querystring_builder(qs_keys: &Value) -> String {
     let _ = writeln!(out, "        foreach (var (k, v) in _params)");
     let _ = writeln!(out, "        {{");
     let _ = writeln!(out, "            sb.Append(first ? '?' : '&');");
-    let _ = writeln!(
-        out,
-        "            sb.Append(Uri.EscapeDataString(k));",
-    );
+    let _ = writeln!(out, "            sb.Append(Uri.EscapeDataString(k));",);
     let _ = writeln!(out, "            sb.Append('=');");
-    let _ = writeln!(
-        out,
-        "            sb.Append(Uri.EscapeDataString(v));",
-    );
+    let _ = writeln!(out, "            sb.Append(Uri.EscapeDataString(v));",);
     let _ = writeln!(out, "            first = false;");
     let _ = writeln!(out, "        }}");
     let _ = writeln!(out, "        return sb.ToString();");
@@ -436,7 +430,10 @@ mod tests {
 
     #[test]
     fn node_id_to_class_name_works() {
-        assert_eq!(node_id_to_class_name("zenresize.constrain"), "ZenresizeConstrain");
+        assert_eq!(
+            node_id_to_class_name("zenresize.constrain"),
+            "ZenresizeConstrain"
+        );
         assert_eq!(node_id_to_class_name("zenjpeg.encode"), "ZenjpegEncode");
     }
 
@@ -513,7 +510,10 @@ mod tests {
             .find(|(name, _)| name.contains("Constrain"));
         assert!(constrain.is_some(), "should produce Constrain class");
         let (_, content) = constrain.unwrap();
-        assert!(content.contains("public uint?"), "should have uint? properties");
+        assert!(
+            content.contains("public uint?"),
+            "should have uint? properties"
+        );
         assert!(content.contains("ToJsonNode()"), "should have ToJsonNode()");
     }
 }

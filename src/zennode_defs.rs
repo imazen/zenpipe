@@ -1048,7 +1048,7 @@ impl Default for Overlay {
 // can't handle keys that map to multiple different node structs
 // (e.g., `flip=h` → FlipH, `flip=v` → FlipV, `flip=both` → both).
 
-use zennode::{NodeDef, NodeError, NodeInstance, KvPairs, ParamMap};
+use zennode::{KvPairs, NodeDef, NodeError, NodeInstance, ParamMap};
 
 /// RIAPI `flip` and `sflip` keys → FlipH / FlipV nodes.
 ///
@@ -1109,8 +1109,11 @@ impl NodeDef for FlipRiapiDef {
             }
             "none" | "" => Ok(None),
             _ => {
-                kv.warn("flip", zennode::kv::KvWarningKind::InvalidValue,
-                    &alloc::format!("unknown flip value '{val}', expected h/v/both/none"));
+                kv.warn(
+                    "flip",
+                    zennode::kv::KvWarningKind::InvalidValue,
+                    &alloc::format!("unknown flip value '{val}', expected h/v/both/none"),
+                );
                 Ok(None)
             }
         }
@@ -1170,13 +1173,14 @@ impl NodeDef for RotateRiapiDef {
         };
 
         // Parse as float, round to nearest 90.
-        let degrees = val
-            .parse::<f32>()
-            .unwrap_or_else(|_| {
-                kv.warn("rotate", zennode::kv::KvWarningKind::InvalidValue,
-                    &alloc::format!("cannot parse '{val}' as degrees"));
-                0.0
-            });
+        let degrees = val.parse::<f32>().unwrap_or_else(|_| {
+            kv.warn(
+                "rotate",
+                zennode::kv::KvWarningKind::InvalidValue,
+                &alloc::format!("cannot parse '{val}' as degrees"),
+            );
+            0.0
+        });
 
         let normalized = ((degrees % 360.0 + 360.0) % 360.0).round() as i32;
 
@@ -1235,7 +1239,9 @@ impl NodeDef for AutorotateRiapiDef {
     }
 
     fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
-        Err(NodeError::Other("use from_kv() for RIAPI autorotate".into()))
+        Err(NodeError::Other(
+            "use from_kv() for RIAPI autorotate".into(),
+        ))
     }
 
     fn from_kv(
@@ -1316,9 +1322,15 @@ impl NodeInstance for FrameSelect {
             _ => false,
         }
     }
-    fn as_any(&self) -> &dyn core::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
-    fn clone_boxed(&self) -> Box<dyn NodeInstance> { Box::new(self.clone()) }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
 }
 
 pub struct FrameRiapiDef;
@@ -1330,10 +1342,7 @@ impl NodeDef for FrameRiapiDef {
     }
 
     fn create(&self, params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
-        let frame = params
-            .get("frame")
-            .and_then(|v| v.as_u32())
-            .unwrap_or(0);
+        let frame = params.get("frame").and_then(|v| v.as_u32()).unwrap_or(0);
         Ok(Box::new(FrameSelect { frame }))
     }
 
@@ -1413,14 +1422,22 @@ impl NodeDef for CropRiapiDef {
         // Parse "x1,y1,x2,y2" — four comma-separated floats.
         let parts: Vec<&str> = val.split(',').collect();
         if parts.len() != 4 {
-            kv.warn("crop", zennode::kv::KvWarningKind::InvalidValue,
-                &alloc::format!("crop requires 4 comma-separated values, got {}", parts.len()));
+            kv.warn(
+                "crop",
+                zennode::kv::KvWarningKind::InvalidValue,
+                &alloc::format!(
+                    "crop requires 4 comma-separated values, got {}",
+                    parts.len()
+                ),
+            );
             return Ok(None);
         }
 
         let parse_f = |s: &str, idx: usize| -> core::result::Result<f32, NodeError> {
             s.trim().parse::<f32>().map_err(|_| {
-                NodeError::Other(alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32").into())
+                NodeError::Other(
+                    alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32").into(),
+                )
             })
         };
 
@@ -1445,8 +1462,11 @@ impl NodeDef for CropRiapiDef {
         };
 
         if cropxunits == 0.0 || cropyunits == 0.0 {
-            kv.warn("crop", zennode::kv::KvWarningKind::InvalidValue,
-                "cropxunits and cropyunits must be non-zero");
+            kv.warn(
+                "crop",
+                zennode::kv::KvWarningKind::InvalidValue,
+                "cropxunits and cropyunits must be non-zero",
+            );
             return Ok(None);
         }
 

@@ -88,8 +88,7 @@ mod tests {
             255, 255, 255, 255,  // D: white
         ];
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt)
-            .with_strip_height(h);
+        let upstream = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(h);
 
         let mut flip = FlipHSource::new(Box::new(upstream));
         assert_eq!(flip.width(), w);

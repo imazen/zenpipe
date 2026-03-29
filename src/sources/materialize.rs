@@ -164,7 +164,7 @@ impl Source for MaterializedSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::{RGBA8_SRGB, RGB8_SRGB};
+    use crate::format::{RGB8_SRGB, RGBA8_SRGB};
 
     /// Helper: collect all rows from a Source into a flat Vec.
     fn drain_all_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
@@ -209,8 +209,7 @@ mod tests {
             }
         }
 
-        let mut src = MaterializedSource::from_data(data.clone(), w, h, fmt)
-            .with_strip_height(1); // one row per strip
+        let mut src = MaterializedSource::from_data(data.clone(), w, h, fmt).with_strip_height(1); // one row per strip
 
         let rows = drain_all_rows(&mut src);
         assert_eq!(rows.len(), h as usize);
@@ -251,8 +250,7 @@ mod tests {
         let stride = fmt.aligned_stride(w);
         let data = vec![0u8; stride * h as usize];
 
-        let mut src = MaterializedSource::from_data(data, w, h, fmt)
-            .with_strip_height(3);
+        let mut src = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(3);
 
         // Should get strips of 3, 3, 2 rows.
         let s1 = src.next().unwrap().unwrap();

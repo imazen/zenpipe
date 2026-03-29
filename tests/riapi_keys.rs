@@ -20,7 +20,10 @@ fn find_node<'a>(
     instances: &'a [Box<dyn NodeInstance>],
     schema_id: &str,
 ) -> Option<&'a dyn NodeInstance> {
-    instances.iter().find(|n| n.schema().id == schema_id).map(|n| n.as_ref())
+    instances
+        .iter()
+        .find(|n| n.schema().id == schema_id)
+        .map(|n| n.as_ref())
 }
 
 fn get_str(node: &dyn NodeInstance, param: &str) -> Option<String> {
@@ -112,7 +115,10 @@ fn dpr_key_on_constrain() {
     // At least one should have consumed it
     let constrain_has = c.and_then(|c| get_f32(c, "zoom")).is_some();
     let qi_has = q.and_then(|q| get_f32(q, "dpr")).is_some();
-    assert!(constrain_has || qi_has, "dpr should be consumed by Constrain or QualityIntent");
+    assert!(
+        constrain_has || qi_has,
+        "dpr should be consumed by Constrain or QualityIntent"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -145,25 +151,37 @@ fn srotate_90() {
 #[test]
 fn flip_horizontal() {
     let r = parse("flip=h");
-    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "flip=h → FlipH");
+    assert!(
+        find_node(&r.instances, "zenlayout.flip_h").is_some(),
+        "flip=h → FlipH"
+    );
 }
 
 #[test]
 fn flip_vertical() {
     let r = parse("flip=v");
-    assert!(find_node(&r.instances, "zenlayout.flip_v").is_some(), "flip=v → FlipV");
+    assert!(
+        find_node(&r.instances, "zenlayout.flip_v").is_some(),
+        "flip=v → FlipV"
+    );
 }
 
 #[test]
 fn flip_both() {
     let r = parse("flip=both");
-    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_some(), "flip=both → Rotate180");
+    assert!(
+        find_node(&r.instances, "zenlayout.rotate_180").is_some(),
+        "flip=both → Rotate180"
+    );
 }
 
 #[test]
 fn sflip_alias() {
     let r = parse("sflip=x");
-    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "sflip=x → FlipH");
+    assert!(
+        find_node(&r.instances, "zenlayout.flip_h").is_some(),
+        "sflip=x → FlipH"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -203,7 +221,10 @@ fn rotate_0_no_node() {
 #[test]
 fn autorotate_true() {
     let r = parse("autorotate=true");
-    assert!(find_node(&r.instances, "zenlayout.orient").is_some(), "autorotate=true → Orient");
+    assert!(
+        find_node(&r.instances, "zenlayout.orient").is_some(),
+        "autorotate=true → Orient"
+    );
 }
 
 #[test]
@@ -211,7 +232,9 @@ fn autorotate_false_no_node() {
     let r = parse("autorotate=false");
     // autorotate=false should not produce an orient node from the adapter
     // (the derive-based Orient node may still match srotate, but not autorotate)
-    let from_adapter: Vec<_> = r.instances.iter()
+    let from_adapter: Vec<_> = r
+        .instances
+        .iter()
         .filter(|n| n.schema().id == "zenpipe.riapi.autorotate")
         .collect();
     assert!(from_adapter.is_empty());
@@ -397,8 +420,10 @@ fn jpeg_progressive() {
     let j = find_node(&r.instances, "zenjpeg.encode").expect("JPEG encode node");
     let mode = get_str(j, "scan_mode");
     // progressive=true should map to scan_mode or similar
-    assert!(mode.is_some() || get_bool(j, "progressive").is_some(),
-        "jpeg.progressive should be consumed");
+    assert!(
+        mode.is_some() || get_bool(j, "progressive").is_some(),
+        "jpeg.progressive should be consumed"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -460,7 +485,9 @@ fn matte_color() {
 #[test]
 fn common_query_no_warnings() {
     let r = parse("w=800&h=600&mode=crop&format=webp&qp=high");
-    let unconsumed: Vec<_> = r.warnings.iter()
+    let unconsumed: Vec<_> = r
+        .warnings
+        .iter()
         .filter(|w| matches!(w.kind, zennode::kv::KvWarningKind::UnrecognizedKey))
         .collect();
     assert!(
@@ -472,7 +499,9 @@ fn common_query_no_warnings() {
 #[test]
 fn resize_with_filter_no_warnings() {
     let r = parse("w=400&down.filter=lanczos&f.sharpen=15");
-    let unconsumed: Vec<_> = r.warnings.iter()
+    let unconsumed: Vec<_> = r
+        .warnings
+        .iter()
         .filter(|w| matches!(w.kind, zennode::kv::KvWarningKind::UnrecognizedKey))
         .collect();
     assert!(
@@ -495,7 +524,9 @@ fn typical_thumbnail_query() {
 
 #[test]
 fn complex_query() {
-    let r = parse("w=1200&h=900&mode=pad&bgcolor=f0f0f0&down.filter=lanczos&f.sharpen=10&format=webp&qp=high&accept.webp=true&accept.avif=true");
+    let r = parse(
+        "w=1200&h=900&mode=pad&bgcolor=f0f0f0&down.filter=lanczos&f.sharpen=10&format=webp&qp=high&accept.webp=true&accept.avif=true",
+    );
     let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain");
     assert_eq!(get_u32(c, "w"), Some(1200));
     assert_eq!(get_str(c, "mode").as_deref(), Some("pad"));

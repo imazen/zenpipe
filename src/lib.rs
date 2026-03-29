@@ -46,6 +46,9 @@ mod node_registry;
 pub use node_registry::full_registry;
 
 #[cfg(feature = "zennode")]
+pub mod srcset;
+
+#[cfg(feature = "zennode")]
 pub mod zennode_defs;
 
 // Re-export bridge config types at crate root for convenience.
@@ -59,7 +62,6 @@ pub use bridge::{OptimizationLevel, canonical_sort, optimize_node_order};
 // Re-export orchestration types.
 #[cfg(feature = "zennode")]
 pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
-
 
 pub mod animation;
 pub mod codec;

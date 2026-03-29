@@ -356,8 +356,7 @@ impl<'a> ImageJob<'a> {
                 let format: PixelFormat = pixels.descriptor();
 
                 let data = pixels.as_strided_bytes().to_vec();
-                let source =
-                    crate::sources::MaterializedSource::from_data(data, w, h, format);
+                let source = crate::sources::MaterializedSource::from_data(data, w, h, format);
                 Ok(Box::new(source))
             }
         }
@@ -433,8 +432,8 @@ impl<'a> ImageJob<'a> {
             let remove_alpha_format = crate::format::RGB8_SRGB;
             // Use RemoveAlpha via TransformSource: composite onto matte, drop alpha
             if let Some(converter) = crate::ops::RowConverterOp::new(format, remove_alpha_format) {
-                let transform = crate::sources::TransformSource::new(source)
-                    .push_boxed(Box::new(converter));
+                let transform =
+                    crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
                 source = Box::new(transform);
             }
             let _ = matte; // TODO: use matte color when RemoveAlpha supports it
@@ -515,7 +514,8 @@ fn ensure_srgb_rgba8(source: Box<dyn Source>) -> Result<Box<dyn Source>, PipeErr
         return Ok(source);
     }
     if let Some(converter) = crate::ops::RowConverterOp::new(src_format, target) {
-        let transform = crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
+        let transform =
+            crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
         Ok(Box::new(transform))
     } else {
         Ok(source)
@@ -600,9 +600,7 @@ mod tests {
     #[test]
     fn builder_overwrite_io_slot() {
         // Adding input then output to the same io_id should overwrite.
-        let job = ImageJob::new()
-            .add_input(0, vec![1, 2, 3])
-            .add_output(0);
+        let job = ImageJob::new().add_input(0, vec![1, 2, 3]).add_output(0);
         assert!(matches!(job.io[&0], IoSlot::Output));
     }
 
@@ -654,10 +652,7 @@ mod tests {
     #[test]
     fn run_with_output_slot_as_decode_input_returns_error() {
         // decode_io_id=0 points to an Output slot, not Input.
-        let result = ImageJob::new()
-            .add_output(0)
-            .add_output(1)
-            .run();
+        let result = ImageJob::new().add_output(0).add_output(1).run();
         assert!(result.is_err());
         let err = result.unwrap_err();
         let msg = alloc::format!("{err}");

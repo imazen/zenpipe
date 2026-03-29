@@ -343,11 +343,10 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         (Some(x), Some(y)) => Some((x, y)),
         (Some(x), None) => Some((x, 0.5)),
         (None, Some(y)) => Some((0.5, y)),
-        (None, None) => {
-            node.get_param("gravity")
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .and_then(|s| parse_gravity_anchor(&s))
-        }
+        (None, None) => node
+            .get_param("gravity")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .and_then(|s| parse_gravity_anchor(&s)),
     };
     let canvas_color = node
         .get_param("canvas_color")
@@ -771,7 +770,9 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, P
 
 // ─── Linear/sRGB conversion helpers for gamma-correct blending ───
 
-use linear_srgb::default::{linear_to_srgb_u8 as linear_to_srgb_byte, srgb_u8_to_linear as srgb_byte_to_linear};
+use linear_srgb::default::{
+    linear_to_srgb_u8 as linear_to_srgb_byte, srgb_u8_to_linear as srgb_byte_to_linear,
+};
 
 /// Convert a `zenresize.resize` node to `NodeOp::Resize`.
 pub(crate) fn convert_resize(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {

@@ -377,6 +377,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     static CROP_SCHEMA: NodeSchema = NodeSchema {
@@ -402,6 +403,7 @@ mod tests {
         compat_version: 1,
         json_key: "",
         deny_unknown_fields: false,
+        inputs: &[],
     };
 
     impl MockNode {

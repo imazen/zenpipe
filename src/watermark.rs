@@ -58,12 +58,7 @@ pub enum FitBox {
     },
     /// Percentage-based region of the canvas.
     /// Values are 0-100 percentages: (x1%, y1%, x2%, y2%).
-    Percentage {
-        x1: f32,
-        y1: f32,
-        x2: f32,
-        y2: f32,
-    },
+    Percentage { x1: f32, y1: f32, x2: f32, y2: f32 },
 }
 
 impl Default for FitBox {
@@ -172,11 +167,7 @@ impl WatermarkLayout {
 
 // ─── Bounding box computation ───
 
-fn compute_bounding_box(
-    w: u32,
-    h: u32,
-    fit_box: &FitBox,
-) -> Option<(i32, i32, i32, i32)> {
+fn compute_bounding_box(w: u32, h: u32, fit_box: &FitBox) -> Option<(i32, i32, i32, i32)> {
     match fit_box {
         FitBox::FullCanvas => Some((0, 0, w as i32, h as i32)),
         FitBox::Margins {
