@@ -1,0 +1,74 @@
+name: Film Look Gallery
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/filters/film_looks.rs'
+      - 'examples/film_look_gallery.rs'
+      - 'site/**'
+      - '.github/workflows/gallery.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-gallery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build gallery tool
+        run: cargo build --release --features experimental --example film_look_gallery
+
+      - name: Download sample images
+        run: |
+          mkdir -p /tmp/clic-samples
+          # CLIC 2025 professional validation set (publicly available)
+          # Using a small curated subset for the gallery
+          URLS=(
+            "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/46015ab1f51bbca0cdc97d9d58fcee23.png"
+            "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/a2aa38c9f3c17f6821c0fa39a3ae2cf3.png"
+            "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/c4e0db22bbd31f35c4bfcdbf17a2bfe5.png"
+            "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/d3f6dad0f7e5f54e476ed9e6c5fef74b.png"
+            "https://data.vision.ee.ethz.ch/cvl/clic/professional_valid/f4df3d2ed2d81e09f119b1478eb0c038.png"
+          )
+          for url in "${URLS[@]}"; do
+            name=$(basename "$url")
+            echo "Downloading $name..."
+            curl -sL "$url" -o "/tmp/clic-samples/$name" || echo "Failed: $url"
+          done
+          ls -la /tmp/clic-samples/
+
+      - name: Generate gallery
+        run: |
+          mkdir -p _site/gallery
+          ./target/release/examples/film_look_gallery /tmp/clic-samples _site/gallery
+
+      - name: Copy site files
+        run: cp site/index.html _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build-gallery
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

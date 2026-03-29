@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zenfilters Film Look Gallery</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; color: #eee; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+#viewer { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+#img-container { position: relative; max-width: 90vw; max-height: 85vh; }
+#img-container img { max-width: 90vw; max-height: 85vh; object-fit: contain; display: block; }
+#img-a, #img-b { position: absolute; top: 0; left: 0; }
+#img-b { opacity: 0; transition: opacity 0.15s; }
+#img-b.visible { opacity: 1; }
+
+#hud {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.85); padding: 12px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 14px; z-index: 10;
+}
+#hud .preset-name { font-size: 18px; font-weight: 600; }
+#hud .image-name { color: #888; }
+#hud .controls { color: #666; font-size: 12px; }
+#hud .state { color: #aaa; }
+#hud .showing { color: #4af; font-weight: 600; }
+
+#preset-list {
+  position: fixed; left: 0; top: 0; bottom: 50px;
+  width: 220px; background: rgba(0,0,0,0.9);
+  overflow-y: auto; padding: 10px 0; z-index: 5;
+  transform: translateX(-100%); transition: transform 0.2s;
+}
+#preset-list.open { transform: translateX(0); }
+#preset-list .item {
+  padding: 6px 16px; cursor: pointer; font-size: 13px; color: #aaa;
+}
+#preset-list .item:hover { background: #222; color: #eee; }
+#preset-list .item.active { color: #4af; background: #1a2a3a; }
+#preset-list .category { padding: 8px 16px 4px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+
+.loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #666; }
+</style>
+</head>
+<body>
+
+<div id="viewer">
+  <div id="img-container">
+    <img id="img-a" alt="">
+    <img id="img-b" alt="">
+  </div>
+</div>
+
+<div id="preset-list"></div>
+
+<div id="hud">
+  <div>
+    <span class="preset-name" id="preset-label">Original</span>
+    <span class="state" id="state-label"></span>
+  </div>
+  <div class="image-name" id="image-label"></div>
+  <div class="controls">
+    Left/Right: A/B compare &middot; Up/Down: switch photo &middot; Tab: preset list &middot; 1-9: preset
+  </div>
+</div>
+
+<div class="loading" id="loading">Loading manifest...</div>
+
+<script>
+let manifest = null;
+let imageIdx = 0;
+let presetIdx = -1; // -1 = original
+let showingB = false;
+const imgA = document.getElementById('img-a');
+const imgB = document.getElementById('img-b');
+const presetLabel = document.getElementById('preset-label');
+const stateLabel = document.getElementById('state-label');
+const imageLabel = document.getElementById('image-label');
+const loading = document.getElementById('loading');
+const presetList = document.getElementById('preset-list');
+
+async function init() {
+  try {
+    const resp = await fetch('gallery/manifest.json');
+    manifest = await resp.json();
+  } catch {
+    loading.textContent = 'Failed to load manifest.json';
+    return;
+  }
+  loading.style.display = 'none';
+  buildPresetList();
+  updateView();
+}
+
+function buildPresetList() {
+  let html = '<div class="item active" data-idx="-1">Original</div>';
+  let lastCategory = '';
+  manifest.presets.forEach((p, i) => {
+    const cat = categorize(p.id);
+    if (cat !== lastCategory) {
+      html += `<div class="category">${cat}</div>`;
+      lastCategory = cat;
+    }
+    html += `<div class="item" data-idx="${i}">${p.name}</div>`;
+  });
+  presetList.innerHTML = html;
+  presetList.querySelectorAll('.item').forEach(el => {
+    el.addEventListener('click', () => {
+      presetIdx = parseInt(el.dataset.idx);
+      showingB = false;
+      updateView();
+    });
+  });
+}
+
+function categorize(id) {
+  const creative = ['bleach_bypass','cross_process','teal_orange','faded_film','golden_hour','noir','technicolor','matte'];
+  const negative = ['portra','kodak_gold','ektar','superia','pro_400h'];
+  const slide = ['velvia','provia','kodachrome','ektachrome'];
+  const cinema = ['print_2383','tungsten_500t'];
+  const digital = ['classic_chrome','classic_neg','cool_chrome'];
+  if (creative.includes(id)) return 'Creative';
+  if (negative.includes(id)) return 'Negative Film';
+  if (slide.includes(id)) return 'Slide Film';
+  if (cinema.includes(id)) return 'Cinema';
+  if (digital.includes(id)) return 'Digital';
+  return 'Cinematic Moods';
+}
+
+function imagePath(imgName, presetId) {
+  if (presetId === null) return `gallery/originals/${imgName}.jpg`;
+  return `gallery/presets/${presetId}/${imgName}.jpg`;
+}
+
+function updateView() {
+  if (!manifest) return;
+  const imgName = manifest.images[imageIdx];
+  const preset = presetIdx >= 0 ? manifest.presets[presetIdx] : null;
+
+  // A = original, B = preset (or vice versa when toggling)
+  const origPath = imagePath(imgName, null);
+  const presetPath = preset ? imagePath(imgName, preset.id) : origPath;
+
+  imgA.src = origPath;
+  imgB.src = presetPath;
+  imgB.classList.toggle('visible', showingB && preset !== null);
+
+  presetLabel.textContent = preset ? preset.name : 'Original';
+  stateLabel.textContent = preset ? (showingB ? ' (filtered)' : ' (original)') : '';
+  imageLabel.textContent = `${imgName} (${imageIdx + 1}/${manifest.images.length})`;
+
+  // Update active preset in list
+  presetList.querySelectorAll('.item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx) === presetIdx);
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!manifest) return;
+  switch (e.key) {
+    case 'ArrowLeft':
+      showingB = false;
+      updateView();
+      e.preventDefault();
+      break;
+    case 'ArrowRight':
+      showingB = true;
+      updateView();
+      e.preventDefault();
+      break;
+    case 'ArrowUp':
+      imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
+      updateView();
+      e.preventDefault();
+      break;
+    case 'ArrowDown':
+      imageIdx = (imageIdx + 1) % manifest.images.length;
+      updateView();
+      e.preventDefault();
+      break;
+    case 'Tab':
+      presetList.classList.toggle('open');
+      e.preventDefault();
+      break;
+    case 'Escape':
+      presetList.classList.remove('open');
+      break;
+    case 'PageUp':
+      presetIdx = Math.max(-1, presetIdx - 1);
+      showingB = presetIdx >= 0;
+      updateView();
+      e.preventDefault();
+      break;
+    case 'PageDown':
+      presetIdx = Math.min(manifest.presets.length - 1, presetIdx + 1);
+      showingB = presetIdx >= 0;
+      updateView();
+      e.preventDefault();
+      break;
+    default:
+      // 1-9 = quick preset select
+      if (e.key >= '1' && e.key <= '9') {
+        const idx = parseInt(e.key) - 1;
+        if (idx < manifest.presets.length) {
+          presetIdx = idx;
+          showingB = true;
+          updateView();
+        }
+      }
+      // 0 = original
+      if (e.key === '0') {
+        presetIdx = -1;
+        showingB = false;
+        updateView();
+      }
+  }
+});
+
+init();
+</script>
+</body>
+</html>
