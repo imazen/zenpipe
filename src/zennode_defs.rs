@@ -604,13 +604,22 @@ pub struct QualityIntentNode {
     #[kv("qp")]
     pub profile: String,
 
+    /// Legacy quality fallback (0-100). Used when `qp` is not set.
+    ///
+    /// RIAPI: `?quality=85` — sets a numeric quality as fallback for all codecs.
+    /// Prefer `qp` (quality profile) for new code.
+    #[param(range(0.0..=100.0), default = 0.0, step = 1.0)]
+    #[param(section = "Main", label = "Quality (legacy)")]
+    #[kv("quality")]
+    pub quality_fallback: Option<f32>,
+
     /// Explicit output format. Empty = auto-select from allowed formats.
     ///
     /// Values: "jpeg", "png", "webp", "gif", "avif", "jxl", "keep", or "".
-    /// "keep" preserves the source format.
+    /// "keep" preserves the source format. "thumbnail" is an alias for the key.
     #[param(default = "")]
     #[param(section = "Main", label = "Output Format")]
-    #[kv("format")]
+    #[kv("format", "thumbnail")]
     pub format: String,
 
     /// Device pixel ratio for quality adjustment.
@@ -659,6 +668,7 @@ impl Default for QualityIntentNode {
     fn default() -> Self {
         Self {
             profile: String::from("high"),
+            quality_fallback: None,
             format: String::new(),
             dpr: 1.0,
             lossless: String::new(),
@@ -696,7 +706,7 @@ impl QualityIntentNode {
         CodecIntent {
             format,
             quality_profile,
-            quality_fallback: None,
+            quality_fallback: self.quality_fallback,
             quality_dpr,
             lossless,
             allowed,
