@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#111111">
 <title>zenfilters Film Look Gallery</title>
 <style>
@@ -14,166 +13,129 @@ body {
   background: #111; color: #eee;
   font-family: system-ui, -apple-system, sans-serif;
   -webkit-user-select: none; user-select: none;
-  touch-action: none;
   display: flex; flex-direction: column;
 }
 
-/* ── Image area ── */
-#viewer {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  overflow: hidden; position: relative;
+/* ── Filter header (big name at top) ── */
+#filter-header {
+  background: #0a0a0a; text-align: center;
+  padding: 10px 12px 4px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0));
 }
-#img-container {
-  position: relative;
+#filter-name { font-size: 22px; font-weight: 700; }
+
+/* ── Top bar: photo nav + A/B ── */
+#top-bar {
   display: flex; align-items: center; justify-content: center;
+  padding: 4px 12px 6px; gap: 8px; background: #0a0a0a;
 }
-#img-a, #img-b {
-  max-width: 96vw;
-  max-height: calc(100dvh - 220px);
-  object-fit: contain;
-  display: block;
+#top-bar button {
+  background: #222; border: none; color: #aaa; padding: 8px 16px;
+  border-radius: 6px; font-size: 14px; cursor: pointer;
+  min-height: 36px; -webkit-tap-highlight-color: transparent;
 }
-#img-b {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0; transition: opacity 0.15s;
-}
-#img-b.visible { opacity: 1; }
+#top-bar button:active { background: #444; }
+#top-bar .photo-label { color: #888; font-size: 13px; min-width: 60px; text-align: center; }
 
-/* ── Info bar ── */
-#info {
-  background: rgba(0,0,0,0.85);
-  padding: 8px 16px;
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 14px; min-height: 36px;
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+/* ── Main area: prev-filter | image | next-filter ── */
+#main {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; position: relative; min-height: 0;
 }
-#info .preset-name { font-weight: 600; }
-#info .state { color: #888; margin-left: 6px; font-size: 12px; }
-#info .image-name { color: #666; font-size: 12px; }
+.side-btn {
+  background: none; border: none; color: #555; font-size: 28px;
+  padding: 16px 10px; cursor: pointer; z-index: 2;
+  min-width: 44px; min-height: 80px;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent; flex-shrink: 0;
+}
+.side-btn:hover { color: #aaa; }
+.side-btn:active { color: #fff; }
 
-/* ── Nav buttons ── */
-#nav-buttons {
-  background: #000;
-  display: flex; justify-content: center; align-items: center;
-  padding: 6px 8px; gap: 6px;
+#img-wrap {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 0; overflow: hidden;
 }
-#nav-buttons button {
-  background: #1a1a1a; border: 1px solid #333; color: #ccc;
-  padding: 8px 16px; border-radius: 8px;
-  font-size: 13px; font-weight: 500;
-  cursor: pointer; min-height: 40px;
-  -webkit-tap-highlight-color: transparent;
+#the-image {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block;
 }
-#nav-buttons button:hover { background: #2a2a2a; }
-#nav-buttons button:active { background: #444; }
-#nav-buttons button.active { background: #1a3a5a; color: #4af; border-color: #4af; }
 
-/* ── Per-filter buttons ── */
-#filter-buttons {
-  background: #0a0a0a;
+/* ── A/B toggle (in top bar) ── */
+#ab-toggle {
+  background: #222; border: 1px solid #333; color: #aaa;
+  padding: 6px 14px; border-radius: 6px; font-size: 12px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  margin-left: auto;
+}
+#ab-toggle:active { background: #444; }
+#ab-toggle.showing-original { background: #1a3a5a; color: #4af; border-color: #4af; }
+
+/* ── Filter button grid ── */
+#filter-grid {
   display: flex; flex-wrap: wrap; justify-content: center;
-  padding: 6px 4px;
+  padding: 6px 6px; gap: 4px; background: #080808;
+  overflow-y: auto; max-height: 28dvh;
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0));
-  gap: 4px; overflow-y: auto; max-height: 30dvh;
 }
-#filter-buttons button {
-  background: #1a1a1a; border: 1px solid #282828; color: #999;
-  padding: 6px 10px; border-radius: 6px;
-  font-size: 11px; cursor: pointer; white-space: nowrap;
+#filter-grid button {
+  background: #1a1a1a; border: 1px solid #252525; color: #888;
+  padding: 5px 9px; border-radius: 5px; font-size: 11px;
+  cursor: pointer; white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
-#filter-buttons button:hover { background: #2a2a2a; color: #ccc; }
-#filter-buttons button:active { background: #444; }
-#filter-buttons button.active { background: #1a3a5a; color: #4af; border-color: #4af; }
-
-/* ── Preset drawer ── */
-#drawer-backdrop {
-  position: fixed; inset: 0; z-index: 20;
-  background: rgba(0,0,0,0.5);
-  display: none;
-}
-#drawer-backdrop.open { display: block; }
-#preset-list {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 25;
-  width: 280px; max-width: 85vw;
-  background: #181818;
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: 12px 0;
-  padding-top: calc(12px + env(safe-area-inset-top, 0));
-  transform: translateX(-100%); transition: transform 0.2s ease;
-}
-#preset-list.open { transform: translateX(0); }
-#preset-list .item {
-  padding: 12px 18px; cursor: pointer; font-size: 15px; color: #aaa;
-  min-height: 44px; display: flex; align-items: center;
-  -webkit-tap-highlight-color: transparent;
-}
-#preset-list .item:active { background: #333; }
-#preset-list .item.active { color: #4af; background: #1a2a3a; }
-#preset-list .category {
-  padding: 14px 18px 6px; font-size: 11px; color: #555;
-  text-transform: uppercase; letter-spacing: 1px;
-}
+#filter-grid button:hover { background: #2a2a2a; color: #ccc; }
+#filter-grid button:active { background: #444; }
+#filter-grid button.active { background: #1a3a5a; color: #4af; border-color: #4af; }
 
 .loading {
   position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%,-50%); color: #666; font-size: 15px;
-}
-
-/* Desktop: also show keyboard hint */
-@media (hover: hover) and (pointer: fine) {
-  #info::after {
-    content: 'Keys: Left/Right A/B \00b7  Up/Down photo \00b7  PgUp/Dn preset';
-    color: #444; font-size: 11px; margin-left: 12px;
-  }
+  transform: translate(-50%,-50%); color: #666;
 }
 </style>
 </head>
 <body>
 
-<div id="viewer">
-  <div id="img-container">
-    <img id="img-a" alt="">
-    <img id="img-b" alt="">
+<!-- Active filter name (big, top of page) -->
+<div id="filter-header">
+  <span id="filter-name">Original</span>
+</div>
+
+<!-- Photo navigation -->
+<div id="top-bar">
+  <button id="btn-prev-photo">&#9650; Prev</button>
+  <span class="photo-label" id="photo-label">1 / 1</span>
+  <button id="btn-next-photo">Next &#9660;</button>
+  <button id="ab-toggle">Show Original</button>
+</div>
+
+<!-- Image with side arrows for filter switching -->
+<div id="main">
+  <button class="side-btn" id="btn-prev-filter">&#9664;</button>
+  <div id="img-wrap">
+    <img id="the-image" alt="">
   </div>
+  <button class="side-btn" id="btn-next-filter">&#9654;</button>
 </div>
 
-<div id="info">
-  <div>
-    <span class="preset-name" id="preset-label">Original</span>
-    <span class="state" id="state-label"></span>
-  </div>
-  <div class="image-name" id="image-label"></div>
-</div>
 
-<div id="nav-buttons">
-  <button id="btn-prev">Prev Photo</button>
-  <button id="btn-toggle">A / B</button>
-  <button id="btn-next">Next Photo</button>
-</div>
-
-<div id="filter-buttons"></div>
-
-<div id="drawer-backdrop"></div>
-<div id="preset-list"></div>
+<!-- All filter buttons -->
+<div id="filter-grid"></div>
 
 <div class="loading" id="loading">Loading...</div>
 
 <script>
 let manifest = null;
 let imageIdx = 0;
-let presetIdx = -1;
-let showingB = false;
+let presetIdx = -1; // -1 = original
+let showOriginal = false; // temporarily show original via A/B
 
-const imgA = document.getElementById('img-a');
-const imgB = document.getElementById('img-b');
-const presetLabel = document.getElementById('preset-label');
-const stateLabel = document.getElementById('state-label');
-const imageLabel = document.getElementById('image-label');
+const img = document.getElementById('the-image');
+const filterName = document.getElementById('filter-name');
+const photoLabel = document.getElementById('photo-label');
+const abToggle = document.getElementById('ab-toggle');
+const filterGrid = document.getElementById('filter-grid');
 const loading = document.getElementById('loading');
-const presetListEl = document.getElementById('preset-list');
-const backdrop = document.getElementById('drawer-backdrop');
 
 async function init() {
   try {
@@ -184,58 +146,24 @@ async function init() {
     return;
   }
   loading.style.display = 'none';
-  buildPresetList();
+  buildFilterGrid();
+  setupControls();
   updateView();
-  setupTouch();
-  setupButtons();
 }
 
-function buildPresetList() {
-  // Drawer list
-  let html = '<div class="item active" data-idx="-1">Original</div>';
-  let lastCat = '';
+function buildFilterGrid() {
+  let html = '<button class="active" data-idx="-1">Original</button>';
   manifest.presets.forEach((p, i) => {
-    const cat = categorize(p.id);
-    if (cat !== lastCat) { html += `<div class="category">${cat}</div>`; lastCat = cat; }
-    html += `<div class="item" data-idx="${i}">${p.name}</div>`;
+    html += `<button data-idx="${i}">${p.name}</button>`;
   });
-  presetListEl.innerHTML = html;
-  presetListEl.querySelectorAll('.item').forEach(el => {
+  filterGrid.innerHTML = html;
+  filterGrid.querySelectorAll('button').forEach(el => {
     el.addEventListener('click', () => {
       presetIdx = parseInt(el.dataset.idx);
-      showingB = presetIdx >= 0;
-      updateView(); closeDrawer();
-    });
-  });
-
-  // Per-filter button grid
-  const grid = document.getElementById('filter-buttons');
-  let btns = '<button class="active" data-idx="-1">Original</button>';
-  manifest.presets.forEach((p, i) => {
-    btns += `<button data-idx="${i}">${p.name}</button>`;
-  });
-  grid.innerHTML = btns;
-  grid.querySelectorAll('button').forEach(el => {
-    el.addEventListener('click', () => {
-      presetIdx = parseInt(el.dataset.idx);
-      showingB = presetIdx >= 0;
+      showOriginal = false;
       updateView();
     });
   });
-}
-
-function categorize(id) {
-  const m = {
-    bleach_bypass:'Creative', cross_process:'Creative', teal_orange:'Creative',
-    faded_film:'Creative', golden_hour:'Creative', noir:'Creative',
-    technicolor:'Creative', matte:'Creative',
-    portra:'Negative Film', kodak_gold:'Negative Film', ektar:'Negative Film',
-    superia:'Negative Film', pro_400h:'Negative Film',
-    velvia:'Slide Film', provia:'Slide Film', kodachrome:'Slide Film', ektachrome:'Slide Film',
-    print_2383:'Cinema', tungsten_500t:'Cinema',
-    classic_chrome:'Digital', classic_neg:'Digital', cool_chrome:'Digital',
-  };
-  return m[id] || 'Cinematic Moods';
 }
 
 function imagePath(name, pid) {
@@ -246,92 +174,110 @@ function updateView() {
   if (!manifest) return;
   const name = manifest.images[imageIdx];
   const preset = presetIdx >= 0 ? manifest.presets[presetIdx] : null;
-  imgA.src = imagePath(name, null);
-  imgB.src = preset ? imagePath(name, preset.id) : imagePath(name, null);
-  imgB.classList.toggle('visible', showingB && preset !== null);
-  presetLabel.textContent = preset ? preset.name : 'Original';
-  stateLabel.textContent = preset ? (showingB ? '(filtered)' : '(original)') : '';
-  imageLabel.textContent = `${imageIdx + 1} / ${manifest.images.length}`;
-  document.getElementById('btn-toggle').classList.toggle('active', showingB && preset !== null);
-  presetListEl.querySelectorAll('.item').forEach(el => {
-    el.classList.toggle('active', parseInt(el.dataset.idx) === presetIdx);
-  });
-  document.getElementById('filter-buttons').querySelectorAll('button').forEach(el => {
+
+  // Show original if A/B toggled or no preset selected
+  if (showOriginal || !preset) {
+    img.src = imagePath(name, null);
+    filterName.textContent = preset ? `${preset.name} (original)` : 'Original';
+  } else {
+    img.src = imagePath(name, preset.id);
+    filterName.textContent = preset.name;
+  }
+
+  photoLabel.textContent = `${imageIdx + 1} / ${manifest.images.length}`;
+
+  // A/B button state
+  abToggle.textContent = showOriginal ? 'Show Filtered' : 'Show Original';
+  abToggle.classList.toggle('showing-original', showOriginal);
+  if (!preset) {
+    abToggle.textContent = 'Select a filter';
+    abToggle.classList.remove('showing-original');
+  }
+
+  // Highlight active filter button
+  filterGrid.querySelectorAll('button').forEach(el => {
     el.classList.toggle('active', parseInt(el.dataset.idx) === presetIdx);
   });
 }
 
-function openDrawer() { presetListEl.classList.add('open'); backdrop.classList.add('open'); }
-function closeDrawer() { presetListEl.classList.remove('open'); backdrop.classList.remove('open'); }
-backdrop.addEventListener('click', closeDrawer);
-
-function setupButtons() {
-  document.getElementById('btn-prev').addEventListener('click', () => {
-    if (!manifest) return;
-    imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
-    updateView();
-  });
-  document.getElementById('btn-next').addEventListener('click', () => {
-    if (!manifest) return;
-    imageIdx = (imageIdx + 1) % manifest.images.length;
-    updateView();
-  });
-  document.getElementById('btn-toggle').addEventListener('click', () => {
-    showingB = !showingB; updateView();
-  });
+function prevFilter() {
+  if (!manifest) return;
+  presetIdx = presetIdx <= -1 ? manifest.presets.length - 1 : presetIdx - 1;
+  showOriginal = false;
+  updateView();
 }
 
-function setupTouch() {
+function nextFilter() {
+  if (!manifest) return;
+  presetIdx = presetIdx >= manifest.presets.length - 1 ? -1 : presetIdx + 1;
+  showOriginal = false;
+  updateView();
+}
+
+function prevPhoto() {
+  if (!manifest) return;
+  imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
+  showOriginal = false;
+  updateView();
+}
+
+function nextPhoto() {
+  if (!manifest) return;
+  imageIdx = (imageIdx + 1) % manifest.images.length;
+  showOriginal = false;
+  updateView();
+}
+
+function toggleAB() {
+  if (presetIdx < 0) return; // no filter selected
+  showOriginal = !showOriginal;
+  updateView();
+}
+
+function setupControls() {
+  document.getElementById('btn-prev-photo').addEventListener('click', prevPhoto);
+  document.getElementById('btn-next-photo').addEventListener('click', nextPhoto);
+  document.getElementById('btn-prev-filter').addEventListener('click', prevFilter);
+  document.getElementById('btn-next-filter').addEventListener('click', nextFilter);
+  abToggle.addEventListener('click', toggleAB);
+
+  // Tap image = A/B toggle
+  img.addEventListener('click', toggleAB);
+
+  // Touch: swipe left/right = filter, up/down = photo
   let sx = 0, sy = 0;
-  const v = document.getElementById('viewer');
-  v.addEventListener('touchstart', e => {
+  const main = document.getElementById('main');
+  main.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) return;
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
   }, { passive: true });
-  v.addEventListener('touchend', e => {
-    if (!manifest) return;
+  main.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
     const ax = Math.abs(dx), ay = Math.abs(dy);
-    if (ax < 10 && ay < 10) { showingB = !showingB; updateView(); return; }
-    if (ax > ay && ax > 30) { showingB = dx < 0; updateView(); }
-    else if (ay > ax && ay > 30) {
-      imageIdx = dy < 0
-        ? (imageIdx + 1) % manifest.images.length
-        : (imageIdx - 1 + manifest.images.length) % manifest.images.length;
-      updateView();
-    }
+    if (ax < 15 && ay < 15) return; // tap handled by click
+    if (ax > ay && ax > 30) { dx < 0 ? nextFilter() : prevFilter(); }
+    else if (ay > ax && ay > 30) { dy < 0 ? nextPhoto() : prevPhoto(); }
   }, { passive: true });
-}
 
-document.addEventListener('keydown', e => {
-  if (!manifest) return;
-  switch (e.key) {
-    case 'ArrowLeft':  showingB = false; updateView(); e.preventDefault(); break;
-    case 'ArrowRight': showingB = true;  updateView(); e.preventDefault(); break;
-    case 'ArrowUp':
-      imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
-      updateView(); e.preventDefault(); break;
-    case 'ArrowDown':
-      imageIdx = (imageIdx + 1) % manifest.images.length;
-      updateView(); e.preventDefault(); break;
-    case 'Tab': e.preventDefault();
-      presetListEl.classList.contains('open') ? closeDrawer() : openDrawer(); break;
-    case 'Escape': closeDrawer(); break;
-    case 'PageUp':
-      presetIdx = Math.max(-1, presetIdx - 1);
-      showingB = presetIdx >= 0; updateView(); e.preventDefault(); break;
-    case 'PageDown':
-      presetIdx = Math.min(manifest.presets.length - 1, presetIdx + 1);
-      showingB = presetIdx >= 0; updateView(); e.preventDefault(); break;
-    default:
-      if (e.key >= '1' && e.key <= '9') {
-        const i = parseInt(e.key) - 1;
-        if (i < manifest.presets.length) { presetIdx = i; showingB = true; updateView(); }
-      }
-      if (e.key === '0') { presetIdx = -1; showingB = false; updateView(); }
-  }
-});
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (!manifest) return;
+    switch (e.key) {
+      case 'ArrowLeft': prevFilter(); e.preventDefault(); break;
+      case 'ArrowRight': nextFilter(); e.preventDefault(); break;
+      case 'ArrowUp': prevPhoto(); e.preventDefault(); break;
+      case 'ArrowDown': nextPhoto(); e.preventDefault(); break;
+      case ' ': toggleAB(); e.preventDefault(); break;
+      default:
+        if (e.key >= '0' && e.key <= '9') {
+          const i = parseInt(e.key) - 1; // 0 = original (-1)
+          if (i < manifest.presets.length) { presetIdx = i; showOriginal = false; updateView(); }
+          e.preventDefault();
+        }
+    }
+  });
+}
 
 init();
 </script>
