@@ -59,7 +59,9 @@ body {
 #the-image {
   max-width: 100%; max-height: 100%;
   object-fit: contain; display: block;
+  transition: opacity 0.3s ease;
 }
+#the-image.fading { opacity: 0; }
 
 /* ── A/B toggle (in top bar) ── */
 #ab-toggle {
@@ -183,7 +185,7 @@ function buildFilterGrid() {
     el.addEventListener('click', () => {
       presetIdx = parseInt(el.dataset.idx);
       showOriginal = false;
-      updateView();
+      updateView(true);
     });
   });
 }
@@ -192,23 +194,40 @@ function imagePath(name, pid) {
   return pid === null ? `gallery/originals/${name}.jpg` : `gallery/presets/${pid}/${name}.jpg`;
 }
 
-function updateView() {
+let fadeTimer = null;
+
+function updateView(animate) {
   if (!manifest) return;
   const name = manifest.images[imageIdx];
   const preset = presetIdx >= 0 ? manifest.presets[presetIdx] : null;
+  const targetSrc = (showOriginal || !preset)
+    ? imagePath(name, null)
+    : imagePath(name, preset.id);
+  const origSrc = imagePath(name, null);
 
-  // Show original if A/B toggled or no preset selected
-  if (showOriginal || !preset) {
-    img.src = imagePath(name, null);
-    filterName.textContent = preset ? `${preset.name} (original)` : 'Original';
+  if (animate && preset && !showOriginal && img.src !== origSrc) {
+    // Flash original, then crossfade to filtered
+    if (fadeTimer) clearTimeout(fadeTimer);
+    img.src = origSrc;
+    img.classList.remove('fading');
+    fadeTimer = setTimeout(() => {
+      img.classList.add('fading');
+      setTimeout(() => {
+        img.src = targetSrc;
+        img.classList.remove('fading');
+      }, 150);
+    }, 250);
   } else {
-    img.src = imagePath(name, preset.id);
-    filterName.textContent = preset.name;
+    if (fadeTimer) clearTimeout(fadeTimer);
+    img.src = targetSrc;
+    img.classList.remove('fading');
   }
 
+  filterName.textContent = preset
+    ? (showOriginal ? `${preset.name} (original)` : preset.name)
+    : 'Original';
   photoLabel.textContent = `${imageIdx + 1} / ${manifest.images.length}`;
 
-  // A/B button state
   abToggle.textContent = showOriginal ? 'Show Filtered' : 'Show Original';
   abToggle.classList.toggle('showing-original', showOriginal);
   if (!preset) {
@@ -216,7 +235,6 @@ function updateView() {
     abToggle.classList.remove('showing-original');
   }
 
-  // Highlight active filter button
   filterGrid.querySelectorAll('button').forEach(el => {
     el.classList.toggle('active', parseInt(el.dataset.idx) === presetIdx);
   });
@@ -226,34 +244,34 @@ function prevFilter() {
   if (!manifest) return;
   presetIdx = presetIdx <= -1 ? manifest.presets.length - 1 : presetIdx - 1;
   showOriginal = false;
-  updateView();
+  updateView(true);
 }
 
 function nextFilter() {
   if (!manifest) return;
   presetIdx = presetIdx >= manifest.presets.length - 1 ? -1 : presetIdx + 1;
   showOriginal = false;
-  updateView();
+  updateView(true);
 }
 
 function prevPhoto() {
   if (!manifest) return;
   imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
   showOriginal = false;
-  updateView();
+  updateView(true);
 }
 
 function nextPhoto() {
   if (!manifest) return;
   imageIdx = (imageIdx + 1) % manifest.images.length;
   showOriginal = false;
-  updateView();
+  updateView(true);
 }
 
 function toggleAB() {
-  if (presetIdx < 0) return; // no filter selected
+  if (presetIdx < 0) return;
   showOriginal = !showOriginal;
-  updateView();
+  updateView(false);
 }
 
 function setupControls() {
@@ -294,7 +312,7 @@ function setupControls() {
       default:
         if (e.key >= '0' && e.key <= '9') {
           const i = parseInt(e.key) - 1; // 0 = original (-1)
-          if (i < manifest.presets.length) { presetIdx = i; showOriginal = false; updateView(); }
+          if (i < manifest.presets.length) { presetIdx = i; showOriginal = false; updateView(true); }
           e.preventDefault();
         }
     }
