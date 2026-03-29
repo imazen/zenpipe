@@ -166,3 +166,110 @@ impl PixelOp for ScaleAlphaOp {
         format::RGBAF32_LINEAR_PREMUL
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::{RGBA8_SRGB, RGB8_SRGB, RGBAF32_LINEAR_PREMUL};
+
+    // ── RowConverterOp::new ─────────────────────────────────────────────
+
+    #[test]
+    fn row_converter_rgba8_to_rgb8_returns_some() {
+        let op = RowConverterOp::new(RGBA8_SRGB, RGB8_SRGB);
+        assert!(op.is_some(), "RGBA8 → RGB8 conversion should be supported");
+        let op = op.unwrap();
+        assert_eq!(op.input_format(), RGBA8_SRGB);
+        assert_eq!(op.output_format(), RGB8_SRGB);
+    }
+
+    #[test]
+    fn row_converter_same_format_returns_identity() {
+        // Same-to-same produces an identity RowConverter (ConvertStep::Identity),
+        // so RowConverterOp::new returns Some — not None.
+        let op = RowConverterOp::new(RGBA8_SRGB, RGBA8_SRGB);
+        assert!(op.is_some(), "same-format conversion yields identity op");
+        let op = op.unwrap();
+        assert_eq!(op.input_format(), RGBA8_SRGB);
+        assert_eq!(op.output_format(), RGBA8_SRGB);
+    }
+
+    // ── RowConverterOp::must ────────────────────────────────────────────
+
+    #[test]
+    fn row_converter_must_does_not_panic_for_valid_conversion() {
+        let op = RowConverterOp::must(RGBA8_SRGB, RGB8_SRGB);
+        assert_eq!(op.input_format(), RGBA8_SRGB);
+        assert_eq!(op.output_format(), RGB8_SRGB);
+    }
+
+    // ── RowConverterOp::as_row_converter ────────────────────────────────
+
+    #[test]
+    fn row_converter_as_row_converter_returns_some() {
+        let op = RowConverterOp::must(RGBA8_SRGB, RGB8_SRGB);
+        assert!(op.as_row_converter().is_some());
+    }
+
+    // ── RowConverterOp::apply ───────────────────────────────────────────
+
+    #[test]
+    fn row_converter_apply_rgba8_to_rgb8_one_pixel() {
+        let mut op = RowConverterOp::must(RGBA8_SRGB, RGB8_SRGB);
+
+        // 1 pixel RGBA8: R=10, G=20, B=30, A=255
+        let input: [u8; 4] = [10, 20, 30, 255];
+        let mut output: [u8; 3] = [0; 3];
+
+        op.apply(&input, &mut output, 1, 1);
+
+        assert_eq!(output, [10, 20, 30], "RGB channels should be copied, alpha dropped");
+    }
+
+    // ── ScaleAlphaOp::new — clamping ────────────────────────────────────
+
+    #[test]
+    fn scale_alpha_clamps_opacity() {
+        let op_low = ScaleAlphaOp::new(-0.5);
+        assert_eq!(op_low.opacity, 0.0);
+
+        let op_high = ScaleAlphaOp::new(1.5);
+        assert_eq!(op_high.opacity, 1.0);
+
+        let op_mid = ScaleAlphaOp::new(0.75);
+        assert!((op_mid.opacity - 0.75).abs() < f32::EPSILON);
+    }
+
+    // ── ScaleAlphaOp format ─────────────────────────────────────────────
+
+    #[test]
+    fn scale_alpha_format_is_premul() {
+        let op = ScaleAlphaOp::new(0.5);
+        assert_eq!(op.input_format(), RGBAF32_LINEAR_PREMUL);
+        assert_eq!(op.output_format(), RGBAF32_LINEAR_PREMUL);
+    }
+
+    // ── ScaleAlphaOp::apply ─────────────────────────────────────────────
+
+    #[test]
+    fn scale_alpha_apply_one_pixel() {
+        let mut op = ScaleAlphaOp::new(0.5);
+
+        // 1 pixel RGBAF32_LINEAR_PREMUL: R=0.8, G=0.4, B=0.2, A=1.0
+        let pixel: [f32; 4] = [0.8, 0.4, 0.2, 1.0];
+        let input: &[u8] = bytemuck::cast_slice(&pixel);
+        let mut output_f32: [f32; 4] = [0.0; 4];
+        let output: &mut [u8] = bytemuck::cast_slice_mut(&mut output_f32);
+
+        op.apply(input, output, 1, 1);
+
+        let result: &[f32] = bytemuck::cast_slice(output);
+        let expected: [f32; 4] = [0.4, 0.2, 0.1, 0.5];
+        for (i, (&got, &exp)) in result.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < f32::EPSILON,
+                "channel {i}: expected {exp}, got {got}"
+            );
+        }
+    }
+}

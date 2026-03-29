@@ -529,3 +529,436 @@ pub fn get_io_bytes<'a>(io: &'a HashMap<i32, IoSlot>, io_id: i32) -> Option<&'a 
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Builder pattern ──
+
+    #[test]
+    fn builder_chaining_compiles_and_returns_self() {
+        // Every builder method should return Self, enabling method chaining.
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![];
+        let converters: Vec<&dyn crate::bridge::NodeConverter> = vec![];
+        let _job = ImageJob::new()
+            .add_input(0, vec![0u8; 4])
+            .add_input_ref(2, &[1, 2, 3])
+            .add_output(1)
+            .with_decode_io(0)
+            .with_encode_io(1)
+            .with_nodes(&nodes)
+            .with_converters(&converters)
+            .with_intent(zencodecs::CodecIntent::default())
+            .with_cms(CmsMode::None)
+            .with_limits(Limits::default())
+            .with_registry(zencodecs::AllowedFormats::all());
+        // If this compiles, chaining works.
+    }
+
+    #[test]
+    fn builder_defaults() {
+        let job = ImageJob::new();
+        assert_eq!(job.decode_io_id, 0);
+        assert_eq!(job.encode_io_id, 1);
+        assert!(job.io.is_empty());
+        assert!(job.nodes.is_empty());
+        assert!(job.converters.is_empty());
+        assert!(job.limits.is_none());
+        assert!(job.codec_config.is_none());
+        assert!(job.trace_config.is_none());
+    }
+
+    #[test]
+    fn builder_add_input_stores_data() {
+        let data = vec![10u8, 20, 30];
+        let job = ImageJob::new().add_input(5, data.clone());
+        assert!(job.io.contains_key(&5));
+        match &job.io[&5] {
+            IoSlot::Input(d) => assert_eq!(d, &data),
+            IoSlot::Output => panic!("expected Input"),
+        }
+    }
+
+    #[test]
+    fn builder_add_input_ref_clones_data() {
+        let data = [10u8, 20, 30];
+        let job = ImageJob::new().add_input_ref(3, &data);
+        match &job.io[&3] {
+            IoSlot::Input(d) => assert_eq!(d.as_slice(), &data),
+            IoSlot::Output => panic!("expected Input"),
+        }
+    }
+
+    #[test]
+    fn builder_add_output_stores_output_variant() {
+        let job = ImageJob::new().add_output(7);
+        assert!(job.io.contains_key(&7));
+        assert!(matches!(job.io[&7], IoSlot::Output));
+    }
+
+    #[test]
+    fn builder_overwrite_io_slot() {
+        // Adding input then output to the same io_id should overwrite.
+        let job = ImageJob::new()
+            .add_input(0, vec![1, 2, 3])
+            .add_output(0);
+        assert!(matches!(job.io[&0], IoSlot::Output));
+    }
+
+    // ── get_io_bytes ──
+
+    #[test]
+    fn get_io_bytes_returns_input_data() {
+        let mut io = HashMap::new();
+        io.insert(0, IoSlot::Input(vec![0xDE, 0xAD, 0xBE, 0xEF]));
+        let bytes = get_io_bytes(&io, 0);
+        assert_eq!(bytes, Some([0xDE, 0xAD, 0xBE, 0xEF].as_slice()));
+    }
+
+    #[test]
+    fn get_io_bytes_returns_none_for_output_slot() {
+        let mut io = HashMap::new();
+        io.insert(1, IoSlot::Output);
+        assert_eq!(get_io_bytes(&io, 1), None);
+    }
+
+    #[test]
+    fn get_io_bytes_returns_none_for_missing_key() {
+        let io: HashMap<i32, IoSlot> = HashMap::new();
+        assert_eq!(get_io_bytes(&io, 42), None);
+    }
+
+    #[test]
+    fn get_io_bytes_empty_input() {
+        let mut io = HashMap::new();
+        io.insert(0, IoSlot::Input(vec![]));
+        assert_eq!(get_io_bytes(&io, 0), Some([].as_slice()));
+    }
+
+    // ── Error paths ──
+
+    #[test]
+    fn run_with_no_input_returns_error() {
+        // No IO slots at all — run() should fail looking for decode_io_id=0.
+        let result = ImageJob::new().add_output(1).run();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = alloc::format!("{err}");
+        assert!(
+            msg.contains("no input data"),
+            "expected 'no input data' error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn run_with_output_slot_as_decode_input_returns_error() {
+        // decode_io_id=0 points to an Output slot, not Input.
+        let result = ImageJob::new()
+            .add_output(0)
+            .add_output(1)
+            .run();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = alloc::format!("{err}");
+        assert!(
+            msg.contains("no input data"),
+            "expected 'no input data' error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn run_with_invalid_image_data_returns_probe_error() {
+        // Valid Input slot but garbage data — probe should fail.
+        let result = ImageJob::new()
+            .add_input(0, vec![0, 0, 0, 0])
+            .add_output(1)
+            .run();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = alloc::format!("{err}");
+        assert!(
+            msg.contains("probe failed"),
+            "expected probe error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn run_with_custom_decode_io_id_missing_returns_error() {
+        // Set decode_io_id=5 but only have input at io_id=0.
+        let result = ImageJob::new()
+            .add_input(0, vec![1, 2, 3])
+            .add_output(1)
+            .with_decode_io(5)
+            .run();
+        assert!(result.is_err());
+        let msg = alloc::format!("{}", result.unwrap_err());
+        assert!(msg.contains("no input data for io_id 5"), "got: {msg}");
+    }
+
+    // ── CmsMode default ──
+
+    #[test]
+    fn cms_mode_default_is_srgb_compat() {
+        assert!(matches!(CmsMode::default(), CmsMode::SrgbCompat));
+    }
+
+    // ── IoSlot Clone ──
+
+    #[test]
+    fn io_slot_input_clone() {
+        let original = IoSlot::Input(vec![1, 2, 3, 4]);
+        let cloned = original.clone();
+        match (&original, &cloned) {
+            (IoSlot::Input(a), IoSlot::Input(b)) => assert_eq!(a, b),
+            _ => panic!("clone changed variant"),
+        }
+    }
+
+    #[test]
+    fn io_slot_output_clone() {
+        let original = IoSlot::Output;
+        let cloned = original.clone();
+        assert!(matches!(cloned, IoSlot::Output));
+    }
+
+    // ── Struct field access ──
+
+    #[test]
+    fn encode_result_fields() {
+        let er = EncodeResult {
+            io_id: 1,
+            bytes: vec![0xFF, 0xD8],
+            width: 100,
+            height: 200,
+            mime_type: String::from("image/jpeg"),
+            extension: String::from("jpg"),
+        };
+        assert_eq!(er.io_id, 1);
+        assert_eq!(er.bytes, vec![0xFF, 0xD8]);
+        assert_eq!(er.width, 100);
+        assert_eq!(er.height, 200);
+        assert_eq!(er.mime_type, "image/jpeg");
+        assert_eq!(er.extension, "jpg");
+    }
+
+    #[test]
+    fn encode_result_clone_and_debug() {
+        let er = EncodeResult {
+            io_id: 0,
+            bytes: vec![],
+            width: 1,
+            height: 1,
+            mime_type: String::new(),
+            extension: String::new(),
+        };
+        let cloned = er.clone();
+        assert_eq!(cloned.io_id, er.io_id);
+        // Debug should not panic.
+        let _ = alloc::format!("{:?}", er);
+    }
+
+    #[test]
+    fn decode_info_fields() {
+        let di = DecodeInfo {
+            io_id: 0,
+            width: 640,
+            height: 480,
+            format: zencodec::ImageFormat::Jpeg,
+            has_alpha: false,
+            has_animation: false,
+            mime_type: String::from("image/jpeg"),
+        };
+        assert_eq!(di.io_id, 0);
+        assert_eq!(di.width, 640);
+        assert_eq!(di.height, 480);
+        assert_eq!(di.format, zencodec::ImageFormat::Jpeg);
+        assert!(!di.has_alpha);
+        assert!(!di.has_animation);
+        assert_eq!(di.mime_type, "image/jpeg");
+    }
+
+    #[test]
+    fn decode_info_clone_and_debug() {
+        let di = DecodeInfo {
+            io_id: 0,
+            width: 1,
+            height: 1,
+            format: zencodec::ImageFormat::Png,
+            has_alpha: true,
+            has_animation: false,
+            mime_type: String::from("image/png"),
+        };
+        let cloned = di.clone();
+        assert_eq!(cloned.format, di.format);
+        let _ = alloc::format!("{:?}", di);
+    }
+
+    #[test]
+    fn job_result_fields() {
+        let jr = JobResult {
+            encode_results: vec![EncodeResult {
+                io_id: 1,
+                bytes: vec![1, 2, 3],
+                width: 10,
+                height: 10,
+                mime_type: String::from("image/png"),
+                extension: String::from("png"),
+            }],
+            decode_infos: vec![DecodeInfo {
+                io_id: 0,
+                width: 10,
+                height: 10,
+                format: zencodec::ImageFormat::Png,
+                has_alpha: false,
+                has_animation: false,
+                mime_type: String::from("image/png"),
+            }],
+        };
+        assert_eq!(jr.encode_results.len(), 1);
+        assert_eq!(jr.decode_infos.len(), 1);
+        assert_eq!(jr.encode_results[0].io_id, 1);
+        assert_eq!(jr.decode_infos[0].io_id, 0);
+    }
+
+    #[test]
+    fn job_result_clone_and_debug() {
+        let jr = JobResult {
+            encode_results: vec![],
+            decode_infos: vec![],
+        };
+        let cloned = jr.clone();
+        assert!(cloned.encode_results.is_empty());
+        let _ = alloc::format!("{:?}", jr);
+    }
+
+    // ── CmsMode variants ──
+
+    #[test]
+    fn cms_mode_copy() {
+        let mode = CmsMode::SceneReferred;
+        let copied = mode;
+        assert!(matches!(copied, CmsMode::SceneReferred));
+    }
+
+    #[test]
+    fn cms_mode_debug() {
+        let _ = alloc::format!("{:?}", CmsMode::SrgbCompat);
+        let _ = alloc::format!("{:?}", CmsMode::SceneReferred);
+        let _ = alloc::format!("{:?}", CmsMode::None);
+    }
+
+    // ── End-to-end with real JPEG ──
+
+    /// End-to-end tests requiring a real JPEG codec.
+    ///
+    /// Run with: `cargo test --features job,nodes-jpeg,zencodecs/jpeg --lib -- job::tests::e2e_jpeg`
+    ///
+    /// The `nodes-jpeg` feature enables zenjpeg for zenpipe, while `zencodecs/jpeg`
+    /// enables the JPEG codec inside zencodecs (used by `ImageJob::run()` for
+    /// probing and format selection).
+    #[cfg(feature = "nodes-jpeg")]
+    mod e2e_jpeg {
+        use super::*;
+
+        /// Generate a small 8x8 JPEG using zenjpeg directly.
+        fn make_test_jpeg() -> Vec<u8> {
+            use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
+
+            let w = 8u32;
+            let h = 8u32;
+            let bpp = 4usize; // RGBA
+            let stride = w as usize * bpp;
+            let mut pixels = vec![0u8; stride * h as usize];
+
+            // Fill with a red gradient.
+            for y in 0..h as usize {
+                for x in 0..w as usize {
+                    let i = y * stride + x * bpp;
+                    pixels[i] = 200; // R
+                    pixels[i + 1] = (x * 32) as u8; // G
+                    pixels[i + 2] = (y * 32) as u8; // B
+                    pixels[i + 3] = 255; // A
+                }
+            }
+
+            let config = EncoderConfig::ycbcr(85.0, ChromaSubsampling::None)
+                .progressive(false)
+                .optimize_huffman(false);
+            let mut enc = config
+                .request()
+                .encode_from_bytes(w, h, PixelLayout::Rgba8Srgb)
+                .expect("encoder creation");
+
+            enc.push(&pixels, h as usize, stride, enough::Unstoppable)
+                .expect("push rows");
+            enc.finish().expect("finish encode")
+        }
+
+        #[test]
+        fn roundtrip_jpeg_no_nodes() {
+            let jpeg_data = make_test_jpeg();
+
+            // Verify it starts with JPEG SOI marker.
+            assert_eq!(&jpeg_data[..2], &[0xFF, 0xD8], "not a valid JPEG");
+
+            let result = ImageJob::new()
+                .add_input(0, jpeg_data)
+                .add_output(1)
+                .with_cms(CmsMode::None)
+                .run();
+
+            let result = result.expect("ImageJob::run() failed");
+
+            // Should have exactly one encode result and one decode info.
+            assert_eq!(result.encode_results.len(), 1);
+            assert_eq!(result.decode_infos.len(), 1);
+
+            // Decode info should reflect the 8x8 JPEG input.
+            let di = &result.decode_infos[0];
+            assert_eq!(di.io_id, 0);
+            assert_eq!(di.width, 8);
+            assert_eq!(di.height, 8);
+            assert_eq!(di.format, zencodec::ImageFormat::Jpeg);
+            assert!(!di.has_alpha);
+            assert!(!di.has_animation);
+            assert_eq!(di.mime_type, "image/jpeg");
+
+            // Encode result should contain valid output bytes.
+            let er = &result.encode_results[0];
+            assert_eq!(er.io_id, 1);
+            assert!(!er.bytes.is_empty(), "output bytes should not be empty");
+            assert_eq!(er.width, 8);
+            assert_eq!(er.height, 8);
+
+            // Output should be a valid JPEG (starts with SOI, ends with EOI).
+            assert_eq!(
+                &er.bytes[..2],
+                &[0xFF, 0xD8],
+                "output should start with JPEG SOI"
+            );
+            assert_eq!(
+                &er.bytes[er.bytes.len() - 2..],
+                &[0xFF, 0xD9],
+                "output should end with JPEG EOI"
+            );
+        }
+
+        #[test]
+        fn roundtrip_jpeg_custom_io_ids() {
+            let jpeg_data = make_test_jpeg();
+
+            let result = ImageJob::new()
+                .add_input(10, jpeg_data)
+                .add_output(20)
+                .with_decode_io(10)
+                .with_encode_io(20)
+                .with_cms(CmsMode::None)
+                .run()
+                .expect("ImageJob with custom io_ids failed");
+
+            assert_eq!(result.decode_infos[0].io_id, 10);
+            assert_eq!(result.encode_results[0].io_id, 20);
+        }
+    }
+}

@@ -160,3 +160,110 @@ impl Source for MaterializedSource {
         self.format
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::{RGBA8_SRGB, RGB8_SRGB};
+
+    /// Helper: collect all rows from a Source into a flat Vec.
+    fn drain_all_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
+        let mut rows = Vec::new();
+        let bpp = src.format().bytes_per_pixel();
+        let w = src.width() as usize;
+        while let Some(strip) = src.next().unwrap() {
+            for r in 0..strip.rows() {
+                let row = strip.row(r);
+                rows.push(row[..w * bpp].to_vec());
+            }
+        }
+        rows
+    }
+
+    #[test]
+    fn from_data_dimensions() {
+        let w = 3u32;
+        let h = 2u32;
+        let fmt = RGBA8_SRGB;
+        let stride = fmt.aligned_stride(w); // 12
+        let data = vec![0u8; stride * h as usize];
+        let src = MaterializedSource::from_data(data, w, h, fmt);
+
+        assert_eq!(src.width(), w);
+        assert_eq!(src.height(), h);
+        assert_eq!(src.format(), fmt);
+    }
+
+    #[test]
+    fn from_data_iterate_rows() {
+        let w = 2u32;
+        let h = 3u32;
+        let fmt = RGBA8_SRGB;
+        let stride = fmt.aligned_stride(w); // 8
+
+        // Fill with distinct per-row patterns.
+        let mut data = vec![0u8; stride * h as usize];
+        for y in 0..h as usize {
+            for x in 0..stride {
+                data[y * stride + x] = (y * 10 + x) as u8;
+            }
+        }
+
+        let mut src = MaterializedSource::from_data(data.clone(), w, h, fmt)
+            .with_strip_height(1); // one row per strip
+
+        let rows = drain_all_rows(&mut src);
+        assert_eq!(rows.len(), h as usize);
+
+        for y in 0..h as usize {
+            let expected: Vec<u8> = (0..stride).map(|x| (y * 10 + x) as u8).collect();
+            assert_eq!(rows[y], expected, "row {y} mismatch");
+        }
+    }
+
+    #[test]
+    fn data_returns_full_buffer() {
+        let w = 4u32;
+        let h = 2u32;
+        let fmt = RGB8_SRGB;
+        let stride = fmt.aligned_stride(w); // 12
+        let data: Vec<u8> = (0..stride * h as usize).map(|i| i as u8).collect();
+        let src = MaterializedSource::from_data(data.clone(), w, h, fmt);
+
+        assert_eq!(src.data(), &data[..]);
+    }
+
+    #[test]
+    fn stride_correct() {
+        let w = 5u32;
+        let h = 1u32;
+        let fmt = RGBA8_SRGB;
+        let src = MaterializedSource::from_data(vec![0u8; fmt.aligned_stride(w)], w, h, fmt);
+
+        assert_eq!(src.stride(), w as usize * 4); // RGBA8 = 4 bpp
+    }
+
+    #[test]
+    fn with_strip_height_changes_strip_size() {
+        let w = 2u32;
+        let h = 8u32;
+        let fmt = RGBA8_SRGB;
+        let stride = fmt.aligned_stride(w);
+        let data = vec![0u8; stride * h as usize];
+
+        let mut src = MaterializedSource::from_data(data, w, h, fmt)
+            .with_strip_height(3);
+
+        // Should get strips of 3, 3, 2 rows.
+        let s1 = src.next().unwrap().unwrap();
+        assert_eq!(s1.rows(), 3);
+
+        let s2 = src.next().unwrap().unwrap();
+        assert_eq!(s2.rows(), 3);
+
+        let s3 = src.next().unwrap().unwrap();
+        assert_eq!(s3.rows(), 2);
+
+        assert!(src.next().unwrap().is_none());
+    }
+}

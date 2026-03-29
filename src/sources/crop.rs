@@ -127,3 +127,87 @@ impl Source for CropSource {
         self.format
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::RGBA8_SRGB;
+    use crate::sources::materialize::MaterializedSource;
+
+    /// Helper: collect all pixel rows from a Source.
+    fn drain_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
+        let bpp = src.format().bytes_per_pixel();
+        let w = src.width() as usize;
+        let mut rows = Vec::new();
+        while let Some(strip) = src.next().unwrap() {
+            for r in 0..strip.rows() {
+                rows.push(strip.row(r)[..w * bpp].to_vec());
+            }
+        }
+        rows
+    }
+
+    #[test]
+    fn crop_center_2x2_from_4x4() {
+        let w = 4u32;
+        let h = 4u32;
+        let fmt = RGBA8_SRGB;
+        let stride = fmt.aligned_stride(w); // 16
+
+        // Build a 4x4 image where each pixel is (x, y, 0, 255).
+        let mut data = vec![0u8; stride * h as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let off = y as usize * stride + x as usize * 4;
+                data[off] = x as u8;
+                data[off + 1] = y as u8;
+                data[off + 2] = 0;
+                data[off + 3] = 255;
+            }
+        }
+
+        let upstream = MaterializedSource::from_data(data, w, h, fmt)
+            .with_strip_height(1);
+
+        // Crop center 2x2: x=1, y=1, w=2, h=2.
+        let mut crop = CropSource::new(Box::new(upstream), 1, 1, 2, 2).unwrap();
+        assert_eq!(crop.width(), 2);
+        assert_eq!(crop.height(), 2);
+
+        let rows = drain_rows(&mut crop);
+        assert_eq!(rows.len(), 2);
+
+        // Row 0 of crop = original row 1, pixels x=1..3.
+        assert_eq!(rows[0], vec![1, 1, 0, 255, 2, 1, 0, 255]);
+        // Row 1 of crop = original row 2, pixels x=1..3.
+        assert_eq!(rows[1], vec![1, 2, 0, 255, 2, 2, 0, 255]);
+    }
+
+    #[test]
+    fn crop_full_image_is_identity() {
+        let w = 3u32;
+        let h = 2u32;
+        let fmt = RGBA8_SRGB;
+        let stride = fmt.aligned_stride(w); // 12
+
+        let data: Vec<u8> = (0..stride * h as usize).map(|i| i as u8).collect();
+        let data_copy = data.clone();
+
+        let upstream = MaterializedSource::from_data(data, w, h, fmt)
+            .with_strip_height(1);
+
+        // Crop the entire image.
+        let mut crop = CropSource::new(Box::new(upstream), 0, 0, w, h).unwrap();
+        assert_eq!(crop.width(), w);
+        assert_eq!(crop.height(), h);
+
+        let rows = drain_rows(&mut crop);
+        assert_eq!(rows.len(), h as usize);
+
+        // Each row should match the original data.
+        for y in 0..h as usize {
+            let expected = &data_copy[y * stride..(y + 1) * stride];
+            assert_eq!(rows[y], expected, "row {y} mismatch");
+        }
+    }
+}

@@ -468,4 +468,227 @@ mod tests {
         // Canvas 150x150, margins 100+100 = 200 > 150.
         assert!(layout.resolve(150, 150).is_none());
     }
+
+    #[test]
+    fn fitcrop_wide_watermark() {
+        // Wide watermark (200x50) into 100x100 box.
+        // wm_aspect=4.0 > box_aspect=1.0, so fill height first:
+        // w = (100 * 4.0).round() = 400, clipped to min(400, 100) = 100; h = 100.
+        let layout = WatermarkLayout {
+            wm_width: 200,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::FitCrop,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 100).unwrap();
+        assert_eq!(p.width, 100);
+        assert_eq!(p.height, 100);
+    }
+
+    #[test]
+    fn fitcrop_tall_watermark() {
+        // Tall watermark (50x200) into 100x100 box.
+        // wm_aspect=0.25 < box_aspect=1.0, so fill width first:
+        // h = (100 / 0.25).round() = 400, clipped to min(400, 100) = 100; w = 100.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 200,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::FitCrop,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 100).unwrap();
+        assert_eq!(p.width, 100);
+        assert_eq!(p.height, 100);
+    }
+
+    #[test]
+    fn withincrop_no_upscale() {
+        // Small watermark (30x30) in 100x100 box — already fits, no scaling.
+        let layout = WatermarkLayout {
+            wm_width: 30,
+            wm_height: 30,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::WithinCrop,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 100).unwrap();
+        assert_eq!(p.width, 30);
+        assert_eq!(p.height, 30);
+        // Centered: (100-30)/2 = 35.
+        assert_eq!(p.x, 35);
+        assert_eq!(p.y, 35);
+    }
+
+    #[test]
+    fn withincrop_downscale() {
+        // Large watermark (400x200) in 100x100 box.
+        // wm_aspect=2.0 > box_aspect=1.0:
+        //   w = (100 * 2.0).round() = 200, min(200, 100) = 100
+        //   h = min(100, 200) = 100
+        let layout = WatermarkLayout {
+            wm_width: 400,
+            wm_height: 200,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::WithinCrop,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 100).unwrap();
+        assert_eq!(p.width, 100);
+        assert_eq!(p.height, 100);
+    }
+
+    #[test]
+    fn gravity_top_left() {
+        // Percentage(0.0, 0.0) → top-left corner.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Percentage(0.0, 0.0),
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(200, 200).unwrap();
+        assert_eq!(p.width, 50);
+        assert_eq!(p.height, 50);
+        // x = 0 + ((200-50) * 0.0 / 100.0).round() = 0
+        assert_eq!(p.x, 0);
+        assert_eq!(p.y, 0);
+    }
+
+    #[test]
+    fn gravity_bottom_right() {
+        // Percentage(100.0, 100.0) → bottom-right corner.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Percentage(100.0, 100.0),
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(200, 200).unwrap();
+        assert_eq!(p.width, 50);
+        assert_eq!(p.height, 50);
+        // x = 0 + ((200-50) * 100.0 / 100.0).round() = 150
+        assert_eq!(p.x, 150);
+        assert_eq!(p.y, 150);
+    }
+
+    #[test]
+    fn zero_dimension_watermark_returns_none() {
+        let layout = WatermarkLayout {
+            wm_width: 0,
+            wm_height: 100,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        assert!(layout.resolve(200, 200).is_none());
+    }
+
+    #[test]
+    fn watermark_larger_than_canvas_within_scales_down() {
+        // 500x250 watermark, 100x100 canvas/box.
+        // wm_aspect=2.0 > box_aspect=1.0 → constrained by width:
+        //   w = 100, h = (100 / 2.0).round() = 50.
+        let layout = WatermarkLayout {
+            wm_width: 500,
+            wm_height: 250,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 100).unwrap();
+        assert_eq!(p.width, 100);
+        assert_eq!(p.height, 50);
+        // Centered: x = (100-100)/2 = 0, y = (100-50)/2 = 25.
+        assert_eq!(p.x, 0);
+        assert_eq!(p.y, 25);
+    }
+
+    #[test]
+    fn percentage_box_inverted_returns_none() {
+        // x2 < x1 → invalid bounding box.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::Percentage {
+                x1: 80.0,
+                y1: 0.0,
+                x2: 20.0,
+                y2: 100.0,
+            },
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: None,
+        };
+        // px1 = (80/100 * 200).round() = 160, px2 = (20/100 * 200).round() = 40.
+        // 160 < 40 is false → None.
+        assert!(layout.resolve(200, 200).is_none());
+    }
+
+    #[test]
+    fn canvas_exactly_at_minimum() {
+        // min_canvas_width=100, canvas width=100 → 100 < 100 is false, proceeds.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: Some(100),
+            min_canvas_height: None,
+        };
+        let p = layout.resolve(100, 200).unwrap();
+        assert_eq!(p.width, 50);
+        assert_eq!(p.height, 50);
+    }
+
+    #[test]
+    fn canvas_one_pixel_below_minimum() {
+        // min_canvas_width=100, canvas width=99 → 99 < 100 is true, returns None.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: Some(100),
+            min_canvas_height: None,
+        };
+        assert!(layout.resolve(99, 200).is_none());
+    }
+
+    #[test]
+    fn min_canvas_height_only() {
+        // min_canvas_height=500, canvas 1000x400 → 400 < 500 is true, returns None.
+        let layout = WatermarkLayout {
+            wm_width: 50,
+            wm_height: 50,
+            fit_box: FitBox::FullCanvas,
+            fit_mode: FitMode::Within,
+            gravity: Gravity::Center,
+            min_canvas_width: None,
+            min_canvas_height: Some(500),
+        };
+        assert!(layout.resolve(1000, 400).is_none());
+    }
 }

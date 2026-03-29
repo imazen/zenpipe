@@ -66,3 +66,52 @@ impl Source for FlipHSource {
         self.upstream.format()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::RGBA8_SRGB;
+    use crate::sources::materialize::MaterializedSource;
+
+    #[test]
+    fn horizontal_flip_4x1_rgba8() {
+        let w = 4u32;
+        let h = 1u32;
+        let fmt = RGBA8_SRGB;
+
+        // 4 pixels: A=red, B=green, C=blue, D=white.
+        #[rustfmt::skip]
+        let data: Vec<u8> = vec![
+            255, 0,   0,   255,  // A: red
+            0,   255, 0,   255,  // B: green
+            0,   0,   255, 255,  // C: blue
+            255, 255, 255, 255,  // D: white
+        ];
+
+        let upstream = MaterializedSource::from_data(data, w, h, fmt)
+            .with_strip_height(h);
+
+        let mut flip = FlipHSource::new(Box::new(upstream));
+        assert_eq!(flip.width(), w);
+        assert_eq!(flip.height(), h);
+        assert_eq!(flip.format(), fmt);
+
+        let strip = flip.next().unwrap().unwrap();
+        assert_eq!(strip.rows(), 1);
+
+        let row = strip.row(0);
+        let bpp = fmt.bytes_per_pixel();
+
+        // After flip, order should be D, C, B, A.
+        // D: white
+        assert_eq!(&row[0 * bpp..1 * bpp], &[255, 255, 255, 255]);
+        // C: blue
+        assert_eq!(&row[1 * bpp..2 * bpp], &[0, 0, 255, 255]);
+        // B: green
+        assert_eq!(&row[2 * bpp..3 * bpp], &[0, 255, 0, 255]);
+        // A: red
+        assert_eq!(&row[3 * bpp..4 * bpp], &[255, 0, 0, 255]);
+
+        assert!(flip.next().unwrap().is_none());
+    }
+}

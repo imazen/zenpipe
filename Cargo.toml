@@ -30,14 +30,14 @@ job = ["zennode", "std", "zencodecs/cms"]
 # ── Node registry features ──
 # Each enables zennode + the codec dep for pipeline use.
 # Codec/quantize node definitions now live in crate::zennode_defs.
-nodes-jpeg = ["zennode", "dep:zenjpeg"]
-nodes-png = ["zennode", "dep:zenpng"]
-nodes-webp = ["zennode", "dep:zenwebp"]
-nodes-gif = ["zennode", "dep:zengif"]
-nodes-avif = ["zennode", "dep:zenavif"]
-nodes-jxl = ["zennode", "dep:zenjxl"]
-nodes-tiff = ["zennode", "dep:zentiff"]
-nodes-bmp = ["zennode", "dep:zenbitmaps"]
+nodes-jpeg = ["zennode", "dep:zenjpeg", "zencodecs/jpeg"]
+nodes-png = ["zennode", "dep:zenpng", "zencodecs/png"]
+nodes-webp = ["zennode", "dep:zenwebp", "zencodecs/webp"]
+nodes-gif = ["zennode", "dep:zengif", "zencodecs/gif"]
+nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
+nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
+nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
+nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
 # Geometry and resize nodes now live in zenpipe's own zennode_defs.
 # These features are kept as backward-compatible aliases.
 nodes-resize = ["zennode"]
