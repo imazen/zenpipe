@@ -56,12 +56,40 @@ body {
   flex: 1; display: flex; align-items: center; justify-content: center;
   min-width: 0; min-height: 0; overflow: hidden;
 }
-#the-image {
-  max-width: 100%; max-height: 100%;
-  object-fit: contain; display: block;
-  transition: opacity 0.3s ease;
+#img-stack {
+  position: relative; display: inline-block; line-height: 0;
 }
-#the-image.fading { opacity: 0; }
+#img-stack img {
+  max-width: calc(100vw - 100px); max-height: calc(100dvh - 200px);
+  object-fit: contain; display: block;
+}
+#img-original {
+  position: relative; z-index: 0;
+}
+#img-filtered {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  /* Cut out bottom-left triangle to reveal original underneath */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 18% 100%, 0 82%);
+}
+/* Diagonal line hint on the peel corner */
+#peel-line {
+  position: absolute; bottom: 0; left: 0; z-index: 2;
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 0 0 60px 60px;
+  border-color: transparent transparent rgba(255,255,255,0.08) transparent;
+  pointer-events: none;
+}
+/* "Original" label in the peel corner */
+#peel-label {
+  position: absolute; bottom: 6px; left: 4px; z-index: 3;
+  font-size: 8px; color: rgba(255,255,255,0.4);
+  transform: rotate(-45deg); transform-origin: bottom left;
+  pointer-events: none;
+}
+/* When showing full original (A/B toggle), remove clip */
+#img-filtered.hide { display: none; }
 
 /* ── A/B toggle (in top bar) ── */
 #ab-toggle {
@@ -123,7 +151,12 @@ body {
 <div id="main">
   <button class="side-btn" id="btn-prev-filter">&#9664;</button>
   <div id="img-wrap">
-    <img id="the-image" alt="">
+    <div id="img-stack">
+      <img id="img-original" alt="">
+      <img id="img-filtered" alt="">
+      <div id="peel-line"></div>
+      <div id="peel-label">original</div>
+    </div>
   </div>
   <button class="side-btn" id="btn-next-filter">&#9654;</button>
 </div>
@@ -140,7 +173,8 @@ let imageIdx = 0;
 let presetIdx = -1; // -1 = original
 let showOriginal = false; // temporarily show original via A/B
 
-const img = document.getElementById('the-image');
+const imgOrig = document.getElementById('img-original');
+const imgFilt = document.getElementById('img-filtered');
 const filterName = document.getElementById('filter-name');
 const photoLabel = document.getElementById('photo-label');
 const abToggle = document.getElementById('ab-toggle');
@@ -201,7 +235,7 @@ function buildFilterGrid() {
     el.addEventListener('click', () => {
       presetIdx = parseInt(el.dataset.idx);
       showOriginal = false;
-      updateView(true);
+      updateView();
     });
   });
 }
@@ -210,33 +244,19 @@ function imagePath(name, pid) {
   return pid === null ? `gallery/originals/${name}.jpg` : `gallery/presets/${pid}/${name}.jpg`;
 }
 
-let fadeTimer = null;
-
-function updateView(animate) {
+function updateView() {
   if (!manifest) return;
   const name = manifest.images[imageIdx];
   const preset = presetIdx >= 0 ? manifest.presets[presetIdx] : null;
-  const targetSrc = (showOriginal || !preset)
-    ? imagePath(name, null)
-    : imagePath(name, preset.id);
-  const origSrc = imagePath(name, null);
 
-  if (animate && preset && !showOriginal && img.src !== origSrc) {
-    // Flash original, then crossfade to filtered
-    if (fadeTimer) clearTimeout(fadeTimer);
-    img.src = origSrc;
-    img.classList.remove('fading');
-    fadeTimer = setTimeout(() => {
-      img.classList.add('fading');
-      setTimeout(() => {
-        img.src = targetSrc;
-        img.classList.remove('fading');
-      }, 150);
-    }, 250);
+  // Original always loads (visible in peel corner and when no filter)
+  imgOrig.src = imagePath(name, null);
+
+  if (preset && !showOriginal) {
+    imgFilt.src = imagePath(name, preset.id);
+    imgFilt.classList.remove('hide');
   } else {
-    if (fadeTimer) clearTimeout(fadeTimer);
-    img.src = targetSrc;
-    img.classList.remove('fading');
+    imgFilt.classList.add('hide');
   }
 
   filterName.textContent = preset
@@ -260,34 +280,34 @@ function prevFilter() {
   if (!manifest) return;
   presetIdx = presetIdx <= -1 ? manifest.presets.length - 1 : presetIdx - 1;
   showOriginal = false;
-  updateView(true);
+  updateView();
 }
 
 function nextFilter() {
   if (!manifest) return;
   presetIdx = presetIdx >= manifest.presets.length - 1 ? -1 : presetIdx + 1;
   showOriginal = false;
-  updateView(true);
+  updateView();
 }
 
 function prevPhoto() {
   if (!manifest) return;
   imageIdx = (imageIdx - 1 + manifest.images.length) % manifest.images.length;
   showOriginal = false;
-  updateView(true);
+  updateView();
 }
 
 function nextPhoto() {
   if (!manifest) return;
   imageIdx = (imageIdx + 1) % manifest.images.length;
   showOriginal = false;
-  updateView(true);
+  updateView();
 }
 
 function toggleAB() {
   if (presetIdx < 0) return;
   showOriginal = !showOriginal;
-  updateView(false);
+  updateView();
 }
 
 function setupControls() {
@@ -298,7 +318,7 @@ function setupControls() {
   abToggle.addEventListener('click', toggleAB);
 
   // Tap image = A/B toggle
-  img.addEventListener('click', toggleAB);
+  document.getElementById('img-stack').addEventListener('click', toggleAB);
 
   // Touch: swipe left/right = filter, up/down = photo
   let sx = 0, sy = 0;
@@ -328,7 +348,7 @@ function setupControls() {
       default:
         if (e.key >= '0' && e.key <= '9') {
           const i = parseInt(e.key) - 1; // 0 = original (-1)
-          if (i < manifest.presets.length) { presetIdx = i; showOriginal = false; updateView(true); }
+          if (i < manifest.presets.length) { presetIdx = i; showOriginal = false; updateView(); }
           e.preventDefault();
         }
     }
