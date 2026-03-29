@@ -1607,8 +1607,7 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 Ok((
                     Box::new(MaterializedSource::from_source_with_transform(
-                        upstream,
-                        transform,
+                        upstream, transform,
                     )?),
                     meta,
                 ))

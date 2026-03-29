@@ -1,15 +1,17 @@
 //! Full node registry collecting all zennode definitions across the ecosystem.
 //!
-//! Each codec and processing crate registers its nodes behind a feature flag.
-//! Call [`full_registry()`] to get a registry with every available node.
+//! Geometry, resize, and pipeline-level nodes are defined in
+//! [`crate::zennode_defs`] and always available when `zennode` is enabled.
+//!
+//! Codec and filter nodes are registered from their own crates behind
+//! feature flags.
 //!
 //! # Features
 //!
-//! Each crate's nodes are gated behind an optional feature:
+//! Each codec crate's nodes are gated behind an optional feature:
 //! - `nodes-jpeg`, `nodes-png`, `nodes-webp`, `nodes-gif`
 //! - `nodes-avif`, `nodes-jxl`, `nodes-tiff`, `nodes-bmp`
-//! - `nodes-resize`, `nodes-layout`, `nodes-quant`
-//! - `nodes-filters` (requires std)
+//! - `nodes-quant`, `nodes-filters` (requires std)
 //!
 //! `nodes-all` enables everything.
 
@@ -63,20 +65,15 @@ pub fn full_registry() -> NodeRegistry {
     #[cfg(feature = "nodes-bmp")]
     zenbitmaps::zennode_defs::register(&mut r);
 
-    // Processing nodes
-    #[cfg(feature = "nodes-resize")]
-    zenresize::zennode_defs::register(&mut r);
-
-    #[cfg(feature = "nodes-layout")]
-    zenlayout::zennode_defs::register(&mut r);
-
+    // Quantization
     #[cfg(feature = "nodes-quant")]
     zenquant::zennode_defs::register(&mut r);
 
+    // Filters (requires std)
     #[cfg(feature = "nodes-filters")]
     zenfilters::zennode_defs::register(&mut r);
 
-    // zenpipe's own pipeline-level nodes (always available when zennode is on).
+    // Geometry, resize, and pipeline-level nodes (always available with zennode).
     crate::zennode_defs::register(&mut r);
 
     r
