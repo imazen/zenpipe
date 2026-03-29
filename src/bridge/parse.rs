@@ -63,6 +63,63 @@ pub(crate) fn parse_constraint_mode(s: &str) -> Result<zenresize::ConstraintMode
     }
 }
 
+pub(crate) fn parse_gravity_anchor(s: &str) -> Option<(f32, f32)> {
+    Some(match s {
+        "center" => (0.5, 0.5),
+        "top_left" => (0.0, 0.0),
+        "top" => (0.5, 0.0),
+        "top_right" => (1.0, 0.0),
+        "left" => (0.0, 0.5),
+        "right" => (1.0, 0.5),
+        "bottom_left" => (0.0, 1.0),
+        "bottom" => (0.5, 1.0),
+        "bottom_right" => (1.0, 1.0),
+        _ => return None,
+    })
+}
+
+pub(crate) fn parse_canvas_color(s: &str) -> Option<zenresize::CanvasColor> {
+    let lower = s.to_ascii_lowercase();
+    Some(match lower.as_str() {
+        "transparent" | "" => zenresize::CanvasColor::Transparent,
+        "white" => zenresize::CanvasColor::Srgb {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        },
+        "black" => zenresize::CanvasColor::Srgb {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        },
+        hex if hex.starts_with('#') => {
+            let hex = &hex[1..];
+            let bytes: alloc::vec::Vec<u8> = (0..hex.len())
+                .step_by(2)
+                .filter_map(|i| hex.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
+                .collect();
+            match bytes.len() {
+                3 => zenresize::CanvasColor::Srgb {
+                    r: bytes[0],
+                    g: bytes[1],
+                    b: bytes[2],
+                    a: 255,
+                },
+                4 => zenresize::CanvasColor::Srgb {
+                    r: bytes[0],
+                    g: bytes[1],
+                    b: bytes[2],
+                    a: bytes[3],
+                },
+                _ => return None,
+            }
+        }
+        _ => return None,
+    })
+}
+
 pub(crate) fn parse_filter_opt(s: &str) -> Option<zenresize::Filter> {
     if s.is_empty() {
         return None;

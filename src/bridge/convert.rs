@@ -12,7 +12,8 @@ use crate::graph::{EdgeKind, NodeId, NodeOp, PipelineGraph};
 
 use super::geometry::{compile_geometry_run, is_geometry_node};
 use super::parse::{
-    param_f32_opt, param_i32, param_str, param_u32, parse_constraint_mode, parse_filter_opt,
+    param_f32_opt, param_i32, param_str, param_u32, parse_canvas_color, parse_constraint_mode,
+    parse_filter_opt, parse_gravity_anchor,
 };
 use super::{NodeConverter, PipelineStep};
 
@@ -264,7 +265,32 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         .get_param("down_filter")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .and_then(|s| parse_filter_opt(&s));
-    let _sharpen = param_f32_opt(node, "sharpen");
+    let sharpen = param_f32_opt(node, "sharpen");
+    let gravity_x = param_f32_opt(node, "gravity_x");
+    let gravity_y = param_f32_opt(node, "gravity_y");
+    let gravity = match (gravity_x, gravity_y) {
+        (Some(x), Some(y)) => Some((x, y)),
+        (Some(x), None) => Some((x, 0.5)),
+        (None, Some(y)) => Some((0.5, y)),
+        (None, None) => {
+            // Check named gravity anchor
+            node.get_param("gravity")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .and_then(|s| parse_gravity_anchor(&s))
+        }
+    };
+    let canvas_color = node
+        .get_param("canvas_color")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty())
+        .and_then(|s| parse_canvas_color(&s));
+    let scaling_linear = node
+        .get_param("scaling_colorspace")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .map(|s| s != "srgb"); // "linear" or anything else = true, "srgb" = false
+    let kernel_width_scale = param_f32_opt(node, "kernel_width_scale");
+    let lobe_ratio = param_f32_opt(node, "lobe_ratio");
+    let post_blur = param_f32_opt(node, "post_blur");
 
     let mode = parse_constraint_mode(&mode_str)?;
 
@@ -274,6 +300,13 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter,
+        sharpen_percent: sharpen.filter(|&v| v > 0.0),
+        gravity,
+        canvas_color,
+        scaling_linear,
+        kernel_width_scale,
+        lobe_ratio,
+        post_blur,
     })
 }
 
@@ -283,6 +316,24 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;
 
+    let gravity_x = param_f32_opt(node, "gravity_x");
+    let gravity_y = param_f32_opt(node, "gravity_y");
+    let gravity = match (gravity_x, gravity_y) {
+        (Some(x), Some(y)) => Some((x, y)),
+        (Some(x), None) => Some((x, 0.5)),
+        (None, Some(y)) => Some((0.5, y)),
+        (None, None) => {
+            node.get_param("gravity")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .and_then(|s| parse_gravity_anchor(&s))
+        }
+    };
+    let canvas_color = node
+        .get_param("canvas_color")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty())
+        .and_then(|s| parse_canvas_color(&s));
+
     let mode = parse_constraint_mode(&mode_str)?;
 
     Ok(NodeOp::Constrain {
@@ -291,6 +342,13 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
         h,
         orientation: None,
         filter: None,
+        sharpen_percent: None,
+        gravity,
+        canvas_color,
+        scaling_linear: None,
+        kernel_width_scale: None,
+        lobe_ratio: None,
+        post_blur: None,
     })
 }
 

@@ -230,6 +230,21 @@ pub enum NodeOp {
         orientation: Option<u8>,
         /// Resampling filter (default Robidoux if None).
         filter: Option<zenresize::Filter>,
+        /// Post-resize sharpening percentage (0-100). None = no sharpening.
+        sharpen_percent: Option<f32>,
+        /// Gravity for crop/pad modes (x: 0.0=left..1.0=right, y: 0.0=top..1.0=bottom).
+        /// None = center (0.5, 0.5).
+        gravity: Option<(f32, f32)>,
+        /// Canvas fill color for pad modes. None = transparent.
+        canvas_color: Option<zenresize::CanvasColor>,
+        /// Scaling colorspace: true = linear light, false = sRGB gamma. None = linear (default).
+        scaling_linear: Option<bool>,
+        /// Kernel width scale factor (>1.0 = softer, <1.0 = sharper). None = 1.0.
+        kernel_width_scale: Option<f32>,
+        /// Negative-lobe ratio for in-kernel sharpening. None = filter default.
+        lobe_ratio: Option<f32>,
+        /// Post-resize Gaussian blur sigma. None = no blur.
+        post_blur: Option<f32>,
     },
 
     /// Advanced resize with a pre-built [`ResizeConfig`](zenresize::ResizeConfig).
@@ -1230,6 +1245,13 @@ impl PipelineGraph {
                 h,
                 orientation,
                 filter,
+                sharpen_percent,
+                gravity,
+                canvas_color,
+                scaling_linear,
+                kernel_width_scale,
+                lobe_ratio,
+                post_blur,
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
@@ -1242,7 +1264,16 @@ impl PipelineGraph {
                 if let Some(exif) = orientation {
                     pipeline = pipeline.auto_orient(exif);
                 }
-                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+
+                // Build Constraint with gravity and canvas_color
+                let mut constraint = zenresize::Constraint::new(mode, w, h);
+                if let Some((gx, gy)) = gravity {
+                    constraint = constraint.gravity(zenresize::Gravity::Percentage(gx, gy));
+                }
+                if let Some(cc) = canvas_color {
+                    constraint = constraint.canvas_color(cc);
+                }
+                pipeline = pipeline.constrain(constraint);
 
                 let (ideal, request) = pipeline
                     .plan()
@@ -1251,17 +1282,53 @@ impl PipelineGraph {
                 let plan = ideal.finalize(&request, &offer);
                 let f = filter.unwrap_or(zenresize::Filter::Robidoux);
 
-                let resizer = zenresize::streaming_from_plan_batched(
-                    in_w,
-                    in_h,
-                    &plan,
-                    zenresize::PixelDescriptor::RGBA8_SRGB,
-                    f,
-                    16,
-                );
-                let mut source: Box<dyn Source> =
-                    Box::new(ResizeSource::from_streaming(upstream, resizer, 16)?);
+                // Check if we need advanced resize params beyond what
+                // streaming_from_plan_batched supports
+                let has_advanced = sharpen_percent.is_some()
+                    || scaling_linear.is_some()
+                    || kernel_width_scale.is_some()
+                    || lobe_ratio.is_some()
+                    || post_blur.is_some();
 
+                let mut source: Box<dyn Source> = if has_advanced {
+                    // Build ResizeConfig from plan, then layer on advanced params
+                    let mut config = zenresize::config_from_plan(
+                        in_w,
+                        in_h,
+                        &plan,
+                        zenresize::PixelDescriptor::RGBA8_SRGB,
+                        f,
+                    );
+                    if let Some(pct) = sharpen_percent {
+                        config.post_sharpen = pct;
+                    }
+                    if let Some(false) = scaling_linear {
+                        config.linear = false;
+                    }
+                    if let Some(kws) = kernel_width_scale {
+                        config.kernel_width_scale = Some(kws as f64);
+                    }
+                    if let Some(lr) = lobe_ratio {
+                        config.lobe_ratio = zenresize::LobeRatio::Exact(lr);
+                    }
+                    if let Some(blur) = post_blur {
+                        config.post_blur_sigma = blur;
+                    }
+                    Box::new(ResizeSource::new(upstream, &config, 16)?)
+                } else {
+                    // Simple path — use streaming_from_plan_batched
+                    let resizer = zenresize::streaming_from_plan_batched(
+                        in_w,
+                        in_h,
+                        &plan,
+                        zenresize::PixelDescriptor::RGBA8_SRGB,
+                        f,
+                        16,
+                    );
+                    Box::new(ResizeSource::from_streaming(upstream, resizer, 16)?)
+                };
+
+                // Apply edge replication if needed
                 if let Some(cs) = plan.content_size {
                     let out_w = source.width();
                     let out_h = source.height();

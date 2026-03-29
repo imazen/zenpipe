@@ -83,7 +83,7 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
 #[unsafe(no_mangle)] pub extern "C" fn op_layout(sp:*const u8,sl:u32,sw:u32,sh:u32,dw:u32,dh:u32,ori:u8)->*mut u8{
     let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)}; let f=format::RGBA8_SRGB;
     let mut g=PipelineGraph::new(); let sn=g.add_node(NodeOp::Source);
-    let ln=g.add_node(NodeOp::Constrain{mode:zenresize::ConstraintMode::Within,w:dw,h:dh,orientation:if ori>1{Some(ori)}else{None},filter:Some(zenresize::Filter::Lanczos)});
+    let ln=g.add_node(NodeOp::Constrain{mode:zenresize::ConstraintMode::Within,w:dw,h:dh,orientation:if ori>1{Some(ori)}else{None},filter:Some(zenresize::Filter::Lanczos),sharpen_percent:None,gravity:None,canvas_color:None,scaling_linear:None,kernel_width_scale:None,lobe_ratio:None,post_blur:None});
     let on=g.add_node(NodeOp::Output); g.add_edge(sn,ln,EdgeKind::Input); g.add_edge(ln,on,EdgeKind::Input);
     match g.compile(msrc(&[sn],&[(sw,sh)],&[f],&[s])){Ok(p)=>ret(drain(p)),Err(_)=>core::ptr::null_mut()}
 }
