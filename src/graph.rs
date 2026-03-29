@@ -245,9 +245,9 @@ pub enum NodeOp {
         lobe_ratio: Option<f32>,
         /// Post-resize Gaussian blur sigma. None = no blur.
         post_blur: Option<f32>,
-        /// Upscale resampling filter. None = use down_filter or default.
-        /// TODO: zenresize does not yet support separate up/down filters in a single
-        /// LayoutPlan. When it does, this will be wired through to the upscale pass.
+        /// Upscale resampling filter. None = use the main `filter` for both directions.
+        /// When set, this filter is used for axes where output > input (upscaling),
+        /// while the main `filter` is used for downscaling axes.
         up_filter: Option<zenresize::Filter>,
         /// When to resample: None = when size differs (default).
         /// Values: "size_differs", "size_differs_or_sharpening_requested", "always".
@@ -1264,7 +1264,7 @@ impl PipelineGraph {
                 kernel_width_scale,
                 lobe_ratio,
                 post_blur,
-                up_filter: _, // TODO: wire through when zenresize supports separate up/down filters
+                up_filter,
                 resample_when: _, // TODO: wire through to execution layer
                 sharpen_when: _, // TODO: wire through to execution layer
             } => {
@@ -1303,7 +1303,8 @@ impl PipelineGraph {
                     || scaling_linear.is_some()
                     || kernel_width_scale.is_some()
                     || lobe_ratio.is_some()
-                    || post_blur.is_some();
+                    || post_blur.is_some()
+                    || up_filter.is_some();
 
                 let mut source: Box<dyn Source> = if has_advanced {
                     // Build ResizeConfig from plan, then layer on advanced params
@@ -1328,6 +1329,9 @@ impl PipelineGraph {
                     }
                     if let Some(blur) = post_blur {
                         config.post_blur_sigma = blur;
+                    }
+                    if let Some(uf) = up_filter {
+                        config.up_filter = Some(uf);
                     }
                     Box::new(ResizeSource::new(upstream, &config, 16)?)
                 } else {
