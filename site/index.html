@@ -336,14 +336,20 @@ function setupControls() {
   document.getElementById('btn-next-filter').addEventListener('click', nextFilter);
   abToggle.addEventListener('click', toggleAB);
 
-  // Triangle = A/B toggle (tap the corner to compare)
+  // Triangle = A/B toggle
   cornerDiv.addEventListener('click', (e) => { e.stopPropagation(); toggleAB(); });
 
-  // Tap/click image: top half = prev photo, bottom half = next photo
+  // Tap/click image:
+  //   filter active → A/B toggle (same as triangle)
+  //   no filter → top half prev photo, bottom half next photo
   mainImg.addEventListener('click', (e) => {
-    const rect = mainImg.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    if (y < rect.height / 2) { prevPhoto(); } else { nextPhoto(); }
+    if (presetIdx >= 0) {
+      toggleAB();
+    } else {
+      const rect = mainImg.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      if (y < rect.height / 2) { prevPhoto(); } else { nextPhoto(); }
+    }
   });
 
   // Touch swipe on main area: left/right = filter, up/down = photo
