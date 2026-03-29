@@ -32,6 +32,9 @@ pub mod bridge;
 #[cfg(feature = "job")]
 pub mod job;
 
+#[cfg(feature = "json-schema")]
+pub mod schema_export;
+
 #[cfg(feature = "zennode")]
 pub mod orchestrate;
 
