@@ -957,6 +957,88 @@ impl RoundCorners {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  COMPOSITING — nodes with multiple inputs (fan-in)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Composite a foreground image onto a background at a position.
+///
+/// Two inputs required:
+/// - **background** (Canvas edge): the base image to draw onto
+/// - **foreground** (Input edge): the image being composited
+///
+/// Both inputs are auto-converted to premultiplied linear f32.
+/// Default blend mode is Porter-Duff source-over.
+#[derive(Node, Clone, Debug, Default)]
+#[node(id = "zenpipe.composite", group = Composite, role = Composite)]
+#[node(changes_dimensions)]
+#[node(tags("composite", "blend", "overlay"))]
+pub struct Composite {
+    /// X position of the foreground on the background canvas.
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Position", label = "X")]
+    pub fg_x: u32,
+
+    /// Y position of the foreground on the background canvas.
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Position", label = "Y")]
+    pub fg_y: u32,
+
+    /// Blend mode: "source_over" (default), "multiply", "screen", etc.
+    #[param(default = "source_over")]
+    #[param(section = "Blending", label = "Blend Mode")]
+    pub blend_mode: String,
+}
+
+/// Overlay a small image (watermark, logo) at absolute coordinates.
+///
+/// Single input (the background). The overlay image data is provided
+/// via io_id (loaded from a separate input buffer).
+///
+/// Overlay is auto-converted to premultiplied linear f32. Opacity
+/// scales the overlay's alpha channel before compositing.
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenpipe.overlay", group = Composite, role = Composite)]
+#[node(tags("overlay", "watermark", "logo", "composite"))]
+pub struct Overlay {
+    /// I/O ID of the overlay image source.
+    #[param(range(0..=1000), default = 0, step = 1)]
+    #[param(section = "Source", label = "Overlay IO ID")]
+    pub io_id: i32,
+
+    /// X position on the background canvas.
+    #[param(range(-65535..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Position", label = "X")]
+    pub x: i32,
+
+    /// Y position on the background canvas.
+    #[param(range(-65535..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Position", label = "Y")]
+    pub y: i32,
+
+    /// Overlay opacity (0.0 = invisible, 1.0 = fully opaque).
+    #[param(range(0.0..=1.0), default = 1.0, identity = 1.0, step = 0.01)]
+    #[param(section = "Blending", label = "Opacity")]
+    pub opacity: f32,
+
+    /// Blend mode: "source_over" (default), "multiply", "screen", etc.
+    #[param(default = "source_over")]
+    #[param(section = "Blending", label = "Blend Mode")]
+    pub blend_mode: String,
+}
+
+impl Default for Overlay {
+    fn default() -> Self {
+        Self {
+            io_id: 0,
+            x: 0,
+            y: 0,
+            opacity: 1.0,
+            blend_mode: String::from("source_over"),
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  RIAPI ADAPTERS — multi-value keys that produce different node types
 // ═══════════════════════════════════════════════════════════════════════
 //
@@ -1308,6 +1390,9 @@ pub static ALL: &[&dyn NodeDef] = &[
     &FILL_RECT_NODE,
     &REMOVE_ALPHA_NODE,
     &ROUND_CORNERS_NODE,
+    // Compositing
+    &COMPOSITE_NODE,
+    &OVERLAY_NODE,
     // RIAPI adapters (multi-value keys → specific node types)
     &FLIP_RIAPI_DEF,
     &ROTATE_RIAPI_DEF,
