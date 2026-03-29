@@ -1,4 +1,4 @@
-# zenfilters ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenfilters/ci.yml?style=for-the-badge) ![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=for-the-badge) ![License](https://img.shields.io/badge/license-AGPL--3.0--only%20OR%20Commercial-blue?style=for-the-badge)
+# zenfilters [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenfilters/ci.yml?style=for-the-badge)](https://github.com/imazen/zenfilters/actions/workflows/ci.yml) [![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=for-the-badge)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![License](https://img.shields.io/badge/license-AGPL--3.0--only%20OR%20Commercial-blue?style=for-the-badge)](https://github.com/imazen/zenfilters#license)
 
 Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via [archmage](https://github.com/imazen/archmage).
 
