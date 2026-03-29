@@ -270,19 +270,27 @@ function updateView() {
   const origSrc = imagePath(name, null);
   const hasFilter = preset && !showOriginal;
 
-  if (hasFilter) {
-    mainImg.src = imagePath(name, preset.id);
-    cornerImg.src = origSrc;
+  if (preset) {
+    const filtSrc = imagePath(name, preset.id);
+    if (showOriginal) {
+      // Main shows original, corner shows filtered (inverted)
+      mainImg.src = origSrc;
+      cornerImg.src = filtSrc;
+      imgOverlay.textContent = 'Original';
+    } else {
+      // Main shows filtered, corner shows original
+      mainImg.src = filtSrc;
+      cornerImg.src = origSrc;
+      imgOverlay.textContent = preset.name;
+    }
     cornerDiv.style.display = '';
     cornerBorder.style.display = '';
-    imgOverlay.textContent = preset.name;
     imgOverlay.style.display = '';
   } else {
     mainImg.src = origSrc;
     cornerDiv.style.display = 'none';
     cornerBorder.style.display = 'none';
-    imgOverlay.textContent = (preset && showOriginal) ? 'Original' : '';
-    imgOverlay.style.display = preset ? '' : 'none';
+    imgOverlay.style.display = 'none';
   }
 
   mainImg.onload = sizeCorner;
@@ -336,20 +344,14 @@ function setupControls() {
   document.getElementById('btn-next-filter').addEventListener('click', nextFilter);
   abToggle.addEventListener('click', toggleAB);
 
-  // Triangle = A/B toggle
+  // Triangle = always A/B toggle
   cornerDiv.addEventListener('click', (e) => { e.stopPropagation(); toggleAB(); });
 
-  // Tap/click image:
-  //   filter active → A/B toggle (same as triangle)
-  //   no filter → top half prev photo, bottom half next photo
+  // Image tap = switch photos (top half prev, bottom half next)
   mainImg.addEventListener('click', (e) => {
-    if (presetIdx >= 0) {
-      toggleAB();
-    } else {
-      const rect = mainImg.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      if (y < rect.height / 2) { prevPhoto(); } else { nextPhoto(); }
-    }
+    const rect = mainImg.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    if (y < rect.height / 2) { prevPhoto(); } else { nextPhoto(); }
   });
 
   // Touch swipe on main area: left/right = filter, up/down = photo
