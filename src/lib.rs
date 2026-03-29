@@ -33,6 +33,8 @@ pub mod bridge;
 pub mod job;
 
 #[cfg(feature = "json-schema")]
+pub mod codegen_csharp;
+#[cfg(feature = "json-schema")]
 pub mod schema_export;
 
 #[cfg(feature = "zennode")]
