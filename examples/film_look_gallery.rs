@@ -7,8 +7,8 @@
 //! Usage:
 //!   cargo run --release --features experimental --example film_look_gallery -- <output_dir> [dataset]
 //!
-//! dataset defaults to "gb82" (25 photographic images, 576x576).
-//! Other options: "CID22/CID22-512/validation", "clic2025/training".
+//! dataset defaults to "clic2025/training" (32 high-res photographic images).
+//! Other options: "CID22/CID22-512/validation", "gb82".
 //!
 //! The output directory will contain:
 //!   originals/    — resized input images (max 1024px long edge)
@@ -41,7 +41,7 @@ fn main() {
     }
 
     let output_dir = PathBuf::from(&args[1]);
-    let dataset = args.get(2).map(|s| s.as_str()).unwrap_or("gb82");
+    let dataset = args.get(2).map(|s| s.as_str()).unwrap_or("clic2025/training");
 
     // Get images via codec-corpus
     let corpus = codec_corpus::Corpus::new().expect("failed to init codec-corpus");
@@ -98,12 +98,7 @@ fn main() {
 
     for (img_idx, img_path) in images.iter().enumerate() {
         let stem = img_path.file_stem().unwrap().to_str().unwrap();
-        eprintln!(
-            "[{}/{}] Processing {}...",
-            img_idx + 1,
-            images.len(),
-            stem
-        );
+        eprintln!("[{}/{}] Processing {}...", img_idx + 1, images.len(), stem);
 
         // Decode and resize
         let img = match ImageReader::open(img_path)
