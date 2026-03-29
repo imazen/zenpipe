@@ -524,6 +524,7 @@ pub struct Constrain {
     /// - "within_pad" — fit inside target without upscale, pad to exact dimensions
     /// - "pad_within" — never upscale, always pad to exact canvas
     /// - "aspect_crop" — crop to target aspect ratio without resizing
+    /// - "larger_than" — upscale if needed to meet target, never downscale
     #[param(default = "within")]
     #[param(section = "Layout", label = "Mode")]
     #[kv("mode")]
