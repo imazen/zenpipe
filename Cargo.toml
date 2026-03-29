@@ -18,8 +18,8 @@ rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
 zencodec = { version = "0.1.5" }
-zenpixels = { version = "0.2.0", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = "0.2.0", features = ["imgref"] }
+zenpixels = { version = "0.2.1", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = "0.2.1", features = ["imgref"] }
 linear-srgb = { version = "0.6.5", default-features = false }
 
 # UltraHDR container types (optional, for re-exporting container/MPF types)
