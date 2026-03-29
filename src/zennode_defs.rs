@@ -1,11 +1,9 @@
 //! Zennode definitions for resize and pipeline-specific operations.
 //!
-//! Geometry nodes (crop, orient, flip, rotate, expand canvas, region
-//! viewport, output limits) are defined in `zenlayout::zennode_defs` and
-//! registered separately in `full_registry()`.
-//!
 //! Codec encode/decode, quantization, and quality-intent nodes live in
-//! `zencodecs::zennode_defs`. Filter nodes live in zenfilters.
+//! `zencodecs::zennode_defs`. Filter nodes live in `zenfilters::zennode_defs`.
+//! Geometry nodes (crop, orient, flip, rotate, etc.) were consolidated here
+//! from zenlayout — zenlayout is a planning-only crate with no zennode dep.
 //!
 //! # Sections
 //!

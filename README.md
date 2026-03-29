@@ -112,44 +112,40 @@ zenpipe::execute(pipeline.as_mut(), &mut sink)?;
 
 ## Node types
 
+Node definitions are distributed across crates. Each crate owns the nodes
+for its domain; `full_registry()` aggregates them all.
+
+| Owner | Nodes | Count |
+|-------|-------|------:|
+| **zenpipe** | Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha, RoundCorners | 6 |
+| **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP/HEIC encode+decode, Quantize, QualityIntentNode | 16 |
+| **zenfilters** | Photo adjustment filter nodes | 43 |
+
+### zenpipe-owned nodes
+
 ```mermaid
 graph TD
-    NodeOp[NodeOp]
+    zenpipe[zenpipe nodes]
 
-    NodeOp --> Sources[Sources]
-    Sources --> Source["Source — external input"]
-
-    NodeOp --> Geometry[Geometry]
-    Geometry --> Layout["Layout — crop+orient+resize fused"]
-    Geometry --> LayoutComposite["LayoutComposite — layout + background"]
-    Geometry --> CropN["Crop"]
-    Geometry --> ResizeN["Resize"]
-    Geometry --> Constrain["Constrain — fit/within/exact"]
-    Geometry --> ResizeAdv["ResizeAdvanced"]
-    Geometry --> OrientN["Orient — EXIF 1-8"]
-    Geometry --> AutoOrient["AutoOrient"]
-
-    NodeOp --> PixelOps[Pixel operations]
-    PixelOps --> Transform["PixelTransform — fusible per-pixel ops"]
-    PixelOps --> FilterN["Filter — zenfilters pipeline"]
-    PixelOps --> IccN["IccTransform — ICC profile conversion"]
-
-    NodeOp --> Alpha[Alpha]
-    Alpha --> RemoveAlpha["RemoveAlpha — composite on matte"]
-    Alpha --> AddAlpha["AddAlpha — RGB → RGBA"]
-
-    NodeOp --> CompOps[Compositing]
-    CompOps --> CompositeN["Composite — Porter-Duff blend"]
-    CompOps --> OverlayN["Overlay — watermark at offset"]
-
-    NodeOp --> Barriers[Barriers]
-    Barriers --> Materialize["Materialize — full-frame transform"]
-    Barriers --> AnalyzeN["Analyze — content-adaptive"]
-    Barriers --> CropWS["CropWhitespace"]
-
-    NodeOp --> Terminal[Terminal]
-    Terminal --> OutputN["Output"]
+    zenpipe --> Constrain["Constrain — 17-param fit/resize/sharpen"]
+    zenpipe --> ResizeN["Resize"]
+    zenpipe --> CropWS["CropWhitespace"]
+    zenpipe --> FillRect["FillRect"]
+    zenpipe --> RemoveAlpha["RemoveAlpha — composite on matte"]
+    zenpipe --> RoundCorners["RoundCorners"]
 ```
+
+### Constrain node
+
+The Constrain node is the primary geometry entry point with 17 parameters:
+
+- **Dimensions** — `w`, `h`
+- **Layout** — `mode` (10 modes including `LargerThan`), `gravity`, `canvas_color`, `matte_color`
+- **Resampling** — separate `down_filter` and `up_filter` (31 filter variants, selected by net area change)
+- **Post-processing** — `unsharp_percent`, `post_blur` (real cost)
+- **Kernel shape** — `kernel_lobe_ratio`, `kernel_width_scale` (zero cost)
+- **Scaling colorspace** — linear or sRGB
+- **Conditional execution** — `resample_when`, `sharpen_when`
 
 ## Zen crate integration
 
@@ -184,17 +180,22 @@ graph TB
 | zenfilters | Filter node — photo adjustments on Oklab f32 (per-pixel streams, neighborhood windows) |
 | zenpixels | Strip type, ColorContext (ICC/CICP), metadata propagation |
 | zenpixels-convert | Automatic row-level format conversion between nodes |
-| zennode | Bridge: declarative node instances → PipelineGraph (optional) |
+| zennode | Bridge: declarative node instances → PipelineGraph; node definitions owned by zencodecs (16), zenfilters (43), and zenpipe (6); `full_registry()` aggregates all three |
 | moxcms | IccTransform node — row-by-row ICC profile conversion (optional) |
 
 ## Bridge layer (zennode → PipelineGraph)
 
 When the `zennode` feature is enabled, declarative node definitions compile
-into an executable pipeline graph with automatic fusion:
+into an executable pipeline graph with automatic fusion. Node definitions
+are distributed: zencodecs owns 16 codec/quantize/quality-intent nodes,
+zenfilters owns 43 filter nodes, and zenpipe owns 6 geometry/resize/pipeline
+nodes (Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha,
+RoundCorners). Call `full_registry()` to aggregate all three.
 
 ```mermaid
 flowchart LR
-    A["zennode instances"] --> B["separate by role
+    A["zennode instances
+    (zencodecs: 16, zenfilters: 43, zenpipe: 6)"] --> B["separate by role
     (decode / process / encode)"]
     B --> C["coalesce adjacent
     same-group nodes"]
