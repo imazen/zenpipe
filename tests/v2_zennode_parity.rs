@@ -1046,3 +1046,79 @@ fn round_corners_pixels_custom() {
     assert_eq!(p.nodes[0].get_param("radius_bl"), Some(ParamValue::F32(20.0)));
     assert_eq!(p.nodes[0].get_param("radius_br"), Some(ParamValue::F32(15.0)));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Execute dimension tests — translate + pipeline through bridge
+// (imazen/zenpipe#14: rotate-after-constrain dimension regression)
+// ═══════════════════════════════════════════════════════════════════════
+
+fn translate_and_execute(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (u32, u32) {
+    let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
+    let pipeline = translate::translate_nodes(&nodes, &io_buffers)
+        .expect("translation should succeed");
+
+    let bpp = zenpipe::format::RGBA8_SRGB.bytes_per_pixel() as usize;
+    let data = vec![128u8; src_w as usize * src_h as usize * bpp];
+    let source: Box<dyn zenpipe::Source> = Box::new(
+        zenpipe::sources::MaterializedSource::from_data(data, src_w, src_h, zenpipe::format::RGBA8_SRGB),
+    );
+
+    let result = zenpipe::bridge::build_pipeline(source, &pipeline.nodes, &[])
+        .expect("pipeline should build");
+    (result.source.width(), result.source.height())
+}
+
+#[test]
+fn execute_constrain_then_rotate90_dimensions() {
+    // 600x450 → constrain within 70x70 → 70x53 → rotate90 → 53x70
+    let (w, h) = translate_and_execute(
+        vec![
+            Node::Constrain(Constraint {
+                mode: ConstraintMode::Within,
+                w: Some(70), h: Some(70),
+                hints: None, gravity: None, canvas_color: None,
+            }),
+            Node::Rotate90,
+        ],
+        600, 450,
+    );
+    assert_eq!((w, h), (53, 70), "constrain+rot90: expected 53x70, got {w}x{h}");
+}
+
+#[test]
+fn execute_constrain_then_rotate270_dimensions() {
+    let (w, h) = translate_and_execute(
+        vec![
+            Node::Constrain(Constraint {
+                mode: ConstraintMode::Within,
+                w: Some(70), h: Some(70),
+                hints: None, gravity: None, canvas_color: None,
+            }),
+            Node::Rotate270,
+        ],
+        600, 450,
+    );
+    assert_eq!((w, h), (53, 70), "constrain+rot270: expected 53x70, got {w}x{h}");
+}
+
+#[test]
+fn execute_rotate90_standalone_dimensions() {
+    let (w, h) = translate_and_execute(vec![Node::Rotate90], 100, 60);
+    assert_eq!((w, h), (60, 100), "standalone rot90: expected 60x100, got {w}x{h}");
+}
+
+#[test]
+fn execute_constrain_then_flip_h_dimensions() {
+    let (w, h) = translate_and_execute(
+        vec![
+            Node::Constrain(Constraint {
+                mode: ConstraintMode::Within,
+                w: Some(70), h: Some(70),
+                hints: None, gravity: None, canvas_color: None,
+            }),
+            Node::FlipH,
+        ],
+        600, 450,
+    );
+    assert_eq!((w, h), (70, 53), "constrain+flip_h: expected 70x53, got {w}x{h}");
+}
