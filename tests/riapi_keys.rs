@@ -589,3 +589,22 @@ fn crop_custom_units() {
     assert!((w - 1.0).abs() < 0.001, "w={w}, expected 1.0");
     assert!((h - 1.0).abs() < 0.001, "h={h}, expected 1.0");
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  GRAYSCALE & INVERT (RIAPI via #[kv])
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn s_grayscale() {
+    let r = parse("s.grayscale=ntsc");
+    // Should produce a zenfilters.grayscale node
+    let g = find_node(&r.instances, "zenfilters.grayscale");
+    assert!(g.is_some(), "s.grayscale should produce Grayscale node");
+}
+
+#[test]
+fn s_invert() {
+    let r = parse("s.invert=true");
+    let inv = find_node(&r.instances, "zenfilters.invert");
+    assert!(inv.is_some(), "s.invert should produce Invert node");
+}
