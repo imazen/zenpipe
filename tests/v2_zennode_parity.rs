@@ -33,6 +33,12 @@ fn first_schema_id(pipeline: &translate::TranslatedPipeline) -> &str {
     pipeline.nodes[0].schema().id
 }
 
+fn assert_param_u32(node: &Box<dyn NodeInstance>, name: &str, expected: u32) {
+    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val.as_u32().unwrap_or_else(|| panic!("param '{name}' is not u32: {val:?}"));
+    assert_eq!(actual, expected, "param '{name}': expected {expected}, got {actual}");
+}
+
 fn assert_param_i32(node: &Box<dyn NodeInstance>, name: &str, expected: i32) {
     let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
     let actual = val.as_i32().unwrap_or_else(|| panic!("param '{name}' is not i32: {val:?}"));
@@ -531,29 +537,59 @@ fn command_string_without_expansion_is_unsupported() {
 }
 
 #[test]
-fn draw_image_exact_is_unsupported() {
-    let result = translate_one(Node::DrawImageExact {
-        x: 0,
-        y: 0,
+fn draw_image_exact_produces_composite() {
+    let p = translate_ok(Node::DrawImageExact {
+        x: 10,
+        y: 20,
         w: 100,
         h: 100,
-        blend: None,
+        blend: Some(CompositingMode::Compose),
         hints: None,
     });
-    assert!(result.is_err(), "DrawImageExact should be unsupported");
+    assert_eq!(first_schema_id(&p), "zenpipe.composite");
+    assert_param_u32(&p.nodes[0], "fg_x", 10);
+    assert_param_u32(&p.nodes[0], "fg_y", 20);
 }
 
 #[test]
-fn copy_rect_to_canvas_is_unsupported() {
-    let result = translate_one(Node::CopyRectToCanvas {
-        from_x: 0,
-        from_y: 0,
-        w: 100,
-        h: 100,
-        x: 50,
-        y: 50,
+fn draw_image_exact_overwrite_blend() {
+    let p = translate_ok(Node::DrawImageExact {
+        x: 0,
+        y: 0,
+        w: 50,
+        h: 50,
+        blend: Some(CompositingMode::Overwrite),
+        hints: None,
     });
-    assert!(result.is_err(), "CopyRectToCanvas should be unsupported");
+    let mode = p.nodes[0].get_param("blend_mode")
+        .and_then(|v| v.as_str().map(|s| s.to_string()));
+    assert_eq!(mode.as_deref(), Some("source"));
+}
+
+#[test]
+fn copy_rect_to_canvas_produces_crop_and_composite() {
+    let p = translate_ok(Node::CopyRectToCanvas {
+        from_x: 10,
+        from_y: 20,
+        w: 100,
+        h: 80,
+        x: 50,
+        y: 60,
+    });
+    // Should produce 2 nodes: Crop then Composite.
+    assert_eq!(p.nodes.len(), 2);
+    assert_eq!(p.nodes[0].schema().id, "zenlayout.crop");
+    assert_eq!(p.nodes[1].schema().id, "zenpipe.composite");
+
+    // Crop params: from_x/from_y as origin, w/h as size.
+    assert_param_u32(&p.nodes[0], "x", 10);
+    assert_param_u32(&p.nodes[0], "y", 20);
+    assert_param_u32(&p.nodes[0], "w", 100);
+    assert_param_u32(&p.nodes[0], "h", 80);
+
+    // Composite params: target position on canvas.
+    assert_param_u32(&p.nodes[1], "fg_x", 50);
+    assert_param_u32(&p.nodes[1], "fg_y", 60);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -725,29 +761,7 @@ fn all_v2_variants_handled() {
             },
         ),
         ("CaptureBitmapKey", Node::CaptureBitmapKey { capture_id: 0 }),
-    ];
-
-    for (name, node) in &translatable {
-        let result = translate_one(node.clone());
-        assert!(
-            result.is_ok(),
-            "Node variant '{name}' should translate successfully, got: {:?}",
-            result.err()
-        );
-    }
-
-    // Known-unsupported variants
-    let unsupported: Vec<(&str, Node)> = vec![
-        (
-            "CommandString",
-            Node::CommandString {
-                kind: CommandStringKind::ImageResizer4,
-                value: "w=100".into(),
-                decode: Some(0),
-                encode: Some(1),
-                watermarks: None,
-            },
-        ),
+        // Composition nodes (now supported)
         (
             "DrawImageExact",
             Node::DrawImageExact {
@@ -762,6 +776,29 @@ fn all_v2_variants_handled() {
         (
             "CopyRectToCanvas",
             Node::CopyRectToCanvas { from_x: 0, from_y: 0, w: 10, h: 10, x: 0, y: 0 },
+        ),
+    ];
+
+    for (name, node) in &translatable {
+        let result = translate_one(node.clone());
+        assert!(
+            result.is_ok(),
+            "Node variant '{name}' should translate successfully, got: {:?}",
+            result.err()
+        );
+    }
+
+    // Known-unsupported variants (must be expanded before translation)
+    let unsupported: Vec<(&str, Node)> = vec![
+        (
+            "CommandString",
+            Node::CommandString {
+                kind: CommandStringKind::ImageResizer4,
+                value: "w=100".into(),
+                decode: Some(0),
+                encode: Some(1),
+                watermarks: None,
+            },
         ),
     ];
 

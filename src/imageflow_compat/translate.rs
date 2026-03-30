@@ -298,8 +298,27 @@ fn translate_one(
         }
 
         // ─── Composition ───
-        Node::DrawImageExact { x, y, w, h, blend, hints } => {
-            Err(TranslateError::Unsupported("draw_image_exact".into()))
+        //
+        // DrawImageExact and CopyRectToCanvas are graph-mode operations
+        // that require two inputs (Input + Canvas edges). In linear Steps
+        // mode, they produce a Composite node that carries position info.
+        // The graph executor wires up the Canvas source separately.
+        Node::DrawImageExact { x, y, w: _w, h: _h, blend, hints: _hints } => {
+            // Maps to zenpipe.composite with foreground position.
+            // The blend mode translates: Compose → source_over, Overwrite → source.
+            let blend_str = match blend {
+                Some(s::CompositingMode::Overwrite) => "source",
+                Some(s::CompositingMode::Compose) | None => "source_over",
+            };
+            push_layout_node(
+                &mut result.nodes,
+                "zenpipe.composite",
+                &[
+                    ("fg_x", ParamValue::U32(*x)),
+                    ("fg_y", ParamValue::U32(*y)),
+                    ("blend_mode", ParamValue::Str(blend_str.to_string())),
+                ],
+            )
         }
 
         Node::Watermark(wm) => {
@@ -311,7 +330,30 @@ fn translate_one(
         }
 
         Node::CopyRectToCanvas { from_x, from_y, w, h, x, y } => {
-            Err(TranslateError::Unsupported("copy_rect_to_canvas".into()))
+            // CopyRectToCanvas crops a region from the input and places it
+            // on the canvas at (x, y). Decompose to Crop + Composite.
+            //
+            // Step 1: Crop the source region.
+            push_layout_node(
+                &mut result.nodes,
+                "zenlayout.crop",
+                &[
+                    ("x", ParamValue::U32(*from_x)),
+                    ("y", ParamValue::U32(*from_y)),
+                    ("w", ParamValue::U32(*w)),
+                    ("h", ParamValue::U32(*h)),
+                ],
+            )?;
+            // Step 2: Composite the cropped region onto the canvas.
+            push_layout_node(
+                &mut result.nodes,
+                "zenpipe.composite",
+                &[
+                    ("fg_x", ParamValue::U32(*x)),
+                    ("fg_y", ParamValue::U32(*y)),
+                    ("blend_mode", ParamValue::Str("source_over".to_string())),
+                ],
+            )
         }
 
         // ─── Misc ───
