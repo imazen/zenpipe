@@ -832,11 +832,27 @@ impl Default for BwMixer {
 ///
 /// In Oklab, grayscale means a=0, b=0. The perceived luminance is already
 /// encoded in the L channel, so there is no information loss.
-#[derive(Node, Clone, Debug, Default)]
+#[derive(Node, Clone, Debug)]
 #[node(id = "zenfilters.grayscale", group = Color, role = Filter)]
 #[node(label = "Grayscale")]
 #[node(format(preferred = OklabF32, alpha = Skip))]
-pub struct Grayscale {}
+pub struct Grayscale {
+    /// Grayscale algorithm. All produce identical results in Oklab space
+    /// (zero chroma), but different luma coefficients when applied in sRGB.
+    /// Values: "oklab" (default), "ntsc", "bt709", "flat", "ry"
+    #[param(default = "oklab")]
+    #[param(section = "Main", label = "Algorithm")]
+    #[kv("s.grayscale")]
+    pub algorithm: String,
+}
+
+impl Default for Grayscale {
+    fn default() -> Self {
+        Self {
+            algorithm: String::from("oklab"),
+        }
+    }
+}
 
 /// Hue rotation in Oklab a/b plane.
 ///
@@ -1246,11 +1262,24 @@ pub struct Dehaze {
 ///
 /// Inverts lightness (L' = 1.0 - L) and negates chroma (a' = -a, b' = -b).
 /// Produces a perceptually correct negative.
-#[derive(Node, Clone, Debug, Default)]
+#[derive(Node, Clone, Debug)]
 #[node(id = "zenfilters.invert", group = Effects, role = Filter)]
 #[node(label = "Invert")]
 #[node(format(preferred = OklabF32, alpha = Skip))]
-pub struct Invert {}
+pub struct Invert {
+    /// Enable/disable. Always true when the node is present.
+    /// Exists to enable RIAPI s.invert=true querystring support.
+    #[param(default = true)]
+    #[param(section = "Main", label = "Enable")]
+    #[kv("s.invert")]
+    pub enabled: bool,
+}
+
+impl Default for Invert {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
 
 /// Alpha channel scaling for transparency adjustment.
 ///

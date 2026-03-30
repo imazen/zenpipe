@@ -57,6 +57,8 @@ mod vibrance;
 mod vignette;
 #[cfg(feature = "experimental")]
 mod warp;
+#[cfg(feature = "experimental")]
+pub mod warp_simd;
 mod white_point;
 mod whites_blacks;
 
