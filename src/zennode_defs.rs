@@ -195,13 +195,14 @@ pub struct FlipV {}
 
 /// Rotate the image 90 degrees clockwise.
 ///
-/// Swaps width and height. NOT coalesced because 90/270 degree
-/// rotations require pixel materialization (axis swap).
+/// Swaps width and height. Coalesced with other geometry nodes so the
+/// layout planner computes correct dimensions through the full chain.
+/// Pixel axis-swap happens at execution time.
 ///
 /// RIAPI: `?srotate=90`
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenlayout.rotate_90", group = Geometry, role = Orient)]
-#[node(changes_dimensions)]
+#[node(coalesce = "layout_plan", changes_dimensions)]
 #[node(tags("rotate", "geometry"))]
 pub struct Rotate90 {}
 
@@ -223,13 +224,13 @@ pub struct Rotate180 {}
 
 /// Rotate the image 270 degrees clockwise (90 counter-clockwise).
 ///
-/// Swaps width and height. NOT coalesced because 90/270 degree
-/// rotations require pixel materialization (axis swap).
+/// Swaps width and height. Coalesced with other geometry nodes so the
+/// layout planner computes correct dimensions through the full chain.
 ///
 /// RIAPI: `?srotate=270`
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenlayout.rotate_270", group = Geometry, role = Orient)]
-#[node(changes_dimensions)]
+#[node(coalesce = "layout_plan", changes_dimensions)]
 #[node(tags("rotate", "geometry"))]
 pub struct Rotate270 {}
 
