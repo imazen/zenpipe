@@ -14,6 +14,7 @@ enough = "0.4.2"
 
 zencodec = "0.1.11"
 zenpixels = { version = "0.2.1", default-features = false }
+codec-corpus = "1"
 
 [dependencies.zencodecs]
 path = ".."
@@ -110,6 +111,13 @@ bench = false
 [[bin]]
 name = "fuzz_select"
 path = "fuzz_targets/fuzz_select.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "seed_corpus_tool"
+path = "seed_corpus_tool.rs"
 test = false
 doc = false
 bench = false

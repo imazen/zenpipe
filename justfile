@@ -108,15 +108,15 @@ fuzz-deep:
 fuzz-cov TARGET:
     cd fuzz && cargo +nightly fuzz coverage {{TARGET}} corpus/seed/mixed
 
-# Seed corpus from local sibling crates (Linux/macOS only — uses bash).
-[unix]
-fuzz-seed *ARGS:
-    ./fuzz/seed_corpus.sh {{ARGS}}
+# Seed fuzz corpus from codec-corpus conformance suites (cross-platform).
+# Downloads on first use, caches locally. Works on Linux, macOS, Windows.
+fuzz-seed:
+    cd fuzz && cargo run --bin seed_corpus_tool
 
-# Seed corpus local only (Linux/macOS only).
+# Seed corpus from local sibling crates + external repos (Linux/macOS only).
 [unix]
-fuzz-seed-local:
-    ./fuzz/seed_corpus.sh --local-only
+fuzz-seed-full *ARGS:
+    ./fuzz/seed_corpus.sh {{ARGS}}
 
 # Clean fuzz artifacts and coverage data (preserves corpus).
 [unix]
