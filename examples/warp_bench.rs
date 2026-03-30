@@ -419,49 +419,5 @@ fn main() {
         verify_correctness(&dl_ref, &dl_d, "Fused SIMD L");
     }
 
-    // ─── RGBA u8 interleaved ────────────────────────────────────────
-    println!("\n=== RGBA u8 interleaved warp (4 channels, no Oklab) ===\n");
-
-    let src_rgba: Vec<u8> = (0..(w * h * 4) as usize).map(|i| (i % 256) as u8).collect();
-    let mut dst_rgba = vec![0u8; src_rgba.len()];
-
-    bench_fn(
-        "RGBA u8 scalar",
-        || {
-            warp_simd::warp_rgba_u8(&src_rgba, &mut dst_rgba, w, h, &m, None);
-        },
-        iters,
-        mpix,
-    );
-
-    bench_fn(
-        "RGBA u8 SIMD",
-        || {
-            warp_simd::warp_rgba_u8_simd(&src_rgba, &mut dst_rgba, w, h, &m, None);
-        },
-        iters,
-        mpix,
-    );
-
-    // ─── Total pipeline comparison ────────────────────────────────
-    println!("\n=== End-to-end comparison (rotate 5° at 1080p) ===");
-    println!("  Fused 3-plane f32 SIMD (Oklab):  needs sRGB→Oklab + warp + Oklab→sRGB");
-    println!("  RGBA u8 SIMD (direct):           warp only, no color conversion\n");
-
-    // Verify RGBA correctness
-    let mut dst_scalar = vec![0u8; src_rgba.len()];
-    let mut dst_simd = vec![0u8; src_rgba.len()];
-    warp_simd::warp_rgba_u8(&src_rgba, &mut dst_scalar, w, h, &m, None);
-    warp_simd::warp_rgba_u8_simd(&src_rgba, &mut dst_simd, w, h, &m, None);
-    let mut max_diff = 0u8;
-    for i in 0..dst_scalar.len() {
-        let d = dst_scalar[i].abs_diff(dst_simd[i]);
-        max_diff = max_diff.max(d);
-    }
-    println!(
-        "  RGBA SIMD vs scalar max diff: {} (should be 0 or 1)",
-        max_diff
-    );
-
     println!("\nDone.");
 }

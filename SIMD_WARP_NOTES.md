@@ -119,8 +119,26 @@ All approaches verified against the scalar reference:
    could be reduced. AVX-512 `vpgatherdd` with 16-wide would also double
    throughput vs AVX2 8-wide.
 
+## Dead end: interleaved RGBA u8
+
+We prototyped an interleaved RGBA u8 warp to skip the Oklab round-trip
+for standalone rotation. The hypothesis was wrong:
+
+| Path | Time | Mpix/s |
+|------|------|--------|
+| Fused 3-plane f32 SIMD | 28ms | 222 |
+| RGBA u8 SIMD | 64ms | 32 |
+| RGBA u8 scalar | 99ms | 21 |
+
+The interleaved u8 path is **2.3× slower** than planar f32 SIMD even
+without counting Oklab conversion overhead (~5ms). Root cause:
+4-byte-strided u8 gathers are catastrophically cache-hostile compared
+to contiguous f32 plane access. The Oklab cost is dwarfed by the
+gather penalty. Code was removed; see git history for the full
+implementation.
+
 ## Files
 
-- `src/filters/warp_simd.rs` — All four approaches + tests
+- `src/filters/warp_simd.rs` — Planar SIMD approaches A-D + tests
 - `examples/warp_bench.rs` — Benchmark harness
 - `src/filters/mod.rs` — Module registration (feature-gated on `experimental`)
