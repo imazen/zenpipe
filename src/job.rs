@@ -127,6 +127,39 @@ pub enum CmsMode {
     None,
 }
 
+// ─── Metadata policy ───
+
+/// Controls which metadata survives the pipeline.
+///
+/// EXIF and XMP contain privacy-sensitive data (GPS, camera serial numbers,
+/// edit history) and can be large (embedded thumbnails, C2PA provenance).
+/// ICC profiles and CICP are functional — they affect how pixels display.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MetadataPolicy {
+    /// Web-optimized defaults (recommended).
+    ///
+    /// Keeps: ICC profile (stripped if sRGB — browsers assume it), CICP,
+    /// HDR metadata (ContentLightLevel, MasteringDisplay).
+    ///
+    /// Strips: EXIF (privacy: GPS, timestamps, camera IDs, thumbnails),
+    /// XMP (privacy: edit history, author info; includes C2PA provenance),
+    /// orientation (already applied or passed through as flag).
+    #[default]
+    WebDefault,
+
+    /// Keep all metadata from the source image.
+    ///
+    /// ICC, EXIF, XMP (including C2PA), CICP, HDR metadata, orientation.
+    /// Use for archival or when metadata preservation is required.
+    PreserveAll,
+
+    /// Strip all metadata. Smallest output.
+    ///
+    /// Only the bare minimum for correct display is kept:
+    /// CICP (4 bytes, needed for wide gamut/HDR).
+    StripAll,
+}
+
 // ─── Gain map mode ───
 
 /// How to handle gain maps (UltraHDR / ISO 21496-1) during processing.
@@ -172,6 +205,8 @@ pub struct ImageJob<'a> {
     cms_mode: CmsMode,
     /// Gain map handling mode.
     gain_map_mode: GainMapMode,
+    /// Metadata stripping policy.
+    metadata_policy: MetadataPolicy,
     /// Resource limits.
     limits: Option<Limits>,
     /// Codec registry (which formats are enabled).
@@ -196,6 +231,7 @@ impl<'a> ImageJob<'a> {
             intent: zencodecs::CodecIntent::default(),
             cms_mode: CmsMode::default(),
             gain_map_mode: GainMapMode::default(),
+            metadata_policy: MetadataPolicy::default(),
             limits: None,
             registry: zencodecs::AllowedFormats::all(),
             codec_config: None,
@@ -265,6 +301,15 @@ impl<'a> ImageJob<'a> {
     /// Use [`GainMapMode::Discard`] to strip gain maps from the output.
     pub fn with_gain_map_mode(mut self, mode: GainMapMode) -> Self {
         self.gain_map_mode = mode;
+        self
+    }
+
+    /// Set the metadata policy.
+    ///
+    /// Default: [`MetadataPolicy::WebDefault`] — strips EXIF/XMP/C2PA,
+    /// keeps ICC/CICP/HDR metadata for correct display.
+    pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
+        self.metadata_policy = policy;
         self
     }
 
@@ -377,7 +422,7 @@ impl<'a> ImageJob<'a> {
             has_gain_map,
             is_hdr: false, // handled by CMS
             exif_orientation: image_info.orientation.to_exif(),
-            metadata: Some(image_info.metadata()),
+            metadata: Some(self.apply_metadata_policy(image_info.metadata())),
         };
 
         // 9. Run the pipeline via orchestrate::stream().
@@ -504,6 +549,41 @@ impl<'a> ImageJob<'a> {
         });
 
         Ok((Box::new(source), sidecar))
+    }
+
+    /// Apply metadata policy: filter metadata fields based on the policy.
+    fn apply_metadata_policy(&self, mut meta: zencodec::Metadata) -> zencodec::Metadata {
+        match self.metadata_policy {
+            MetadataPolicy::PreserveAll => meta,
+            MetadataPolicy::WebDefault => {
+                // Strip EXIF (GPS, camera IDs, thumbnails, C2PA in JUMBF)
+                meta.exif = None;
+                // Strip XMP (edit history, author, C2PA provenance)
+                meta.xmp = None;
+                // Keep ICC (required for wide gamut), but strip known sRGB profiles
+                // (browsers assume sRGB — embedding it wastes 500B–150KB).
+                if let Some(ref icc) = meta.icc_profile {
+                    if zencodecs::icc_profile_is_srgb(icc) {
+                        meta.icc_profile = None;
+                    }
+                }
+                // Keep CICP (4 bytes, required for correct wide gamut/HDR display)
+                // Keep content_light_level and mastering_display (HDR tone mapping)
+                // Set orientation to Identity (already applied or passed through)
+                meta.orientation = zencodec::Orientation::Identity;
+                meta
+            }
+            MetadataPolicy::StripAll => {
+                meta.exif = None;
+                meta.xmp = None;
+                meta.icc_profile = None;
+                meta.content_light_level = None;
+                meta.mastering_display = None;
+                meta.orientation = zencodec::Orientation::Identity;
+                // Keep only CICP (4 bytes, bare minimum for correct display)
+                meta
+            }
+        }
     }
 
     /// Apply CMS transform if configured and needed.
