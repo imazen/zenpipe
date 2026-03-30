@@ -100,16 +100,30 @@ pub struct JobResult {
 
 /// Color management mode for the job.
 ///
-/// Controls how ICC profiles are handled between decode and pipeline.
-#[derive(Clone, Copy, Debug, Default)]
+/// Controls how ICC profiles and color spaces are handled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CmsMode {
-    /// Convert to sRGB after decode using loose sRGB detection.
-    /// Matches legacy imageflow v2 behavior.
+    /// Preserve the source color space (default for v3).
+    ///
+    /// Wide gamut content (Display P3, Rec. 2020) passes through
+    /// the pipeline without gamut mapping. The ICC profile is embedded
+    /// in the output for correct display.
+    ///
+    /// Unknown/vendor ICC profiles are still converted to sRGB (via
+    /// structural sRGB detection) to avoid color shifts from
+    /// unrecognized profiles.
     #[default]
+    Preserve,
+    /// Convert to sRGB after decode using loose sRGB detection.
+    /// Matches legacy imageflow v2 behavior. Vendor profiles with
+    /// "sRGB" in the description are treated as sRGB (skipped).
     SrgbCompat,
     /// Convert to sRGB after decode using strict structural sRGB detection.
+    /// Only skips transform if profile primaries + TRC match sRGB exactly.
     SceneReferred,
-    /// No CMS — preserve source color space.
+    /// No CMS — no ICC transforms at all. Source pixels pass through
+    /// byte-for-byte. Use when you know the source is already in the
+    /// desired color space.
     None,
 }
 
@@ -344,10 +358,14 @@ impl<'a> ImageJob<'a> {
         let has_gain_map = gain_map_sidecar.is_some();
 
         // 6. Apply CMS transform if needed.
+        // When CMS is None, preserve the source color space (P3, Rec.2020, etc.)
+        // — don't force conversion to sRGB.
         let source = self.apply_cms(source, &image_info, input_bytes)?;
 
-        // 7. Ensure source is RGBA8 sRGB for pipeline compatibility.
-        let source = ensure_srgb_rgba8(source)?;
+        // 7. Ensure source is RGBA8 for pipeline compatibility.
+        // Preserves the source color primaries — only converts channel layout
+        // and depth (e.g., RGB8 → RGBA8, u16 → u8). Does NOT gamut-map to sRGB.
+        let source = ensure_rgba8(source)?;
 
         // 8. Build source info for orchestration.
         let source_info = crate::orchestrate::SourceImageInfo {
@@ -488,7 +506,13 @@ impl<'a> ImageJob<'a> {
         Ok((Box::new(source), sidecar))
     }
 
-    /// Apply CMS transform (ICC → sRGB) if configured and needed.
+    /// Apply CMS transform if configured and needed.
+    ///
+    /// - `Preserve`: skip transform for wide gamut (P3, Rec.2020 via CICP).
+    ///   Only convert unknown vendor ICC profiles to sRGB.
+    /// - `SrgbCompat`: convert non-sRGB to sRGB (loose matching).
+    /// - `SceneReferred`: convert non-sRGB to sRGB (strict matching).
+    /// - `None`: no CMS at all.
     #[cfg(feature = "std")]
     fn apply_cms(
         &self,
@@ -498,6 +522,19 @@ impl<'a> ImageJob<'a> {
     ) -> Result<Box<dyn Source>, PipeError> {
         let cms_mode = match self.cms_mode {
             CmsMode::None => return Ok(source),
+            CmsMode::Preserve => {
+                // In Preserve mode, skip CMS for known wide gamut profiles.
+                // CICP tells us the primaries — if it's P3 or Rec.2020, preserve.
+                if let Some(cicp) = info.source_color.cicp {
+                    match cicp.color_primaries {
+                        9 | 12 => return Ok(source), // BT.2020 or Display P3
+                        _ => {}
+                    }
+                }
+                // For unknown ICC profiles, still convert to sRGB (strict mode)
+                // to avoid color shifts from unrecognized vendor profiles.
+                zencodecs::CmsMode::SceneReferred
+            }
             CmsMode::SrgbCompat => zencodecs::CmsMode::Compat,
             CmsMode::SceneReferred => zencodecs::CmsMode::SceneReferred,
         };
@@ -690,10 +727,22 @@ impl<'a> ImageJob<'a> {
     }
 }
 
-/// Convert source to RGBA8 sRGB if it isn't already.
-fn ensure_srgb_rgba8(source: Box<dyn Source>) -> Result<Box<dyn Source>, PipeError> {
+/// Convert source to RGBA8 while preserving color primaries and transfer function.
+///
+/// Only changes the channel layout (e.g., RGB→RGBA, Gray→RGBA) and depth
+/// (e.g., u16→u8). Does NOT gamut-map — P3 stays P3, Rec.2020 stays Rec.2020.
+fn ensure_rgba8(source: Box<dyn Source>) -> Result<Box<dyn Source>, PipeError> {
     let src_format = source.format();
-    let target = crate::format::RGBA8_SRGB;
+
+    // Build a target that matches the source primaries and transfer function
+    // but has RGBA u8 layout with straight alpha.
+    let target = crate::format::PixelFormat::new(
+        crate::ChannelType::U8,
+        crate::ChannelLayout::Rgba,
+        Some(crate::AlphaMode::Straight),
+        src_format.transfer,
+    )
+    .with_primaries(src_format.primaries);
 
     if src_format == target {
         return Ok(source);
@@ -879,8 +928,8 @@ mod tests {
     // ── CmsMode default ──
 
     #[test]
-    fn cms_mode_default_is_srgb_compat() {
-        assert!(matches!(CmsMode::default(), CmsMode::SrgbCompat));
+    fn cms_mode_default_is_preserve() {
+        assert!(matches!(CmsMode::default(), CmsMode::Preserve));
     }
 
     // ── IoSlot Clone ──
