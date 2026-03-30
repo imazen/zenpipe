@@ -170,6 +170,7 @@ pub fn execute_framewise(
     framewise: &Framewise,
     io_buffers: &HashMap<i32, Vec<u8>>,
     security: &imageflow_types::ExecutionSecurity,
+    job_options: &imageflow_types::JobOptions,
 ) -> Result<ExecuteResult, ZenError> {
     // Collect decode info from probing input buffers.
     let decode_infos = collect_decode_infos(framewise, io_buffers);
@@ -181,7 +182,7 @@ pub fn execute_framewise(
 
     match framewise {
         Framewise::Steps(steps) => {
-            let (results, captures) = execute_steps(steps, io_buffers, security)?;
+            let (results, captures) = execute_steps(steps, io_buffers, security, job_options)?;
             Ok(ExecuteResult {
                 encode_results: results,
                 captured_dimensions: captures,
@@ -212,6 +213,7 @@ fn execute_steps(
     steps: &[Node],
     io_buffers: &HashMap<i32, Vec<u8>>,
     security: &imageflow_types::ExecutionSecurity,
+    job_options: &imageflow_types::JobOptions,
 ) -> Result<(Vec<ZenEncodeResult>, CapturedBitmaps), ZenError> {
     // Pre-process: expand CommandString nodes using source dimensions from probe.
     let mut steps = expand_command_strings(steps, io_buffers)?;
@@ -359,7 +361,7 @@ fn execute_steps(
     }
 
     let (decision, source, exif_flag) =
-        probe_resolve_decode(input_data, &pipeline, &pipeline.decoder_commands, security.cms_mode)?;
+        probe_resolve_decode(input_data, &pipeline, &pipeline.decoder_commands, job_options.cms_mode)?;
 
     // Auto-apply EXIF orientation unless the pipeline already has an explicit orient node.
     // zenjpeg auto-orients by default (exif_flag returns 1/Identity after decode),
@@ -547,10 +549,11 @@ fn execute_graph(
 
     // Execute each branch as a linear steps pipeline.
     let security = imageflow_types::ExecutionSecurity::sane_defaults();
+    let job_options = imageflow_types::JobOptions::default();
     let mut all_results = Vec::new();
 
     for (_encode_io_id, path) in &encode_branches {
-        let (results, _captures) = execute_steps(path, io_buffers, &security)?;
+        let (results, _captures) = execute_steps(path, io_buffers, &security, &job_options)?;
         all_results.extend(results);
     }
 
