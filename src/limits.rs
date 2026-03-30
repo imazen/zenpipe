@@ -50,6 +50,24 @@ impl Limits {
         Self::default()
     }
 
+    /// Production-safe limits for real-time image proxies processing untrusted input.
+    ///
+    /// 16384x16384 max dimensions, 100 megapixels, 512 MB memory, 100 MB input,
+    /// 1000 frames, 60 seconds duration.
+    pub fn for_proxy() -> Self {
+        Self {
+            max_width: Some(16_384),
+            max_height: Some(16_384),
+            max_pixels: Some(100_000_000),
+            max_memory_bytes: Some(512 * 1024 * 1024),
+            max_input_bytes: Some(100 * 1024 * 1024),
+            max_output_bytes: Some(100 * 1024 * 1024),
+            max_frames: Some(1000),
+            max_duration_ms: Some(60_000),
+            threading: zencodec::ThreadingPolicy::Unlimited,
+        }
+    }
+
     /// Set maximum image width in pixels.
     pub fn with_max_width(mut self, max: u64) -> Self {
         self.max_width = Some(max);

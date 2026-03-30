@@ -516,9 +516,23 @@ impl DecodedDepthMap {
             };
         }
 
+        // Guard against overflow / excessive allocation.
+        const MAX_DEPTH_PIXELS: u64 = 64_000_000; // 64 megapixels
+        let total_pixels = (target_width as u64)
+            .checked_mul(target_height as u64)
+            .unwrap_or(u64::MAX);
+        if total_pixels > MAX_DEPTH_PIXELS {
+            return DepthImage {
+                data: Vec::new(),
+                width: target_width,
+                height: target_height,
+                pixel_format: self.depth.pixel_format,
+            };
+        }
+
         // Read source as f32 for interpolation
         let src_f32 = read_raw_f32(&self.depth);
-        let mut dst_f32 = alloc::vec![0.0f32; target_width as usize * target_height as usize];
+        let mut dst_f32 = alloc::vec![0.0f32; total_pixels as usize];
 
         for y in 0..target_height {
             for x in 0..target_width {

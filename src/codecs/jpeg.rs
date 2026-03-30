@@ -172,7 +172,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     gainmap_quality: Option<f32>,
     _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
@@ -184,10 +184,21 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     let width = img.width() as u32;
     let height = img.height() as u32;
 
+    // Enforce limits if provided.
+    if let Some(limits) = limits {
+        limits
+            .check_dimensions(width as u64, height as u64)
+            .map_err(|msg| at!(CodecError::LimitExceeded(alloc::string::String::from(msg))))?;
+    }
+
     // Convert ImgRef<Rgb<f32>> to RawImage (RGBA f32)
     let (buf, _, _) = img.to_contiguous_buf();
+    let alloc_size = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(16))
+        .ok_or_else(|| at!(CodecError::Oom))?;
     let mut rgba_data: alloc::vec::Vec<u8> =
-        alloc::vec::Vec::with_capacity(width as usize * height as usize * 16);
+        alloc::vec::Vec::with_capacity(alloc_size);
     for px in buf.iter() {
         rgba_data.extend_from_slice(&px.r.to_le_bytes());
         rgba_data.extend_from_slice(&px.g.to_le_bytes());
@@ -232,7 +243,7 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     gainmap_quality: Option<f32>,
     _metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
-    _limits: Option<&Limits>,
+    limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use zenjpeg::ultrahdr::{
@@ -243,6 +254,13 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     let stop_token = crate::limits::stop_or_default(&stop);
     let width = img.width() as u32;
     let height = img.height() as u32;
+
+    // Enforce limits if provided.
+    if let Some(limits) = limits {
+        limits
+            .check_dimensions(width as u64, height as u64)
+            .map_err(|msg| at!(CodecError::LimitExceeded(alloc::string::String::from(msg))))?;
+    }
 
     // Convert ImgRef<Rgba<f32>> to RawImage (RGBA f32)
     let (buf, _, _) = img.to_contiguous_buf();

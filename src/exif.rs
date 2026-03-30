@@ -335,6 +335,10 @@ const TAG_GPS_ALTITUDE: u16 = 0x0006;
 /// Maximum number of IFD entries we will parse per directory.
 /// Protects against corrupt data claiming millions of entries.
 const MAX_IFD_ENTRIES: u16 = 1000;
+/// Cap pre-allocation for vector-valued EXIF entries.
+/// No legitimate tag has thousands of rationals; this prevents OOM from
+/// crafted entries with count=u32::MAX.
+const MAX_VEC_PREALLOC: u32 = 1024;
 
 // =========================================================================
 // Byte-order reader
@@ -570,7 +574,8 @@ fn read_srational_vec(
         return None;
     }
     let off = entry.data_offset(entry_offset)?;
-    let mut vals = Vec::with_capacity(entry.count as usize);
+    // Cap pre-allocation: no legitimate EXIF entry has thousands of rationals.
+    let mut vals = Vec::with_capacity(entry.count.min(MAX_VEC_PREALLOC) as usize);
     for i in 0..entry.count as usize {
         let base = off + i * 8;
         let num = reader.i32_at(base)?;
@@ -609,7 +614,8 @@ fn read_rational_vec(
         return None;
     }
     let off = entry.data_offset(entry_offset)?;
-    let mut vals = Vec::with_capacity(entry.count as usize);
+    // Cap pre-allocation: no legitimate EXIF entry has thousands of rationals.
+    let mut vals = Vec::with_capacity(entry.count.min(MAX_VEC_PREALLOC) as usize);
     for i in 0..entry.count as usize {
         let base = off + i * 8;
         let num = reader.u32_at(base)?;
