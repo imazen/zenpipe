@@ -1702,6 +1702,214 @@ fn warp_3plane_fused_v3(
     }
 }
 
+// ─── Interleaved RGBA u8 warp ──────────────────────────────────────
+//
+// Operates directly on sRGB u8 RGBA data without Oklab conversion.
+// For standalone rotation (no color filters), this skips the entire
+// Oklab round-trip. Accumulates in f32, rounds to u8 at output.
+
+/// Warp interleaved RGBA u8 data using Robidoux interpolation.
+///
+/// Operates directly in sRGB gamma space — correct for spatial operations
+/// (rotation, affine, perspective) that move pixels without blending across
+/// large distances. Avoids the Oklab conversion round-trip.
+///
+/// `src` and `dst` are packed RGBA u8: `len = width * height * 4`.
+/// `bg_rgba` is the fill color for out-of-bounds pixels (or `None` for clamp).
+///
+/// # Panics
+///
+/// Panics if `src.len() < (width * height * 4)` or `dst.len() < (width * height * 4)`.
+#[allow(clippy::too_many_arguments)]
+pub fn warp_rgba_u8(
+    src: &[u8],
+    dst: &mut [u8],
+    width: u32,
+    height: u32,
+    m: &[f32; 9],
+    bg_rgba: Option<[u8; 4]>,
+) {
+    let npx = (width as usize) * (height as usize);
+    assert!(src.len() >= npx * 4);
+    assert!(dst.len() >= npx * 4);
+
+    let w = width as usize;
+    let h = height as usize;
+    let wf = width as f32;
+    let hf = height as f32;
+    let w_i32 = width as i32;
+    let h_i32 = height as i32;
+    let m0 = m[0];
+    let m3 = m[3];
+
+    let is_color_bg = bg_rgba.is_some();
+    let bg = bg_rgba.unwrap_or([0, 0, 0, 0]);
+
+    for dy in 0..h {
+        let dyf = dy as f32;
+        let mut sx = m[1] * dyf + m[2];
+        let mut sy = m[4] * dyf + m[5];
+        let row_start = dy * w * 4;
+
+        for dx in 0..w {
+            let out_off = row_start + dx * 4;
+
+            // OOB check
+            if is_color_bg && (sx < -0.5 || sx >= wf - 0.5 || sy < -0.5 || sy >= hf - 0.5) {
+                dst[out_off] = bg[0];
+                dst[out_off + 1] = bg[1];
+                dst[out_off + 2] = bg[2];
+                dst[out_off + 3] = bg[3];
+                sx += m0;
+                sy += m3;
+                continue;
+            }
+
+            let sx_c = sx.clamp(0.0, wf - 1.0);
+            let sy_c = sy.clamp(0.0, hf - 1.0);
+
+            let ix = sx_c.floor() as i32;
+            let iy = sy_c.floor() as i32;
+            let fx = sx_c - ix as f32;
+            let fy = sy_c - iy as f32;
+
+            // Kernel weights (Robidoux, 4-tap separable)
+            let mut wx = [0.0f32; 4];
+            let mut wy = [0.0f32; 4];
+            let mut wx_sum = 0.0f32;
+            let mut wy_sum = 0.0f32;
+            for i in 0..4 {
+                let o = i as i32 - 1;
+                let wt_x = robidoux_scalar(o as f32 - fx);
+                let wt_y = robidoux_scalar(o as f32 - fy);
+                wx[i] = wt_x;
+                wy[i] = wt_y;
+                wx_sum += wt_x;
+                wy_sum += wt_y;
+            }
+            let inv_wx = if wx_sum.abs() > 1e-10 {
+                1.0 / wx_sum
+            } else {
+                1.0
+            };
+            let inv_wy = if wy_sum.abs() > 1e-10 {
+                1.0 / wy_sum
+            } else {
+                1.0
+            };
+            for i in 0..4 {
+                wx[i] *= inv_wx;
+                wy[i] *= inv_wy;
+            }
+
+            // Precompute row/col indices (shared across channels)
+            let gy: [usize; 4] =
+                core::array::from_fn(|j| (iy + j as i32 - 1).clamp(0, h_i32 - 1) as usize);
+            let gx: [usize; 4] =
+                core::array::from_fn(|i| (ix + i as i32 - 1).clamp(0, w_i32 - 1) as usize);
+
+            // Precompute byte offsets (4 bytes per pixel)
+            let idx: [[usize; 4]; 4] = core::array::from_fn(|j| {
+                let base = gy[j] * w * 4;
+                core::array::from_fn(|i| base + gx[i] * 4)
+            });
+
+            // Gather and accumulate all 4 channels (R, G, B, A)
+            let mut sum_r = 0.0f32;
+            let mut sum_g = 0.0f32;
+            let mut sum_b = 0.0f32;
+            let mut sum_a = 0.0f32;
+            for j in 0..4 {
+                let mut rr = 0.0f32;
+                let mut rg = 0.0f32;
+                let mut rb = 0.0f32;
+                let mut ra = 0.0f32;
+                for i in 0..4 {
+                    let off = idx[j][i];
+                    rr += src[off] as f32 * wx[i];
+                    rg += src[off + 1] as f32 * wx[i];
+                    rb += src[off + 2] as f32 * wx[i];
+                    ra += src[off + 3] as f32 * wx[i];
+                }
+                sum_r += rr * wy[j];
+                sum_g += rg * wy[j];
+                sum_b += rb * wy[j];
+                sum_a += ra * wy[j];
+            }
+
+            dst[out_off] = sum_r.round().clamp(0.0, 255.0) as u8;
+            dst[out_off + 1] = sum_g.round().clamp(0.0, 255.0) as u8;
+            dst[out_off + 2] = sum_b.round().clamp(0.0, 255.0) as u8;
+            dst[out_off + 3] = sum_a.round().clamp(0.0, 255.0) as u8;
+
+            sx += m0;
+            sy += m3;
+        }
+    }
+}
+
+/// Cardinal rotation (90°/180°/270°) on interleaved RGBA u8 data.
+///
+/// `quarter_turns`: 1=90°CCW, 2=180°, 3=270°CCW. Pixel-perfect, no interpolation.
+/// For 90°/270°, output dimensions are swapped (width↔height).
+///
+/// Returns `(dst, out_width, out_height)`.
+pub fn rotate_rgba_u8_cardinal(
+    src: &[u8],
+    width: u32,
+    height: u32,
+    quarter_turns: u8,
+) -> (alloc::vec::Vec<u8>, u32, u32) {
+    let w = width as usize;
+    let h = height as usize;
+    let (out_w, out_h) = match quarter_turns {
+        1 | 3 => (height, width),
+        _ => (width, height),
+    };
+    let ow = out_w as usize;
+    let oh = out_h as usize;
+    let mut dst = alloc::vec![0u8; ow * oh * 4];
+
+    match quarter_turns {
+        1 => {
+            // 90° CCW: (x, y) → (y, w-1-x)
+            for y in 0..h {
+                for x in 0..w {
+                    let src_off = (y * w + x) * 4;
+                    let dst_off = ((w - 1 - x) * ow + y) * 4;
+                    dst[dst_off..dst_off + 4].copy_from_slice(&src[src_off..src_off + 4]);
+                }
+            }
+        }
+        2 => {
+            // 180°: (x, y) → (w-1-x, h-1-y)
+            for y in 0..h {
+                for x in 0..w {
+                    let src_off = (y * w + x) * 4;
+                    let dst_off = ((h - 1 - y) * ow + (w - 1 - x)) * 4;
+                    dst[dst_off..dst_off + 4].copy_from_slice(&src[src_off..src_off + 4]);
+                }
+            }
+        }
+        3 => {
+            // 270° CCW (90° CW): (x, y) → (h-1-y, x)
+            for y in 0..h {
+                for x in 0..w {
+                    let src_off = (y * w + x) * 4;
+                    let dst_off = (x * ow + (h - 1 - y)) * 4;
+                    dst[dst_off..dst_off + 4].copy_from_slice(&src[src_off..src_off + 4]);
+                }
+            }
+        }
+        _ => {
+            // 0° / identity
+            dst.copy_from_slice(&src[..ow * oh * 4]);
+        }
+    }
+
+    (dst, out_w, out_h)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1879,5 +2087,124 @@ mod tests {
             max_diff < 1e-4,
             "SIMD color bg vs scalar max diff: {max_diff} (should be < 1e-4)"
         );
+    }
+
+    fn make_gradient_rgba(w: u32, h: u32) -> alloc::vec::Vec<u8> {
+        let mut buf = alloc::vec::Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                buf.push(((x * 255) / w) as u8); // R
+                buf.push(((y * 255) / h) as u8); // G
+                buf.push((((x + y) * 127) / (w + h)) as u8); // B
+                buf.push(255); // A
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn rgba_identity_is_exact() {
+        let w = 32u32;
+        let h = 32u32;
+        let src = make_gradient_rgba(w, h);
+        let mut dst = alloc::vec![0u8; src.len()];
+        let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0f32];
+        warp_rgba_u8(&src, &mut dst, w, h, &identity, None);
+        assert_eq!(src, dst, "identity warp should be exact");
+    }
+
+    #[test]
+    fn rgba_rotation_interior_changes() {
+        let w = 64u32;
+        let h = 64u32;
+        let src = make_gradient_rgba(w, h);
+        let mut dst = alloc::vec![0u8; src.len()];
+        let angle = 5.0f32 * core::f32::consts::PI / 180.0;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        let cx = (w as f32 - 1.0) * 0.5;
+        let cy = (h as f32 - 1.0) * 0.5;
+        let m = [
+            cos_a,
+            sin_a,
+            cx - cx * cos_a - cy * sin_a,
+            -sin_a,
+            cos_a,
+            cy + cx * sin_a - cy * cos_a,
+            0.0,
+            0.0,
+            1.0,
+        ];
+        warp_rgba_u8(&src, &mut dst, w, h, &m, None);
+        // Interior should differ from source (it's rotated)
+        let center = (32 * w as usize + 32) * 4;
+        let differs = dst[center] != src[center]
+            || dst[center + 1] != src[center + 1]
+            || dst[center + 2] != src[center + 2];
+        assert!(differs, "5° rotation should change interior pixels");
+    }
+
+    #[test]
+    fn rgba_bg_fill() {
+        let w = 16u32;
+        let h = 16u32;
+        let src = alloc::vec![128u8; (w * h * 4) as usize];
+        let mut dst = alloc::vec![0u8; src.len()];
+        // Large rotation → corners should be fill color
+        let angle = 45.0f32 * core::f32::consts::PI / 180.0;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        let cx = (w as f32 - 1.0) * 0.5;
+        let cy = (h as f32 - 1.0) * 0.5;
+        let m = [
+            cos_a,
+            sin_a,
+            cx - cx * cos_a - cy * sin_a,
+            -sin_a,
+            cos_a,
+            cy + cx * sin_a - cy * cos_a,
+            0.0,
+            0.0,
+            1.0,
+        ];
+        warp_rgba_u8(&src, &mut dst, w, h, &m, Some([255, 0, 0, 255]));
+        // Corner (0,0) should be the fill color (red)
+        assert_eq!(dst[0], 255, "corner R should be fill");
+        assert_eq!(dst[1], 0, "corner G should be fill");
+        assert_eq!(dst[2], 0, "corner B should be fill");
+    }
+
+    #[test]
+    fn cardinal_90_swaps_dimensions() {
+        let w = 16u32;
+        let h = 8u32;
+        let src = make_gradient_rgba(w, h);
+        let (dst, ow, oh) = rotate_rgba_u8_cardinal(&src, w, h, 1);
+        assert_eq!(ow, 8);
+        assert_eq!(oh, 16);
+        assert_eq!(dst.len(), 8 * 16 * 4);
+    }
+
+    #[test]
+    fn cardinal_180_preserves_dimensions() {
+        let w = 16u32;
+        let h = 16u32;
+        let src = make_gradient_rgba(w, h);
+        let (dst, ow, oh) = rotate_rgba_u8_cardinal(&src, w, h, 2);
+        assert_eq!((ow, oh), (w, h));
+        // Double 180° = identity
+        let (dst2, _, _) = rotate_rgba_u8_cardinal(&dst, w, h, 2);
+        assert_eq!(src, dst2, "180° twice should be identity");
+    }
+
+    #[test]
+    fn cardinal_90_270_roundtrip() {
+        let w = 16u32;
+        let h = 8u32;
+        let src = make_gradient_rgba(w, h);
+        let (r90, w90, h90) = rotate_rgba_u8_cardinal(&src, w, h, 1);
+        let (back, wb, hb) = rotate_rgba_u8_cardinal(&r90, w90, h90, 3);
+        assert_eq!((wb, hb), (w, h));
+        assert_eq!(src, back, "90° + 270° should be identity");
     }
 }

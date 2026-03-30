@@ -2759,12 +2759,11 @@ dependencies = [
 
 [[package]]
 name = "zenblend"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "archmage",
  "magetypes",
  "safe_unaligned_simd",
- "wide",
 ]
 
 [[package]]
