@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
@@ -83,6 +85,20 @@ pub struct Warp {
     cardinal: Option<u8>,
 }
 
+/// How to handle the border region created by non-cardinal rotation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RotateMode {
+    /// Crop to the largest inscribed rectangle with the original aspect ratio.
+    /// No borders, no fill — output is smaller but clean. Default.
+    #[default]
+    Crop,
+    /// Fill out-of-bounds with clamped edge pixels.
+    FillClamp,
+    /// Fill out-of-bounds with black.
+    FillBlack,
+}
+
 /// Rotation by an arbitrary angle in degrees.
 ///
 /// Automatically selects the fastest path:
@@ -90,31 +106,35 @@ pub struct Warp {
 /// - **90°, 180°, 270°** — pixel-perfect cardinal rotation (no interpolation)
 /// - **All other angles** — sub-pixel rotation via [`Warp`] matrix
 ///
-/// This is the recommended API for rotation. Use [`Warp`] directly only when
-/// you need affine/projective transforms or custom center points.
+/// By default, non-cardinal rotations crop to the largest inscribed rectangle
+/// (no borders). Use [`RotateMode::FillClamp`] or [`FillBlack`](RotateMode::FillBlack)
+/// to keep the original dimensions with filled borders instead.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use zenfilters::{Rotate, WarpInterpolation};
+/// use zenfilters::Rotate;
 ///
-/// // Auto-selects cardinal fast path
+/// // Cardinal: pixel-perfect, no interpolation
 /// let r90 = Rotate::new(90.0);
 ///
-/// // Arbitrary angle with default bicubic interpolation
+/// // Arbitrary: rotates and crops to clean rectangle
 /// let tilt = Rotate::new(3.5);
 ///
-/// // Document deskew: black background + max quality
+/// // Document deskew: black borders + Lanczos3
 /// let deskew = Rotate::deskew(1.2);
+///
+/// // Keep full frame with clamped edges
+/// let full = Rotate::new(3.5).with_mode(RotateMode::FillClamp);
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rotate {
     /// Rotation angle in degrees. Positive = counterclockwise.
     pub angle_degrees: f32,
-    /// How to handle out-of-bounds pixels (non-cardinal only).
-    pub background: WarpBackground,
-    /// Interpolation quality (non-cardinal only).
+    /// How to handle borders. Default: Crop.
+    pub mode: RotateMode,
+    /// Interpolation quality (non-cardinal only). Default: Bicubic.
     pub interpolation: WarpInterpolation,
 }
 
@@ -123,23 +143,38 @@ impl Rotate {
     ///
     /// Positive = counterclockwise. Cardinal angles (0, 90, 180, 270)
     /// are detected automatically and use pixel-perfect fast paths.
+    /// Non-cardinal rotations crop to the largest clean rectangle.
     pub fn new(angle_degrees: f32) -> Self {
         Self {
             angle_degrees,
-            background: WarpBackground::Clamp,
+            mode: RotateMode::Crop,
             interpolation: WarpInterpolation::Bicubic,
         }
     }
 
-    /// Create a deskew rotation (black background + Lanczos3).
+    /// Create a deskew rotation (black borders + Lanczos3).
     ///
     /// Optimized for document text: clean borders and maximum sharpness.
+    /// Does NOT crop — the full rotated frame is preserved so no content
+    /// is lost at the edges. Use [`new`](Self::new) for photo straightening.
     pub fn deskew(angle_degrees: f32) -> Self {
         Self {
             angle_degrees,
-            background: WarpBackground::Black,
+            mode: RotateMode::FillBlack,
             interpolation: WarpInterpolation::Lanczos3,
         }
+    }
+
+    /// Set the border mode.
+    pub fn with_mode(mut self, mode: RotateMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Set interpolation to maximum quality (Lanczos3).
+    pub fn with_max_quality(mut self) -> Self {
+        self.interpolation = WarpInterpolation::Lanczos3;
+        self
     }
 
     /// Normalize angle to [0, 360) and check for exact cardinal.
@@ -164,17 +199,82 @@ impl Rotate {
     /// Cardinal angles produce pixel-perfect warps (no interpolation).
     /// Non-cardinal angles produce matrix-based warps.
     pub fn to_warp(&self, width: u32, height: u32) -> Warp {
+        let bg = match self.mode {
+            RotateMode::Crop | RotateMode::FillClamp => WarpBackground::Clamp,
+            RotateMode::FillBlack => WarpBackground::Black,
+        };
         match self.cardinal_quarter_turns() {
             Some(0) => Warp::default(), // identity
             Some(n) => Warp::exact_cardinal(n, width, height),
             None => {
                 let mut warp = Warp::rotation(self.angle_degrees, width, height);
-                warp.background = self.background;
+                warp.background = bg;
                 warp.interpolation = self.interpolation;
                 warp
             }
         }
     }
+}
+
+/// Compute the largest axis-aligned rectangle with the original aspect ratio
+/// that fits entirely inside the rotated rectangle.
+///
+/// Returns `(crop_w, crop_h)` in pixels, always ≤ `(w, h)`.
+fn inscribed_crop_dimensions(w: f32, h: f32, angle_rad: f32) -> (f32, f32) {
+    let theta = angle_rad.abs() % (core::f32::consts::PI / 2.0);
+    if theta < 1e-6 {
+        return (w, h);
+    }
+    let cos_t = theta.cos();
+    let sin_t = theta.sin();
+
+    // Two constraints from the four edges of the rotated rectangle.
+    // The inscribed rectangle preserves the original aspect ratio.
+    let w1 = (w * w) / (w * cos_t + h * sin_t);
+    let denom2 = (h * cos_t - w * sin_t).abs();
+    let w2 = if denom2 > 1e-6 {
+        (w * h) / denom2
+    } else {
+        f32::MAX
+    };
+
+    let crop_w = w1.min(w2).min(w);
+    let crop_h = (crop_w * h / w).min(h);
+    (crop_w, crop_h)
+}
+
+/// Crop `planes` to a centered sub-rectangle of size `(new_w, new_h)`.
+fn crop_planes_center(planes: &mut OklabPlanes, new_w: u32, new_h: u32) {
+    let old_w = planes.width as usize;
+    let x0 = ((planes.width - new_w) / 2) as usize;
+    let y0 = ((planes.height - new_h) / 2) as usize;
+    let nw = new_w as usize;
+    let nh = new_h as usize;
+
+    fn crop_plane(
+        src: &[f32],
+        old_w: usize,
+        x0: usize,
+        y0: usize,
+        nw: usize,
+        nh: usize,
+    ) -> Vec<f32> {
+        let mut dst = Vec::with_capacity(nw * nh);
+        for y in y0..y0 + nh {
+            let row_start = y * old_w + x0;
+            dst.extend_from_slice(&src[row_start..row_start + nw]);
+        }
+        dst
+    }
+
+    planes.l = crop_plane(&planes.l, old_w, x0, y0, nw, nh);
+    planes.a = crop_plane(&planes.a, old_w, x0, y0, nw, nh);
+    planes.b = crop_plane(&planes.b, old_w, x0, y0, nw, nh);
+    if let Some(ref alpha) = planes.alpha {
+        planes.alpha = Some(crop_plane(alpha, old_w, x0, y0, nw, nh));
+    }
+    planes.width = new_w;
+    planes.height = new_h;
 }
 
 impl Filter for Rotate {
@@ -183,8 +283,6 @@ impl Filter for Rotate {
     }
 
     fn is_neighborhood(&self) -> bool {
-        // Cardinal rotations are pixel-perfect remaps, not neighborhood.
-        // Non-cardinal need neighborhood access for interpolation.
         self.cardinal_quarter_turns().is_none()
     }
 
@@ -202,7 +300,19 @@ impl Filter for Rotate {
 
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         let warp = self.to_warp(planes.width, planes.height);
+        let (orig_w, orig_h) = (planes.width, planes.height);
         warp.apply(planes, ctx);
+
+        // Crop to inscribed rectangle if Crop mode and non-cardinal
+        if self.mode == RotateMode::Crop && self.cardinal_quarter_turns().is_none() {
+            let angle_rad = self.angle_degrees.abs() * core::f32::consts::PI / 180.0;
+            let (cw, ch) = inscribed_crop_dimensions(orig_w as f32, orig_h as f32, angle_rad);
+            let new_w = (cw.floor() as u32).max(1).min(planes.width);
+            let new_h = (ch.floor() as u32).max(1).min(planes.height);
+            if new_w < planes.width || new_h < planes.height {
+                crop_planes_center(planes, new_w, new_h);
+            }
+        }
     }
 }
 

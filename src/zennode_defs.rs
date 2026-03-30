@@ -1307,6 +1307,10 @@ impl Default for ColorMatrix {
 /// Cardinal angles (0°, 90°, 180°, 270°) use pixel-perfect remapping
 /// with zero interpolation. All other angles use sub-pixel rotation
 /// via a 3×3 affine matrix with configurable interpolation quality.
+///
+/// Default mode is **Crop** — the result is cropped to the largest clean
+/// rectangle with no borders. Use mode=1 (FillClamp) or mode=2 (FillBlack)
+/// to keep original dimensions with filled borders.
 #[cfg(feature = "experimental")]
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenfilters.rotate", group = Geometry, role = Filter)]
@@ -1321,11 +1325,11 @@ pub struct RotateNode {
     #[param(unit = "°", section = "Main", slider = Linear)]
     pub angle: f32,
 
-    /// Background mode for out-of-bounds pixels (non-cardinal only).
-    /// 0 = Clamp (default, photos), 1 = Black (documents).
-    #[param(range(0..=1), default = 0, identity = 0, step = 1)]
+    /// Border mode (non-cardinal only).
+    /// 0 = Crop (default, clean rectangle), 1 = FillClamp, 2 = FillBlack.
+    #[param(range(0..=2), default = 0, identity = 0, step = 1)]
     #[param(section = "Options")]
-    pub background: i32,
+    pub mode: i32,
 
     /// Interpolation quality (non-cardinal only).
     /// 0 = Bilinear (fast), 1 = Bicubic (default), 2 = Lanczos3 (max quality).
@@ -1609,16 +1613,17 @@ pub fn node_to_filter(
         #[cfg(feature = "experimental")]
         "zenfilters.rotate" => {
             let angle = f32_param(node, "angle");
-            let bg = match node
-                .get_param("background")
+            let mode = match node
+                .get_param("mode")
                 .and_then(|p| match p {
                     ParamValue::I32(v) => Some(v),
                     _ => None,
                 })
                 .unwrap_or(0)
             {
-                1 => WarpBackground::Black,
-                _ => WarpBackground::Clamp,
+                1 => RotateMode::FillClamp,
+                2 => RotateMode::FillBlack,
+                _ => RotateMode::Crop,
             };
             let interp = match node
                 .get_param("interpolation")
@@ -1634,7 +1639,7 @@ pub fn node_to_filter(
             };
             Some(alloc::boxed::Box::new(crate::filters::Rotate {
                 angle_degrees: angle,
-                background: bg,
+                mode,
                 interpolation: interp,
             }))
         }
