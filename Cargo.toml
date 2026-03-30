@@ -24,8 +24,8 @@ std = [
 ]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
 zennode = ["dep:zennode", "zenresize/layout", "dep:zencodecs", "zencodecs/zennode"]
-# High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS).
-job = ["zennode", "std", "zencodecs/cms"]
+# High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS + gain map support).
+job = ["zennode", "std", "zencodecs/cms", "zencodecs/jpeg-ultrahdr"]
 # JSON Schema / OpenAPI schema export from node registry.
 json-schema = ["zennode", "zennode/json-schema", "zencodecs/zennode", "dep:serde_json"]
 # Imageflow v2 compat: translate v2 Node/EncoderPreset/Framewise/Build001 to zen pipeline.

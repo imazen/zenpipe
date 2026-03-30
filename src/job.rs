@@ -113,12 +113,38 @@ pub enum CmsMode {
     None,
 }
 
+// ─── Gain map mode ───
+
+/// How to handle gain maps (UltraHDR / ISO 21496-1) during processing.
+///
+/// Gain maps enable HDR display from SDR base images. They're supported
+/// by JPEG (UltraHDR/MPF), AVIF (tmap), and JXL (jhgm).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GainMapMode {
+    /// Preserve the gain map through the pipeline (default).
+    ///
+    /// Extracts during decode, tracks geometry proportionally through
+    /// resize/crop/orientation, re-embeds during encode. The gain map
+    /// is automatically transcoded between formats (JPEG MPF → AVIF tmap → JXL jhgm).
+    ///
+    /// If the output format doesn't support gain maps (PNG, WebP, GIF),
+    /// the gain map is silently dropped.
+    #[default]
+    Preserve,
+
+    /// Discard the gain map. Output is SDR only.
+    Discard,
+}
+
 // ─── Job builder ───
 
 /// A high-level image processing job.
 ///
 /// Combines zencodecs (probe/decode/encode) with zenpipe (pipeline execution)
 /// into a single bytes-in → bytes-out operation.
+///
+/// Gain maps are preserved by default — no user action required. Set
+/// `gain_map_mode(GainMapMode::Discard)` to strip them.
 pub struct ImageJob<'a> {
     /// I/O slots keyed by io_id.
     io: HashMap<i32, IoSlot>,
@@ -130,6 +156,8 @@ pub struct ImageJob<'a> {
     intent: zencodecs::CodecIntent,
     /// Color management mode.
     cms_mode: CmsMode,
+    /// Gain map handling mode.
+    gain_map_mode: GainMapMode,
     /// Resource limits.
     limits: Option<Limits>,
     /// Codec registry (which formats are enabled).
@@ -153,6 +181,7 @@ impl<'a> ImageJob<'a> {
             converters: &[],
             intent: zencodecs::CodecIntent::default(),
             cms_mode: CmsMode::default(),
+            gain_map_mode: GainMapMode::default(),
             limits: None,
             registry: zencodecs::AllowedFormats::all(),
             codec_config: None,
@@ -213,6 +242,15 @@ impl<'a> ImageJob<'a> {
     /// Set the CMS mode.
     pub fn with_cms(mut self, mode: CmsMode) -> Self {
         self.cms_mode = mode;
+        self
+    }
+
+    /// Set the gain map handling mode.
+    ///
+    /// Default: [`GainMapMode::Preserve`] — gain maps round-trip automatically.
+    /// Use [`GainMapMode::Discard`] to strip gain maps from the output.
+    pub fn with_gain_map_mode(mut self, mode: GainMapMode) -> Self {
+        self.gain_map_mode = mode;
         self
     }
 
@@ -281,8 +319,16 @@ impl<'a> ImageJob<'a> {
         )
         .map_err(|e| PipeError::Op(alloc::format!("format selection failed: {e}")))?;
 
-        // 5. Decode the source to a pixel stream.
-        let source = self.decode_source(input_bytes, &image_info)?;
+        // 5. Decode the source to a pixel stream, optionally extracting gain map.
+        let has_gain_map = image_info.gain_map.is_present();
+        let preserve_gain_map =
+            has_gain_map && self.gain_map_mode == GainMapMode::Preserve;
+
+        let (source, gain_map_sidecar) = if preserve_gain_map {
+            self.decode_source_with_gainmap(input_bytes)?
+        } else {
+            (self.decode_source(input_bytes, &image_info)?, None)
+        };
 
         // 6. Apply CMS transform if needed.
         let source = self.apply_cms(source, &image_info, input_bytes)?;
@@ -297,22 +343,26 @@ impl<'a> ImageJob<'a> {
             format: source.format(),
             has_alpha: image_info.has_alpha,
             has_animation: image_info.is_animation(),
-            has_gain_map: image_info.gain_map.is_present(),
+            has_gain_map,
             is_hdr: false, // handled by CMS
             exif_orientation: image_info.orientation.to_exif(),
             metadata: Some(image_info.metadata()),
         };
 
         // 9. Run the pipeline via orchestrate::stream().
+        // When preserving gain maps, set hdr_mode to "preserve" so the sidecar
+        // is tracked through geometry transforms (crop, resize, orientation).
+        let hdr_mode = if preserve_gain_map { "preserve" } else { "sdr_only" };
+
         let config = crate::orchestrate::ProcessConfig {
             nodes: self.nodes,
             converters: self.converters,
             source_info: &source_info,
-            hdr_mode: "sdr_only",
+            hdr_mode,
             trace_config: self.trace_config,
         };
 
-        let output = crate::orchestrate::stream(source, &config, None)?;
+        let output = crate::orchestrate::stream(source, &config, gain_map_sidecar)?;
 
         // 10. Encode the output.
         let encode_result = self.stream_encode(output, &decision)?;
@@ -360,6 +410,69 @@ impl<'a> ImageJob<'a> {
                 Ok(Box::new(source))
             }
         }
+    }
+
+    /// Decode source AND extract gain map in one call.
+    ///
+    /// Returns `(base_source, Option<SidecarStream>)`. The gain map is
+    /// wrapped as a SidecarStream for the orchestration layer to track
+    /// through geometry transforms.
+    fn decode_source_with_gainmap(
+        &self,
+        data: &[u8],
+    ) -> Result<(Box<dyn Source>, Option<crate::sidecar::SidecarStream>), PipeError> {
+        let mut request = zencodecs::DecodeRequest::new(data)
+            .with_registry(&self.registry)
+            .with_gain_map_extraction(true);
+
+        if let Some(ref config) = self.codec_config {
+            request = request.with_codec_config(config);
+        }
+
+        let (decoded, gain_map) = request
+            .decode_gain_map()
+            .map_err(|e| PipeError::Op(alloc::format!("decode with gain map failed: {e}")))?;
+
+        // Convert base image to Source.
+        let pixels = decoded.pixels();
+        let w = decoded.width();
+        let h = decoded.height();
+        let format: PixelFormat = pixels.descriptor();
+        let pixel_data = pixels.as_strided_bytes().to_vec();
+        let source = crate::sources::MaterializedSource::from_data(pixel_data, w, h, format);
+
+        // Convert gain map to SidecarStream.
+        let sidecar = gain_map.map(|gm| {
+            let gm_w = gm.gain_map.width;
+            let gm_h = gm.gain_map.height;
+            let gm_channels = gm.gain_map.channels;
+            let params = gm.params(); // extract before moving data
+
+            // Determine pixel format from channel count.
+            let gm_format = if gm_channels == 1 {
+                crate::format::PixelFormat::new(
+                    crate::ChannelType::U8,
+                    crate::ChannelLayout::Gray,
+                    None,
+                    crate::TransferFunction::Srgb,
+                )
+            } else {
+                crate::format::RGB8_SRGB
+            };
+
+            let gm_source = crate::sources::MaterializedSource::from_data(
+                gm.gain_map.data, gm_w, gm_h, gm_format,
+            );
+
+            crate::sidecar::SidecarStream {
+                source: Box::new(gm_source),
+                width: gm_w,
+                height: gm_h,
+                kind: crate::sidecar::SidecarKind::GainMap { params },
+            }
+        });
+
+        Ok((Box::new(source), sidecar))
     }
 
     /// Apply CMS transform (ICC → sRGB) if configured and needed.
@@ -454,6 +567,33 @@ impl<'a> ImageJob<'a> {
         }
         if let Some(meta) = output.metadata {
             encode_request = encode_request.with_metadata(meta);
+        }
+
+        // Prepare gain map data for re-embedding (if sidecar was preserved).
+        // These live outside the encode_request borrow scope.
+        let gain_map_data = output.sidecar.and_then(|sidecar| {
+            if let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind {
+                let metadata = zencodecs::gainmap::params_to_metadata(params);
+                let gain_map = zencodecs::GainMap {
+                    data: sidecar.data().to_vec(),
+                    width: sidecar.width(),
+                    height: sidecar.height(),
+                    channels: if sidecar.format().layout() == crate::ChannelLayout::Gray { 1 } else { 3 },
+                };
+                Some((gain_map, metadata))
+            } else {
+                None
+            }
+        });
+
+        // Attach gain map to encoder if present.
+        if let Some((ref gm, ref meta)) = gain_map_data {
+            encode_request = encode_request.with_gain_map(
+                zencodecs::GainMapSource::Precomputed {
+                    gain_map: gm,
+                    metadata: meta,
+                },
+            );
         }
 
         // Try streaming encode.
