@@ -14,7 +14,7 @@ enough = "0.4.2"
 
 zencodec = "0.1.11"
 zenpixels = { version = "0.2.1", default-features = false }
-codec-corpus = "1"
+codec-corpus = "1.1"
 
 [dependencies.zencodecs]
 path = ".."
