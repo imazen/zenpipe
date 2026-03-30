@@ -96,6 +96,7 @@ static CROP_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -121,6 +122,7 @@ static ORIENT_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -146,6 +148,7 @@ static FLIP_H_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -171,6 +174,7 @@ static FLIP_V_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -196,6 +200,7 @@ static ROT90_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -221,6 +226,7 @@ static ROT180_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -246,6 +252,7 @@ static ROT270_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -271,6 +278,7 @@ static CONSTRAIN_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -296,6 +304,7 @@ static FILTER_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -321,6 +330,7 @@ static FILTER2_SCHEMA: NodeSchema = NodeSchema {
     version: 1,
     compat_version: 1,
     json_key: "",
+    inputs: &[],
     deny_unknown_fields: false,
 };
 
@@ -627,4 +637,102 @@ fn materialize_after_fusion() {
     assert_eq!(mat.pixels.width(), 100);
     assert_eq!(mat.pixels.height(), 75);
     assert!(!mat.pixels.data().is_empty());
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rotate-after-constrain regression tests (imazen/zenpipe#14)
+//
+// When rotate_90 follows a constrain, the bridge must swap dimensions
+// correctly. Previously the coalesced layout used original source
+// dimensions instead of the constrain output.
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn rotate90_after_constrain_swaps_dimensions() {
+    // 600x450 landscape → constrain within 70x70 → 70x53 → rotate90 → 53x70
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+        make_node(&ROT90_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 53, "after constrain+rot90: width should be 53");
+    assert_eq!(result.source.height(), 70, "after constrain+rot90: height should be 70");
+}
+
+#[test]
+fn rotate270_after_constrain_swaps_dimensions() {
+    // 600x450 → constrain within 70x70 → 70x53 → rotate270 → 53x70
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+        make_node(&ROT270_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 53, "after constrain+rot270: width should be 53");
+    assert_eq!(result.source.height(), 70, "after constrain+rot270: height should be 70");
+}
+
+#[test]
+fn rotate180_after_constrain_preserves_dimensions() {
+    // 600x450 → constrain within 70x70 → 70x53 → rotate180 → 70x53 (no swap)
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+        make_node(&ROT180_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 70, "after constrain+rot180: width should be 70");
+    assert_eq!(result.source.height(), 53, "after constrain+rot180: height should be 53");
+}
+
+#[test]
+fn rotate90_standalone_swaps_dimensions() {
+    // 100x60 → rotate90 → 60x100
+    let source = solid_source(100, 60);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&ROT90_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 60, "standalone rot90: width should be 60");
+    assert_eq!(result.source.height(), 100, "standalone rot90: height should be 100");
+}
+
+#[test]
+fn flip_h_after_constrain_preserves_dimensions() {
+    // 600x450 → constrain within 70x70 → 70x53 → flip_h → 70x53
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+        make_node(&FLIP_H_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 70, "after constrain+flip_h: width should be 70");
+    assert_eq!(result.source.height(), 53, "after constrain+flip_h: height should be 53");
+}
+
+#[test]
+fn orient_exif6_after_constrain_swaps_dimensions() {
+    // EXIF 6 = Rotate90. 600x450 → constrain within 70x70 → 70x53 → orient(6) → 53x70
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+        make_node(&ORIENT_SCHEMA, orient_params(6)),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 53, "after constrain+orient(6): width should be 53");
+    assert_eq!(result.source.height(), 70, "after constrain+orient(6): height should be 70");
+}
+
+#[test]
+fn constrain_after_rotate90_uses_rotated_dimensions() {
+    // 600x450 → rotate90 → 450x600 → constrain within 70x70 → 53x70
+    let source = solid_source(600, 450);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&ROT90_SCHEMA, ParamMap::new()),
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    assert_eq!(result.source.width(), 53, "after rot90+constrain: width should be 53");
+    assert_eq!(result.source.height(), 70, "after rot90+constrain: height should be 70");
 }
