@@ -28,6 +28,12 @@ zennode = ["dep:zennode", "zenresize/layout", "dep:zencodecs", "zencodecs/zennod
 job = ["zennode", "std", "zencodecs/cms"]
 # JSON Schema / OpenAPI schema export from node registry.
 json-schema = ["zennode", "zennode/json-schema", "zencodecs/zennode", "dep:serde_json"]
+# Imageflow v2 compat: translate v2 Node/EncoderPreset/Framewise/Build001 to zen pipeline.
+imageflow-compat = [
+    "job", "nodes-filters", "nodes-png", "nodes-webp",
+    "nodes-gif",
+    "dep:imageflow_types", "dep:imageflow_riapi",
+]
 
 # ── Node registry features ──
 # Each enables zennode + the codec dep for pipeline use.
@@ -95,6 +101,9 @@ zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true
 zenquant = { path = "../zenquant", default-features = false, optional = true }
 # JSON serialization (optional — for schema export)
 serde_json = { version = "1", optional = true }
+# Imageflow v2 compatibility (optional — for running legacy imageflow pipelines)
+imageflow_types = { path = "../../imageflow/imageflow_types", optional = true }
+imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true }
 # Face detection + saliency via zentract plugin (optional)
 zensally = { path = "../zenfaces/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true }
 zensally-zentract = { path = "../zenfaces/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true }

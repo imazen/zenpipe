@@ -65,6 +65,8 @@ pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingO
 
 pub mod animation;
 pub mod codec;
+#[cfg(feature = "imageflow-compat")]
+pub mod imageflow_compat;
 pub mod sidecar;
 pub mod watermark;
 
