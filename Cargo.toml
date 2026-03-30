@@ -115,6 +115,9 @@ zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
 zennode = { path = "../zennode/zennode", features = ["derive"] }
 serde_json = "1"
+codec-corpus = "1"
+imgref = "1.12"
+rgb = { version = "0.8", features = ["as-bytes"] }
 
 [package.metadata.superwork.ci]
 strategy = "git_url"

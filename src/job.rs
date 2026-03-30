@@ -320,15 +320,28 @@ impl<'a> ImageJob<'a> {
         .map_err(|e| PipeError::Op(alloc::format!("format selection failed: {e}")))?;
 
         // 5. Decode the source to a pixel stream, optionally extracting gain map.
-        let has_gain_map = image_info.gain_map.is_present();
-        let preserve_gain_map =
-            has_gain_map && self.gain_map_mode == GainMapMode::Preserve;
+        //
+        // Gain map detection at probe time is unreliable (JPEG returns Unknown
+        // because MPF scanning requires full decode). So when preserving, we
+        // attempt extraction for any format that COULD contain a gain map,
+        // and let the decoder report whether one was actually found.
+        let format_may_have_gainmap = matches!(
+            image_info.format,
+            zencodec::ImageFormat::Jpeg
+                | zencodec::ImageFormat::Avif
+                | zencodec::ImageFormat::Jxl
+                | zencodec::ImageFormat::Heic
+        );
+        let try_extract_gainmap =
+            self.gain_map_mode == GainMapMode::Preserve && format_may_have_gainmap;
 
-        let (source, gain_map_sidecar) = if preserve_gain_map {
+        let (source, gain_map_sidecar) = if try_extract_gainmap {
             self.decode_source_with_gainmap(input_bytes)?
         } else {
             (self.decode_source(input_bytes, &image_info)?, None)
         };
+
+        let has_gain_map = gain_map_sidecar.is_some();
 
         // 6. Apply CMS transform if needed.
         let source = self.apply_cms(source, &image_info, input_bytes)?;
@@ -352,7 +365,7 @@ impl<'a> ImageJob<'a> {
         // 9. Run the pipeline via orchestrate::stream().
         // When preserving gain maps, set hdr_mode to "preserve" so the sidecar
         // is tracked through geometry transforms (crop, resize, orientation).
-        let hdr_mode = if preserve_gain_map { "preserve" } else { "sdr_only" };
+        let hdr_mode = if has_gain_map { "preserve" } else { "sdr_only" };
 
         let config = crate::orchestrate::ProcessConfig {
             nodes: self.nodes,
@@ -596,9 +609,17 @@ impl<'a> ImageJob<'a> {
             );
         }
 
-        // Try streaming encode.
-        match encode_request.build_streaming_encoder(w, h) {
-            Ok(streaming_enc) => {
+        // When a gain map is present, use one-shot encode (gain map embedding
+        // requires full-frame access for MPF/tmap/jhgm assembly).
+        // Otherwise, try streaming encode with one-shot fallback.
+        let has_gain_map_data = gain_map_data.is_some();
+        let streaming_result = if has_gain_map_data {
+            None // Force one-shot path
+        } else {
+            encode_request.build_streaming_encoder(w, h).ok()
+        };
+        match streaming_result {
+            Some(streaming_enc) => {
                 let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
                 crate::execute(source.as_mut(), &mut sink)?;
                 let encode_output = sink
@@ -614,8 +635,8 @@ impl<'a> ImageJob<'a> {
                     extension: target_format.extension().to_string(),
                 })
             }
-            Err(_) => {
-                // Fall back to full-frame encode.
+            None => {
+                // One-shot encode (full-frame materialize).
                 let materialized = crate::sources::MaterializedSource::from_source(source)?;
                 let pixels = zenpixels::PixelSlice::new(
                     materialized.data(),
@@ -626,9 +647,21 @@ impl<'a> ImageJob<'a> {
                 )
                 .map_err(|e| PipeError::Op(alloc::format!("PixelSlice failed: {e}")))?;
 
-                let encode_output = zencodecs::EncodeRequest::new(target_format)
+                let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
                     .with_quality(decision.quality.quality)
-                    .with_registry(&self.registry)
+                    .with_registry(&self.registry);
+
+                // Re-attach gain map for one-shot encode.
+                if let Some((ref gm, ref meta)) = gain_map_data {
+                    oneshot_request = oneshot_request.with_gain_map(
+                        zencodecs::GainMapSource::Precomputed {
+                            gain_map: gm,
+                            metadata: meta,
+                        },
+                    );
+                }
+
+                let encode_output = oneshot_request
                     .encode(pixels, format.has_alpha())
                     .map_err(|e| PipeError::Op(alloc::format!("encode failed: {e}")))?;
 
