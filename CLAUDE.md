@@ -767,7 +767,7 @@ across sibling crate corpora + external GitHub repos (dvyukov/go-fuzz-corpus, li
 
 Key justfile commands: `fuzz-seed`, `fuzz-smoke`, `fuzz-deep`, `fuzz-ci`, `fuzz <target>`.
 
-### Security fixes (2026-03-30)
+### DoS fixes (2026-03-30)
 - **Fixed**: Integer overflow in JPEG UltraHDR allocation (`codecs/jpeg.rs:190`) — added `checked_mul` + limits enforcement
 - **Fixed**: Integer overflow in depth map resize (`depthmap.rs:521`) — added overflow guard with 64MP cap
 - **Fixed**: EXIF parser uncapped Vec allocation (`exif.rs:573,612`) — capped `with_capacity` to MAX_VEC_PREALLOC=1024
