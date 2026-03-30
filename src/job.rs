@@ -599,14 +599,24 @@ impl<'a> ImageJob<'a> {
             }
         });
 
-        // Attach gain map to encoder if present.
-        if let Some((ref gm, ref meta)) = gain_map_data {
-            encode_request = encode_request.with_gain_map(
-                zencodecs::GainMapSource::Precomputed {
-                    gain_map: gm,
-                    metadata: meta,
-                },
-            );
+        // Attach gain map to encoder if the target format supports it.
+        // Formats without gain map support (PNG, WebP, GIF, BMP, etc.)
+        // silently drop the gain map — no error.
+        let target_supports_gainmap = matches!(
+            target_format,
+            zencodec::ImageFormat::Jpeg
+                | zencodec::ImageFormat::Avif
+                | zencodec::ImageFormat::Jxl
+        );
+        if target_supports_gainmap {
+            if let Some((ref gm, ref meta)) = gain_map_data {
+                encode_request = encode_request.with_gain_map(
+                    zencodecs::GainMapSource::Precomputed {
+                        gain_map: gm,
+                        metadata: meta,
+                    },
+                );
+            }
         }
 
         // When a gain map is present, use one-shot encode (gain map embedding
@@ -651,14 +661,16 @@ impl<'a> ImageJob<'a> {
                     .with_quality(decision.quality.quality)
                     .with_registry(&self.registry);
 
-                // Re-attach gain map for one-shot encode.
-                if let Some((ref gm, ref meta)) = gain_map_data {
-                    oneshot_request = oneshot_request.with_gain_map(
-                        zencodecs::GainMapSource::Precomputed {
-                            gain_map: gm,
-                            metadata: meta,
-                        },
-                    );
+                // Re-attach gain map for one-shot encode (only if format supports it).
+                if target_supports_gainmap {
+                    if let Some((ref gm, ref meta)) = gain_map_data {
+                        oneshot_request = oneshot_request.with_gain_map(
+                            zencodecs::GainMapSource::Precomputed {
+                                gain_map: gm,
+                                metadata: meta,
+                            },
+                        );
+                    }
                 }
 
                 let encode_output = oneshot_request
