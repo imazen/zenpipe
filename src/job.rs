@@ -183,6 +183,46 @@ pub enum GainMapMode {
     Discard,
 }
 
+// ─── Defaults presets ───
+
+/// Pre-configured behavior presets for common use cases.
+///
+/// Sets CMS, gain map, and metadata policies in one call. Individual
+/// settings can be overridden after applying a preset.
+///
+/// Used by the v3 JSON API via `"defaults": "v2"` in the request body.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DefaultsPreset {
+    /// Modern web-optimized defaults (default).
+    ///
+    /// - CMS: Preserve wide gamut (P3, Rec.2020 pass through)
+    /// - Gain maps: Preserve (automatic round-trip)
+    /// - Metadata: WebDefault (strip EXIF/XMP/C2PA, keep ICC/CICP/HDR)
+    #[default]
+    Web,
+
+    /// Legacy imageflow v2 behavior.
+    ///
+    /// - CMS: SrgbCompat (convert everything to sRGB)
+    /// - Gain maps: Discard (v2 never had them)
+    /// - Metadata: StripAll (v2 didn't preserve metadata through pipeline)
+    V2Compat,
+
+    /// Archival — preserve everything from the source.
+    ///
+    /// - CMS: Preserve wide gamut
+    /// - Gain maps: Preserve
+    /// - Metadata: PreserveAll (ICC, EXIF, XMP, C2PA, CICP, HDR)
+    Archival,
+
+    /// Minimal — strip everything, smallest output.
+    ///
+    /// - CMS: None (no transforms)
+    /// - Gain maps: Discard
+    /// - Metadata: StripAll
+    Minimal,
+}
+
 // ─── Job builder ───
 
 /// A high-level image processing job.
@@ -190,8 +230,9 @@ pub enum GainMapMode {
 /// Combines zencodecs (probe/decode/encode) with zenpipe (pipeline execution)
 /// into a single bytes-in → bytes-out operation.
 ///
-/// Gain maps are preserved by default — no user action required. Set
-/// `gain_map_mode(GainMapMode::Discard)` to strip them.
+/// Default behavior (`DefaultsPreset::Web`): wide gamut preserved, gain maps
+/// round-trip automatically, EXIF/XMP stripped for privacy. Use
+/// `with_defaults(DefaultsPreset::V2Compat)` for legacy behavior.
 pub struct ImageJob<'a> {
     /// I/O slots keyed by io_id.
     io: HashMap<i32, IoSlot>,
@@ -286,6 +327,40 @@ impl<'a> ImageJob<'a> {
     /// Set the codec intent (format/quality selection).
     pub fn with_intent(mut self, intent: zencodecs::CodecIntent) -> Self {
         self.intent = intent;
+        self
+    }
+
+    /// Apply a defaults preset (sets CMS, gain map, and metadata policies).
+    ///
+    /// Individual settings can be overridden after this call.
+    /// ```ignore
+    /// ImageJob::new()
+    ///     .with_defaults(DefaultsPreset::V2Compat)
+    ///     .with_metadata_policy(MetadataPolicy::WebDefault)  // override just metadata
+    /// ```
+    pub fn with_defaults(mut self, preset: DefaultsPreset) -> Self {
+        match preset {
+            DefaultsPreset::Web => {
+                self.cms_mode = CmsMode::Preserve;
+                self.gain_map_mode = GainMapMode::Preserve;
+                self.metadata_policy = MetadataPolicy::WebDefault;
+            }
+            DefaultsPreset::V2Compat => {
+                self.cms_mode = CmsMode::SrgbCompat;
+                self.gain_map_mode = GainMapMode::Discard;
+                self.metadata_policy = MetadataPolicy::StripAll;
+            }
+            DefaultsPreset::Archival => {
+                self.cms_mode = CmsMode::Preserve;
+                self.gain_map_mode = GainMapMode::Preserve;
+                self.metadata_policy = MetadataPolicy::PreserveAll;
+            }
+            DefaultsPreset::Minimal => {
+                self.cms_mode = CmsMode::None;
+                self.gain_map_mode = GainMapMode::Discard;
+                self.metadata_policy = MetadataPolicy::StripAll;
+            }
+        }
         self
     }
 
