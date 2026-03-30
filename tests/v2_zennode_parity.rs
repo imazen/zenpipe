@@ -13,6 +13,7 @@ use imageflow_types::{
     ConstraintGravity, ConstraintMode, EncoderPreset, Node, PixelFormat, RoundCornersMode,
 };
 use zennode::{NodeInstance, ParamValue};
+use zenpipe::Source as _;
 use zenpipe::imageflow_compat::translate;
 
 /// Helper: translate a single node with empty io_buffers.
@@ -1052,6 +1053,21 @@ fn round_corners_pixels_custom() {
 // (imazen/zenpipe#14: rotate-after-constrain dimension regression)
 // ═══════════════════════════════════════════════════════════════════════
 
+fn gradient_data(w: u32, h: u32) -> Vec<u8> {
+    let bpp = 4usize;
+    let mut data = vec![0u8; w as usize * h as usize * bpp];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let i = (y * w as usize + x) * bpp;
+            data[i] = (x * 255 / (w as usize - 1).max(1)) as u8;
+            data[i + 1] = (y * 255 / (h as usize - 1).max(1)) as u8;
+            data[i + 2] = 0;
+            data[i + 3] = 255;
+        }
+    }
+    data
+}
+
 fn translate_and_execute(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (u32, u32) {
     let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
     let pipeline = translate::translate_nodes(&nodes, &io_buffers)
@@ -1121,4 +1137,101 @@ fn execute_constrain_then_flip_h_dimensions() {
         600, 450,
     );
     assert_eq!((w, h), (70, 53), "constrain+flip_h: expected 70x53, got {w}x{h}");
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Pixel-level orientation tests via translate + bridge
+// ═══════════════════════════════════════════════════════════════════════
+
+fn translate_and_materialize(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (Vec<u8>, u32, u32) {
+    let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
+    let pipeline = translate::translate_nodes(&nodes, &io_buffers)
+        .expect("translation should succeed");
+
+    let data = gradient_data(src_w, src_h);
+    let source: Box<dyn zenpipe::Source> = Box::new(
+        zenpipe::sources::MaterializedSource::from_data(data, src_w, src_h, zenpipe::format::RGBA8_SRGB),
+    );
+
+    let result = zenpipe::bridge::build_pipeline(source, &pipeline.nodes, &[])
+        .expect("pipeline should build");
+    let mat = result.materialize().unwrap();
+    let w = mat.pixels.width();
+    let h = mat.pixels.height();
+    (mat.pixels.data().to_vec(), w, h)
+}
+
+fn px(data: &[u8], w: u32, x: u32, y: u32) -> [u8; 4] {
+    let i = (y * w + x) as usize * 4;
+    [data[i], data[i + 1], data[i + 2], data[i + 3]]
+}
+
+#[test]
+fn execute_flip_h_reverses_pixels() {
+    let (data, w, h) = translate_and_materialize(vec![Node::FlipH], 80, 40);
+    assert_eq!((w, h), (80, 40));
+    let left = px(&data, w, 0, 0);
+    let right = px(&data, w, w - 1, 0);
+    assert!(left[0] > right[0],
+        "FlipH: left R ({}) should be > right R ({}) — gradient reversed",
+        left[0], right[0]);
+}
+
+#[test]
+fn execute_constrain_then_flip_h_reverses_pixels() {
+    let (data, w, h) = translate_and_materialize(
+        vec![
+            Node::Constrain(Constraint {
+                mode: ConstraintMode::Within,
+                w: Some(20), h: Some(20),
+                hints: None, gravity: None, canvas_color: None,
+            }),
+            Node::FlipH,
+        ],
+        80, 40,
+    );
+    assert_eq!(w, 20);
+    assert_eq!(h, 10);
+    let left = px(&data, w, 0, 0);
+    let right = px(&data, w, w - 1, 0);
+    assert!(left[0] > right[0],
+        "constrain+FlipH: left R ({}) should be > right R ({}) — gradient reversed",
+        left[0], right[0]);
+}
+
+#[test]
+fn execute_orient_exif2_reverses_pixels() {
+    // EXIF 2 = FlipH
+    let (data, w, h) = translate_and_materialize(
+        vec![Node::ApplyOrientation { flag: 2 }],
+        80, 40,
+    );
+    assert_eq!((w, h), (80, 40));
+    let left = px(&data, w, 0, 0);
+    let right = px(&data, w, w - 1, 0);
+    assert!(left[0] > right[0],
+        "orient(2): left R ({}) should be > right R ({}) — FlipH reversed",
+        left[0], right[0]);
+}
+
+#[test]
+fn execute_constrain_then_orient_exif2_reverses_pixels() {
+    let (data, w, h) = translate_and_materialize(
+        vec![
+            Node::Constrain(Constraint {
+                mode: ConstraintMode::Within,
+                w: Some(20), h: Some(20),
+                hints: None, gravity: None, canvas_color: None,
+            }),
+            Node::ApplyOrientation { flag: 2 },
+        ],
+        80, 40,
+    );
+    assert_eq!(w, 20);
+    assert_eq!(h, 10);
+    let left = px(&data, w, 0, 0);
+    let right = px(&data, w, w - 1, 0);
+    assert!(left[0] > right[0],
+        "constrain+orient(2): left R ({}) should be > right R ({}) — FlipH reversed",
+        left[0], right[0]);
 }

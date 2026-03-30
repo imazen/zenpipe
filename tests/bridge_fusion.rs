@@ -736,3 +736,173 @@ fn constrain_after_rotate90_uses_rotated_dimensions() {
     assert_eq!(result.source.width(), 53, "after rot90+constrain: width should be 53");
     assert_eq!(result.source.height(), 70, "after rot90+constrain: height should be 70");
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Pixel-level orientation verification (imazen/zenpipe#14)
+//
+// Uses an asymmetric gradient pattern to verify that orientation
+// transforms actually change pixel content, not just dimensions.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Create a source with a left-to-right red gradient (R increases with x).
+/// First pixel is (0,0,0,255), last pixel in row is (w-1,0,0,255).
+fn gradient_source(w: u32, h: u32) -> Box<dyn Source> {
+    let bpp = 4usize;
+    let mut data = vec![0u8; w as usize * h as usize * bpp];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let i = (y * w as usize + x) * bpp;
+            data[i] = (x * 255 / (w as usize - 1).max(1)) as u8; // R = x gradient
+            data[i + 1] = (y * 255 / (h as usize - 1).max(1)) as u8; // G = y gradient
+            data[i + 2] = 0; // B = 0
+            data[i + 3] = 255; // A = opaque
+        }
+    }
+    Box::new(MaterializedSource::from_data(data, w, h, format::RGBA8_SRGB))
+}
+
+/// Materialize pipeline output and return pixel data + dimensions.
+fn materialize_pixels(result: zenpipe::bridge::PipelineResult) -> (Vec<u8>, u32, u32) {
+    let mat = result.materialize().unwrap();
+    let w = mat.pixels.width();
+    let h = mat.pixels.height();
+    let data = mat.pixels.data().to_vec();
+    (data, w, h)
+}
+
+/// Get the RGBA pixel at (x, y) from contiguous RGBA8 data.
+fn pixel_at(data: &[u8], w: u32, x: u32, y: u32) -> [u8; 4] {
+    let i = (y * w + x) as usize * 4;
+    [data[i], data[i + 1], data[i + 2], data[i + 3]]
+}
+
+#[test]
+fn flip_h_reverses_pixel_content() {
+    // 8x4 gradient → flip_h → pixel at (0,0) should have R from the right edge
+    let w = 8u32;
+    let h = 4u32;
+    let source = gradient_source(w, h);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&FLIP_H_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    let (data, ow, oh) = materialize_pixels(result);
+    assert_eq!((ow, oh), (w, h), "flip_h should not change dimensions");
+
+    // After FlipH, pixel (0,0) should have the R value that was at (w-1,0)
+    let top_left = pixel_at(&data, ow, 0, 0);
+    let top_right = pixel_at(&data, ow, ow - 1, 0);
+    // Original: top_left.R ≈ 0, top_right.R ≈ 255
+    // After FlipH: top_left.R ≈ 255, top_right.R ≈ 0
+    assert!(
+        top_left[0] > 200,
+        "after flip_h: top_left R should be ~255 (was right edge), got {}",
+        top_left[0]
+    );
+    assert!(
+        top_right[0] < 55,
+        "after flip_h: top_right R should be ~0 (was left edge), got {}",
+        top_right[0]
+    );
+}
+
+#[test]
+fn rotate90_rotates_pixel_content() {
+    // 8x4 gradient → rotate90 → 4x8, pixel content rotated
+    let w = 8u32;
+    let h = 4u32;
+    let source = gradient_source(w, h);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&ROT90_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    let (data, ow, oh) = materialize_pixels(result);
+    assert_eq!((ow, oh), (h, w), "rot90 should swap dimensions to {}x{}", h, w);
+
+    // Original (0,0) = R:0, G:0. After rot90 CW, this pixel moves to (h-1, 0) = (3, 0).
+    // Original (w-1,0) = R:255, G:0. After rot90 CW, moves to (h-1, w-1) = (3, 7).
+    // Original (0, h-1) = R:0, G:255. After rot90 CW, moves to (0, 0).
+    let top_left = pixel_at(&data, ow, 0, 0);
+    // Should be original bottom-left: R≈0, G≈255
+    assert!(
+        top_left[1] > 200,
+        "after rot90: top_left G should be ~255 (was bottom-left), got {}",
+        top_left[1]
+    );
+}
+
+#[test]
+fn constrain_then_flip_h_flips_pixel_content() {
+    // 80x40 gradient → constrain within 20x20 → 20x10 → flip_h
+    // This tests the actual bug: orientation after constrain via coalesced layout.
+    let w = 80u32;
+    let h = 40u32;
+    let source = gradient_source(w, h);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(20, 20, "within")),
+        make_node(&FLIP_H_SCHEMA, ParamMap::new()),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    let (data, ow, oh) = materialize_pixels(result);
+    assert_eq!(ow, 20, "constrained width");
+    assert_eq!(oh, 10, "constrained height");
+
+    // After constrain + flip_h: the left-to-right gradient should be reversed.
+    let top_left = pixel_at(&data, ow, 0, 0);
+    let top_right = pixel_at(&data, ow, ow - 1, 0);
+    assert!(
+        top_left[0] > top_right[0],
+        "after constrain+flip_h: left R ({}) should be > right R ({}) — gradient should be reversed",
+        top_left[0],
+        top_right[0],
+    );
+}
+
+#[test]
+fn orient_exif2_flips_pixel_content() {
+    // 80x40 gradient → orient(2) [FlipH] → pixels should be horizontally mirrored
+    let w = 80u32;
+    let h = 40u32;
+    let source = gradient_source(w, h);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&ORIENT_SCHEMA, orient_params(2)),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    let (data, ow, oh) = materialize_pixels(result);
+    assert_eq!((ow, oh), (w, h), "FlipH should not change dimensions");
+
+    let top_left = pixel_at(&data, ow, 0, 0);
+    let top_right = pixel_at(&data, ow, ow - 1, 0);
+    assert!(
+        top_left[0] > top_right[0],
+        "after orient(2): left R ({}) should be > right R ({}) — FlipH should reverse gradient",
+        top_left[0],
+        top_right[0],
+    );
+}
+
+#[test]
+fn constrain_then_orient_exif2_flips_pixel_content() {
+    // 80x40 gradient → constrain within 20x20 → 20x10 → orient(2) [FlipH]
+    // The coalesced layout plan must produce FlipH pixels.
+    let w = 80u32;
+    let h = 40u32;
+    let source = gradient_source(w, h);
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![
+        make_node(&CONSTRAIN_SCHEMA, constrain_params(20, 20, "within")),
+        make_node(&ORIENT_SCHEMA, orient_params(2)),
+    ];
+    let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
+    let (data, ow, oh) = materialize_pixels(result);
+    assert_eq!(ow, 20, "constrained width");
+    assert_eq!(oh, 10, "constrained height");
+
+    let top_left = pixel_at(&data, ow, 0, 0);
+    let top_right = pixel_at(&data, ow, ow - 1, 0);
+    assert!(
+        top_left[0] > top_right[0],
+        "after constrain+orient(2): left R ({}) should be > right R ({}) — FlipH should reverse gradient",
+        top_left[0],
+        top_right[0],
+    );
+}
