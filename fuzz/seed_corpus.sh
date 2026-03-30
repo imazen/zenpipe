@@ -194,9 +194,59 @@ done
 echo "  mixed: $(find "$MIXED_DIR" -type f | wc -l) files total"
 
 echo ""
-echo "Done. Total seed files: $(find "$CORPUS_DIR" -type f | wc -l)"
+echo "=== Phase 4: OSS-Fuzz corpus backups ==="
+
+OSS_FUZZ_CACHE="$EXTERNAL_CACHE/oss-fuzz"
+mkdir -p "$OSS_FUZZ_CACHE"
+
+fetch_ossfuzz_zip() {
+    local project="$1" fuzzer="$2" dst_subdir="$3"
+    local zip="$OSS_FUZZ_CACHE/${project}_${fuzzer}.zip"
+    local dst="$CORPUS_DIR/$dst_subdir"
+    local url="https://storage.googleapis.com/${project}-backup.clusterfuzz-external.appspot.com/corpus/libFuzzer/${project}_${fuzzer}/public.zip"
+
+    if [ -f "$zip" ] && [ "$(stat -c%s "$zip" 2>/dev/null || stat -f%z "$zip" 2>/dev/null)" -gt 1000 ]; then
+        echo "  $dst_subdir: using cached $project/$fuzzer"
+    else
+        echo "  $dst_subdir: downloading $project/$fuzzer..."
+        curl -sL --retry 3 --retry-delay 5 -o "$zip" "$url" 2>/dev/null || {
+            echo "  WARNING: failed to download $project/$fuzzer — skipping"
+            rm -f "$zip"
+            return
+        }
+        # Verify it's a real zip, not an XML error
+        if ! file "$zip" | grep -q "Zip archive"; then
+            echo "  WARNING: $project/$fuzzer returned non-zip response — skipping"
+            rm -f "$zip"
+            return
+        fi
+    fi
+
+    mkdir -p "$dst"
+    unzip -qo "$zip" -d "$dst" 2>/dev/null || true
+    local count
+    count=$(find "$dst" -type f | wc -l)
+    echo "  $dst_subdir: $count files total"
+}
+
+fetch_ossfuzz_zip "libjpeg-turbo" "cjpeg_fuzzer" "jpeg"
+fetch_ossfuzz_zip "libpng" "read_fuzzer" "png"
+fetch_ossfuzz_zip "libjxl" "djxl_fuzzer" "jxl"
+
 echo ""
-echo "Optional: download OSS-Fuzz corpora (requires gsutil):"
-echo "  gsutil -m cp -r gs://libjxl-corpus.clusterfuzz-external.appspot.com/libFuzzer/ $CORPUS_DIR/jxl/"
-echo "  gsutil -m cp -r gs://libpng-corpus.clusterfuzz-external.appspot.com/libFuzzer/ $CORPUS_DIR/png/"
-echo "  gsutil -m cp -r gs://libwebp-corpus.clusterfuzz-external.appspot.com/libFuzzer/ $CORPUS_DIR/webp/"
+echo "=== Phase 5: Final mixed/ refresh ==="
+for subdir in jpeg png gif webp avif jxl heic bitmaps tiff; do
+    src="$CORPUS_DIR/$subdir"
+    [ -d "$src" ] || continue
+    count=0
+    for f in "$src"/*; do
+        [ -f "$f" ] || continue
+        cp -n "$f" "$MIXED_DIR/" 2>/dev/null || true
+        count=$((count + 1))
+        [ "$count" -ge 20 ] && break
+    done
+done
+echo "  mixed: $(find "$MIXED_DIR" -type f | wc -l) files total"
+
+echo ""
+echo "Done. Total seed files: $(find "$CORPUS_DIR" -type f | wc -l)"
