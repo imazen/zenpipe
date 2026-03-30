@@ -2301,7 +2301,7 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -2357,7 +2357,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -2367,7 +2367,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-simd"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archmage",
  "paste",
