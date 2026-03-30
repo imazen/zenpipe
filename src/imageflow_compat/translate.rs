@@ -188,27 +188,49 @@ fn translate_one(
             Ok(())
         }
 
-        Node::Region { x1, y1, x2, y2, background_color } => push_layout_node(
-            &mut result.nodes,
-            "zenlayout.region",
-            &[
-                ("x1", ParamValue::I32(*x1)),
-                ("y1", ParamValue::I32(*y1)),
-                ("x2", ParamValue::I32(*x2)),
-                ("y2", ParamValue::I32(*y2)),
-            ],
-        ),
+        Node::Region { x1, y1, x2, y2, background_color } => {
+            // v2 Region uses pixel edge coordinates (i32).
+            // zenlayout.region uses pct+px pairs for each edge.
+            // Map: x1 → left_px, y1 → top_px, x2 → right_px, y2 → bottom_px.
+            // Percentage fields stay at defaults (0.0 for left/top, 1.0 for right/bottom)
+            // so the pixel offsets are relative to 0% and 100% respectively.
+            let color_str = color_to_css_string(background_color);
+            push_layout_node(
+                &mut result.nodes,
+                "zenlayout.region",
+                &[
+                    ("left_pct", ParamValue::F32(0.0)),
+                    ("left_px", ParamValue::I32(*x1)),
+                    ("top_pct", ParamValue::F32(0.0)),
+                    ("top_px", ParamValue::I32(*y1)),
+                    ("right_pct", ParamValue::F32(0.0)),
+                    ("right_px", ParamValue::I32(*x2)),
+                    ("bottom_pct", ParamValue::F32(0.0)),
+                    ("bottom_px", ParamValue::I32(*y2)),
+                    ("color", ParamValue::Str(color_str)),
+                ],
+            )
+        }
 
-        Node::RegionPercent { x1, y1, x2, y2, background_color } => push_layout_node(
-            &mut result.nodes,
-            "zenlayout.crop_percent",
-            &[
-                ("x1", ParamValue::F32(*x1)),
-                ("y1", ParamValue::F32(*y1)),
-                ("x2", ParamValue::F32(*x2)),
-                ("y2", ParamValue::F32(*y2)),
-            ],
-        ),
+        Node::RegionPercent { x1, y1, x2, y2, background_color } => {
+            // v2 RegionPercent uses edge percentages (0-100 scale).
+            // zenlayout.crop_percent uses origin+size fractions (0.0-1.0 scale).
+            // Convert: x = x1/100, y = y1/100, w = (x2-x1)/100, h = (y2-y1)/100.
+            let x = x1 / 100.0;
+            let y = y1 / 100.0;
+            let w = (x2 - x1) / 100.0;
+            let h = (y2 - y1) / 100.0;
+            push_layout_node(
+                &mut result.nodes,
+                "zenlayout.crop_percent",
+                &[
+                    ("x", ParamValue::F32(x)),
+                    ("y", ParamValue::F32(y)),
+                    ("w", ParamValue::F32(w)),
+                    ("h", ParamValue::F32(h)),
+                ],
+            )
+        }
 
         Node::ExpandCanvas { left, top, right, bottom, color } => {
             let color_str = color_to_css_string(color);
@@ -623,7 +645,11 @@ fn push_layout_node(
         .create_default()
         .map_err(|e| TranslateError::NodeCreation(format!("{schema_id}: {e}")))?;
     for (name, value) in params {
-        node.set_param(name, value.clone());
+        if !node.set_param(name, value.clone()) {
+            return Err(TranslateError::InvalidParam(format!(
+                "set_param(\"{name}\", {value:?}) failed on {schema_id} — param not found"
+            )));
+        }
     }
     nodes.push(node);
     Ok(())

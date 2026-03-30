@@ -12,7 +12,7 @@ use imageflow_types::{
     Color, ColorFilterSrgb, ColorSrgb, CommandStringKind, CompositingMode, Constraint,
     ConstraintGravity, ConstraintMode, EncoderPreset, Node, PixelFormat, RoundCornersMode,
 };
-use zennode::ParamValue;
+use zennode::{NodeInstance, ParamValue};
 use zenpipe::imageflow_compat::translate;
 
 /// Helper: translate a single node with empty io_buffers.
@@ -31,6 +31,21 @@ fn translate_ok(node: Node) -> translate::TranslatedPipeline {
 fn first_schema_id(pipeline: &translate::TranslatedPipeline) -> &str {
     assert!(!pipeline.nodes.is_empty(), "expected at least one node");
     pipeline.nodes[0].schema().id
+}
+
+fn assert_param_i32(node: &Box<dyn NodeInstance>, name: &str, expected: i32) {
+    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val.as_i32().unwrap_or_else(|| panic!("param '{name}' is not i32: {val:?}"));
+    assert_eq!(actual, expected, "param '{name}': expected {expected}, got {actual}");
+}
+
+fn assert_param_f32_approx(node: &Box<dyn NodeInstance>, name: &str, expected: f32) {
+    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val.as_f32().unwrap_or_else(|| panic!("param '{name}' is not f32: {val:?}"));
+    assert!(
+        (actual - expected).abs() < 0.001,
+        "param '{name}': expected {expected}, got {actual}"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -268,20 +283,12 @@ fn fill_rect_black() {
 
 // ═══════════════════════════════════════════════════════════════════
 // Region and RegionPercent
-//
-// KNOWN ISSUE: translate.rs passes x1/y1/x2/y2 params via push_layout_node,
-// but the actual zennode definitions use different param names:
-//   - zenlayout.region uses left_pct/left_px/top_pct/top_px/right_pct/right_px
-//   - zenlayout.crop_percent uses x/y/w/h
-// The set_param calls silently fail (return false), so the nodes are created
-// with default values instead of the intended coordinates. This is a
-// pre-existing translation gap that needs to be fixed in translate.rs.
 // ═══════════════════════════════════════════════════════════════════
 
 #[test]
-fn region_produces_correct_schema() {
-    // We can only verify that the correct schema is created.
-    // Param values are NOT correctly set — see known issue above.
+fn region_maps_pixel_coordinates() {
+    // v2 Region uses pixel edge coordinates (i32).
+    // Mapped to zenlayout.region's left_px/top_px/right_px/bottom_px.
     let p = translate_ok(Node::Region {
         x1: -10,
         y1: -20,
@@ -292,36 +299,31 @@ fn region_produces_correct_schema() {
     assert_eq!(first_schema_id(&p), "zenlayout.region");
     assert_eq!(p.nodes.len(), 1);
 
-    // Demonstrate the mismatch: the node uses left_px/top_px etc., not x1/y1.
-    // translate.rs sets x1/y1/x2/y2 which the node ignores.
-    assert_eq!(
-        p.nodes[0].get_param("x1"),
-        None,
-        "KNOWN ISSUE: zenlayout.region does not have an 'x1' param"
-    );
+    assert_param_i32(&p.nodes[0], "left_px", -10);
+    assert_param_i32(&p.nodes[0], "top_px", -20);
+    assert_param_i32(&p.nodes[0], "right_px", 100);
+    assert_param_i32(&p.nodes[0], "bottom_px", 200);
 }
 
 #[test]
-fn region_percent_produces_correct_schema() {
-    // We can only verify that the correct schema is created.
-    // Param values are NOT correctly set — see known issue above.
+fn region_percent_converts_edges_to_origin_size() {
+    // v2 RegionPercent uses edge percentages (0-100 scale).
+    // Mapped to zenlayout.crop_percent's x/y/w/h (0.0-1.0 fractions).
+    // x = x1/100, y = y1/100, w = (x2-x1)/100, h = (y2-y1)/100
     let p = translate_ok(Node::RegionPercent {
-        x1: 0.0,
-        y1: 0.0,
-        x2: 50.0,
-        y2: 50.0,
+        x1: 10.0,
+        y1: 20.0,
+        x2: 60.0,
+        y2: 70.0,
         background_color: Color::Black,
     });
     assert_eq!(first_schema_id(&p), "zenlayout.crop_percent");
     assert_eq!(p.nodes.len(), 1);
 
-    // Demonstrate the mismatch: the node uses x/y/w/h, not x1/y1/x2/y2.
-    // translate.rs sets x1/y1/x2/y2 which the node ignores.
-    assert_eq!(
-        p.nodes[0].get_param("x1"),
-        None,
-        "KNOWN ISSUE: zenlayout.crop_percent does not have an 'x1' param"
-    );
+    assert_param_f32_approx(&p.nodes[0], "x", 0.1);
+    assert_param_f32_approx(&p.nodes[0], "y", 0.2);
+    assert_param_f32_approx(&p.nodes[0], "w", 0.5);
+    assert_param_f32_approx(&p.nodes[0], "h", 0.5);
 }
 
 // ═══════════════════════════════════════════════════════════════════

@@ -1989,7 +1989,7 @@ dependencies = [
  "whereat",
  "yuv",
  "zenavif-parse",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -2017,7 +2017,7 @@ dependencies = [
  "imgref",
  "rgb",
  "thiserror",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
@@ -2033,19 +2033,9 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.9"
-dependencies = [
- "almost-enough",
- "enough",
- "whereat",
- "zenpixels",
-]
-
-[[package]]
-name = "zencodec"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d055b475f345ab30e82f582cc1e54be97fcdf8a2ab6d427106a4195c2b899f2"
+checksum = "ce7dbfca05c2c9f7b45d6b19012602260a3809e904177a2cb9ec7e4ffbe63fe5"
 dependencies = [
  "almost-enough",
  "enough",
@@ -2067,7 +2057,7 @@ dependencies = [
  "whereat",
  "zenavif",
  "zenbitmaps",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zengif",
  "zenjpeg",
  "zenjxl",
@@ -2126,7 +2116,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
  "zenquant 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2149,7 +2139,7 @@ dependencies = [
  "whereat",
  "wide",
  "yuv",
- "zencodec 0.1.9",
+ "zencodec",
  "zenpixels",
 ]
 
@@ -2163,7 +2153,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenjxl-decoder",
  "zenpixels",
 ]
@@ -2255,7 +2245,7 @@ dependencies = [
  "zenavif",
  "zenbitmaps",
  "zenblend",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zencodecs",
  "zenfilters",
  "zengif",
@@ -2315,7 +2305,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror",
  "whereat",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenflate 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenpixels",
  "zenpixels-convert",
@@ -2395,7 +2385,7 @@ dependencies = [
  "thiserror",
  "tiff",
  "whereat",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
@@ -2430,7 +2420,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "yuv",
- "zencodec 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
