@@ -1624,8 +1624,6 @@ pub fn node_to_filter(
                 })
                 .unwrap_or(0)
             {
-                1 => RotateMode::FillClamp,
-                2 => RotateMode::white(),
                 1 => RotateMode::Deskew,
                 2 => RotateMode::FillClamp,
                 3 => RotateMode::black(),

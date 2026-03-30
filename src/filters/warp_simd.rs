@@ -990,7 +990,7 @@ pub fn warp_all_planes_simd(
     // Per-plane background values
     let (bg_l, bg_a, bg_b) = match background {
         WarpBackground::Clamp => (0.0, 0.0, 0.0),
-        WarpBackground::Color { l, a, b } => (l, a, b),
+        WarpBackground::Color { l, a, b, .. } => (l, a, b),
     };
 
     let mk_bg = |val: f32| -> WarpBackground {
@@ -1000,6 +1000,7 @@ pub fn warp_all_planes_simd(
                 l: val,
                 a: 0.0,
                 b: 0.0,
+                alpha: 0.0,
             },
         }
     };
@@ -1011,18 +1012,12 @@ pub fn warp_all_planes_simd(
     if let (Some(sa), Some(da)) = (src_alpha, dst_alpha) {
         let alpha_bg = match background {
             WarpBackground::Clamp => WarpBackground::Clamp,
-            WarpBackground::Color { l, a, b } => {
-                let alpha = if l == 0.0 && a == 0.0 && b == 0.0 {
-                    0.0
-                } else {
-                    1.0
-                };
-                WarpBackground::Color {
-                    l: alpha,
-                    a: 0.0,
-                    b: 0.0,
-                }
-            }
+            WarpBackground::Color { alpha, .. } => WarpBackground::Color {
+                l: alpha,
+                a: 0.0,
+                b: 0.0,
+                alpha: 0.0,
+            },
         };
         warp_plane_simd_planar(sa, da, width, height, m, alpha_bg, interp);
     }
@@ -1047,7 +1042,7 @@ pub fn warp_all_planes_rowgather(
 ) {
     let (bg_l, bg_a, bg_b) = match background {
         WarpBackground::Clamp => (0.0, 0.0, 0.0),
-        WarpBackground::Color { l, a, b } => (l, a, b),
+        WarpBackground::Color { l, a, b, .. } => (l, a, b),
     };
 
     let mk_bg = |val: f32| -> WarpBackground {
@@ -1057,6 +1052,7 @@ pub fn warp_all_planes_rowgather(
                 l: val,
                 a: 0.0,
                 b: 0.0,
+                alpha: 0.0,
             },
         }
     };
@@ -1068,18 +1064,12 @@ pub fn warp_all_planes_rowgather(
     if let (Some(sa), Some(da)) = (src_alpha, dst_alpha) {
         let alpha_bg = match background {
             WarpBackground::Clamp => WarpBackground::Clamp,
-            WarpBackground::Color { l, a, b } => {
-                let alpha = if l == 0.0 && a == 0.0 && b == 0.0 {
-                    0.0
-                } else {
-                    1.0
-                };
-                WarpBackground::Color {
-                    l: alpha,
-                    a: 0.0,
-                    b: 0.0,
-                }
-            }
+            WarpBackground::Color { alpha, .. } => WarpBackground::Color {
+                l: alpha,
+                a: 0.0,
+                b: 0.0,
+                alpha: 0.0,
+            },
         };
         warp_plane_simd_rowgather(sa, da, width, height, m, alpha_bg, interp);
     }
@@ -1768,9 +1758,9 @@ pub fn warp_planes_fused(
     m: &[f32; 9],
     background: WarpBackground,
 ) {
-    let (bg_l, bg_a, bg_b) = match background {
-        WarpBackground::Clamp => (0.0, 0.0, 0.0),
-        WarpBackground::Color { l, a, b } => (l, a, b),
+    let (bg_l, bg_a, bg_b, bg_alpha) = match background {
+        WarpBackground::Clamp => (0.0, 0.0, 0.0, 1.0),
+        WarpBackground::Color { l, a, b, alpha } => (l, a, b, alpha),
     };
     let is_color_bg = matches!(background, WarpBackground::Color { .. });
 
@@ -1794,17 +1784,11 @@ pub fn warp_planes_fused(
     // Separate pass for alpha (still SIMD, just not fused)
     if let (Some(sa), Some(da)) = (src_alpha, dst_alpha) {
         let alpha_bg = if is_color_bg {
-            // For non-black fills, alpha = 1.0 (opaque fill).
-            // For black (L=a=b=0), alpha = 0.0 (transparent fill).
-            let alpha_val = if bg_l == 0.0 && bg_a == 0.0 && bg_b == 0.0 {
-                0.0
-            } else {
-                1.0
-            };
             WarpBackground::Color {
-                l: alpha_val,
+                l: bg_alpha,
                 a: 0.0,
                 b: 0.0,
+                alpha: 0.0,
             }
         } else {
             WarpBackground::Clamp

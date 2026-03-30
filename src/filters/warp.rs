@@ -12,9 +12,7 @@ use crate::planes::OklabPlanes;
 pub enum WarpBackground {
     /// Clamp to nearest edge pixel (default, best for photos).
     Clamp,
-    /// Fill out-of-bounds with a solid Oklab color.
-    /// Use [`WarpBackground::black()`] or [`WarpBackground::white()`] for
-    /// common presets, or specify arbitrary L/a/b values.
+    /// Fill out-of-bounds with a solid Oklab color + alpha.
     Color {
         /// Oklab L (lightness): 0.0 = black, 1.0 = white.
         l: f32,
@@ -22,25 +20,39 @@ pub enum WarpBackground {
         a: f32,
         /// Oklab b (blue-yellow): 0.0 = neutral.
         b: f32,
+        /// Alpha for the fill region. 1.0 = opaque, 0.0 = transparent.
+        alpha: f32,
     },
 }
 
 impl WarpBackground {
-    /// Black fill (L=0, a=0, b=0).
+    /// Opaque black fill.
     pub const fn black() -> Self {
         Self::Color {
             l: 0.0,
             a: 0.0,
             b: 0.0,
+            alpha: 1.0,
         }
     }
 
-    /// White fill (L=1, a=0, b=0 in Oklab).
+    /// Transparent fill (alpha=0). RGB values are zero.
+    pub const fn transparent() -> Self {
+        Self::Color {
+            l: 0.0,
+            a: 0.0,
+            b: 0.0,
+            alpha: 0.0,
+        }
+    }
+
+    /// Opaque white fill.
     pub const fn white() -> Self {
         Self::Color {
             l: 1.0,
             a: 0.0,
             b: 0.0,
+            alpha: 1.0,
         }
     }
 }
@@ -82,11 +94,16 @@ pub enum WarpInterpolation {
 ///
 /// # Interpolation quality
 ///
-/// Three modes are available, trading speed for sharpness:
+/// Four modes are available, trading speed for sharpness:
 /// - **Bilinear** — 2×2, fast, softens edges slightly
-/// - **Bicubic** (Catmull-Rom) — 4×4, sharp with no ringing, default
-/// - **Lanczos3** (windowed sinc) — 6×6, maximum sharpness, ideal for
-///   document text and fine detail
+/// - **Bicubic** (Catmull-Rom) — 4×4, sharp with no ringing
+/// - **Robidoux** — 4×4, optimized for rotation (same cost as bicubic, sharper)
+/// - **Lanczos3** (windowed sinc) — 6×6, maximum sharpness
+///
+/// **Note:** With the `experimental` feature, the SIMD fast path always uses
+/// Robidoux regardless of this setting. The interpolation field is only
+/// respected by the scalar fallback (perspective transforms, or builds
+/// without `experimental`).
 ///
 /// # Matrix convention
 ///
@@ -126,44 +143,29 @@ pub enum RotateMode {
     /// No borders, no fill — output is smaller but clean. Default for photos.
     #[default]
     Crop,
-    /// Document deskew: white fill, preserves full frame.
+    /// Document deskew: opaque white fill, preserves full frame.
     /// No content lost at edges — important for scanned documents.
     Deskew,
     /// Fill out-of-bounds with clamped edge pixels.
     FillClamp,
-    /// Fill out-of-bounds with a solid Oklab color.
-    Fill {
-        /// Oklab L (lightness): 0.0 = black, 1.0 = white.
-        l: f32,
-        /// Oklab a: 0.0 = neutral.
-        a: f32,
-        /// Oklab b: 0.0 = neutral.
-        b: f32,
-    },
+    /// Fill out-of-bounds with a specific background.
+    Fill(WarpBackground),
 }
 
 impl RotateMode {
-    /// Fill with black (L=0, a=0, b=0).
+    /// Fill with opaque black.
     pub const fn black() -> Self {
-        Self::Fill {
-            l: 0.0,
-            a: 0.0,
-            b: 0.0,
-        }
+        Self::Fill(WarpBackground::black())
     }
 
-    /// Fill with white (L=1, a=0, b=0 in Oklab).
+    /// Fill with opaque white.
     pub const fn white() -> Self {
-        Self::Fill {
-            l: 1.0,
-            a: 0.0,
-            b: 0.0,
-        }
+        Self::Fill(WarpBackground::white())
     }
 
-    /// Fill with a custom Oklab color.
-    pub const fn color(l: f32, a: f32, b: f32) -> Self {
-        Self::Fill { l, a, b }
+    /// Fill with transparent (alpha=0).
+    pub const fn transparent() -> Self {
+        Self::Fill(WarpBackground::transparent())
     }
 }
 
@@ -248,7 +250,7 @@ impl Rotate {
         let bg = match self.mode {
             RotateMode::Crop | RotateMode::FillClamp => WarpBackground::Clamp,
             RotateMode::Deskew => WarpBackground::white(),
-            RotateMode::Fill { l, a, b } => WarpBackground::Color { l, a, b },
+            RotateMode::Fill(bg) => bg,
         };
         match self.cardinal_quarter_turns() {
             Some(0) => Warp::default(), // identity
@@ -412,7 +414,7 @@ impl Warp {
     /// Deskew a document image by the given angle.
     ///
     /// Convenience wrapper around [`rotation`](Self::rotation) with
-    /// [`WarpBackground::Black`] and [`WarpInterpolation::Lanczos3`]
+    /// white background fill and [`WarpInterpolation::Lanczos3`]
     /// (clean borders and maximum sharpness for text).
     pub fn deskew(angle_degrees: f32, width: u32, height: u32) -> Self {
         let mut warp = Self::rotation(angle_degrees, width, height);
@@ -458,13 +460,7 @@ impl Warp {
     ///
     /// Coordinates are in pixels (not normalized). For the image center,
     /// use `((width-1)/2, (height-1)/2)`.
-    pub fn rotation_around(
-        angle_degrees: f32,
-        center_x: f32,
-        center_y: f32,
-        _width: u32,
-        _height: u32,
-    ) -> Self {
+    pub fn rotation_around(angle_degrees: f32, center_x: f32, center_y: f32) -> Self {
         let angle_rad = angle_degrees * core::f32::consts::PI / 180.0;
         let cos_a = angle_rad.cos();
         let sin_a = angle_rad.sin();
@@ -813,17 +809,13 @@ fn sample_all_planes(
     let hf = h as f32;
 
     // Out-of-bounds check for solid color fill.
-    if let WarpBackground::Color { l, a, b } = background {
+    if let WarpBackground::Color { l, a, b, alpha } = background {
         if sx < -0.5 || sx >= wf - 0.5 || sy < -0.5 || sy >= hf - 0.5 {
             dst_l[out_idx] = l;
             dst_a[out_idx] = a;
             dst_b[out_idx] = b;
             if let Some(da) = dst_alpha {
-                da[out_idx] = if l == 0.0 && a == 0.0 && b == 0.0 {
-                    0.0
-                } else {
-                    1.0
-                };
+                da[out_idx] = alpha;
             }
             return;
         }
@@ -1475,7 +1467,7 @@ mod tests {
         }
 
         // Rotate around (10, 10) — the patch center should be preserved
-        let warp = Warp::rotation_around(15.0, 10.0, 10.0, 64, 64);
+        let warp = Warp::rotation_around(15.0, 10.0, 10.0);
         warp.apply(&mut planes, &mut FilterContext::new());
 
         let center = planes.l[planes.index(10, 10)];
