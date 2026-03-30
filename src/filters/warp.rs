@@ -123,9 +123,12 @@ pub struct Warp {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RotateMode {
     /// Crop to the largest inscribed rectangle with the original aspect ratio.
-    /// No borders, no fill — output is smaller but clean. Default.
+    /// No borders, no fill — output is smaller but clean. Default for photos.
     #[default]
     Crop,
+    /// Document deskew: white fill, preserves full frame.
+    /// No content lost at edges — important for scanned documents.
+    Deskew,
     /// Fill out-of-bounds with clamped edge pixels.
     FillClamp,
     /// Fill out-of-bounds with a solid Oklab color.
@@ -169,38 +172,36 @@ impl RotateMode {
 /// Automatically selects the fastest path:
 /// - **0°** — identity (no-op, zero cost)
 /// - **90°, 180°, 270°** — pixel-perfect cardinal rotation (no interpolation)
-/// - **All other angles** — sub-pixel rotation via [`Warp`] matrix
+/// - **All other angles** — Robidoux interpolation (4×4, sharp, fast)
 ///
 /// By default, non-cardinal rotations crop to the largest inscribed rectangle
-/// (no borders). Use [`RotateMode::FillClamp`] or [`FillBlack`](RotateMode::FillBlack)
-/// to keep the original dimensions with filled borders instead.
+/// (no borders). Use [`RotateMode::Deskew`] for documents or
+/// [`RotateMode::Fill`] for custom backgrounds.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use zenfilters::Rotate;
+/// use zenfilters::{Rotate, RotateMode};
 ///
-/// // Cardinal: pixel-perfect, no interpolation
-/// let r90 = Rotate::new(90.0);
-///
-/// // Arbitrary: rotates and crops to clean rectangle
+/// // Photo straighten — crops to clean rectangle
 /// let tilt = Rotate::new(3.5);
 ///
-/// // Document deskew: black borders + Lanczos3
-/// let deskew = Rotate::deskew(1.2);
+/// // Document deskew — white fill, full frame
+/// let deskew = Rotate::new(1.2).with_mode(RotateMode::Deskew);
 ///
-/// // Keep full frame with clamped edges
-/// let full = Rotate::new(3.5).with_mode(RotateMode::FillClamp);
+/// // Cardinal — pixel-perfect, zero cost
+/// let r90 = Rotate::new(90.0);
+///
+/// // Custom fill color
+/// let r = Rotate::new(5.0).with_mode(RotateMode::black());
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rotate {
     /// Rotation angle in degrees. Positive = counterclockwise.
     pub angle_degrees: f32,
     /// How to handle borders. Default: Crop.
     pub mode: RotateMode,
-    /// Interpolation quality (non-cardinal only). Default: Bicubic.
-    pub interpolation: WarpInterpolation,
 }
 
 impl Rotate {
@@ -209,39 +210,16 @@ impl Rotate {
     /// Positive = counterclockwise. Cardinal angles (0, 90, 180, 270)
     /// are detected automatically and use pixel-perfect fast paths.
     /// Non-cardinal rotations crop to the largest clean rectangle.
-    ///
-    /// Default interpolation is Robidoux — same 4×4 cost as bicubic but
-    /// significantly sharper for rotation (86 vs 78 zensim roundtrip score).
     pub fn new(angle_degrees: f32) -> Self {
         Self {
             angle_degrees,
             mode: RotateMode::Crop,
-            interpolation: WarpInterpolation::Robidoux,
-        }
-    }
-
-    /// Create a deskew rotation (black borders + Lanczos3).
-    ///
-    /// Optimized for document text: clean borders and maximum sharpness.
-    /// Does NOT crop — the full rotated frame is preserved so no content
-    /// is lost at the edges. Use [`new`](Self::new) for photo straightening.
-    pub fn deskew(angle_degrees: f32) -> Self {
-        Self {
-            angle_degrees,
-            mode: RotateMode::white(),
-            interpolation: WarpInterpolation::Lanczos3,
         }
     }
 
     /// Set the border mode.
     pub fn with_mode(mut self, mode: RotateMode) -> Self {
         self.mode = mode;
-        self
-    }
-
-    /// Set interpolation to maximum quality (Lanczos3).
-    pub fn with_max_quality(mut self) -> Self {
-        self.interpolation = WarpInterpolation::Lanczos3;
         self
     }
 
@@ -265,10 +243,11 @@ impl Rotate {
     /// Convert to a [`Warp`] filter for the given image dimensions.
     ///
     /// Cardinal angles produce pixel-perfect warps (no interpolation).
-    /// Non-cardinal angles produce matrix-based warps.
+    /// Non-cardinal angles produce Robidoux-interpolated warps.
     pub fn to_warp(&self, width: u32, height: u32) -> Warp {
         let bg = match self.mode {
             RotateMode::Crop | RotateMode::FillClamp => WarpBackground::Clamp,
+            RotateMode::Deskew => WarpBackground::white(),
             RotateMode::Fill { l, a, b } => WarpBackground::Color { l, a, b },
         };
         match self.cardinal_quarter_turns() {
@@ -277,7 +256,7 @@ impl Rotate {
             None => {
                 let mut warp = Warp::rotation(self.angle_degrees, width, height);
                 warp.background = bg;
-                warp.interpolation = self.interpolation;
+                warp.interpolation = WarpInterpolation::Robidoux;
                 warp
             }
         }

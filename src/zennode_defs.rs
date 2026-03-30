@@ -1304,20 +1304,19 @@ impl Default for ColorMatrix {
 
 /// Rotation by arbitrary angle with automatic cardinal fast-path.
 ///
-/// Cardinal angles (0°, 90°, 180°, 270°) use pixel-perfect remapping
-/// with zero interpolation. All other angles use sub-pixel rotation
-/// via a 3×3 affine matrix with configurable interpolation quality.
+/// Cardinal angles (0°, 90°, 180°, 270°) use pixel-perfect remapping.
+/// All other angles use Robidoux interpolation (4×4, sharp, fast).
 ///
-/// Default mode is **Crop** — the result is cropped to the largest clean
-/// rectangle with no borders. Use mode=1 (FillClamp) or mode=2 (FillWhite)
-/// to keep original dimensions with filled borders.
+/// Default mode is **Crop** — cropped to the largest clean rectangle.
+/// Use Deskew for documents (white fill, full frame) or Fill for
+/// custom backgrounds.
 #[cfg(feature = "experimental")]
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenfilters.rotate", group = Geometry, role = Filter)]
 #[node(label = "Rotate")]
 #[node(format(preferred = OklabF32, alpha = Process))]
 #[node(changes_dimensions)]
-#[node(tags("rotate", "geometry", "transform"))]
+#[node(tags("rotate", "geometry", "transform", "deskew", "straighten"))]
 pub struct RotateNode {
     /// Rotation angle in degrees. Positive = counterclockwise.
     /// 90, 180, 270 use pixel-perfect fast path (no interpolation).
@@ -1326,35 +1325,10 @@ pub struct RotateNode {
     pub angle: f32,
 
     /// Border mode (non-cardinal only).
-    /// 0 = Crop (default, clean rectangle), 1 = FillClamp, 2 = FillWhite.
-    #[param(range(0..=2), default = 0, identity = 0, step = 1)]
+    /// 0 = Crop (default), 1 = Deskew (white fill), 2 = FillClamp, 3 = FillBlack.
+    #[param(range(0..=3), default = 0, identity = 0, step = 1)]
     #[param(section = "Options")]
     pub mode: i32,
-
-    /// Interpolation quality (non-cardinal only).
-    /// 0 = Bilinear, 1 = Bicubic, 2 = Robidoux (default), 3 = Lanczos3.
-    #[param(range(0..=3), default = 2, identity = 2, step = 1)]
-    #[param(section = "Options")]
-    pub interpolation: i32,
-}
-
-/// Document deskew: rotation with black background and Lanczos3 interpolation.
-///
-/// Convenience node for straightening scanned documents. Equivalent to
-/// Rotate with white fill and interpolation=Lanczos3, but with a
-/// tighter angle range and finer step size for precision alignment.
-#[cfg(feature = "experimental")]
-#[derive(Node, Clone, Debug, Default)]
-#[node(id = "zenfilters.deskew", group = Geometry, role = Filter)]
-#[node(label = "Deskew")]
-#[node(format(preferred = OklabF32, alpha = Process))]
-#[node(tags("deskew", "document", "geometry", "straighten"))]
-pub struct DeskewNode {
-    /// Skew angle in degrees. Positive = counterclockwise correction.
-    /// Typical range for document correction is -5° to +5°.
-    #[param(range(-15.0..=15.0), default = 0.0, identity = 0.0, step = 0.05)]
-    #[param(unit = "°", section = "Main", slider = Linear)]
-    pub angle: f32,
 }
 
 /// Arbitrary geometric transform via 3×3 projective matrix.
@@ -1452,7 +1426,7 @@ pub fn register_all(registry: &mut NodeRegistry) {
     #[cfg(feature = "experimental")]
     {
         registry.register(&ROTATE_NODE_NODE);
-        registry.register(&DESKEW_NODE_NODE);
+
         registry.register(&WARP_NODE_NODE);
     }
 }
@@ -1501,7 +1475,7 @@ pub static ALL: &[&dyn NodeDef] = &[
 
 /// Geometry node definitions (requires `experimental` feature).
 #[cfg(feature = "experimental")]
-pub static GEOMETRY: &[&dyn NodeDef] = &[&ROTATE_NODE_NODE, &DESKEW_NODE_NODE, &WARP_NODE_NODE];
+pub static GEOMETRY: &[&dyn NodeDef] = &[&ROTATE_NODE_NODE, &WARP_NODE_NODE];
 
 // ═══════════════════════════════════════════════════════════════════
 // NodeInstance → Filter bridge
@@ -1623,33 +1597,15 @@ pub fn node_to_filter(
             {
                 1 => RotateMode::FillClamp,
                 2 => RotateMode::white(),
+                1 => RotateMode::Deskew,
+                2 => RotateMode::FillClamp,
+                3 => RotateMode::black(),
                 _ => RotateMode::Crop,
-            };
-            let interp = match node
-                .get_param("interpolation")
-                .and_then(|p| match p {
-                    ParamValue::I32(v) => Some(v),
-                    _ => None,
-                })
-                .unwrap_or(1)
-            {
-                0 => WarpInterpolation::Bilinear,
-                1 => WarpInterpolation::Bicubic,
-                3 => WarpInterpolation::Lanczos3,
-                _ => WarpInterpolation::Robidoux,
             };
             Some(alloc::boxed::Box::new(crate::filters::Rotate {
                 angle_degrees: angle,
                 mode,
-                interpolation: interp,
             }))
-        }
-        #[cfg(feature = "experimental")]
-        "zenfilters.deskew" => {
-            let angle = f32_param(node, "angle");
-            Some(alloc::boxed::Box::new(crate::filters::Rotate::deskew(
-                angle,
-            )))
         }
         #[cfg(feature = "experimental")]
         "zenfilters.warp" => {
