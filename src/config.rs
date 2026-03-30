@@ -54,10 +54,10 @@ pub mod jpeg {
 /// WebP configuration types from zenwebp.
 #[cfg(feature = "webp")]
 pub mod webp {
+    pub use zenwebp::decoder::UpsamplingMethod;
     pub use zenwebp::{
         DecodeConfig, LosslessConfig, LossyConfig, PixelLayout as WebpPixelLayout, Preset,
     };
-    pub use zenwebp::decoder::UpsamplingMethod;
 }
 
 /// GIF configuration types from zengif.

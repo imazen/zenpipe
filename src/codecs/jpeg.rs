@@ -197,8 +197,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
         .checked_mul(height as usize)
         .and_then(|n| n.checked_mul(16))
         .ok_or_else(|| at!(CodecError::Oom))?;
-    let mut rgba_data: alloc::vec::Vec<u8> =
-        alloc::vec::Vec::with_capacity(alloc_size);
+    let mut rgba_data: alloc::vec::Vec<u8> = alloc::vec::Vec::with_capacity(alloc_size);
     for px in buf.iter() {
         rgba_data.extend_from_slice(&px.r.to_le_bytes());
         rgba_data.extend_from_slice(&px.g.to_le_bytes());

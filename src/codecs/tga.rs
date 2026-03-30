@@ -45,8 +45,5 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
-    crate::dispatch::build_streaming_from_config(
-        |_p| zenbitmaps::TgaEncoderConfig::new(),
-        params,
-    )
+    crate::dispatch::build_streaming_from_config(|_p| zenbitmaps::TgaEncoderConfig::new(), params)
 }

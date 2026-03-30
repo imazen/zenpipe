@@ -518,9 +518,7 @@ impl DecodedDepthMap {
 
         // Guard against overflow / excessive allocation.
         const MAX_DEPTH_PIXELS: u64 = 64_000_000; // 64 megapixels
-        let total_pixels = (target_width as u64)
-            .checked_mul(target_height as u64)
-            .unwrap_or(u64::MAX);
+        let total_pixels = (target_width as u64).saturating_mul(target_height as u64);
         if total_pixels > MAX_DEPTH_PIXELS {
             return DepthImage {
                 data: Vec::new(),

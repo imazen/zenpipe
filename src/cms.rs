@@ -223,8 +223,7 @@ pub fn parse_png_color_chunks(data: &[u8]) -> PngColorInfo {
                 let d = &data[chunk_data_start..];
                 let r =
                     |off: usize| u32::from_be_bytes([d[off], d[off + 1], d[off + 2], d[off + 3]]);
-                info.chromaticities =
-                    Some([r(0), r(4), r(8), r(12), r(16), r(20), r(24), r(28)]);
+                info.chromaticities = Some([r(0), r(4), r(8), r(12), r(16), r(20), r(24), r(28)]);
             }
             b"sRGB" => {
                 info.has_srgb_chunk = true;
@@ -266,7 +265,7 @@ pub fn synthesize_icc_from_gama(
     let neutral_low = 0.4318;
     let neutral_high = 0.4773;
 
-    let chrm_is_srgb = chromaticities.map_or(true, |c| {
+    let chrm_is_srgb = chromaticities.is_none_or(|c| {
         let srgb = [31270u32, 32900, 64000, 33000, 30000, 60000, 15000, 6000];
         c.iter()
             .zip(srgb.iter())
@@ -280,8 +279,8 @@ pub fn synthesize_icc_from_gama(
     let display_gamma = 1.0 / gamma_f;
     let mut profile = moxcms::ColorProfile::new_srgb();
 
-    if let Some(c) = chromaticities {
-        if !chrm_is_srgb {
+    if let Some(c) = chromaticities
+        && !chrm_is_srgb {
             let white = moxcms::XyY::new(c[0] as f64 / 100000.0, c[1] as f64 / 100000.0, 1.0);
             let primaries = moxcms::ColorPrimaries {
                 red: moxcms::Chromaticity {
@@ -299,7 +298,6 @@ pub fn synthesize_icc_from_gama(
             };
             profile.update_rgb_colorimetry(white, primaries);
         }
-    }
 
     let trc = moxcms::ToneReprCurve::Parametric(vec![display_gamma as f32]);
     profile.red_trc = Some(trc.clone());
@@ -391,14 +389,13 @@ pub fn srgb_transform_icc(
     let dst_icc = srgb_icc_profile();
 
     // 1. Try embedded ICC profile.
-    if let Some(icc) = &source_color.icc_profile {
-        if !icc.is_empty() {
+    if let Some(icc) = &source_color.icc_profile
+        && !icc.is_empty() {
             if is_srgb_for_mode(icc, mode) {
                 return None; // Already sRGB
             }
             return Some((icc.to_vec(), dst_icc));
         }
-    }
 
     // 2. Check CICP on SourceColor (non-PNG path).
     if let Some(cicp_val) = source_color.cicp {
@@ -438,10 +435,7 @@ pub fn png_srgb_transform_icc(data: &[u8], _mode: CmsMode) -> Option<(Vec<u8>, V
 }
 
 /// Extended PNG transform with control over gAMA-only behavior.
-pub fn png_srgb_transform_icc_ex(
-    data: &[u8],
-    honor_gama_only: bool,
-) -> Option<(Vec<u8>, Vec<u8>)> {
+pub fn png_srgb_transform_icc_ex(data: &[u8], honor_gama_only: bool) -> Option<(Vec<u8>, Vec<u8>)> {
     let info = parse_png_color_chunks(data);
     let dst_icc = srgb_icc_profile();
 
@@ -472,11 +466,10 @@ pub fn png_srgb_transform_icc_ex(
     };
 
     // Validate cHRM: reject degenerate chromaticities (y=0 causes division by zero).
-    if let Some(ref c) = info.chromaticities {
-        if c.iter().enumerate().any(|(i, v)| i % 2 == 1 && *v == 0) {
+    if let Some(ref c) = info.chromaticities
+        && c.iter().enumerate().any(|(i, v)| i % 2 == 1 && *v == 0) {
             return None;
         }
-    }
 
     // gAMA-only without cHRM is ignored unless honor_gama_only is set.
     if info.chromaticities.is_none() && !honor_gama_only {

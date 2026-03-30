@@ -488,6 +488,7 @@ impl Default for EncodeBmp {
 #[derive(Node, Clone, Debug)]
 #[node(id = "heic.decode", group = Decode, role = Decode)]
 #[node(tags("heic", "heif", "hdr", "depth"))]
+#[derive(Default)]
 pub struct DecodeHeic {
     #[param(default = false)]
     #[param(section = "Supplements", label = "Extract Gain Map")]
@@ -512,16 +513,6 @@ pub struct DecodeHeic {
     pub decode_thumbnail: bool,
 }
 
-impl Default for DecodeHeic {
-    fn default() -> Self {
-        Self {
-            extract_gain_map: false,
-            extract_depth: false,
-            extract_mattes: false,
-            decode_thumbnail: false,
-        }
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  QUANTIZATION
