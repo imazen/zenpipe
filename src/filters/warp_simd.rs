@@ -1848,6 +1848,432 @@ pub fn warp_rgba_u8(
     }
 }
 
+/// SIMD-accelerated RGBA u8 warp using fused 4-channel gather.
+///
+/// Same algorithm as [`warp_rgba_u8`] but evaluates kernel weights in SIMD
+/// (8 pixels at a time) and fuses all 4 channel gathers.
+#[allow(clippy::too_many_arguments)]
+pub fn warp_rgba_u8_simd(
+    src: &[u8],
+    dst: &mut [u8],
+    width: u32,
+    height: u32,
+    m: &[f32; 9],
+    bg_rgba: Option<[u8; 4]>,
+) {
+    let npx = (width as usize) * (height as usize);
+    assert!(src.len() >= npx * 4);
+    assert!(dst.len() >= npx * 4);
+
+    archmage::incant!(
+        warp_rgba_u8_dispatch(src, dst, width, height, m, bg_rgba),
+        [v3, scalar]
+    );
+}
+
+#[archmage::arcane]
+fn warp_rgba_u8_dispatch_v3(
+    token: archmage::X64V3Token,
+    src: &[u8],
+    dst: &mut [u8],
+    width: u32,
+    height: u32,
+    m: &[f32; 9],
+    bg_rgba: Option<[u8; 4]>,
+) {
+    warp_rgba_u8_inner_v3(token, src, dst, width, height, m, bg_rgba);
+}
+
+fn warp_rgba_u8_dispatch_scalar(
+    _token: archmage::ScalarToken,
+    src: &[u8],
+    dst: &mut [u8],
+    width: u32,
+    height: u32,
+    m: &[f32; 9],
+    bg_rgba: Option<[u8; 4]>,
+) {
+    warp_rgba_u8(src, dst, width, height, m, bg_rgba);
+}
+
+fn warp_rgba_u8_inner_v3(
+    token: archmage::X64V3Token,
+    src: &[u8],
+    dst: &mut [u8],
+    width: u32,
+    height: u32,
+    m: &[f32; 9],
+    bg_rgba: Option<[u8; 4]>,
+) {
+    use magetypes::simd::f32x8;
+
+    let w = width as usize;
+    let h = height as usize;
+    let wf = width as f32;
+    let hf = height as f32;
+    let w_i32 = width as i32;
+    let h_i32 = height as i32;
+    let m0 = m[0];
+    let m3 = m[3];
+
+    let is_color_bg = bg_rgba.is_some();
+    let bg = bg_rgba.unwrap_or([0, 0, 0, 0]);
+
+    let zero_v = f32x8::zero(token);
+    let one_v = f32x8::splat(token, 1.0);
+    let two_v = f32x8::splat(token, 2.0);
+    let neg1_v = f32x8::splat(token, -1.0);
+    let wf_minus1 = f32x8::splat(token, wf - 1.0);
+    let hf_minus1 = f32x8::splat(token, hf - 1.0);
+    let a3_v = f32x8::splat(token, A3);
+    let a2_v = f32x8::splat(token, A2);
+    let a0_v = f32x8::splat(token, A0);
+    let b3_v = f32x8::splat(token, B3);
+    let b2_v = f32x8::splat(token, B2);
+    let b1_v = f32x8::splat(token, B1);
+    let b0_v = f32x8::splat(token, B0);
+    let neg_half = f32x8::splat(token, -0.5);
+    let wf_half = f32x8::splat(token, wf - 0.5);
+    let hf_half = f32x8::splat(token, hf - 0.5);
+    let v255 = f32x8::splat(token, 255.0);
+
+    let dx_offsets = f32x8::from_array(
+        token,
+        [
+            0.0 * m0,
+            1.0 * m0,
+            2.0 * m0,
+            3.0 * m0,
+            4.0 * m0,
+            5.0 * m0,
+            6.0 * m0,
+            7.0 * m0,
+        ],
+    );
+    let dy_offsets = f32x8::from_array(
+        token,
+        [
+            0.0 * m3,
+            1.0 * m3,
+            2.0 * m3,
+            3.0 * m3,
+            4.0 * m3,
+            5.0 * m3,
+            6.0 * m3,
+            7.0 * m3,
+        ],
+    );
+    let step8_sx = f32x8::splat(token, 8.0 * m0);
+    let step8_sy = f32x8::splat(token, 8.0 * m3);
+
+    #[inline(always)]
+    fn robidoux_v(
+        t: f32x8,
+        a3: f32x8,
+        a2: f32x8,
+        a0: f32x8,
+        b3: f32x8,
+        b2: f32x8,
+        b1: f32x8,
+        b0: f32x8,
+        one: f32x8,
+        two: f32x8,
+        zero: f32x8,
+    ) -> f32x8 {
+        let inner = t.mul_add(a3, a2).mul_add(t, zero).mul_add(t, a0);
+        let outer = t.mul_add(b3, b2).mul_add(t, b1).mul_add(t, b0);
+        let is_inner = t.simd_lt(one);
+        let is_valid = t.simd_lt(two);
+        f32x8::blend(is_inner, inner, f32x8::blend(is_valid, outer, zero))
+    }
+
+    for dy in 0..h {
+        let dyf = dy as f32;
+        let base_sx = m[1] * dyf + m[2];
+        let base_sy = m[4] * dyf + m[5];
+        let mut sx_v = f32x8::splat(token, base_sx) + dx_offsets;
+        let mut sy_v = f32x8::splat(token, base_sy) + dy_offsets;
+        let row_byte_start = dy * w * 4;
+        let mut dx = 0usize;
+
+        while dx + 8 <= w {
+            let out_base = row_byte_start + dx * 4;
+
+            // OOB fast fill (all 8 pixels out of bounds)
+            if is_color_bg {
+                let oob_any = f32x8::blend(
+                    sx_v.simd_lt(neg_half),
+                    one_v,
+                    f32x8::blend(
+                        sx_v.simd_ge(wf_half),
+                        one_v,
+                        f32x8::blend(
+                            sy_v.simd_lt(neg_half),
+                            one_v,
+                            f32x8::blend(sy_v.simd_ge(hf_half), one_v, zero_v),
+                        ),
+                    ),
+                );
+                if oob_any.reduce_add() >= 8.0 {
+                    for p in 0..8 {
+                        let off = out_base + p * 4;
+                        dst[off] = bg[0];
+                        dst[off + 1] = bg[1];
+                        dst[off + 2] = bg[2];
+                        dst[off + 3] = bg[3];
+                    }
+                    sx_v = sx_v + step8_sx;
+                    sy_v = sy_v + step8_sy;
+                    dx += 8;
+                    continue;
+                }
+            }
+
+            // Clamp + floor + frac
+            let sx_c = sx_v.clamp(zero_v, wf_minus1);
+            let sy_c = sy_v.clamp(zero_v, hf_minus1);
+            let sx_fl = sx_c.floor();
+            let sy_fl = sy_c.floor();
+            let fx = sx_c - sx_fl;
+            let fy = sy_c - sy_fl;
+            let ix_arr = sx_fl.to_i32x8().to_array();
+            let iy_arr = sy_fl.to_i32x8().to_array();
+
+            // SIMD kernel weights
+            let wx0 = robidoux_v(
+                (neg1_v - fx).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+            let wx1 = robidoux_v(
+                fx, a3_v, a2_v, a0_v, b3_v, b2_v, b1_v, b0_v, one_v, two_v, zero_v,
+            );
+            let wx2 = robidoux_v(
+                (one_v - fx).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+            let wx3 = robidoux_v(
+                (two_v - fx).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+            let wy0 = robidoux_v(
+                (neg1_v - fy).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+            let wy1 = robidoux_v(
+                fy, a3_v, a2_v, a0_v, b3_v, b2_v, b1_v, b0_v, one_v, two_v, zero_v,
+            );
+            let wy2 = robidoux_v(
+                (one_v - fy).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+            let wy3 = robidoux_v(
+                (two_v - fy).abs(),
+                a3_v,
+                a2_v,
+                a0_v,
+                b3_v,
+                b2_v,
+                b1_v,
+                b0_v,
+                one_v,
+                two_v,
+                zero_v,
+            );
+
+            // Normalize
+            let inv_wx = ((wx0 + wx1) + (wx2 + wx3)).recip();
+            let inv_wy = ((wy0 + wy1) + (wy2 + wy3)).recip();
+            let wx = [
+                (wx0 * inv_wx).to_array(),
+                (wx1 * inv_wx).to_array(),
+                (wx2 * inv_wx).to_array(),
+                (wx3 * inv_wx).to_array(),
+            ];
+            let wy = [
+                (wy0 * inv_wy).to_array(),
+                (wy1 * inv_wy).to_array(),
+                (wy2 * inv_wy).to_array(),
+                (wy3 * inv_wy).to_array(),
+            ];
+
+            // Per-pixel scalar gather + fused 4-channel accumulate
+            for p in 0..8usize {
+                let ix = ix_arr[p];
+                let iy = iy_arr[p];
+                let mut sr = 0.0f32;
+                let mut sg = 0.0f32;
+                let mut sb = 0.0f32;
+                let mut sa = 0.0f32;
+
+                for j in 0..4 {
+                    let gy = (iy + j as i32 - 1).clamp(0, h_i32 - 1) as usize;
+                    let row_base = gy * w * 4;
+                    let mut rr = 0.0f32;
+                    let mut rg = 0.0f32;
+                    let mut rb = 0.0f32;
+                    let mut ra = 0.0f32;
+                    for i in 0..4 {
+                        let gx = (ix + i as i32 - 1).clamp(0, w_i32 - 1) as usize;
+                        let off = row_base + gx * 4;
+                        let wxi = wx[i][p];
+                        rr += src[off] as f32 * wxi;
+                        rg += src[off + 1] as f32 * wxi;
+                        rb += src[off + 2] as f32 * wxi;
+                        ra += src[off + 3] as f32 * wxi;
+                    }
+                    let wyj = wy[j][p];
+                    sr += rr * wyj;
+                    sg += rg * wyj;
+                    sb += rb * wyj;
+                    sa += ra * wyj;
+                }
+
+                let off = out_base + p * 4;
+                dst[off] = sr.round().clamp(0.0, 255.0) as u8;
+                dst[off + 1] = sg.round().clamp(0.0, 255.0) as u8;
+                dst[off + 2] = sb.round().clamp(0.0, 255.0) as u8;
+                dst[off + 3] = sa.round().clamp(0.0, 255.0) as u8;
+            }
+
+            // OOB per-pixel masking
+            if is_color_bg {
+                let sx_arr = sx_v.to_array();
+                let sy_arr = sy_v.to_array();
+                for p in 0..8 {
+                    if sx_arr[p] < -0.5
+                        || sx_arr[p] >= wf - 0.5
+                        || sy_arr[p] < -0.5
+                        || sy_arr[p] >= hf - 0.5
+                    {
+                        let off = out_base + p * 4;
+                        dst[off] = bg[0];
+                        dst[off + 1] = bg[1];
+                        dst[off + 2] = bg[2];
+                        dst[off + 3] = bg[3];
+                    }
+                }
+            }
+
+            sx_v = sx_v + step8_sx;
+            sy_v = sy_v + step8_sy;
+            dx += 8;
+        }
+
+        // Scalar tail
+        while dx < w {
+            let out_off = row_byte_start + dx * 4;
+            let sx = m0 * dx as f32 + m[1] * dyf + m[2];
+            let sy = m3 * dx as f32 + m[4] * dyf + m[5];
+
+            if is_color_bg && (sx < -0.5 || sx >= wf - 0.5 || sy < -0.5 || sy >= hf - 0.5) {
+                dst[out_off] = bg[0];
+                dst[out_off + 1] = bg[1];
+                dst[out_off + 2] = bg[2];
+                dst[out_off + 3] = bg[3];
+            } else {
+                let sx_c = sx.clamp(0.0, wf - 1.0);
+                let sy_c = sy.clamp(0.0, hf - 1.0);
+                let ix = sx_c.floor() as i32;
+                let iy = sy_c.floor() as i32;
+                let fx = sx_c - ix as f32;
+                let fy = sy_c - iy as f32;
+                let mut wxs = [0.0f32; 4];
+                let mut wys = [0.0f32; 4];
+                let mut wxsum = 0.0f32;
+                let mut wysum = 0.0f32;
+                for i in 0..4 {
+                    let o = i as i32 - 1;
+                    wxs[i] = robidoux_scalar(o as f32 - fx);
+                    wys[i] = robidoux_scalar(o as f32 - fy);
+                    wxsum += wxs[i];
+                    wysum += wys[i];
+                }
+                let iwx = 1.0 / wxsum;
+                let iwy = 1.0 / wysum;
+                for i in 0..4 {
+                    wxs[i] *= iwx;
+                    wys[i] *= iwy;
+                }
+
+                let mut sr = 0.0f32;
+                let mut sg = 0.0f32;
+                let mut sb = 0.0f32;
+                let mut sa_acc = 0.0f32;
+                for j in 0..4 {
+                    let gy = (iy + j as i32 - 1).clamp(0, h_i32 - 1) as usize;
+                    let row_base = gy * w * 4;
+                    let mut rr = 0.0f32;
+                    let mut rg = 0.0f32;
+                    let mut rb = 0.0f32;
+                    let mut ra = 0.0f32;
+                    for i in 0..4 {
+                        let gx = (ix + i as i32 - 1).clamp(0, w_i32 - 1) as usize;
+                        let off = row_base + gx * 4;
+                        rr += src[off] as f32 * wxs[i];
+                        rg += src[off + 1] as f32 * wxs[i];
+                        rb += src[off + 2] as f32 * wxs[i];
+                        ra += src[off + 3] as f32 * wxs[i];
+                    }
+                    sr += rr * wys[j];
+                    sg += rg * wys[j];
+                    sb += rb * wys[j];
+                    sa_acc += ra * wys[j];
+                }
+                dst[out_off] = sr.round().clamp(0.0, 255.0) as u8;
+                dst[out_off + 1] = sg.round().clamp(0.0, 255.0) as u8;
+                dst[out_off + 2] = sb.round().clamp(0.0, 255.0) as u8;
+                dst[out_off + 3] = sa_acc.round().clamp(0.0, 255.0) as u8;
+            }
+            dx += 1;
+        }
+    }
+}
+
 /// Cardinal rotation (90°/180°/270°) on interleaved RGBA u8 data.
 ///
 /// `quarter_turns`: 1=90°CCW, 2=180°, 3=270°CCW. Pixel-perfect, no interpolation.
