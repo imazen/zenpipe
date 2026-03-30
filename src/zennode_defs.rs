@@ -752,7 +752,7 @@ impl Default for Constrain {
 /// RIAPI: Not directly exposed — use Constrain for querystring-driven resize.
 #[derive(Node, Clone, Debug, Default)]
 #[node(id = "zenresize.resize", group = Geometry, role = Resize)]
-#[node(changes_dimensions)]
+#[node(coalesce = "layout_plan", changes_dimensions)]
 #[node(tags("resize", "scale", "resample"))]
 pub struct Resize {
     /// Target width in pixels.
