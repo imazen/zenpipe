@@ -47,17 +47,8 @@ zcimg-run *ARGS:
     cargo run --release --manifest-path zcimg/Cargo.toml -- {{ARGS}}
 
 # ═══════════════════════════════════════════════════════════
-# Fuzzing
+# Fuzzing (cross-platform: works on Linux, macOS, Windows)
 # ═══════════════════════════════════════════════════════════
-
-# Seed the fuzz corpus from local sibling crates + external GitHub repos.
-# Pass --local-only to skip external downloads.
-fuzz-seed *ARGS:
-    ./fuzz/seed_corpus.sh {{ARGS}}
-
-# Seed corpus (local only, no network).
-fuzz-seed-local:
-    ./fuzz/seed_corpus.sh --local-only
 
 # Build all fuzz targets (release mode with debug info).
 fuzz-build:
@@ -67,53 +58,73 @@ fuzz-build:
 fuzz-list:
     cd fuzz && cargo +nightly fuzz list
 
-# Run a specific fuzz target. Seeds corpus first (local only).
+# Run a specific fuzz target.
 # Usage: just fuzz <target> [extra-libfuzzer-args]
 # Example: just fuzz fuzz_decode -- -max_total_time=60
 fuzz TARGET *ARGS:
-    ./fuzz/seed_corpus.sh --local-only
     cd fuzz && cargo +nightly fuzz run {{TARGET}} corpus/seed/mixed -- -dict=multiformat.dict {{ARGS}}
+
+# Run a target for N seconds (default 60).
+# Example: just fuzz-timed fuzz_decode 120
+fuzz-timed TARGET DURATION="60":
+    cd fuzz && cargo +nightly fuzz run {{TARGET}} corpus/seed/mixed -- -dict=multiformat.dict -max_total_time={{DURATION}}
+
+# Run all high-priority fuzz targets for N seconds each (default 60).
+fuzz-ci DURATION="60":
+    just fuzz-timed fuzz_probe {{DURATION}}
+    just fuzz-timed fuzz_decode {{DURATION}}
+    just fuzz-timed fuzz_exif {{DURATION}}
+    just fuzz-timed fuzz_decode_limits {{DURATION}}
 
 # Run all fuzz targets for 60 seconds each (quick smoke test).
 fuzz-smoke:
-    ./fuzz/seed_corpus.sh --local-only
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd fuzz
-    for target in $(cargo fuzz list 2>/dev/null); do
-        echo "=== $target (60s) ==="
-        cargo fuzz run "$target" corpus/seed/mixed -- -dict=multiformat.dict -max_total_time=60 || true
-    done
+    just fuzz-timed fuzz_probe 60
+    just fuzz-timed fuzz_decode 60
+    just fuzz-timed fuzz_exif 60
+    just fuzz-timed fuzz_decode_limits 60
+    just fuzz-timed fuzz_push_decode 60
+    just fuzz-timed fuzz_animation 60
+    just fuzz-timed fuzz_transcode 60
+    just fuzz-timed fuzz_gainmap 60
+    just fuzz-timed fuzz_depthmap 60
+    just fuzz-timed fuzz_roundtrip 60
+    just fuzz-timed fuzz_select 60
 
 # Run all fuzz targets for 30 minutes each (deep fuzzing).
 fuzz-deep:
-    ./fuzz/seed_corpus.sh
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd fuzz
-    for target in $(cargo fuzz list 2>/dev/null); do
-        echo "=== $target (30min) ==="
-        cargo fuzz run "$target" corpus/seed/mixed -- -dict=multiformat.dict -max_total_time=1800 || true
-    done
+    just fuzz-timed fuzz_probe 1800
+    just fuzz-timed fuzz_decode 1800
+    just fuzz-timed fuzz_exif 1800
+    just fuzz-timed fuzz_decode_limits 1800
+    just fuzz-timed fuzz_push_decode 1800
+    just fuzz-timed fuzz_animation 1800
+    just fuzz-timed fuzz_transcode 1800
+    just fuzz-timed fuzz_gainmap 1800
+    just fuzz-timed fuzz_depthmap 1800
+    just fuzz-timed fuzz_roundtrip 1800
+    just fuzz-timed fuzz_select 1800
 
 # Run a fuzz target with coverage instrumentation and generate a report.
-# Usage: just fuzz-cov <target>
 fuzz-cov TARGET:
     cd fuzz && cargo +nightly fuzz coverage {{TARGET}} corpus/seed/mixed
-    @echo "Coverage data written to fuzz/coverage/{{TARGET}}/"
 
-# Run only high-priority fuzz targets (probe, decode, exif, limits) for CI.
-# Pass --local-only to fuzz-seed to avoid network in CI.
-fuzz-ci DURATION="60":
+# Seed corpus from local sibling crates (Linux/macOS only — uses bash).
+[unix]
+fuzz-seed *ARGS:
+    ./fuzz/seed_corpus.sh {{ARGS}}
+
+# Seed corpus local only (Linux/macOS only).
+[unix]
+fuzz-seed-local:
     ./fuzz/seed_corpus.sh --local-only
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd fuzz
-    for target in fuzz_probe fuzz_decode fuzz_exif fuzz_decode_limits; do
-        echo "=== $target ({{DURATION}}s) ==="
-        cargo fuzz run "$target" corpus/seed/mixed -- -dict=multiformat.dict -max_total_time={{DURATION}}
-    done
 
 # Clean fuzz artifacts and coverage data (preserves corpus).
+[unix]
 fuzz-clean:
     rm -rf fuzz/target fuzz/artifacts fuzz/coverage
+
+[windows]
+fuzz-clean:
+    if exist fuzz\target rmdir /s /q fuzz\target
+    if exist fuzz\artifacts rmdir /s /q fuzz\artifacts
+    if exist fuzz\coverage rmdir /s /q fuzz\coverage
