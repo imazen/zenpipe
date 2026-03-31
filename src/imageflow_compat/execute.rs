@@ -224,7 +224,9 @@ fn execute_steps(
     job_options: &imageflow_types::JobOptions,
 ) -> Result<(Vec<ZenEncodeResult>, CapturedBitmaps), ZenError> {
     // Pre-process: expand CommandString nodes using source dimensions from probe.
-    let mut steps = expand_command_strings(steps, io_buffers)?;
+    let expanded = expand_command_strings(steps, io_buffers)?;
+    let mut steps = expanded.steps;
+    let raw_querystring = expanded.raw_querystring;
 
     // Remove no-op Resample2D nodes where output matches source dimensions.
     // RIAPI expansion inserts Resample2D even for "format=png" (no resize requested).
@@ -252,6 +254,13 @@ fn execute_steps(
         .collect();
 
     let mut pipeline = translate::translate_nodes(&steps, io_buffers)?;
+
+    // Apply c.focus / c.zoom / c.finalmode from the raw RIAPI querystring.
+    // This injects SmartCropAnalyze nodes and sets gravity on Constrain nodes.
+    if let Some(ref qs) = raw_querystring {
+        super::riapi::apply_c_focus_postprocessing(&mut pipeline.nodes, qs);
+    }
+
     let has_encode = pipeline.encode_io_id.is_some();
 
     // Handle CreateCanvas — create solid-color source instead of decoding.
@@ -1210,16 +1219,27 @@ fn pipeline_creates_alpha(steps: &[Node]) -> bool {
 /// CommandString needs source dimensions for layout computation. We probe
 /// the decode source to get dimensions, then use `Ir4Expand::expand_steps()`
 /// to produce concrete v2 Node steps.
+/// Result of command string expansion: expanded Node steps + raw querystring (if any).
+struct ExpandedSteps {
+    steps: Vec<Node>,
+    /// Raw RIAPI querystring from the CommandString node, if present.
+    /// Used for c.focus/c.zoom/c.finalmode post-processing after translate_nodes.
+    raw_querystring: Option<String>,
+}
+
 fn expand_command_strings(
     steps: &[Node],
     io_buffers: &HashMap<i32, Vec<u8>>,
-) -> Result<Vec<Node>, ZenError> {
+) -> Result<ExpandedSteps, ZenError> {
     // Check if any CommandString nodes exist.
     let has_command_string = steps
         .iter()
         .any(|n| matches!(n, Node::CommandString { .. }));
     if !has_command_string {
-        return Ok(steps.to_vec());
+        return Ok(ExpandedSteps {
+            steps: steps.to_vec(),
+            raw_querystring: None,
+        });
     }
 
     // Find decode io_id to probe source dimensions.
@@ -1254,6 +1274,7 @@ fn expand_command_strings(
 
     // Expand each CommandString into concrete steps.
     let mut result = Vec::new();
+    let mut raw_querystring: Option<String> = None;
     for node in steps {
         match node {
             Node::CommandString {
@@ -1263,6 +1284,8 @@ fn expand_command_strings(
                 encode,
                 watermarks,
             } => {
+                // Capture raw querystring for c.focus/c.zoom/c.finalmode post-processing.
+                raw_querystring = Some(value.clone());
                 use imageflow_riapi::ir4::*;
 
                 // Inject Decode node if CommandString specifies a decode io_id.
@@ -1363,7 +1386,10 @@ fn expand_command_strings(
         }
     }
 
-    Ok(result)
+    Ok(ExpandedSteps {
+        steps: result,
+        raw_querystring,
+    })
 }
 
 /// Strip trim-related keys from a RIAPI querystring so expansion can proceed.

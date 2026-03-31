@@ -97,63 +97,8 @@ pub fn expand_legacy(
 
     let mut nodes = pipeline.nodes;
 
-    // Apply c.focus / c.zoom / c.finalmode post-processing (same as expand_zen).
-    let c_focus = parse_c_focus(querystring);
-    let c_zoom = parse_c_zoom(querystring);
-    let c_finalmode = parse_c_finalmode(querystring);
-
-    // Apply c.focus point and c.finalmode to the Constrain node.
-    for inst in &mut nodes {
-        let schema_id = inst.schema().id;
-        if schema_id == "zenresize.constrain" || schema_id == "zenlayout.constrain" {
-            if let Some(CFocusParsed::Point(fx, fy)) = &c_focus {
-                let gx = (fx / 100.0).clamp(0.0, 1.0);
-                let gy = (fy / 100.0).clamp(0.0, 1.0);
-                inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
-                inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
-            }
-            if let Some(ref fm) = c_finalmode {
-                inst.set_param("mode", zennode::ParamValue::Str(fm.clone()));
-            }
-        }
-    }
-
-    // Inject SmartCropAnalyze before Constrain for c.focus rects.
-    if let Some(CFocusParsed::Rects(ref rects)) = c_focus {
-        let constrain_idx = nodes.iter().position(|n| {
-            let id = n.schema().id;
-            id == "zenresize.constrain" || id == "zenlayout.constrain"
-        });
-
-        if let Some(idx) = constrain_idx {
-            let constrain = &nodes[idx];
-            let target_w = constrain
-                .get_param("w")
-                .and_then(|v| v.as_u32())
-                .unwrap_or(0);
-            let target_h = constrain
-                .get_param("h")
-                .and_then(|v| v.as_u32())
-                .unwrap_or(0);
-
-            if target_w > 0 && target_h > 0 {
-                let csv: String = rects
-                    .iter()
-                    .flat_map(|r| r.iter().copied())
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
-
-                let mut analyze = crate::zennode_defs::SmartCropAnalyze::default();
-                analyze.rects_csv = csv;
-                analyze.target_w = target_w;
-                analyze.target_h = target_h;
-                analyze.zoom = c_zoom.unwrap_or(false);
-
-                nodes.insert(idx, Box::new(analyze));
-            }
-        }
-    }
+    // Apply c.focus / c.zoom / c.finalmode post-processing (shared with execute.rs).
+    apply_c_focus_postprocessing(&mut nodes, querystring);
 
     Ok(ExpandedRiapi {
         nodes,
@@ -337,6 +282,83 @@ enum CFocusParsed {
     Faces,
     /// Keyword: trigger faces + saliency (requires ML backend).
     Auto,
+}
+
+/// Apply `c.focus` / `c.zoom` / `c.finalmode` post-processing to a list of zennode instances.
+///
+/// This is called after RIAPI expansion (both legacy and zen-native paths) and also
+/// by `execute.rs` after `translate_nodes()`. Shared logic to avoid duplication.
+///
+/// - `Point(x,y)` → sets gravity on Constrain node
+/// - `Rects(...)` → injects SmartCropAnalyze before Constrain
+/// - `Faces`/`Auto` → silently ignored without `nodes-faces` feature
+/// - `c.finalmode` → overrides Constrain mode
+pub(crate) fn apply_c_focus_postprocessing(
+    nodes: &mut Vec<Box<dyn NodeInstance>>,
+    querystring: &str,
+) {
+    let c_focus = parse_c_focus(querystring);
+    let c_zoom = parse_c_zoom(querystring);
+    let c_finalmode = parse_c_finalmode(querystring);
+
+    // Apply c.focus point and c.finalmode to the Constrain node.
+    for inst in nodes.iter_mut() {
+        let schema_id = inst.schema().id;
+        if schema_id == "zenresize.constrain" || schema_id == "zenlayout.constrain" {
+            if let Some(CFocusParsed::Point(fx, fy)) = &c_focus {
+                let gx = (fx / 100.0).clamp(0.0, 1.0);
+                let gy = (fy / 100.0).clamp(0.0, 1.0);
+                inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
+                inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
+            }
+            if let Some(ref fm) = c_finalmode {
+                inst.set_param("mode", zennode::ParamValue::Str(fm.clone()));
+            }
+        }
+    }
+
+    // Inject SmartCropAnalyze before Constrain for c.focus rects.
+    if let Some(CFocusParsed::Rects(ref rects)) = c_focus {
+        let constrain_idx = nodes.iter().position(|n| {
+            let id = n.schema().id;
+            id == "zenresize.constrain" || id == "zenlayout.constrain"
+        });
+
+        if let Some(idx) = constrain_idx {
+            let constrain = &nodes[idx];
+            let target_w = constrain
+                .get_param("w")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+            let target_h = constrain
+                .get_param("h")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+
+            if target_w > 0 && target_h > 0 {
+                let csv: String = rects
+                    .iter()
+                    .flat_map(|r| r.iter().copied())
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+
+                let mut analyze = crate::zennode_defs::SmartCropAnalyze::default();
+                analyze.rects_csv = csv;
+                analyze.target_w = target_w;
+                analyze.target_h = target_h;
+                analyze.zoom = c_zoom.unwrap_or(false);
+
+                nodes.insert(idx, Box::new(analyze));
+            }
+        }
+    }
+
+    // Faces / Auto: silently ignored without nodes-faces feature.
+    #[cfg(feature = "nodes-faces")]
+    if matches!(c_focus, Some(CFocusParsed::Faces | CFocusParsed::Auto)) {
+        // TODO: Build ML Analyze closure when nodes-faces is available.
+    }
 }
 
 /// Parse `c.focus` from a raw querystring.
