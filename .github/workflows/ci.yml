@@ -88,6 +88,8 @@ jobs:
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
       - run: cargo test --all-targets
       - run: cargo test --all-targets --no-default-features
+      - run: cargo test --features zennode
+      - run: cargo test --features zennode,json-schema
 
   msrv:
     name: MSRV
