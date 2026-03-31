@@ -606,25 +606,6 @@ impl Tracer {
         Ok(result)
     }
 
-    /// Cost-aware format conversion via [`zenpixels_convert::ideal_format`].
-    ///
-    /// Instead of forcing a specific target format, uses the intent to determine
-    /// the ideal working format for the downstream operation. If the source
-    /// already satisfies the intent (e.g., f32 linear source for a LinearLight
-    /// resize), no conversion is inserted — avoiding unnecessary round-trips.
-    ///
-    /// Falls back to `ensure_format` with the ideal target when conversion is needed.
-    pub fn ensure_format_negotiated(
-        &self,
-        source: Box<dyn crate::Source>,
-        intent: zenpixels_convert::ConvertIntent,
-        reason: &str,
-    ) -> Result<Box<dyn crate::Source>, crate::error::PipeError> {
-        let current = source.format();
-        let ideal = zenpixels_convert::ideal_format(current, intent);
-        self.ensure_format(source, ideal, reason)
-    }
-
     /// Add a runtime note to the trace (e.g., content-adaptive detection results).
     ///
     /// Pushes an implicit entry with the given name and description. No-op when inactive.

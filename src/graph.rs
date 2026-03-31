@@ -1148,24 +1148,6 @@ impl PipelineGraph {
             }};
         }
 
-        /// Cost-aware format conversion via intent negotiation.
-        /// Uses [`ideal_format()`](zenpixels_convert::ideal_format) to pick the
-        /// cheapest compatible format instead of forcing a specific target.
-        /// If the source already satisfies the intent, no conversion is inserted.
-        #[allow(unused_macros)]
-        macro_rules! ensure_fmt_negotiated {
-            ($source:expr, $intent:expr, $reason:expr) => {{
-                #[cfg(feature = "std")]
-                {
-                    tracer.ensure_format_negotiated($source, $intent, $reason)
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    ensure_format_negotiated($source, $intent)
-                }
-            }};
-        }
-
         match op {
             NodeOp::Source => {
                 let source = sources.remove(&node_id).ok_or_else(|| {
@@ -1873,20 +1855,6 @@ fn ensure_format(
         ))
     })?;
     Ok(Box::new(TransformSource::new(source).push(op)))
-}
-
-/// Cost-aware format conversion using [`zenpixels_convert::ideal_format`] (no-std path).
-///
-/// Computes the ideal working format for the given intent and only converts
-/// if the source doesn't already satisfy the requirement.
-#[cfg(not(feature = "std"))]
-fn ensure_format_negotiated(
-    source: Box<dyn Source>,
-    intent: zenpixels_convert::ConvertIntent,
-) -> Result<Box<dyn Source>, PipeError> {
-    let current = source.format();
-    let ideal = zenpixels_convert::ideal_format(current, intent);
-    ensure_format(source, ideal)
 }
 
 // ensure_format_traced is now Tracer::ensure_format — see trace.rs
