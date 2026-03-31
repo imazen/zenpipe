@@ -1368,6 +1368,62 @@ impl Default for AutoExposureDef {
     }
 }
 
+/// Auto levels: stretch the luminance histogram to fill [0, 1].
+///
+/// Scans the L plane to find cutoff points, then remaps luminance so the
+/// low cutoff maps to 0 and the high cutoff maps to 1. Equivalent to
+/// ImageMagick `-auto-level`, with smart outlier-resistant plateau detection,
+/// optional midpoint gamma correction, chroma scaling, and cast removal.
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenfilters.auto_levels", group = Auto, role = Filter)]
+#[node(label = "Auto Levels")]
+#[node(format(preferred = OklabF32, alpha = Skip))]
+#[node(tags("auto", "levels", "normalize", "histogram", "stretch"))]
+pub struct AutoLevelsDef {
+    /// Fraction of pixels to clip at the dark end (0 = smart plateau detection)
+    #[param(range(0.0..=0.1), default = 0.0, identity = 0.0, step = 0.005)]
+    #[param(unit = "", section = "Range", slider = Linear)]
+    pub clip_low: f32,
+
+    /// Fraction of pixels to clip at the bright end (0 = smart plateau detection)
+    #[param(range(0.0..=0.1), default = 0.0, identity = 0.0, step = 0.005)]
+    #[param(unit = "", section = "Range", slider = Linear)]
+    pub clip_high: f32,
+
+    /// Move the median luminance to this value via gamma correction (0 = off)
+    #[param(range(0.0..=1.0), default = 0.0, identity = 0.0, step = 0.05)]
+    #[param(unit = "", section = "Tone", slider = Linear)]
+    pub target_midpoint: f32,
+
+    /// Scale a/b channels by the same factor as L (raises saturation on stretch)
+    #[param(default = false)]
+    #[param(section = "Color", label = "Scale Chroma")]
+    pub scale_chroma: bool,
+
+    /// Subtract mean(a) and mean(b) to neutralize color cast
+    #[param(default = false)]
+    #[param(section = "Color", label = "Remove Color Cast")]
+    pub remove_cast: bool,
+
+    /// Blend strength (0 = off, 1 = full stretch)
+    #[param(range(0.0..=1.0), default = 1.0, identity = 1.0, step = 0.05)]
+    #[param(unit = "", section = "Main", slider = Linear)]
+    pub strength: f32,
+}
+
+impl Default for AutoLevelsDef {
+    fn default() -> Self {
+        Self {
+            clip_low: 0.0,
+            clip_high: 0.0,
+            target_midpoint: 0.0,
+            scale_chroma: false,
+            remove_cast: false,
+            strength: 1.0,
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // ADDITIONAL DETAIL
 // ═══════════════════════════════════════════════════════════════════
@@ -1910,6 +1966,7 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(&ALPHA_NODE);
     registry.register(&COLOR_MATRIX_NODE);
     registry.register(&AUTO_EXPOSURE_DEF_NODE);
+    registry.register(&AUTO_LEVELS_DEF_NODE);
     registry.register(&BILATERAL_DEF_NODE);
     registry.register(&BLUR_DEF_NODE);
     registry.register(&CHANNEL_CURVES_DEF_NODE);
@@ -1970,6 +2027,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &ALPHA_NODE,
     &COLOR_MATRIX_NODE,
     &AUTO_EXPOSURE_DEF_NODE,
+    &AUTO_LEVELS_DEF_NODE,
     &BILATERAL_DEF_NODE,
     &BLUR_DEF_NODE,
     &CHANNEL_CURVES_DEF_NODE,
@@ -2099,6 +2157,27 @@ pub fn node_to_filter(
             target: f32_param(node, "target"),
             max_correction: f32_param(node, "max_correction"),
         })),
+        "zenfilters.auto_levels" => {
+            fn bool_param(node: &dyn zennode::traits::NodeInstance, name: &str) -> bool {
+                node.get_param(name)
+                    .and_then(|p| match p {
+                        ParamValue::Bool(v) => Some(v),
+                        _ => None,
+                    })
+                    .unwrap_or(false)
+            }
+            Some(alloc::boxed::Box::new(AutoLevels {
+                clip_low: f32_param(node, "clip_low"),
+                clip_high: f32_param(node, "clip_high"),
+                target_midpoint: f32_param(node, "target_midpoint"),
+                scale_chroma: bool_param(node, "scale_chroma"),
+                remove_cast: bool_param(node, "remove_cast"),
+                strength: {
+                    let v = f32_param(node, "strength");
+                    if v > 0.0 { v } else { 1.0 }
+                },
+            }))
+        }
         // Additional Detail
         "zenfilters.bilateral" => Some(alloc::boxed::Box::new(Bilateral {
             spatial_sigma: f32_param(node, "spatial_sigma"),

@@ -2,6 +2,7 @@ mod adaptive_sharpen;
 mod alpha;
 mod asc_cdl;
 mod auto_exposure;
+mod auto_levels;
 #[cfg(feature = "experimental")]
 mod auto_tune;
 mod basecurve;
@@ -66,6 +67,7 @@ pub use adaptive_sharpen::AdaptiveSharpen;
 pub use alpha::Alpha;
 pub use asc_cdl::AscCdl;
 pub use auto_exposure::AutoExposure;
+pub use auto_levels::AutoLevels;
 #[cfg(feature = "experimental")]
 pub use auto_tune::{
     CLUSTER_COUNT, ClusterModel, ImageFeatures, LINEAR_MODEL_INPUTS, LINEAR_MODEL_OUTPUTS,

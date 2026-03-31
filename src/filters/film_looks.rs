@@ -1132,6 +1132,8 @@ fn blockbuster(r: f32, g: f32, b: f32) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     extern crate std;
+    use std::vec;
+    use std::vec::Vec;
     use super::*;
 
     #[test]

@@ -76,6 +76,7 @@ pub enum FilterTag {
     FusedAdjust,
     Bloom,
     Levels,
+    AutoLevels,
     Other,
 }
 
