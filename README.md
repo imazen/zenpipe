@@ -249,11 +249,34 @@ estimate.check(&Limits {
 })?;
 ```
 
+## Smart crop (`c.focus`)
+
+zenpipe supports content-aware cropping via the `c.focus` RIAPI parameter, back-compatible with ImageResizer's CropAround plugin.
+
+```text
+?w=800&h=600&mode=crop&c.focus=20,30,80,90          # keep this region visible
+?w=400&h=400&mode=crop&c.focus=50,30                 # focal point (like c.gravity)
+?w=800&h=600&mode=crop&c.focus=20,30,80,90&c.zoom=true  # tight crop around region
+?w=800&h=600&mode=crop&c.focus=faces                 # face detection (when available)
+```
+
+| Parameter | Effect |
+|-----------|--------|
+| `c.focus=x1,y1,x2,y2` | Focus rect in percentages (0-100). Crop shifts to keep it visible. |
+| `c.focus=x1,y1,x2,y2;x3,y3,x4,y4` | Multiple rects (semicolon or flat comma groups). |
+| `c.focus=x,y` | Focal point — sets crop gravity. |
+| `c.focus=faces\|saliency\|auto` | Detection keywords — silently ignored without `nodes-faces` feature. |
+| `c.zoom=true` | Maximal (tight) crop. Default `false` = minimal (loose). |
+| `c.finalmode=pad\|crop\|max` | Override constraint mode after smart crop. |
+
+Manual focus rects work with zero additional dependencies — just zenlayout geometry. The detection keywords (`faces`, `saliency`, `auto`) activate when the `nodes-faces` feature is enabled, bringing in zensally for ML-based face detection and saliency maps.
+
 ## Features
 
 - `default = ["std"]` — enables zenfilters and moxcms
 - `zennode` — bridge from declarative node definitions
 - `nodes-all` — all codec node converters (jpeg, png, webp, gif, avif, jxl, tiff, bmp, resize, filters, etc.)
+- `nodes-faces` — face detection + saliency via zensally (optional, adds ML models)
 - `no_std + alloc` compatible for core pipeline
 
 `#![forbid(unsafe_code)]` — pure safe Rust throughout.
