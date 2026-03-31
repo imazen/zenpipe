@@ -72,9 +72,9 @@ zenlayout = { path = "../zenlayout", default-features = false, features = ["smar
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
 zenblend = { path = "../zenblend", default-features = false }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
-zenpixels-convert = { version = "0.2.1", default-features = false }
+zenpixels-convert = { version = "0.2.2", default-features = false }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
-zenpixels = { version = "0.2.1", default-features = false }
+zenpixels = { version = "0.2.2", default-features = false }
 # Codec trait abstraction (decode/encode, animation, streaming)
 zencodec = { version = "0.1.8", default-features = false }
 # Cooperative cancellation
