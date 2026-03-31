@@ -174,7 +174,9 @@ pub fn expand_zen(
 /// Matches zenlayout's parsing: `c.gravity=30,70` → `(0.30, 0.70)`.
 fn parse_c_gravity(querystring: &str) -> Option<(f32, f32)> {
     for part in querystring.split('&') {
-        let (key, value) = part.split_once('=')?;
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
         if key.eq_ignore_ascii_case("c.gravity") {
             let (x_str, y_str) = value.split_once(',')?;
             let x: f32 = x_str.trim().parse().ok()?;

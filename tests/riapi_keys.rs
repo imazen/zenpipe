@@ -679,6 +679,78 @@ fn c_gravity_clamped_to_0_100() {
     assert!((gy - 1.0).abs() < 0.001, "gravity_y={gy}, expected 1.0 (clamped)");
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  C.GRAVITY EDGE CASES
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_single_value() {
+    // c.gravity=30 (only one value, no comma) — should return None, no panic
+    let r = expand_zen("w=400&h=400&mode=crop&c.gravity=30");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_f32(c, "gravity_x"), None, "single-value c.gravity should be ignored");
+    assert_eq!(get_f32(c, "gravity_y"), None, "single-value c.gravity should be ignored");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_non_numeric() {
+    // c.gravity=abc (non-numeric) — should return None, no panic
+    let r = expand_zen("w=400&h=400&mode=crop&c.gravity=abc");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_f32(c, "gravity_x"), None, "non-numeric c.gravity should be ignored");
+    assert_eq!(get_f32(c, "gravity_y"), None, "non-numeric c.gravity should be ignored");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_empty_value() {
+    // c.gravity= (empty value) — should return None, no panic
+    let r = expand_zen("w=400&h=400&mode=crop&c.gravity=");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_f32(c, "gravity_x"), None, "empty c.gravity should be ignored");
+    assert_eq!(get_f32(c, "gravity_y"), None, "empty c.gravity should be ignored");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_too_many_values() {
+    // c.gravity=30,70,50 (three values) — should return None, no panic
+    let r = expand_zen("w=400&h=400&mode=crop&c.gravity=30,70,50");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_f32(c, "gravity_x"), None, "three-value c.gravity should be ignored");
+    assert_eq!(get_f32(c, "gravity_y"), None, "three-value c.gravity should be ignored");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_absent() {
+    // No c.gravity key at all — should return None
+    let r = expand_zen("w=400&h=400&mode=crop");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_f32(c, "gravity_x"), None, "absent c.gravity should leave gravity_x None");
+    assert_eq!(get_f32(c, "gravity_y"), None, "absent c.gravity should leave gravity_y None");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_after_bare_key() {
+    // c.gravity after a bare key (no =) — should still be found
+    let r = expand_zen("w=400&h=400&mode=crop&barekey&c.gravity=30,70");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set despite preceding bare key");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set despite preceding bare key");
+    assert!((gx - 0.30).abs() < 0.001, "gravity_x={gx}, expected 0.30");
+    assert!((gy - 0.70).abs() < 0.001, "gravity_y={gy}, expected 0.70");
+}
+
 #[cfg(feature = "imageflow-compat")]
 #[test]
 fn c_gravity_no_unconsumed_warning() {
