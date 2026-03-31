@@ -1,8 +1,12 @@
-name: Docs
+name: Deploy Docs
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -11,43 +15,42 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Generate docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Export schemas
-        run: |
-          cargo test --features "json-schema,nodes-all" --lib -- schema_export::tests::dump_schemas_to_files 2>/dev/null || true
-          # Fallback to committed sample schemas if test doesn't produce output
-          if [ ! -f /tmp/zen-schemas/v3_nodes.json ]; then
-            mkdir -p /tmp/zen-schemas
-            cp tools/docgen/sample_schemas/*.json /tmp/zen-schemas/
-          fi
-
-      - name: Generate site
-        run: python3 tools/docgen/generate_docs.py /tmp/zen-schemas/ docs/
-
-      - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/
+          submodules: true
+
+      - name: Install Zola
+        run: |
+          ZOLA_VERSION="0.22.1"
+          mkdir -p $HOME/bin
+          curl -sSL "https://github.com/getzola/zola/releases/download/v${ZOLA_VERSION}/zola-v${ZOLA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C $HOME/bin
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Build site
+        run: zola --root site build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/public
 
   deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
     steps:
-      - uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4
