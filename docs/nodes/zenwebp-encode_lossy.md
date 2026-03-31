@@ -1,24 +1,9 @@
-+++
-title = "Encode Webp Lossy"
-description = "zenwebp.encode_lossy — encode node"
-weight = 700
+# ⚙️ Encode Webp Lossy
 
-[taxonomies]
-tags = ["webp", "lossy", "encode"]
-
-[extra]
-node_id = "zenwebp.encode_lossy"
-role = "encode"
-group = "encode"
-stage = "Encode"
-+++
+> **ID:** `zenwebp.encode_lossy` · **Role:** encode · **Group:** encode
+> **Tags:** `webp`, `lossy`, `encode`
 
 WebP lossy (VP8) encode node.
-
-
-## Accepted Values
-
-- **`preset`**: `default`, `picture`, `photo`, `drawing`, `icon`, `text`
 
 ## Parameters
 
@@ -70,4 +55,3 @@ WebP lossy (VP8) encode node.
 | `webp.target_size` | — | `target_size` |
 
 **Example:** `?webp.alpha_quality=400&webp.effort=5&webp.sharpness=400`
-

@@ -1,0 +1,19 @@
+# ⚙️ Grayscale
+
+> **ID:** `zenfilters.grayscale` · **Role:** filter · **Group:** color
+
+Convert to grayscale by zeroing chroma channels.  In Oklab, grayscale means a=0, b=0. The perceived luminance is already encoded in the L channel, so there is no information loss.
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `algorithm` | string | oklab | Grayscale algorithm. All produce identical results in Oklab space (zero chroma), but different luma coefficients when applied in sRGB. Values: "oklab" (default), "ntsc", "bt709", "flat", "ry" |
+
+## RIAPI Querystring Keys
+
+| Key | Aliases | Parameter |
+|-----|---------|-----------|
+| `s.grayscale` | — | `algorithm` |
+
+**Example:** `?s.grayscale=oklab`

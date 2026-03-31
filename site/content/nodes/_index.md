@@ -42,7 +42,7 @@ Decode → Orient & Crop → Resize & Layout → Filters → Composite → Quant
 | [Rotate 270](zenlayout-rotate_270) | 270-degree rotation |
 | [Rotate (RIAPI)](zenpipe-riapi-rotate) | RIAPI rotation querystring |
 
-### 3. Resize & Layout (5 nodes)
+### 3. Resize & Layout (6 nodes)
 
 | Node | Description |
 |------|-------------|
@@ -51,6 +51,7 @@ Decode → Orient & Crop → Resize & Layout → Filters → Composite → Quant
 | [Expand Canvas](zenlayout-expand_canvas) | Add padding around the image |
 | [Output Limits](zenlayout-output_limits) | Restrict maximum output dimensions |
 | [Crop Whitespace](zenpipe-crop_whitespace) | Detect and trim uniform borders |
+| [Smart Crop](zenpipe-smart_crop_analyze) | Content-aware crop using focus rectangles or face detection |
 
 ### 4. Filters (53 nodes)
 
@@ -146,6 +147,7 @@ Decode → Orient & Crop → Resize & Layout → Filters → Composite → Quant
 | Node | Description |
 |------|-------------|
 | [Auto Exposure](zenfilters-auto_exposure) | Automatic exposure correction |
+| [Auto Levels](zenfilters-auto_levels) | Automatic levels correction |
 
 ### 5. Composite (2 nodes)
 

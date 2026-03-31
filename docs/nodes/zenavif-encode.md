@@ -1,26 +1,9 @@
-+++
-title = "Avif Encode"
-description = "zenavif.encode — encode node"
-weight = 700
+# ⚙️ Avif Encode
 
-[taxonomies]
-tags = ["avif", "encode", "av1"]
-
-[extra]
-node_id = "zenavif.encode"
-role = "encode"
-group = "encode"
-stage = "Encode"
-+++
+> **ID:** `zenavif.encode` · **Role:** encode · **Group:** encode
+> **Tags:** `avif`, `encode`, `av1`
 
 AVIF encoding node.
-
-
-## Accepted Values
-
-- **`bit_depth`**: `auto`, `8`, `10`, `12`
-- **`color_model`**: `ycbcr`, `rgb`
-- **`alpha_color_mode`**: `clean`, `dirty`, `premultiplied`
 
 ## Parameters
 
@@ -56,4 +39,3 @@ AVIF encoding node.
 | `avif.speed` | — | `speed` |
 
 **Example:** `?avif.alpha_color_mode=clean&avif.alpha_quality=value&avif.depth=auto`
-

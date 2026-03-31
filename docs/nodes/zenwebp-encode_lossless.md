@@ -1,17 +1,7 @@
-+++
-title = "Encode Webp Lossless"
-description = "zenwebp.encode_lossless — encode node"
-weight = 700
+# ⚙️ Encode Webp Lossless
 
-[taxonomies]
-tags = ["webp", "lossless", "encode"]
-
-[extra]
-node_id = "zenwebp.encode_lossless"
-role = "encode"
-group = "encode"
-stage = "Encode"
-+++
+> **ID:** `zenwebp.encode_lossless` · **Role:** encode · **Group:** encode
+> **Tags:** `webp`, `lossless`, `encode`
 
 WebP lossless (VP8L) encode node.
 
@@ -55,4 +45,3 @@ WebP lossless (VP8L) encode node.
 | `webp.target_size` | — | `target_size` |
 
 **Example:** `?webp.alpha_quality=400&webp.effort=5&webp.exact=value`
-
