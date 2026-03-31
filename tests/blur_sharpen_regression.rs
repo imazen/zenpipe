@@ -98,7 +98,7 @@ fn max_abs_diff(a: &[f32], b: &[f32]) -> f32 {
 fn blur_checkerboard_reduces_adjacent_contrast() {
     // A 1-pixel checkerboard is the hardest pattern for a blur to smooth:
     // every pixel differs from all its neighbors.
-    let mut planes = make_checkerboard(32, 32, 0.2, 0.8);
+    let mut planes = make_checkerboard(128, 128, 0.2, 0.8);
     let original = planes.l.clone();
 
     let std_before = std_dev(&original);
@@ -116,11 +116,11 @@ fn blur_checkerboard_reduces_adjacent_contrast() {
     );
 
     // Also verify individual adjacent pixels are closer together after blur.
-    // Sample an interior pair at (15, 16) and (16, 16).
-    let a = planes.l[planes.index(15, 16)];
-    let b = planes.l[planes.index(16, 16)];
-    let orig_a = original[planes.index(15, 16)];
-    let orig_b = original[planes.index(16, 16)];
+    // Sample an interior pair at (63, 64) and (64, 64).
+    let a = planes.l[planes.index(63, 64)];
+    let b = planes.l[planes.index(64, 64)];
+    let orig_a = original[planes.index(63, 64)];
+    let orig_b = original[planes.index(64, 64)];
     assert!(
         (a - b).abs() < (orig_a - orig_b).abs(),
         "adjacent pixels should be closer after blur: |{a}-{b}|={:.4} vs original |{orig_a}-{orig_b}|={:.4}",
@@ -136,7 +136,8 @@ fn blur_larger_sigma_produces_more_smoothing() {
     let mut rms_diffs = Vec::new();
 
     for &sigma in &sigmas {
-        let mut planes = make_step_edge(32, 32, 0.2, 0.8);
+        // Use 256x256 so even sigma=8 (kernel ~49px) has ample interior.
+        let mut planes = make_step_edge(256, 256, 0.2, 0.8);
         let original = planes.l.clone();
         new_blur(sigma).apply(&mut planes, &mut FilterContext::new());
         let diff = rms_diff(&planes.l, &original);
@@ -157,8 +158,8 @@ fn blur_larger_sigma_produces_more_smoothing() {
 
     // The largest sigma should produce meaningfully more smoothing than the smallest.
     assert!(
-        rms_diffs[rms_diffs.len() - 1] > rms_diffs[0] * 1.5,
-        "sigma=8 should produce >1.5x the smoothing of sigma=0.5: {:.6} vs {:.6}",
+        rms_diffs[rms_diffs.len() - 1] > rms_diffs[0] * 3.0,
+        "sigma=8 should produce >3.0x the smoothing of sigma=0.5: {:.6} vs {:.6}",
         rms_diffs[rms_diffs.len() - 1],
         rms_diffs[0]
     );
@@ -167,7 +168,7 @@ fn blur_larger_sigma_produces_more_smoothing() {
 #[test]
 fn blur_small_sigma_is_not_identity() {
     // sigma=0.5 is small but should still produce a visible effect (not a no-op).
-    let mut planes = make_checkerboard(32, 32, 0.2, 0.8);
+    let mut planes = make_checkerboard(128, 128, 0.2, 0.8);
     let original = planes.l.clone();
     new_blur(0.5).apply(&mut planes, &mut FilterContext::new());
 
@@ -181,14 +182,14 @@ fn blur_small_sigma_is_not_identity() {
 #[test]
 fn blur_preserves_mean_luminance() {
     // Gaussian blur should preserve the mean value of the plane (energy conservation).
-    let mut planes = make_step_edge(32, 32, 0.2, 0.8);
+    let mut planes = make_step_edge(128, 128, 0.2, 0.8);
     let mean_before: f32 = planes.l.iter().sum::<f32>() / planes.l.len() as f32;
 
     new_blur(3.0).apply(&mut planes, &mut FilterContext::new());
 
     let mean_after: f32 = planes.l.iter().sum::<f32>() / planes.l.len() as f32;
     assert!(
-        (mean_before - mean_after).abs() < 0.02,
+        (mean_before - mean_after).abs() < 0.005,
         "blur should preserve mean luminance: {mean_before:.4} -> {mean_after:.4}"
     );
 }
@@ -201,7 +202,7 @@ fn blur_preserves_mean_luminance() {
 fn sharpen_output_differs_from_input() {
     // Basic functionality: sharpening with nonzero amount on a patterned image
     // should produce output different from input.
-    let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+    let mut planes = make_step_edge(128, 128, 0.3, 0.7);
     let original = planes.l.clone();
 
     new_sharpen(1.0, 0.5).apply(&mut planes, &mut FilterContext::new());
@@ -237,7 +238,7 @@ fn sharpen_increasing_amount_increases_divergence() {
     let mut rms_diffs = Vec::new();
 
     for &amount in &amounts {
-        let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+        let mut planes = make_step_edge(128, 128, 0.3, 0.7);
         let original = planes.l.clone();
 
         new_sharpen(1.0, amount).apply(&mut planes, &mut FilterContext::new());
@@ -264,7 +265,7 @@ fn sharpen_preserves_mean_luminance() {
     // Unsharp mask sharpening should approximately preserve mean luminance.
     // The formula is L' = L + amount * (L - blur(L)) which has zero-mean detail,
     // so the mean should be preserved (with edge effects at boundaries).
-    let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+    let mut planes = make_step_edge(128, 128, 0.3, 0.7);
     let mean_before: f32 = planes.l.iter().sum::<f32>() / planes.l.len() as f32;
 
     new_sharpen(1.0, 1.0).apply(&mut planes, &mut FilterContext::new());
@@ -273,7 +274,7 @@ fn sharpen_preserves_mean_luminance() {
     // Note: the `.max(0.0)` clamp in unsharp_fuse can shift the mean slightly upward
     // for very dark regions near edges. Allow some tolerance.
     assert!(
-        (mean_before - mean_after).abs() < 0.05,
+        (mean_before - mean_after).abs() < 0.02,
         "sharpen should approximately preserve mean: {mean_before:.4} -> {mean_after:.4}"
     );
 }
@@ -281,13 +282,18 @@ fn sharpen_preserves_mean_luminance() {
 #[test]
 fn sharpen_does_not_modify_chroma() {
     // Sharpen operates on L_ONLY -- the a and b channels must be untouched.
-    let mut planes = make_step_edge(32, 32, 0.3, 0.7);
-    // Give a and b non-trivial values.
-    for v in &mut planes.a {
-        *v = 0.05;
-    }
-    for v in &mut planes.b {
-        *v = -0.03;
+    // Use a gradient/checkerboard pattern in a and b to catch cross-channel edge bleed.
+    let width = 128u32;
+    let height = 128u32;
+    let mut planes = make_step_edge(width, height, 0.3, 0.7);
+    for y in 0..height {
+        for x in 0..width {
+            let i = planes.index(x, y);
+            // a channel: horizontal gradient from -0.1 to +0.1
+            planes.a[i] = -0.1 + 0.2 * (x as f32) / (width as f32 - 1.0);
+            // b channel: checkerboard between -0.05 and +0.05
+            planes.b[i] = if (x + y) % 2 == 0 { -0.05 } else { 0.05 };
+        }
     }
     let a_orig = planes.a.clone();
     let b_orig = planes.b.clone();
@@ -302,17 +308,17 @@ fn sharpen_does_not_modify_chroma() {
 fn sharpen_increases_edge_contrast() {
     // On a step edge, sharpening should push dark-side pixels darker and
     // bright-side pixels brighter (overshoot at the edge).
-    let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+    let mut planes = make_step_edge(128, 128, 0.3, 0.7);
 
     new_sharpen(1.0, 1.0).apply(&mut planes, &mut FilterContext::new());
 
     // Interior pixels far from the edge should be nearly unchanged.
-    let far_left = planes.l[planes.index(4, 16)];
-    let far_right = planes.l[planes.index(28, 16)];
+    let far_left = planes.l[planes.index(16, 64)];
+    let far_right = planes.l[planes.index(112, 64)];
 
     // Pixels just at the edge should be pushed apart.
-    let edge_left = planes.l[planes.index(15, 16)];
-    let edge_right = planes.l[planes.index(16, 16)];
+    let edge_left = planes.l[planes.index(63, 64)];
+    let edge_right = planes.l[planes.index(64, 64)];
 
     // The edge contrast should exceed the original 0.4 gap.
     assert!(
@@ -355,13 +361,15 @@ fn sharpen_increases_edge_contrast() {
 fn sharpen_parameter_range_produces_sensible_output() {
     // Verify sigma range (per SHARPEN_SCHEMA: 0.5 to 3.0).
     for sigma in [0.5, 1.0, 1.5, 2.0, 3.0] {
-        let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+        let mut planes = make_step_edge(128, 128, 0.3, 0.7);
         new_sharpen(sigma, 0.5).apply(&mut planes, &mut FilterContext::new());
 
         // All output values should be finite and in a reasonable range.
+        // Theoretical max with input [0.3, 0.7] and amount 2.0 is 1.5,
+        // so 1.6 provides a tight bound with headroom.
         for &v in &planes.l {
             assert!(
-                v.is_finite() && v >= 0.0 && v <= 2.0,
+                v.is_finite() && v >= 0.0 && v <= 1.6,
                 "sharpen sigma={sigma} produced out-of-range value {v}"
             );
         }
@@ -369,12 +377,12 @@ fn sharpen_parameter_range_produces_sensible_output() {
 
     // Verify amount range (per SHARPEN_SCHEMA: 0.0 to 2.0).
     for amount in [0.0, 0.5, 1.0, 1.5, 2.0] {
-        let mut planes = make_step_edge(32, 32, 0.3, 0.7);
+        let mut planes = make_step_edge(128, 128, 0.3, 0.7);
         new_sharpen(1.0, amount).apply(&mut planes, &mut FilterContext::new());
 
         for &v in &planes.l {
             assert!(
-                v.is_finite() && v >= 0.0 && v <= 2.0,
+                v.is_finite() && v >= 0.0 && v <= 1.6,
                 "sharpen amount={amount} produced out-of-range value {v}"
             );
         }
