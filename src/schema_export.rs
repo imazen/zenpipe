@@ -166,4 +166,31 @@ mod tests {
         let qs_json = serde_json::to_string(&schemas.querystring_schema).unwrap();
         assert!(qs_json.len() > 100);
     }
+
+    /// Dump all schemas to /tmp/zen-schemas/ for the doc generator.
+    ///
+    /// Used by CI: `cargo test --features "json-schema,nodes-all" --lib -- dump_schemas_to_files`
+    #[test]
+    fn dump_schemas_to_files() {
+        let schemas = export_all();
+        let dir = std::path::Path::new("/tmp/zen-schemas");
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(
+            dir.join("v3_nodes.json"),
+            serde_json::to_string_pretty(&schemas.node_schemas).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("v3_qs_keys.json"),
+            serde_json::to_string_pretty(&schemas.querystring_keys).unwrap(),
+        )
+        .unwrap();
+        let registry = zencodecs::AllowedFormats::all();
+        let codecs = crate::codec_info::list_codecs_json(&registry);
+        std::fs::write(
+            dir.join("v3_codecs.json"),
+            serde_json::to_string_pretty(&codecs).unwrap(),
+        )
+        .unwrap();
+    }
 }

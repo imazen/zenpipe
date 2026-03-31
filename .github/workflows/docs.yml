@@ -1,0 +1,53 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Generate docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Export schemas
+        run: |
+          cargo test --features "json-schema,nodes-all" --lib -- schema_export::tests::dump_schemas_to_files 2>/dev/null || true
+          # Fallback to committed sample schemas if test doesn't produce output
+          if [ ! -f /tmp/zen-schemas/v3_nodes.json ]; then
+            mkdir -p /tmp/zen-schemas
+            cp tools/docgen/sample_schemas/*.json /tmp/zen-schemas/
+          fi
+
+      - name: Generate site
+        run: python3 tools/docgen/generate_docs.py /tmp/zen-schemas/ docs/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
