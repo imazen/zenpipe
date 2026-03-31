@@ -78,11 +78,8 @@ fn apply_icc_to_source(
     match transform {
         Ok(row_transform) => {
             let dst_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(dst_icc.to_vec());
-            let transformed = crate::sources::IccTransformSource::from_transform(
-                source,
-                row_transform,
-                dst_arc,
-            );
+            let transformed =
+                crate::sources::IccTransformSource::from_transform(source, row_transform, dst_arc);
             Ok(Box::new(transformed))
         }
         Err(_) => Ok(source), // Transform not possible — pass through

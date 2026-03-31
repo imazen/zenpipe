@@ -30,19 +30,14 @@ fn make_test_jpeg() -> Vec<u8> {
     for y in 0..h as usize {
         for x in 0..w as usize {
             let offset = y * stride + x * bpp;
-            pixels[offset] = (x * 32).min(255) as u8;     // R
-            pixels[offset + 1] = (y * 32).min(255) as u8;  // G
-            pixels[offset + 2] = 128;                       // B
+            pixels[offset] = (x * 32).min(255) as u8; // R
+            pixels[offset + 1] = (y * 32).min(255) as u8; // G
+            pixels[offset + 2] = 128; // B
         }
     }
-    let ps = zenpixels::PixelSlice::new(
-        &pixels,
-        w,
-        h,
-        stride,
-        zenpixels::PixelDescriptor::RGB8_SRGB,
-    )
-    .expect("pixel slice");
+    let ps =
+        zenpixels::PixelSlice::new(&pixels, w, h, stride, zenpixels::PixelDescriptor::RGB8_SRGB)
+            .expect("pixel slice");
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
         .with_quality(90.0)
         .encode(ps, false)
@@ -90,7 +85,10 @@ fn assert_single_output(result: &ExecuteResult) -> &[u8] {
 fn decode_encode_passthrough() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Mozjpeg {
@@ -114,7 +112,10 @@ fn decode_encode_passthrough() {
 fn decode_constrain_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Constrain(Constraint {
             mode: ConstraintMode::Within,
             w: Some(4),
@@ -148,18 +149,27 @@ fn decode_constrain_encode() {
 fn decode_flip_rotate_encode_png() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::FlipH,
         Node::Rotate90,
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
     let bytes = assert_single_output(&result);
     // PNG signature: 89 50 4E 47
-    assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47], "output is not a PNG");
+    assert_eq!(
+        &bytes[..4],
+        &[0x89, 0x50, 0x4E, 0x47],
+        "output is not a PNG"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -171,8 +181,16 @@ fn decode_flip_rotate_encode_png() {
 fn decode_crop_encode_webp() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
-        Node::Crop { x1: 1, y1: 1, x2: 5, y2: 5 },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
+        Node::Crop {
+            x1: 1,
+            y1: 1,
+            x2: 5,
+            y2: 5,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::WebPLossy { quality: 75.0 },
@@ -195,7 +213,10 @@ fn decode_crop_encode_webp() {
 fn decode_expand_canvas_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ExpandCanvas {
             left: 2,
             top: 2,
@@ -228,7 +249,10 @@ fn decode_expand_canvas_encode() {
 fn color_filter_sepia() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorFilterSrgb(ColorFilterSrgb::Sepia),
         Node::Encode {
             io_id: 1,
@@ -247,11 +271,16 @@ fn color_filter_sepia() {
 fn color_filter_grayscale_ntsc() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorFilterSrgb(ColorFilterSrgb::GrayscaleNtsc),
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -262,7 +291,10 @@ fn color_filter_grayscale_ntsc() {
 fn color_filter_invert() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorFilterSrgb(ColorFilterSrgb::Invert),
         Node::Encode {
             io_id: 1,
@@ -281,7 +313,10 @@ fn color_filter_invert() {
 fn color_filter_contrast() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorFilterSrgb(ColorFilterSrgb::Contrast(0.5)),
         Node::Encode {
             io_id: 1,
@@ -300,7 +335,10 @@ fn color_filter_contrast() {
 fn color_filter_brightness() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorFilterSrgb(ColorFilterSrgb::Brightness(-0.2)),
         Node::Encode {
             io_id: 1,
@@ -323,14 +361,19 @@ fn color_filter_brightness() {
 fn decode_crop_whitespace_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::CropWhitespace {
             threshold: 80,
             percent_padding: 0.0,
         },
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -345,11 +388,16 @@ fn decode_crop_whitespace_encode() {
 fn decode_apply_orientation_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ApplyOrientation { flag: 6 }, // 90 CW rotation
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -364,11 +412,16 @@ fn decode_apply_orientation_encode() {
 fn decode_transpose_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Transpose,
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -383,14 +436,19 @@ fn decode_transpose_encode() {
 fn decode_round_corners_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::RoundImageCorners {
             radius: RoundCornersMode::Percentage(20.0),
             background_color: Color::Transparent,
         },
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -405,8 +463,13 @@ fn decode_round_corners_encode() {
 fn decode_white_balance_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
-        Node::WhiteBalanceHistogramAreaThresholdSrgb { threshold: Some(0.06) },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
+        Node::WhiteBalanceHistogramAreaThresholdSrgb {
+            threshold: Some(0.06),
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Mozjpeg {
@@ -435,7 +498,10 @@ fn decode_color_matrix_identity_encode() {
         [0.0, 0.0, 0.0, 0.0, 1.0],
     ];
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::ColorMatrixSrgb { matrix: identity },
         Node::Encode {
             io_id: 1,
@@ -458,7 +524,10 @@ fn decode_color_matrix_identity_encode() {
 fn decode_constrain_fit_crop_gravity_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Constrain(Constraint {
             mode: ConstraintMode::FitCrop,
             w: Some(4),
@@ -491,11 +560,20 @@ fn decode_constrain_fit_crop_gravity_encode() {
 fn decode_resample2d_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
-        Node::Resample2D { w: 4, h: 4, hints: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
+        Node::Resample2D {
+            w: 4,
+            h: 4,
+            hints: None,
+        },
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -532,7 +610,10 @@ fn command_string_resize_crop_png() {
 fn encoder_preset_mozjpeg() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Mozjpeg {
@@ -551,7 +632,10 @@ fn encoder_preset_mozjpeg() {
 fn encoder_preset_libjpeg_turbo() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::LibjpegTurbo {
@@ -571,7 +655,10 @@ fn encoder_preset_libjpeg_turbo() {
 fn encoder_preset_libpng() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Libpng {
@@ -590,10 +677,15 @@ fn encoder_preset_libpng() {
 fn encoder_preset_lodepng() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: Some(false) },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: Some(false),
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -605,7 +697,10 @@ fn encoder_preset_lodepng() {
 fn encoder_preset_pngquant() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Pngquant {
@@ -626,7 +721,10 @@ fn encoder_preset_pngquant() {
 fn encoder_preset_webp_lossy() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::WebPLossy { quality: 80.0 },
@@ -643,7 +741,10 @@ fn encoder_preset_webp_lossy() {
 fn encoder_preset_webp_lossless() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::WebPLossless,
@@ -660,7 +761,10 @@ fn encoder_preset_webp_lossless() {
 fn encoder_preset_gif() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Gif,
@@ -678,7 +782,10 @@ fn encoder_preset_gif() {
 fn encoder_preset_auto() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Encode {
             io_id: 1,
             preset: EncoderPreset::Auto {
@@ -705,7 +812,10 @@ fn graph_fanout_two_encodes() {
         nodes: HashMap::from([
             (
                 "0".into(),
-                Node::Decode { io_id: 0, commands: None },
+                Node::Decode {
+                    io_id: 0,
+                    commands: None,
+                },
             ),
             (
                 "1".into(),
@@ -733,7 +843,9 @@ fn graph_fanout_two_encodes() {
                 "3".into(),
                 Node::Encode {
                     io_id: 2,
-                    preset: EncoderPreset::Lodepng { maximum_deflate: None },
+                    preset: EncoderPreset::Lodepng {
+                        maximum_deflate: None,
+                    },
                 },
             ),
         ]),
@@ -773,7 +885,11 @@ fn graph_fanout_two_encodes() {
         result.encode_results.len()
     );
     for er in &result.encode_results {
-        assert!(!er.bytes.is_empty(), "encode result for io_id {} is empty", er.io_id);
+        assert!(
+            !er.bytes.is_empty(),
+            "encode result for io_id {} is empty",
+            er.io_id
+        );
     }
 }
 
@@ -785,11 +901,16 @@ fn graph_fanout_two_encodes() {
 fn decode_flip_v_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::FlipV,
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -800,11 +921,16 @@ fn decode_flip_v_encode() {
 fn decode_rotate180_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Rotate180,
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -815,11 +941,16 @@ fn decode_rotate180_encode() {
 fn decode_rotate270_encode() {
     let input = make_test_jpeg();
     let fw = Framewise::Steps(vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::Rotate270,
         Node::Encode {
             io_id: 1,
-            preset: EncoderPreset::Lodepng { maximum_deflate: None },
+            preset: EncoderPreset::Lodepng {
+                maximum_deflate: None,
+            },
         },
     ]);
     let result = run_framewise(&fw, &input);
@@ -845,7 +976,10 @@ fn json_roundtrip_all_constraint_modes() {
     ];
     for mode in &modes {
         let fw = Framewise::Steps(vec![
-            Node::Decode { io_id: 0, commands: None },
+            Node::Decode {
+                io_id: 0,
+                commands: None,
+            },
             Node::Constrain(Constraint {
                 mode: *mode,
                 w: Some(4),
@@ -856,7 +990,9 @@ fn json_roundtrip_all_constraint_modes() {
             }),
             Node::Encode {
                 io_id: 1,
-                preset: EncoderPreset::Lodepng { maximum_deflate: None },
+                preset: EncoderPreset::Lodepng {
+                    maximum_deflate: None,
+                },
             },
         ]);
         let json = serde_json::to_value(&fw).expect("serialize");
@@ -874,7 +1010,10 @@ fn json_roundtrip_color_variants() {
     ];
     for color in &colors {
         let fw = Framewise::Steps(vec![
-            Node::Decode { io_id: 0, commands: None },
+            Node::Decode {
+                io_id: 0,
+                commands: None,
+            },
             Node::ExpandCanvas {
                 left: 1,
                 top: 1,
@@ -884,7 +1023,9 @@ fn json_roundtrip_color_variants() {
             },
             Node::Encode {
                 io_id: 1,
-                preset: EncoderPreset::Lodepng { maximum_deflate: None },
+                preset: EncoderPreset::Lodepng {
+                    maximum_deflate: None,
+                },
             },
         ]);
         let json = serde_json::to_value(&fw).expect("serialize");
@@ -896,7 +1037,11 @@ fn json_roundtrip_color_variants() {
 #[test]
 fn json_roundtrip_encoder_presets() {
     let presets = vec![
-        EncoderPreset::Mozjpeg { quality: Some(85), progressive: Some(true), matte: None },
+        EncoderPreset::Mozjpeg {
+            quality: Some(85),
+            progressive: Some(true),
+            matte: None,
+        },
         EncoderPreset::LibjpegTurbo {
             quality: Some(90),
             progressive: None,
@@ -908,7 +1053,9 @@ fn json_roundtrip_encoder_presets() {
             matte: None,
             zlib_compression: Some(6),
         },
-        EncoderPreset::Lodepng { maximum_deflate: Some(true) },
+        EncoderPreset::Lodepng {
+            maximum_deflate: Some(true),
+        },
         EncoderPreset::Pngquant {
             quality: Some(80),
             minimum_quality: Some(60),
@@ -928,8 +1075,14 @@ fn json_roundtrip_encoder_presets() {
     ];
     for preset in &presets {
         let fw = Framewise::Steps(vec![
-            Node::Decode { io_id: 0, commands: None },
-            Node::Encode { io_id: 1, preset: preset.clone() },
+            Node::Decode {
+                io_id: 0,
+                commands: None,
+            },
+            Node::Encode {
+                io_id: 1,
+                preset: preset.clone(),
+            },
         ]);
         let json = serde_json::to_value(&fw).expect("serialize");
         let parsed: Framewise = serde_json::from_value(json).expect("deserialize");
@@ -958,19 +1111,28 @@ fn json_roundtrip_round_corners_modes() {
     ];
     for mode in &modes {
         let fw = Framewise::Steps(vec![
-            Node::Decode { io_id: 0, commands: None },
+            Node::Decode {
+                io_id: 0,
+                commands: None,
+            },
             Node::RoundImageCorners {
                 radius: *mode,
                 background_color: Color::Transparent,
             },
             Node::Encode {
                 io_id: 1,
-                preset: EncoderPreset::Lodepng { maximum_deflate: None },
+                preset: EncoderPreset::Lodepng {
+                    maximum_deflate: None,
+                },
             },
         ]);
         let json = serde_json::to_value(&fw).expect("serialize");
         let parsed: Framewise = serde_json::from_value(json).expect("deserialize");
-        assert_eq!(fw, parsed, "JSON round-trip failed for corners mode {:?}", mode);
+        assert_eq!(
+            fw, parsed,
+            "JSON round-trip failed for corners mode {:?}",
+            mode
+        );
     }
 }
 
@@ -978,7 +1140,13 @@ fn json_roundtrip_round_corners_modes() {
 fn json_roundtrip_graph_mode() {
     let fw = Framewise::Graph(imageflow_types::Graph {
         nodes: HashMap::from([
-            ("0".into(), Node::Decode { io_id: 0, commands: None }),
+            (
+                "0".into(),
+                Node::Decode {
+                    io_id: 0,
+                    commands: None,
+                },
+            ),
             (
                 "1".into(),
                 Node::Constrain(Constraint {

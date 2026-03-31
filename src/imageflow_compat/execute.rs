@@ -10,10 +10,10 @@
 
 use std::collections::HashMap;
 
-use imageflow_types::{self as s, Framewise, Node};
-use zencodecs::{select_format_from_intent, AllowedFormats, CodecPolicy, ImageFacts};
-use zennode::NodeDef as _;
 use crate::Source as _;
+use imageflow_types::{self as s, Framewise, Node};
+use zencodecs::{AllowedFormats, CodecPolicy, ImageFacts, select_format_from_intent};
+use zennode::NodeDef as _;
 
 use super::cms::{apply_icc_transform, apply_png_gamma_transform, ensure_srgb_rgba8};
 use super::translate::{self, TranslateError, TranslatedPipeline};
@@ -199,7 +199,9 @@ pub fn execute_framewise(
             let results = execute_graph(graph, io_buffers)?;
             Ok(ExecuteResult {
                 encode_results: results,
-                captured_dimensions: CapturedBitmaps { captures: HashMap::new() },
+                captured_dimensions: CapturedBitmaps {
+                    captures: HashMap::new(),
+                },
                 decode_infos,
             })
         }
@@ -254,7 +256,12 @@ fn execute_steps(
 
     // Handle CreateCanvas — create solid-color source instead of decoding.
     if let Some(ref canvas) = pipeline.create_canvas {
-        check_security_limit(canvas.w, canvas.h, &security.max_frame_size, "max_frame_size")?;
+        check_security_limit(
+            canvas.w,
+            canvas.h,
+            &security.max_frame_size,
+            "max_frame_size",
+        )?;
         let source = create_canvas_source(canvas)?;
         let source = ensure_srgb_rgba8(source)?;
 
@@ -269,8 +276,12 @@ fn execute_steps(
         if has_encode && capture_ids.is_empty() {
             let encode_io_id = pipeline.encode_io_id.unwrap();
             // Use the encoder preset's format, falling back to PNG.
-            let codec_intent =
-                pipeline.preset.as_ref().map(|p| &p.intent).cloned().unwrap_or_default();
+            let codec_intent = pipeline
+                .preset
+                .as_ref()
+                .map(|p| &p.intent)
+                .cloned()
+                .unwrap_or_default();
             let canvas_facts = zencodecs::ImageFacts {
                 has_alpha: true,
                 pixel_count: out_w as u64 * out_h as u64,
@@ -330,8 +341,9 @@ fn execute_steps(
         }
     }
 
-    let decode_io_id =
-        pipeline.decode_io_id.ok_or_else(|| ZenError::Io("no decode node in pipeline".into()))?;
+    let decode_io_id = pipeline
+        .decode_io_id
+        .ok_or_else(|| ZenError::Io("no decode node in pipeline".into()))?;
     let input_data = io_buffers
         .get(&decode_io_id)
         .ok_or_else(|| ZenError::Io(format!("no input buffer for io_id {decode_io_id}")))?;
@@ -340,7 +352,8 @@ fn execute_steps(
     // do a multi-frame passthrough (decode all → encode all).
     // Skip when SelectFrame is set — that means single-frame extraction, not animation.
     let has_select_frame = pipeline.decoder_commands.as_ref().is_some_and(|cmds| {
-        cmds.iter().any(|c| matches!(c, imageflow_types::DecoderCommand::SelectFrame(_)))
+        cmds.iter()
+            .any(|c| matches!(c, imageflow_types::DecoderCommand::SelectFrame(_)))
     });
     if has_encode && pipeline.nodes.is_empty() && !has_select_frame {
         let registry = AllowedFormats::all();
@@ -348,8 +361,12 @@ fn execute_steps(
             .map_err(|e| ZenError::Codec(format!("probe: {e}")))?;
         if info.is_animation() {
             let encode_io_id = pipeline.encode_io_id.unwrap();
-            let codec_intent =
-                pipeline.preset.as_ref().map(|p| &p.intent).cloned().unwrap_or_default();
+            let codec_intent = pipeline
+                .preset
+                .as_ref()
+                .map(|p| &p.intent)
+                .cloned()
+                .unwrap_or_default();
             let decision = select_format_from_intent(
                 &codec_intent,
                 &ImageFacts::from_image_info(&info),
@@ -361,18 +378,30 @@ fn execute_steps(
             if let Ok(result) =
                 encode_animation_passthrough(input_data, &registry, &decision, encode_io_id)
             {
-                return Ok((result, CapturedBitmaps { captures: HashMap::new() }));
+                return Ok((
+                    result,
+                    CapturedBitmaps {
+                        captures: HashMap::new(),
+                    },
+                ));
             }
         }
     }
 
-    let (decision, source, exif_flag) =
-        probe_resolve_decode(input_data, &pipeline, &pipeline.decoder_commands, job_options.cms_mode)?;
+    let (decision, source, exif_flag) = probe_resolve_decode(
+        input_data,
+        &pipeline,
+        &pipeline.decoder_commands,
+        job_options.cms_mode,
+    )?;
 
     // Auto-apply EXIF orientation unless the pipeline already has an explicit orient node.
     // zenjpeg auto-orients by default (exif_flag returns 1/Identity after decode),
     // but other codecs may report orientation without applying it.
-    let has_explicit_orient = pipeline.nodes.iter().any(|n| n.schema().id == "zenlayout.orient");
+    let has_explicit_orient = pipeline
+        .nodes
+        .iter()
+        .any(|n| n.schema().id == "zenlayout.orient");
     if exif_flag > 1 && !has_explicit_orient {
         let registry = super::translate::zen_registry();
         if let Some(def) = registry.get("zenlayout.orient") {
@@ -550,7 +579,9 @@ fn execute_graph(
     }
 
     if encode_branches.is_empty() {
-        return Err(ZenError::Pipeline(crate::PipeError::Op("graph has no encode nodes".into())));
+        return Err(ZenError::Pipeline(crate::PipeError::Op(
+            "graph has no encode nodes".into(),
+        )));
     }
 
     // Execute each branch as a linear steps pipeline.
@@ -580,7 +611,12 @@ fn probe_resolve_decode(
     let info =
         zencodecs::from_bytes(input_data).map_err(|e| ZenError::Codec(format!("probe: {e}")))?;
 
-    let codec_intent = pipeline.preset.as_ref().map(|p| &p.intent).cloned().unwrap_or_default();
+    let codec_intent = pipeline
+        .preset
+        .as_ref()
+        .map(|p| &p.intent)
+        .cloned()
+        .unwrap_or_default();
 
     let decision = select_format_from_intent(
         &codec_intent,
@@ -683,8 +719,9 @@ fn encode_animation_passthrough(
             .map_err(|e| ZenError::Codec(format!("push_frame: {e}")))?;
     }
 
-    let output =
-        encoder.finish(None).map_err(|e| ZenError::Codec(format!("finish animation: {e}")))?;
+    let output = encoder
+        .finish(None)
+        .map_err(|e| ZenError::Codec(format!("finish animation: {e}")))?;
 
     let mut bytes = output.into_vec();
     // Ensure GIF trailer.
@@ -721,7 +758,9 @@ fn decode_to_source_frame(
             .render_next_frame_owned(None)
             .map_err(|e| ZenError::Codec(format!("decode frame {i}: {e}")))?
             .ok_or_else(|| {
-                ZenError::Codec(format!("frame index {frame_index} out of range (only {i} frames)"))
+                ZenError::Codec(format!(
+                    "frame index {frame_index} out of range (only {i} frames)"
+                ))
             })?;
 
         if i == frame_index {
@@ -789,7 +828,9 @@ fn decode_to_source(
             let h = decoded.height();
             let format = decoded.descriptor();
             let bytes = decoded.into_buffer().copy_to_contiguous_bytes();
-            Ok(Box::new(crate::sources::MaterializedSource::from_data(bytes, w, h, format)))
+            Ok(Box::new(crate::sources::MaterializedSource::from_data(
+                bytes, w, h, format,
+            )))
         }
     }
 }
@@ -860,8 +901,11 @@ fn resolve_png_quantization(decision: &zencodecs::FormatDecision) -> (f32, bool)
     let quality = if has_min_quality_hint {
         // min_quality explicitly sets the gate threshold. Lower min_quality =
         // more permissive (always quantizes). Higher = stricter (may fall back).
-        let mq =
-            decision.hints.get("min_quality").and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
+        let mq = decision
+            .hints
+            .get("min_quality")
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(0.0);
         // Ensure < 100 so zenpng enters the quantization path.
         mq.clamp(0.0, 99.99)
     } else {
@@ -890,7 +934,11 @@ fn stream_encode(
     if !decision.format.supports_alpha() && source.format().has_alpha() {
         let matte = decision.matte.unwrap_or([255, 255, 255]);
         let options = zenpixels::ConvertOptions::permissive().with_alpha_policy(
-            zenpixels::AlphaPolicy::CompositeOnto { r: matte[0], g: matte[1], b: matte[2] },
+            zenpixels::AlphaPolicy::CompositeOnto {
+                r: matte[0],
+                g: matte[1],
+                b: matte[2],
+            },
         );
         let from = source.format();
         let to = crate::format::RGB8_SRGB;
@@ -934,7 +982,8 @@ fn stream_encode(
 
         let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, out_format);
         crate::execute(source.as_mut(), &mut sink)?;
-        sink.take_output().ok_or_else(|| ZenError::Codec("encoder produced no output".into()))?
+        sink.take_output()
+            .ok_or_else(|| ZenError::Codec("encoder produced no output".into()))?
     } else {
         // One-shot encode: materialize and encode in one pass.
         let mat = crate::sources::MaterializedSource::from_source(source)?;
@@ -990,7 +1039,10 @@ fn collect_decode_infos(
     for node in nodes {
         let io_id = match node {
             Node::Decode { io_id, .. } => Some(*io_id),
-            Node::CommandString { decode: Some(io_id), .. } => Some(*io_id),
+            Node::CommandString {
+                decode: Some(io_id),
+                ..
+            } => Some(*io_id),
             _ => None,
         };
         if let Some(io_id) = io_id {
@@ -1081,7 +1133,9 @@ fn create_canvas_source(
         }
     }
 
-    Ok(Box::new(crate::sources::MaterializedSource::from_data(pixels, w, h, format)))
+    Ok(Box::new(crate::sources::MaterializedSource::from_data(
+        pixels, w, h, format,
+    )))
 }
 
 /// Remove Resample2D nodes that match the source dimensions (no-op resamples).
@@ -1161,7 +1215,9 @@ fn expand_command_strings(
     io_buffers: &HashMap<i32, Vec<u8>>,
 ) -> Result<Vec<Node>, ZenError> {
     // Check if any CommandString nodes exist.
-    let has_command_string = steps.iter().any(|n| matches!(n, Node::CommandString { .. }));
+    let has_command_string = steps
+        .iter()
+        .any(|n| matches!(n, Node::CommandString { .. }));
     if !has_command_string {
         return Ok(steps.to_vec());
     }
@@ -1170,7 +1226,10 @@ fn expand_command_strings(
     // Check both explicit Decode nodes and CommandString's decode field.
     let decode_io_id = steps.iter().find_map(|n| match n {
         Node::Decode { io_id, .. } => Some(*io_id),
-        Node::CommandString { decode: Some(io_id), .. } => Some(*io_id),
+        Node::CommandString {
+            decode: Some(io_id),
+            ..
+        } => Some(*io_id),
         _ => None,
     });
 
@@ -1182,7 +1241,9 @@ fn expand_command_strings(
                 info.width as i32,
                 info.height as i32,
                 Some(info.format.mime_type().to_string()),
-                info.source_encoding.as_ref().map_or(false, |se| se.is_lossless()),
+                info.source_encoding
+                    .as_ref()
+                    .map_or(false, |se| se.is_lossless()),
             )
         } else {
             (0, 0, None, false)
@@ -1195,7 +1256,13 @@ fn expand_command_strings(
     let mut result = Vec::new();
     for node in steps {
         match node {
-            Node::CommandString { kind: _, value, decode, encode, watermarks } => {
+            Node::CommandString {
+                kind: _,
+                value,
+                decode,
+                encode,
+                watermarks,
+            } => {
                 use imageflow_riapi::ir4::*;
 
                 // Inject Decode node if CommandString specifies a decode io_id.
@@ -1208,7 +1275,10 @@ fn expand_command_strings(
                                 Some(vec![imageflow_types::DecoderCommand::SelectFrame(frame)]);
                         }
                     }
-                    result.push(Node::Decode { io_id: *dec_id, commands });
+                    result.push(Node::Decode {
+                        io_id: *dec_id,
+                        commands,
+                    });
                 }
 
                 let expand = Ir4Expand {

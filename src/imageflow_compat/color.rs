@@ -13,7 +13,11 @@ pub fn parse_hex_rgba(hex: &str) -> [u8; 4] {
     let r = u8::from_str_radix(hex.get(0..2).unwrap_or("00"), 16).unwrap_or(0);
     let g = u8::from_str_radix(hex.get(2..4).unwrap_or("00"), 16).unwrap_or(0);
     let b = u8::from_str_radix(hex.get(4..6).unwrap_or("00"), 16).unwrap_or(0);
-    let a = if hex.len() >= 8 { u8::from_str_radix(&hex[6..8], 16).unwrap_or(255) } else { 255 };
+    let a = if hex.len() >= 8 {
+        u8::from_str_radix(&hex[6..8], 16).unwrap_or(255)
+    } else {
+        255
+    };
     [r, g, b, a]
 }
 

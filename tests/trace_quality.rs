@@ -34,9 +34,7 @@ const TRUNCATED_PNG: &[u8] = &[
 ];
 
 /// JPEG SOI + APP0 marker, truncated before segment length can be read.
-const TRUNCATED_JPEG: &[u8] = &[
-    0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46,
-];
+const TRUNCATED_JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46];
 
 /// GIF89a logical-screen descriptor, truncated before the colour table.
 const TRUNCATED_GIF: &[u8] = b"GIF89a\x04\x00\x04\x00\x00\x00\x00";
@@ -44,20 +42,18 @@ const TRUNCATED_GIF: &[u8] = b"GIF89a\x04\x00\x04\x00\x00\x00\x00";
 /// RIFF/WEBP with a VP8 lossy chunk whose keyframe sync bytes are wrong.
 /// Fires the instrumented `at!(DecodeError::Vp8MagicInvalid(...))` path in zenwebp.
 const TRUNCATED_WEBP: &[u8] = &[
-    b'R', b'I', b'F', b'F',
-    0x12, 0x00, 0x00, 0x00, // RIFF size = 18 (WEBP + VP8 chunk header + 6-byte payload)
-    b'W', b'E', b'B', b'P',
-    b'V', b'P', b'8', b' ', // VP8 lossy chunk
+    b'R', b'I', b'F', b'F', 0x12, 0x00, 0x00,
+    0x00, // RIFF size = 18 (WEBP + VP8 chunk header + 6-byte payload)
+    b'W', b'E', b'B', b'P', b'V', b'P', b'8', b' ', // VP8 lossy chunk
     0x06, 0x00, 0x00, 0x00, // VP8 chunk size = 6
-    0x00, 0x00, 0x00,       // VP8 frame tag (bit 0 = 0 → keyframe)
-    0x00, 0x00, 0x00,       // WRONG sync code (should be 0x9D 0x01 0x2A)
+    0x00, 0x00, 0x00, // VP8 frame tag (bit 0 = 0 → keyframe)
+    0x00, 0x00, 0x00, // WRONG sync code (should be 0x9D 0x01 0x2A)
 ];
 
 /// Minimal AVIF ftyp box (major brand "avif"), nothing after it.
 const TRUNCATED_AVIF: &[u8] = &[
-    0x00, 0x00, 0x00, 0x18, b'f', b't', b'y', b'p',
-    b'a', b'v', b'i', b'f',
-    0x00, 0x00, 0x00, 0x00, // minor version
+    0x00, 0x00, 0x00, 0x18, b'f', b't', b'y', b'p', b'a', b'v', b'i', b'f', 0x00, 0x00, 0x00,
+    0x00, // minor version
     b'a', b'v', b'i', b'f', b'm', b'i', b'f', b'1', // compat brands
 ];
 
@@ -67,16 +63,13 @@ const TRUNCATED_JXL: &[u8] = &[0xFF, 0x0A, 0x00, 0x00, 0x00, 0x00];
 /// Minimal HEIC ftyp box (major brand "heic"), nothing after it.
 #[cfg(feature = "nodes-heic")]
 const TRUNCATED_HEIC: &[u8] = &[
-    0x00, 0x00, 0x00, 0x18, b'f', b't', b'y', b'p',
-    b'h', b'e', b'i', b'c',
-    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18, b'f', b't', b'y', b'p', b'h', b'e', b'i', b'c', 0x00, 0x00, 0x00, 0x00,
     b'h', b'e', b'i', b'c', b'm', b'i', b'f', b'1',
 ];
 
 /// BMP magic + file-header stub, no DIB header.
 const TRUNCATED_BMP: &[u8] = &[
-    b'B', b'M',
-    0x1A, 0x00, 0x00, 0x00, // file size
+    b'B', b'M', 0x1A, 0x00, 0x00, 0x00, // file size
     0x00, 0x00, 0x00, 0x00, // reserved
     0x36, 0x00, 0x00, 0x00, // pixel data offset = 54
 ];
@@ -131,13 +124,19 @@ fn gif_trace_includes_zengif_and_boundaries() {
 /// zenwebp is instrumented.
 #[test]
 fn webp_trace_includes_zenwebp_and_boundaries() {
-    assert_trace(run_job(TRUNCATED_WEBP), &["zenwebp", "zencodecs", "zenpipe"]);
+    assert_trace(
+        run_job(TRUNCATED_WEBP),
+        &["zenwebp", "zencodecs", "zenpipe"],
+    );
 }
 
 /// zenavif is instrumented.
 #[test]
 fn avif_trace_includes_zenavif_and_boundaries() {
-    assert_trace(run_job(TRUNCATED_AVIF), &["zenavif", "zencodecs", "zenpipe"]);
+    assert_trace(
+        run_job(TRUNCATED_AVIF),
+        &["zenavif", "zencodecs", "zenpipe"],
+    );
 }
 
 /// zenjxl is instrumented.
@@ -172,7 +171,10 @@ fn jpeg_trace_has_at_least_one_frame_and_boundaries() {
         frames >= 1,
         "expected ≥1 frame for JPEG (zencodecs), got {frames}\nfull trace:\n{trace_str}"
     );
-    assert!(frames <= 20, "unexpectedly deep trace: {frames}\nfull trace:\n{trace_str}");
+    assert!(
+        frames <= 20,
+        "unexpectedly deep trace: {frames}\nfull trace:\n{trace_str}"
+    );
 
     for name in ["zencodecs", "zenpipe"] {
         assert!(
@@ -195,7 +197,10 @@ fn bmp_trace_has_at_least_one_frame_and_boundaries() {
         frames >= 1,
         "expected ≥1 frame for BMP (zencodecs), got {frames}\nfull trace:\n{trace_str}"
     );
-    assert!(frames <= 20, "unexpectedly deep trace: {frames}\nfull trace:\n{trace_str}");
+    assert!(
+        frames <= 20,
+        "unexpectedly deep trace: {frames}\nfull trace:\n{trace_str}"
+    );
 
     for name in ["zencodecs", "zenpipe"] {
         assert!(
@@ -212,18 +217,19 @@ fn bmp_trace_has_at_least_one_frame_and_boundaries() {
 #[test]
 fn codec_errors_use_codec_variant_not_op_string() {
     for (name, data) in [
-        ("PNG",  TRUNCATED_PNG.as_ref()),
-        ("GIF",  TRUNCATED_GIF.as_ref()),
+        ("PNG", TRUNCATED_PNG.as_ref()),
+        ("GIF", TRUNCATED_GIF.as_ref()),
         ("WebP", TRUNCATED_WEBP.as_ref()),
         ("AVIF", TRUNCATED_AVIF.as_ref()),
-        ("JXL",  TRUNCATED_JXL.as_ref()),
+        ("JXL", TRUNCATED_JXL.as_ref()),
         ("JPEG", TRUNCATED_JPEG.as_ref()),
-        ("BMP",  TRUNCATED_BMP.as_ref()),
+        ("BMP", TRUNCATED_BMP.as_ref()),
     ] {
         let err = run_job(data).expect_err(&std::format!("{name} should fail"));
         assert!(
             matches!(err.error(), PipeError::Codec(_)),
-            "{name}: expected PipeError::Codec, got {:?}", err.error()
+            "{name}: expected PipeError::Codec, got {:?}",
+            err.error()
         );
     }
 
@@ -232,7 +238,8 @@ fn codec_errors_use_codec_variant_not_op_string() {
         let err = run_job(TRUNCATED_HEIC).expect_err("HEIC should fail");
         assert!(
             matches!(err.error(), PipeError::Codec(_)),
-            "HEIC: expected PipeError::Codec, got {:?}", err.error()
+            "HEIC: expected PipeError::Codec, got {:?}",
+            err.error()
         );
     }
 }

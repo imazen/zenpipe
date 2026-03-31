@@ -25,7 +25,13 @@ pub struct PresetMapping {
 /// Map a v2 EncoderPreset to a zencodecs CodecIntent.
 pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateError> {
     match preset {
-        EncoderPreset::Auto { quality_profile, quality_profile_dpr, matte, lossless, allow } => {
+        EncoderPreset::Auto {
+            quality_profile,
+            quality_profile_dpr,
+            matte,
+            lossless,
+            allow,
+        } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Auto);
             intent.quality_profile = Some(map_quality_profile(quality_profile));
@@ -40,7 +46,10 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
                 intent.matte = color_to_rgb(matte);
             }
 
-            Ok(PresetMapping { intent, explicit_format: None })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: None,
+            })
         }
 
         EncoderPreset::Format {
@@ -120,7 +129,12 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
                             intent.lossless = Some(zencodecs::BoolKeep::True);
                         }
                         zencodecs::ImageFormat::WebP => {
-                            if intent.hints.webp.get("lossless").is_some_and(|v| v == "true") {
+                            if intent
+                                .hints
+                                .webp
+                                .get("lossless")
+                                .is_some_and(|v| v == "true")
+                            {
                                 intent.lossless = Some(zencodecs::BoolKeep::True);
                             }
                         }
@@ -129,11 +143,18 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
                 }
             }
 
-            Ok(PresetMapping { intent, explicit_format })
+            Ok(PresetMapping {
+                intent,
+                explicit_format,
+            })
         }
 
         // ─── Legacy presets: map to explicit format + quality ───
-        EncoderPreset::Mozjpeg { quality, progressive, matte } => {
+        EncoderPreset::Mozjpeg {
+            quality,
+            progressive,
+            matte,
+        } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Jpeg));
             if let Some(q) = quality {
@@ -151,10 +172,18 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
             if let Some(matte) = matte {
                 intent.matte = color_to_rgb(matte);
             }
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Jpeg) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Jpeg),
+            })
         }
 
-        EncoderPreset::LibjpegTurbo { quality, progressive, optimize_huffman_coding, matte } => {
+        EncoderPreset::LibjpegTurbo {
+            quality,
+            progressive,
+            optimize_huffman_coding,
+            matte,
+        } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Jpeg));
             if let Some(q) = quality {
@@ -170,20 +199,35 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
             if let Some(matte) = matte {
                 intent.matte = color_to_rgb(matte);
             }
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Jpeg) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Jpeg),
+            })
         }
 
-        EncoderPreset::Libpng { depth, matte, zlib_compression } => {
+        EncoderPreset::Libpng {
+            depth,
+            matte,
+            zlib_compression,
+        } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Png));
             intent.lossless = Some(ZenBoolKeep::True);
             if let Some(matte) = matte {
                 intent.matte = color_to_rgb(matte);
             }
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Png) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Png),
+            })
         }
 
-        EncoderPreset::Pngquant { quality, minimum_quality, speed, maximum_deflate } => {
+        EncoderPreset::Pngquant {
+            quality,
+            minimum_quality,
+            speed,
+            maximum_deflate,
+        } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Png));
             if let Some(q) = quality {
@@ -199,14 +243,20 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
             if !png_hints.is_empty() {
                 intent.hints.png = png_hints;
             }
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Png) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Png),
+            })
         }
 
         EncoderPreset::Lodepng { maximum_deflate } => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Png));
             intent.lossless = Some(ZenBoolKeep::True);
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Png) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Png),
+            })
         }
 
         EncoderPreset::WebPLossy { quality } => {
@@ -214,20 +264,29 @@ pub fn map_preset(preset: &EncoderPreset) -> Result<PresetMapping, TranslateErro
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::WebP));
             intent.quality_fallback = Some(*quality);
             intent.lossless = Some(ZenBoolKeep::False);
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::WebP) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::WebP),
+            })
         }
 
         EncoderPreset::WebPLossless => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::WebP));
             intent.lossless = Some(ZenBoolKeep::True);
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::WebP) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::WebP),
+            })
         }
 
         EncoderPreset::Gif => {
             let mut intent = CodecIntent::default();
             intent.format = Some(FormatChoice::Specific(zencodecs::ImageFormat::Gif));
-            Ok(PresetMapping { intent, explicit_format: Some(zencodecs::ImageFormat::Gif) })
+            Ok(PresetMapping {
+                intent,
+                explicit_format: Some(zencodecs::ImageFormat::Gif),
+            })
         }
     }
 }

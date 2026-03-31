@@ -169,7 +169,10 @@ fn frame_sink_encode_2_frames() {
         .unwrap();
 
     // Frame 0: should be reddish
-    let frame0 = verify.render_next_frame_owned(None).unwrap().expect("missing frame 0");
+    let frame0 = verify
+        .render_next_frame_owned(None)
+        .unwrap()
+        .expect("missing frame 0");
     let px0 = frame0.pixels().as_strided_bytes();
     // Sample first pixel (RGBA)
     assert!(px0.len() >= 4, "frame 0 pixel data too short");
@@ -180,7 +183,10 @@ fn frame_sink_encode_2_frames() {
     );
 
     // Frame 1: should be bluish
-    let frame1 = verify.render_next_frame_owned(None).unwrap().expect("missing frame 1");
+    let frame1 = verify
+        .render_next_frame_owned(None)
+        .unwrap()
+        .expect("missing frame 1");
     let px1 = frame1.pixels().as_strided_bytes();
     assert!(px1.len() >= 4, "frame 1 pixel data too short");
     let (r1, g1, b1) = (px1[0], px1[1], px1[2]);
@@ -303,7 +309,10 @@ fn transcode_gif_with_crop() {
                 && (b as i16 - expected_gray as i16).abs() <= tolerance,
             "cropped frame {i}: expected ~gray({expected_gray}), got r={r} g={g} b={b}"
         );
-        assert!(a > 200, "cropped frame {i}: alpha should be opaque, got a={a}");
+        assert!(
+            a > 200,
+            "cropped frame {i}: alpha should be opaque, got a={a}"
+        );
     }
     assert!(verify.render_next_frame_owned(None).unwrap().is_none());
 }

@@ -13,14 +13,14 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use crate::bridge::NodeConverter;
+use crate::graph::NodeOp;
 use imageflow_types::{
     ConstraintGravity, Watermark, WatermarkConstraintBox, WatermarkConstraintMode,
 };
-use zennode::{NodeInstance, NodeSchema, ParamMap, ParamValue};
-use crate::bridge::NodeConverter;
-use crate::graph::NodeOp;
 #[allow(unused_imports)]
 use whereat::at;
+use zennode::{NodeInstance, NodeSchema, ParamMap, ParamValue};
 
 use crate::PipeError;
 
@@ -170,13 +170,17 @@ impl NodeConverter for WatermarkConverter {
         match schema_id {
             "imageflow.watermark_red_dot" => Ok(make_red_dot_materialize()),
             "imageflow.watermark_overlay" => {
-                let overlay =
-                    node.as_any().downcast_ref::<WatermarkOverlayNode>().ok_or_else(|| {
+                let overlay = node
+                    .as_any()
+                    .downcast_ref::<WatermarkOverlayNode>()
+                    .ok_or_else(|| {
                         PipeError::Op("watermark overlay: wrong NodeInstance type".into())
                     })?;
                 Ok(make_watermark_materialize(overlay.clone()))
             }
-            _ => Err(at!(PipeError::Op(format!("WatermarkConverter: unknown schema '{schema_id}'")))),
+            _ => Err(at!(PipeError::Op(format!(
+                "WatermarkConverter: unknown schema '{schema_id}'"
+            )))),
         }
     }
 
@@ -292,7 +296,11 @@ fn make_watermark_materialize(overlay: WatermarkOverlayNode) -> NodeOp {
                         let sb_lin = srgb_to_linear(resized[wm_off + 2]) * sa;
 
                         // Dest pixel (from canvas) → linear.
-                        let da = if bpp >= 4 { data[canvas_off + 3] as f32 / 255.0 } else { 1.0 };
+                        let da = if bpp >= 4 {
+                            data[canvas_off + 3] as f32 / 255.0
+                        } else {
+                            1.0
+                        };
                         let dest_coeff = (1.0 - sa) * da;
                         let dr_lin = srgb_to_linear(data[canvas_off]) * dest_coeff;
                         let dg_lin = srgb_to_linear(data[canvas_off + 1]) * dest_coeff;
@@ -331,14 +339,30 @@ fn to_watermark_layout(
 
     let fit_box = match overlay.fit_box.as_ref() {
         None => FitBox::FullCanvas,
-        Some(WatermarkConstraintBox::ImageMargins { left, top, right, bottom })
-        | Some(WatermarkConstraintBox::CanvasMargins { left, top, right, bottom }) => {
-            FitBox::Margins { left: *left, top: *top, right: *right, bottom: *bottom }
-        }
+        Some(WatermarkConstraintBox::ImageMargins {
+            left,
+            top,
+            right,
+            bottom,
+        })
+        | Some(WatermarkConstraintBox::CanvasMargins {
+            left,
+            top,
+            right,
+            bottom,
+        }) => FitBox::Margins {
+            left: *left,
+            top: *top,
+            right: *right,
+            bottom: *bottom,
+        },
         Some(WatermarkConstraintBox::ImagePercentage { x1, y1, x2, y2 })
-        | Some(WatermarkConstraintBox::CanvasPercentage { x1, y1, x2, y2 }) => {
-            FitBox::Percentage { x1: *x1, y1: *y1, x2: *x2, y2: *y2 }
-        }
+        | Some(WatermarkConstraintBox::CanvasPercentage { x1, y1, x2, y2 }) => FitBox::Percentage {
+            x1: *x1,
+            y1: *y1,
+            x2: *x2,
+            y2: *y2,
+        },
     };
 
     let fit_mode = match overlay.fit_mode {
@@ -413,8 +437,9 @@ pub fn decode_watermark(
         raw_bytes
     } else {
         // Use MaterializedSource + RowConverterOp to get RGBA8.
-        let source: Box<dyn crate::Source> =
-            Box::new(crate::sources::MaterializedSource::from_data(raw_bytes, w, h, descriptor));
+        let source: Box<dyn crate::Source> = Box::new(
+            crate::sources::MaterializedSource::from_data(raw_bytes, w, h, descriptor),
+        );
         let src_format = source.format();
         let converter = crate::ops::RowConverterOp::new(src_format, target_format)
             .ok_or_else(|| {
@@ -457,6 +482,10 @@ fn srgb_to_linear(b: u8) -> f32 {
 
 /// Convert a linear float to sRGB byte (IEC 61966-2-1).
 fn linear_to_srgb(l: f32) -> u8 {
-    let s = if l <= 0.0031308 { l * 12.92 } else { 1.055 * l.powf(1.0 / 2.4) - 0.055 };
+    let s = if l <= 0.0031308 {
+        l * 12.92
+    } else {
+        1.055 * l.powf(1.0 / 2.4) - 0.055
+    };
     (s * 255.0 + 0.5).min(255.0).max(0.0) as u8
 }

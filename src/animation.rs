@@ -215,13 +215,16 @@ impl Source for FrameSource {
 
         self.y += rows;
 
-        Ok(Some(Strip::new(
-            &self.data[start..end],
-            self.width,
-            rows,
-            self.stride,
-            self.format,
-        ).pipe_err()?))
+        Ok(Some(
+            Strip::new(
+                &self.data[start..end],
+                self.width,
+                rows,
+                self.stride,
+                self.format,
+            )
+            .pipe_err()?,
+        ))
     }
 
     fn width(&self) -> u32 {
@@ -309,7 +312,11 @@ impl FrameSink {
             stride,
             self.format,
         )
-        .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice construction failed: {e}"))))?;
+        .map_err(|e| {
+            at!(PipeError::Op(alloc::format!(
+                "PixelSlice construction failed: {e}"
+            )))
+        })?;
 
         encoder
             .push_frame(pixels, duration_ms, None)

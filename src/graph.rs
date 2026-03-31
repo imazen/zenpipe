@@ -633,10 +633,11 @@ impl PipelineGraph {
             .ok_or_else(|| at!(PipeError::Op(alloc::format!("node {node_id} has no op"))))?;
 
         match op {
-            NodeOp::Source => source_info
-                .get(&node_id)
-                .cloned()
-                .ok_or_else(|| at!(PipeError::Op(alloc::format!("no source info for node {node_id}")))),
+            NodeOp::Source => source_info.get(&node_id).cloned().ok_or_else(|| {
+                at!(PipeError::Op(alloc::format!(
+                    "no source info for node {node_id}"
+                )))
+            }),
 
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
@@ -980,12 +981,10 @@ impl PipelineGraph {
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
         config: &crate::trace::TraceConfig,
-    ) -> crate::PipeResult<
-        (
-            Box<dyn Source>,
-            alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
-        ),
-    > {
+    ) -> crate::PipeResult<(
+        Box<dyn Source>,
+        alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
+    )> {
         self.validate()?;
         let trace =
             alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));

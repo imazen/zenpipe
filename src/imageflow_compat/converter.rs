@@ -4,11 +4,11 @@
 //! but doesn't know about zenfilters or zenlayout.expand_canvas. These converters
 //! bridge the gap.
 
-use zennode::NodeInstance;
 use crate::bridge::NodeConverter;
 use crate::graph::NodeOp;
 #[allow(unused_imports)]
 use whereat::at;
+use zennode::NodeInstance;
 
 use crate::PipeError;
 
@@ -25,18 +25,29 @@ impl NodeConverter for ZenFiltersConverter {
 
     fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         let filter = zenfilters::zennode_defs::node_to_filter(node).ok_or_else(|| {
-            PipeError::Op(format!("zenfilters converter: unrecognized node '{}'", node.schema().id))
+            PipeError::Op(format!(
+                "zenfilters converter: unrecognized node '{}'",
+                node.schema().id
+            ))
         })?;
 
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
+            .map_err(|e| {
+                at!(PipeError::Op(format!(
+                    "zenfilters pipeline creation failed: {e:?}"
+                )))
+            })?;
         pipeline.push(filter);
         Ok(NodeOp::Filter(pipeline))
     }
 
     fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
+            .map_err(|e| {
+                at!(PipeError::Op(format!(
+                    "zenfilters pipeline creation failed: {e:?}"
+                )))
+            })?;
 
         for node in nodes {
             let filter = zenfilters::zennode_defs::node_to_filter(*node).ok_or_else(|| {
@@ -59,7 +70,11 @@ impl NodeConverter for ZenFiltersConverter {
         }
 
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
+            .map_err(|e| {
+                at!(PipeError::Op(format!(
+                    "zenfilters pipeline creation failed: {e:?}"
+                )))
+            })?;
 
         for node in nodes {
             if let Some(filter) = zenfilters::zennode_defs::node_to_filter(*node) {
@@ -100,7 +115,13 @@ impl NodeConverter for ExpandCanvasConverter {
             _ => [0u8, 0, 0, 0], // transparent (default)
         };
 
-        Ok(NodeOp::ExpandCanvas { left, top, right, bottom, bg_color })
+        Ok(NodeOp::ExpandCanvas {
+            left,
+            top,
+            right,
+            bottom,
+            bg_color,
+        })
     }
 
     fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
@@ -346,7 +367,10 @@ fn create_byte_mapping(low: usize, high: usize) -> [u8; 256] {
     // This matches v2's IEEE 754 behavior.
     let scale = 255.0 / (high - low) as f64;
     for v in 0..256usize {
-        map[v] = (v.saturating_sub(low) as f64 * scale).round().min(255.0).max(0.0) as u8;
+        map[v] = (v.saturating_sub(low) as f64 * scale)
+            .round()
+            .min(255.0)
+            .max(0.0) as u8;
     }
     map
 }
@@ -372,7 +396,7 @@ impl NodeConverter for ColorMatrixSrgbConverter {
             _ => {
                 return Err(at!(PipeError::Op(
                     "color_matrix_srgb: missing or invalid matrix param".into(),
-                )))
+                )));
             }
         };
 
@@ -454,5 +478,7 @@ pub fn imageflow_converters() -> [&'static dyn NodeConverter; 6] {
     static WHITE_BAL: WhiteBalanceConverter = WhiteBalanceConverter;
     static COLOR_MAT: ColorMatrixSrgbConverter = ColorMatrixSrgbConverter;
     static WATERMARK: super::watermark::WatermarkConverter = super::watermark::WatermarkConverter;
-    [&FILTERS, &EXPAND, &REGION, &WHITE_BAL, &COLOR_MAT, &WATERMARK]
+    [
+        &FILTERS, &EXPAND, &REGION, &WHITE_BAL, &COLOR_MAT, &WATERMARK,
+    ]
 }

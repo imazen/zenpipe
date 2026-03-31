@@ -180,8 +180,7 @@ fn codec_bridge_roundtrip() {
             .expect("streaming decoder")
     };
 
-    let mut source =
-        DecoderSource::new(streaming).expect("DecoderSource creation");
+    let mut source = DecoderSource::new(streaming).expect("DecoderSource creation");
     assert_eq!(source.width(), w);
     assert_eq!(source.height(), h);
 

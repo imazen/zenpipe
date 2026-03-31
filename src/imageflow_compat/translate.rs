@@ -155,7 +155,10 @@ fn translate_one(
                 .and_then(|h| h.down_filter.as_ref())
                 .map(|f| filter_to_str(f).to_string())
                 .unwrap_or_default();
-            let sharpen = hints.as_ref().and_then(|h| h.sharpen_percent).unwrap_or(0.0);
+            let sharpen = hints
+                .as_ref()
+                .and_then(|h| h.sharpen_percent)
+                .unwrap_or(0.0);
             push_layout_node(
                 &mut result.nodes,
                 "zenresize.resize",
@@ -188,7 +191,13 @@ fn translate_one(
             Ok(())
         }
 
-        Node::Region { x1, y1, x2, y2, background_color } => {
+        Node::Region {
+            x1,
+            y1,
+            x2,
+            y2,
+            background_color,
+        } => {
             // v2 Region uses pixel edge coordinates (i32).
             // zenlayout.region uses pct+px pairs for each edge.
             // Map: x1 → left_px, y1 → top_px, x2 → right_px, y2 → bottom_px.
@@ -212,7 +221,13 @@ fn translate_one(
             )
         }
 
-        Node::RegionPercent { x1, y1, x2, y2, background_color } => {
+        Node::RegionPercent {
+            x1,
+            y1,
+            x2,
+            y2,
+            background_color,
+        } => {
             // v2 RegionPercent uses edge percentages (0-100 scale).
             // zenlayout.crop_percent uses origin+size fractions (0.0-1.0 scale).
             // Convert: x = x1/100, y = y1/100, w = (x2-x1)/100, h = (y2-y1)/100.
@@ -232,7 +247,13 @@ fn translate_one(
             )
         }
 
-        Node::ExpandCanvas { left, top, right, bottom, color } => {
+        Node::ExpandCanvas {
+            left,
+            top,
+            right,
+            bottom,
+            color,
+        } => {
             let color_str = color_to_css_string(color);
             push_layout_node(
                 &mut result.nodes,
@@ -254,7 +275,9 @@ fn translate_one(
             // Transpose v2 [[f32; 5]; 5] (m[input][output]) to flat [f32; 25]
             // (row-per-output-channel) for the ColorMatrixSrgbConverter.
             let flat = v2_matrix_to_flat(matrix);
-            result.nodes.push(Box::new(super::nodes::ColorMatrixSrgbNode { matrix: flat }));
+            result
+                .nodes
+                .push(Box::new(super::nodes::ColorMatrixSrgbNode { matrix: flat }));
             Ok(())
         }
 
@@ -269,17 +292,31 @@ fn translate_one(
         }
 
         // ─── Canvas operations ───
-        Node::CreateCanvas { format, w, h, color } => {
+        Node::CreateCanvas {
+            format,
+            w,
+            h,
+            color,
+        } => {
             // CreateCanvas is a decode-replacement: produces a solid-color image.
             // In the zen pipeline, we handle it as a special source in execute.rs.
             // Store it as a decode with a synthetic marker.
             result.decode_io_id = Some(-1); // sentinel: create_canvas, not a real io_id
-            result.create_canvas =
-                Some(CreateCanvasParams { w: *w as u32, h: *h as u32, color: color.clone() });
+            result.create_canvas = Some(CreateCanvasParams {
+                w: *w as u32,
+                h: *h as u32,
+                color: color.clone(),
+            });
             Ok(())
         }
 
-        Node::FillRect { x1, y1, x2, y2, color } => {
+        Node::FillRect {
+            x1,
+            y1,
+            x2,
+            y2,
+            color,
+        } => {
             let rgba = color_to_rgba(color);
             push_layout_node(
                 &mut result.nodes,
@@ -303,7 +340,14 @@ fn translate_one(
         // that require two inputs (Input + Canvas edges). In linear Steps
         // mode, they produce a Composite node that carries position info.
         // The graph executor wires up the Canvas source separately.
-        Node::DrawImageExact { x, y, w: _w, h: _h, blend, hints: _hints } => {
+        Node::DrawImageExact {
+            x,
+            y,
+            w: _w,
+            h: _h,
+            blend,
+            hints: _hints,
+        } => {
             // Maps to zenpipe.composite with foreground position.
             // The blend mode translates: Compose → source_over, Overwrite → source.
             let blend_str = match blend {
@@ -329,7 +373,14 @@ fn translate_one(
             Ok(())
         }
 
-        Node::CopyRectToCanvas { from_x, from_y, w, h, x, y } => {
+        Node::CopyRectToCanvas {
+            from_x,
+            from_y,
+            w,
+            h,
+            x,
+            y,
+        } => {
             // CopyRectToCanvas crops a region from the input and places it
             // on the canvas at (x, y). Decompose to Crop + Composite.
             //
@@ -357,7 +408,10 @@ fn translate_one(
         }
 
         // ─── Misc ───
-        Node::CropWhitespace { threshold, percent_padding } => push_layout_node(
+        Node::CropWhitespace {
+            threshold,
+            percent_padding,
+        } => push_layout_node(
             &mut result.nodes,
             "zenpipe.crop_whitespace",
             &[
@@ -366,7 +420,10 @@ fn translate_one(
             ],
         ),
 
-        Node::RoundImageCorners { radius, background_color } => {
+        Node::RoundImageCorners {
+            radius,
+            background_color,
+        } => {
             let bg = color_to_rgba(background_color);
             let mut params: Vec<(&str, ParamValue)> = Vec::new();
             match radius {
@@ -415,7 +472,13 @@ fn translate_one(
             push_layout_node(&mut result.nodes, "zenpipe.round_corners", &param_refs)
         }
 
-        Node::CommandString { kind, value, decode, encode, watermarks } => {
+        Node::CommandString {
+            kind,
+            value,
+            decode,
+            encode,
+            watermarks,
+        } => {
             // RIAPI querystring — delegate to imageflow_riapi at a higher level.
             // The caller should expand CommandString before calling translate_nodes.
             Err(TranslateError::Unsupported(
@@ -657,9 +720,27 @@ mod srgb_matrix {
         let complement_g = 0.6094f32 * complement;
         let complement_b = 0.0820f32 * complement;
         [
-            [complement_r + saturation, complement_r, complement_r, 0.0f32, 0.0f32],
-            [complement_g, complement_g + saturation, complement_g, 0.0f32, 0.0f32],
-            [complement_b, complement_b, complement_b + saturation, 0.0f32, 0.0f32],
+            [
+                complement_r + saturation,
+                complement_r,
+                complement_r,
+                0.0f32,
+                0.0f32,
+            ],
+            [
+                complement_g,
+                complement_g + saturation,
+                complement_g,
+                0.0f32,
+                0.0f32,
+            ],
+            [
+                complement_b,
+                complement_b,
+                complement_b + saturation,
+                0.0f32,
+                0.0f32,
+            ],
             [0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32],
             [0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32],
         ]
@@ -692,7 +773,9 @@ fn push_layout_node(
 ) -> Result<(), TranslateError> {
     let registry = zen_registry();
     let def = registry.get(schema_id).ok_or_else(|| {
-        TranslateError::NodeCreation(format!("zenlayout node '{schema_id}' not found in registry"))
+        TranslateError::NodeCreation(format!(
+            "zenlayout node '{schema_id}' not found in registry"
+        ))
     })?;
     let mut node = def
         .create_default()

@@ -35,20 +35,38 @@ fn first_schema_id(pipeline: &translate::TranslatedPipeline) -> &str {
 }
 
 fn assert_param_u32(node: &Box<dyn NodeInstance>, name: &str, expected: u32) {
-    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
-    let actual = val.as_u32().unwrap_or_else(|| panic!("param '{name}' is not u32: {val:?}"));
-    assert_eq!(actual, expected, "param '{name}': expected {expected}, got {actual}");
+    let val = node
+        .get_param(name)
+        .unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val
+        .as_u32()
+        .unwrap_or_else(|| panic!("param '{name}' is not u32: {val:?}"));
+    assert_eq!(
+        actual, expected,
+        "param '{name}': expected {expected}, got {actual}"
+    );
 }
 
 fn assert_param_i32(node: &Box<dyn NodeInstance>, name: &str, expected: i32) {
-    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
-    let actual = val.as_i32().unwrap_or_else(|| panic!("param '{name}' is not i32: {val:?}"));
-    assert_eq!(actual, expected, "param '{name}': expected {expected}, got {actual}");
+    let val = node
+        .get_param(name)
+        .unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val
+        .as_i32()
+        .unwrap_or_else(|| panic!("param '{name}' is not i32: {val:?}"));
+    assert_eq!(
+        actual, expected,
+        "param '{name}': expected {expected}, got {actual}"
+    );
 }
 
 fn assert_param_f32_approx(node: &Box<dyn NodeInstance>, name: &str, expected: f32) {
-    let val = node.get_param(name).unwrap_or_else(|| panic!("param '{name}' not found"));
-    let actual = val.as_f32().unwrap_or_else(|| panic!("param '{name}' is not f32: {val:?}"));
+    let val = node
+        .get_param(name)
+        .unwrap_or_else(|| panic!("param '{name}' not found"));
+    let actual = val
+        .as_f32()
+        .unwrap_or_else(|| panic!("param '{name}' is not f32: {val:?}"));
     assert!(
         (actual - expected).abs() < 0.001,
         "param '{name}': expected {expected}, got {actual}"
@@ -125,12 +143,20 @@ fn transpose_produces_two_nodes() {
 fn apply_orientation_sets_flag() {
     let p = translate_ok(Node::ApplyOrientation { flag: 6 });
     assert_eq!(first_schema_id(&p), "zenlayout.orient");
-    assert_eq!(p.nodes[0].get_param("orientation"), Some(ParamValue::I32(6)));
+    assert_eq!(
+        p.nodes[0].get_param("orientation"),
+        Some(ParamValue::I32(6))
+    );
 }
 
 #[test]
 fn crop_converts_corners_to_xywh() {
-    let p = translate_ok(Node::Crop { x1: 10, y1: 20, x2: 110, y2: 220 });
+    let p = translate_ok(Node::Crop {
+        x1: 10,
+        y1: 20,
+        x2: 110,
+        y2: 220,
+    });
     assert_eq!(first_schema_id(&p), "zenlayout.crop");
     assert_eq!(p.nodes[0].get_param("x"), Some(ParamValue::U32(10)));
     assert_eq!(p.nodes[0].get_param("y"), Some(ParamValue::U32(20)));
@@ -140,10 +166,16 @@ fn crop_converts_corners_to_xywh() {
 
 #[test]
 fn crop_whitespace_sets_params() {
-    let p = translate_ok(Node::CropWhitespace { threshold: 80, percent_padding: 0.5 });
+    let p = translate_ok(Node::CropWhitespace {
+        threshold: 80,
+        percent_padding: 0.5,
+    });
     assert_eq!(first_schema_id(&p), "zenpipe.crop_whitespace");
     assert_eq!(p.nodes[0].get_param("threshold"), Some(ParamValue::U32(80)));
-    assert_eq!(p.nodes[0].get_param("percent_padding"), Some(ParamValue::F32(0.5)));
+    assert_eq!(
+        p.nodes[0].get_param("percent_padding"),
+        Some(ParamValue::F32(0.5))
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -166,7 +198,10 @@ fn constrain_within_basic() {
     assert_eq!(node.schema().id, "zenresize.constrain");
     assert_eq!(node.get_param("w"), Some(ParamValue::U32(800)));
     assert_eq!(node.get_param("h"), Some(ParamValue::U32(600)));
-    assert_eq!(node.get_param("mode"), Some(ParamValue::Str("within".into())));
+    assert_eq!(
+        node.get_param("mode"),
+        Some(ParamValue::Str("within".into()))
+    );
 }
 
 #[test]
@@ -182,7 +217,10 @@ fn constrain_fit_crop_with_gravity() {
     let p = translate_ok(Node::Constrain(c));
     assert!(!p.nodes.is_empty());
     let node = &p.nodes[0];
-    assert_eq!(node.get_param("mode"), Some(ParamValue::Str("fit_crop".into())));
+    assert_eq!(
+        node.get_param("mode"),
+        Some(ParamValue::Str("fit_crop".into()))
+    );
     assert_eq!(node.get_param("w"), Some(ParamValue::U32(400)));
     assert_eq!(node.get_param("h"), Some(ParamValue::U32(300)));
 }
@@ -225,7 +263,11 @@ fn constrain_all_modes_produce_correct_mode_string() {
 
 #[test]
 fn resample_2d_basic() {
-    let p = translate_ok(Node::Resample2D { w: 400, h: 300, hints: None });
+    let p = translate_ok(Node::Resample2D {
+        w: 400,
+        h: 300,
+        hints: None,
+    });
     assert!(!p.nodes.is_empty());
     let node = &p.nodes[0];
     assert_eq!(node.schema().id, "zenresize.resize");
@@ -345,7 +387,10 @@ fn round_corners_percentage() {
     });
     assert_eq!(first_schema_id(&p), "zenpipe.round_corners");
     assert_eq!(p.nodes[0].get_param("radius"), Some(ParamValue::F32(15.0)));
-    assert_eq!(p.nodes[0].get_param("mode"), Some(ParamValue::Str("percentage".into())));
+    assert_eq!(
+        p.nodes[0].get_param("mode"),
+        Some(ParamValue::Str("percentage".into()))
+    );
 }
 
 #[test]
@@ -355,7 +400,10 @@ fn round_corners_circle() {
         background_color: Color::Black,
     });
     assert_eq!(first_schema_id(&p), "zenpipe.round_corners");
-    assert_eq!(p.nodes[0].get_param("mode"), Some(ParamValue::Str("circle".into())));
+    assert_eq!(
+        p.nodes[0].get_param("mode"),
+        Some(ParamValue::Str("circle".into()))
+    );
     // Circle uses radius=50.0 internally
     assert_eq!(p.nodes[0].get_param("radius"), Some(ParamValue::F32(50.0)));
 }
@@ -368,7 +416,10 @@ fn round_corners_circle() {
 fn white_balance_default_threshold() {
     let p = translate_ok(Node::WhiteBalanceHistogramAreaThresholdSrgb { threshold: None });
     assert_eq!(first_schema_id(&p), "imageflow.white_balance_srgb");
-    assert_eq!(p.nodes[0].get_param("threshold"), Some(ParamValue::F32(0.006)));
+    assert_eq!(
+        p.nodes[0].get_param("threshold"),
+        Some(ParamValue::F32(0.006))
+    );
 }
 
 #[test]
@@ -377,7 +428,10 @@ fn white_balance_custom_threshold() {
         threshold: Some(0.01),
     });
     assert_eq!(first_schema_id(&p), "imageflow.white_balance_srgb");
-    assert_eq!(p.nodes[0].get_param("threshold"), Some(ParamValue::F32(0.01)));
+    assert_eq!(
+        p.nodes[0].get_param("threshold"),
+        Some(ParamValue::F32(0.01))
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -411,14 +465,20 @@ fn color_matrix_srgb_sets_matrix() {
 
 #[test]
 fn decode_sets_io_id() {
-    let p = translate_ok(Node::Decode { io_id: 0, commands: None });
+    let p = translate_ok(Node::Decode {
+        io_id: 0,
+        commands: None,
+    });
     assert_eq!(p.decode_io_id, Some(0));
     assert!(p.nodes.is_empty(), "Decode should not produce pixel nodes");
 }
 
 #[test]
 fn decode_with_nonzero_io_id() {
-    let p = translate_ok(Node::Decode { io_id: 42, commands: None });
+    let p = translate_ok(Node::Decode {
+        io_id: 42,
+        commands: None,
+    });
     assert_eq!(p.decode_io_id, Some(42));
 }
 
@@ -426,7 +486,11 @@ fn decode_with_nonzero_io_id() {
 fn encode_mozjpeg_sets_preset_and_io_id() {
     let p = translate_ok(Node::Encode {
         io_id: 1,
-        preset: EncoderPreset::Mozjpeg { quality: Some(85), progressive: None, matte: None },
+        preset: EncoderPreset::Mozjpeg {
+            quality: Some(85),
+            progressive: None,
+            matte: None,
+        },
     });
     assert_eq!(p.encode_io_id, Some(1));
     assert!(p.preset.is_some(), "Encode should produce a preset mapping");
@@ -441,7 +505,10 @@ fn create_canvas_sets_canvas_params() {
         color: Color::Black,
         format: PixelFormat::Bgra32,
     });
-    assert!(p.create_canvas.is_some(), "CreateCanvas should set create_canvas");
+    assert!(
+        p.create_canvas.is_some(),
+        "CreateCanvas should set create_canvas"
+    );
     let canvas = p.create_canvas.as_ref().unwrap();
     assert_eq!(canvas.w, 200);
     assert_eq!(canvas.h, 100);
@@ -512,7 +579,11 @@ fn color_filter_all_grayscale_variants() {
     ];
     for filter in &variants {
         let p = translate_ok(Node::ColorFilterSrgb(*filter));
-        assert_eq!(p.nodes.len(), 1, "filter {filter:?} should produce exactly 1 node");
+        assert_eq!(
+            p.nodes.len(),
+            1,
+            "filter {filter:?} should produce exactly 1 node"
+        );
         assert_eq!(
             p.nodes[0].schema().id,
             "imageflow.color_matrix_srgb",
@@ -534,7 +605,10 @@ fn command_string_without_expansion_is_unsupported() {
         encode: Some(1),
         watermarks: None,
     });
-    assert!(result.is_err(), "CommandString should be unsupported without expansion");
+    assert!(
+        result.is_err(),
+        "CommandString should be unsupported without expansion"
+    );
 }
 
 #[test]
@@ -562,7 +636,8 @@ fn draw_image_exact_overwrite_blend() {
         blend: Some(CompositingMode::Overwrite),
         hints: None,
     });
-    let mode = p.nodes[0].get_param("blend_mode")
+    let mode = p.nodes[0]
+        .get_param("blend_mode")
         .and_then(|v| v.as_str().map(|s| s.to_string()));
     assert_eq!(mode.as_deref(), Some("source"));
 }
@@ -600,7 +675,10 @@ fn copy_rect_to_canvas_produces_crop_and_composite() {
 #[test]
 fn capture_bitmap_key_is_noop() {
     let p = translate_ok(Node::CaptureBitmapKey { capture_id: 42 });
-    assert!(p.nodes.is_empty(), "CaptureBitmapKey should produce no pixel nodes");
+    assert!(
+        p.nodes.is_empty(),
+        "CaptureBitmapKey should produce no pixel nodes"
+    );
     assert!(p.preset.is_none());
     assert!(p.decode_io_id.is_none());
 }
@@ -613,9 +691,17 @@ fn capture_bitmap_key_is_noop() {
 fn multi_node_pipeline_preserves_order() {
     let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
     let nodes = vec![
-        Node::Decode { io_id: 0, commands: None },
+        Node::Decode {
+            io_id: 0,
+            commands: None,
+        },
         Node::FlipV,
-        Node::Crop { x1: 0, y1: 0, x2: 50, y2: 50 },
+        Node::Crop {
+            x1: 0,
+            y1: 0,
+            x2: 50,
+            y2: 50,
+        },
         Node::Rotate90,
         Node::Encode {
             io_id: 1,
@@ -656,8 +742,22 @@ fn all_v2_variants_handled() {
         ("Transpose", Node::Transpose),
         ("WatermarkRedDot", Node::WatermarkRedDot),
         ("ApplyOrientation", Node::ApplyOrientation { flag: 1 }),
-        ("Crop", Node::Crop { x1: 0, y1: 0, x2: 10, y2: 10 }),
-        ("CropWhitespace", Node::CropWhitespace { threshold: 50, percent_padding: 0.0 }),
+        (
+            "Crop",
+            Node::Crop {
+                x1: 0,
+                y1: 0,
+                x2: 10,
+                y2: 10,
+            },
+        ),
+        (
+            "CropWhitespace",
+            Node::CropWhitespace {
+                threshold: 50,
+                percent_padding: 0.0,
+            },
+        ),
         (
             "Constrain",
             Node::Constrain(Constraint {
@@ -669,7 +769,14 @@ fn all_v2_variants_handled() {
                 canvas_color: None,
             }),
         ),
-        ("Resample2D", Node::Resample2D { w: 100, h: 100, hints: None }),
+        (
+            "Resample2D",
+            Node::Resample2D {
+                w: 100,
+                h: 100,
+                hints: None,
+            },
+        ),
         (
             "ExpandCanvas",
             Node::ExpandCanvas {
@@ -682,11 +789,23 @@ fn all_v2_variants_handled() {
         ),
         (
             "FillRect",
-            Node::FillRect { x1: 0, y1: 0, x2: 10, y2: 10, color: Color::Black },
+            Node::FillRect {
+                x1: 0,
+                y1: 0,
+                x2: 10,
+                y2: 10,
+                color: Color::Black,
+            },
         ),
         (
             "Region",
-            Node::Region { x1: 0, y1: 0, x2: 10, y2: 10, background_color: Color::Black },
+            Node::Region {
+                x1: 0,
+                y1: 0,
+                x2: 10,
+                y2: 10,
+                background_color: Color::Black,
+            },
         ),
         (
             "RegionPercent",
@@ -707,7 +826,9 @@ fn all_v2_variants_handled() {
         ),
         (
             "WhiteBalanceHistogramAreaThresholdSrgb",
-            Node::WhiteBalanceHistogramAreaThresholdSrgb { threshold: Some(0.006) },
+            Node::WhiteBalanceHistogramAreaThresholdSrgb {
+                threshold: Some(0.006),
+            },
         ),
         (
             "ColorMatrixSrgb",
@@ -715,7 +836,10 @@ fn all_v2_variants_handled() {
                 matrix: [[1.0, 0.0, 0.0, 0.0, 0.0]; 5],
             },
         ),
-        ("ColorFilterSrgb_Sepia", Node::ColorFilterSrgb(ColorFilterSrgb::Sepia)),
+        (
+            "ColorFilterSrgb_Sepia",
+            Node::ColorFilterSrgb(ColorFilterSrgb::Sepia),
+        ),
         (
             "ColorFilterSrgb_GrayscaleNtsc",
             Node::ColorFilterSrgb(ColorFilterSrgb::GrayscaleNtsc),
@@ -728,10 +852,22 @@ fn all_v2_variants_handled() {
             "ColorFilterSrgb_GrayscaleBt709",
             Node::ColorFilterSrgb(ColorFilterSrgb::GrayscaleBt709),
         ),
-        ("ColorFilterSrgb_GrayscaleRy", Node::ColorFilterSrgb(ColorFilterSrgb::GrayscaleRy)),
-        ("ColorFilterSrgb_Invert", Node::ColorFilterSrgb(ColorFilterSrgb::Invert)),
-        ("ColorFilterSrgb_Alpha", Node::ColorFilterSrgb(ColorFilterSrgb::Alpha(0.5))),
-        ("ColorFilterSrgb_Contrast", Node::ColorFilterSrgb(ColorFilterSrgb::Contrast(0.5))),
+        (
+            "ColorFilterSrgb_GrayscaleRy",
+            Node::ColorFilterSrgb(ColorFilterSrgb::GrayscaleRy),
+        ),
+        (
+            "ColorFilterSrgb_Invert",
+            Node::ColorFilterSrgb(ColorFilterSrgb::Invert),
+        ),
+        (
+            "ColorFilterSrgb_Alpha",
+            Node::ColorFilterSrgb(ColorFilterSrgb::Alpha(0.5)),
+        ),
+        (
+            "ColorFilterSrgb_Contrast",
+            Node::ColorFilterSrgb(ColorFilterSrgb::Contrast(0.5)),
+        ),
         (
             "ColorFilterSrgb_Brightness",
             Node::ColorFilterSrgb(ColorFilterSrgb::Brightness(0.2)),
@@ -740,7 +876,13 @@ fn all_v2_variants_handled() {
             "ColorFilterSrgb_Saturation",
             Node::ColorFilterSrgb(ColorFilterSrgb::Saturation(0.3)),
         ),
-        ("Decode", Node::Decode { io_id: 0, commands: None }),
+        (
+            "Decode",
+            Node::Decode {
+                io_id: 0,
+                commands: None,
+            },
+        ),
         (
             "Encode",
             Node::Encode {
@@ -776,7 +918,14 @@ fn all_v2_variants_handled() {
         ),
         (
             "CopyRectToCanvas",
-            Node::CopyRectToCanvas { from_x: 0, from_y: 0, w: 10, h: 10, x: 0, y: 0 },
+            Node::CopyRectToCanvas {
+                from_x: 0,
+                from_y: 0,
+                w: 10,
+                h: 10,
+                x: 0,
+                y: 0,
+            },
         ),
     ];
 
@@ -790,18 +939,16 @@ fn all_v2_variants_handled() {
     }
 
     // Known-unsupported variants (must be expanded before translation)
-    let unsupported: Vec<(&str, Node)> = vec![
-        (
-            "CommandString",
-            Node::CommandString {
-                kind: CommandStringKind::ImageResizer4,
-                value: "w=100".into(),
-                decode: Some(0),
-                encode: Some(1),
-                watermarks: None,
-            },
-        ),
-    ];
+    let unsupported: Vec<(&str, Node)> = vec![(
+        "CommandString",
+        Node::CommandString {
+            kind: CommandStringKind::ImageResizer4,
+            value: "w=100".into(),
+            decode: Some(0),
+            encode: Some(1),
+            watermarks: None,
+        },
+    )];
 
     for (name, node) in &unsupported {
         let result = translate_one(node.clone());
@@ -903,7 +1050,11 @@ fn encoder_presets_all_handled() {
         ),
         (
             "Mozjpeg",
-            EncoderPreset::Mozjpeg { quality: Some(85), progressive: Some(true), matte: None },
+            EncoderPreset::Mozjpeg {
+                quality: Some(85),
+                progressive: Some(true),
+                matte: None,
+            },
         ),
         (
             "Mozjpeg_baseline",
@@ -939,7 +1090,12 @@ fn encoder_presets_all_handled() {
                 maximum_deflate: None,
             },
         ),
-        ("Lodepng", EncoderPreset::Lodepng { maximum_deflate: Some(true) }),
+        (
+            "Lodepng",
+            EncoderPreset::Lodepng {
+                maximum_deflate: Some(true),
+            },
+        ),
         ("WebPLossy", EncoderPreset::WebPLossy { quality: 75.0 }),
         ("WebPLossless", EncoderPreset::WebPLossless),
         ("Gif", EncoderPreset::Gif),
@@ -962,7 +1118,12 @@ fn encoder_presets_all_handled() {
 #[test]
 fn crop_zero_size_does_not_panic() {
     // x2 == x1 → w=0, h=0
-    let p = translate_ok(Node::Crop { x1: 50, y1: 50, x2: 50, y2: 50 });
+    let p = translate_ok(Node::Crop {
+        x1: 50,
+        y1: 50,
+        x2: 50,
+        y2: 50,
+    });
     assert_eq!(p.nodes[0].get_param("w"), Some(ParamValue::U32(0)));
     assert_eq!(p.nodes[0].get_param("h"), Some(ParamValue::U32(0)));
 }
@@ -1027,7 +1188,10 @@ fn empty_pipeline_succeeds() {
 fn apply_orientation_identity() {
     // flag=1 is the identity orientation (no change needed)
     let p = translate_ok(Node::ApplyOrientation { flag: 1 });
-    assert_eq!(p.nodes[0].get_param("orientation"), Some(ParamValue::I32(1)));
+    assert_eq!(
+        p.nodes[0].get_param("orientation"),
+        Some(ParamValue::I32(1))
+    );
 }
 
 #[test]
@@ -1041,11 +1205,26 @@ fn round_corners_pixels_custom() {
         },
         background_color: Color::Transparent,
     });
-    assert_eq!(p.nodes[0].get_param("mode"), Some(ParamValue::Str("pixels_custom".into())));
-    assert_eq!(p.nodes[0].get_param("radius_tl"), Some(ParamValue::F32(5.0)));
-    assert_eq!(p.nodes[0].get_param("radius_tr"), Some(ParamValue::F32(10.0)));
-    assert_eq!(p.nodes[0].get_param("radius_bl"), Some(ParamValue::F32(20.0)));
-    assert_eq!(p.nodes[0].get_param("radius_br"), Some(ParamValue::F32(15.0)));
+    assert_eq!(
+        p.nodes[0].get_param("mode"),
+        Some(ParamValue::Str("pixels_custom".into()))
+    );
+    assert_eq!(
+        p.nodes[0].get_param("radius_tl"),
+        Some(ParamValue::F32(5.0))
+    );
+    assert_eq!(
+        p.nodes[0].get_param("radius_tr"),
+        Some(ParamValue::F32(10.0))
+    );
+    assert_eq!(
+        p.nodes[0].get_param("radius_bl"),
+        Some(ParamValue::F32(20.0))
+    );
+    assert_eq!(
+        p.nodes[0].get_param("radius_br"),
+        Some(ParamValue::F32(15.0))
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1070,14 +1249,18 @@ fn gradient_data(w: u32, h: u32) -> Vec<u8> {
 
 fn translate_and_execute(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (u32, u32) {
     let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
-    let pipeline = translate::translate_nodes(&nodes, &io_buffers)
-        .expect("translation should succeed");
+    let pipeline =
+        translate::translate_nodes(&nodes, &io_buffers).expect("translation should succeed");
 
     let bpp = zenpipe::format::RGBA8_SRGB.bytes_per_pixel() as usize;
     let data = vec![128u8; src_w as usize * src_h as usize * bpp];
-    let source: Box<dyn zenpipe::Source> = Box::new(
-        zenpipe::sources::MaterializedSource::from_data(data, src_w, src_h, zenpipe::format::RGBA8_SRGB),
-    );
+    let source: Box<dyn zenpipe::Source> =
+        Box::new(zenpipe::sources::MaterializedSource::from_data(
+            data,
+            src_w,
+            src_h,
+            zenpipe::format::RGBA8_SRGB,
+        ));
 
     let result = zenpipe::bridge::build_pipeline(source, &pipeline.nodes, &[])
         .expect("pipeline should build");
@@ -1091,14 +1274,22 @@ fn execute_constrain_then_rotate90_dimensions() {
         vec![
             Node::Constrain(Constraint {
                 mode: ConstraintMode::Within,
-                w: Some(70), h: Some(70),
-                hints: None, gravity: None, canvas_color: None,
+                w: Some(70),
+                h: Some(70),
+                hints: None,
+                gravity: None,
+                canvas_color: None,
             }),
             Node::Rotate90,
         ],
-        600, 450,
+        600,
+        450,
     );
-    assert_eq!((w, h), (53, 70), "constrain+rot90: expected 53x70, got {w}x{h}");
+    assert_eq!(
+        (w, h),
+        (53, 70),
+        "constrain+rot90: expected 53x70, got {w}x{h}"
+    );
 }
 
 #[test]
@@ -1107,20 +1298,32 @@ fn execute_constrain_then_rotate270_dimensions() {
         vec![
             Node::Constrain(Constraint {
                 mode: ConstraintMode::Within,
-                w: Some(70), h: Some(70),
-                hints: None, gravity: None, canvas_color: None,
+                w: Some(70),
+                h: Some(70),
+                hints: None,
+                gravity: None,
+                canvas_color: None,
             }),
             Node::Rotate270,
         ],
-        600, 450,
+        600,
+        450,
     );
-    assert_eq!((w, h), (53, 70), "constrain+rot270: expected 53x70, got {w}x{h}");
+    assert_eq!(
+        (w, h),
+        (53, 70),
+        "constrain+rot270: expected 53x70, got {w}x{h}"
+    );
 }
 
 #[test]
 fn execute_rotate90_standalone_dimensions() {
     let (w, h) = translate_and_execute(vec![Node::Rotate90], 100, 60);
-    assert_eq!((w, h), (60, 100), "standalone rot90: expected 60x100, got {w}x{h}");
+    assert_eq!(
+        (w, h),
+        (60, 100),
+        "standalone rot90: expected 60x100, got {w}x{h}"
+    );
 }
 
 #[test]
@@ -1129,14 +1332,22 @@ fn execute_constrain_then_flip_h_dimensions() {
         vec![
             Node::Constrain(Constraint {
                 mode: ConstraintMode::Within,
-                w: Some(70), h: Some(70),
-                hints: None, gravity: None, canvas_color: None,
+                w: Some(70),
+                h: Some(70),
+                hints: None,
+                gravity: None,
+                canvas_color: None,
             }),
             Node::FlipH,
         ],
-        600, 450,
+        600,
+        450,
     );
-    assert_eq!((w, h), (70, 53), "constrain+flip_h: expected 70x53, got {w}x{h}");
+    assert_eq!(
+        (w, h),
+        (70, 53),
+        "constrain+flip_h: expected 70x53, got {w}x{h}"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1145,13 +1356,17 @@ fn execute_constrain_then_flip_h_dimensions() {
 
 fn translate_and_materialize(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (Vec<u8>, u32, u32) {
     let io_buffers: HashMap<i32, Vec<u8>> = HashMap::new();
-    let pipeline = translate::translate_nodes(&nodes, &io_buffers)
-        .expect("translation should succeed");
+    let pipeline =
+        translate::translate_nodes(&nodes, &io_buffers).expect("translation should succeed");
 
     let data = gradient_data(src_w, src_h);
-    let source: Box<dyn zenpipe::Source> = Box::new(
-        zenpipe::sources::MaterializedSource::from_data(data, src_w, src_h, zenpipe::format::RGBA8_SRGB),
-    );
+    let source: Box<dyn zenpipe::Source> =
+        Box::new(zenpipe::sources::MaterializedSource::from_data(
+            data,
+            src_w,
+            src_h,
+            zenpipe::format::RGBA8_SRGB,
+        ));
 
     let result = zenpipe::bridge::build_pipeline(source, &pipeline.nodes, &[])
         .expect("pipeline should build");
@@ -1172,9 +1387,12 @@ fn execute_flip_h_reverses_pixels() {
     assert_eq!((w, h), (80, 40));
     let left = px(&data, w, 0, 0);
     let right = px(&data, w, w - 1, 0);
-    assert!(left[0] > right[0],
+    assert!(
+        left[0] > right[0],
         "FlipH: left R ({}) should be > right R ({}) — gradient reversed",
-        left[0], right[0]);
+        left[0],
+        right[0]
+    );
 }
 
 #[test]
@@ -1183,35 +1401,42 @@ fn execute_constrain_then_flip_h_reverses_pixels() {
         vec![
             Node::Constrain(Constraint {
                 mode: ConstraintMode::Within,
-                w: Some(20), h: Some(20),
-                hints: None, gravity: None, canvas_color: None,
+                w: Some(20),
+                h: Some(20),
+                hints: None,
+                gravity: None,
+                canvas_color: None,
             }),
             Node::FlipH,
         ],
-        80, 40,
+        80,
+        40,
     );
     assert_eq!(w, 20);
     assert_eq!(h, 10);
     let left = px(&data, w, 0, 0);
     let right = px(&data, w, w - 1, 0);
-    assert!(left[0] > right[0],
+    assert!(
+        left[0] > right[0],
         "constrain+FlipH: left R ({}) should be > right R ({}) — gradient reversed",
-        left[0], right[0]);
+        left[0],
+        right[0]
+    );
 }
 
 #[test]
 fn execute_orient_exif2_reverses_pixels() {
     // EXIF 2 = FlipH
-    let (data, w, h) = translate_and_materialize(
-        vec![Node::ApplyOrientation { flag: 2 }],
-        80, 40,
-    );
+    let (data, w, h) = translate_and_materialize(vec![Node::ApplyOrientation { flag: 2 }], 80, 40);
     assert_eq!((w, h), (80, 40));
     let left = px(&data, w, 0, 0);
     let right = px(&data, w, w - 1, 0);
-    assert!(left[0] > right[0],
+    assert!(
+        left[0] > right[0],
         "orient(2): left R ({}) should be > right R ({}) — FlipH reversed",
-        left[0], right[0]);
+        left[0],
+        right[0]
+    );
 }
 
 #[test]
@@ -1220,18 +1445,25 @@ fn execute_constrain_then_orient_exif2_reverses_pixels() {
         vec![
             Node::Constrain(Constraint {
                 mode: ConstraintMode::Within,
-                w: Some(20), h: Some(20),
-                hints: None, gravity: None, canvas_color: None,
+                w: Some(20),
+                h: Some(20),
+                hints: None,
+                gravity: None,
+                canvas_color: None,
             }),
             Node::ApplyOrientation { flag: 2 },
         ],
-        80, 40,
+        80,
+        40,
     );
     assert_eq!(w, 20);
     assert_eq!(h, 10);
     let left = px(&data, w, 0, 0);
     let right = px(&data, w, w - 1, 0);
-    assert!(left[0] > right[0],
+    assert!(
+        left[0] > right[0],
         "constrain+orient(2): left R ({}) should be > right R ({}) — FlipH reversed",
-        left[0], right[0]);
+        left[0],
+        right[0]
+    );
 }

@@ -47,13 +47,16 @@ impl Source for SyntheticSource {
         let stride = self.width as usize * 16;
         let len = rows as usize * stride;
         self.y += rows;
-        Ok(Some(Strip::new(
-            &self.buf[..len],
-            self.width,
-            rows,
-            stride,
-            format::RGBAF32_LINEAR,
-        ).expect("valid strip dimensions")))
+        Ok(Some(
+            Strip::new(
+                &self.buf[..len],
+                self.width,
+                rows,
+                stride,
+                format::RGBAF32_LINEAR,
+            )
+            .expect("valid strip dimensions"),
+        ))
     }
     fn width(&self) -> u32 {
         self.width

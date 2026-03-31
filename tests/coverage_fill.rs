@@ -999,12 +999,14 @@ fn graph_analyze_custom_analysis() {
     // Analyze: materialize, inspect, return as-is
     let mut g = PipelineGraph::new();
     let src_node = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
-        // Just verify we got the right dimensions and pass through
-        assert_eq!(mat.width(), 4);
-        assert_eq!(mat.height(), 4);
-        Ok(Box::new(mat) as Box<dyn Source>)
-    })));
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(
+        |mat: MaterializedSource, _trace| {
+            // Just verify we got the right dimensions and pass through
+            assert_eq!(mat.width(), 4);
+            assert_eq!(mat.height(), 4);
+            Ok(Box::new(mat) as Box<dyn Source>)
+        },
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src_node, analyze, EdgeKind::Input);
     g.add_edge(analyze, out, EdgeKind::Input);
@@ -1027,11 +1029,13 @@ fn graph_analyze_modifies_pipeline() {
     // Analyze: materialize, then crop via returned source
     let mut g = PipelineGraph::new();
     let src_node = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
-        // Crop to 2x2 from the materialized source
-        use zenpipe::sources::CropSource;
-        Ok(Box::new(CropSource::new(Box::new(mat), 1, 1, 2, 2)?) as Box<dyn Source>)
-    })));
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(
+        |mat: MaterializedSource, _trace| {
+            // Crop to 2x2 from the materialized source
+            use zenpipe::sources::CropSource;
+            Ok(Box::new(CropSource::new(Box::new(mat), 1, 1, 2, 2)?) as Box<dyn Source>)
+        },
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src_node, analyze, EdgeKind::Input);
     g.add_edge(analyze, out, EdgeKind::Input);
@@ -1290,9 +1294,9 @@ fn estimate_crop_whitespace() {
 fn estimate_analyze() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
-        Ok(Box::new(mat) as Box<dyn Source>)
-    })));
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(
+        |mat: MaterializedSource, _trace| Ok(Box::new(mat) as Box<dyn Source>),
+    )));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, analyze, EdgeKind::Input);
     g.add_edge(analyze, out, EdgeKind::Input);

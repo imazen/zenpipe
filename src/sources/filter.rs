@@ -91,13 +91,9 @@ impl Source for FilterSource {
         let stride = format::RGBAF32_LINEAR.aligned_stride(w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
 
-        Ok(Some(Strip::new(
-            data,
-            w,
-            h,
-            stride,
-            format::RGBAF32_LINEAR,
-        ).pipe_err()?))
+        Ok(Some(
+            Strip::new(data, w, h, stride, format::RGBAF32_LINEAR).pipe_err()?,
+        ))
     }
 
     fn width(&self) -> u32 {

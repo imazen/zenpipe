@@ -133,9 +133,11 @@ pub(crate) fn compile_geometry_run(
         }
     }
 
-    let (ideal, request) = pipeline
-        .plan()
-        .map_err(|e| at!(PipeError::Op(alloc::format!("geometry fusion plan failed: {e}"))))?;
+    let (ideal, request) = pipeline.plan().map_err(|e| {
+        at!(PipeError::Op(alloc::format!(
+            "geometry fusion plan failed: {e}"
+        )))
+    })?;
     let offer = zenresize::DecoderOffer::full_decode(source_w, source_h);
     let plan = ideal.finalize(&request, &offer);
     let f = filter.unwrap_or(zenresize::Filter::Robidoux);

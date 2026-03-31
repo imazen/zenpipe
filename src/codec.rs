@@ -228,7 +228,11 @@ impl crate::Sink for EncoderSink<'_> {
             strip.stride(),
             self.descriptor,
         )
-        .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice construction failed: {e}"))))?;
+        .map_err(|e| {
+            at!(PipeError::Op(alloc::format!(
+                "PixelSlice construction failed: {e}"
+            )))
+        })?;
 
         encoder
             .push_rows(pixels)
@@ -241,7 +245,9 @@ impl crate::Sink for EncoderSink<'_> {
             .take()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        let output = encoder.finish().map_err(|e| at!(PipeError::Op(e.to_string())))?;
+        let output = encoder
+            .finish()
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         self.output = Some(output);
         Ok(())

@@ -105,13 +105,16 @@ impl Source for TransformSource {
             // No ops — copy to buf_a for lifetime management.
             self.buf_a.resize(strip.as_strided_bytes().len(), 0);
             self.buf_a.copy_from_slice(strip.as_strided_bytes());
-            return Ok(Some(Strip::new(
-                &self.buf_a,
-                width,
-                height,
-                strip.stride(),
-                self.output_format,
-            ).pipe_err()?));
+            return Ok(Some(
+                Strip::new(
+                    &self.buf_a,
+                    width,
+                    height,
+                    strip.stride(),
+                    self.output_format,
+                )
+                .pipe_err()?,
+            ));
         }
 
         // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
@@ -143,13 +146,9 @@ impl Source for TransformSource {
             &self.buf_b
         };
 
-        Ok(Some(Strip::new(
-            data,
-            width,
-            height,
-            stride,
-            self.output_format,
-        ).pipe_err()?))
+        Ok(Some(
+            Strip::new(data, width, height, stride, self.output_format).pipe_err()?,
+        ))
     }
 
     fn width(&self) -> u32 {

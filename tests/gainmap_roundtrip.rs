@@ -198,7 +198,10 @@ fn jpeg_to_jpeg_with_resize_preserves_gainmap() {
     let input = make_ultrahdr_jpeg_16x16();
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![resize_node(8, 8)];
     let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
-    assert!(gm.is_some(), "gain map should survive JPEG→JPEG with resize");
+    assert!(
+        gm.is_some(),
+        "gain map should survive JPEG→JPEG with resize"
+    );
 }
 
 // ─── JPEG → JPEG with crop ───
@@ -229,8 +232,8 @@ fn jpeg_to_png_drops_gainmap() {
 fn jpeg_resize_and_crop_preserves_gainmap() {
     let input = make_ultrahdr_jpeg_16x16();
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![
-        crop_node(1, 1, 6, 6),   // crop to 6x6
-        resize_node(4, 4),        // then resize to 4x4
+        crop_node(1, 1, 6, 6), // crop to 6x6
+        resize_node(4, 4),     // then resize to 4x4
     ];
     let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
     assert!(gm.is_some(), "gain map should survive crop + resize");

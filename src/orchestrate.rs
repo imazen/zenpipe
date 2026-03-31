@@ -424,7 +424,11 @@ fn process_sidecar(
     let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_output.width, primary_output.height)
         .plan()
-        .map_err(|e| at!(PipeError::Op(alloc::format!("sidecar layout plan failed: {e}"))))?;
+        .map_err(|e| {
+            at!(PipeError::Op(alloc::format!(
+                "sidecar layout plan failed: {e}"
+            )))
+        })?;
 
     // Derive proportional transforms for the sidecar.
     let plan = SidecarPlan::derive(
@@ -454,7 +458,11 @@ fn process_sidecar_from_dims(
     let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_w, primary_h)
         .plan()
-        .map_err(|e| at!(PipeError::Op(alloc::format!("sidecar layout plan failed: {e}"))))?;
+        .map_err(|e| {
+            at!(PipeError::Op(alloc::format!(
+                "sidecar layout plan failed: {e}"
+            )))
+        })?;
 
     let plan = SidecarPlan::derive(
         &primary_ideal,
@@ -497,9 +505,9 @@ mod tests {
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
-            Ok(Some(crate::strip::Strip::new(
-                leaked, self.w, rows, stride, RGBA8_SRGB,
-            ).pipe_err()?))
+            Ok(Some(
+                crate::strip::Strip::new(leaked, self.w, rows, stride, RGBA8_SRGB).pipe_err()?,
+            ))
         }
         fn width(&self) -> u32 {
             self.w

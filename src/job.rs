@@ -36,11 +36,11 @@ use hashbrown::HashMap;
 
 use crate::Source;
 use crate::bridge::NodeConverter;
+use whereat::ResultAtExt as _;
 #[allow(unused_imports)]
 use whereat::at;
 #[allow(unused_imports)]
 use whereat::at_crate;
-use whereat::ResultAtExt as _;
 
 use crate::error::PipeError;
 use crate::format::PixelFormat;
@@ -434,8 +434,11 @@ impl<'a> ImageJob<'a> {
         };
 
         // 2. Probe the source.
-        let image_info = at_crate!(zencodecs::from_bytes_with_registry(input_bytes, &self.registry))
-            .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let image_info = at_crate!(zencodecs::from_bytes_with_registry(
+            input_bytes,
+            &self.registry
+        ))
+        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         let decode_info = DecodeInfo {
             io_id: self.decode_io_id,
@@ -552,10 +555,12 @@ impl<'a> ImageJob<'a> {
             }
             Err(_) => {
                 // Fall back to full-frame decode.
-                let decoded = at_crate!(zencodecs::DecodeRequest::new(data)
-                    .with_registry(&self.registry)
-                    .decode_full_frame())
-                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+                let decoded = at_crate!(
+                    zencodecs::DecodeRequest::new(data)
+                        .with_registry(&self.registry)
+                        .decode_full_frame()
+                )
+                .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let pixels = decoded.pixels();
                 let w = decoded.width();
@@ -586,9 +591,8 @@ impl<'a> ImageJob<'a> {
             request = request.with_codec_config(config);
         }
 
-        let (decoded, gain_map) = at_crate!(request
-            .decode_gain_map())
-            .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let (decoded, gain_map) =
+            at_crate!(request.decode_gain_map()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         // Convert base image to Source.
         let pixels = decoded.pixels();
@@ -618,7 +622,10 @@ impl<'a> ImageJob<'a> {
             };
 
             let gm_source = crate::sources::MaterializedSource::from_data(
-                gm.gain_map.data, gm_w, gm_h, gm_format,
+                gm.gain_map.data,
+                gm_w,
+                gm_h,
+                gm_format,
             );
 
             crate::sidecar::SidecarStream {
@@ -789,7 +796,11 @@ impl<'a> ImageJob<'a> {
                     data: sidecar.data().to_vec(),
                     width: sidecar.width(),
                     height: sidecar.height(),
-                    channels: if sidecar.format().layout() == crate::ChannelLayout::Gray { 1 } else { 3 },
+                    channels: if sidecar.format().layout() == crate::ChannelLayout::Gray {
+                        1
+                    } else {
+                        3
+                    },
                 };
                 Some((gain_map, metadata))
             } else {
@@ -802,18 +813,15 @@ impl<'a> ImageJob<'a> {
         // silently drop the gain map — no error.
         let target_supports_gainmap = matches!(
             target_format,
-            zencodec::ImageFormat::Jpeg
-                | zencodec::ImageFormat::Avif
-                | zencodec::ImageFormat::Jxl
+            zencodec::ImageFormat::Jpeg | zencodec::ImageFormat::Avif | zencodec::ImageFormat::Jxl
         );
         if target_supports_gainmap {
             if let Some((ref gm, ref meta)) = gain_map_data {
-                encode_request = encode_request.with_gain_map(
-                    zencodecs::GainMapSource::Precomputed {
+                encode_request =
+                    encode_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
                         gain_map: gm,
                         metadata: meta,
-                    },
-                );
+                    });
             }
         }
 
@@ -862,17 +870,15 @@ impl<'a> ImageJob<'a> {
                 // Re-attach gain map for one-shot encode (only if format supports it).
                 if target_supports_gainmap {
                     if let Some((ref gm, ref meta)) = gain_map_data {
-                        oneshot_request = oneshot_request.with_gain_map(
-                            zencodecs::GainMapSource::Precomputed {
+                        oneshot_request =
+                            oneshot_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
                                 gain_map: gm,
                                 metadata: meta,
-                            },
-                        );
+                            });
                     }
                 }
 
-                let encode_output = at_crate!(oneshot_request
-                    .encode(pixels, format.has_alpha()))
+                let encode_output = at_crate!(oneshot_request.encode(pixels, format.has_alpha()))
                     .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 Ok(EncodeResult {

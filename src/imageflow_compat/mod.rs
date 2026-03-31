@@ -25,5 +25,5 @@ pub mod translate;
 pub mod watermark;
 
 pub use captured::CapturedBitmap;
-pub use execute::{execute_framewise, ZenEncodeResult, ZenError, ExecuteResult};
+pub use execute::{ExecuteResult, ZenEncodeResult, ZenError, execute_framewise};
 pub use riapi::RiapiEngine;

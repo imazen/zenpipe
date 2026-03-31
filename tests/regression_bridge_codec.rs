@@ -172,8 +172,7 @@ fn riapi_combined_qp_dpr_format() {
 #[test]
 fn riapi_anchor_topleft_sets_gravity() {
     let r = parse("w=800&h=600&mode=crop&anchor=topleft");
-    let c = find_node(&r.instances, "zenresize.constrain")
-        .expect("Constrain node should exist");
+    let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain node should exist");
     assert_eq!(
         get_str(c, "gravity").as_deref(),
         Some("topleft"),
@@ -184,12 +183,8 @@ fn riapi_anchor_topleft_sets_gravity() {
 #[test]
 fn riapi_anchor_bottomright_sets_gravity() {
     let r = parse("w=800&h=600&mode=crop&anchor=bottomright");
-    let c = find_node(&r.instances, "zenresize.constrain")
-        .expect("Constrain node should exist");
-    assert_eq!(
-        get_str(c, "gravity").as_deref(),
-        Some("bottomright"),
-    );
+    let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain node should exist");
+    assert_eq!(get_str(c, "gravity").as_deref(), Some("bottomright"),);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -225,8 +220,16 @@ fn list_codecs_reports_capability_flags() {
     // should still report capability flags (false in that case).
     for codec in &codecs {
         // Every codec should have a non-empty MIME type and extension.
-        assert!(!codec.mime_type.is_empty(), "{} missing mime_type", codec.name);
-        assert!(!codec.extension.is_empty(), "{} missing extension", codec.name);
+        assert!(
+            !codec.mime_type.is_empty(),
+            "{} missing mime_type",
+            codec.name
+        );
+        assert!(
+            !codec.extension.is_empty(),
+            "{} missing extension",
+            codec.name
+        );
     }
 
     // The decodable/encodable lists should be consistent: if a format is
@@ -253,7 +256,10 @@ fn list_codecs_gif_supports_animation() {
         .iter()
         .find(|c| c.name == "gif")
         .expect("GIF should be in codec list");
-    assert!(gif.supports_animation, "GIF should report animation support");
+    assert!(
+        gif.supports_animation,
+        "GIF should report animation support"
+    );
     assert!(gif.supports_alpha, "GIF should report alpha support");
 }
 
@@ -381,11 +387,7 @@ fn export_querystring_schema_has_qp_and_format_keys() {
 #[test]
 fn export_querystring_keys_includes_kv_annotated_nodes() {
     let keys = zenpipe::schema_export::export_querystring_keys();
-    let nodes = keys
-        .get("nodes")
-        .unwrap()
-        .as_object()
-        .unwrap();
+    let nodes = keys.get("nodes").unwrap().as_object().unwrap();
 
     // Only nodes with #[kv(...)] annotations appear in the querystring key
     // registry. zenlayout.crop has no kv keys (it's JSON-only), but
@@ -393,15 +395,29 @@ fn export_querystring_keys_includes_kv_annotated_nodes() {
     let has_orient = nodes.contains_key("zenlayout.orient");
     let has_constrain = nodes.contains_key("zenresize.constrain");
 
-    assert!(has_orient, "should include zenlayout.orient (has srotate kv key)");
-    assert!(has_constrain, "should include zenresize.constrain (has w/h/mode kv keys)");
+    assert!(
+        has_orient,
+        "should include zenlayout.orient (has srotate kv key)"
+    );
+    assert!(
+        has_constrain,
+        "should include zenresize.constrain (has w/h/mode kv keys)"
+    );
 
     // Verify the keys registry covers both zenpipe-owned and zencodecs-owned nodes.
     let node_ids: Vec<&str> = nodes.keys().map(|k| k.as_str()).collect();
-    let has_zenpipe_node = node_ids.iter().any(|id| id.starts_with("zenresize.") || id.starts_with("zenlayout."));
+    let has_zenpipe_node = node_ids
+        .iter()
+        .any(|id| id.starts_with("zenresize.") || id.starts_with("zenlayout."));
     let has_zencodecs_node = node_ids.iter().any(|id| id.starts_with("zencodecs."));
-    assert!(has_zenpipe_node, "should include at least one zenpipe-owned node");
-    assert!(has_zencodecs_node, "should include at least one zencodecs-owned node");
+    assert!(
+        has_zenpipe_node,
+        "should include at least one zenpipe-owned node"
+    );
+    assert!(
+        has_zencodecs_node,
+        "should include at least one zencodecs-owned node"
+    );
 }
 
 #[cfg(feature = "json-schema")]
@@ -443,7 +459,10 @@ fn full_registry_includes_quality_intent() {
         .all()
         .iter()
         .any(|def| def.schema().id == "zencodecs.quality_intent");
-    assert!(has_qi, "full_registry should include zencodecs.quality_intent");
+    assert!(
+        has_qi,
+        "full_registry should include zencodecs.quality_intent"
+    );
 }
 
 #[test]
@@ -453,5 +472,8 @@ fn full_registry_includes_constrain() {
         .all()
         .iter()
         .any(|def| def.schema().id == "zenresize.constrain");
-    assert!(has_constrain, "full_registry should include zenresize.constrain");
+    assert!(
+        has_constrain,
+        "full_registry should include zenresize.constrain"
+    );
 }

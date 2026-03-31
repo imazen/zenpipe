@@ -656,8 +656,16 @@ fn rotate90_after_constrain_swaps_dimensions() {
         make_node(&ROT90_SCHEMA, ParamMap::new()),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 53, "after constrain+rot90: width should be 53");
-    assert_eq!(result.source.height(), 70, "after constrain+rot90: height should be 70");
+    assert_eq!(
+        result.source.width(),
+        53,
+        "after constrain+rot90: width should be 53"
+    );
+    assert_eq!(
+        result.source.height(),
+        70,
+        "after constrain+rot90: height should be 70"
+    );
 }
 
 #[test]
@@ -669,8 +677,16 @@ fn rotate270_after_constrain_swaps_dimensions() {
         make_node(&ROT270_SCHEMA, ParamMap::new()),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 53, "after constrain+rot270: width should be 53");
-    assert_eq!(result.source.height(), 70, "after constrain+rot270: height should be 70");
+    assert_eq!(
+        result.source.width(),
+        53,
+        "after constrain+rot270: width should be 53"
+    );
+    assert_eq!(
+        result.source.height(),
+        70,
+        "after constrain+rot270: height should be 70"
+    );
 }
 
 #[test]
@@ -682,20 +698,34 @@ fn rotate180_after_constrain_preserves_dimensions() {
         make_node(&ROT180_SCHEMA, ParamMap::new()),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 70, "after constrain+rot180: width should be 70");
-    assert_eq!(result.source.height(), 53, "after constrain+rot180: height should be 53");
+    assert_eq!(
+        result.source.width(),
+        70,
+        "after constrain+rot180: width should be 70"
+    );
+    assert_eq!(
+        result.source.height(),
+        53,
+        "after constrain+rot180: height should be 53"
+    );
 }
 
 #[test]
 fn rotate90_standalone_swaps_dimensions() {
     // 100x60 → rotate90 → 60x100
     let source = solid_source(100, 60);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&ROT90_SCHEMA, ParamMap::new()),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(&ROT90_SCHEMA, ParamMap::new())];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 60, "standalone rot90: width should be 60");
-    assert_eq!(result.source.height(), 100, "standalone rot90: height should be 100");
+    assert_eq!(
+        result.source.width(),
+        60,
+        "standalone rot90: width should be 60"
+    );
+    assert_eq!(
+        result.source.height(),
+        100,
+        "standalone rot90: height should be 100"
+    );
 }
 
 #[test]
@@ -707,8 +737,16 @@ fn flip_h_after_constrain_preserves_dimensions() {
         make_node(&FLIP_H_SCHEMA, ParamMap::new()),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 70, "after constrain+flip_h: width should be 70");
-    assert_eq!(result.source.height(), 53, "after constrain+flip_h: height should be 53");
+    assert_eq!(
+        result.source.width(),
+        70,
+        "after constrain+flip_h: width should be 70"
+    );
+    assert_eq!(
+        result.source.height(),
+        53,
+        "after constrain+flip_h: height should be 53"
+    );
 }
 
 #[test]
@@ -720,8 +758,16 @@ fn orient_exif6_after_constrain_swaps_dimensions() {
         make_node(&ORIENT_SCHEMA, orient_params(6)),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 53, "after constrain+orient(6): width should be 53");
-    assert_eq!(result.source.height(), 70, "after constrain+orient(6): height should be 70");
+    assert_eq!(
+        result.source.width(),
+        53,
+        "after constrain+orient(6): width should be 53"
+    );
+    assert_eq!(
+        result.source.height(),
+        70,
+        "after constrain+orient(6): height should be 70"
+    );
 }
 
 #[test]
@@ -733,8 +779,16 @@ fn constrain_after_rotate90_uses_rotated_dimensions() {
         make_node(&CONSTRAIN_SCHEMA, constrain_params(70, 70, "within")),
     ];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
-    assert_eq!(result.source.width(), 53, "after rot90+constrain: width should be 53");
-    assert_eq!(result.source.height(), 70, "after rot90+constrain: height should be 70");
+    assert_eq!(
+        result.source.width(),
+        53,
+        "after rot90+constrain: width should be 53"
+    );
+    assert_eq!(
+        result.source.height(),
+        70,
+        "after rot90+constrain: height should be 70"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -758,7 +812,12 @@ fn gradient_source(w: u32, h: u32) -> Box<dyn Source> {
             data[i + 3] = 255; // A = opaque
         }
     }
-    Box::new(MaterializedSource::from_data(data, w, h, format::RGBA8_SRGB))
+    Box::new(MaterializedSource::from_data(
+        data,
+        w,
+        h,
+        format::RGBA8_SRGB,
+    ))
 }
 
 /// Materialize pipeline output and return pixel data + dimensions.
@@ -782,9 +841,7 @@ fn flip_h_reverses_pixel_content() {
     let w = 8u32;
     let h = 4u32;
     let source = gradient_source(w, h);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&FLIP_H_SCHEMA, ParamMap::new()),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(&FLIP_H_SCHEMA, ParamMap::new())];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     let (data, ow, oh) = materialize_pixels(result);
     assert_eq!((ow, oh), (w, h), "flip_h should not change dimensions");
@@ -812,12 +869,16 @@ fn rotate90_rotates_pixel_content() {
     let w = 8u32;
     let h = 4u32;
     let source = gradient_source(w, h);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&ROT90_SCHEMA, ParamMap::new()),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(&ROT90_SCHEMA, ParamMap::new())];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     let (data, ow, oh) = materialize_pixels(result);
-    assert_eq!((ow, oh), (h, w), "rot90 should swap dimensions to {}x{}", h, w);
+    assert_eq!(
+        (ow, oh),
+        (h, w),
+        "rot90 should swap dimensions to {}x{}",
+        h,
+        w
+    );
 
     // Original (0,0) = R:0, G:0. After rot90 CW, this pixel moves to (h-1, 0) = (3, 0).
     // Original (w-1,0) = R:255, G:0. After rot90 CW, moves to (h-1, w-1) = (3, 7).
@@ -864,9 +925,7 @@ fn orient_exif2_flips_pixel_content() {
     let w = 80u32;
     let h = 40u32;
     let source = gradient_source(w, h);
-    let nodes: Vec<Box<dyn NodeInstance>> = vec![
-        make_node(&ORIENT_SCHEMA, orient_params(2)),
-    ];
+    let nodes: Vec<Box<dyn NodeInstance>> = vec![make_node(&ORIENT_SCHEMA, orient_params(2))];
     let result = bridge::build_pipeline(source, &nodes, &[]).unwrap();
     let (data, ow, oh) = materialize_pixels(result);
     assert_eq!((ow, oh), (w, h), "FlipH should not change dimensions");

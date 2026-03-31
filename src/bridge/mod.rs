@@ -887,7 +887,7 @@ mod core_tests {
 
     impl crate::Source for SolidSource {
         fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
-        use crate::strip::BufferResultExt as _;
+            use crate::strip::BufferResultExt as _;
             if self.y >= self.height {
                 return Ok(None);
             }
@@ -896,13 +896,9 @@ mod core_tests {
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
-            Ok(Some(Strip::new(
-                leaked,
-                self.width,
-                rows,
-                stride,
-                self.format,
-            ).pipe_err()?))
+            Ok(Some(
+                Strip::new(leaked, self.width, rows, stride, self.format).pipe_err()?,
+            ))
         }
 
         fn width(&self) -> u32 {

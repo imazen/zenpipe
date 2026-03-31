@@ -153,13 +153,16 @@ impl Source for TeeCursor {
 
         self.y += rows;
 
-        Ok(Some(Strip::new(
-            &self.data[start..end],
-            self.width,
-            rows,
-            self.stride,
-            self.format,
-        ).pipe_err()?))
+        Ok(Some(
+            Strip::new(
+                &self.data[start..end],
+                self.width,
+                rows,
+                self.stride,
+                self.format,
+            )
+            .pipe_err()?,
+        ))
     }
 
     fn width(&self) -> u32 {

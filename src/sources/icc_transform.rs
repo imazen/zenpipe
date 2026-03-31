@@ -136,13 +136,9 @@ impl Source for IccTransformSource {
             );
         }
 
-        Ok(Some(Strip::new(
-            &self.buf,
-            width,
-            height,
-            stride,
-            self.format,
-        ).pipe_err()?))
+        Ok(Some(
+            Strip::new(&self.buf, width, height, stride, self.format).pipe_err()?,
+        ))
     }
 
     fn width(&self) -> u32 {

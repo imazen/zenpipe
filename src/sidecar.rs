@@ -209,7 +209,7 @@ mod tests {
 
     impl Source for SolidSource {
         fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
-        use crate::strip::BufferResultExt as _;
+            use crate::strip::BufferResultExt as _;
             if self.y >= self.height {
                 return Ok(None);
             }
@@ -219,13 +219,9 @@ mod tests {
             self.y += rows;
             // Leak the data to get a 'static lifetime for testing.
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
-            Ok(Some(Strip::new(
-                leaked,
-                self.width,
-                rows,
-                stride,
-                self.format,
-            ).pipe_err()?))
+            Ok(Some(
+                Strip::new(leaked, self.width, rows, stride, self.format).pipe_err()?,
+            ))
         }
 
         fn width(&self) -> u32 {

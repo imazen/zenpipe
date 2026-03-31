@@ -44,7 +44,10 @@ fn limits_check_pixels_exceeded() {
     let limits = Limits::default().with_max_pixels(100);
     let result = limits.check(20, 20, format::RGBA8_SRGB);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err().into_inner(), PipeError::LimitExceeded(_)));
+    assert!(matches!(
+        result.unwrap_err().into_inner(),
+        PipeError::LimitExceeded(_)
+    ));
 }
 
 #[test]
@@ -274,7 +277,10 @@ fn tracker_exceeds_limit() {
     // 600 + 500 = 1100 > 1000
     let err = tracker.allocate(500);
     assert!(err.is_err());
-    assert!(matches!(err.unwrap_err().into_inner(), PipeError::LimitExceeded(_)));
+    assert!(matches!(
+        err.unwrap_err().into_inner(),
+        PipeError::LimitExceeded(_)
+    ));
 
     // Current should be unchanged (allocation was rejected)
     assert_eq!(tracker.current_bytes(), 600);
