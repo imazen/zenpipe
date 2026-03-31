@@ -9,7 +9,7 @@ use crate::float_math::F64Ext;
 
 use super::ParseWarning;
 use super::color::parse_color;
-use super::instructions::{Anchor1D, FitMode, Instructions, ScaleMode};
+use super::instructions::{Anchor1D, CFocus, FitMode, Instructions, ScaleMode};
 
 /// Known non-layout keys that should be preserved in `extras` without warnings.
 /// Sorted for binary search.
@@ -268,6 +268,37 @@ fn dispatch_key(key: &str, value: &str, inst: &mut Instructions, warnings: &mut 
                 });
             }
         }
+        "c.focus" => {
+            if let Some(f) = parse_c_focus(value) {
+                set_or_warn(&mut inst.c_focus, Some(f), key, value, warnings);
+            } else {
+                warnings.push(ParseWarning::ValueInvalid {
+                    key: "c.focus",
+                    value: String::from(value),
+                    reason: "expected faces|auto|x,y|x1,y1,x2,y2[,...]",
+                });
+            }
+        }
+        "c.zoom" => {
+            if let Some(b) = parse_bool(value) {
+                set_or_warn(&mut inst.c_zoom, Some(b), key, value, warnings);
+            } else {
+                warnings.push(ParseWarning::ValueInvalid {
+                    key: "c.zoom",
+                    value: String::from(value),
+                    reason: "expected true|false|1|0|yes|no|on|off",
+                });
+            }
+        }
+        "c.finalmode" => {
+            set_or_warn(
+                &mut inst.c_finalmode,
+                Some(String::from(value)),
+                key,
+                value,
+                warnings,
+            );
+        }
 
         // Background color
         "bgcolor" | "s.bgcolor" => {
@@ -421,6 +452,34 @@ fn parse_gravity(s: &str) -> Option<[f64; 2]> {
     }
 }
 
+/// Parse `c.focus` value: keywords, 2-value point, or groups-of-4 rects.
+fn parse_c_focus(s: &str) -> Option<CFocus> {
+    let trimmed = s.trim();
+    match trimmed.to_ascii_lowercase().as_str() {
+        "faces" => return Some(CFocus::Faces),
+        "auto" => return Some(CFocus::Auto),
+        _ => {}
+    }
+
+    let parts: Vec<&str> = trimmed.split(',').collect();
+    let values: Vec<f64> = parts
+        .iter()
+        .map(|p| p.trim().parse::<f64>().ok().filter(|v| v.is_finite()))
+        .collect::<Option<Vec<f64>>>()?;
+
+    match values.len() {
+        2 => Some(CFocus::Point([values[0], values[1]])),
+        n if n >= 4 && n % 4 == 0 => {
+            let rects = values
+                .chunks_exact(4)
+                .map(|c| [c[0], c[1], c[2], c[3]])
+                .collect();
+            Some(CFocus::Rects(rects))
+        }
+        _ => None,
+    }
+}
+
 /// Strict crop parsing: exactly 4 comma-separated f64 values.
 fn parse_crop_strict(s: &str) -> Option<[f64; 4]> {
     let parts: Vec<&str> = s.split(',').collect();
@@ -543,6 +602,9 @@ fn leak_key(key: &str) -> &'static str {
         "cropyunits" => "cropyunits",
         "anchor" => "anchor",
         "c.gravity" => "c.gravity",
+        "c.focus" => "c.focus",
+        "c.zoom" => "c.zoom",
+        "c.finalmode" => "c.finalmode",
         "bgcolor" => "bgcolor",
         "s.bgcolor" => "bgcolor",
         _ => "unknown",

@@ -32,7 +32,7 @@ pub mod instructions;
 mod parse;
 
 pub use color::parse_color;
-pub use instructions::{Anchor1D, FitMode, Instructions, ScaleMode};
+pub use instructions::{Anchor1D, CFocus, FitMode, Instructions, ScaleMode};
 
 use alloc::string::String;
 use alloc::vec::Vec;

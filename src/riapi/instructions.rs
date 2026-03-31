@@ -3,7 +3,25 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
+use alloc::vec::Vec;
+
 use crate::CanvasColor;
+
+/// Parsed `c.focus` value for smart cropping.
+///
+/// Specifies where the important content is so that cropping preserves it.
+/// Values are in percentage coordinates (0–100).
+#[derive(Debug, Clone, PartialEq)]
+pub enum CFocus {
+    /// Focal point `[x, y]` in percentage coords (0–100). Two-value form.
+    Point([f64; 2]),
+    /// Focus rectangles `[x1, y1, x2, y2]` in percentage coords (0–100).
+    Rects(Vec<[f64; 4]>),
+    /// Keyword: trigger face detection (requires ML backend).
+    Faces,
+    /// Keyword: trigger faces + saliency (requires ML backend).
+    Auto,
+}
 
 /// How to fit the image into the target dimensions.
 ///
@@ -89,6 +107,12 @@ pub struct Instructions {
     pub anchor: Option<(Anchor1D, Anchor1D)>,
     /// Crop gravity override as `[x%, y%]` (0–100).
     pub c_gravity: Option<[f64; 2]>,
+    /// Smart crop focus: point, rectangles, or ML keyword.
+    pub c_focus: Option<CFocus>,
+    /// Whether to zoom into the focus area (`c.zoom`).
+    pub c_zoom: Option<bool>,
+    /// Override fit mode after smart crop (`c.finalmode`).
+    pub c_finalmode: Option<String>,
     /// Crop rectangle as `[x1, y1, x2, y2]` in cropxunits/cropyunits space.
     pub crop: Option<[f64; 4]>,
     /// Crop X coordinate space (0 or absent = source pixels).
@@ -126,6 +150,9 @@ impl Instructions {
             autorotate: None,
             anchor: None,
             c_gravity: None,
+            c_focus: None,
+            c_zoom: None,
+            c_finalmode: None,
             crop: None,
             cropxunits: None,
             cropyunits: None,
@@ -153,6 +180,23 @@ impl Instructions {
 
         if let Some(z) = self.zoom {
             check(z)?;
+        }
+        if let Some(ref focus) = self.c_focus {
+            match focus {
+                CFocus::Point([x, y]) => {
+                    check(*x)?;
+                    check(*y)?;
+                }
+                CFocus::Rects(rects) => {
+                    for [a, b, c, d] in rects {
+                        check(*a)?;
+                        check(*b)?;
+                        check(*c)?;
+                        check(*d)?;
+                    }
+                }
+                CFocus::Faces | CFocus::Auto => {}
+            }
         }
         if let Some([x, y]) = self.c_gravity {
             check(x)?;
@@ -183,5 +227,30 @@ impl Instructions {
             }
         }
         Ok(())
+    }
+
+    /// Convert `c_focus` rects to [`FocusRect`](crate::smart_crop::FocusRect) values.
+    ///
+    /// Returns an empty vec for keywords, points, or `None`.
+    #[cfg(feature = "smart-crop")]
+    pub fn focus_rects(&self) -> Vec<crate::smart_crop::FocusRect> {
+        match &self.c_focus {
+            Some(CFocus::Rects(rects)) => rects
+                .iter()
+                .map(|[x1, y1, x2, y2]| crate::smart_crop::FocusRect {
+                    x1: *x1 as f32,
+                    y1: *y1 as f32,
+                    x2: *x2 as f32,
+                    y2: *y2 as f32,
+                    weight: 1.0,
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether `c_focus` requests ML detection (faces or auto keywords).
+    pub fn focus_needs_detection(&self) -> bool {
+        matches!(self.c_focus, Some(CFocus::Faces | CFocus::Auto))
     }
 }
