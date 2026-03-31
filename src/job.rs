@@ -440,6 +440,11 @@ impl<'a> ImageJob<'a> {
         ))
         .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
+        // Enforce dimension limits before decoding.
+        if let Some(ref limits) = self.limits {
+            limits.check_dimensions(image_info.width, image_info.height)?;
+        }
+
         let decode_info = DecodeInfo {
             io_id: self.decode_io_id,
             width: image_info.width,

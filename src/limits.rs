@@ -115,6 +115,35 @@ impl Limits {
         self
     }
 
+    /// Check dimensions and pixel count only (no memory estimate).
+    ///
+    /// Use before decoding when the pixel format is not yet known.
+    pub fn check_dimensions(&self, width: u32, height: u32) -> crate::PipeResult<()> {
+        if let Some(max_w) = self.max_width {
+            if width > max_w {
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                    "width {width} exceeds max {max_w}"
+                ))));
+            }
+        }
+        if let Some(max_h) = self.max_height {
+            if height > max_h {
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                    "height {height} exceeds max {max_h}"
+                ))));
+            }
+        }
+        let pixels = width as u64 * height as u64;
+        if let Some(max_px) = self.max_pixels {
+            if pixels > max_px {
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                    "pixel count {pixels} exceeds max {max_px}"
+                ))));
+            }
+        }
+        Ok(())
+    }
+
     /// Check whether an image of the given dimensions and format is within limits.
     ///
     /// Returns `Ok(())` if within limits, `Err(at!(PipeError::LimitExceeded))` otherwise.
