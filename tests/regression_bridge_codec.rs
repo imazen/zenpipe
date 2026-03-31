@@ -116,18 +116,20 @@ fn riapi_dpr_alias_produces_dpr_param() {
 
 #[test]
 fn riapi_format_auto_empty_string() {
-    // format= (empty) means auto-select.
+    // format= (empty) is a recognized key — the registry will consume it and
+    // create a QualityIntentNode with format="" (auto-select).
     let r = parse("format=");
     let q = find_node(&r.instances, "zencodecs.quality_intent");
-    // Empty format is the default — may or may not produce a node.
-    // If it does produce one, the format field should be empty.
-    if let Some(q) = q {
-        let fmt = get_str(q, "format").unwrap_or_default();
-        assert!(
-            fmt.is_empty(),
-            "format= (empty) should produce empty format field, got '{fmt}'"
-        );
-    }
+    assert!(
+        q.is_some(),
+        "format= (empty) should produce a quality_intent node (format is a recognized key)"
+    );
+    let q = q.unwrap();
+    let fmt = get_str(q, "format").unwrap_or_default();
+    assert!(
+        fmt.is_empty(),
+        "format= (empty) should produce empty format field, got '{fmt}'"
+    );
 }
 
 #[test]
