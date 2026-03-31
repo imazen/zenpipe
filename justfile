@@ -21,3 +21,11 @@ fmt-check:
 
 # Run all CI checks locally
 ci: fmt-check clippy test
+
+# Build documentation site
+site-build:
+    zola --root site build
+
+# Serve documentation site locally
+site-serve:
+    zola --root site serve --port 3100

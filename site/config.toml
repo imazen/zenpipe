@@ -1,0 +1,76 @@
+# Zenpipe Documentation
+# Built with Zola + Goyo theme
+
+base_url = "https://imazen.github.io/zenpipe"
+title = "Zenpipe"
+description = "Streaming pixel pipeline for Rust — zero-materialization image processing"
+
+theme = "goyo"
+
+build_search_index = true
+default_language = "en"
+generate_feeds = false
+generate_sitemap = true
+compile_sass = true
+
+taxonomies = [
+    { name = "tags", feed = false },
+    { name = "categories", feed = false },
+]
+
+[markdown]
+bottom_footnotes = true
+
+[markdown.highlighting]
+theme = "ayu-dark"
+
+[search]
+include_title = true
+include_description = true
+include_path = true
+include_content = true
+truncate_content_length = 200
+
+[extra]
+footer_html = "<span>Powered by <a href='https://www.getzola.org'>Zola</a> and <a href='https://github.com/hahwul/goyo'>Goyo</a></span>"
+default_thumbnail = ""
+gtag = ""
+
+nav = [
+    { name = "Docs", url = "/docs", type = "url", icon = "fa-solid fa-book" },
+    { name = "Nodes", url = "/nodes", type = "url", icon = "fa-solid fa-diagram-project" },
+    { name = "Formats", url = "/docs/formats", type = "url", icon = "fa-solid fa-image" },
+    { name = "Querystring", url = "/docs/querystring", type = "url", icon = "fa-solid fa-link" },
+    { name = "Links", type = "dropdown", icon = "fa-solid fa-link", members = [
+        { name = "GitHub", url = "https://github.com/imazen/zenpipe", type = "url", icon = "fa-brands fa-github" },
+        { name = "crates.io", url = "https://crates.io/crates/zenpipe", type = "url", icon = "fa-solid fa-cube" },
+        { name = "docs.rs", url = "https://docs.rs/zenpipe", type = "url", icon = "fa-solid fa-book-open" },
+    ] },
+]
+
+# Edit this page Configuration
+edit_url = "https://github.com/imazen/zenpipe/edit/main/site"
+issue_url = "https://github.com/imazen/zenpipe/issues"
+
+# Logo
+[extra.logo]
+text = "Zenpipe"
+
+# Theme
+[extra.theme]
+colorset = "dark"
+brightness = "normal"
+disable_toggle = false
+default_theme_dark = "goyo-dark"
+default_theme_light = "goyo-light"
+
+# Sidebar
+[extra.sidebar]
+expand_depth = 2
+disable_root_hide = false
+enable_desktop_menu = true
+
+# Share
+[extra.share]
+copy_url = true
+x = false
