@@ -491,13 +491,13 @@ impl NodeConverter for TestFilterConverter {
     fn can_convert(&self, schema_id: &str) -> bool {
         schema_id.starts_with("zenfilters.")
     }
-    fn convert(&self, _node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, _node: &dyn NodeInstance) -> zenpipe::PipeResult<NodeOp> {
         Ok(NodeOp::PixelTransform(Box::new(IdentityOp)))
     }
-    fn convert_group(&self, _nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, _nodes: &[&dyn NodeInstance]) -> zenpipe::PipeResult<NodeOp> {
         Ok(NodeOp::PixelTransform(Box::new(IdentityOp)))
     }
-    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> zenpipe::PipeResult<Option<NodeOp>> {
         if nodes.len() >= 2 {
             // Simulate FusedAdjust: multiple filter nodes → single PixelTransform
             Ok(Some(NodeOp::PixelTransform(Box::new(IdentityOp))))

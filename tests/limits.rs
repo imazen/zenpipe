@@ -44,7 +44,7 @@ fn limits_check_pixels_exceeded() {
     let limits = Limits::default().with_max_pixels(100);
     let result = limits.check(20, 20, format::RGBA8_SRGB);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), PipeError::LimitExceeded(_)));
+    assert!(matches!(result.unwrap_err().into_inner(), PipeError::LimitExceeded(_)));
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn materialize_checked_exceeds_limits() {
     let limits = Limits::default().with_max_pixels(10);
     let src = solid_source(4, 4); // 16 pixels > 10
     let result = MaterializedSource::from_source_checked(src, &limits);
-    assert!(matches!(result, Err(PipeError::LimitExceeded(_))));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::LimitExceeded(_))));
 }
 
 // =========================================================================
@@ -113,7 +113,7 @@ fn tee_checked_exceeds_limits() {
     let limits = Limits::default().with_max_pixels(10);
     let src = solid_source(4, 4);
     let result = TeeSource::new_checked(src, &limits);
-    assert!(matches!(result, Err(PipeError::LimitExceeded(_))));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::LimitExceeded(_))));
 }
 
 // =========================================================================
@@ -156,7 +156,7 @@ fn execute_with_stop_cancels() {
     let mut sink = CollectSink::new();
     let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &stop);
 
-    assert!(matches!(result, Err(PipeError::Cancelled)));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
     // Should have processed some but not all data.
     assert!(sink.bytes < 4 * 100 * 4);
 }
@@ -181,11 +181,11 @@ impl CollectSink {
 }
 
 impl zenpipe::Sink for CollectSink {
-    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> zenpipe::PipeResult<()> {
         self.bytes += strip.as_strided_bytes().len();
         Ok(())
     }
-    fn finish(&mut self) -> Result<(), PipeError> {
+    fn finish(&mut self) -> zenpipe::PipeResult<()> {
         Ok(())
     }
 }
@@ -226,7 +226,7 @@ fn check_frames_within_limit() {
 fn check_frames_exceeds_limit() {
     let limits = Limits::default().with_max_frames(100);
     let err = limits.check_frames(101);
-    assert!(matches!(err, Err(PipeError::LimitExceeded(_))));
+    assert!(err.is_err_and(|e| matches!(e.error(), PipeError::LimitExceeded(_))));
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn tracker_exceeds_limit() {
     // 600 + 500 = 1100 > 1000
     let err = tracker.allocate(500);
     assert!(err.is_err());
-    assert!(matches!(err.unwrap_err(), PipeError::LimitExceeded(_)));
+    assert!(matches!(err.unwrap_err().into_inner(), PipeError::LimitExceeded(_)));
 
     // Current should be unchanged (allocation was rejected)
     assert_eq!(tracker.current_bytes(), 600);
@@ -388,5 +388,5 @@ fn deadline_compose_with_execute() {
     let mut src = solid_source(4, 100);
     let mut sink = CollectSink::new();
     let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &deadline);
-    assert!(matches!(result, Err(PipeError::Cancelled)));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
 }

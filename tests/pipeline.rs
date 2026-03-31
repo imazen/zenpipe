@@ -281,12 +281,12 @@ impl CollectSink {
 }
 
 impl zenpipe::Sink for CollectSink {
-    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> zenpipe::PipeResult<()> {
         self.data.extend_from_slice(strip.as_strided_bytes());
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), PipeError> {
+    fn finish(&mut self) -> zenpipe::PipeResult<()> {
         self.finished = true;
         Ok(())
     }

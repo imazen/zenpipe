@@ -846,13 +846,16 @@ fn graph_materialize_custom_transform() {
     // Materialize and invert all pixel values
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let mat = g.add_node(NodeOp::Materialize(Box::new(
-        |data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {
-            for byte in data.iter_mut() {
-                *byte = 255 - *byte;
-            }
-        },
-    )));
+    let mat = g.add_node(NodeOp::Materialize {
+        label: "test_invert",
+        transform: Box::new(
+            |data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {
+                for byte in data.iter_mut() {
+                    *byte = 255 - *byte;
+                }
+            },
+        ),
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, mat, EdgeKind::Input);
     g.add_edge(mat, out, EdgeKind::Input);
@@ -872,21 +875,24 @@ fn graph_materialize_resize_dimensions() {
     // Materialize and change dimensions
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let mat = g.add_node(NodeOp::Materialize(Box::new(
-        |data: &mut Vec<u8>, w: &mut u32, h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {
-            // Crop to 2x2 (take top-left corner)
-            let old_w = *w as usize;
-            let bpp = 4;
-            let mut new_data = Vec::new();
-            for y in 0..2usize {
-                let row_start = y * old_w * bpp;
-                new_data.extend_from_slice(&data[row_start..row_start + 2 * bpp]);
-            }
-            *data = new_data;
-            *w = 2;
-            *h = 2;
-        },
-    )));
+    let mat = g.add_node(NodeOp::Materialize {
+        label: "test_crop_2x2",
+        transform: Box::new(
+            |data: &mut Vec<u8>, w: &mut u32, h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {
+                // Crop to 2x2 (take top-left corner)
+                let old_w = *w as usize;
+                let bpp = 4;
+                let mut new_data = Vec::new();
+                for y in 0..2usize {
+                    let row_start = y * old_w * bpp;
+                    new_data.extend_from_slice(&data[row_start..row_start + 2 * bpp]);
+                }
+                *data = new_data;
+                *w = 2;
+                *h = 2;
+            },
+        ),
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, mat, EdgeKind::Input);
     g.add_edge(mat, out, EdgeKind::Input);
@@ -993,7 +999,7 @@ fn graph_analyze_custom_analysis() {
     // Analyze: materialize, inspect, return as-is
     let mut g = PipelineGraph::new();
     let src_node = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource| {
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
         // Just verify we got the right dimensions and pass through
         assert_eq!(mat.width(), 4);
         assert_eq!(mat.height(), 4);
@@ -1021,7 +1027,7 @@ fn graph_analyze_modifies_pipeline() {
     // Analyze: materialize, then crop via returned source
     let mut g = PipelineGraph::new();
     let src_node = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource| {
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
         // Crop to 2x2 from the materialized source
         use zenpipe::sources::CropSource;
         Ok(Box::new(CropSource::new(Box::new(mat), 1, 1, 2, 2)?) as Box<dyn Source>)
@@ -1226,9 +1232,12 @@ fn estimate_add_alpha() {
 fn estimate_materialize() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let mat = g.add_node(NodeOp::Materialize(Box::new(
-        |_data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {},
-    )));
+    let mat = g.add_node(NodeOp::Materialize {
+        label: "test_noop",
+        transform: Box::new(
+            |_data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut zenpipe::PixelFormat| {},
+        ),
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, mat, EdgeKind::Input);
     g.add_edge(mat, out, EdgeKind::Input);
@@ -1281,7 +1290,7 @@ fn estimate_crop_whitespace() {
 fn estimate_analyze() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource| {
+    let analyze = g.add_node(NodeOp::Analyze(Box::new(|mat: MaterializedSource, _trace| {
         Ok(Box::new(mat) as Box<dyn Source>)
     })));
     let out = g.add_node(NodeOp::Output);

@@ -429,13 +429,16 @@ fn crop_then_orient_chain() {
 fn materialize_custom_graph() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let mat = g.add_node(NodeOp::Materialize(Box::new(
-        |data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut PixelFormat| {
-            for byte in data.iter_mut() {
-                *byte = 255 - *byte;
-            }
-        },
-    )));
+    let mat = g.add_node(NodeOp::Materialize {
+        label: "test_invert",
+        transform: Box::new(
+            |data: &mut Vec<u8>, _w: &mut u32, _h: &mut u32, _fmt: &mut PixelFormat| {
+                for byte in data.iter_mut() {
+                    *byte = 255 - *byte;
+                }
+            },
+        ),
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, mat, EdgeKind::Input);
     g.add_edge(mat, out, EdgeKind::Input);

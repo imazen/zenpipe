@@ -39,7 +39,7 @@ impl SyntheticSource {
 }
 
 impl Source for SyntheticSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> zenpipe::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -53,7 +53,7 @@ impl Source for SyntheticSource {
             rows,
             stride,
             format::RGBAF32_LINEAR,
-        )?))
+        ).expect("valid strip dimensions")))
     }
     fn width(&self) -> u32 {
         self.width
@@ -66,7 +66,7 @@ impl Source for SyntheticSource {
     }
 }
 
-fn drain(source: &mut dyn Source) -> Result<u32, PipeError> {
+fn drain(source: &mut dyn Source) -> zenpipe::PipeResult<u32> {
     let mut total = 0u32;
     while let Some(strip) = source.next()? {
         total += strip.rows();

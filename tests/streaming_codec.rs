@@ -181,7 +181,7 @@ fn codec_bridge_roundtrip() {
     };
 
     let mut source =
-        DecoderSource::new(streaming, format::RGBA8_SRGB).expect("DecoderSource creation");
+        DecoderSource::new(streaming).expect("DecoderSource creation");
     assert_eq!(source.width(), w);
     assert_eq!(source.height(), h);
 
