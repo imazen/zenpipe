@@ -149,7 +149,7 @@ All supported querystring keys for image processing URLs.
 | `jxl.quality` | `jxl.q` | number | JXL Quality |
 | `jxl.distance` | `jxl.d` | number | Distance |
 | `jxl.lossless` | — | boolean | Lossless |
-| `jxl.effort` | `jxl.e` | integer | Effort |
+| `jxl.effort` | `jxl.e` | integer | Generic effort (0 = fastest, 10 = best compression).  Mapped to libjxl speed tiers: 0-1 map to tier 1 (Lightning), 10 maps to tier 10 (Tortoise). |
 | `jxl.noise` | — | boolean | Noise |
 
 ### [Orient](nodes/zenlayout-orient.md)

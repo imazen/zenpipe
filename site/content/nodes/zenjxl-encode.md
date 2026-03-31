@@ -28,7 +28,7 @@ JPEG XL encoder configuration.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `effort` | int (1 – 10) | 7 | Effort *(optional)* |
+| `effort` | int (0 – 10) | 7 | Generic effort (0 = fastest, 10 = best compression).  Mapped to libjxl speed tiers: 0-1 map to tier 1 (Lightning), 10 maps to tier 10 (Tortoise). *(optional)* |
 
 ### Mode
 
