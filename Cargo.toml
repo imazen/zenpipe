@@ -17,15 +17,15 @@ srgb-filters = ["dep:rgb", "zenpixels/rgb"]
 zennode = ["dep:zennode"]
 
 [dependencies]
-archmage = { version = "0.9.14", features = ["avx512"] }
+archmage = { version = "0.9.15", features = ["avx512"] }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
-linear-srgb = "0.6.5"
-magetypes = "0.9.14"
+linear-srgb = "0.6.6"
+magetypes = "0.9.15"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
 zenpixels = { version = "0.2.1", features = ["planar"] }
-whereat = "0.1.4"
+whereat = "0.1.5"
 zennode = { version = "0.1", path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 zenpixels-convert = { version = "0.2.1" }
 
@@ -39,7 +39,7 @@ enough = "0.4"
 zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 libblur = { version = "0.23", default-features = true }
 zenresize = { version = "0.2", path = "../zenresize", default-features = false, features = ["std"] }
-zensim = { version = "0.2.3", default-features = false }
+zensim = { version = "0.2.4", default-features = false }
 zenpixels = { version = "0.2.1", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.2.1", features = ["planar"] }
 
