@@ -77,7 +77,7 @@ zencodec = { version = "0.1.8", default-features = false }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
-whereat = { version = "0.1.4", default-features = false }
+whereat = { version = "0.1.5", default-features = false }
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
 linear-srgb = { path = "../linear-srgb", default-features = false }
 # f32 ↔ u8 reinterpretation
