@@ -1,7 +1,7 @@
 +++
 title = "Remove Alpha"
 description = "zenpipe.remove_alpha — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = ["alpha", "matte", "composite", "flatten"]
@@ -10,6 +10,7 @@ tags = ["alpha", "matte", "composite", "flatten"]
 node_id = "zenpipe.remove_alpha"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Remove alpha channel by compositing onto a solid matte color.  Produces RGB output suitable for JPEG encoding. The compositing is done in sRGB space (matching browser behavior for CSS background-color).  JSON: `{ "matte_r": 255, "matte_g": 255, "matte_b": 255 }`

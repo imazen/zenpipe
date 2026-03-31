@@ -1,7 +1,7 @@
 +++
 title = "Quantize"
 description = "zenquant.quantize — quantize node"
-weight = 150
+weight = 600
 
 [taxonomies]
 tags = ["quantize", "palette", "indexed"]
@@ -10,9 +10,15 @@ tags = ["quantize", "palette", "indexed"]
 node_id = "zenquant.quantize"
 role = "quantize"
 group = "quantize"
+stage = "Quantize"
 +++
 
 Palette quantization with perceptual masking.
+
+
+## Accepted Values
+
+- **`quality`**: `best`, `good`, `balanced`, `speed`, `fastest`
 
 ## Parameters
 

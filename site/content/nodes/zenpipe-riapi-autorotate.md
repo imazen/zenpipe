@@ -1,7 +1,7 @@
 +++
 title = "Auto-Rotate (RIAPI)"
 description = "zenpipe.riapi.autorotate — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["autorotate", "exif", "riapi", "adapter"]
@@ -10,6 +10,7 @@ tags = ["autorotate", "exif", "riapi", "adapter"]
 node_id = "zenpipe.riapi.autorotate"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Apply EXIF orientation correction via querystring

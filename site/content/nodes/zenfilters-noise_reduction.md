@@ -1,7 +1,7 @@
 +++
 title = "Noise Reduction"
 description = "zenfilters.noise_reduction — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.noise_reduction"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Wavelet-based luminance and chroma noise reduction.  Uses an a trous wavelet decomposition with soft thresholding. Chroma denoising uses a higher effective threshold since chroma noise is typically more objectionable.

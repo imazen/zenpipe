@@ -1,7 +1,7 @@
 +++
 title = "Grain"
 description = "zenfilters.grain — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.grain"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Film grain simulation with luminance-adaptive response.  Adds synthetic grain to the luminance channel. Grain intensity varies with luminance: stronger in midtones, weaker in deep shadows and bright highlights, like real film.

@@ -1,7 +1,7 @@
 +++
 title = "Devignette"
 description = "zenfilters.devignette — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = ["lens", "correction", "vignette"]
@@ -10,6 +10,7 @@ tags = ["lens", "correction", "vignette"]
 node_id = "zenfilters.devignette"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Lens vignetting correction (devignette).  Compensates for the natural light falloff at the edges of a lens. Applies a radial brightness correction that increases toward the corners, based on the cos^4 law of illumination falloff.

@@ -1,7 +1,7 @@
 +++
 title = "Decode Jpeg"
 description = "zenjpeg.decode — decode node"
-weight = 10
+weight = 100
 
 [taxonomies]
 tags = ["jpeg", "jpg", "decode"]
@@ -10,9 +10,15 @@ tags = ["jpeg", "jpg", "decode"]
 node_id = "zenjpeg.decode"
 role = "decode"
 group = "decode"
+stage = "Decode"
 +++
 
 JPEG decoder configuration.
+
+
+## Accepted Values
+
+- **`strictness`**: `strict`, `balanced`, `permissive`
 
 ## Parameters
 

@@ -1,7 +1,7 @@
 +++
 title = "Edge Detect"
 description = "zenfilters.edge_detect — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = ["edge", "detect", "sobel", "canny"]
@@ -10,9 +10,15 @@ tags = ["edge", "detect", "sobel", "canny"]
 node_id = "zenfilters.edge_detect"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Edge detection on the L (lightness) channel.  Replaces L with gradient magnitude (Sobel/Laplacian) or binary edges (Canny), normalized to [0, 1]. Chroma channels are zeroed to produce a grayscale edge map.
+
+
+## Accepted Values
+
+- **`mode`**: `0 (Sobel)`, `1 (Laplacian)`, `2 (Canny)`
 
 ## Parameters
 

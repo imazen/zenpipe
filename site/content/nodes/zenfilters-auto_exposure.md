@@ -1,7 +1,7 @@
 +++
 title = "Auto Exposure"
 description = "zenfilters.auto_exposure — filter node"
-weight = 130
+weight = 400
 
 [taxonomies]
 tags = ["auto", "exposure", "normalize"]
@@ -10,6 +10,7 @@ tags = ["auto", "exposure", "normalize"]
 node_id = "zenfilters.auto_exposure"
 role = "filter"
 group = "auto"
+stage = "Filters"
 +++
 
 Automatic exposure correction by normalizing to a target middle grey.  Measures the geometric mean of L (log-average luminance) and applies exposure correction to bring it to the target. The geometric mean is robust against small bright areas that would bias an arithmetic mean.

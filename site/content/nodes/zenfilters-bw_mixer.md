@@ -1,7 +1,7 @@
 +++
 title = "Bw Mixer"
 description = "zenfilters.bw_mixer — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = ["color", "grayscale", "bw"]
@@ -10,6 +10,7 @@ tags = ["color", "grayscale", "bw"]
 node_id = "zenfilters.bw_mixer"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Grayscale conversion with per-color luminance weights

@@ -1,7 +1,7 @@
 +++
 title = "Round Corners"
 description = "zenpipe.round_corners — filter node"
-weight = 100
+weight = 400
 
 [taxonomies]
 tags = ["corners", "rounded", "mask", "border-radius"]
@@ -10,9 +10,15 @@ tags = ["corners", "rounded", "mask", "border-radius"]
 node_id = "zenpipe.round_corners"
 role = "filter"
 group = "canvas"
+stage = "Filters"
 +++
 
 Apply rounded corners with anti-aliased masking.  Generates a `RoundedRectMask` (via zenblend) and applies it to the alpha channel. Transparent corners reveal the background color, or remain transparent for PNG/WebP/AVIF output.  Supports uniform radius, per-corner radii, percentage-based radii, and circle mode (elliptical crop for non-square images).  JSON: `{ "radius": 20.0, "bg_color": [0, 0, 0, 0] }`
+
+
+## Accepted Values
+
+- **`mode`**: `pixels`, `percentage`, `circle`, `per_corner`
 
 ## Parameters
 

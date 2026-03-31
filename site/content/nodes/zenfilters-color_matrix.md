@@ -1,7 +1,7 @@
 +++
 title = "Color Matrix"
 description = "zenfilters.color_matrix — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.color_matrix"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 5x5 color matrix applied in linear RGB space.  Transforms `[R, G, B, A, 1]` -> `[R', G', B', A', 1]` using a row-major 5x5 matrix (25 elements). The 5th column is the bias/offset. The filter converts Oklab -> linear RGB, applies the matrix, then converts back.

@@ -1,7 +1,7 @@
 +++
 title = "Output Limits"
 description = "zenlayout.output_limits — resize node"
-weight = 140
+weight = 300
 
 [taxonomies]
 tags = ["limits", "alignment", "layout", "codec"]
@@ -10,6 +10,7 @@ tags = ["limits", "alignment", "layout", "codec"]
 node_id = "zenlayout.output_limits"
 role = "resize"
 group = "layout"
+stage = "Resize & Layout"
 +++
 
 Safety limits and codec alignment for output dimensions.  Constrains the final output to max/min dimension bounds and optionally aligns dimensions to codec block boundaries (e.g., MCU multiples for JPEG).  Processing order: max (scale down) → min (scale up) → align (snap). Max always wins over min if they conflict.  JSON: `{ "max_w": 4096, "max_h": 4096, "align_x": 16, "align_y": 16, "align_mode": "extend" }`

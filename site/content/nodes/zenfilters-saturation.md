@@ -1,7 +1,7 @@
 +++
 title = "Saturation"
 description = "zenfilters.saturation — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.saturation"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Uniform chroma scaling on Oklab a/b channels.  Scales chroma by a constant factor. 1.0 = no change, 0.0 = grayscale, 2.0 = double saturation.

@@ -1,7 +1,7 @@
 +++
 title = "Parametric Curve"
 description = "zenfilters.parametric_curve — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.parametric_curve"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 Parametric tone curve with 4 zone controls and 3 movable dividers.  Zone-based control similar to Lightroom's parametric tone curve panel. Each zone slider pushes the curve up or down within its region.

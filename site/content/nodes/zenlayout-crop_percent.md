@@ -1,7 +1,7 @@
 +++
 title = "Crop Percent"
 description = "zenlayout.crop_percent — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["crop", "geometry"]
@@ -10,6 +10,7 @@ tags = ["crop", "geometry"]
 node_id = "zenlayout.crop_percent"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Crop the image using percentage-based coordinates.  All coordinates are fractions of source dimensions (0.0 = origin, 1.0 = full extent). For example, `x=0.1, y=0.1, w=0.8, h=0.8` removes 10% from each edge.  JSON: `{ "x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8 }`

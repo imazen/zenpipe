@@ -1,7 +1,7 @@
 +++
 title = "Decode Jxl"
 description = "zenjxl.decode — decode node"
-weight = 10
+weight = 100
 
 [taxonomies]
 tags = ["jxl", "jpeg-xl", "decode", "codec"]
@@ -10,6 +10,7 @@ tags = ["jxl", "jpeg-xl", "decode", "codec"]
 node_id = "zenjxl.decode"
 role = "decode"
 group = "decode"
+stage = "Decode"
 +++
 
 JPEG XL decoder configuration.

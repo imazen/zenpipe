@@ -1,7 +1,7 @@
 +++
 title = "Levels"
 description = "zenfilters.levels — filter node"
-weight = 70
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.levels"
 role = "filter"
 group = "tone_map"
+stage = "Filters"
 +++
 
 Input/output range remapping with gamma correction.  The classic Photoshop/Lightroom Levels dialog: clip input range, adjust midtone gamma, and remap output range.

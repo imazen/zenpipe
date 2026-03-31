@@ -1,7 +1,7 @@
 +++
 title = "Shadow Lift"
 description = "zenfilters.shadow_lift — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.shadow_lift"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Automatic toe-curve recovery for crushed shadows.  Analyzes the L histogram to detect crushed shadow content, then applies a proportional toe lift curve. Images with properly exposed shadows are barely affected.

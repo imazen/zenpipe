@@ -1,7 +1,7 @@
 +++
 title = "Median Blur"
 description = "zenfilters.median_blur — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = ["median", "denoise", "impulse", "edge-preserving"]
@@ -10,6 +10,7 @@ tags = ["median", "denoise", "impulse", "edge-preserving"]
 node_id = "zenfilters.median_blur"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Median filter for impulse noise removal (preserves edges).  Replaces each pixel with the median of its neighborhood. Unlike Gaussian blur, the median filter preserves edges while removing salt-and-pepper noise.

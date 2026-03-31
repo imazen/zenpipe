@@ -1,7 +1,7 @@
 +++
 title = "Fill Rect"
 description = "zenpipe.fill_rect — filter node"
-weight = 100
+weight = 400
 
 [taxonomies]
 tags = ["fill", "rect", "draw", "canvas"]
@@ -10,6 +10,7 @@ tags = ["fill", "rect", "draw", "canvas"]
 node_id = "zenpipe.fill_rect"
 role = "filter"
 group = "canvas"
+stage = "Filters"
 +++
 
 Fill a rectangle with a solid color.  Materializes the upstream image, draws the rectangle, then re-streams.  JSON: `{ "x1": 10, "y1": 10, "x2": 100, "y2": 100, "color": [255, 0, 0, 255] }`

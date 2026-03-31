@@ -1,7 +1,7 @@
 +++
 title = "White Point"
 description = "zenfilters.white_point — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.white_point"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 White point adjustment on Oklab L channel.  Scales the L range so that `level` maps to L=1.0. Values < 1.0 brighten highlights; values > 1.0 extend the dynamic range. Optional soft-clip headroom compresses super-whites instead of hard clipping.

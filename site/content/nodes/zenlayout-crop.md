@@ -1,7 +1,7 @@
 +++
 title = "Crop"
 description = "zenlayout.crop — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["crop", "geometry"]
@@ -10,6 +10,7 @@ tags = ["crop", "geometry"]
 node_id = "zenlayout.crop"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Crop the image to a pixel rectangle.  Specifies origin (x, y) and dimensions (w, h) in post-orientation source coordinates. For percentage-based cropping, use [`CropPercent`] or [`CropMargins`] instead.  RIAPI: `?crop=10,10,90,90` JSON: `{ "x": 10, "y": 10, "w": 80, "h": 80 }`

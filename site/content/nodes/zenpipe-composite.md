@@ -1,7 +1,7 @@
 +++
 title = "Composite"
 description = "zenpipe.composite — composite node"
-weight = 110
+weight = 500
 
 [taxonomies]
 tags = ["composite", "blend", "overlay"]
@@ -10,6 +10,7 @@ tags = ["composite", "blend", "overlay"]
 node_id = "zenpipe.composite"
 role = "composite"
 group = "composite"
+stage = "Composite"
 +++
 
 Composite a foreground image onto a background at a position.  Two inputs required: - **background** (Canvas edge): the base image to draw onto - **foreground** (Input edge): the image being composited  Both inputs are auto-converted to premultiplied linear f32. Default blend mode is Porter-Duff source-over.
@@ -20,6 +21,11 @@ Composite a foreground image onto a background at a position.  Two inputs requir
 |------|-------|-----------|----------|
 | `canvas` | Background canvas | canvas | Yes |
 | `input` | Foreground image | input | Yes |
+
+
+## Accepted Values
+
+- **`blend_mode`**: `source_over`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color_dodge`, `color_burn`, `hard_light`, `soft_light`, `difference`, `exclusion`
 
 ## Parameters
 

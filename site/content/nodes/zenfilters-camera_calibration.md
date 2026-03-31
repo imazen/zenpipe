@@ -1,7 +1,7 @@
 +++
 title = "Camera Calibration"
 description = "zenfilters.camera_calibration — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.camera_calibration"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Camera calibration -- primary color hue and saturation calibration with shadow tint.  Equivalent to Lightroom's Camera Calibration panel. Adjusts how the camera's RGB primaries map to final color.

@@ -1,7 +1,7 @@
 +++
 title = "Temperature"
 description = "zenfilters.temperature — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.temperature"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Color temperature adjustment (warm/cool) via Oklab b shift.  Positive values warm the image (shift toward yellow/orange). Negative values cool it (shift toward blue).

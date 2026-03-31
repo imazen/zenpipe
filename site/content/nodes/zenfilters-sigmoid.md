@@ -1,7 +1,7 @@
 +++
 title = "Sigmoid"
 description = "zenfilters.sigmoid — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.sigmoid"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 S-curve tone mapping with skew and chroma compression.  Uses the generalized sigmoid f(x) = x^c / (x^c + (1-x)^c). Contrast controls steepness, skew shifts the midpoint, and chroma_compression adapts saturation to luminance changes.

@@ -1,7 +1,7 @@
 +++
 title = "Adaptive Sharpen"
 description = "zenfilters.adaptive_sharpen — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.adaptive_sharpen"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Noise-gated sharpening with detail and masking controls.  Measures local texture energy and only sharpens where there is actual detail to enhance, leaving flat areas (sky, skin) unaffected.

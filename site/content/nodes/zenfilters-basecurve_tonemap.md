@@ -1,7 +1,7 @@
 +++
 title = "Basecurve Tone Map"
 description = "zenfilters.basecurve_tonemap — filter node"
-weight = 70
+weight = 400
 
 [taxonomies]
 tags = ["tonemap", "camera", "basecurve"]
@@ -10,9 +10,15 @@ tags = ["tonemap", "camera", "basecurve"]
 node_id = "zenfilters.basecurve_tonemap"
 role = "filter"
 group = "tone_map"
+stage = "Filters"
 +++
 
 Camera-matched basecurve tone mapping from darktable presets
+
+
+## Accepted Values
+
+- **`preset`**: `linear`, `film_like`, `nikon`, `canon`, `sony`
 
 ## Parameters
 

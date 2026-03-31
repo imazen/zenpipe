@@ -1,7 +1,7 @@
 +++
 title = "Gamut Expand"
 description = "zenfilters.gamut_expand — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = ["color", "gamut", "p3", "wide"]
@@ -10,6 +10,7 @@ tags = ["color", "gamut", "p3", "wide"]
 node_id = "zenfilters.gamut_expand"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Hue-selective chroma boost simulating wider color gamuts (P3).  Selectively boosts chroma in hue regions where Display P3 extends beyond sRGB, producing vivid reds, richer greens, and punchier oranges. Already-saturated colors get less boost (vibrance-style protection).

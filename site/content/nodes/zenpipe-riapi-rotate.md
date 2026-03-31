@@ -1,7 +1,7 @@
 +++
 title = "Rotate (RIAPI)"
 description = "zenpipe.riapi.rotate — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["rotate", "riapi", "adapter"]
@@ -10,6 +10,7 @@ tags = ["rotate", "riapi", "adapter"]
 node_id = "zenpipe.riapi.rotate"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Rotate image by 90/180/270 degrees via querystring

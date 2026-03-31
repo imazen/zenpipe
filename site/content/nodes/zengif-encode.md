@@ -1,7 +1,7 @@
 +++
 title = "Encode Gif"
 description = "zengif.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["gif", "encode", "animation", "palette"]
@@ -10,9 +10,16 @@ tags = ["gif", "encode", "animation", "palette"]
 node_id = "zengif.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 GIF encoder settings.
+
+
+## Accepted Values
+
+- **`quantizer`**: `auto`, `zenquant`, `quantette`, `quantizr`, `web`, `solid`
+- **`loop_count`**: `infinite`, `0`, `1`, `...`
 
 ## Parameters
 

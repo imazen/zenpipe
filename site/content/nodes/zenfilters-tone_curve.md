@@ -1,7 +1,7 @@
 +++
 title = "Tone Curve"
 description = "zenfilters.tone_curve — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = ["tone", "curve"]
@@ -10,6 +10,7 @@ tags = ["tone", "curve"]
 node_id = "zenfilters.tone_curve"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 Arbitrary tone curve via control points with cubic spline interpolation  Control points define an input→output mapping on the L channel. Points are encoded as a comma-separated string of "x:y" pairs, e.g., "0.0:0.0,0.25:0.15,0.75:0.85,1.0:1.0". The execution layer parses this and calls ToneCurve::from_points().

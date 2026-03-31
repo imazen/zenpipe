@@ -1,7 +1,7 @@
 +++
 title = "Black Point"
 description = "zenfilters.black_point — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.black_point"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Black point adjustment on Oklab L channel.  Remaps the shadow floor. A black point of 0.05 means values that were L=0.05 become L=0.0, and the range is stretched accordingly.

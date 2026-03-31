@@ -1,7 +1,7 @@
 +++
 title = "DtSigmoid"
 description = "zenfilters.dt_sigmoid — filter node"
-weight = 70
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.dt_sigmoid"
 role = "filter"
 group = "tone_map"
+stage = "Filters"
 +++
 
 darktable-compatible sigmoid tone mapper.  Implements the generalized log-logistic sigmoid from darktable's sigmoid module. Operates per-channel in linear RGB space (not Oklab).

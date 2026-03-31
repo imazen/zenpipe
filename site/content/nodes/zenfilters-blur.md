@@ -1,7 +1,7 @@
 +++
 title = "Blur"
 description = "zenfilters.blur — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = ["blur", "smooth", "gaussian"]
@@ -10,6 +10,7 @@ tags = ["blur", "smooth", "gaussian"]
 node_id = "zenfilters.blur"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Full-image Gaussian blur across all Oklab channels.  Unlike the L-only blur used internally by clarity/sharpen, this blurs the entire image (L, a, b, and alpha). Blurring in Oklab avoids the darkening artifacts that sRGB gamma-space blurs produce at color boundaries.

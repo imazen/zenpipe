@@ -1,7 +1,7 @@
 +++
 title = "Highlights / Shadows"
 description = "zenfilters.highlights_shadows — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.highlights_shadows"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Targeted highlight recovery and shadow lift.  Positive highlights compresses bright areas (recovery). Positive shadows lifts dark areas (fill light). Custom thresholds control where transitions begin.

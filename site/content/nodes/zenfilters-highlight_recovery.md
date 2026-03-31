@@ -1,7 +1,7 @@
 +++
 title = "Highlight Recovery"
 description = "zenfilters.highlight_recovery — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.highlight_recovery"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Automatic soft-clip recovery for blown highlights.  Analyzes the L histogram to detect blown highlight content, then applies a proportional soft knee compression. Images with properly exposed highlights are barely affected.

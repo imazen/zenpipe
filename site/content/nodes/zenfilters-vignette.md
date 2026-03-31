@@ -1,7 +1,7 @@
 +++
 title = "Vignette"
 description = "zenfilters.vignette — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.vignette"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Post-crop vignette: darken or lighten image edges.  Applies a radial falloff from center to edges. Positive strength darkens edges (classic vignette), negative brightens.

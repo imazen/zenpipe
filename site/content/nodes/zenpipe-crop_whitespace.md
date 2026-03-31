@@ -1,7 +1,7 @@
 +++
 title = "Crop Whitespace"
 description = "zenpipe.crop_whitespace — resize node"
-weight = 120
+weight = 300
 
 [taxonomies]
 tags = ["crop", "whitespace", "trim", "content", "analysis"]
@@ -10,6 +10,7 @@ tags = ["crop", "whitespace", "trim", "content", "analysis"]
 node_id = "zenpipe.crop_whitespace"
 role = "resize"
 group = "analysis"
+stage = "Resize & Layout"
 +++
 
 Detect and crop uniform borders (whitespace trimming).  Materializes the upstream image, scans inward from each edge to find where pixel values diverge from the border color, then crops to the detected content bounds plus optional padding.  RIAPI: `?trim.threshold=80&trim.percentpadding=0.5` JSON: `{ "threshold": 80, "percent_padding": 0.5 }`

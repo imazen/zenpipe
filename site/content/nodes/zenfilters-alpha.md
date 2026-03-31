@@ -1,7 +1,7 @@
 +++
 title = "Alpha"
 description = "zenfilters.alpha — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.alpha"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Alpha channel scaling for transparency adjustment.  Multiplies all alpha values by a constant factor. Useful for fade effects or global opacity changes. If no alpha channel exists, this is a no-op.

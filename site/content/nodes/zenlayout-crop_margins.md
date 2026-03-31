@@ -1,7 +1,7 @@
 +++
 title = "Crop Margins"
 description = "zenlayout.crop_margins — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["crop", "margins", "geometry"]
@@ -10,6 +10,7 @@ tags = ["crop", "margins", "geometry"]
 node_id = "zenlayout.crop_margins"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Crop the image by removing percentage-based margins from each side.  Each value is a fraction of the corresponding source dimension to remove. CSS-style ordering: top, right, bottom, left.  JSON: `{ "top": 0.1, "right": 0.05, "bottom": 0.1, "left": 0.05 }`

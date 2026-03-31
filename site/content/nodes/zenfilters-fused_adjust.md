@@ -1,7 +1,7 @@
 +++
 title = "Fused Adjust"
 description = "zenfilters.fused_adjust — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = ["fused", "adjust", "exposure", "contrast", "saturation"]
@@ -10,6 +10,7 @@ tags = ["fused", "adjust", "exposure", "contrast", "saturation"]
 node_id = "zenfilters.fused_adjust"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 Fused per-pixel adjustment: applies all per-pixel operations in a single pass over the data, avoiding repeated plane traversal.  Equivalent to chaining Exposure + Contrast + BlackPoint + WhitePoint + Saturation + Temperature + Tint + HighlightsShadows + Dehaze + Vibrance, but runs ~3x faster because it only scans the planes once.

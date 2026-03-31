@@ -1,7 +1,7 @@
 +++
 title = "Chromatic Aberration"
 description = "zenfilters.chromatic_aberration — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = ["lens", "correction", "fringing"]
@@ -10,6 +10,7 @@ tags = ["lens", "correction", "fringing"]
 node_id = "zenfilters.chromatic_aberration"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Lateral chromatic aberration correction.  Corrects color fringing at image edges caused by lens dispersion. In Oklab, CA manifests as radial displacement of the a (green-red) and b (blue-yellow) planes relative to L. Shifts chroma planes radially to re-align them with luminance.

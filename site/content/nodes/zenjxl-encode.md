@@ -1,7 +1,7 @@
 +++
 title = "Encode Jxl"
 description = "zenjxl.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["jxl", "jpeg-xl", "encode", "lossy", "lossless", "hdr", "codec"]
@@ -10,6 +10,7 @@ tags = ["jxl", "jpeg-xl", "encode", "lossy", "lossless", "hdr", "codec"]
 node_id = "zenjxl.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 JPEG XL encoder configuration.

@@ -1,7 +1,7 @@
 +++
 title = "Crop (RIAPI)"
 description = "zenpipe.riapi.crop — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["crop", "riapi", "adapter"]
@@ -10,6 +10,7 @@ tags = ["crop", "riapi", "adapter"]
 node_id = "zenpipe.riapi.crop"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Crop image to rectangle via querystring coordinates

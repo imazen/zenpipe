@@ -1,7 +1,7 @@
 +++
 title = "Constrain"
 description = "zenresize.constrain — resize node"
-weight = 30
+weight = 300
 
 [taxonomies]
 tags = ["resize", "geometry", "scale"]
@@ -10,9 +10,22 @@ tags = ["resize", "geometry", "scale"]
 node_id = "zenresize.constrain"
 role = "resize"
 group = "geometry"
+stage = "Resize & Layout"
 +++
 
 Constrain image dimensions with resize, crop, or pad modes.  The unified resize/layout node — combines layout geometry with resampling hints in a single node, matching imageflow's ergonomic Constrain API.  Optional parameters (`Option<T>`) use `None` for "not specified" — the engine picks sensible defaults based on the operation.  # Gravity  Two ways to specify gravity: - **Named anchor** (`gravity`): "center", "top_left", "bottom_right", etc. - **Percentage** (`gravity_x`/`gravity_y`): 0.0–1.0, overrides named anchor when set.  If `gravity_x` and `gravity_y` are both set, the named `gravity` is ignored.  # JSON API  Simple (named anchor): ```json { "w": 800, "h": 600, "mode": "fit_crop", "gravity": "top_left" } ```  Precise (percentage gravity): ```json { "w": 800, "h": 600, "mode": "fit_crop", "gravity_x": 0.33, "gravity_y": 0.0, "down_filter": "lanczos", "unsharp_percent": 15.0 } ```  RIAPI: `?w=800&h=600&mode=fit_crop&anchor=top_left&down.filter=lanczos`
+
+
+## Accepted Values
+
+- **`mode`**: `distort`, `fit`, `within`, `fit_crop`, `crop`, `within_crop`, `fit_pad`, `pad`, `within_pad`, `pad_within`, `aspect_crop`, `larger_than`
+- **`gravity`**: `center`, `top_left`, `top`, `top_right`, `left`, `right`, `bottom_left`, `bottom`, `bottom_right`
+- **`down_filter`**: `robidoux`, `robidoux_sharp`, `robidoux_fast`, `lanczos`, `lanczos_sharp`, `lanczos2`, `lanczos2_sharp`, `ginseng`, `ginseng_sharp`, `mitchell`, `catmull_rom`, `cubic`, `cubic_sharp`, `cubic_b_spline`, `hermite`, `triangle`, `linear`, `box`, `fastest`, `jinc`, `n_cubic`, `n_cubic_sharp`
+- **`up_filter`**: `(same as down_filter)`
+- **`scaling_colorspace`**: `linear`, `srgb`
+- **`scale`**: `down`, `up`, `both`, `canvas`
+- **`resample_when`**: `size_differs`, `size_differs_or_sharpening_requested`, `always`
+- **`sharpen_when`**: `downscaling`, `upscaling`, `size_differs`, `always`
 
 ## Parameters
 

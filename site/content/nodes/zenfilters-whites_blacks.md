@@ -1,7 +1,7 @@
 +++
 title = "Whites / Blacks"
 description = "zenfilters.whites_blacks — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.whites_blacks"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Whites and Blacks adjustment -- targeted luminance control for the extreme ends of the histogram.  Unlike BlackPoint/WhitePoint (which remap the entire range), Whites/Blacks apply a smooth, localized adjustment that matches Lightroom's Whites/Blacks sliders.

@@ -1,7 +1,7 @@
 +++
 title = "Tint"
 description = "zenfilters.tint — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.tint"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Green-magenta tint adjustment via Oklab a shift.  Positive values shift toward magenta, negative toward green.

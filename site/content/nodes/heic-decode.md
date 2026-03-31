@@ -1,7 +1,7 @@
 +++
 title = "Decode Heic"
 description = "heic.decode — decode node"
-weight = 10
+weight = 100
 
 [taxonomies]
 tags = ["heic", "heif", "hdr", "depth"]
@@ -10,6 +10,7 @@ tags = ["heic", "heif", "hdr", "depth"]
 node_id = "heic.decode"
 role = "decode"
 group = "decode"
+stage = "Decode"
 +++
 
 HEIC/HEIF decode node.

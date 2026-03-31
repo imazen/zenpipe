@@ -1,7 +1,7 @@
 +++
 title = "Exposure"
 description = "zenfilters.exposure — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.exposure"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 Exposure adjustment in photographic stops.  +1 stop doubles linear light, -1 halves it. Preserves hue and saturation by scaling all Oklab channels proportionally.

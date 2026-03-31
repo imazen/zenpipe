@@ -1,7 +1,7 @@
 +++
 title = "Decode Webp"
 description = "zenwebp.decode — decode node"
-weight = 10
+weight = 100
 
 [taxonomies]
 tags = ["webp", "decode"]
@@ -10,9 +10,15 @@ tags = ["webp", "decode"]
 node_id = "zenwebp.decode"
 role = "decode"
 group = "decode"
+stage = "Decode"
 +++
 
 WebP decode node.
+
+
+## Accepted Values
+
+- **`upsampling`**: `bilinear`, `fancy`
 
 ## Parameters
 

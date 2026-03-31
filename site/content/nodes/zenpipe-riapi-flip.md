@@ -1,7 +1,7 @@
 +++
 title = "Flip (RIAPI)"
 description = "zenpipe.riapi.flip — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["flip", "riapi", "adapter"]
@@ -10,6 +10,7 @@ tags = ["flip", "riapi", "adapter"]
 node_id = "zenpipe.riapi.flip"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Flip image horizontally and/or vertically via querystring

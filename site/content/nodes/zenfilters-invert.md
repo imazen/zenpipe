@@ -1,7 +1,7 @@
 +++
 title = "Invert"
 description = "zenfilters.invert — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.invert"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Color inversion in Oklab space.  Inverts lightness (L' = 1.0 - L) and negates chroma (a' = -a, b' = -b). Produces a perceptually correct negative.

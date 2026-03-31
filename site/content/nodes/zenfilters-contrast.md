@@ -1,7 +1,7 @@
 +++
 title = "Contrast"
 description = "zenfilters.contrast — filter node"
-weight = 60
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.contrast"
 role = "filter"
 group = "tone"
+stage = "Filters"
 +++
 
 Power-curve contrast adjustment pivoted at middle grey.  Uses a power curve that pivots at the perceptual equivalent of 18.42% middle grey in Oklab space. Positive values increase contrast.

@@ -1,7 +1,7 @@
 +++
 title = "Encode Webp Lossy"
 description = "zenwebp.encode_lossy — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["webp", "lossy", "encode"]
@@ -10,9 +10,15 @@ tags = ["webp", "lossy", "encode"]
 node_id = "zenwebp.encode_lossy"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 WebP lossy (VP8) encode node.
+
+
+## Accepted Values
+
+- **`preset`**: `default`, `picture`, `photo`, `drawing`, `icon`, `text`
 
 ## Parameters
 

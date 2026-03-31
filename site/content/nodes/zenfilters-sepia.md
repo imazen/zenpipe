@@ -1,7 +1,7 @@
 +++
 title = "Sepia"
 description = "zenfilters.sepia — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.sepia"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Sepia tone effect in perceptual Oklab space.  Desaturates the image, then applies a warm brown tint by shifting the a and b channels toward the sepia point.

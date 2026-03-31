@@ -1,7 +1,7 @@
 +++
 title = "Avif Encode"
 description = "zenavif.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["avif", "encode", "av1"]
@@ -10,9 +10,17 @@ tags = ["avif", "encode", "av1"]
 node_id = "zenavif.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 AVIF encoding node.
+
+
+## Accepted Values
+
+- **`bit_depth`**: `auto`, `8`, `10`, `12`
+- **`color_model`**: `ycbcr`, `rgb`
+- **`alpha_color_mode`**: `clean`, `dirty`, `premultiplied`
 
 ## Parameters
 

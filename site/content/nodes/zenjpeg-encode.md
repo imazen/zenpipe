@@ -1,7 +1,7 @@
 +++
 title = "Encode Jpeg"
 description = "zenjpeg.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["jpeg", "jpg", "encode", "lossy"]
@@ -10,9 +10,19 @@ tags = ["jpeg", "jpg", "encode", "lossy"]
 node_id = "zenjpeg.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 JPEG encoder configuration as a self-documenting pipeline node.  Schema-only definition for pipeline registry. Conversion to native zenjpeg config types happens in the bridge layer via `ParamMap`.
+
+
+## Accepted Values
+
+- **`color_space`**: `ycbcr`, `grayscale`, `xyb`
+- **`subsampling`**: `none (4:4:4)`, `half_horizontal (4:2:2)`, `quarter (4:2:0)`, `half_vertical (4:4:0)`
+- **`chroma_downsampling`**: `average`, `gamma_aware`, `gamma_aware_iterative`
+- **`scan_mode`**: `progressive`, `baseline`, `progressive_mozjpeg`, `progressive_search`
+- **`quant_tables`**: `jpegli`, `mozjpeg`, `mozjpeg_robidoux`
 
 ## Parameters
 

@@ -1,7 +1,7 @@
 +++
 title = "Encode Bmp"
 description = "zenbitmaps.encode_bmp — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["codec", "bmp", "lossless", "encode"]
@@ -10,6 +10,7 @@ tags = ["codec", "bmp", "lossless", "encode"]
 node_id = "zenbitmaps.encode_bmp"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 BMP encoding with bit depth selection.

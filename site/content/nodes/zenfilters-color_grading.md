@@ -1,7 +1,7 @@
 +++
 title = "Color Grading"
 description = "zenfilters.color_grading — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.color_grading"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Three-way split-toning for shadows, midtones, and highlights.  Applies different color tints to shadows, midtones, and highlights independently. Colors are specified as Oklab a/b offsets.

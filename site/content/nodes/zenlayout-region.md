@@ -1,7 +1,7 @@
 +++
 title = "Region Viewport"
 description = "zenlayout.region — orient node"
-weight = 30
+weight = 200
 
 [taxonomies]
 tags = ["region", "viewport", "crop", "pad", "geometry"]
@@ -10,6 +10,7 @@ tags = ["region", "viewport", "crop", "pad", "geometry"]
 node_id = "zenlayout.region"
 role = "orient"
 group = "geometry"
+stage = "Orient & Crop"
 +++
 
 Viewport into the source image, unifying crop and pad.  Defines a rectangular window using edge coordinates, each expressed as a percentage of the source dimension plus a pixel offset: `resolved = source_dim * pct + px`.  - Viewport smaller than source = crop - Viewport extending beyond source = pad (filled with color) - Viewport entirely outside source = blank canvas  Coordinates are **edge-based** (left, top, right, bottom), not origin + size.  Examples: - Crop 10px from each edge: left_px=10, top_px=10, right_pct=1.0, right_px=-10, bottom_pct=1.0, bottom_px=-10 - Add 20px padding: left_px=-20, top_px=-20, right_pct=1.0, right_px=20, bottom_pct=1.0, bottom_px=20 - Center 50% of image: left_pct=0.25, top_pct=0.25, right_pct=0.75, bottom_pct=0.75

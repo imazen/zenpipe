@@ -1,7 +1,7 @@
 +++
 title = "Quality Intent Node"
 description = "zencodecs.quality_intent — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["quality", "auto", "format", "encode"]
@@ -10,9 +10,17 @@ tags = ["quality", "auto", "format", "encode"]
 node_id = "zencodecs.quality_intent"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 Format selection and quality profile for encoding (zennode node).  This node controls output format selection and quality. It supports both RIAPI querystring keys and JSON API fields, matching imageflow's established `EncoderPreset::Auto` / `EncoderPreset::Format` ergonomics.  **RIAPI**: `?qp=high&accept.webp=true&accept.avif=true` **JSON**: `{ "profile": "high", "allow_webp": true, "allow_avif": true }`  When `format` is empty (default), the pipeline auto-selects the best format from the allowed set. When `format` is set (e.g., "jpeg"), that format is used directly.  The `profile` field accepts both named presets and numeric values: - Named: lowest, low, medium_low, medium, good, high, highest, lossless - Numeric: 0-100 (mapped to codec-specific quality scales)  Convert to [`CodecIntent`] via [`to_codec_intent()`](QualityIntentNode::to_codec_intent).
+
+
+## Accepted Values
+
+- **`profile`**: `lowest`, `low`, `medium_low`, `medium`, `good`, `high`, `highest`, `lossless`, `0-100`
+- **`format`**: `"" (auto)`, `jpeg`, `png`, `webp`, `gif`, `avif`, `jxl`, `keep`
+- **`lossless`**: `true`, `false`, `keep`
 
 ## Parameters
 

@@ -1,7 +1,7 @@
 +++
 title = "Encode Tiff"
 description = "zentiff.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["codec", "tiff", "lossless", "encode"]
@@ -10,9 +10,16 @@ tags = ["codec", "tiff", "lossless", "encode"]
 node_id = "zentiff.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 TIFF encoding with compression and predictor options.
+
+
+## Accepted Values
+
+- **`compression`**: `uncompressed`, `lzw`, `deflate`, `packbits`
+- **`predictor`**: `none`, `horizontal`
 
 ## Parameters
 

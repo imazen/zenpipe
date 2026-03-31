@@ -1,7 +1,7 @@
 +++
 title = "Grayscale"
 description = "zenfilters.grayscale — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,9 +10,15 @@ tags = []
 node_id = "zenfilters.grayscale"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Convert to grayscale by zeroing chroma channels.  In Oklab, grayscale means a=0, b=0. The perceived luminance is already encoded in the L channel, so there is no information loss.
+
+
+## Accepted Values
+
+- **`algorithm`**: `oklab`, `ntsc`, `bt709`, `flat`, `ry`
 
 ## Parameters
 

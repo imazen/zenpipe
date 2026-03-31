@@ -1,7 +1,7 @@
 +++
 title = "Hsl Adjust"
 description = "zenfilters.hsl_adjust — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = ["color", "hsl"]
@@ -10,6 +10,7 @@ tags = ["color", "hsl"]
 node_id = "zenfilters.hsl_adjust"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Per-color hue, saturation, and luminance adjustment

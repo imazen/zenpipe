@@ -1,7 +1,7 @@
 +++
 title = "Encode Mozjpeg"
 description = "zenjpeg.encode_mozjpeg — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["jpeg", "jpg", "encode", "lossy", "mozjpeg", "compat"]
@@ -10,9 +10,15 @@ tags = ["jpeg", "jpg", "encode", "lossy", "mozjpeg", "compat"]
 node_id = "zenjpeg.encode_mozjpeg"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 Mozjpeg-compatible JPEG encoder configuration.
+
+
+## Accepted Values
+
+- **`subsampling`**: `none (4:4:4)`, `half_horizontal (4:2:2)`, `quarter (4:2:0)`
 
 ## Parameters
 

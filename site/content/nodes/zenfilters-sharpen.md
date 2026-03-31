@@ -1,7 +1,7 @@
 +++
 title = "Sharpen"
 description = "zenfilters.sharpen — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.sharpen"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Unsharp mask sharpening on L channel.  Like clarity but with a smaller sigma for fine detail enhancement. Sharpening in Oklab L avoids color fringing at high-contrast edges.

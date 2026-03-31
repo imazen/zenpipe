@@ -1,7 +1,7 @@
 +++
 title = "Hue Rotate"
 description = "zenfilters.hue_rotate — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.hue_rotate"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Hue rotation in Oklab a/b plane.  Rotates colors around the hue circle by the specified angle in degrees. Preserves lightness and chroma.

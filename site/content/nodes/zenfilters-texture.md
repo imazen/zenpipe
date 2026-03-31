@@ -1,7 +1,7 @@
 +++
 title = "Texture"
 description = "zenfilters.texture — filter node"
-weight = 40
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.texture"
 role = "filter"
 group = "detail"
+stage = "Filters"
 +++
 
 Fine detail contrast enhancement (smaller scale than clarity).  Similar to Clarity but targets higher-frequency detail like skin pores, fabric weave, and individual leaves. Mirrors Lightroom's Texture slider.

@@ -1,7 +1,7 @@
 +++
 title = "Encode Png"
 description = "zenpng.encode — encode node"
-weight = 20
+weight = 700
 
 [taxonomies]
 tags = ["codec", "png", "lossless", "encode"]
@@ -10,6 +10,7 @@ tags = ["codec", "png", "lossless", "encode"]
 node_id = "zenpng.encode"
 role = "encode"
 group = "encode"
+stage = "Encode"
 +++
 
 PNG encoding with quality, lossless mode, and compression options.

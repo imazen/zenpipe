@@ -1,7 +1,7 @@
 +++
 title = "Local Tone Map"
 description = "zenfilters.local_tone_map — filter node"
-weight = 80
+weight = 400
 
 [taxonomies]
 tags = ["tonemap", "hdr", "local", "dynamic range"]
@@ -10,6 +10,7 @@ tags = ["tonemap", "hdr", "local", "dynamic range"]
 node_id = "zenfilters.local_tone_map"
 role = "filter"
 group = "tone_range"
+stage = "Filters"
 +++
 
 Local tone mapping: compresses dynamic range while preserving local contrast.  Separates the image into a base layer (large-scale luminance) and detail layer (local texture), compresses the base, and recombines. Core of faux HDR processing from a single exposure.

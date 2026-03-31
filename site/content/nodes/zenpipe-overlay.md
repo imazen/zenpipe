@@ -1,7 +1,7 @@
 +++
 title = "Overlay"
 description = "zenpipe.overlay — composite node"
-weight = 110
+weight = 500
 
 [taxonomies]
 tags = ["overlay", "watermark", "logo", "composite"]
@@ -10,6 +10,7 @@ tags = ["overlay", "watermark", "logo", "composite"]
 node_id = "zenpipe.overlay"
 role = "composite"
 group = "composite"
+stage = "Composite"
 +++
 
 Overlay a small image (watermark, logo) at absolute coordinates.  Single input (the background). The overlay image data is provided via io_id (loaded from a separate input buffer).  Overlay is auto-converted to premultiplied linear f32. Opacity scales the overlay's alpha channel before compositing.
@@ -20,6 +21,11 @@ Overlay a small image (watermark, logo) at absolute coordinates.  Single input (
 |------|-------|-----------|----------|
 | `input` | Background image | input | Yes |
 | `from_io` | Overlay image (io_id) | input | Yes |
+
+
+## Accepted Values
+
+- **`blend_mode`**: `source_over`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color_dodge`, `color_burn`, `hard_light`, `soft_light`, `difference`, `exclusion`
 
 ## Parameters
 

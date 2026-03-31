@@ -1,7 +1,7 @@
 +++
 title = "Vibrance"
 description = "zenfilters.vibrance — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.vibrance"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Smart saturation that protects already-saturated colors.  Boosts chroma of low-saturation pixels more than high-saturation ones, preventing skin tone and sky clipping.

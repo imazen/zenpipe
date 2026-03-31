@@ -1,7 +1,7 @@
 +++
 title = "Bloom"
 description = "zenfilters.bloom — filter node"
-weight = 90
+weight = 400
 
 [taxonomies]
 tags = []
@@ -10,6 +10,7 @@ tags = []
 node_id = "zenfilters.bloom"
 role = "filter"
 group = "effects"
+stage = "Filters"
 +++
 
 Soft glow from bright areas via screen blending.  Extracts pixels above a luminance threshold, blurs them with a large Gaussian kernel, and adds the result back. Produces natural-looking soft glow around bright light sources.

@@ -1,7 +1,7 @@
 +++
 title = "Channel Curves"
 description = "zenfilters.channel_curves — filter node"
-weight = 50
+weight = 400
 
 [taxonomies]
 tags = ["color", "curves", "channel", "rgb"]
@@ -10,6 +10,7 @@ tags = ["color", "curves", "channel", "rgb"]
 node_id = "zenfilters.channel_curves"
 role = "filter"
 group = "color"
+stage = "Filters"
 +++
 
 Per-channel tone curves applied independently to R, G, B in sRGB space.  Unlike ToneCurve which operates on Oklab L (preserving color ratios), ChannelCurves enables independent tonal correction of each color channel. Each channel has its own 256-entry LUT mapping sRGB [0,1] to [0,1].  The node accepts control points as comma-separated "x:y" pairs per channel. Default is identity: "0:0,1:1".
