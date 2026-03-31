@@ -19,6 +19,8 @@ pub enum CFocus {
     Rects(Vec<[f64; 4]>),
     /// Keyword: trigger face detection (requires ML backend).
     Faces,
+    /// Keyword: trigger saliency detection only (lightweight or ML).
+    Saliency,
     /// Keyword: trigger faces + saliency (requires ML backend).
     Auto,
 }
@@ -249,8 +251,11 @@ impl Instructions {
         }
     }
 
-    /// Whether `c_focus` requests ML detection (faces or auto keywords).
+    /// Whether `c_focus` requests any detection engine (faces, saliency, or auto keywords).
     pub fn focus_needs_detection(&self) -> bool {
-        matches!(self.c_focus, Some(CFocus::Faces | CFocus::Auto))
+        matches!(
+            self.c_focus,
+            Some(CFocus::Faces | CFocus::Saliency | CFocus::Auto)
+        )
     }
 }

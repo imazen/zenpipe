@@ -453,14 +453,44 @@ fn parse_gravity(s: &str) -> Option<[f64; 2]> {
 }
 
 /// Parse `c.focus` value: keywords, 2-value point, or groups-of-4 rects.
+///
+/// Supports both semicolon-separated rects (`20,30,80,90;10,10,40,40`)
+/// and flat comma groups (`20,30,80,90,10,10,40,40`) for compatibility
+/// with both ImageResizer and the focus-rects-smart-crop branch.
 fn parse_c_focus(s: &str) -> Option<CFocus> {
     let trimmed = s.trim();
     match trimmed.to_ascii_lowercase().as_str() {
         "faces" => return Some(CFocus::Faces),
+        "saliency" => return Some(CFocus::Saliency),
         "auto" => return Some(CFocus::Auto),
         _ => {}
     }
 
+    // Semicolon-separated rects: "20,30,80,90;10,10,40,40"
+    if trimmed.contains(';') {
+        let mut rects = Vec::new();
+        for group in trimmed.split(';') {
+            let group = group.trim();
+            if group.is_empty() {
+                continue;
+            }
+            let values: Vec<f64> = group
+                .split(',')
+                .map(|p| p.trim().parse::<f64>().ok().filter(|v| v.is_finite()))
+                .collect::<Option<Vec<f64>>>()?;
+            if values.len() != 4 {
+                return None;
+            }
+            rects.push([values[0], values[1], values[2], values[3]]);
+        }
+        return if rects.is_empty() {
+            None
+        } else {
+            Some(CFocus::Rects(rects))
+        };
+    }
+
+    // Flat comma-separated: 2 values = point, N*4 values = rects
     let parts: Vec<&str> = trimmed.split(',').collect();
     let values: Vec<f64> = parts
         .iter()
