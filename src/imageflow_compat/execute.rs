@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use crate::Source as _;
 use imageflow_types::{self as s, Framewise, Node};
+use whereat::at;
 use zencodecs::{AllowedFormats, CodecPolicy, ImageFacts, select_format_from_intent};
 use zennode::NodeDef as _;
 
@@ -104,7 +105,8 @@ fn build_pipeline_maybe_traced(
 pub enum ZenError {
     Translate(TranslateError),
     Codec(String),
-    Pipeline(crate::PipeError),
+    /// Pipeline error with preserved source location trace.
+    Pipeline(whereat::At<crate::PipeError>),
     Io(String),
     SizeLimit(String),
 }
@@ -114,7 +116,7 @@ impl std::fmt::Display for ZenError {
         match self {
             Self::Translate(e) => write!(f, "translate: {e}"),
             Self::Codec(e) => write!(f, "codec: {e}"),
-            Self::Pipeline(e) => write!(f, "pipeline: {e}"),
+            Self::Pipeline(e) => write!(f, "pipeline: {}", e.full_trace()),
             Self::Io(e) => write!(f, "io: {e}"),
             Self::SizeLimit(e) => write!(f, "SizeLimitExceeded: {e}"),
         }
@@ -131,13 +133,13 @@ impl From<TranslateError> for ZenError {
 
 impl From<crate::PipeError> for ZenError {
     fn from(e: crate::PipeError) -> Self {
-        Self::Pipeline(e)
+        Self::Pipeline(at!(e))
     }
 }
 
 impl From<whereat::At<crate::PipeError>> for ZenError {
     fn from(e: whereat::At<crate::PipeError>) -> Self {
-        Self::Pipeline(e.into_inner())
+        Self::Pipeline(e)
     }
 }
 
@@ -553,15 +555,15 @@ fn execute_graph(
 
             loop {
                 if !visited.insert(current) {
-                    return Err(ZenError::Pipeline(crate::PipeError::Op(format!(
+                    return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
                         "cycle detected in graph at node {current}"
-                    ))));
+                    )))));
                 }
                 let key_str = current.to_string();
                 let node = graph.nodes.get(&key_str).ok_or_else(|| {
-                    ZenError::Pipeline(crate::PipeError::Op(format!(
+                    ZenError::Pipeline(at!(crate::PipeError::Op(format!(
                         "graph references missing node {current}"
-                    )))
+                    ))))
                 })?;
                 path.push(node.clone());
 
@@ -571,11 +573,11 @@ fn execute_graph(
                         current = preds[0];
                     }
                     Some(preds) if preds.len() > 1 => {
-                        return Err(ZenError::Pipeline(crate::PipeError::Op(format!(
+                        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
                             "node {current} has {} input edges; zen DAG decomposition \
                              only supports linear pipelines (no multi-input compositing)",
                             preds.len()
-                        ))));
+                        )))));
                     }
                     _ => break, // No predecessors — reached a source node.
                 }
@@ -588,9 +590,9 @@ fn execute_graph(
     }
 
     if encode_branches.is_empty() {
-        return Err(ZenError::Pipeline(crate::PipeError::Op(
+        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(
             "graph has no encode nodes".into(),
-        )));
+        ))));
     }
 
     // Execute each branch as a linear steps pipeline.
