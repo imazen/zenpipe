@@ -143,6 +143,17 @@ pub struct EncodePng {
     #[kv("png.min_quality")]
     pub min_quality: Option<u32>,
 
+    /// Generic effort (0 = no compression, 12 = extreme).
+    ///
+    /// Maps to zenpng's Compression enum:
+    /// 0 = None, 1 = Fastest, 2 = Turbo, 3 = Fast, 4 = Balanced,
+    /// 5 = Thorough, 6 = High, 7 = Aggressive, 8 = Intense,
+    /// 9 = Crush, 10 = Maniac, 11 = Brag, 12+ = Minutes.
+    #[param(range(0..=12), default = 5, step = 1)]
+    #[param(section = "Main", label = "Compression Effort")]
+    #[kv("png.effort")]
+    pub effort: Option<i32>,
+
     #[param(default = true)]
     #[param(section = "Main")]
     #[kv("png.lossless")]
@@ -166,10 +177,13 @@ pub struct EncodeWebpLossy {
     #[kv("webp.quality", "webp.q")]
     pub quality: Option<f32>,
 
-    #[param(range(0.0..=100.0), step = 1.0)]
+    /// Generic effort (0 = fastest, 10 = best compression).
+    ///
+    /// Maps to WebP method 0-6 internally.
+    #[param(range(0..=10), default = 5, step = 1)]
     #[param(section = "Main", label = "Effort")]
     #[kv("webp.effort")]
-    pub effort: Option<f32>,
+    pub effort: Option<i32>,
 
     #[param(section = "Main", label = "Preset")]
     #[kv("webp.preset")]
@@ -219,10 +233,13 @@ pub struct EncodeWebpLossy {
 #[node(id = "zenwebp.encode_lossless", group = Encode, role = Encode)]
 #[node(tags("webp", "lossless", "encode"))]
 pub struct EncodeWebpLossless {
-    #[param(range(0.0..=100.0), step = 1.0)]
+    /// Generic effort (0 = fastest, 10 = best compression).
+    ///
+    /// Maps to WebP method 0-6 internally.
+    #[param(range(0..=10), default = 5, step = 1)]
     #[param(section = "Main", label = "Compression Effort")]
     #[kv("webp.effort")]
-    pub effort: Option<f32>,
+    pub effort: Option<i32>,
 
     /// VP8L compression method (0 = fastest, 6 = best).
     /// Separate from effort — method controls the algorithm tier,
@@ -341,6 +358,16 @@ pub struct AvifEncode {
     #[kv("avif.q", "avif.quality")]
     pub quality: Option<f32>,
 
+    /// Generic effort (0 = fastest, 10 = best compression).
+    ///
+    /// Inverted from rav1e speed: effort 0 = speed 10, effort 10 = speed 1.
+    /// Prefer this over `speed` for codec-agnostic pipelines.
+    #[param(range(0..=10), default = 6, step = 1)]
+    #[param(section = "Main", label = "Effort")]
+    #[kv("avif.effort")]
+    pub effort: Option<i32>,
+
+    /// rav1e-native speed (1 = slowest, 10 = fastest). Inverse of effort.
     #[param(range(1..=10), default = 4)]
     #[param(section = "Main", label = "Speed")]
     #[kv("avif.speed")]
