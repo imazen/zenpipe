@@ -119,16 +119,25 @@ pub fn expand_zen(
     // Each registered node claims its own keys via #[kv(...)] annotations.
     let kv_result = registry.from_querystring(querystring);
 
+    // 2b. Parse c.gravity from the raw querystring — compound key that
+    // maps to two separate fields (gravity_x, gravity_y) on the Constrain node.
+    // The #[kv] system can't handle one key → two fields, so we do it manually.
+    let c_gravity = parse_c_gravity(querystring);
+
     let mut nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
     let mut preset = None;
     let mut warnings: Vec<String> = Vec::new();
 
     for w in &kv_result.warnings {
+        // Suppress the "unrecognized key" warning for c.gravity — we handle it here.
+        if w.key == "c.gravity" {
+            continue;
+        }
         warnings.push(format!("{}: {}", w.key, w.message));
     }
 
     // 3. Separate pixel-processing nodes from codec intent nodes.
-    for inst in kv_result.instances {
+    for mut inst in kv_result.instances {
         let schema_id = inst.schema().id;
         if schema_id == "zencodecs.quality_intent" {
             // Extract codec intent from QualityIntentNode.
@@ -145,9 +154,33 @@ pub fn expand_zen(
                 });
             }
         } else {
+            // Apply c.gravity to the Constrain node if present.
+            if schema_id == "zenresize.constrain" {
+                if let Some((gx, gy)) = c_gravity {
+                    inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
+                    inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
+                }
+            }
             nodes.push(inst);
         }
     }
 
     Ok(ExpandedRiapi { nodes, preset, warnings })
+}
+
+/// Parse `c.gravity=x,y` from a raw querystring.
+///
+/// Returns `Some((gx, gy))` in 0.0–1.0 range (percentage / 100, clamped).
+/// Matches zenlayout's parsing: `c.gravity=30,70` → `(0.30, 0.70)`.
+fn parse_c_gravity(querystring: &str) -> Option<(f32, f32)> {
+    for part in querystring.split('&') {
+        let (key, value) = part.split_once('=')?;
+        if key.eq_ignore_ascii_case("c.gravity") {
+            let (x_str, y_str) = value.split_once(',')?;
+            let x: f32 = x_str.trim().parse().ok()?;
+            let y: f32 = y_str.trim().parse().ok()?;
+            return Some(((x / 100.0).clamp(0.0, 1.0), (y / 100.0).clamp(0.0, 1.0)));
+        }
+    }
+    None
 }

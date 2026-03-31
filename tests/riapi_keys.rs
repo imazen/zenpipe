@@ -608,3 +608,87 @@ fn s_invert() {
     let inv = find_node(&r.instances, "zenfilters.invert");
     assert!(inv.is_some(), "s.invert should produce Invert node");
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  C.GRAVITY (percentage focal point via expand_zen)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Helper: expand_zen with dummy source dimensions.
+#[cfg(feature = "imageflow-compat")]
+fn expand_zen(qs: &str) -> zenpipe::imageflow_compat::riapi::ExpandedRiapi {
+    zenpipe::imageflow_compat::riapi::expand_zen(qs, 1000, 1000, None).unwrap()
+}
+
+#[cfg(feature = "imageflow-compat")]
+fn find_expanded_node<'a>(
+    nodes: &'a [Box<dyn NodeInstance>],
+    schema_id: &str,
+) -> Option<&'a dyn NodeInstance> {
+    nodes
+        .iter()
+        .find(|n| n.schema().id == schema_id)
+        .map(|n| n.as_ref())
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_sets_gravity_xy() {
+    let r = expand_zen("w=800&h=600&mode=crop&c.gravity=30,70");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
+    assert!((gx - 0.30).abs() < 0.001, "gravity_x={gx}, expected 0.30");
+    assert!((gy - 0.70).abs() < 0.001, "gravity_y={gy}, expected 0.70");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn anchor_still_works_via_expand_zen() {
+    let r = expand_zen("w=800&h=600&mode=crop&anchor=topleft");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    assert_eq!(get_str(c, "gravity").as_deref(), Some("topleft"));
+    // gravity_x/gravity_y should NOT be set when only anchor is provided.
+    assert_eq!(get_f32(c, "gravity_x"), None,
+        "gravity_x should be None with anchor only");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_overrides_anchor() {
+    let r = expand_zen("w=800&h=600&mode=crop&anchor=topleft&c.gravity=50,50");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
+    // c.gravity=50,50 → center (0.5, 0.5) — should override anchor=topleft
+    assert!((gx - 0.50).abs() < 0.001, "gravity_x={gx}, expected 0.50");
+    assert!((gy - 0.50).abs() < 0.001, "gravity_y={gy}, expected 0.50");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_clamped_to_0_100() {
+    let r = expand_zen("w=400&h=400&mode=crop&c.gravity=-10,150");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
+        .expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
+    assert!((gx - 0.0).abs() < 0.001, "gravity_x={gx}, expected 0.0 (clamped)");
+    assert!((gy - 1.0).abs() < 0.001, "gravity_y={gy}, expected 1.0 (clamped)");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_gravity_no_unconsumed_warning() {
+    let r = expand_zen("w=800&h=600&mode=crop&c.gravity=30,70");
+    // The c.gravity key should NOT produce an "unrecognized key" warning.
+    let gravity_warnings: Vec<_> = r.warnings.iter()
+        .filter(|w| w.contains("c.gravity"))
+        .collect();
+    assert!(
+        gravity_warnings.is_empty(),
+        "c.gravity should not produce warnings, got: {gravity_warnings:?}"
+    );
+}

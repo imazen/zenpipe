@@ -13,7 +13,7 @@ use std::fmt;
 
 use imageflow_types::{
     self as s, Color, ColorFilterSrgb, CommandStringKind, CompositingMode, Constraint,
-    ConstraintMode, EncoderPreset, Node, RoundCornersMode, Watermark,
+    ConstraintGravity, ConstraintMode, EncoderPreset, Node, RoundCornersMode, Watermark,
 };
 use zennode::{NodeDef, NodeInstance, NodeRegistry, ParamValue};
 
@@ -454,6 +454,17 @@ fn translate_constrain(
         if let Some(ref filter) = hints.down_filter {
             params.push(("down_filter", ParamValue::Str(filter_to_str(filter).into())));
         }
+    }
+    // Pass gravity through to the Constrain node.
+    match c.gravity {
+        Some(ConstraintGravity::Percentage { x, y }) => {
+            params.push(("gravity_x", ParamValue::F32(x)));
+            params.push(("gravity_y", ParamValue::F32(y)));
+        }
+        Some(ConstraintGravity::Center) => {
+            // Center is the default — no need to set explicitly.
+        }
+        None => {}
     }
     push_constrain_node(nodes, &params)?;
     // If an opaque background_color (matte) is specified, add RemoveAlpha after constrain.
