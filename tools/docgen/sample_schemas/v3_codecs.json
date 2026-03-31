@@ -1,0 +1,14 @@
+{
+  "codecs": [
+    {"name": "jpeg", "mime_type": "image/jpeg", "mime_types": ["image/jpeg"], "extension": "jpg", "extensions": ["jpg", "jpeg", "jpe", "jfif"], "supports_alpha": false, "supports_lossless": false, "supports_animation": false, "can_decode": true, "can_encode": true},
+    {"name": "png", "mime_type": "image/png", "mime_types": ["image/png"], "extension": "png", "extensions": ["png"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
+    {"name": "webp", "mime_type": "image/webp", "mime_types": ["image/webp"], "extension": "webp", "extensions": ["webp"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
+    {"name": "avif", "mime_type": "image/avif", "mime_types": ["image/avif"], "extension": "avif", "extensions": ["avif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
+    {"name": "jxl", "mime_type": "image/jxl", "mime_types": ["image/jxl"], "extension": "jxl", "extensions": ["jxl"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
+    {"name": "gif", "mime_type": "image/gif", "mime_types": ["image/gif"], "extension": "gif", "extensions": ["gif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
+    {"name": "bmp", "mime_type": "image/bmp", "mime_types": ["image/bmp", "image/x-bmp"], "extension": "bmp", "extensions": ["bmp", "dib"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
+    {"name": "tiff", "mime_type": "image/tiff", "mime_types": ["image/tiff"], "extension": "tiff", "extensions": ["tiff", "tif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
+    {"name": "qoi", "mime_type": "image/qoi", "mime_types": ["image/qoi"], "extension": "qoi", "extensions": ["qoi"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
+    {"name": "hdr", "mime_type": "image/vnd.radiance", "mime_types": ["image/vnd.radiance"], "extension": "hdr", "extensions": ["hdr", "rgbe"], "supports_alpha": false, "supports_lossless": false, "supports_animation": false, "can_decode": true, "can_encode": true}
+  ]
+}

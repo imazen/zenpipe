@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "zenresize.constrain": {
+      "type": "object",
+      "title": "Constrain Size",
+      "description": "Constrain image dimensions with resize, crop, or pad modes.",
+      "x-zennode-id": "zenresize.constrain",
+      "x-zennode-group": "Geometry",
+      "x-zennode-role": "Resize",
+      "x-zennode-tags": ["resize", "geometry", "scale"],
+      "x-zennode-inputs": [],
+      "properties": {
+        "w": {"type": ["integer", "null"], "minimum": 0, "maximum": 65535, "default": 0, "title": "Width", "x-zennode-unit": "px", "x-zennode-section": "Dimensions", "x-zennode-optional": true, "x-zennode-kv-keys": ["w", "width", "maxwidth"]},
+        "h": {"type": ["integer", "null"], "minimum": 0, "maximum": 65535, "default": 0, "title": "Height", "x-zennode-unit": "px", "x-zennode-section": "Dimensions", "x-zennode-optional": true, "x-zennode-kv-keys": ["h", "height", "maxheight"]},
+        "mode": {"type": "string", "default": "within", "title": "Mode", "x-zennode-section": "Layout", "x-zennode-kv-keys": ["mode"], "enum": ["distort", "within", "fit", "within_crop", "fit_crop", "fit_pad", "within_pad", "pad_within", "aspect_crop"], "x-zennode-enum-labels": [{"name": "distort", "label": "Distort", "description": "Stretch to exact dimensions"}, {"name": "within", "label": "Within", "description": "Fit inside, no upscale"}, {"name": "fit", "label": "Fit", "description": "Fit inside, may upscale"}, {"name": "within_crop", "label": "Within Crop", "description": "Fill by cropping, no upscale"}, {"name": "fit_crop", "label": "Fit Crop", "description": "Fill by cropping"}, {"name": "fit_pad", "label": "Fit Pad", "description": "Fit inside, pad to exact"}, {"name": "within_pad", "label": "Within Pad", "description": "Fit, no upscale, pad"}, {"name": "pad_within", "label": "Pad Within", "description": "No upscale, always pad"}, {"name": "aspect_crop", "label": "Aspect Crop", "description": "Crop to aspect, no resize"}]},
+        "down_filter": {"type": ["string", "null"], "default": "", "title": "Downscale Filter", "x-zennode-section": "Quality", "x-zennode-optional": true, "x-zennode-kv-keys": ["down.filter"]},
+        "unsharp_percent": {"type": ["number", "null"], "minimum": 0.0, "maximum": 100.0, "default": 0.0, "title": "Unsharp Mask", "x-zennode-unit": "%", "x-zennode-section": "Post-Processing", "x-zennode-optional": true, "x-zennode-kv-keys": ["f.sharpen", "unsharp"]},
+        "bgcolor": {"type": ["string", "null"], "default": "", "title": "Canvas Color", "x-zennode-section": "Position", "x-zennode-optional": true, "x-zennode-kv-keys": ["bgcolor", "canvas_color"]}
+      }
+    },
+    "zenlayout.flip_h": {
+      "type": "object",
+      "title": "Flip Horizontal",
+      "description": "Mirror the image left-right.",
+      "x-zennode-id": "zenlayout.flip_h",
+      "x-zennode-group": "Geometry",
+      "x-zennode-role": "Orient",
+      "x-zennode-tags": ["flip", "geometry"],
+      "properties": {}
+    },
+    "zenfilters.exposure": {
+      "type": "object",
+      "title": "Exposure",
+      "description": "Adjust exposure compensation in photographic stops.",
+      "x-zennode-id": "zenfilters.exposure",
+      "x-zennode-group": "Tone",
+      "x-zennode-role": "Filter",
+      "x-zennode-tags": ["basic", "tone"],
+      "properties": {
+        "stops": {"type": "number", "minimum": -5.0, "maximum": 5.0, "default": 0.0, "title": "Stops", "x-zennode-unit": "EV", "x-zennode-section": "Main", "x-zennode-kv-keys": ["s.brightness"]}
+      }
+    },
+    "zenpipe.composite": {
+      "type": "object",
+      "title": "Composite",
+      "description": "Composite a foreground image onto a background at a position.",
+      "x-zennode-id": "zenpipe.composite",
+      "x-zennode-group": "Composite",
+      "x-zennode-role": "Composite",
+      "x-zennode-tags": ["composite", "blend"],
+      "x-zennode-inputs": [{"name": "canvas", "label": "Background canvas", "edge_kind": "canvas", "required": true}, {"name": "input", "label": "Foreground image", "edge_kind": "input", "required": true}],
+      "properties": {
+        "fg_x": {"type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "title": "X", "x-zennode-unit": "px", "x-zennode-section": "Position"},
+        "fg_y": {"type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "title": "Y", "x-zennode-unit": "px", "x-zennode-section": "Position"},
+        "blend_mode": {"type": "string", "default": "source_over", "title": "Blend Mode", "x-zennode-section": "Blending"}
+      }
+    },
+    "zenjpeg.encode": {
+      "type": "object",
+      "title": "JPEG Encoder",
+      "description": "JPEG encoding with quality, chroma subsampling, and progressive mode.",
+      "x-zennode-id": "zenjpeg.encode",
+      "x-zennode-group": "Encode",
+      "x-zennode-role": "Encode",
+      "x-zennode-tags": ["jpeg", "encode", "lossy"],
+      "properties": {
+        "quality": {"type": ["number", "null"], "minimum": 0.0, "maximum": 100.0, "default": 85.0, "title": "Quality", "x-zennode-section": "Quality", "x-zennode-optional": true, "x-zennode-kv-keys": ["jpeg.quality", "jpeg.q"]}
+      }
+    }
+  }
+}

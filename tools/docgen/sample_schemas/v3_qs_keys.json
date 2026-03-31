@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "nodes": {
+    "zenresize.constrain": {
+      "label": "Constrain Size",
+      "keys": [
+        {"key": "w", "param": "w", "label": "Width", "description": "Target width in pixels", "aliases": ["width", "maxwidth"], "value_schema": {"type": "integer", "minimum": 0, "maximum": 65535}},
+        {"key": "h", "param": "h", "label": "Height", "description": "Target height in pixels", "aliases": ["height", "maxheight"], "value_schema": {"type": "integer", "minimum": 0, "maximum": 65535}},
+        {"key": "mode", "param": "mode", "label": "Mode", "description": "Constraint mode", "aliases": [], "value_schema": {"type": "string"}},
+        {"key": "down.filter", "param": "down_filter", "label": "Downscale Filter", "description": "Resampling filter for downscaling", "aliases": [], "value_schema": {"type": "string"}},
+        {"key": "f.sharpen", "param": "unsharp_percent", "label": "Unsharp Mask", "description": "Post-resize sharpening (0-100%)", "aliases": ["unsharp"], "value_schema": {"type": "number"}},
+        {"key": "bgcolor", "param": "bgcolor", "label": "Canvas Color", "description": "Background color for padding", "aliases": ["canvas_color"], "value_schema": {"type": "string"}}
+      ]
+    },
+    "zenfilters.exposure": {
+      "label": "Exposure",
+      "keys": [
+        {"key": "s.brightness", "param": "stops", "label": "Brightness/Exposure", "description": "Exposure adjustment in stops", "aliases": [], "value_schema": {"type": "number", "minimum": -5.0, "maximum": 5.0}}
+      ]
+    },
+    "zencodecs.quality_intent": {
+      "label": "Quality & Format",
+      "keys": [
+        {"key": "qp", "param": "profile", "label": "Quality Profile", "description": "Named quality preset", "aliases": [], "value_schema": {"type": "string"}},
+        {"key": "format", "param": "format", "label": "Output Format", "description": "Target image format", "aliases": ["thumbnail"], "value_schema": {"type": "string"}},
+        {"key": "quality", "param": "quality_fallback", "label": "Quality (legacy)", "description": "Numeric quality 0-100", "aliases": [], "value_schema": {"type": "number"}},
+        {"key": "lossless", "param": "lossless", "label": "Lossless", "aliases": [], "value_schema": {"type": "string"}},
+        {"key": "accept.webp", "param": "allow_webp", "label": "Accept WebP", "aliases": [], "value_schema": {"type": "boolean"}},
+        {"key": "accept.avif", "param": "allow_avif", "label": "Accept AVIF", "aliases": [], "value_schema": {"type": "boolean"}}
+      ]
+    }
+  }
+}
