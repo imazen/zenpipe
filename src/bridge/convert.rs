@@ -225,6 +225,7 @@ pub(crate) fn convert_single(
 
         // zenpipe native nodes + zenresize.resize
         "zenpipe.crop_whitespace" => convert_crop_whitespace(node),
+        "zenpipe.smart_crop_analyze" => convert_smart_crop_analyze(node),
         "zenpipe.fill_rect" => convert_fill_rect(node),
         "zenpipe.remove_alpha" => convert_remove_alpha(node),
         "zenpipe.round_corners" => convert_round_corners(node),
@@ -389,6 +390,91 @@ pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> crate::PipeRes
         threshold,
         percent_padding,
     })
+}
+
+/// Convert a `zenpipe.smart_crop_analyze` node to `NodeOp::Analyze`.
+///
+/// Parses focus rectangles from the `rects_csv` string, then builds an
+/// `AnalyzeBuilder` closure that calls `zenlayout::smart_crop::compute_crop`
+/// at execution time (with actual source dimensions) and returns a
+/// `CropSource` if a crop is computed, or passes through unchanged.
+pub(crate) fn convert_smart_crop_analyze(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
+    let rects_csv = param_str(node, "rects_csv").unwrap_or_default();
+    let target_w = param_u32(node, "target_w").unwrap_or(0);
+    let target_h = param_u32(node, "target_h").unwrap_or(0);
+    let zoom = node
+        .get_param("zoom")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Parse the CSV into focus rects.
+    let floats: Vec<f32> = rects_csv
+        .split(',')
+        .filter_map(|s| s.trim().parse::<f32>().ok())
+        .collect();
+    let mut focus_rects = Vec::new();
+    for chunk in floats.chunks_exact(4) {
+        focus_rects.push(zenlayout::smart_crop::FocusRect {
+            x1: chunk[0],
+            y1: chunk[1],
+            x2: chunk[2],
+            y2: chunk[3],
+            weight: 1.0,
+        });
+    }
+
+    let mode = if zoom {
+        zenlayout::smart_crop::CropMode::Maximal
+    } else {
+        zenlayout::smart_crop::CropMode::Minimal
+    };
+
+    // Inner closure logic shared between std and no-std variants.
+    let analyze_inner = move |mat: crate::sources::MaterializedSource|
+        -> crate::PipeResult<Box<dyn crate::Source>> {
+        use crate::Source as _;
+        let src_w = mat.width();
+        let src_h = mat.height();
+
+        if target_w == 0 || target_h == 0 || focus_rects.is_empty() {
+            return Ok(Box::new(mat));
+        }
+
+        let config = zenlayout::smart_crop::CropConfig {
+            target_aspect: zenlayout::smart_crop::AspectRatio {
+                w: target_w,
+                h: target_h,
+            },
+            mode,
+            ..zenlayout::smart_crop::CropConfig::default()
+        };
+
+        match zenlayout::smart_crop::compute_crop(
+            src_w,
+            src_h,
+            &focus_rects,
+            None,
+            &config,
+        ) {
+            Some(rect) => Ok(Box::new(
+                crate::sources::CropSource::new(
+                    Box::new(mat),
+                    rect.x,
+                    rect.y,
+                    rect.width,
+                    rect.height,
+                )?,
+            )),
+            None => Ok(Box::new(mat)),
+        }
+    };
+
+    #[cfg(feature = "std")]
+    let builder: crate::graph::AnalyzeBuilder = Box::new(move |mat, _tracer| analyze_inner(mat));
+    #[cfg(not(feature = "std"))]
+    let builder: crate::graph::AnalyzeBuilder = Box::new(move |mat| analyze_inner(mat));
+
+    Ok(NodeOp::Analyze(builder))
 }
 
 /// Convert a `zenpipe.fill_rect` node to `NodeOp::FillRect`.

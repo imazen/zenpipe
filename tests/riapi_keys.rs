@@ -634,8 +634,7 @@ fn find_expanded_node<'a>(
 #[test]
 fn c_gravity_sets_gravity_xy() {
     let r = expand_zen("w=800&h=600&mode=crop&c.gravity=30,70");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
     let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
     let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
     assert!((gx - 0.30).abs() < 0.001, "gravity_x={gx}, expected 0.30");
@@ -646,20 +645,21 @@ fn c_gravity_sets_gravity_xy() {
 #[test]
 fn anchor_still_works_via_expand_zen() {
     let r = expand_zen("w=800&h=600&mode=crop&anchor=topleft");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
     assert_eq!(get_str(c, "gravity").as_deref(), Some("topleft"));
     // gravity_x/gravity_y should NOT be set when only anchor is provided.
-    assert_eq!(get_f32(c, "gravity_x"), None,
-        "gravity_x should be None with anchor only");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "gravity_x should be None with anchor only"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
 #[test]
 fn c_gravity_overrides_anchor() {
     let r = expand_zen("w=800&h=600&mode=crop&anchor=topleft&c.gravity=50,50");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
     let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
     let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
     // c.gravity=50,50 → center (0.5, 0.5) — should override anchor=topleft
@@ -671,12 +671,17 @@ fn c_gravity_overrides_anchor() {
 #[test]
 fn c_gravity_clamped_to_0_100() {
     let r = expand_zen("w=400&h=400&mode=crop&c.gravity=-10,150");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
     let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
     let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
-    assert!((gx - 0.0).abs() < 0.001, "gravity_x={gx}, expected 0.0 (clamped)");
-    assert!((gy - 1.0).abs() < 0.001, "gravity_y={gy}, expected 1.0 (clamped)");
+    assert!(
+        (gx - 0.0).abs() < 0.001,
+        "gravity_x={gx}, expected 0.0 (clamped)"
+    );
+    assert!(
+        (gy - 1.0).abs() < 0.001,
+        "gravity_y={gy}, expected 1.0 (clamped)"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -688,10 +693,17 @@ fn c_gravity_clamped_to_0_100() {
 fn c_gravity_single_value() {
     // c.gravity=30 (only one value, no comma) — should return None, no panic
     let r = expand_zen("w=400&h=400&mode=crop&c.gravity=30");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
-    assert_eq!(get_f32(c, "gravity_x"), None, "single-value c.gravity should be ignored");
-    assert_eq!(get_f32(c, "gravity_y"), None, "single-value c.gravity should be ignored");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "single-value c.gravity should be ignored"
+    );
+    assert_eq!(
+        get_f32(c, "gravity_y"),
+        None,
+        "single-value c.gravity should be ignored"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
@@ -699,10 +711,17 @@ fn c_gravity_single_value() {
 fn c_gravity_non_numeric() {
     // c.gravity=abc (non-numeric) — should return None, no panic
     let r = expand_zen("w=400&h=400&mode=crop&c.gravity=abc");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
-    assert_eq!(get_f32(c, "gravity_x"), None, "non-numeric c.gravity should be ignored");
-    assert_eq!(get_f32(c, "gravity_y"), None, "non-numeric c.gravity should be ignored");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "non-numeric c.gravity should be ignored"
+    );
+    assert_eq!(
+        get_f32(c, "gravity_y"),
+        None,
+        "non-numeric c.gravity should be ignored"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
@@ -710,10 +729,17 @@ fn c_gravity_non_numeric() {
 fn c_gravity_empty_value() {
     // c.gravity= (empty value) — should return None, no panic
     let r = expand_zen("w=400&h=400&mode=crop&c.gravity=");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
-    assert_eq!(get_f32(c, "gravity_x"), None, "empty c.gravity should be ignored");
-    assert_eq!(get_f32(c, "gravity_y"), None, "empty c.gravity should be ignored");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "empty c.gravity should be ignored"
+    );
+    assert_eq!(
+        get_f32(c, "gravity_y"),
+        None,
+        "empty c.gravity should be ignored"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
@@ -721,10 +747,17 @@ fn c_gravity_empty_value() {
 fn c_gravity_too_many_values() {
     // c.gravity=30,70,50 (three values) — should return None, no panic
     let r = expand_zen("w=400&h=400&mode=crop&c.gravity=30,70,50");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
-    assert_eq!(get_f32(c, "gravity_x"), None, "three-value c.gravity should be ignored");
-    assert_eq!(get_f32(c, "gravity_y"), None, "three-value c.gravity should be ignored");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "three-value c.gravity should be ignored"
+    );
+    assert_eq!(
+        get_f32(c, "gravity_y"),
+        None,
+        "three-value c.gravity should be ignored"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
@@ -732,10 +765,17 @@ fn c_gravity_too_many_values() {
 fn c_gravity_absent() {
     // No c.gravity key at all — should return None
     let r = expand_zen("w=400&h=400&mode=crop");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
-    assert_eq!(get_f32(c, "gravity_x"), None, "absent c.gravity should leave gravity_x None");
-    assert_eq!(get_f32(c, "gravity_y"), None, "absent c.gravity should leave gravity_y None");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_f32(c, "gravity_x"),
+        None,
+        "absent c.gravity should leave gravity_x None"
+    );
+    assert_eq!(
+        get_f32(c, "gravity_y"),
+        None,
+        "absent c.gravity should leave gravity_y None"
+    );
 }
 
 #[cfg(feature = "imageflow-compat")]
@@ -743,8 +783,7 @@ fn c_gravity_absent() {
 fn c_gravity_after_bare_key() {
     // c.gravity after a bare key (no =) — should still be found
     let r = expand_zen("w=400&h=400&mode=crop&barekey&c.gravity=30,70");
-    let c = find_expanded_node(&r.nodes, "zenresize.constrain")
-        .expect("Constrain node");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
     let gx = get_f32(c, "gravity_x").expect("gravity_x should be set despite preceding bare key");
     let gy = get_f32(c, "gravity_y").expect("gravity_y should be set despite preceding bare key");
     assert!((gx - 0.30).abs() < 0.001, "gravity_x={gx}, expected 0.30");
@@ -756,11 +795,239 @@ fn c_gravity_after_bare_key() {
 fn c_gravity_no_unconsumed_warning() {
     let r = expand_zen("w=800&h=600&mode=crop&c.gravity=30,70");
     // The c.gravity key should NOT produce an "unrecognized key" warning.
-    let gravity_warnings: Vec<_> = r.warnings.iter()
+    let gravity_warnings: Vec<_> = r
+        .warnings
+        .iter()
         .filter(|w| w.contains("c.gravity"))
         .collect();
     assert!(
         gravity_warnings.is_empty(),
         "c.gravity should not produce warnings, got: {gravity_warnings:?}"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  C.FOCUS (smart crop: rects, points, keywords)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_rect_injects_analyze_before_constrain() {
+    let r = expand_zen("c.focus=20,30,80,90&w=800&h=600&mode=crop");
+    // Should have SmartCropAnalyze BEFORE Constrain.
+    let analyze_idx = r
+        .nodes
+        .iter()
+        .position(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    let constrain_idx = r
+        .nodes
+        .iter()
+        .position(|n| n.schema().id == "zenresize.constrain");
+    assert!(
+        analyze_idx.is_some(),
+        "SmartCropAnalyze node should be present"
+    );
+    assert!(constrain_idx.is_some(), "Constrain node should be present");
+    assert!(
+        analyze_idx.unwrap() < constrain_idx.unwrap(),
+        "SmartCropAnalyze should come before Constrain"
+    );
+
+    // Verify the Analyze node has the correct parameters.
+    let a = find_expanded_node(&r.nodes, "zenpipe.smart_crop_analyze").unwrap();
+    assert_eq!(get_str(a, "rects_csv").as_deref(), Some("20,30,80,90"));
+    assert_eq!(get_u32(a, "target_w"), Some(800));
+    assert_eq!(get_u32(a, "target_h"), Some(600));
+    assert_eq!(get_bool(a, "zoom"), Some(false));
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_point_sets_gravity_on_constrain() {
+    let r = expand_zen("c.focus=50,30&w=400&h=400&mode=crop");
+    // Point should set gravity, NOT inject Analyze.
+    let analyze = r
+        .nodes
+        .iter()
+        .find(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_none(),
+        "Point c.focus should NOT inject Analyze node"
+    );
+
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
+    assert!((gx - 0.50).abs() < 0.001, "gravity_x={gx}, expected 0.50");
+    assert!((gy - 0.30).abs() < 0.001, "gravity_y={gy}, expected 0.30");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_faces_without_feature_is_noop() {
+    let r = expand_zen("c.focus=faces&w=800&h=600&mode=crop");
+    // Without nodes-faces feature, faces keyword should be silently ignored.
+    let analyze = r
+        .nodes
+        .iter()
+        .find(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_none(),
+        "c.focus=faces should NOT inject Analyze node without ML feature"
+    );
+    // Should still have the Constrain node.
+    assert!(
+        find_expanded_node(&r.nodes, "zenresize.constrain").is_some(),
+        "Constrain node should still be present"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_without_target_dims_is_noop() {
+    // No w/h means no aspect ratio, so c.focus rects should be ignored.
+    let r = expand_zen("c.focus=20,30,80,90");
+    let analyze = r
+        .nodes
+        .iter()
+        .find(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_none(),
+        "c.focus rects without target dims should be ignored"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_multiple_rects_all_converted() {
+    let r = expand_zen("c.focus=20,30,80,90,10,10,40,40&w=800&h=600&mode=crop");
+    let a = find_expanded_node(&r.nodes, "zenpipe.smart_crop_analyze")
+        .expect("SmartCropAnalyze node should be present");
+    assert_eq!(
+        get_str(a, "rects_csv").as_deref(),
+        Some("20,30,80,90,10,10,40,40"),
+        "All rects should be preserved in CSV"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_zoom_true_propagates() {
+    let r = expand_zen("c.focus=20,30,80,90&c.zoom=true&w=800&h=600&mode=crop");
+    let a = find_expanded_node(&r.nodes, "zenpipe.smart_crop_analyze")
+        .expect("SmartCropAnalyze node should be present");
+    assert_eq!(
+        get_bool(a, "zoom"),
+        Some(true),
+        "c.zoom=true should set zoom=true"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_zoom_false_propagates() {
+    let r = expand_zen("c.focus=20,30,80,90&c.zoom=false&w=800&h=600&mode=crop");
+    let a = find_expanded_node(&r.nodes, "zenpipe.smart_crop_analyze")
+        .expect("SmartCropAnalyze node should be present");
+    assert_eq!(
+        get_bool(a, "zoom"),
+        Some(false),
+        "c.zoom=false should set zoom=false"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_finalmode_propagates() {
+    let r = expand_zen("c.focus=50,30&c.finalmode=pad&w=400&h=400&mode=crop");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    assert_eq!(
+        get_str(c, "mode").as_deref(),
+        Some("pad"),
+        "c.finalmode=pad should override mode on Constrain"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_with_c_gravity_both_apply() {
+    // c.focus point takes precedence over c.gravity for gravity values.
+    let r = expand_zen("c.focus=60,40&c.gravity=30,70&w=400&h=400&mode=crop");
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set");
+    // c.focus=60,40 should override c.gravity=30,70
+    assert!(
+        (gx - 0.60).abs() < 0.001,
+        "gravity_x={gx}, expected 0.60 (c.focus overrides c.gravity)"
+    );
+    assert!(
+        (gy - 0.40).abs() < 0.001,
+        "gravity_y={gy}, expected 0.40 (c.focus overrides c.gravity)"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_rects_with_c_gravity_both_apply() {
+    // c.focus rects inject Analyze, c.gravity sets gravity on Constrain.
+    let r = expand_zen("c.focus=20,30,80,90&c.gravity=30,70&w=800&h=600&mode=crop");
+    // Should have both Analyze and Constrain with gravity.
+    let analyze = find_expanded_node(&r.nodes, "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_some(),
+        "SmartCropAnalyze should be present for rects"
+    );
+
+    let c = find_expanded_node(&r.nodes, "zenresize.constrain").expect("Constrain node");
+    let gx = get_f32(c, "gravity_x").expect("gravity_x should be set from c.gravity");
+    let gy = get_f32(c, "gravity_y").expect("gravity_y should be set from c.gravity");
+    assert!((gx - 0.30).abs() < 0.001, "gravity_x={gx}, expected 0.30");
+    assert!((gy - 0.70).abs() < 0.001, "gravity_y={gy}, expected 0.70");
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_auto_without_feature_is_noop() {
+    let r = expand_zen("c.focus=auto&w=800&h=600&mode=crop");
+    let analyze = r
+        .nodes
+        .iter()
+        .find(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_none(),
+        "c.focus=auto should NOT inject Analyze node without ML feature"
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_invalid_value_no_crash() {
+    // 3 values (not 2 or multiple of 4) — should be silently ignored.
+    let r = expand_zen("c.focus=20,30,80&w=800&h=600&mode=crop");
+    let analyze = r
+        .nodes
+        .iter()
+        .find(|n| n.schema().id == "zenpipe.smart_crop_analyze");
+    assert!(
+        analyze.is_none(),
+        "Invalid c.focus should not produce Analyze node"
+    );
+    // Constrain should still be present.
+    assert!(find_expanded_node(&r.nodes, "zenresize.constrain").is_some());
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn c_focus_no_unconsumed_warnings() {
+    let r = expand_zen("w=800&h=600&mode=crop&c.focus=20,30,80,90&c.zoom=true&c.finalmode=pad");
+    let focus_warnings: Vec<_> = r
+        .warnings
+        .iter()
+        .filter(|w| w.contains("c.focus") || w.contains("c.zoom") || w.contains("c.finalmode"))
+        .collect();
+    assert!(
+        focus_warnings.is_empty(),
+        "c.focus/c.zoom/c.finalmode should not produce warnings, got: {focus_warnings:?}"
     );
 }

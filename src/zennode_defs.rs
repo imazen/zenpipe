@@ -812,6 +812,43 @@ pub struct CropWhitespace {
     pub percent_padding: f32,
 }
 
+/// Content-aware smart crop using focus rectangles.
+///
+/// Materializes the upstream image, computes the optimal crop rectangle
+/// based on focus regions and target aspect ratio, then crops. Uses
+/// `zenlayout::smart_crop::compute_crop` for the crop computation.
+///
+/// Not directly addressable from RIAPI — created programmatically by
+/// `expand_zen()` when `c.focus` specifies rectangle coordinates.
+#[derive(Node, Clone, Debug, Default)]
+#[node(id = "zenpipe.smart_crop_analyze", group = Analysis, role = Analysis)]
+#[node(changes_dimensions)]
+#[node(tags("crop", "smart", "focus", "analysis"))]
+pub struct SmartCropAnalyze {
+    /// Focus rectangles as a comma-separated list of percentage coordinates.
+    ///
+    /// Groups of 4 values: x1,y1,x2,y2 (0-100 range). Multiple rects are
+    /// concatenated: "20,30,80,90,10,10,40,40" = two rects.
+    #[param(default = "")]
+    #[param(section = "Main", label = "Focus Rects")]
+    pub rects_csv: String,
+
+    /// Target width for aspect ratio computation.
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Main", label = "Target Width")]
+    pub target_w: u32,
+
+    /// Target height for aspect ratio computation.
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Main", label = "Target Height")]
+    pub target_h: u32,
+
+    /// Whether to use maximal (tight/zoom) crop mode instead of minimal.
+    #[param(default = false)]
+    #[param(section = "Main", label = "Zoom")]
+    pub zoom: bool,
+}
+
 /// Fill a rectangle with a solid color.
 ///
 /// Materializes the upstream image, draws the rectangle, then re-streams.
@@ -1516,6 +1553,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &RESIZE_NODE,
     // Pipeline
     &CROP_WHITESPACE_NODE,
+    &SMART_CROP_ANALYZE_NODE,
     &FILL_RECT_NODE,
     &REMOVE_ALPHA_NODE,
     &ROUND_CORNERS_NODE,

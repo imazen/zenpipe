@@ -85,14 +85,81 @@ pub fn expand_legacy(
         .map_err(|e| TranslateError::InvalidParam(format!("RIAPI expansion error: {e:?}")))?;
 
     let steps = result.steps.unwrap_or_default();
-    let mut warnings: Vec<String> =
-        result.parse_warnings.iter().map(|w| format!("{w:?}")).collect();
+    let mut warnings: Vec<String> = result
+        .parse_warnings
+        .iter()
+        .map(|w| format!("{w:?}"))
+        .collect();
 
     // Translate v2 Node steps → zennode instances.
     // RIAPI path never produces Watermark nodes, so pass empty io_buffers.
     let pipeline = translate::translate_nodes(&steps, &std::collections::HashMap::new())?;
 
-    Ok(ExpandedRiapi { nodes: pipeline.nodes, preset: pipeline.preset, warnings })
+    let mut nodes = pipeline.nodes;
+
+    // Apply c.focus / c.zoom / c.finalmode post-processing (same as expand_zen).
+    let c_focus = parse_c_focus(querystring);
+    let c_zoom = parse_c_zoom(querystring);
+    let c_finalmode = parse_c_finalmode(querystring);
+
+    // Apply c.focus point and c.finalmode to the Constrain node.
+    for inst in &mut nodes {
+        let schema_id = inst.schema().id;
+        if schema_id == "zenresize.constrain" || schema_id == "zenlayout.constrain" {
+            if let Some(CFocusParsed::Point(fx, fy)) = &c_focus {
+                let gx = (fx / 100.0).clamp(0.0, 1.0);
+                let gy = (fy / 100.0).clamp(0.0, 1.0);
+                inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
+                inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
+            }
+            if let Some(ref fm) = c_finalmode {
+                inst.set_param("mode", zennode::ParamValue::Str(fm.clone()));
+            }
+        }
+    }
+
+    // Inject SmartCropAnalyze before Constrain for c.focus rects.
+    if let Some(CFocusParsed::Rects(ref rects)) = c_focus {
+        let constrain_idx = nodes.iter().position(|n| {
+            let id = n.schema().id;
+            id == "zenresize.constrain" || id == "zenlayout.constrain"
+        });
+
+        if let Some(idx) = constrain_idx {
+            let constrain = &nodes[idx];
+            let target_w = constrain
+                .get_param("w")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+            let target_h = constrain
+                .get_param("h")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+
+            if target_w > 0 && target_h > 0 {
+                let csv: String = rects
+                    .iter()
+                    .flat_map(|r| r.iter().copied())
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+
+                let mut analyze = crate::zennode_defs::SmartCropAnalyze::default();
+                analyze.rects_csv = csv;
+                analyze.target_w = target_w;
+                analyze.target_h = target_h;
+                analyze.zoom = c_zoom.unwrap_or(false);
+
+                nodes.insert(idx, Box::new(analyze));
+            }
+        }
+    }
+
+    Ok(ExpandedRiapi {
+        nodes,
+        preset: pipeline.preset,
+        warnings,
+    })
 }
 
 /// Expand a RIAPI querystring using the zen-native parser.
@@ -119,18 +186,22 @@ pub fn expand_zen(
     // Each registered node claims its own keys via #[kv(...)] annotations.
     let kv_result = registry.from_querystring(querystring);
 
-    // 2b. Parse c.gravity from the raw querystring — compound key that
-    // maps to two separate fields (gravity_x, gravity_y) on the Constrain node.
-    // The #[kv] system can't handle one key → two fields, so we do it manually.
+    // 2b. Parse compound keys from the raw querystring — these map to
+    // multiple fields or require special handling beyond #[kv].
     let c_gravity = parse_c_gravity(querystring);
+    let c_focus = parse_c_focus(querystring);
+    let c_zoom = parse_c_zoom(querystring);
+    let c_finalmode = parse_c_finalmode(querystring);
 
     let mut nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
     let mut preset = None;
     let mut warnings: Vec<String> = Vec::new();
 
+    // Keys we handle manually — suppress "unrecognized key" warnings for these.
+    const MANUAL_KEYS: &[&str] = &["c.gravity", "c.focus", "c.zoom", "c.finalmode"];
+
     for w in &kv_result.warnings {
-        // Suppress the "unrecognized key" warning for c.gravity — we handle it here.
-        if w.key == "c.gravity" {
+        if MANUAL_KEYS.iter().any(|k| w.key.eq_ignore_ascii_case(k)) {
             continue;
         }
         warnings.push(format!("{}: {}", w.key, w.message));
@@ -141,8 +212,9 @@ pub fn expand_zen(
         let schema_id = inst.schema().id;
         if schema_id == "zencodecs.quality_intent" {
             // Extract codec intent from QualityIntentNode.
-            if let Some(qin) =
-                inst.as_any().downcast_ref::<zencodecs::zennode_defs::QualityIntentNode>()
+            if let Some(qin) = inst
+                .as_any()
+                .downcast_ref::<zencodecs::zennode_defs::QualityIntentNode>()
             {
                 let intent = qin.to_codec_intent();
                 preset = Some(PresetMapping {
@@ -154,18 +226,83 @@ pub fn expand_zen(
                 });
             }
         } else {
-            // Apply c.gravity to the Constrain node if present.
             if schema_id == "zenresize.constrain" {
+                // Apply c.gravity to the Constrain node.
                 if let Some((gx, gy)) = c_gravity {
                     inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
                     inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
+                }
+
+                // Apply c.focus point — overrides c.gravity if both present.
+                if let Some(CFocusParsed::Point(fx, fy)) = &c_focus {
+                    let gx = (fx / 100.0).clamp(0.0, 1.0);
+                    let gy = (fy / 100.0).clamp(0.0, 1.0);
+                    inst.set_param("gravity_x", zennode::ParamValue::F32(gx));
+                    inst.set_param("gravity_y", zennode::ParamValue::F32(gy));
+                }
+
+                // Apply c.finalmode — override the Constrain mode.
+                if let Some(ref fm) = c_finalmode {
+                    inst.set_param("mode", zennode::ParamValue::Str(fm.clone()));
                 }
             }
             nodes.push(inst);
         }
     }
 
-    Ok(ExpandedRiapi { nodes, preset, warnings })
+    // 4. Inject SmartCropAnalyze before Constrain for c.focus rects.
+    if let Some(CFocusParsed::Rects(ref rects)) = c_focus {
+        // Find the Constrain node and extract target dimensions.
+        let constrain_idx = nodes
+            .iter()
+            .position(|n| n.schema().id == "zenresize.constrain");
+
+        if let Some(idx) = constrain_idx {
+            let constrain = &nodes[idx];
+            let target_w = constrain
+                .get_param("w")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+            let target_h = constrain
+                .get_param("h")
+                .and_then(|v| v.as_u32())
+                .unwrap_or(0);
+
+            // Only inject if we have target dimensions (need aspect ratio).
+            if target_w > 0 && target_h > 0 {
+                // Build CSV from rects.
+                let csv: String = rects
+                    .iter()
+                    .flat_map(|r| r.iter().copied())
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+
+                let mut analyze = crate::zennode_defs::SmartCropAnalyze::default();
+                analyze.rects_csv = csv;
+                analyze.target_w = target_w;
+                analyze.target_h = target_h;
+                analyze.zoom = c_zoom.unwrap_or(false);
+
+                // Insert BEFORE the Constrain node.
+                nodes.insert(idx, Box::new(analyze));
+            }
+        }
+    }
+
+    // Faces / Auto: silently ignored without nodes-faces feature.
+    // No error, no Analyze node — normal crop proceeds.
+    #[cfg(feature = "nodes-faces")]
+    if matches!(c_focus, Some(CFocusParsed::Faces | CFocusParsed::Auto)) {
+        // TODO: Build ML Analyze closure when nodes-faces is available.
+        // For now, silently ignored even with the feature.
+    }
+
+    Ok(ExpandedRiapi {
+        nodes,
+        preset,
+        warnings,
+    })
 }
 
 /// Parse `c.gravity=x,y` from a raw querystring.
@@ -182,6 +319,108 @@ fn parse_c_gravity(querystring: &str) -> Option<(f32, f32)> {
             let x: f32 = x_str.trim().parse().ok()?;
             let y: f32 = y_str.trim().parse().ok()?;
             return Some(((x / 100.0).clamp(0.0, 1.0), (y / 100.0).clamp(0.0, 1.0)));
+        }
+    }
+    None
+}
+
+// ─── c.focus / c.zoom / c.finalmode parsing ───
+
+/// Parsed `c.focus` value.
+#[derive(Debug, Clone, PartialEq)]
+enum CFocusParsed {
+    /// Focal point (x, y) in percentage coords (0-100). 2-value form.
+    Point(f32, f32),
+    /// Focus rectangles [x1, y1, x2, y2] in percentage coords (0-100).
+    Rects(Vec<[f32; 4]>),
+    /// Keyword: trigger face detection (requires ML backend).
+    Faces,
+    /// Keyword: trigger faces + saliency (requires ML backend).
+    Auto,
+}
+
+/// Parse `c.focus` from a raw querystring.
+///
+/// Supports:
+/// - `c.focus=faces` → `Faces`
+/// - `c.focus=auto` → `Auto`
+/// - `c.focus=50,30` → `Point(50.0, 30.0)`
+/// - `c.focus=20,30,80,90` → `Rects([[20,30,80,90]])`
+/// - `c.focus=20,30,80,90,10,10,40,40` → `Rects([[20,30,80,90],[10,10,40,40]])`
+///
+/// Returns `None` on parse failure (graceful degradation, no crash).
+fn parse_c_focus(querystring: &str) -> Option<CFocusParsed> {
+    for part in querystring.split('&') {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        if !key.eq_ignore_ascii_case("c.focus") {
+            continue;
+        }
+        let value = value.trim();
+        if value.is_empty() {
+            return None;
+        }
+
+        // Check keywords first.
+        if value.eq_ignore_ascii_case("faces") {
+            return Some(CFocusParsed::Faces);
+        }
+        if value.eq_ignore_ascii_case("auto") {
+            return Some(CFocusParsed::Auto);
+        }
+
+        // Parse as comma-separated floats.
+        let floats: Vec<f32> = value
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+
+        match floats.len() {
+            2 => return Some(CFocusParsed::Point(floats[0], floats[1])),
+            n if n >= 4 && n % 4 == 0 => {
+                let rects: Vec<[f32; 4]> = floats
+                    .chunks_exact(4)
+                    .map(|c| [c[0], c[1], c[2], c[3]])
+                    .collect();
+                return Some(CFocusParsed::Rects(rects));
+            }
+            _ => return None, // Invalid count — silent failure
+        }
+    }
+    None
+}
+
+/// Parse `c.zoom=true|false` from a raw querystring.
+fn parse_c_zoom(querystring: &str) -> Option<bool> {
+    for part in querystring.split('&') {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        if key.eq_ignore_ascii_case("c.zoom") {
+            return match value.trim().to_ascii_lowercase().as_str() {
+                "true" | "1" | "yes" => Some(true),
+                "false" | "0" | "no" => Some(false),
+                _ => None,
+            };
+        }
+    }
+    None
+}
+
+/// Parse `c.finalmode` from a raw querystring.
+fn parse_c_finalmode(querystring: &str) -> Option<String> {
+    for part in querystring.split('&') {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        if key.eq_ignore_ascii_case("c.finalmode") {
+            let v = value.trim();
+            if v.is_empty() {
+                return None;
+            }
+            return Some(v.to_string());
         }
     }
     None
