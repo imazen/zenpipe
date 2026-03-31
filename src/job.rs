@@ -38,6 +38,8 @@ use crate::Source;
 use crate::bridge::NodeConverter;
 #[allow(unused_imports)]
 use whereat::at;
+#[allow(unused_imports)]
+use whereat::at_crate;
 
 use crate::error::PipeError;
 use crate::format::PixelFormat;
@@ -431,7 +433,7 @@ impl<'a> ImageJob<'a> {
         };
 
         // 2. Probe the source.
-        let image_info = zencodecs::from_bytes_with_registry(input_bytes, &self.registry)
+        let image_info = at_crate!(zencodecs::from_bytes_with_registry(input_bytes, &self.registry))
             .map_err(|e| at!(PipeError::Op(alloc::format!("probe failed: {e}"))))?;
 
         let decode_info = DecodeInfo {
@@ -448,12 +450,12 @@ impl<'a> ImageJob<'a> {
         let facts = zencodecs::ImageFacts::from_image_info(&image_info);
 
         // 4. Select output format.
-        let decision = zencodecs::select_format_from_intent(
+        let decision = at_crate!(zencodecs::select_format_from_intent(
             &self.intent,
             &facts,
             &self.registry,
             &zencodecs::CodecPolicy::default(),
-        )
+        ))
         .map_err(|e| at!(PipeError::Op(alloc::format!("format selection failed: {e}"))))?;
 
         // 5. Decode the source to a pixel stream, optionally extracting gain map.
@@ -549,9 +551,9 @@ impl<'a> ImageJob<'a> {
             }
             Err(_) => {
                 // Fall back to full-frame decode.
-                let decoded = zencodecs::DecodeRequest::new(data)
+                let decoded = at_crate!(zencodecs::DecodeRequest::new(data)
                     .with_registry(&self.registry)
-                    .decode_full_frame()
+                    .decode_full_frame())
                     .map_err(|e| at!(PipeError::Op(alloc::format!("decode failed: {e}"))))?;
 
                 let pixels = decoded.pixels();
@@ -583,8 +585,8 @@ impl<'a> ImageJob<'a> {
             request = request.with_codec_config(config);
         }
 
-        let (decoded, gain_map) = request
-            .decode_gain_map()
+        let (decoded, gain_map) = at_crate!(request
+            .decode_gain_map())
             .map_err(|e| at!(PipeError::Op(alloc::format!("decode with gain map failed: {e}"))))?;
 
         // Convert base image to Source.
@@ -868,8 +870,8 @@ impl<'a> ImageJob<'a> {
                     }
                 }
 
-                let encode_output = oneshot_request
-                    .encode(pixels, format.has_alpha())
+                let encode_output = at_crate!(oneshot_request
+                    .encode(pixels, format.has_alpha()))
                     .map_err(|e| at!(PipeError::Op(alloc::format!("encode failed: {e}"))))?;
 
                 Ok(EncodeResult {
