@@ -2,6 +2,9 @@ use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::{Strip, StripBuf};
@@ -35,7 +38,7 @@ impl CompositeSource {
     pub fn over(
         background: Box<dyn Source>,
         foreground: Box<dyn Source>,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         Self::over_at(background, foreground, 0, 0)
     }
 
@@ -51,19 +54,19 @@ impl CompositeSource {
         foreground: Box<dyn Source>,
         fg_x: u32,
         fg_y: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let fmt = format::RGBAF32_LINEAR_PREMUL;
         if background.format() != fmt {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: fmt,
                 got: background.format(),
-            });
+            }));
         }
         if foreground.format() != fmt {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: fmt,
                 got: foreground.format(),
-            });
+            }));
         }
 
         let w = background.width();
@@ -88,7 +91,7 @@ impl CompositeSource {
 }
 
 impl Source for CompositeSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.height {
             return Ok(None);
         }

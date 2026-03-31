@@ -23,6 +23,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::Strip;
@@ -50,13 +53,13 @@ impl TeeSource {
     pub fn new_checked(
         upstream: Box<dyn Source>,
         limits: &crate::limits::Limits,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         limits.check(upstream.width(), upstream.height(), upstream.format())?;
         Self::new(upstream)
     }
 
     /// Materialize the upstream source and prepare for fan-out.
-    pub fn new(mut upstream: Box<dyn Source>) -> Result<Self, PipeError> {
+    pub fn new(mut upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
@@ -138,7 +141,8 @@ pub struct TeeCursor {
 }
 
 impl Source for TeeCursor {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         if self.y >= self.height {
             return Ok(None);
         }
@@ -155,7 +159,7 @@ impl Source for TeeCursor {
             rows,
             self.stride,
             self.format,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

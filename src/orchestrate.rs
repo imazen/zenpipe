@@ -43,6 +43,9 @@ use alloc::boxed::Box;
 
 use crate::Source;
 use crate::bridge::{self, CompileResult, DecodeConfig, EncodeConfig, NodeConverter};
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::sidecar::{ProcessedSidecar, SidecarPlan, SidecarStream};
@@ -219,7 +222,7 @@ pub fn stream(
     source: Box<dyn Source>,
     config: &ProcessConfig<'_>,
     sidecar: Option<SidecarStream>,
-) -> Result<StreamingOutput, PipeError> {
+) -> crate::PipeResult<StreamingOutput> {
     let CompileResult {
         graph,
         encode_config,
@@ -310,7 +313,7 @@ pub fn stream(
 pub fn process(
     source: Box<dyn Source>,
     config: &ProcessConfig<'_>,
-) -> Result<ProcessedImage, PipeError> {
+) -> crate::PipeResult<ProcessedImage> {
     process_with_sidecar(source, config, None)
 }
 
@@ -335,7 +338,7 @@ pub fn process_with_sidecar(
     source: Box<dyn Source>,
     config: &ProcessConfig<'_>,
     sidecar: Option<SidecarStream>,
-) -> Result<ProcessedImage, PipeError> {
+) -> crate::PipeResult<ProcessedImage> {
     // 1. Compile nodes: separate decode/encode, coalesce, build graph.
     let CompileResult {
         graph,
@@ -409,7 +412,7 @@ fn process_sidecar(
     sidecar_stream: SidecarStream,
     source_info: &SourceImageInfo,
     primary: &MaterializedSource,
-) -> Result<ProcessedSidecar, PipeError> {
+) -> crate::PipeResult<ProcessedSidecar> {
     let primary_source = Size::new(source_info.width, source_info.height);
     let sidecar_source = Size::new(sidecar_stream.width, sidecar_stream.height);
 
@@ -421,7 +424,7 @@ fn process_sidecar(
     let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_output.width, primary_output.height)
         .plan()
-        .map_err(|e| PipeError::Op(alloc::format!("sidecar layout plan failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("sidecar layout plan failed: {e}"))))?;
 
     // Derive proportional transforms for the sidecar.
     let plan = SidecarPlan::derive(
@@ -445,13 +448,13 @@ fn process_sidecar_from_dims(
     source_info: &SourceImageInfo,
     primary_w: u32,
     primary_h: u32,
-) -> Result<ProcessedSidecar, PipeError> {
+) -> crate::PipeResult<ProcessedSidecar> {
     let sidecar_source = Size::new(sidecar_stream.width, sidecar_stream.height);
 
     let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_w, primary_h)
         .plan()
-        .map_err(|e| PipeError::Op(alloc::format!("sidecar layout plan failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("sidecar layout plan failed: {e}"))))?;
 
     let plan = SidecarPlan::derive(
         &primary_ideal,
@@ -484,7 +487,7 @@ mod tests {
         }
     }
     impl crate::Source for SolidSource {
-        fn next(&mut self) -> Result<Option<crate::Strip<'_>>, PipeError> {
+        fn next(&mut self) -> crate::PipeResult<Option<crate::Strip<'_>>> {
             if self.y >= self.h {
                 return Ok(None);
             }
@@ -495,7 +498,7 @@ mod tests {
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
             Ok(Some(crate::strip::Strip::new(
                 leaked, self.w, rows, stride, RGBA8_SRGB,
-            )?))
+            ).pipe_err()?))
         }
         fn width(&self) -> u32 {
             self.w

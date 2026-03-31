@@ -4,41 +4,44 @@ use alloc::string::{String, ToString};
 
 use zennode::NodeInstance;
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 
-pub(crate) fn param_u32(node: &dyn NodeInstance, name: &str) -> Result<u32, PipeError> {
+pub(crate) fn param_u32(node: &dyn NodeInstance, name: &str) -> crate::PipeResult<u32> {
     node.get_param(name)
         .and_then(|v| v.as_u32())
         .ok_or_else(|| {
-            PipeError::Op(alloc::format!(
+            at!(PipeError::Op(alloc::format!(
                 "bridge: missing or invalid u32 param '{}' on '{}'",
                 name,
                 node.schema().id,
-            ))
+            )))
         })
 }
 
-pub(crate) fn param_i32(node: &dyn NodeInstance, name: &str) -> Result<i32, PipeError> {
+pub(crate) fn param_i32(node: &dyn NodeInstance, name: &str) -> crate::PipeResult<i32> {
     node.get_param(name)
         .and_then(|v| v.as_i32())
         .ok_or_else(|| {
-            PipeError::Op(alloc::format!(
+            at!(PipeError::Op(alloc::format!(
                 "bridge: missing or invalid i32 param '{}' on '{}'",
                 name,
                 node.schema().id,
-            ))
+            )))
         })
 }
 
-pub(crate) fn param_str(node: &dyn NodeInstance, name: &str) -> Result<String, PipeError> {
+pub(crate) fn param_str(node: &dyn NodeInstance, name: &str) -> crate::PipeResult<String> {
     node.get_param(name)
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .ok_or_else(|| {
-            PipeError::Op(alloc::format!(
+            at!(PipeError::Op(alloc::format!(
                 "bridge: missing or invalid string param '{}' on '{}'",
                 name,
                 node.schema().id,
-            ))
+            )))
         })
 }
 
@@ -46,7 +49,7 @@ pub(crate) fn param_f32_opt(node: &dyn NodeInstance, name: &str) -> Option<f32> 
     node.get_param(name).and_then(|v| v.as_f32())
 }
 
-pub(crate) fn parse_constraint_mode(s: &str) -> Result<zenresize::ConstraintMode, PipeError> {
+pub(crate) fn parse_constraint_mode(s: &str) -> crate::PipeResult<zenresize::ConstraintMode> {
     match s {
         "distort" => Ok(zenresize::ConstraintMode::Distort),
         "fit" => Ok(zenresize::ConstraintMode::Fit),
@@ -58,12 +61,12 @@ pub(crate) fn parse_constraint_mode(s: &str) -> Result<zenresize::ConstraintMode
         "pad_within" => Ok(zenresize::ConstraintMode::PadWithin),
         "aspect_crop" => Ok(zenresize::ConstraintMode::AspectCrop),
         // "larger_than" not yet in zenresize
-        "larger_than" => Err(PipeError::Op(alloc::format!(
+        "larger_than" => Err(at!(PipeError::Op(alloc::format!(
             "larger_than mode not yet supported"
-        ))),
-        _ => Err(PipeError::Op(alloc::format!(
+        )))),
+        _ => Err(at!(PipeError::Op(alloc::format!(
             "bridge: unknown constraint mode '{s}'"
-        ))),
+        )))),
     }
 }
 

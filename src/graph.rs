@@ -46,6 +46,9 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::ops::{PixelOp, RowConverterOp};
@@ -77,14 +80,14 @@ pub type AnalyzeBuilder = Box<
     dyn FnOnce(
             MaterializedSource,
             Option<crate::trace::TraceAppender>,
-        ) -> Result<Box<dyn Source>, PipeError>
+        ) -> crate::PipeResult<Box<dyn Source>>
         + Send,
 >;
 
 /// A closure that analyzes a materialized buffer and returns a new source chain (no-std).
 #[cfg(not(feature = "std"))]
 pub type AnalyzeBuilder =
-    Box<dyn FnOnce(MaterializedSource) -> Result<Box<dyn Source>, PipeError> + Send>;
+    Box<dyn FnOnce(MaterializedSource) -> crate::PipeResult<Box<dyn Source>> + Send>;
 
 /// Metadata about a source, used by [`PipelineGraph::estimate`].
 ///
@@ -142,14 +145,14 @@ impl ResourceEstimate {
     }
 
     /// Check this estimate against resource limits.
-    pub fn check(&self, limits: &crate::Limits) -> Result<(), PipeError> {
+    pub fn check(&self, limits: &crate::Limits) -> crate::PipeResult<()> {
         limits.check(self.output_width, self.output_height, self.output_format)?;
         if let Some(max_mem) = limits.max_memory_bytes {
             if self.peak_memory_bytes() > max_mem {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "estimated peak memory {} bytes exceeds limit {max_mem}",
                     self.peak_memory_bytes()
-                )));
+                ))));
             }
         }
         Ok(())
@@ -502,10 +505,10 @@ impl PipelineGraph {
     /// Validate graph structure: no cycles, valid node references, exactly one output.
     ///
     /// Called automatically by [`estimate()`](Self::estimate) and [`compile()`](Self::compile).
-    pub fn validate(&self) -> Result<(), PipeError> {
+    pub fn validate(&self) -> crate::PipeResult<()> {
         // Must have at least one node
         if self.nodes.is_empty() {
-            return Err(PipeError::Op("graph has no nodes".to_string()));
+            return Err(at!(PipeError::Op("graph has no nodes".to_string())));
         }
 
         // Exactly one Output node
@@ -515,35 +518,35 @@ impl PipelineGraph {
             .filter(|n| matches!(&n.op, Some(NodeOp::Output)))
             .count();
         if output_count == 0 {
-            return Err(PipeError::Op("graph has no Output node".to_string()));
+            return Err(at!(PipeError::Op("graph has no Output node".to_string())));
         }
         if output_count > 1 {
-            return Err(PipeError::Op(alloc::format!(
+            return Err(at!(PipeError::Op(alloc::format!(
                 "graph has {output_count} Output nodes, expected 1"
-            )));
+            ))));
         }
 
         // All edge references must be valid node indices
         for (i, e) in self.edges.iter().enumerate() {
             if e.from >= self.nodes.len() {
-                return Err(PipeError::Op(alloc::format!(
+                return Err(at!(PipeError::Op(alloc::format!(
                     "edge {i}: source node {} out of range (graph has {} nodes)",
                     e.from,
                     self.nodes.len()
-                )));
+                ))));
             }
             if e.to >= self.nodes.len() {
-                return Err(PipeError::Op(alloc::format!(
+                return Err(at!(PipeError::Op(alloc::format!(
                     "edge {i}: target node {} out of range (graph has {} nodes)",
                     e.to,
                     self.nodes.len()
-                )));
+                ))));
             }
             if e.from == e.to {
-                return Err(PipeError::Op(alloc::format!(
+                return Err(at!(PipeError::Op(alloc::format!(
                     "edge {i}: self-loop on node {}",
                     e.from
-                )));
+                ))));
             }
         }
 
@@ -560,16 +563,16 @@ impl PipelineGraph {
     }
 
     /// DFS cycle detection. Traverses edges in reverse (to→from is our direction).
-    fn dfs_cycle_check(&self, node: usize, color: &mut [u8]) -> Result<(), PipeError> {
+    fn dfs_cycle_check(&self, node: usize, color: &mut [u8]) -> crate::PipeResult<()> {
         color[node] = 1; // gray — in progress
         // Follow edges where this node is the target (upstream nodes)
         for e in &self.edges {
             if e.to == node {
                 let upstream = e.from;
                 if color[upstream] == 1 {
-                    return Err(PipeError::Op(alloc::format!(
+                    return Err(at!(PipeError::Op(alloc::format!(
                         "cycle detected: node {upstream} → node {node}"
-                    )));
+                    ))));
                 }
                 if color[upstream] == 0 {
                     self.dfs_cycle_check(upstream, color)?;
@@ -595,7 +598,7 @@ impl PipelineGraph {
     pub fn estimate(
         &self,
         source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
-    ) -> Result<ResourceEstimate, PipeError> {
+    ) -> crate::PipeResult<ResourceEstimate> {
         self.validate()?;
         let output_id = self
             .nodes
@@ -617,23 +620,23 @@ impl PipelineGraph {
         source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
         est: &mut ResourceEstimate,
         depth: usize,
-    ) -> Result<SourceInfo, PipeError> {
+    ) -> crate::PipeResult<SourceInfo> {
         if depth > MAX_GRAPH_DEPTH {
-            return Err(PipeError::Op(alloc::format!(
+            return Err(at!(PipeError::Op(alloc::format!(
                 "graph depth exceeds {MAX_GRAPH_DEPTH} at node {node_id}"
-            )));
+            ))));
         }
         let op = self
             .nodes
             .get(node_id)
             .and_then(|n| n.op.as_ref())
-            .ok_or_else(|| PipeError::Op(alloc::format!("node {node_id} has no op")))?;
+            .ok_or_else(|| at!(PipeError::Op(alloc::format!("node {node_id} has no op"))))?;
 
         match op {
             NodeOp::Source => source_info
                 .get(&node_id)
                 .cloned()
-                .ok_or_else(|| PipeError::Op(alloc::format!("no source info for node {node_id}"))),
+                .ok_or_else(|| at!(PipeError::Op(alloc::format!("no source info for node {node_id}")))),
 
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
@@ -956,7 +959,7 @@ impl PipelineGraph {
     pub fn compile(
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
-    ) -> Result<Box<dyn Source>, PipeError> {
+    ) -> crate::PipeResult<Box<dyn Source>> {
         self.validate()?;
         let output_id = self
             .nodes
@@ -977,12 +980,11 @@ impl PipelineGraph {
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
         config: &crate::trace::TraceConfig,
-    ) -> Result<
+    ) -> crate::PipeResult<
         (
             Box<dyn Source>,
             alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
         ),
-        PipeError,
     > {
         self.validate()?;
         let trace =
@@ -1017,15 +1019,15 @@ impl PipelineGraph {
         Ok((source, trace))
     }
 
-    fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> Result<NodeId, PipeError> {
+    fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> crate::PipeResult<NodeId> {
         for e in &self.edges {
             if e.to == node_id && e.kind == kind {
                 return Ok(e.from);
             }
         }
-        Err(PipeError::Op(alloc::format!(
+        Err(at!(PipeError::Op(alloc::format!(
             "node {node_id} has no {kind:?} input edge"
-        )))
+        ))))
     }
 
     fn output_count(&self, node_id: NodeId) -> usize {
@@ -1036,11 +1038,11 @@ impl PipelineGraph {
         self.nodes[id].op.as_ref()
     }
 
-    fn take_op(&mut self, id: NodeId) -> Result<NodeOp, PipeError> {
+    fn take_op(&mut self, id: NodeId) -> crate::PipeResult<NodeOp> {
         self.nodes[id]
             .op
             .take()
-            .ok_or_else(|| PipeError::Op(alloc::format!("node {id} already compiled")))
+            .ok_or_else(|| at!(PipeError::Op(alloc::format!("node {id} already compiled"))))
     }
 
     fn compile_node(
@@ -1048,7 +1050,7 @@ impl PipelineGraph {
         node_id: NodeId,
         sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
         depth: usize,
-    ) -> Result<Box<dyn Source>, PipeError> {
+    ) -> crate::PipeResult<Box<dyn Source>> {
         // Capture op metadata before it's consumed — only when tracer is active.
         // Description is computed eagerly here (before take_op consumes it),
         // but only when tracing is on — zero alloc when inactive.
@@ -1095,11 +1097,11 @@ impl PipelineGraph {
         node_id: NodeId,
         sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
         depth: usize,
-    ) -> Result<(Box<dyn Source>, Option<UpstreamMeta>), PipeError> {
+    ) -> crate::PipeResult<(Box<dyn Source>, Option<UpstreamMeta>)> {
         if depth > MAX_GRAPH_DEPTH {
-            return Err(PipeError::Op(alloc::format!(
+            return Err(at!(PipeError::Op(alloc::format!(
                 "graph depth exceeds {MAX_GRAPH_DEPTH} at node {node_id}"
-            )));
+            ))));
         }
         let op = self.take_op(node_id)?;
 
@@ -1294,7 +1296,7 @@ impl PipelineGraph {
 
                 let (ideal, request) = pipeline
                     .plan()
-                    .map_err(|e| PipeError::Op(alloc::format!("layout plan failed: {e}")))?;
+                    .map_err(|e| at!(PipeError::Op(alloc::format!("layout plan failed: {e}"))))?;
                 let offer = zenresize::DecoderOffer::full_decode(in_w, in_h);
                 let plan = ideal.finalize(&request, &offer);
                 let f = filter.unwrap_or(zenresize::Filter::Robidoux);
@@ -1778,7 +1780,7 @@ fn compile_orient(
     orientation: zenresize::Orientation,
     depth: usize,
     #[cfg(feature = "std")] tracer: &crate::trace::Tracer,
-) -> Result<(Box<dyn Source>, Option<crate::trace::UpstreamMeta>), PipeError> {
+) -> crate::PipeResult<(Box<dyn Source>, Option<crate::trace::UpstreamMeta>)> {
     let input_id = graph.find_input(node_id, EdgeKind::Input)?;
     let upstream = graph.compile_node(input_id, sources, depth + 1)?;
     #[cfg(feature = "std")]
@@ -1816,7 +1818,7 @@ fn compile_orient(
 fn ensure_format(
     source: Box<dyn Source>,
     target: PixelFormat,
-) -> Result<Box<dyn Source>, PipeError> {
+) -> crate::PipeResult<Box<dyn Source>> {
     let current = source.format();
     if current == target {
         return Ok(source);

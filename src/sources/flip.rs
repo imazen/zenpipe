@@ -1,6 +1,9 @@
 use alloc::boxed::Box;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -27,7 +30,7 @@ impl FlipHSource {
 }
 
 impl Source for FlipHSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);

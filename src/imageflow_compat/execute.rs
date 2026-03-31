@@ -31,7 +31,7 @@ fn build_pipeline_maybe_traced(
     source: Box<dyn crate::Source>,
     nodes: &[Box<dyn zennode::NodeInstance>],
     converters: &[&dyn crate::bridge::NodeConverter],
-) -> Result<crate::PipelineResult, crate::PipeError> {
+) -> crate::PipeResult<crate::PipelineResult> {
     let trace_mode = std::env::var("ZENPIPE_TRACE").unwrap_or_default();
     if trace_mode.is_empty() {
         return crate::bridge::build_pipeline(source, nodes, converters);
@@ -132,6 +132,12 @@ impl From<TranslateError> for ZenError {
 impl From<crate::PipeError> for ZenError {
     fn from(e: crate::PipeError) -> Self {
         Self::Pipeline(e)
+    }
+}
+
+impl From<whereat::At<crate::PipeError>> for ZenError {
+    fn from(e: whereat::At<crate::PipeError>) -> Self {
+        Self::Pipeline(e.into_inner())
     }
 }
 

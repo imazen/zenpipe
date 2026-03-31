@@ -20,6 +20,9 @@ use alloc::vec::Vec;
 use zenpixels_convert::cms::{ColorManagement, RowTransform};
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::Strip;
@@ -66,13 +69,13 @@ impl IccTransformSource {
         src_icc: &[u8],
         dst_icc: &[u8],
         cms: &C,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let format = upstream.format();
         let pixel_format = format.pixel_format();
 
         let transform = cms
             .build_transform_for_format(src_icc, dst_icc, pixel_format, pixel_format)
-            .map_err(|e| PipeError::Op(alloc::format!("ICC transform failed: {e:?}")))?;
+            .map_err(|e| at!(PipeError::Op(alloc::format!("ICC transform failed: {e:?}"))))?;
 
         Ok(Self {
             upstream,
@@ -109,7 +112,8 @@ impl IccTransformSource {
 }
 
 impl Source for IccTransformSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
@@ -138,7 +142,7 @@ impl Source for IccTransformSource {
             height,
             stride,
             self.format,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

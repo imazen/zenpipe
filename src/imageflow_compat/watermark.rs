@@ -19,6 +19,9 @@ use imageflow_types::{
 use zennode::{NodeInstance, NodeSchema, ParamMap, ParamValue};
 use crate::bridge::NodeConverter;
 use crate::graph::NodeOp;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::PipeError;
 
 use super::execute::ZenError;
@@ -162,7 +165,7 @@ impl NodeConverter for WatermarkConverter {
         schema_id == "imageflow.watermark_red_dot" || schema_id == "imageflow.watermark_overlay"
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         let schema_id = node.schema().id;
         match schema_id {
             "imageflow.watermark_red_dot" => Ok(make_red_dot_materialize()),
@@ -173,15 +176,15 @@ impl NodeConverter for WatermarkConverter {
                     })?;
                 Ok(make_watermark_materialize(overlay.clone()))
             }
-            _ => Err(PipeError::Op(format!("WatermarkConverter: unknown schema '{schema_id}'"))),
+            _ => Err(at!(PipeError::Op(format!("WatermarkConverter: unknown schema '{schema_id}'")))),
         }
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         if let Some(node) = nodes.first() {
             self.convert(*node)
         } else {
-            Err(PipeError::Op("empty watermark group".into()))
+            Err(at!(PipeError::Op("empty watermark group".into())))
         }
     }
 }
@@ -423,7 +426,7 @@ pub fn decode_watermark(
             crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
         let mat_source: Box<dyn crate::Source> = Box::new(transform);
         let mat = crate::sources::MaterializedSource::from_source(mat_source)
-            .map_err(ZenError::Pipeline)?;
+            .map_err(|e| ZenError::Pipeline(e.into_inner()))?;
         mat.data().to_vec()
     };
 

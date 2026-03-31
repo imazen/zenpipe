@@ -36,6 +36,9 @@ use hashbrown::HashMap;
 
 use crate::Source;
 use crate::bridge::NodeConverter;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::limits::Limits;
@@ -415,21 +418,21 @@ impl<'a> ImageJob<'a> {
     /// Execute the job: probe → decode → CMS → pipeline → encode.
     ///
     /// Returns a [`JobResult`] with encoded outputs and decode metadata.
-    pub fn run(self) -> Result<JobResult, PipeError> {
+    pub fn run(self) -> crate::PipeResult<JobResult> {
         // 1. Get primary input bytes.
         let input_bytes = match self.io.get(&self.decode_io_id) {
             Some(IoSlot::Input(data)) => data,
             _ => {
-                return Err(PipeError::Op(alloc::format!(
+                return Err(at!(PipeError::Op(alloc::format!(
                     "no input data for io_id {}",
                     self.decode_io_id
-                )));
+                ))));
             }
         };
 
         // 2. Probe the source.
         let image_info = zencodecs::from_bytes_with_registry(input_bytes, &self.registry)
-            .map_err(|e| PipeError::Op(alloc::format!("probe failed: {e}")))?;
+            .map_err(|e| at!(PipeError::Op(alloc::format!("probe failed: {e}"))))?;
 
         let decode_info = DecodeInfo {
             io_id: self.decode_io_id,
@@ -451,7 +454,7 @@ impl<'a> ImageJob<'a> {
             &self.registry,
             &zencodecs::CodecPolicy::default(),
         )
-        .map_err(|e| PipeError::Op(alloc::format!("format selection failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("format selection failed: {e}"))))?;
 
         // 5. Decode the source to a pixel stream, optionally extracting gain map.
         //
@@ -529,7 +532,7 @@ impl<'a> ImageJob<'a> {
         &self,
         data: &[u8],
         info: &zencodec::ImageInfo,
-    ) -> Result<Box<dyn Source>, PipeError> {
+    ) -> crate::PipeResult<Box<dyn Source>> {
         let _ = info; // may use for format negotiation later
 
         // Try streaming decode first, fall back to full-frame.
@@ -549,7 +552,7 @@ impl<'a> ImageJob<'a> {
                 let decoded = zencodecs::DecodeRequest::new(data)
                     .with_registry(&self.registry)
                     .decode_full_frame()
-                    .map_err(|e| PipeError::Op(alloc::format!("decode failed: {e}")))?;
+                    .map_err(|e| at!(PipeError::Op(alloc::format!("decode failed: {e}"))))?;
 
                 let pixels = decoded.pixels();
                 let w = decoded.width();
@@ -571,7 +574,7 @@ impl<'a> ImageJob<'a> {
     fn decode_source_with_gainmap(
         &self,
         data: &[u8],
-    ) -> Result<(Box<dyn Source>, Option<crate::sidecar::SidecarStream>), PipeError> {
+    ) -> crate::PipeResult<(Box<dyn Source>, Option<crate::sidecar::SidecarStream>)> {
         let mut request = zencodecs::DecodeRequest::new(data)
             .with_registry(&self.registry)
             .with_gain_map_extraction(true);
@@ -582,7 +585,7 @@ impl<'a> ImageJob<'a> {
 
         let (decoded, gain_map) = request
             .decode_gain_map()
-            .map_err(|e| PipeError::Op(alloc::format!("decode with gain map failed: {e}")))?;
+            .map_err(|e| at!(PipeError::Op(alloc::format!("decode with gain map failed: {e}"))))?;
 
         // Convert base image to Source.
         let pixels = decoded.pixels();
@@ -674,7 +677,7 @@ impl<'a> ImageJob<'a> {
         source: Box<dyn Source>,
         info: &zencodec::ImageInfo,
         raw_data: &[u8],
-    ) -> Result<Box<dyn Source>, PipeError> {
+    ) -> crate::PipeResult<Box<dyn Source>> {
         let cms_mode = match self.cms_mode {
             CmsMode::None => return Ok(source),
             CmsMode::Preserve => {
@@ -735,7 +738,7 @@ impl<'a> ImageJob<'a> {
         &self,
         output: crate::orchestrate::StreamingOutput,
         decision: &zencodecs::FormatDecision,
-    ) -> Result<EncodeResult, PipeError> {
+    ) -> crate::PipeResult<EncodeResult> {
         let mut source = output.source;
         let w = source.width();
         let h = source.height();
@@ -826,7 +829,7 @@ impl<'a> ImageJob<'a> {
                 crate::execute(source.as_mut(), &mut sink)?;
                 let encode_output = sink
                     .take_output()
-                    .ok_or_else(|| PipeError::Op("encoder produced no output".to_string()))?;
+                    .ok_or_else(|| at!(PipeError::Op("encoder produced no output".to_string())))?;
 
                 Ok(EncodeResult {
                     io_id: self.encode_io_id,
@@ -847,7 +850,7 @@ impl<'a> ImageJob<'a> {
                     materialized.stride(),
                     src_format,
                 )
-                .map_err(|e| PipeError::Op(alloc::format!("PixelSlice failed: {e}")))?;
+                .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice failed: {e}"))))?;
 
                 let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
                     .with_quality(decision.quality.quality)
@@ -867,7 +870,7 @@ impl<'a> ImageJob<'a> {
 
                 let encode_output = oneshot_request
                     .encode(pixels, format.has_alpha())
-                    .map_err(|e| PipeError::Op(alloc::format!("encode failed: {e}")))?;
+                    .map_err(|e| at!(PipeError::Op(alloc::format!("encode failed: {e}"))))?;
 
                 Ok(EncodeResult {
                     io_id: self.encode_io_id,
@@ -886,7 +889,7 @@ impl<'a> ImageJob<'a> {
 ///
 /// Only changes the channel layout (e.g., RGB→RGBA, Gray→RGBA) and depth
 /// (e.g., u16→u8). Does NOT gamut-map — P3 stays P3, Rec.2020 stays Rec.2020.
-fn ensure_rgba8(source: Box<dyn Source>) -> Result<Box<dyn Source>, PipeError> {
+fn ensure_rgba8(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
     let src_format = source.format();
 
     // Build a target that matches the source primaries and transfer function

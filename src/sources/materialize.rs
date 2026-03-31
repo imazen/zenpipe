@@ -2,6 +2,9 @@ use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::limits::Limits;
@@ -31,13 +34,13 @@ impl MaterializedSource {
     pub fn from_source_checked(
         upstream: Box<dyn Source>,
         limits: &Limits,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         limits.check(upstream.width(), upstream.height(), upstream.format())?;
         Self::from_source(upstream)
     }
 
     /// Drain all strips from `upstream` into memory.
-    pub fn from_source(mut upstream: Box<dyn Source>) -> Result<Self, PipeError> {
+    pub fn from_source(mut upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
@@ -71,7 +74,7 @@ impl MaterializedSource {
     pub fn from_source_with_transform(
         upstream: Box<dyn Source>,
         transform: impl FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut PixelFormat),
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let mut mat = Self::from_source(upstream)?;
         transform(
             &mut mat.data,
@@ -129,7 +132,8 @@ impl MaterializedSource {
 }
 
 impl Source for MaterializedSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         if self.y >= self.height {
             return Ok(None);
         }
@@ -147,7 +151,7 @@ impl Source for MaterializedSource {
             rows,
             stride,
             self.format,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

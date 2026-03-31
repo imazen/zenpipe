@@ -540,7 +540,7 @@ impl Tracer {
         source: Box<dyn crate::Source>,
         target: crate::format::PixelFormat,
         reason: &str,
-    ) -> Result<Box<dyn crate::Source>, crate::error::PipeError> {
+    ) -> crate::PipeResult<Box<dyn crate::Source>> {
         let current = source.format();
         if current == target {
             return Ok(source);

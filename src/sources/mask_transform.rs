@@ -3,6 +3,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::{Strip, StripBuf};
@@ -29,13 +32,13 @@ impl MaskTransformSource {
     pub fn new(
         upstream: Box<dyn Source>,
         mask: Box<dyn zenblend::mask::MaskSource + Send>,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let fmt = format::RGBAF32_LINEAR_PREMUL;
         if upstream.format() != fmt {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: fmt,
                 got: upstream.format(),
-            });
+            }));
         }
         let w = upstream.width();
         let h = upstream.height();
@@ -52,7 +55,7 @@ impl MaskTransformSource {
 }
 
 impl Source for MaskTransformSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);

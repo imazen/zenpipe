@@ -7,6 +7,9 @@ use zennode::NodeInstance;
 use alloc::boxed::Box;
 use zennode::NodeRole;
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeId, NodeOp, PipelineGraph};
 
@@ -61,7 +64,7 @@ pub(crate) fn coalesce_and_append_chain(
     source_w: u32,
     source_h: u32,
     graph: &mut PipelineGraph,
-) -> Result<Option<(NodeId, NodeId)>, PipeError> {
+) -> crate::PipeResult<Option<(NodeId, NodeId)>> {
     let steps = coalesce(pixel_nodes);
     let mut first_id = None;
     let mut prev_id = None;
@@ -143,7 +146,7 @@ pub(crate) fn convert_step(
     converters: &[&dyn NodeConverter],
     source_w: u32,
     source_h: u32,
-) -> Result<Vec<NodeOp>, PipeError> {
+) -> crate::PipeResult<Vec<NodeOp>> {
     match step {
         PipelineStep::Single(node) => {
             let schema_id = node.schema().id;
@@ -198,7 +201,7 @@ pub(crate) fn convert_step(
 pub(crate) fn convert_single(
     node: &dyn NodeInstance,
     converters: &[&dyn NodeConverter],
-) -> Result<NodeOp, PipeError> {
+) -> crate::PipeResult<NodeOp> {
     let schema_id = node.schema().id;
 
     // Try extension converters first.
@@ -230,16 +233,16 @@ pub(crate) fn convert_single(
         // Legacy aliases (zenlayout had crop_whitespace before it moved to zenpipe)
         "zenlayout.crop_whitespace" => convert_crop_whitespace(node),
 
-        _ => Err(PipeError::Op(alloc::format!(
+        _ => Err(at!(PipeError::Op(alloc::format!(
             "bridge: no converter for node '{schema_id}'"
-        ))),
+        )))),
     }
 }
 
 // ─── Built-in converters ───
 
 /// Convert a `zenlayout.crop` node to `NodeOp::Crop`.
-pub(crate) fn convert_crop(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_crop(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let x = param_u32(node, "x")?;
     let y = param_u32(node, "y")?;
     let w = param_u32(node, "w")?;
@@ -248,7 +251,7 @@ pub(crate) fn convert_crop(node: &dyn NodeInstance) -> Result<NodeOp, PipeError>
 }
 
 /// Convert a `zenlayout.orient` node to `NodeOp::AutoOrient`.
-pub(crate) fn convert_orient(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_orient(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let orientation = param_i32(node, "orientation")?;
     // Clamp to u8 range — AutoOrient handles values outside 1-8 as identity.
     let value = u8::try_from(orientation).unwrap_or(1);
@@ -256,7 +259,7 @@ pub(crate) fn convert_orient(node: &dyn NodeInstance) -> Result<NodeOp, PipeErro
 }
 
 /// Convert a `zenresize.constrain` node to `NodeOp::Constrain`.
-pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;
@@ -332,7 +335,7 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> Result<Nod
 }
 
 /// Convert a `zenlayout.constrain` node to `NodeOp::Constrain`.
-pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let mode_str = param_str(node, "mode")?;
@@ -379,7 +382,7 @@ pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> Result<Nod
 // ─── zenpipe native node converters ───
 
 /// Convert a `zenpipe.crop_whitespace` node to `NodeOp::CropWhitespace`.
-pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let threshold = param_u32(node, "threshold").unwrap_or(80) as u8;
     let percent_padding = param_f32_opt(node, "percent_padding").unwrap_or(0.0);
     Ok(NodeOp::CropWhitespace {
@@ -389,7 +392,7 @@ pub(crate) fn convert_crop_whitespace(node: &dyn NodeInstance) -> Result<NodeOp,
 }
 
 /// Convert a `zenpipe.fill_rect` node to `NodeOp::FillRect`.
-pub(crate) fn convert_fill_rect(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_fill_rect(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let x1 = param_u32(node, "x1")?;
     let y1 = param_u32(node, "y1")?;
     let x2 = param_u32(node, "x2")?;
@@ -410,7 +413,7 @@ pub(crate) fn convert_fill_rect(node: &dyn NodeInstance) -> Result<NodeOp, PipeE
 }
 
 /// Convert a `zenpipe.remove_alpha` node to `NodeOp::RemoveAlpha`.
-pub(crate) fn convert_remove_alpha(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_remove_alpha(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let matte = [
         param_u32(node, "matte_r").unwrap_or(255) as u8,
         param_u32(node, "matte_g").unwrap_or(255) as u8,
@@ -426,7 +429,7 @@ pub(crate) fn convert_remove_alpha(node: &dyn NodeInstance) -> Result<NodeOp, Pi
 /// - Per-corner radii (PixelsCustom / PercentageCustom)
 /// - Volumetric offset anti-aliasing
 /// - Gamma-correct (linear) blending
-pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let radius = param_f32_opt(node, "radius").unwrap_or(0.0);
     let radius_tl = param_f32_opt(node, "radius_tl").unwrap_or(-1.0);
     let radius_tr = param_f32_opt(node, "radius_tr").unwrap_or(-1.0);
@@ -775,7 +778,7 @@ use linear_srgb::default::{
 };
 
 /// Convert a `zenresize.resize` node to `NodeOp::Resize`.
-pub(crate) fn convert_resize(node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+pub(crate) fn convert_resize(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
     let w = param_u32(node, "w")?;
     let h = param_u32(node, "h")?;
     let filter_str = node

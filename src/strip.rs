@@ -142,9 +142,13 @@ impl StripBuf {
     }
 }
 
-/// Convert a [`BufferError`] to a [`PipeError`].
-impl From<whereat::At<BufferError>> for PipeError {
-    fn from(e: whereat::At<BufferError>) -> Self {
-        PipeError::Op(alloc::format!("pixel buffer: {e}"))
+/// Extension trait to convert `Result<T, At<BufferError>>` into `Result<T, At<PipeError>>`.
+pub(crate) trait BufferResultExt<T> {
+    fn pipe_err(self) -> Result<T, whereat::At<PipeError>>;
+}
+
+impl<T> BufferResultExt<T> for Result<T, whereat::At<BufferError>> {
+    fn pipe_err(self) -> Result<T, whereat::At<PipeError>> {
+        self.map_err(|e| e.map_error(|be| PipeError::Op(alloc::format!("pixel buffer: {be}"))))
     }
 }

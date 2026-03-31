@@ -11,6 +11,9 @@
 use alloc::boxed::Box;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
@@ -106,7 +109,7 @@ impl SidecarPlan {
     ///
     /// Otherwise, builds a mini [`PipelineGraph`] with
     /// `Source → Layout → Output` and compiles it.
-    pub fn compile(self, sidecar_source: Box<dyn Source>) -> Result<Box<dyn Source>, PipeError> {
+    pub fn compile(self, sidecar_source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
         if self.is_identity() {
             return Ok(sidecar_source);
         }
@@ -205,7 +208,8 @@ mod tests {
     }
 
     impl Source for SolidSource {
-        fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+        fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
             if self.y >= self.height {
                 return Ok(None);
             }
@@ -221,7 +225,7 @@ mod tests {
                 rows,
                 stride,
                 self.format,
-            )?))
+            ).pipe_err()?))
         }
 
         fn width(&self) -> u32 {

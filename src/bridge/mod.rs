@@ -40,6 +40,9 @@ use alloc::vec::Vec;
 
 use zennode::NodeInstance;
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 
@@ -96,7 +99,7 @@ impl PipelineResult {
     ///
     /// Use only when you genuinely need random-access pixels
     /// (quality analysis, non-streaming encoder).
-    pub fn materialize(self) -> Result<MaterializedImage, PipeError> {
+    pub fn materialize(self) -> crate::PipeResult<MaterializedImage> {
         let mat = crate::sources::MaterializedSource::from_source(self.source)?;
         Ok(MaterializedImage {
             pixels: mat,
@@ -140,13 +143,13 @@ pub trait NodeConverter: Send + Sync {
     fn can_convert(&self, schema_id: &str) -> bool;
 
     /// Convert a single node instance to a [`NodeOp`].
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError>;
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp>;
 
     /// Convert a coalesced group of nodes into a single [`NodeOp`].
     ///
     /// Called when adjacent fusable nodes share a coalesce group and the
     /// converter claims at least one of them.
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError>;
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp>;
 
     /// Fuse a group of adjacent compatible nodes into a single [`NodeOp`].
     ///
@@ -158,7 +161,7 @@ pub trait NodeConverter: Send + Sync {
     ///
     /// Returns `Ok(None)` if fusion is not possible for this group — the bridge
     /// will fall back to converting each node individually.
-    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<Option<NodeOp>> {
         let _ = nodes;
         Ok(None)
     }
@@ -197,7 +200,7 @@ pub fn compile_nodes(
     source_w: u32,
     source_h: u32,
     #[cfg(feature = "std")] trace_config: Option<&crate::trace::TraceConfig>,
-) -> Result<CompileResult, PipeError> {
+) -> crate::PipeResult<CompileResult> {
     let sep = convert::separate_by_role(nodes.iter().map(|n| n.as_ref()));
 
     let decode_config = DecodeConfig::from_nodes(&sep.decode);
@@ -447,7 +450,7 @@ pub fn build_pipeline(
     source: Box<dyn crate::Source>,
     nodes: &[Box<dyn NodeInstance>],
     converters: &[&dyn NodeConverter],
-) -> Result<PipelineResult, PipeError> {
+) -> crate::PipeResult<PipelineResult> {
     let source_w = source.width();
     let source_h = source.height();
 
@@ -486,7 +489,7 @@ pub fn build_pipeline_traced(
     nodes: &[Box<dyn NodeInstance>],
     converters: &[&dyn NodeConverter],
     trace_config: &crate::trace::TraceConfig,
-) -> Result<(PipelineResult, crate::trace::FullPipelineTrace), PipeError> {
+) -> crate::PipeResult<(PipelineResult, crate::trace::FullPipelineTrace)> {
     let source_w = source.width();
     let source_h = source.height();
 
@@ -883,7 +886,8 @@ mod core_tests {
     }
 
     impl crate::Source for SolidSource {
-        fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+        fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
             if self.y >= self.height {
                 return Ok(None);
             }
@@ -898,7 +902,7 @@ mod core_tests {
                 rows,
                 stride,
                 self.format,
-            )?))
+            ).pipe_err()?))
         }
 
         fn width(&self) -> u32 {
@@ -1144,15 +1148,15 @@ mod core_tests {
             schema_id == "zenfilters.exposure"
         }
 
-        fn convert(&self, _node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+        fn convert(&self, _node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
             Ok(NodeOp::PixelTransform(Box::new(IdentityOp)))
         }
 
-        fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+        fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
             self.convert(nodes[0])
         }
 
-        fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+        fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<Option<NodeOp>> {
             if nodes.len() > 1 {
                 Ok(Some(NodeOp::PixelTransform(Box::new(IdentityOp))))
             } else {

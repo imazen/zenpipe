@@ -3,6 +3,9 @@ use alloc::format;
 use alloc::string::ToString;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::{Strip, StripBuf};
@@ -39,21 +42,21 @@ impl ResizeSource {
         upstream: Box<dyn Source>,
         config: &zenresize::ResizeConfig,
         strip_height: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBA8_SRGB {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBA8_SRGB,
                 got: upstream.format(),
-            });
+            }));
         }
         if upstream.width() != config.in_width || upstream.height() != config.in_height {
-            return Err(PipeError::DimensionMismatch(format!(
+            return Err(at!(PipeError::DimensionMismatch(format!(
                 "upstream {}x{} != config {}x{}",
                 upstream.width(),
                 upstream.height(),
                 config.in_width,
                 config.in_height,
-            )));
+            ))));
         }
 
         let out_w = config.total_output_width();
@@ -87,12 +90,12 @@ impl ResizeSource {
         upstream: Box<dyn Source>,
         resizer: zenresize::StreamingResize,
         strip_height: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBA8_SRGB {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBA8_SRGB,
                 got: upstream.format(),
-            });
+            }));
         }
         // output_row_len is in bytes; RGBA8 = 4 bytes/pixel
         let out_w = (resizer.output_row_len() / 4) as u32;
@@ -113,7 +116,7 @@ impl ResizeSource {
 
     /// Pull a strip from upstream and push all its rows directly into the
     /// resizer. No intermediate copy.
-    fn push_upstream_strip(&mut self) -> Result<bool, PipeError> {
+    fn push_upstream_strip(&mut self) -> crate::PipeResult<bool> {
         if self.input_exhausted {
             return Ok(false);
         }
@@ -128,7 +131,7 @@ impl ResizeSource {
             let row = strip.row(r);
             self.resizer
                 .push_row(row)
-                .map_err(|e| PipeError::Resize(e.to_string()))?;
+                .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
         }
 
         Ok(true)
@@ -147,7 +150,7 @@ impl ResizeSource {
 }
 
 impl Source for ResizeSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.out_height {
             return Ok(None);
         }
@@ -242,12 +245,12 @@ impl ResizeF32Source {
         upstream: Box<dyn Source>,
         config: &zenresize::ResizeConfig,
         strip_height: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
-            });
+            }));
         }
 
         let out_w = config.total_output_width();
@@ -271,7 +274,7 @@ impl ResizeF32Source {
     /// Pull a strip from upstream and push all its rows directly into the
     /// resizer. No intermediate copy — strip.data borrows self.upstream
     /// while self.resizer is a disjoint field.
-    fn push_upstream_strip(&mut self) -> Result<bool, PipeError> {
+    fn push_upstream_strip(&mut self) -> crate::PipeResult<bool> {
         if self.input_exhausted {
             return Ok(false);
         }
@@ -290,7 +293,7 @@ impl ResizeF32Source {
             let row_f32: &[f32] = bytemuck::cast_slice(row);
             self.resizer
                 .push_row_f32(row_f32)
-                .map_err(|e| PipeError::Resize(e.to_string()))?;
+                .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
         }
 
         Ok(true)
@@ -309,7 +312,7 @@ impl ResizeF32Source {
 }
 
 impl Source for ResizeF32Source {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.out_height {
             return Ok(None);
         }

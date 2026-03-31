@@ -12,6 +12,9 @@ use zencodec::encode::DynEncoder;
 use zenpixels::PixelDescriptor;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -44,7 +47,7 @@ impl<'a> DecoderSource<'a> {
     /// This ensures `format()`, `width()`, and `height()` are all accurate
     /// before any `next()` call — required by `build_pipeline` which reads
     /// format during graph compilation.
-    pub fn new(mut decoder: Box<dyn DynStreamingDecoder + 'a>) -> Result<Self, PipeError> {
+    pub fn new(mut decoder: Box<dyn DynStreamingDecoder + 'a>) -> crate::PipeResult<Self> {
         let info = decoder.info();
         let w = info.width;
         let h = info.height;
@@ -52,7 +55,7 @@ impl<'a> DecoderSource<'a> {
         // Eagerly decode first batch to discover output pixel format.
         let first = decoder
             .next_batch()
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         let (format, first_batch) = match first {
             Some((_batch_y, pixels)) => {
@@ -94,7 +97,7 @@ impl<'a> DecoderSource<'a> {
     pub fn with_format(
         decoder: Box<dyn DynStreamingDecoder + 'a>,
         format: PixelFormat,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let info = decoder.info();
         let w = info.width;
         let h = info.height;
@@ -113,7 +116,7 @@ impl<'a> DecoderSource<'a> {
 }
 
 impl Source for DecoderSource<'_> {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.height {
             return Ok(None);
         }
@@ -134,7 +137,7 @@ impl Source for DecoderSource<'_> {
         let batch = self
             .decoder
             .next_batch()
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         let Some((_batch_y, pixels)) = batch else {
             return Ok(None);
@@ -212,11 +215,11 @@ impl<'a> EncoderSink<'a> {
 }
 
 impl crate::Sink for EncoderSink<'_> {
-    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> crate::PipeResult<()> {
         let encoder = self
             .encoder
             .as_mut()
-            .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
+            .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
         let pixels = zenpixels::PixelSlice::new(
             strip.as_strided_bytes(),
@@ -225,20 +228,20 @@ impl crate::Sink for EncoderSink<'_> {
             strip.stride(),
             self.descriptor,
         )
-        .map_err(|e| PipeError::Op(alloc::format!("PixelSlice construction failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice construction failed: {e}"))))?;
 
         encoder
             .push_rows(pixels)
-            .map_err(|e| PipeError::Op(e.to_string()))
+            .map_err(|e| at!(PipeError::Op(e.to_string())))
     }
 
-    fn finish(&mut self) -> Result<(), PipeError> {
+    fn finish(&mut self) -> crate::PipeResult<()> {
         let encoder = self
             .encoder
             .take()
-            .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
+            .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        let output = encoder.finish().map_err(|e| PipeError::Op(e.to_string()))?;
+        let output = encoder.finish().map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         self.output = Some(output);
         Ok(())

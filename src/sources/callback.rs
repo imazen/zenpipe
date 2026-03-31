@@ -1,6 +1,9 @@
 use alloc::boxed::Box;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -22,7 +25,7 @@ use crate::strip::{Strip, StripBuf};
 ///     Ok(true)
 /// });
 /// ```
-type RowCallback = Box<dyn FnMut(&mut [u8]) -> Result<bool, PipeError> + Send>;
+type RowCallback = Box<dyn FnMut(&mut [u8]) -> crate::PipeResult<bool> + Send>;
 
 pub struct CallbackSource {
     callback: RowCallback,
@@ -46,7 +49,7 @@ impl CallbackSource {
         height: u32,
         format: PixelFormat,
         strip_height: u32,
-        callback: impl FnMut(&mut [u8]) -> Result<bool, PipeError> + Send + 'static,
+        callback: impl FnMut(&mut [u8]) -> crate::PipeResult<bool> + Send + 'static,
     ) -> Self {
         let sh = strip_height.min(height);
         Self {
@@ -85,7 +88,7 @@ impl CallbackSource {
 }
 
 impl Source for CallbackSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.exhausted || self.y >= self.height {
             return Ok(None);
         }

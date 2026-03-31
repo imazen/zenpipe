@@ -1,6 +1,9 @@
 use alloc::string::String;
 use core::fmt;
 
+/// Result type with `whereat::At<PipeError>` as the error.
+pub type PipeResult<T> = Result<T, whereat::At<PipeError>>;
+
 /// Pipeline execution error.
 #[derive(Debug)]
 pub enum PipeError {

@@ -15,6 +15,9 @@
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 
@@ -114,38 +117,38 @@ impl Limits {
 
     /// Check whether an image of the given dimensions and format is within limits.
     ///
-    /// Returns `Ok(())` if within limits, `Err(PipeError::LimitExceeded)` otherwise.
-    pub fn check(&self, width: u32, height: u32, format: PixelFormat) -> Result<(), PipeError> {
+    /// Returns `Ok(())` if within limits, `Err(at!(PipeError::LimitExceeded))` otherwise.
+    pub fn check(&self, width: u32, height: u32, format: PixelFormat) -> crate::PipeResult<()> {
         if let Some(max_w) = self.max_width {
             if width > max_w {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "width {width} exceeds max {max_w}"
-                )));
+                ))));
             }
         }
         if let Some(max_h) = self.max_height {
             if height > max_h {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "height {height} exceeds max {max_h}"
-                )));
+                ))));
             }
         }
 
         let pixels = width as u64 * height as u64;
         if let Some(max_px) = self.max_pixels {
             if pixels > max_px {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "pixel count {pixels} exceeds max {max_px}"
-                )));
+                ))));
             }
         }
 
         if let Some(max_mem) = self.max_memory_bytes {
             let mem = pixels * format.bytes_per_pixel() as u64;
             if mem > max_mem {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "estimated memory {mem} bytes exceeds max {max_mem}"
-                )));
+                ))));
             }
         }
 
@@ -155,12 +158,12 @@ impl Limits {
     /// Check whether a frame count is within limits.
     ///
     /// Returns `Ok(())` if within limits or no frame limit is set.
-    pub fn check_frames(&self, count: u32) -> Result<(), PipeError> {
+    pub fn check_frames(&self, count: u32) -> crate::PipeResult<()> {
         if let Some(max) = self.max_frames {
             if count > max {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "frame count {count} exceeds max {max}"
-                )));
+                ))));
             }
         }
         Ok(())
@@ -257,11 +260,11 @@ impl AllocationTracker {
 
     /// Record an allocation of `bytes` and return an RAII guard.
     ///
-    /// Returns `Err(PipeError::LimitExceeded)` if the allocation would
+    /// Returns `Err(at!(PipeError::LimitExceeded))` if the allocation would
     /// push `current_bytes` past the configured limit.
     ///
     /// The returned [`AllocationGuard`] decrements `current_bytes` on drop.
-    pub fn allocate(self: &Arc<Self>, bytes: u64) -> Result<AllocationGuard, PipeError> {
+    pub fn allocate(self: &Arc<Self>, bytes: u64) -> crate::PipeResult<AllocationGuard> {
         self.check(bytes)?;
 
         let new_total = self.current_bytes.fetch_add(bytes, Ordering::SeqCst) + bytes;
@@ -282,17 +285,17 @@ impl AllocationTracker {
 
     /// Check whether `requested` bytes can be allocated without exceeding
     /// the limit. Does **not** actually allocate.
-    pub fn check(&self, requested: u64) -> Result<(), PipeError> {
+    pub fn check(&self, requested: u64) -> crate::PipeResult<()> {
         if self.limit_bytes > 0 {
             let current = self.current_bytes.load(Ordering::SeqCst);
             if current + requested > self.limit_bytes {
-                return Err(PipeError::LimitExceeded(alloc::format!(
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "memory: {} + {} = {} bytes exceeds limit {}",
                     current,
                     requested,
                     current + requested,
                     self.limit_bytes,
-                )));
+                ))));
             }
         }
         Ok(())

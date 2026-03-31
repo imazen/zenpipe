@@ -46,6 +46,9 @@ use zencodec::encode::{DynAnimationFrameEncoder, EncodeOutput};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::Strip;
@@ -98,7 +101,7 @@ impl FrameSource {
     ///
     /// The first frame is automatically loaded. If the animation has zero
     /// frames, `frame_info()` returns `None`.
-    pub fn new(decoder: Box<dyn DynAnimationFrameDecoder>) -> Result<Self, PipeError> {
+    pub fn new(decoder: Box<dyn DynAnimationFrameDecoder>) -> crate::PipeResult<Self> {
         let info = decoder.info().clone();
         let w = info.width;
         let h = info.height;
@@ -145,7 +148,7 @@ impl FrameSource {
     ///
     /// After calling this, [`next()`](Source::next) yields strips from the
     /// new frame. Resets the y position to 0.
-    pub fn advance_frame(&mut self) -> Result<bool, PipeError> {
+    pub fn advance_frame(&mut self) -> crate::PipeResult<bool> {
         if self.done {
             return Ok(false);
         }
@@ -153,11 +156,11 @@ impl FrameSource {
         Ok(self.frame_info.is_some())
     }
 
-    fn load_next_frame(&mut self) -> Result<(), PipeError> {
+    fn load_next_frame(&mut self) -> crate::PipeResult<()> {
         let frame = self
             .decoder
             .render_next_frame_owned(None)
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         match frame {
             Some(owned) => {
@@ -200,7 +203,8 @@ impl FrameSource {
 }
 
 impl Source for FrameSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         if self.frame_info.is_none() || self.y >= self.height {
             return Ok(None);
         }
@@ -217,7 +221,7 @@ impl Source for FrameSource {
             rows,
             self.stride,
             self.format,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {
@@ -289,11 +293,11 @@ impl FrameSink {
     ///
     /// Must be called after all strips for one frame have been consumed
     /// via the `Sink` trait.
-    pub fn finish_frame(&mut self, duration_ms: u32) -> Result<(), PipeError> {
+    pub fn finish_frame(&mut self, duration_ms: u32) -> crate::PipeResult<()> {
         let encoder = self
             .encoder
             .as_mut()
-            .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
+            .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
         let stride = self.format.aligned_stride(self.width);
         let total = stride * self.rows_accumulated as usize;
@@ -305,26 +309,26 @@ impl FrameSink {
             stride,
             self.format,
         )
-        .map_err(|e| PipeError::Op(alloc::format!("PixelSlice construction failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice construction failed: {e}"))))?;
 
         encoder
             .push_frame(pixels, duration_ms, None)
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         self.rows_accumulated = 0;
         Ok(())
     }
 
     /// Finalize the animation and return the encoded output.
-    pub fn finish_animation(mut self) -> Result<EncodeOutput, PipeError> {
+    pub fn finish_animation(mut self) -> crate::PipeResult<EncodeOutput> {
         let encoder = self
             .encoder
             .take()
-            .ok_or_else(|| PipeError::Op("encoder already finished".to_string()))?;
+            .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
         encoder
             .finish(None)
-            .map_err(|e| PipeError::Op(e.to_string()))
+            .map_err(|e| at!(PipeError::Op(e.to_string())))
     }
 
     /// Take the encoded output (if finish_animation was called via trait).
@@ -334,14 +338,14 @@ impl FrameSink {
 }
 
 impl crate::Sink for FrameSink {
-    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError> {
+    fn consume(&mut self, strip: &Strip<'_>) -> crate::PipeResult<()> {
         let stride = self.format.aligned_stride(self.width);
         for r in 0..strip.rows() {
             if self.rows_accumulated >= self.height {
-                return Err(PipeError::DimensionMismatch(alloc::format!(
+                return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                     "frame sink received more than {} rows",
                     self.height
-                )));
+                ))));
             }
             let src_row = strip.row(r);
             let dst_start = self.rows_accumulated as usize * stride;
@@ -351,7 +355,7 @@ impl crate::Sink for FrameSink {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), PipeError> {
+    fn finish(&mut self) -> crate::PipeResult<()> {
         // No-op: frame completion is handled by finish_frame().
         // Animation finalization is handled by finish_animation().
         Ok(())
@@ -393,8 +397,8 @@ pub fn transcode(
     out_width: u32,
     out_height: u32,
     out_format: PixelFormat,
-    mut build_pipeline: impl FnMut(Box<dyn Source>, u32) -> Result<Box<dyn Source>, PipeError>,
-) -> Result<EncodeOutput, PipeError> {
+    mut build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
+) -> crate::PipeResult<EncodeOutput> {
     let mut frame_source = FrameSource::new(decoder)?;
     let mut frame_sink = FrameSink::new(encoder, out_width, out_height, out_format);
 

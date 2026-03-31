@@ -3,6 +3,9 @@
 
 use zennode::NodeInstance;
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::graph::NodeOp;
 
@@ -41,16 +44,16 @@ pub(crate) fn compile_geometry_run(
     nodes: &[&dyn NodeInstance],
     source_w: u32,
     source_h: u32,
-) -> Result<NodeOp, PipeError> {
+) -> crate::PipeResult<NodeOp> {
     if nodes.is_empty() {
-        return Err(PipeError::Op("empty geometry run".into()));
+        return Err(at!(PipeError::Op("empty geometry run".into())));
     }
 
     // If source dimensions aren't known, fall back (caller handles this).
     if source_w == 0 || source_h == 0 {
-        return Err(PipeError::Op(
+        return Err(at!(PipeError::Op(
             "geometry fusion requires source dimensions".into(),
-        ));
+        )));
     }
 
     let mut pipeline = zenresize::Pipeline::new(source_w, source_h);
@@ -123,16 +126,16 @@ pub(crate) fn compile_geometry_run(
             }
             // zenlayout.region is handled by the RegionConverter (needs ExpandCanvas).
             _ => {
-                return Err(PipeError::Op(alloc::format!(
+                return Err(at!(PipeError::Op(alloc::format!(
                     "unexpected node '{id}' in geometry run"
-                )));
+                ))));
             }
         }
     }
 
     let (ideal, request) = pipeline
         .plan()
-        .map_err(|e| PipeError::Op(alloc::format!("geometry fusion plan failed: {e}")))?;
+        .map_err(|e| at!(PipeError::Op(alloc::format!("geometry fusion plan failed: {e}"))))?;
     let offer = zenresize::DecoderOffer::full_decode(source_w, source_h);
     let plan = ideal.finalize(&request, &offer);
     let f = filter.unwrap_or(zenresize::Filter::Robidoux);

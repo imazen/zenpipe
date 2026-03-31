@@ -2,6 +2,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::ops::PixelOp;
@@ -88,7 +91,8 @@ impl TransformSource {
 }
 
 impl Source for TransformSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
@@ -107,7 +111,7 @@ impl Source for TransformSource {
                 height,
                 strip.stride(),
                 self.output_format,
-            )?));
+            ).pipe_err()?));
         }
 
         // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
@@ -145,7 +149,7 @@ impl Source for TransformSource {
             height,
             stride,
             self.output_format,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

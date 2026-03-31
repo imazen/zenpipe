@@ -3,6 +3,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -114,7 +117,7 @@ impl ExpandCanvasSource {
     }
 
     /// Pull the next upstream row, refilling the pending strip if needed.
-    fn next_upstream_row(&mut self) -> Result<Option<()>, PipeError> {
+    fn next_upstream_row(&mut self) -> crate::PipeResult<Option<()>> {
         // If pending strip has rows, use it
         if let Some(ref p) = self.pending {
             if p.remaining() > 0 {
@@ -157,7 +160,7 @@ impl ExpandCanvasSource {
     }
 
     /// Skip upstream rows that fall before the visible content region.
-    fn skip_leading_rows(&mut self) -> Result<(), PipeError> {
+    fn skip_leading_rows(&mut self) -> crate::PipeResult<()> {
         while self.upstream_rows_consumed < self.skip_y {
             if self.next_upstream_row()?.is_none() {
                 break;
@@ -169,7 +172,7 @@ impl ExpandCanvasSource {
 }
 
 impl Source for ExpandCanvasSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.out_y >= self.canvas_h {
             return Ok(None);
         }

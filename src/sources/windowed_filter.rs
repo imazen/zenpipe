@@ -15,6 +15,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::{Strip, StripBuf};
@@ -99,12 +102,12 @@ impl WindowedFilterSource {
         upstream: Box<dyn Source>,
         pipeline: zenfilters::Pipeline,
         overlap: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
-            });
+            }));
         }
 
         let width = upstream.width();
@@ -145,7 +148,7 @@ impl WindowedFilterSource {
     }
 
     /// Pull one row from upstream into the row buffer at the given local index.
-    fn pull_row_into(&mut self, local_idx: u32) -> Result<bool, PipeError> {
+    fn pull_row_into(&mut self, local_idx: u32) -> crate::PipeResult<bool> {
         let row_f32 = self.pull_upstream_row_f32()?;
         let Some(row_f32) = row_f32 else {
             return Ok(false);
@@ -156,7 +159,7 @@ impl WindowedFilterSource {
     }
 
     /// Pull one row of f32 data from upstream.
-    fn pull_upstream_row_f32(&mut self) -> Result<Option<Vec<f32>>, PipeError> {
+    fn pull_upstream_row_f32(&mut self) -> crate::PipeResult<Option<Vec<f32>>> {
         // Try pending strip
         if let Some(ref mut pending) = self.pending {
             if pending.remaining() > 0 {
@@ -205,7 +208,7 @@ impl WindowedFilterSource {
 
     /// Prepare the window for output rows starting at `output_y`.
     /// Returns the window height and the offset of the first output row within the window.
-    fn prepare_window(&mut self) -> Result<(u32, u32), PipeError> {
+    fn prepare_window(&mut self) -> crate::PipeResult<(u32, u32)> {
         let y = self.output_y;
 
         // Window bounds (global coordinates)
@@ -242,7 +245,7 @@ impl WindowedFilterSource {
 }
 
 impl Source for WindowedFilterSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.output_y >= self.total_height {
             return Ok(None);
         }
@@ -268,7 +271,7 @@ impl Source for WindowedFilterSource {
                 4,
                 &mut self.ctx,
             )
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         // Extract center rows into output strip
         let actual_rows = output_rows.min(window_height.saturating_sub(output_offset));

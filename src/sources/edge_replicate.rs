@@ -7,6 +7,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -86,7 +89,7 @@ impl EdgeReplicateSource {
     }
 
     /// Pull next row from upstream (content area only).
-    fn pull_content_row(&mut self) -> Result<Option<Vec<u8>>, PipeError> {
+    fn pull_content_row(&mut self) -> crate::PipeResult<Option<Vec<u8>>> {
         // Try pending strip first
         if let Some(ref mut pending) = self.pending {
             if pending.remaining() > 0 {
@@ -148,7 +151,7 @@ impl EdgeReplicateSource {
 }
 
 impl Source for EdgeReplicateSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.y >= self.canvas_h {
             return Ok(None);
         }

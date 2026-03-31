@@ -1,6 +1,9 @@
 use alloc::boxed::Box;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -31,15 +34,15 @@ impl CropSource {
         y: u32,
         w: u32,
         h: u32,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         let fmt = upstream.format();
         let uw = upstream.width();
         let uh = upstream.height();
 
         if x + w > uw || y + h > uh {
-            return Err(PipeError::DimensionMismatch(alloc::format!(
+            return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                 "crop ({x},{y},{w},{h}) exceeds source ({uw},{uh})"
-            )));
+            ))));
         }
 
         let sh = 16u32.min(h);
@@ -66,7 +69,7 @@ impl CropSource {
 }
 
 impl Source for CropSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         if self.out_y >= self.crop_h {
             return Ok(None);
         }

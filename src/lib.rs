@@ -16,6 +16,10 @@
 
 extern crate alloc;
 
+whereat::define_at_crate_info!();
+#[allow(unused_imports)]
+use whereat::at;
+
 mod error;
 pub mod format;
 pub mod graph;
@@ -72,7 +76,7 @@ pub mod imageflow_compat;
 pub mod sidecar;
 pub mod watermark;
 
-pub use error::PipeError;
+pub use error::{PipeError, PipeResult};
 pub use format::PixelFormat;
 pub use graph::{ResourceEstimate, SourceInfo};
 #[cfg(feature = "std")]
@@ -98,7 +102,7 @@ pub use zenpixels_convert::cms_moxcms::MoxCms;
 /// A source of pixel strips (pull-based).
 pub trait Source: Send {
     /// Pull the next strip. Returns `None` when the image is exhausted.
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError>;
+    fn next(&mut self) -> PipeResult<Option<Strip<'_>>>;
     /// Output image width in pixels.
     fn width(&self) -> u32;
     /// Total output image height in pixels.
@@ -110,13 +114,13 @@ pub trait Source: Send {
 /// A sink that consumes pixel strips (push-based).
 pub trait Sink: Send {
     /// Consume one strip of pixel data.
-    fn consume(&mut self, strip: &Strip<'_>) -> Result<(), PipeError>;
+    fn consume(&mut self, strip: &Strip<'_>) -> PipeResult<()>;
     /// Signal end of image.
-    fn finish(&mut self) -> Result<(), PipeError>;
+    fn finish(&mut self) -> PipeResult<()>;
 }
 
 /// Drive a pipeline: pull all strips from `source` into `sink`.
-pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> Result<(), PipeError> {
+pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> PipeResult<()> {
     execute_with_stop(source, sink, &Unstoppable)
 }
 
@@ -125,9 +129,9 @@ pub fn execute_with_stop(
     source: &mut dyn Source,
     sink: &mut dyn Sink,
     stop: &dyn Stop,
-) -> Result<(), PipeError> {
+) -> PipeResult<()> {
     while let Some(strip) = source.next()? {
-        stop.check().map_err(PipeError::from)?;
+        stop.check().map_err(|_| at!(PipeError::Cancelled))?;
         sink.consume(&strip)?;
     }
     sink.finish()

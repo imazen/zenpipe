@@ -16,6 +16,9 @@ use alloc::vec::Vec;
 
 use zennode::{NodeInstance, NodeRole};
 
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 
@@ -56,7 +59,7 @@ pub fn build_pipeline_dag(
     sources: Vec<(usize, Box<dyn crate::Source>)>,
     dag: &[DagNode],
     converters: &[&dyn NodeConverter],
-) -> Result<PipelineResult, PipeError> {
+) -> crate::PipeResult<PipelineResult> {
     let mut decode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
     let mut encode_nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
 
@@ -170,7 +173,7 @@ pub fn build_pipeline_dag(
         .iter()
         .rev()
         .find_map(|opt| *opt)
-        .ok_or_else(|| PipeError::Op("DAG has no pixel-processing nodes".into()))?;
+        .ok_or_else(|| at!(PipeError::Op("DAG has no pixel-processing nodes".into())))?;
 
     let output_id = graph.add_node(NodeOp::Output);
     graph.add_edge(last_gid, output_id, EdgeKind::Input);

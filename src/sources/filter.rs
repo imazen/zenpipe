@@ -9,6 +9,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
 use crate::strip::Strip;
@@ -40,12 +43,12 @@ impl FilterSource {
     pub fn new(
         upstream: Box<dyn Source>,
         pipeline: zenfilters::Pipeline,
-    ) -> Result<Self, PipeError> {
+    ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
-            return Err(PipeError::FormatMismatch {
+            return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBAF32_LINEAR,
                 got: upstream.format(),
-            });
+            }));
         }
         assert!(
             !pipeline.has_neighborhood_filter(),
@@ -66,7 +69,8 @@ impl FilterSource {
 }
 
 impl Source for FilterSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+        use crate::strip::BufferResultExt as _;
         let strip = self.upstream.next()?;
         let Some(strip) = strip else {
             return Ok(None);
@@ -82,7 +86,7 @@ impl Source for FilterSource {
         self.dst_buf.resize(pixels * 4, 0.0);
         self.pipeline
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
-            .map_err(|e| PipeError::Op(e.to_string()))?;
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
         let stride = format::RGBAF32_LINEAR.aligned_stride(w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
@@ -93,7 +97,7 @@ impl Source for FilterSource {
             h,
             stride,
             format::RGBAF32_LINEAR,
-        )?))
+        ).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

@@ -5,6 +5,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::Source;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
@@ -76,7 +79,7 @@ impl TracingSource {
 }
 
 impl Source for TracingSource {
-    fn next(&mut self) -> Result<Option<Strip<'_>>, PipeError> {
+    fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
         // Measure upstream pull time if timing is enabled.
         #[cfg(feature = "std")]
         let start = self.timing.as_ref().map(|_| std::time::Instant::now());

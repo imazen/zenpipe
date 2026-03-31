@@ -7,6 +7,9 @@
 use zennode::NodeInstance;
 use crate::bridge::NodeConverter;
 use crate::graph::NodeOp;
+#[allow(unused_imports)]
+use whereat::at;
+
 use crate::PipeError;
 
 /// Converter for `zenfilters.*` nodes → `NodeOp::Filter(pipeline)`.
@@ -20,20 +23,20 @@ impl NodeConverter for ZenFiltersConverter {
         zenfilters::zennode_defs::is_zenfilters_node(schema_id)
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         let filter = zenfilters::zennode_defs::node_to_filter(node).ok_or_else(|| {
             PipeError::Op(format!("zenfilters converter: unrecognized node '{}'", node.schema().id))
         })?;
 
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}")))?;
+            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
         pipeline.push(filter);
         Ok(NodeOp::Filter(pipeline))
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}")))?;
+            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
 
         for node in nodes {
             let filter = zenfilters::zennode_defs::node_to_filter(*node).ok_or_else(|| {
@@ -48,7 +51,7 @@ impl NodeConverter for ZenFiltersConverter {
         Ok(NodeOp::Filter(pipeline))
     }
 
-    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> Result<Option<NodeOp>, PipeError> {
+    fn fuse_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<Option<NodeOp>> {
         // All zenfilters nodes in the fused_adjust coalesce group can be fused
         // into a single pipeline. Try to build a pipeline from all nodes.
         if nodes.len() < 2 {
@@ -56,7 +59,7 @@ impl NodeConverter for ZenFiltersConverter {
         }
 
         let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}")))?;
+            .map_err(|e| at!(PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))))?;
 
         for node in nodes {
             if let Some(filter) = zenfilters::zennode_defs::node_to_filter(*node) {
@@ -78,7 +81,7 @@ impl NodeConverter for ExpandCanvasConverter {
         schema_id == "zenlayout.expand_canvas"
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         use zennode::ParamValue;
         let get_u32 = |name| match node.get_param(name) {
             Some(ParamValue::U32(v)) => v,
@@ -100,11 +103,11 @@ impl NodeConverter for ExpandCanvasConverter {
         Ok(NodeOp::ExpandCanvas { left, top, right, bottom, bg_color })
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         if let Some(node) = nodes.first() {
             self.convert(*node)
         } else {
-            Err(PipeError::Op("empty expand_canvas group".into()))
+            Err(at!(PipeError::Op("empty expand_canvas group".into())))
         }
     }
 }
@@ -125,7 +128,7 @@ impl NodeConverter for RegionConverter {
         schema_id == "zenlayout.region"
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         use zennode::ParamValue;
         let x1 = match node.get_param("x1") {
             Some(ParamValue::I32(v)) => v,
@@ -198,11 +201,11 @@ impl NodeConverter for RegionConverter {
         })
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         if let Some(node) = nodes.first() {
             self.convert(*node)
         } else {
-            Err(PipeError::Op("empty region group".into()))
+            Err(at!(PipeError::Op("empty region group".into())))
         }
     }
 }
@@ -222,7 +225,7 @@ impl NodeConverter for WhiteBalanceConverter {
         schema_id == "imageflow.white_balance_srgb"
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         use zennode::ParamValue;
         let threshold = match node.get_param("threshold") {
             Some(ParamValue::F32(v)) => v as f64,
@@ -286,11 +289,11 @@ impl NodeConverter for WhiteBalanceConverter {
         })
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         if let Some(node) = nodes.first() {
             self.convert(*node)
         } else {
-            Err(PipeError::Op("empty white_balance group".into()))
+            Err(at!(PipeError::Op("empty white_balance group".into())))
         }
     }
 }
@@ -358,7 +361,7 @@ impl NodeConverter for ColorMatrixSrgbConverter {
         schema_id == "imageflow.color_matrix_srgb"
     }
 
-    fn convert(&self, node: &dyn NodeInstance) -> Result<NodeOp, PipeError> {
+    fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
         use zennode::ParamValue;
         let matrix: [f32; 25] = match node.get_param("matrix") {
             Some(ParamValue::F32Array(v)) if v.len() == 25 => {
@@ -367,9 +370,9 @@ impl NodeConverter for ColorMatrixSrgbConverter {
                 arr
             }
             _ => {
-                return Err(PipeError::Op(
+                return Err(at!(PipeError::Op(
                     "color_matrix_srgb: missing or invalid matrix param".into(),
-                ))
+                )))
             }
         };
 
@@ -430,11 +433,11 @@ impl NodeConverter for ColorMatrixSrgbConverter {
         })
     }
 
-    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> Result<NodeOp, PipeError> {
+    fn convert_group(&self, nodes: &[&dyn NodeInstance]) -> crate::PipeResult<NodeOp> {
         if let Some(node) = nodes.first() {
             self.convert(*node)
         } else {
-            Err(PipeError::Op("empty color_matrix_srgb group".into()))
+            Err(at!(PipeError::Op("empty color_matrix_srgb group".into())))
         }
     }
 }
