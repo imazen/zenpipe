@@ -57,7 +57,27 @@ assert_eq!(ideal.layout.resize_to.width, 800);
 assert_eq!(ideal.layout.resize_to.height, 600);
 ```
 
-Supported parameters: `w`/`h`, `maxwidth`/`maxheight`, `mode`, `scale`, `crop`, `anchor`, `zoom`/`dpr`, `srotate`/`rotate`, `flip`/`sflip`, `autorotate`, `bgcolor`. Non-layout keys (format, quality, effects) are preserved in `Instructions::extras()` for downstream consumers.
+Supported parameters: `w`/`h`, `maxwidth`/`maxheight`, `mode`, `scale`, `crop`, `anchor`, `zoom`/`dpr`, `srotate`/`rotate`, `flip`/`sflip`, `autorotate`, `bgcolor`, `c.gravity`, `c.focus`, `c.zoom`, `c.finalmode`. Non-layout keys (format, quality, effects) are preserved in `Instructions::extras()` for downstream consumers.
+
+### Smart crop parameters
+
+These parameters control content-aware crop positioning. They require a crop-producing mode (`mode=crop`) with target dimensions (`w`/`h`).
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `c.gravity=x,y` | Percentages 0-100 | Focal point for crop alignment. `c.gravity=30,70` shifts the crop window toward 30% from left, 70% from top. |
+| `c.focus=x1,y1,x2,y2` | Percentages 0-100 | Focus rectangle that must stay visible when cropping. |
+| `c.focus=x1,y1,x2,y2;...` | Semicolon-separated | Multiple focus rectangles. Also supports flat comma groups of 4. |
+| `c.focus=x,y` | Percentages 0-100 | Focal point (2-value shorthand, equivalent to `c.gravity`). |
+| `c.focus=faces` | Keyword | Trigger face detection (requires ML engine). Silently ignored when unavailable. |
+| `c.focus=saliency` | Keyword | Trigger saliency detection. Silently ignored when unavailable. |
+| `c.focus=auto` | Keyword | Trigger faces + saliency detection. Silently ignored when unavailable. |
+| `c.zoom=true` | Boolean | Maximal crop mode — zoom tight on the subject. Default: `false` (minimal crop, keeps most content). |
+| `c.finalmode=pad\|crop\|max\|stretch` | Mode name | Override the constraint mode after smart crop is applied. |
+
+Example: `?w=400&h=400&mode=crop&c.focus=20,30,80,90` crops to a square while keeping the region from 20-80% width, 30-90% height visible.
+
+Parsed into `Instructions::c_focus` (`CFocus` enum), `c_zoom` (`Option<bool>`), and `c_finalmode` (`Option<String>`). Back-compatible with ImageResizer's CropAround plugin syntax.
 
 ## Processing pipeline
 
