@@ -280,6 +280,8 @@ enum CFocusParsed {
     Rects(Vec<[f32; 4]>),
     /// Keyword: trigger face detection (requires ML backend).
     Faces,
+    /// Keyword: trigger saliency detection only (lightweight or ML).
+    Saliency,
     /// Keyword: trigger faces + saliency (requires ML backend).
     Auto,
 }
@@ -354,9 +356,12 @@ pub(crate) fn apply_c_focus_postprocessing(
         }
     }
 
-    // Faces / Auto: silently ignored without nodes-faces feature.
+    // Faces / Saliency / Auto: silently ignored without nodes-faces feature.
     #[cfg(feature = "nodes-faces")]
-    if matches!(c_focus, Some(CFocusParsed::Faces | CFocusParsed::Auto)) {
+    if matches!(
+        c_focus,
+        Some(CFocusParsed::Faces | CFocusParsed::Saliency | CFocusParsed::Auto)
+    ) {
         // TODO: Build ML Analyze closure when nodes-faces is available.
     }
 }
@@ -364,11 +369,11 @@ pub(crate) fn apply_c_focus_postprocessing(
 /// Parse `c.focus` from a raw querystring.
 ///
 /// Supports:
-/// - `c.focus=faces` → `Faces`
-/// - `c.focus=auto` → `Auto`
+/// - `c.focus=faces` / `c.focus=saliency` / `c.focus=auto` → keywords
 /// - `c.focus=50,30` → `Point(50.0, 30.0)`
 /// - `c.focus=20,30,80,90` → `Rects([[20,30,80,90]])`
-/// - `c.focus=20,30,80,90,10,10,40,40` → `Rects([[20,30,80,90],[10,10,40,40]])`
+/// - `c.focus=20,30,80,90,10,10,40,40` → `Rects` (flat comma groups of 4)
+/// - `c.focus=20,30,80,90;10,10,40,40` → `Rects` (semicolon-separated)
 ///
 /// Returns `None` on parse failure (graceful degradation, no crash).
 fn parse_c_focus(querystring: &str) -> Option<CFocusParsed> {
@@ -385,14 +390,39 @@ fn parse_c_focus(querystring: &str) -> Option<CFocusParsed> {
         }
 
         // Check keywords first.
-        if value.eq_ignore_ascii_case("faces") {
-            return Some(CFocusParsed::Faces);
-        }
-        if value.eq_ignore_ascii_case("auto") {
-            return Some(CFocusParsed::Auto);
+        match value.to_ascii_lowercase().as_str() {
+            "faces" => return Some(CFocusParsed::Faces),
+            "saliency" => return Some(CFocusParsed::Saliency),
+            "auto" => return Some(CFocusParsed::Auto),
+            _ => {}
         }
 
-        // Parse as comma-separated floats.
+        // Semicolon-separated rects: "20,30,80,90;10,10,40,40"
+        if value.contains(';') {
+            let mut rects = Vec::new();
+            for group in value.split(';') {
+                let group = group.trim();
+                if group.is_empty() {
+                    continue;
+                }
+                let values: Vec<f32> = group
+                    .split(',')
+                    .map(|s| s.trim().parse::<f32>())
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok()?;
+                if values.len() != 4 {
+                    return None;
+                }
+                rects.push([values[0], values[1], values[2], values[3]]);
+            }
+            return if rects.is_empty() {
+                None
+            } else {
+                Some(CFocusParsed::Rects(rects))
+            };
+        }
+
+        // Flat comma-separated: 2 values = point, N*4 values = rects
         let floats: Vec<f32> = value
             .split(',')
             .map(|s| s.trim().parse::<f32>())
