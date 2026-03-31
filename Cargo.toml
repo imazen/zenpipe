@@ -19,5 +19,5 @@ smart-crop = ["alloc"]
 # zennode = ["dep:zennode", "alloc"]
 
 [dependencies]
-whereat = { version = "0.1.4", default-features = false }
+whereat = { version = "0.1.5", default-features = false }
 # zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
