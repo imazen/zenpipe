@@ -93,17 +93,21 @@ fn frame_source_decode_3_frames() {
     assert_eq!(source.width(), 8);
     assert_eq!(source.height(), 8);
 
-    drain(&mut source);
+    let frame_count = 3usize;
+    let frame0_pixels = drain(&mut source);
+    assert_pixel_gray(&frame0_pixels, 0, frame_count);
 
     assert!(source.advance_frame().unwrap());
     let info = source.frame_info().unwrap();
     assert_eq!(info.index, 1);
-    drain(&mut source);
+    let frame1_pixels = drain(&mut source);
+    assert_pixel_gray(&frame1_pixels, 1, frame_count);
 
     assert!(source.advance_frame().unwrap());
     let info = source.frame_info().unwrap();
     assert_eq!(info.index, 2);
-    drain(&mut source);
+    let frame2_pixels = drain(&mut source);
+    assert_pixel_gray(&frame2_pixels, 2, frame_count);
 
     assert!(!source.advance_frame().unwrap());
     assert!(source.frame_info().is_none());
@@ -164,8 +168,27 @@ fn frame_sink_encode_2_frames() {
         .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap();
 
-    assert!(verify.render_next_frame_owned(None).unwrap().is_some());
-    assert!(verify.render_next_frame_owned(None).unwrap().is_some());
+    // Frame 0: should be reddish
+    let frame0 = verify.render_next_frame_owned(None).unwrap().expect("missing frame 0");
+    let px0 = frame0.pixels().as_strided_bytes();
+    // Sample first pixel (RGBA)
+    assert!(px0.len() >= 4, "frame 0 pixel data too short");
+    let (r0, g0, b0) = (px0[0], px0[1], px0[2]);
+    assert!(
+        r0 > 200 && g0 < 50 && b0 < 50,
+        "frame 0 should be reddish, got r={r0} g={g0} b={b0}"
+    );
+
+    // Frame 1: should be bluish
+    let frame1 = verify.render_next_frame_owned(None).unwrap().expect("missing frame 1");
+    let px1 = frame1.pixels().as_strided_bytes();
+    assert!(px1.len() >= 4, "frame 1 pixel data too short");
+    let (r1, g1, b1) = (px1[0], px1[1], px1[2]);
+    assert!(
+        b1 > 200 && r1 < 50 && g1 < 50,
+        "frame 1 should be bluish, got r={r1} g={g1} b={b1}"
+    );
+
     assert!(verify.render_next_frame_owned(None).unwrap().is_none());
 }
 
@@ -196,11 +219,26 @@ fn transcode_gif_passthrough() {
         .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
         .unwrap();
 
-    for i in 0..3 {
+    let frame_count = 3usize;
+    for i in 0..frame_count {
+        let frame = verify
+            .render_next_frame_owned(None)
+            .unwrap()
+            .unwrap_or_else(|| panic!("missing frame {i}"));
+        let px = frame.pixels().as_strided_bytes();
+        assert!(px.len() >= 4, "frame {i} pixel data too short");
+
+        // build_test_gif produces gray = (i+1)*255/frame_count for each frame
+        let expected_gray = ((i + 1) * 255 / frame_count) as u8;
+        let (r, g, b, a) = (px[0], px[1], px[2], px[3]);
+        let tolerance = 32i16; // GIF quantization loses precision
         assert!(
-            verify.render_next_frame_owned(None).unwrap().is_some(),
-            "missing frame {i}"
+            (r as i16 - expected_gray as i16).abs() <= tolerance
+                && (g as i16 - expected_gray as i16).abs() <= tolerance
+                && (b as i16 - expected_gray as i16).abs() <= tolerance,
+            "frame {i}: expected ~gray({expected_gray}), got r={r} g={g} b={b}"
         );
+        assert!(a > 200, "frame {i}: alpha should be opaque, got a={a}");
     }
     assert!(verify.render_next_frame_owned(None).unwrap().is_none());
 }
@@ -245,14 +283,58 @@ fn transcode_gif_with_crop() {
 
     assert_eq!(verify.info().width, 4);
     assert_eq!(verify.info().height, 4);
-    assert!(verify.render_next_frame_owned(None).unwrap().is_some());
-    assert!(verify.render_next_frame_owned(None).unwrap().is_some());
+
+    // Solid-color frames survive cropping — verify pixel values still match
+    let crop_frame_count = 2usize;
+    for i in 0..crop_frame_count {
+        let frame = verify
+            .render_next_frame_owned(None)
+            .unwrap()
+            .unwrap_or_else(|| panic!("missing cropped frame {i}"));
+        let px = frame.pixels().as_strided_bytes();
+        assert!(px.len() >= 4, "cropped frame {i} pixel data too short");
+
+        let expected_gray = ((i + 1) * 255 / crop_frame_count) as u8;
+        let (r, g, b, a) = (px[0], px[1], px[2], px[3]);
+        let tolerance = 32i16;
+        assert!(
+            (r as i16 - expected_gray as i16).abs() <= tolerance
+                && (g as i16 - expected_gray as i16).abs() <= tolerance
+                && (b as i16 - expected_gray as i16).abs() <= tolerance,
+            "cropped frame {i}: expected ~gray({expected_gray}), got r={r} g={g} b={b}"
+        );
+        assert!(a > 200, "cropped frame {i}: alpha should be opaque, got a={a}");
+    }
     assert!(verify.render_next_frame_owned(None).unwrap().is_none());
 }
 
 // =========================================================================
 // Helpers
 // =========================================================================
+
+/// Assert that the first pixel of RGBA frame data matches the expected gray value
+/// from `build_test_gif`: gray = (frame_index+1)*255/frame_count.
+/// Allows ±32 tolerance for GIF palette quantization.
+fn assert_pixel_gray(pixel_data: &[u8], frame_index: usize, frame_count: usize) {
+    assert!(
+        pixel_data.len() >= 4,
+        "frame {frame_index} pixel data too short ({} bytes)",
+        pixel_data.len()
+    );
+    let expected_gray = ((frame_index + 1) * 255 / frame_count) as u8;
+    let (r, g, b, a) = (pixel_data[0], pixel_data[1], pixel_data[2], pixel_data[3]);
+    let tolerance = 32i16;
+    assert!(
+        (r as i16 - expected_gray as i16).abs() <= tolerance
+            && (g as i16 - expected_gray as i16).abs() <= tolerance
+            && (b as i16 - expected_gray as i16).abs() <= tolerance,
+        "frame {frame_index}: expected ~gray({expected_gray}), got r={r} g={g} b={b}"
+    );
+    assert!(
+        a > 200,
+        "frame {frame_index}: alpha should be opaque, got a={a}"
+    );
+}
 
 fn make_solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
     let row_bytes = width as usize * 4;
