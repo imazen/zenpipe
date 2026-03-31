@@ -382,6 +382,2071 @@
       ],
       "x-zennode-version": 1
     },
+    "zenfilters.adaptive_sharpen": {
+      "additionalProperties": false,
+      "description": "Noise-gated sharpening with detail and masking controls.  Measures local texture energy and only sharpens where there is actual detail to enhance, leaving flat areas (sky, skin) unaffected.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Sharpening strength",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        },
+        "detail": {
+          "default": 0.5,
+          "description": "Edge-only (0) to full detail (1) sharpening",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Detail",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "masking": {
+          "default": 0.0,
+          "description": "Restrict sharpening to stronger edges",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Masking",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Masking",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "noise_floor": {
+          "default": 0.004999999888241291,
+          "description": "Threshold below which detail is treated as noise",
+          "maximum": 0.019999999552965164,
+          "minimum": 0.0010000000474974513,
+          "title": "Noise Floor",
+          "type": "number",
+          "x-zennode-identity": 0.004999999888241291,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "square_from_slider",
+          "x-zennode-step": 0.0010000000474974513
+        },
+        "sigma": {
+          "default": 1.0,
+          "description": "Detail extraction scale (smaller = finer detail)",
+          "maximum": 3.0,
+          "minimum": 0.5,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Adaptive Sharpen",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.adaptive_sharpen",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.alpha": {
+      "additionalProperties": false,
+      "description": "Alpha channel scaling for transparency adjustment.  Multiplies all alpha values by a constant factor. Useful for fade effects or global opacity changes. If no alpha channel exists, this is a no-op.",
+      "properties": {
+        "factor": {
+          "default": 1.0,
+          "description": "Alpha multiplier (0 = fully transparent, 1 = unchanged)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Factor",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-kv-keys": [
+            "s.alpha"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Alpha",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "modify_alpha",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.alpha",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.basecurve_tonemap": {
+      "additionalProperties": false,
+      "description": "Camera-matched basecurve tone mapping from darktable presets",
+      "properties": {
+        "chroma_compression": {
+          "default": 0.4000000059604645,
+          "description": "Chroma compression strength (0=L-only, 1=full RGB-like desaturation)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Chroma Compression",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "preset": {
+          "default": "",
+          "description": "Camera preset name (e.g., \"nikon_d7000\", \"canon_eos_5d_mark_ii\")",
+          "title": "Preset",
+          "type": "string",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Basecurve Tone Map",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_map",
+      "x-zennode-id": "zenfilters.basecurve_tonemap",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "tonemap",
+        "camera",
+        "basecurve"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenfilters.black_point": {
+      "additionalProperties": false,
+      "description": "Black point adjustment on Oklab L channel.  Remaps the shadow floor. A black point of 0.05 means values that were L=0.05 become L=0.0, and the range is stretched accordingly.",
+      "properties": {
+        "level": {
+          "default": 0.0,
+          "description": "Black point level (0 = no change, 0.1 = crush bottom 10%)",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Level",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        }
+      },
+      "title": "Black Point",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.black_point",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.bloom": {
+      "additionalProperties": false,
+      "description": "Soft glow from bright areas via screen blending.  Extracts pixels above a luminance threshold, blurs them with a large Gaussian kernel, and adds the result back. Produces natural-looking soft glow around bright light sources.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Bloom intensity (0 = off, 1 = full)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "sigma": {
+          "default": 20.0,
+          "description": "Bloom spread (larger = softer, wider glow)",
+          "maximum": 100.0,
+          "minimum": 2.0,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 20.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "px"
+        },
+        "threshold": {
+          "default": 0.699999988079071,
+          "description": "Luminance threshold for bloom contribution",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Threshold",
+          "type": "number",
+          "x-zennode-identity": 0.699999988079071,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Bloom",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.bloom",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.brilliance": {
+      "additionalProperties": false,
+      "description": "Adaptive local contrast based on local average luminance.  Unlike clarity, brilliance adjusts each pixel relative to its local average -- lifting shadows and compressing highlights selectively. Produces natural dynamic range compression similar to Apple's Brilliance slider.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Overall effect strength",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "highlight_strength": {
+          "default": 0.4000000059604645,
+          "description": "Highlight compression strength",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Highlight Strength",
+          "type": "number",
+          "x-zennode-identity": 0.4000000059604645,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "shadow_strength": {
+          "default": 0.6000000238418579,
+          "description": "Shadow lift strength",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Shadow Strength",
+          "type": "number",
+          "x-zennode-identity": 0.6000000238418579,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "sigma": {
+          "default": 10.0,
+          "description": "Blur sigma for computing local average",
+          "maximum": 50.0,
+          "minimum": 2.0,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 10.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Brilliance",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.brilliance",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.bw_mixer": {
+      "additionalProperties": false,
+      "description": "Grayscale conversion with per-color luminance weights",
+      "properties": {
+        "weights": {
+          "default": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "description": "Weight per color range (proportional to chroma)",
+          "items": {
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "title": "Weights",
+          "type": "array",
+          "x-zennode-labels": [
+            "Red",
+            "Orange",
+            "Yellow",
+            "Green",
+            "Cyan",
+            "Blue",
+            "Purple",
+            "Magenta"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "not_slider",
+          "x-zennode-unit": "×"
+        }
+      },
+      "title": "Bw Mixer",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.bw_mixer",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "color",
+        "grayscale",
+        "bw"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenfilters.camera_calibration": {
+      "additionalProperties": false,
+      "description": "Camera calibration -- primary color hue and saturation calibration with shadow tint.  Equivalent to Lightroom's Camera Calibration panel. Adjusts how the camera's RGB primaries map to final color.",
+      "properties": {
+        "blue_hue": {
+          "default": 0.0,
+          "description": "Blue primary hue shift",
+          "maximum": 60.0,
+          "minimum": -60.0,
+          "title": "Blue Hue",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Blue Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "°"
+        },
+        "blue_saturation": {
+          "default": 1.0,
+          "description": "Blue primary saturation scale",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Blue Saturation",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Blue Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        },
+        "green_hue": {
+          "default": 0.0,
+          "description": "Green primary hue shift",
+          "maximum": 60.0,
+          "minimum": -60.0,
+          "title": "Green Hue",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Green Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "°"
+        },
+        "green_saturation": {
+          "default": 1.0,
+          "description": "Green primary saturation scale",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Green Saturation",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Green Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        },
+        "red_hue": {
+          "default": 0.0,
+          "description": "Red primary hue shift",
+          "maximum": 60.0,
+          "minimum": -60.0,
+          "title": "Red Hue",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Red Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "°"
+        },
+        "red_saturation": {
+          "default": 1.0,
+          "description": "Red primary saturation scale",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Red Saturation",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Red Primary",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        },
+        "shadow_tint": {
+          "default": 0.0,
+          "description": "Shadow tint: green-magenta balance in shadows",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Shadow Tint",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Shadow",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Camera Calibration",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.camera_calibration",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.clarity": {
+      "additionalProperties": false,
+      "description": "Multi-scale local contrast enhancement on L channel.  Uses a two-band decomposition to isolate the mid-frequency \"clarity\" band, avoiding both noise amplification and halos.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Enhancement amount (positive = enhance, negative = soften)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "sigma": {
+          "default": 4.0,
+          "description": "Fine-scale blur sigma (coarse blur is 4x this)",
+          "maximum": 16.0,
+          "minimum": 1.0,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 4.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.5,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Clarity",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.clarity",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.color_grading": {
+      "additionalProperties": false,
+      "description": "Three-way split-toning for shadows, midtones, and highlights.  Applies different color tints to shadows, midtones, and highlights independently. Colors are specified as Oklab a/b offsets.",
+      "properties": {
+        "balance": {
+          "default": 0.0,
+          "description": "Balance: shifts the shadow/highlight boundary",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Balance",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "highlight_a": {
+          "default": 0.0,
+          "description": "Highlight tint: Oklab a offset",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Highlight A",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Highlights",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        },
+        "highlight_b": {
+          "default": 0.0,
+          "description": "Highlight tint: Oklab b offset",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Highlight B",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Highlights",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        },
+        "midtone_a": {
+          "default": 0.0,
+          "description": "Midtone tint: Oklab a offset",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Midtone A",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Midtones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        },
+        "midtone_b": {
+          "default": 0.0,
+          "description": "Midtone tint: Oklab b offset",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Midtone B",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Midtones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        },
+        "shadow_a": {
+          "default": 0.0,
+          "description": "Shadow tint: Oklab a offset (green-magenta)",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Shadow A",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Shadows",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        },
+        "shadow_b": {
+          "default": 0.0,
+          "description": "Shadow tint: Oklab b offset (blue-yellow)",
+          "maximum": 0.10000000149011612,
+          "minimum": -0.10000000149011612,
+          "title": "Shadow B",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Shadows",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.004999999888241291
+        }
+      },
+      "title": "Color Grading",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.color_grading",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.color_matrix": {
+      "additionalProperties": false,
+      "description": "5x5 color matrix applied in linear RGB space.  Transforms `[R, G, B, A, 1]` -> `[R', G', B', A', 1]` using a row-major 5x5 matrix (25 elements). The 5th column is the bias/offset. The filter converts Oklab -> linear RGB, applies the matrix, then converts back.",
+      "properties": {
+        "matrix": {
+          "default": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "description": "Row-major 5x5 color matrix (25 floats)",
+          "items": {
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "type": "number"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Matrix",
+          "type": "array",
+          "x-zennode-labels": [],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "not_slider"
+        }
+      },
+      "title": "Color Matrix",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.color_matrix",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.contrast": {
+      "additionalProperties": false,
+      "description": "Power-curve contrast adjustment pivoted at middle grey.  Uses a power curve that pivots at the perceptual equivalent of 18.42% middle grey in Oklab space. Positive values increase contrast.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Contrast strength (positive = increase, negative = flatten)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "s.contrast"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "square_from_slider",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Contrast",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone",
+      "x-zennode-id": "zenfilters.contrast",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.dehaze": {
+      "additionalProperties": false,
+      "description": "Spatially-adaptive haze removal using dark channel prior.  Uses a dark channel prior analog in Oklab space to estimate and remove atmospheric haze. Hazy regions get strong correction while clear regions are barely affected.",
+      "properties": {
+        "strength": {
+          "default": 0.0,
+          "description": "Dehaze correction strength",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "square_from_slider",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Dehaze",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.dehaze",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.dt_sigmoid": {
+      "additionalProperties": false,
+      "description": "darktable-compatible sigmoid tone mapper.  Implements the generalized log-logistic sigmoid from darktable's sigmoid module. Operates per-channel in linear RGB space (not Oklab).",
+      "properties": {
+        "contrast": {
+          "default": 1.5,
+          "description": "Middle-grey contrast",
+          "maximum": 10.0,
+          "minimum": 0.10000000149011612,
+          "title": "Contrast",
+          "type": "number",
+          "x-zennode-identity": 1.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612
+        },
+        "hue_preservation": {
+          "default": 1.0,
+          "description": "Hue preservation (0.0 = per-channel, 1.0 = full hue preservation)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Hue Preservation",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "skew": {
+          "default": 0.0,
+          "description": "Contrast skewness (-1 to 1, 0 = symmetric)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Skew",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "DtSigmoid",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "linear_f32"
+      },
+      "x-zennode-group": "tone_map",
+      "x-zennode-id": "zenfilters.dt_sigmoid",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.exposure": {
+      "additionalProperties": false,
+      "description": "Exposure adjustment in photographic stops.  +1 stop doubles linear light, -1 halves it. Preserves hue and saturation by scaling all Oklab channels proportionally.",
+      "properties": {
+        "stops": {
+          "default": 0.0,
+          "description": "Exposure compensation in stops (+/-)  Note: RIAPI `s.brightness` historically used a -1..1 sRGB offset, not photographic stops. The kv alias is provided for discoverability; callers should be aware of the different scale.",
+          "maximum": 5.0,
+          "minimum": -5.0,
+          "title": "Stops",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "s.brightness"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612,
+          "x-zennode-unit": "EV"
+        }
+      },
+      "title": "Exposure",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone",
+      "x-zennode-id": "zenfilters.exposure",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.grain": {
+      "additionalProperties": false,
+      "description": "Film grain simulation with luminance-adaptive response.  Adds synthetic grain to the luminance channel. Grain intensity varies with luminance: stronger in midtones, weaker in deep shadows and bright highlights, like real film.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Grain intensity (0 = none, 1 = heavy)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "seed": {
+          "default": 0,
+          "description": "Random seed for grain pattern",
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "not_slider"
+        },
+        "size": {
+          "default": 1.0,
+          "description": "Grain spatial frequency (1 = fine, 2+ = coarser)",
+          "maximum": 5.0,
+          "minimum": 1.0,
+          "title": "Size",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.5,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Grain",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.grain",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.grayscale": {
+      "additionalProperties": false,
+      "description": "Convert to grayscale by zeroing chroma channels.  In Oklab, grayscale means a=0, b=0. The perceived luminance is already encoded in the L channel, so there is no information loss.",
+      "properties": {
+        "algorithm": {
+          "default": "oklab",
+          "description": "Grayscale algorithm. All produce identical results in Oklab space (zero chroma), but different luma coefficients when applied in sRGB. Values: \"oklab\" (default), \"ntsc\", \"bt709\", \"flat\", \"ry\"",
+          "title": "Algorithm",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "s.grayscale"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Grayscale",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.grayscale",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.highlight_recovery": {
+      "additionalProperties": false,
+      "description": "Automatic soft-clip recovery for blown highlights.  Analyzes the L histogram to detect blown highlight content, then applies a proportional soft knee compression. Images with properly exposed highlights are barely affected.",
+      "properties": {
+        "strength": {
+          "default": 0.0,
+          "description": "Recovery strength (0 = off, 1 = full)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Highlight Recovery",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.highlight_recovery",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.highlights_shadows": {
+      "additionalProperties": false,
+      "description": "Targeted highlight recovery and shadow lift.  Positive highlights compresses bright areas (recovery). Positive shadows lifts dark areas (fill light). Custom thresholds control where transitions begin.",
+      "properties": {
+        "highlight_threshold": {
+          "default": 0.699999988079071,
+          "description": "L value above which pixels are in the highlight zone",
+          "maximum": 0.949999988079071,
+          "minimum": 0.5,
+          "title": "Highlight Threshold",
+          "type": "number",
+          "x-zennode-identity": 0.699999988079071,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "highlights": {
+          "default": 0.0,
+          "description": "Highlight recovery (positive = compress, negative = boost)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Highlights",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "shadow_threshold": {
+          "default": 0.30000001192092896,
+          "description": "L value below which pixels are in the shadow zone",
+          "maximum": 0.5,
+          "minimum": 0.05000000074505806,
+          "title": "Shadow Threshold",
+          "type": "number",
+          "x-zennode-identity": 0.30000001192092896,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "shadows": {
+          "default": 0.0,
+          "description": "Shadow recovery (positive = lift, negative = deepen)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Shadows",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Highlights / Shadows",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.highlights_shadows",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.hsl_adjust": {
+      "additionalProperties": false,
+      "description": "Per-color hue, saturation, and luminance adjustment",
+      "properties": {
+        "hue": {
+          "default": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "description": "Hue shift per color range in degrees",
+          "items": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "type": "number"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "title": "Hue",
+          "type": "array",
+          "x-zennode-labels": [
+            "Red",
+            "Orange",
+            "Yellow",
+            "Green",
+            "Cyan",
+            "Blue",
+            "Purple",
+            "Magenta"
+          ],
+          "x-zennode-section": "Hue",
+          "x-zennode-slider": "not_slider",
+          "x-zennode-unit": "°"
+        },
+        "luminance": {
+          "default": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "description": "Luminance offset per color range",
+          "items": {
+            "maximum": 0.5,
+            "minimum": -0.5,
+            "type": "number"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "title": "Luminance",
+          "type": "array",
+          "x-zennode-labels": [
+            "Red",
+            "Orange",
+            "Yellow",
+            "Green",
+            "Cyan",
+            "Blue",
+            "Purple",
+            "Magenta"
+          ],
+          "x-zennode-section": "Luminance",
+          "x-zennode-slider": "not_slider"
+        },
+        "saturation": {
+          "default": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "description": "Saturation multiplier per color range",
+          "items": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "title": "Saturation",
+          "type": "array",
+          "x-zennode-labels": [
+            "Red",
+            "Orange",
+            "Yellow",
+            "Green",
+            "Cyan",
+            "Blue",
+            "Purple",
+            "Magenta"
+          ],
+          "x-zennode-section": "Saturation",
+          "x-zennode-slider": "not_slider",
+          "x-zennode-unit": "×"
+        }
+      },
+      "title": "Hsl Adjust",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.hsl_adjust",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "color",
+        "hsl"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenfilters.hue_rotate": {
+      "additionalProperties": false,
+      "description": "Hue rotation in Oklab a/b plane.  Rotates colors around the hue circle by the specified angle in degrees. Preserves lightness and chroma.",
+      "properties": {
+        "degrees": {
+          "default": 0.0,
+          "description": "Rotation angle in degrees",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "title": "Degrees",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 5.0,
+          "x-zennode-unit": "°"
+        }
+      },
+      "title": "Hue Rotate",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.hue_rotate",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.invert": {
+      "additionalProperties": false,
+      "description": "Color inversion in Oklab space.  Inverts lightness (L' = 1.0 - L) and negates chroma (a' = -a, b' = -b). Produces a perceptually correct negative.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Enable/disable. Always true when the node is present. Exists to enable RIAPI s.invert=true querystring support.",
+          "title": "Enable",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "s.invert"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Invert",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.invert",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.levels": {
+      "additionalProperties": false,
+      "description": "Input/output range remapping with gamma correction.  The classic Photoshop/Lightroom Levels dialog: clip input range, adjust midtone gamma, and remap output range.",
+      "properties": {
+        "gamma": {
+          "default": 1.0,
+          "description": "Midtone adjustment (1 = linear, >1 = brighten, <1 = darken)",
+          "maximum": 10.0,
+          "minimum": 0.10000000149011612,
+          "title": "Gamma",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Midtone",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "in_black": {
+          "default": 0.0,
+          "description": "Input black point (clip shadows)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "In Black",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Input",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "in_white": {
+          "default": 1.0,
+          "description": "Input white point (clip highlights)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "In White",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Input",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "out_black": {
+          "default": 0.0,
+          "description": "Minimum output luminance",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Out Black",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Output",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "out_white": {
+          "default": 1.0,
+          "description": "Maximum output luminance",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Out White",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Output",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        }
+      },
+      "title": "Levels",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_map",
+      "x-zennode-id": "zenfilters.levels",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.noise_reduction": {
+      "additionalProperties": false,
+      "description": "Wavelet-based luminance and chroma noise reduction.  Uses an a trous wavelet decomposition with soft thresholding. Chroma denoising uses a higher effective threshold since chroma noise is typically more objectionable.",
+      "properties": {
+        "chroma": {
+          "default": 0.0,
+          "description": "Chroma noise reduction strength",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Chroma",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "square_from_slider",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "chroma_detail": {
+          "default": 0.5,
+          "description": "Chroma detail preservation (higher = keep more color detail)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Chroma Detail",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "detail": {
+          "default": 0.5,
+          "description": "Luminance detail preservation (higher = keep more detail)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Detail",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "luminance": {
+          "default": 0.0,
+          "description": "Luminance noise reduction strength",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Luminance",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "square_from_slider",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "luminance_contrast": {
+          "default": 0.5,
+          "description": "Luminance contrast preservation in denoised areas",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Luminance Contrast",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "scales": {
+          "default": 4,
+          "description": "Number of wavelet scales",
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Scales",
+          "type": "integer",
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "not_slider"
+        }
+      },
+      "title": "Noise Reduction",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.noise_reduction",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.parametric_curve": {
+      "additionalProperties": false,
+      "description": "Parametric tone curve with 4 zone controls and 3 movable dividers.  Zone-based control similar to Lightroom's parametric tone curve panel. Each zone slider pushes the curve up or down within its region.",
+      "properties": {
+        "darks": {
+          "default": 0.0,
+          "description": "Darks (lower midtones) zone adjustment",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Darks",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Zones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "highlights": {
+          "default": 0.0,
+          "description": "Highlights zone adjustment",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Highlights",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Zones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "lights": {
+          "default": 0.0,
+          "description": "Lights (upper midtones) zone adjustment",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Lights",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Zones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "shadows": {
+          "default": 0.0,
+          "description": "Shadows zone adjustment",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Shadows",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Zones",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "split_highlights": {
+          "default": 0.75,
+          "description": "Boundary between lights and highlights zones",
+          "maximum": 0.949999988079071,
+          "minimum": 0.550000011920929,
+          "title": "Split Highlights",
+          "type": "number",
+          "x-zennode-identity": 0.75,
+          "x-zennode-section": "Splits",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "split_midtones": {
+          "default": 0.5,
+          "description": "Boundary between darks and lights zones",
+          "maximum": 0.75,
+          "minimum": 0.30000001192092896,
+          "title": "Split Midtones",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Splits",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "split_shadows": {
+          "default": 0.25,
+          "description": "Boundary between shadows and darks zones",
+          "maximum": 0.44999998807907104,
+          "minimum": 0.05000000074505806,
+          "title": "Split Shadows",
+          "type": "number",
+          "x-zennode-identity": 0.25,
+          "x-zennode-section": "Splits",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Parametric Curve",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone",
+      "x-zennode-id": "zenfilters.parametric_curve",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.saturation": {
+      "additionalProperties": false,
+      "description": "Uniform chroma scaling on Oklab a/b channels.  Scales chroma by a constant factor. 1.0 = no change, 0.0 = grayscale, 2.0 = double saturation.",
+      "properties": {
+        "factor": {
+          "default": 1.0,
+          "description": "Saturation multiplier (0 = grayscale, 1 = unchanged, 2 = double)",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Factor",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-kv-keys": [
+            "s.saturation"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "factor_centered",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        }
+      },
+      "title": "Saturation",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.saturation",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.sepia": {
+      "additionalProperties": false,
+      "description": "Sepia tone effect in perceptual Oklab space.  Desaturates the image, then applies a warm brown tint by shifting the a and b channels toward the sepia point.",
+      "properties": {
+        "amount": {
+          "default": 1.0,
+          "description": "Sepia strength (0 = grayscale, 1 = full sepia)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-kv-keys": [
+            "s.sepia"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Sepia",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.sepia",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.shadow_lift": {
+      "additionalProperties": false,
+      "description": "Automatic toe-curve recovery for crushed shadows.  Analyzes the L histogram to detect crushed shadow content, then applies a proportional toe lift curve. Images with properly exposed shadows are barely affected.",
+      "properties": {
+        "strength": {
+          "default": 0.0,
+          "description": "Lift strength (0 = off, 1 = full)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Shadow Lift",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.shadow_lift",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.sharpen": {
+      "additionalProperties": false,
+      "description": "Unsharp mask sharpening on L channel.  Like clarity but with a smaller sigma for fine detail enhancement. Sharpening in Oklab L avoids color fringing at high-contrast edges.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Sharpening strength",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806,
+          "x-zennode-unit": "×"
+        },
+        "sigma": {
+          "default": 1.0,
+          "description": "Blur sigma for detail extraction",
+          "maximum": 3.0,
+          "minimum": 0.5,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Sharpen",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.sharpen",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.sigmoid": {
+      "additionalProperties": false,
+      "description": "S-curve tone mapping with skew and chroma compression.  Uses the generalized sigmoid f(x) = x^c / (x^c + (1-x)^c). Contrast controls steepness, skew shifts the midpoint, and chroma_compression adapts saturation to luminance changes.",
+      "properties": {
+        "chroma_compression": {
+          "default": 0.0,
+          "description": "How much chroma adapts to luminance changes (0 = L-only, 1 = full)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Chroma Compression",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "contrast": {
+          "default": 1.0,
+          "description": "S-curve steepness (1 = identity, >1 = more contrast)",
+          "maximum": 3.0,
+          "minimum": 0.5,
+          "title": "Contrast",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "skew": {
+          "default": 0.5,
+          "description": "Midpoint bias (0.5 = symmetric, <0.5 = darken, >0.5 = brighten)",
+          "maximum": 0.8999999761581421,
+          "minimum": 0.10000000149011612,
+          "title": "Skew",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Sigmoid",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone",
+      "x-zennode-id": "zenfilters.sigmoid",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.temperature": {
+      "additionalProperties": false,
+      "description": "Color temperature adjustment (warm/cool) via Oklab b shift.  Positive values warm the image (shift toward yellow/orange). Negative values cool it (shift toward blue).",
+      "properties": {
+        "shift": {
+          "default": 0.0,
+          "description": "Color temperature shift (negative = cool, positive = warm)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Shift",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Temperature",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.temperature",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.texture": {
+      "additionalProperties": false,
+      "description": "Fine detail contrast enhancement (smaller scale than clarity).  Similar to Clarity but targets higher-frequency detail like skin pores, fabric weave, and individual leaves. Mirrors Lightroom's Texture slider.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Enhancement amount (positive = sharpen, negative = soften)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "sigma": {
+          "default": 1.5,
+          "description": "Fine-scale blur sigma (coarse blur is 2x this)",
+          "maximum": 8.0,
+          "minimum": 0.5,
+          "title": "Sigma",
+          "type": "number",
+          "x-zennode-identity": 1.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.5,
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Texture",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": true,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "detail",
+      "x-zennode-id": "zenfilters.texture",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.tint": {
+      "additionalProperties": false,
+      "description": "Green-magenta tint adjustment via Oklab a shift.  Positive values shift toward magenta, negative toward green.",
+      "properties": {
+        "shift": {
+          "default": 0.0,
+          "description": "Tint shift (negative = green, positive = magenta)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Shift",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Tint",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.tint",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.tone_curve": {
+      "additionalProperties": false,
+      "description": "Arbitrary tone curve via control points with cubic spline interpolation  Control points define an input→output mapping on the L channel. Points are encoded as a comma-separated string of \"x:y\" pairs, e.g., \"0.0:0.0,0.25:0.15,0.75:0.85,1.0:1.0\". The execution layer parses this and calls ToneCurve::from_points().",
+      "properties": {
+        "points": {
+          "default": "0:0,1:1",
+          "description": "Control points as \"x:y\" pairs, comma-separated.  Each point is input_L:output_L in [0,1] range. Default is identity (diagonal line): \"0:0,1:1\". Example S-curve: \"0:0,0.25:0.15,0.75:0.85,1:1\".",
+          "title": "Control Points",
+          "type": "string",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "not_slider"
+        }
+      },
+      "title": "Tone Curve",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone",
+      "x-zennode-id": "zenfilters.tone_curve",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "tone",
+        "curve"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenfilters.vibrance": {
+      "additionalProperties": false,
+      "description": "Smart saturation that protects already-saturated colors.  Boosts chroma of low-saturation pixels more than high-saturation ones, preventing skin tone and sky clipping.",
+      "properties": {
+        "amount": {
+          "default": 0.0,
+          "description": "Vibrance boost (0 = off, 1 = full)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Amount",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "protection": {
+          "default": 2.0,
+          "description": "Protection exponent for already-saturated colors",
+          "maximum": 4.0,
+          "minimum": 0.5,
+          "title": "Protection",
+          "type": "number",
+          "x-zennode-identity": 2.0,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612
+        }
+      },
+      "title": "Vibrance",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenfilters.vibrance",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.vignette": {
+      "additionalProperties": false,
+      "description": "Post-crop vignette: darken or lighten image edges.  Applies a radial falloff from center to edges. Positive strength darkens edges (classic vignette), negative brightens.",
+      "properties": {
+        "feather": {
+          "default": 0.5,
+          "description": "Transition softness (0 = hard, 1 = very soft)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Feather",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "midpoint": {
+          "default": 0.5,
+          "description": "Distance from center where effect starts (0 = center, 1 = corners)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Midpoint",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "roundness": {
+          "default": 1.0,
+          "description": "Shape (1 = circular, 0 = rectangular)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Roundness",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Shape",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "strength": {
+          "default": 0.0,
+          "description": "Vignette strength (positive = darken edges, negative = brighten)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Strength",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Vignette",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "effects",
+      "x-zennode-id": "zenfilters.vignette",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.white_point": {
+      "additionalProperties": false,
+      "description": "White point adjustment on Oklab L channel.  Scales the L range so that `level` maps to L=1.0. Values < 1.0 brighten highlights; values > 1.0 extend the dynamic range. Optional soft-clip headroom compresses super-whites instead of hard clipping.",
+      "properties": {
+        "headroom": {
+          "default": 0.0,
+          "description": "Soft-clip rolloff fraction above white point",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Headroom",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "level": {
+          "default": 1.0,
+          "description": "White point level (1.0 = no change, <1 = brighten highlights)",
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Level",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "White Point",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "fused_adjust",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.white_point",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
+    "zenfilters.whites_blacks": {
+      "additionalProperties": false,
+      "description": "Whites and Blacks adjustment -- targeted luminance control for the extreme ends of the histogram.  Unlike BlackPoint/WhitePoint (which remap the entire range), Whites/Blacks apply a smooth, localized adjustment that matches Lightroom's Whites/Blacks sliders.",
+      "properties": {
+        "blacks": {
+          "default": 0.0,
+          "description": "Blacks adjustment (positive = lift shadows)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Blacks",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "whites": {
+          "default": 0.0,
+          "description": "Whites adjustment (positive = brighten highlights)",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Whites",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        }
+      },
+      "title": "Whites / Blacks",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "skip",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "oklab_f32"
+      },
+      "x-zennode-group": "tone_range",
+      "x-zennode-id": "zenfilters.whites_blacks",
+      "x-zennode-role": "filter",
+      "x-zennode-version": 1
+    },
     "zengif.encode": {
       "additionalProperties": false,
       "description": "GIF encoder settings.",

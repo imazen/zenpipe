@@ -252,6 +252,121 @@
       ],
       "label": "Quality Intent Node"
     },
+    "zenfilters.alpha": {
+      "keys": [
+        {
+          "description": "Alpha multiplier (0 = fully transparent, 1 = unchanged)",
+          "key": "s.alpha",
+          "label": "Factor",
+          "param": "factor",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Alpha"
+    },
+    "zenfilters.contrast": {
+      "keys": [
+        {
+          "description": "Contrast strength (positive = increase, negative = flatten)",
+          "key": "s.contrast",
+          "label": "Amount",
+          "param": "amount",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Contrast"
+    },
+    "zenfilters.exposure": {
+      "keys": [
+        {
+          "description": "Exposure compensation in stops (+/-)  Note: RIAPI `s.brightness` historically used a -1..1 sRGB offset, not photographic stops. The kv alias is provided for discoverability; callers should be aware of the different scale.",
+          "key": "s.brightness",
+          "label": "Stops",
+          "param": "stops",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 5.0,
+            "minimum": -5.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Exposure"
+    },
+    "zenfilters.grayscale": {
+      "keys": [
+        {
+          "description": "Grayscale algorithm. All produce identical results in Oklab space (zero chroma), but different luma coefficients when applied in sRGB. Values: \"oklab\" (default), \"ntsc\", \"bt709\", \"flat\", \"ry\"",
+          "key": "s.grayscale",
+          "label": "Algorithm",
+          "param": "algorithm",
+          "value_schema": {
+            "default": "oklab",
+            "type": "string"
+          }
+        }
+      ],
+      "label": "Grayscale"
+    },
+    "zenfilters.invert": {
+      "keys": [
+        {
+          "description": "Enable/disable. Always true when the node is present. Exists to enable RIAPI s.invert=true querystring support.",
+          "key": "s.invert",
+          "label": "Enable",
+          "param": "enabled",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Invert"
+    },
+    "zenfilters.saturation": {
+      "keys": [
+        {
+          "description": "Saturation multiplier (0 = grayscale, 1 = unchanged, 2 = double)",
+          "key": "s.saturation",
+          "label": "Factor",
+          "param": "factor",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Saturation"
+    },
+    "zenfilters.sepia": {
+      "keys": [
+        {
+          "description": "Sepia strength (0 = grayscale, 1 = full sepia)",
+          "key": "s.sepia",
+          "label": "Amount",
+          "param": "amount",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Sepia"
+    },
     "zengif.encode": {
       "keys": [
         {

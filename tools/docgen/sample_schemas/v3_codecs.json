@@ -68,7 +68,7 @@
       "supports_lossless": true
     },
     {
-      "can_decode": false,
+      "can_decode": true,
       "can_encode": false,
       "extension": "avif",
       "extensions": [
@@ -84,7 +84,7 @@
       "supports_lossless": true
     },
     {
-      "can_decode": false,
+      "can_decode": true,
       "can_encode": false,
       "extension": "jxl",
       "extensions": [
@@ -119,8 +119,8 @@
       "supports_lossless": false
     },
     {
-      "can_decode": false,
-      "can_encode": false,
+      "can_decode": true,
+      "can_encode": true,
       "extension": "bmp",
       "extensions": [
         "bmp"
@@ -136,8 +136,8 @@
       "supports_lossless": true
     },
     {
-      "can_decode": false,
-      "can_encode": false,
+      "can_decode": true,
+      "can_encode": true,
       "extension": "tiff",
       "extensions": [
         "tiff",
@@ -153,8 +153,8 @@
       "supports_lossless": true
     },
     {
-      "can_decode": false,
-      "can_encode": false,
+      "can_decode": true,
+      "can_encode": true,
       "extension": "pnm",
       "extensions": [
         "pnm",
@@ -177,8 +177,8 @@
       "supports_lossless": true
     },
     {
-      "can_decode": false,
-      "can_encode": false,
+      "can_decode": true,
+      "can_encode": true,
       "extension": "ff",
       "extensions": [
         "ff"
