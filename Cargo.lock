@@ -663,6 +663,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "heic"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "enough",
+ "garb",
+ "imgref",
+ "rgb",
+ "safe_unaligned_simd",
+ "whereat",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2226,6 +2241,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "enough",
+ "heic",
  "imgref",
  "linear-srgb 0.6.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "moxcms",
@@ -2433,6 +2449,7 @@ dependencies = [
  "zengif",
  "zenjpeg",
  "zenjxl",
+ "zenlayout 0.2.1",
  "zennode",
  "zenpixels",
  "zenpixels-convert",

@@ -53,15 +53,19 @@ nodes-layout = ["zennode"]
 nodes-quant = ["zennode", "dep:zenquant"]
 nodes-filters = ["zennode", "std", "zenfilters/zennode"]
 nodes-faces = ["zennode", "std", "dep:zensally", "dep:zensally-zentract"]
+nodes-heic = ["zennode", "zencodecs/heic-decode"]
 nodes-all = [
     "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif",
     "nodes-avif", "nodes-jxl", "nodes-tiff", "nodes-bmp",
     "nodes-resize", "nodes-layout", "nodes-quant", "nodes-filters",
+    "nodes-heic",
 ]
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
+# Image layout: constraint modes, orientation, smart crop
+zenlayout = { path = "../zenlayout", default-features = false, features = ["smart-crop"] }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
 zenblend = { path = "../zenblend", default-features = false }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
