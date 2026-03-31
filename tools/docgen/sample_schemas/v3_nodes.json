@@ -1,72 +1,3347 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
-    "zenresize.constrain": {
-      "type": "object",
-      "title": "Constrain Size",
-      "description": "Constrain image dimensions with resize, crop, or pad modes.",
-      "x-zennode-id": "zenresize.constrain",
-      "x-zennode-group": "Geometry",
-      "x-zennode-role": "Resize",
-      "x-zennode-tags": ["resize", "geometry", "scale"],
-      "x-zennode-inputs": [],
+    "heic.decode": {
+      "additionalProperties": false,
+      "description": "HEIC/HEIF decode node.",
       "properties": {
-        "w": {"type": ["integer", "null"], "minimum": 0, "maximum": 65535, "default": 0, "title": "Width", "x-zennode-unit": "px", "x-zennode-section": "Dimensions", "x-zennode-optional": true, "x-zennode-kv-keys": ["w", "width", "maxwidth"]},
-        "h": {"type": ["integer", "null"], "minimum": 0, "maximum": 65535, "default": 0, "title": "Height", "x-zennode-unit": "px", "x-zennode-section": "Dimensions", "x-zennode-optional": true, "x-zennode-kv-keys": ["h", "height", "maxheight"]},
-        "mode": {"type": "string", "default": "within", "title": "Mode", "x-zennode-section": "Layout", "x-zennode-kv-keys": ["mode"], "enum": ["distort", "within", "fit", "within_crop", "fit_crop", "fit_pad", "within_pad", "pad_within", "aspect_crop"], "x-zennode-enum-labels": [{"name": "distort", "label": "Distort", "description": "Stretch to exact dimensions"}, {"name": "within", "label": "Within", "description": "Fit inside, no upscale"}, {"name": "fit", "label": "Fit", "description": "Fit inside, may upscale"}, {"name": "within_crop", "label": "Within Crop", "description": "Fill by cropping, no upscale"}, {"name": "fit_crop", "label": "Fit Crop", "description": "Fill by cropping"}, {"name": "fit_pad", "label": "Fit Pad", "description": "Fit inside, pad to exact"}, {"name": "within_pad", "label": "Within Pad", "description": "Fit, no upscale, pad"}, {"name": "pad_within", "label": "Pad Within", "description": "No upscale, always pad"}, {"name": "aspect_crop", "label": "Aspect Crop", "description": "Crop to aspect, no resize"}]},
-        "down_filter": {"type": ["string", "null"], "default": "", "title": "Downscale Filter", "x-zennode-section": "Quality", "x-zennode-optional": true, "x-zennode-kv-keys": ["down.filter"]},
-        "unsharp_percent": {"type": ["number", "null"], "minimum": 0.0, "maximum": 100.0, "default": 0.0, "title": "Unsharp Mask", "x-zennode-unit": "%", "x-zennode-section": "Post-Processing", "x-zennode-optional": true, "x-zennode-kv-keys": ["f.sharpen", "unsharp"]},
-        "bgcolor": {"type": ["string", "null"], "default": "", "title": "Canvas Color", "x-zennode-section": "Position", "x-zennode-optional": true, "x-zennode-kv-keys": ["bgcolor", "canvas_color"]}
-      }
-    },
-    "zenlayout.flip_h": {
+        "decode_thumbnail": {
+          "default": false,
+          "description": "Placeholder — not yet wired to the decoder.",
+          "title": "Decode Thumbnail",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "heic.thumbnail"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "extract_depth": {
+          "default": false,
+          "title": "Extract Depth Map",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "heic.depth"
+          ],
+          "x-zennode-section": "Supplements",
+          "x-zennode-slider": "linear"
+        },
+        "extract_gain_map": {
+          "default": false,
+          "title": "Extract Gain Map",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "heic.gain_map"
+          ],
+          "x-zennode-section": "Supplements",
+          "x-zennode-slider": "linear"
+        },
+        "extract_mattes": {
+          "default": false,
+          "description": "Placeholder — not yet wired to the decoder.",
+          "title": "Extract Mattes",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "heic.mattes"
+          ],
+          "x-zennode-section": "Supplements",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Decode Heic",
       "type": "object",
-      "title": "Flip Horizontal",
-      "description": "Mirror the image left-right.",
-      "x-zennode-id": "zenlayout.flip_h",
-      "x-zennode-group": "Geometry",
-      "x-zennode-role": "Orient",
-      "x-zennode-tags": ["flip", "geometry"],
-      "properties": {}
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "decode",
+      "x-zennode-id": "heic.decode",
+      "x-zennode-role": "decode",
+      "x-zennode-tags": [
+        "heic",
+        "heif",
+        "hdr",
+        "depth"
+      ],
+      "x-zennode-version": 1
     },
-    "zenfilters.exposure": {
-      "type": "object",
-      "title": "Exposure",
-      "description": "Adjust exposure compensation in photographic stops.",
-      "x-zennode-id": "zenfilters.exposure",
-      "x-zennode-group": "Tone",
-      "x-zennode-role": "Filter",
-      "x-zennode-tags": ["basic", "tone"],
+    "zenavif.encode": {
+      "additionalProperties": false,
+      "description": "AVIF encoding node.",
       "properties": {
-        "stops": {"type": "number", "minimum": -5.0, "maximum": 5.0, "default": 0.0, "title": "Stops", "x-zennode-unit": "EV", "x-zennode-section": "Main", "x-zennode-kv-keys": ["s.brightness"]}
-      }
-    },
-    "zenpipe.composite": {
+        "alpha_color_mode": {
+          "default": "clean",
+          "title": "Alpha Color Mode",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "avif.alpha_color_mode",
+            "avif.alpha_mode"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "alpha_quality": {
+          "default": 0.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Alpha Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "avif.alpha_quality",
+            "avif.aq"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "bit_depth": {
+          "default": "auto",
+          "title": "Bit Depth",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "avif.depth"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "color_model": {
+          "default": "ycbcr",
+          "title": "Color Model",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "avif.color_model"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "lossless": {
+          "default": false,
+          "title": "Lossless",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "avif.lossless"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "quality": {
+          "default": 75.0,
+          "maximum": 100.0,
+          "minimum": 1.0,
+          "title": "Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "avif.q",
+            "avif.quality"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "speed": {
+          "default": 4,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Speed",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "avif.speed"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Avif Encode",
       "type": "object",
-      "title": "Composite",
-      "description": "Composite a foreground image onto a background at a position.",
-      "x-zennode-id": "zenpipe.composite",
-      "x-zennode-group": "Composite",
-      "x-zennode-role": "Composite",
-      "x-zennode-tags": ["composite", "blend"],
-      "x-zennode-inputs": [{"name": "canvas", "label": "Background canvas", "edge_kind": "canvas", "required": true}, {"name": "input", "label": "Foreground image", "edge_kind": "input", "required": true}],
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenavif.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "avif",
+        "encode",
+        "av1"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenbitmaps.encode_bmp": {
+      "additionalProperties": false,
+      "description": "BMP encoding with bit depth selection.",
       "properties": {
-        "fg_x": {"type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "title": "X", "x-zennode-unit": "px", "x-zennode-section": "Position"},
-        "fg_y": {"type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "title": "Y", "x-zennode-unit": "px", "x-zennode-section": "Position"},
-        "blend_mode": {"type": "string", "default": "source_over", "title": "Blend Mode", "x-zennode-section": "Blending"}
-      }
+        "bits": {
+          "default": 24,
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Bit Depth",
+          "type": "integer",
+          "x-zennode-kv-keys": [
+            "bmp.bits",
+            "bits"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "bits"
+        }
+      },
+      "title": "Encode Bmp",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenbitmaps.encode_bmp",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "codec",
+        "bmp",
+        "lossless",
+        "encode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zencodecs.quality_intent": {
+      "additionalProperties": false,
+      "description": "Format selection and quality profile for encoding (zennode node).  This node controls output format selection and quality. It supports both RIAPI querystring keys and JSON API fields, matching imageflow's established `EncoderPreset::Auto` / `EncoderPreset::Format` ergonomics.  **RIAPI**: `?qp=high&accept.webp=true&accept.avif=true` **JSON**: `{ \"profile\": \"high\", \"allow_webp\": true, \"allow_avif\": true }`  When `format` is empty (default), the pipeline auto-selects the best format from the allowed set. When `format` is set (e.g., \"jpeg\"), that format is used directly.  The `profile` field accepts both named presets and numeric values: - Named: lowest, low, medium_low, medium, good, high, highest, lossless - Numeric: 0-100 (mapped to codec-specific quality scales)  Convert to [`CodecIntent`] via [`to_codec_intent()`](QualityIntentNode::to_codec_intent).",
+      "properties": {
+        "allow_avif": {
+          "default": false,
+          "description": "Allow AVIF output. Must be explicitly enabled.",
+          "title": "Allow Avif",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "accept.avif"
+          ],
+          "x-zennode-section": "Allowed Formats",
+          "x-zennode-slider": "linear"
+        },
+        "allow_color_profiles": {
+          "default": false,
+          "description": "Allow non-sRGB color profiles in the output.",
+          "title": "Allow Color Profiles",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "accept.color_profiles"
+          ],
+          "x-zennode-section": "Allowed Formats",
+          "x-zennode-slider": "linear"
+        },
+        "allow_jxl": {
+          "default": false,
+          "description": "Allow JPEG XL output. Must be explicitly enabled.",
+          "title": "Allow Jxl",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "accept.jxl"
+          ],
+          "x-zennode-section": "Allowed Formats",
+          "x-zennode-slider": "linear"
+        },
+        "allow_webp": {
+          "default": false,
+          "description": "Allow WebP output. Must be explicitly enabled.",
+          "title": "Allow Webp",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "accept.webp"
+          ],
+          "x-zennode-section": "Allowed Formats",
+          "x-zennode-slider": "linear"
+        },
+        "dpr": {
+          "default": 1.0,
+          "description": "Device pixel ratio for quality adjustment.  Higher DPR screens tolerate lower quality (smaller pixels). Default 1.0 = no adjustment.",
+          "maximum": 10.0,
+          "minimum": 0.5,
+          "title": "Dpr",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-kv-keys": [
+            "qp.dpr",
+            "qp.dppx",
+            "dpr",
+            "dppx"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.5,
+          "x-zennode-unit": "×"
+        },
+        "format": {
+          "default": "",
+          "description": "Explicit output format. Empty = auto-select from allowed formats.  Values: \"jpeg\", \"png\", \"webp\", \"gif\", \"avif\", \"jxl\", \"keep\", or \"\". \"keep\" preserves the source format. \"thumbnail\" is an alias for the key.",
+          "title": "Output Format",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "format",
+            "thumbnail"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "lossless": {
+          "default": "",
+          "description": "Global lossless preference. Empty = default (lossy).  Accepts \"true\", \"false\", or \"keep\" (match source losslessness).",
+          "title": "Lossless",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "lossless"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "profile": {
+          "default": "high",
+          "description": "Quality profile: named preset or numeric 0-100.  Named presets: \"lowest\", \"low\", \"medium_low\", \"medium\", \"good\", \"high\", \"highest\", \"lossless\". Numeric: \"0\" to \"100\" (codec-specific mapping).",
+          "title": "Quality Profile",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "qp"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "quality_fallback": {
+          "default": 0.0,
+          "description": "Legacy quality fallback (0-100). Used when `qp` is not set.  RIAPI: `?quality=85` — sets a numeric quality as fallback for all codecs. Prefer `qp` (quality profile) for new code.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Quality (legacy)",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "quality"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        }
+      },
+      "title": "Quality Intent Node",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zencodecs.quality_intent",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "quality",
+        "auto",
+        "format",
+        "encode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zengif.encode": {
+      "additionalProperties": false,
+      "description": "GIF encoder settings.",
+      "properties": {
+        "dithering": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Dithering",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "gif.dithering",
+            "gif.dither"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "loop_count": {
+          "default": "infinite",
+          "title": "Loop",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "gif.loop"
+          ],
+          "x-zennode-section": "Animation",
+          "x-zennode-slider": "linear"
+        },
+        "lossy_tolerance": {
+          "default": 0.0,
+          "maximum": 255.0,
+          "minimum": 0.0,
+          "title": "Lossy Tolerance",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "gif.lossy"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "palette_error_threshold": {
+          "default": 5.0,
+          "maximum": 50.0,
+          "minimum": 0.0,
+          "title": "Palette Error Threshold",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "gif.palette_threshold"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Animation",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.5
+        },
+        "quality": {
+          "default": 80.0,
+          "maximum": 100.0,
+          "minimum": 1.0,
+          "title": "Palette Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "gif.quality"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "quantizer": {
+          "default": "auto",
+          "title": "Quantizer",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "gif.quantizer"
+          ],
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "shared_palette": {
+          "default": true,
+          "title": "Shared Palette",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "gif.shared_palette"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Animation",
+          "x-zennode-slider": "linear"
+        },
+        "use_transparency": {
+          "default": true,
+          "title": "Use Transparency",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "gif.use_transparency",
+            "gif.transparency"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Gif",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zengif.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "gif",
+        "encode",
+        "animation",
+        "palette"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenjpeg.decode": {
+      "additionalProperties": false,
+      "description": "JPEG decoder configuration.",
+      "properties": {
+        "auto_orient": {
+          "default": false,
+          "title": "Auto Orient",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "jpeg.orient",
+            "jpeg.auto_orient"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "max_megapixels": {
+          "default": 100,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Max Megapixels",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.max_megapixels"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Limits",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "MP"
+        },
+        "strictness": {
+          "default": "balanced",
+          "title": "Strictness",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "jpeg.strictness"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Decode Jpeg",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "decode",
+      "x-zennode-id": "zenjpeg.decode",
+      "x-zennode-role": "decode",
+      "x-zennode-tags": [
+        "jpeg",
+        "jpg",
+        "decode"
+      ],
+      "x-zennode-version": 1
     },
     "zenjpeg.encode": {
-      "type": "object",
-      "title": "JPEG Encoder",
-      "description": "JPEG encoding with quality, chroma subsampling, and progressive mode.",
-      "x-zennode-id": "zenjpeg.encode",
-      "x-zennode-group": "Encode",
-      "x-zennode-role": "Encode",
-      "x-zennode-tags": ["jpeg", "encode", "lossy"],
+      "additionalProperties": false,
+      "description": "JPEG encoder configuration as a self-documenting pipeline node.  Schema-only definition for pipeline registry. Conversion to native zenjpeg config types happens in the bridge layer via `ParamMap`.",
       "properties": {
-        "quality": {"type": ["number", "null"], "minimum": 0.0, "maximum": 100.0, "default": 85.0, "title": "Quality", "x-zennode-section": "Quality", "x-zennode-optional": true, "x-zennode-kv-keys": ["jpeg.quality", "jpeg.q"]}
-      }
+        "aq": {
+          "default": true,
+          "title": "Adaptive Quantization",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.aq"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "chroma_downsampling": {
+          "default": "average",
+          "title": "Chroma Downsampling",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.chroma_method"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Color",
+          "x-zennode-slider": "linear"
+        },
+        "color_space": {
+          "default": "ycbcr",
+          "title": "Color Space",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.colorspace"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Color",
+          "x-zennode-slider": "linear"
+        },
+        "deringing": {
+          "default": true,
+          "title": "Deringing",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.deringing"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "effort": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Effort",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.effort"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "quality": {
+          "default": 85.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "jpeg.quality",
+            "jpeg.q"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "quant_tables": {
+          "default": "jpegli",
+          "title": "Quantization Tables",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.tables"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Encoding",
+          "x-zennode-slider": "linear"
+        },
+        "scan_mode": {
+          "default": "progressive",
+          "title": "Scan Mode",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.progressive",
+            "jpeg.mode"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Encoding",
+          "x-zennode-slider": "linear"
+        },
+        "subsampling": {
+          "default": "quarter",
+          "title": "Chroma Subsampling",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jpeg.subsampling",
+            "jpeg.ss"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Color",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Jpeg",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenjpeg.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "jpeg",
+        "jpg",
+        "encode",
+        "lossy"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenjpeg.encode_mozjpeg": {
+      "additionalProperties": false,
+      "description": "Mozjpeg-compatible JPEG encoder configuration.",
+      "properties": {
+        "effort": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Effort",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "mozjpeg.effort"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "quality": {
+          "default": 85.0,
+          "maximum": 100.0,
+          "minimum": 1.0,
+          "title": "Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "mozjpeg.quality",
+            "mozjpeg.q"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "subsampling": {
+          "default": "quarter",
+          "title": "Chroma Subsampling",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "mozjpeg.subsampling",
+            "mozjpeg.ss"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Color",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Mozjpeg",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenjpeg.encode_mozjpeg",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "jpeg",
+        "jpg",
+        "encode",
+        "lossy",
+        "mozjpeg",
+        "compat"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenjxl.decode": {
+      "additionalProperties": false,
+      "description": "JPEG XL decoder configuration.",
+      "properties": {
+        "adjust_orientation": {
+          "default": true,
+          "title": "Adjust Orientation",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "jxl.orient"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "intensity_target": {
+          "default": 0.0,
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Intensity Target",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "jxl.nits"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "HDR",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 100.0,
+          "x-zennode-unit": "nits"
+        }
+      },
+      "title": "Decode Jxl",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "decode",
+      "x-zennode-id": "zenjxl.decode",
+      "x-zennode-role": "decode",
+      "x-zennode-tags": [
+        "jxl",
+        "jpeg-xl",
+        "decode",
+        "codec"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenjxl.encode": {
+      "additionalProperties": false,
+      "description": "JPEG XL encoder configuration.",
+      "properties": {
+        "distance": {
+          "default": 1.0,
+          "maximum": 25.0,
+          "minimum": 0.0,
+          "title": "Distance",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 1.0,
+          "x-zennode-kv-keys": [
+            "jxl.distance",
+            "jxl.d"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612,
+          "x-zennode-unit": "butteraugli"
+        },
+        "effort": {
+          "default": 7,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Effort",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jxl.effort",
+            "jxl.e"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Speed",
+          "x-zennode-slider": "linear"
+        },
+        "jxl_quality": {
+          "default": 75.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "JXL Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 75.0,
+          "x-zennode-kv-keys": [
+            "jxl.quality",
+            "jxl.q"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "lossless": {
+          "default": false,
+          "title": "Lossless",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jxl.lossless"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Mode",
+          "x-zennode-slider": "linear"
+        },
+        "noise": {
+          "default": false,
+          "title": "Noise",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "jxl.noise"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Jxl",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenjxl.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "jxl",
+        "jpeg-xl",
+        "encode",
+        "lossy",
+        "lossless",
+        "hdr",
+        "codec"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.crop": {
+      "additionalProperties": false,
+      "description": "Crop the image to a pixel rectangle.  Specifies origin (x, y) and dimensions (w, h) in post-orientation source coordinates. For percentage-based cropping, use [`CropPercent`] or [`CropMargins`] instead.  RIAPI: `?crop=10,10,90,90` JSON: `{ \"x\": 10, \"y\": 10, \"w\": 80, \"h\": 80 }`",
+      "properties": {
+        "h": {
+          "default": 0,
+          "description": "Height of the crop region in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Height",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "w": {
+          "default": 0,
+          "description": "Width of the crop region in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Width",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "x": {
+          "default": 0,
+          "description": "Left edge X coordinate in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "y": {
+          "default": 0,
+          "description": "Top edge Y coordinate in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Crop",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.crop",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "crop",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.crop_margins": {
+      "additionalProperties": false,
+      "description": "Crop the image by removing percentage-based margins from each side.  Each value is a fraction of the corresponding source dimension to remove. CSS-style ordering: top, right, bottom, left.  JSON: `{ \"top\": 0.1, \"right\": 0.05, \"bottom\": 0.1, \"left\": 0.05 }`",
+      "properties": {
+        "bottom": {
+          "default": 0.0,
+          "description": "Bottom margin as fraction of source height to remove.",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Bottom",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "left": {
+          "default": 0.0,
+          "description": "Left margin as fraction of source width to remove.",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Left",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "right": {
+          "default": 0.0,
+          "description": "Right margin as fraction of source width to remove.",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Right",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "top": {
+          "default": 0.0,
+          "description": "Top margin as fraction of source height to remove.",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Top",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        }
+      },
+      "title": "Crop Margins",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.crop_margins",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "crop",
+        "margins",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.crop_percent": {
+      "additionalProperties": false,
+      "description": "Crop the image using percentage-based coordinates.  All coordinates are fractions of source dimensions (0.0 = origin, 1.0 = full extent). For example, `x=0.1, y=0.1, w=0.8, h=0.8` removes 10% from each edge.  JSON: `{ \"x\": 0.1, \"y\": 0.1, \"w\": 0.8, \"h\": 0.8 }`",
+      "properties": {
+        "h": {
+          "default": 1.0,
+          "description": "Height as fraction of source height (1.0 = full height).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Height",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "w": {
+          "default": 1.0,
+          "description": "Width as fraction of source width (1.0 = full width).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Width",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "x": {
+          "default": 0.0,
+          "description": "Left edge as fraction of source width (0.0 = left edge).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "y": {
+          "default": 0.0,
+          "description": "Top edge as fraction of source height (0.0 = top edge).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        }
+      },
+      "title": "Crop Percent",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.crop_percent",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "crop",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.expand_canvas": {
+      "additionalProperties": false,
+      "description": "Expand the canvas by adding padding around the image.  Adds specified pixel amounts to each side. The fill color defaults to \"transparent\" (premultiplied zero). Accepts CSS-style named colors or hex values.  JSON: `{ \"left\": 10, \"top\": 10, \"right\": 10, \"bottom\": 10, \"color\": \"white\" }`",
+      "properties": {
+        "bottom": {
+          "default": 0,
+          "description": "Bottom padding in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Bottom",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "color": {
+          "default": "transparent",
+          "description": "Fill color for the expanded area.  Accepts \"transparent\", \"white\", \"black\", or hex \"#RRGGBB\" / \"#RRGGBBAA\".",
+          "title": "Color",
+          "type": "string",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "left": {
+          "default": 0,
+          "description": "Left padding in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Left",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "right": {
+          "default": 0,
+          "description": "Right padding in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Right",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "top": {
+          "default": 0,
+          "description": "Top padding in pixels.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Top",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Expand Canvas",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "canvas",
+      "x-zennode-id": "zenlayout.expand_canvas",
+      "x-zennode-role": "resize",
+      "x-zennode-tags": [
+        "pad",
+        "canvas",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.flip_h": {
+      "additionalProperties": false,
+      "description": "Flip the image horizontally (mirror left-right).  No parameters. Presence in the pipeline means flip is applied. Composes with other orientation operations into a single transform.  RIAPI: `?sflip=h`",
+      "properties": {},
+      "title": "Flip H",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.flip_h",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "flip",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.flip_v": {
+      "additionalProperties": false,
+      "description": "Flip the image vertically (mirror top-bottom).  No parameters. Presence in the pipeline means flip is applied. Composes with other orientation operations into a single transform.  RIAPI: `?sflip=v`",
+      "properties": {},
+      "title": "Flip V",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.flip_v",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "flip",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.orient": {
+      "additionalProperties": false,
+      "description": "Apply EXIF orientation correction.  Orientation values 1-8 follow the EXIF standard: 1 = identity, 2 = flip-H, 3 = rotate-180, 4 = flip-V, 5 = transpose, 6 = rotate-90, 7 = transverse, 8 = rotate-270.  RIAPI: `?autorotate=true` (uses embedded EXIF), `?srotate=90` JSON: `{ \"orientation\": 6 }`",
+      "properties": {
+        "orientation": {
+          "default": 1,
+          "description": "EXIF orientation value (1-8). 1 = no transformation.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Orientation",
+          "type": "integer",
+          "x-zennode-kv-keys": [
+            "srotate"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Orient",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.orient",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "orient",
+        "exif",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.output_limits": {
+      "additionalProperties": false,
+      "description": "Safety limits and codec alignment for output dimensions.  Constrains the final output to max/min dimension bounds and optionally aligns dimensions to codec block boundaries (e.g., MCU multiples for JPEG).  Processing order: max (scale down) → min (scale up) → align (snap). Max always wins over min if they conflict.  JSON: `{ \"max_w\": 4096, \"max_h\": 4096, \"align_x\": 16, \"align_y\": 16, \"align_mode\": \"extend\" }`",
+      "properties": {
+        "align_mode": {
+          "default": "extend",
+          "description": "How to handle alignment snapping.  - \"crop\" — round down, lose edge pixels - \"extend\" — round up, replicate edge pixels (default) - \"distort\" — round to nearest, slight stretch",
+          "title": "Align Mode",
+          "type": "string",
+          "x-zennode-section": "Align",
+          "x-zennode-slider": "linear"
+        },
+        "align_x": {
+          "default": 0,
+          "description": "Horizontal alignment multiple in pixels. 0 = no alignment.  Output width will be snapped to the nearest multiple of this value. Common values: 2 (4:2:2), 8 (DCT block), 16 (4:2:0 MCU).",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "X Multiple",
+          "type": "integer",
+          "x-zennode-section": "Align",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "align_y": {
+          "default": 0,
+          "description": "Vertical alignment multiple in pixels. 0 = no alignment.  Output height will be snapped to the nearest multiple of this value.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Y Multiple",
+          "type": "integer",
+          "x-zennode-section": "Align",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "max_h": {
+          "default": 0,
+          "description": "Maximum output height. 0 = no limit. Scales down proportionally if exceeded.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Height",
+          "type": "integer",
+          "x-zennode-section": "Max",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "max_w": {
+          "default": 0,
+          "description": "Maximum output width. 0 = no limit. Scales down proportionally if exceeded.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Width",
+          "type": "integer",
+          "x-zennode-section": "Max",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "min_h": {
+          "default": 0,
+          "description": "Minimum output height. 0 = no minimum. Scales up proportionally if below.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Height",
+          "type": "integer",
+          "x-zennode-section": "Min",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "min_w": {
+          "default": 0,
+          "description": "Minimum output width. 0 = no minimum. Scales up proportionally if below.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Width",
+          "type": "integer",
+          "x-zennode-section": "Min",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Output Limits",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "layout",
+      "x-zennode-id": "zenlayout.output_limits",
+      "x-zennode-role": "resize",
+      "x-zennode-tags": [
+        "limits",
+        "alignment",
+        "layout",
+        "codec"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.region": {
+      "additionalProperties": false,
+      "description": "Viewport into the source image, unifying crop and pad.  Defines a rectangular window using edge coordinates, each expressed as a percentage of the source dimension plus a pixel offset: `resolved = source_dim * pct + px`.  - Viewport smaller than source = crop - Viewport extending beyond source = pad (filled with color) - Viewport entirely outside source = blank canvas  Coordinates are **edge-based** (left, top, right, bottom), not origin + size.  Examples: - Crop 10px from each edge: left_px=10, top_px=10, right_pct=1.0, right_px=-10, bottom_pct=1.0, bottom_px=-10 - Add 20px padding: left_px=-20, top_px=-20, right_pct=1.0, right_px=20, bottom_pct=1.0, bottom_px=20 - Center 50% of image: left_pct=0.25, top_pct=0.25, right_pct=0.75, bottom_pct=0.75",
+      "properties": {
+        "bottom_pct": {
+          "default": 1.0,
+          "description": "Bottom edge: fraction of source height (1.0 = far edge).",
+          "maximum": 2.0,
+          "minimum": -1.0,
+          "title": "Percent",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Bottom",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "bottom_px": {
+          "default": 0,
+          "description": "Bottom edge: pixel offset added after percentage.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "Pixels",
+          "type": "integer",
+          "x-zennode-section": "Bottom",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "color": {
+          "default": "transparent",
+          "description": "Fill color for areas outside the source image.  Accepts \"transparent\", \"white\", \"black\", or hex \"#RRGGBB\" / \"#RRGGBBAA\".",
+          "title": "Color",
+          "type": "string",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "left_pct": {
+          "default": 0.0,
+          "description": "Left edge: fraction of source width (0.0 = origin).",
+          "maximum": 2.0,
+          "minimum": -1.0,
+          "title": "Percent",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Left",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "left_px": {
+          "default": 0,
+          "description": "Left edge: pixel offset added after percentage.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "Pixels",
+          "type": "integer",
+          "x-zennode-section": "Left",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "right_pct": {
+          "default": 1.0,
+          "description": "Right edge: fraction of source width (1.0 = far edge).",
+          "maximum": 2.0,
+          "minimum": -1.0,
+          "title": "Percent",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Right",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "right_px": {
+          "default": 0,
+          "description": "Right edge: pixel offset added after percentage.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "Pixels",
+          "type": "integer",
+          "x-zennode-section": "Right",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "top_pct": {
+          "default": 0.0,
+          "description": "Top edge: fraction of source height (0.0 = origin).",
+          "maximum": 2.0,
+          "minimum": -1.0,
+          "title": "Percent",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Top",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "top_px": {
+          "default": 0,
+          "description": "Top edge: pixel offset added after percentage.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "Pixels",
+          "type": "integer",
+          "x-zennode-section": "Top",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Region Viewport",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.region",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "region",
+        "viewport",
+        "crop",
+        "pad",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.rotate_180": {
+      "additionalProperties": false,
+      "description": "Rotate the image 180 degrees.  Decomposes to flip-H + flip-V (no axis swap), so it can be coalesced into the layout plan without pixel materialization.  RIAPI: `?srotate=180`",
+      "properties": {},
+      "title": "Rotate180",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.rotate_180",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "rotate",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.rotate_270": {
+      "additionalProperties": false,
+      "description": "Rotate the image 270 degrees clockwise (90 counter-clockwise).  Swaps width and height. Coalesced with other geometry nodes so the layout planner computes correct dimensions through the full chain.  RIAPI: `?srotate=270`",
+      "properties": {},
+      "title": "Rotate270",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.rotate_270",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "rotate",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenlayout.rotate_90": {
+      "additionalProperties": false,
+      "description": "Rotate the image 90 degrees clockwise.  Swaps width and height. Coalesced with other geometry nodes so the layout planner computes correct dimensions through the full chain. Pixel axis-swap happens at execution time.  RIAPI: `?srotate=90`",
+      "properties": {},
+      "title": "Rotate90",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenlayout.rotate_90",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "rotate",
+        "geometry"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.composite": {
+      "additionalProperties": false,
+      "description": "Composite a foreground image onto a background at a position.  Two inputs required: - **background** (Canvas edge): the base image to draw onto - **foreground** (Input edge): the image being composited  Both inputs are auto-converted to premultiplied linear f32. Default blend mode is Porter-Duff source-over.",
+      "properties": {
+        "blend_mode": {
+          "default": "source_over",
+          "description": "Blend mode: \"source_over\" (default), \"multiply\", \"screen\", etc.",
+          "title": "Blend Mode",
+          "type": "string",
+          "x-zennode-section": "Blending",
+          "x-zennode-slider": "linear"
+        },
+        "fg_x": {
+          "default": 0,
+          "description": "X position of the foreground on the background canvas.",
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer",
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "fg_y": {
+          "default": 0,
+          "description": "Y position of the foreground on the background canvas.",
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer",
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Composite",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "composite",
+      "x-zennode-id": "zenpipe.composite",
+      "x-zennode-inputs": [
+        {
+          "edge_kind": "canvas",
+          "from_io_id": false,
+          "label": "Background canvas",
+          "name": "canvas",
+          "required": true,
+          "variadic": false
+        },
+        {
+          "edge_kind": "input",
+          "from_io_id": false,
+          "label": "Foreground image",
+          "name": "input",
+          "required": true,
+          "variadic": false
+        }
+      ],
+      "x-zennode-role": "composite",
+      "x-zennode-tags": [
+        "composite",
+        "blend",
+        "overlay"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.crop_whitespace": {
+      "additionalProperties": false,
+      "description": "Detect and crop uniform borders (whitespace trimming).  Materializes the upstream image, scans inward from each edge to find where pixel values diverge from the border color, then crops to the detected content bounds plus optional padding.  RIAPI: `?trim.threshold=80&trim.percentpadding=0.5` JSON: `{ \"threshold\": 80, \"percent_padding\": 0.5 }`",
+      "properties": {
+        "percent_padding": {
+          "default": 0.0,
+          "description": "Padding around detected content as a percentage of content dimensions.  0.0 = tight crop, 0.5 = 0.5% padding on each side.",
+          "maximum": 50.0,
+          "minimum": 0.0,
+          "title": "Padding",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "trim.percentpadding"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612,
+          "x-zennode-unit": "%"
+        },
+        "threshold": {
+          "default": 80,
+          "description": "Color distance threshold (0–255).  Pixels within this distance of the border color are considered \"whitespace\". Lower = stricter, higher = more tolerant.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Threshold",
+          "type": "integer",
+          "x-zennode-kv-keys": [
+            "trim.threshold"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Crop Whitespace",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "analysis",
+      "x-zennode-id": "zenpipe.crop_whitespace",
+      "x-zennode-role": "resize",
+      "x-zennode-tags": [
+        "crop",
+        "whitespace",
+        "trim",
+        "content",
+        "analysis"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.fill_rect": {
+      "additionalProperties": false,
+      "description": "Fill a rectangle with a solid color.  Materializes the upstream image, draws the rectangle, then re-streams.  JSON: `{ \"x1\": 10, \"y1\": 10, \"x2\": 100, \"y2\": 100, \"color\": [255, 0, 0, 255] }`",
+      "properties": {
+        "color_a": {
+          "default": 255,
+          "description": "Fill color alpha channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Color A",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "color_b": {
+          "default": 0,
+          "description": "Fill color blue channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Color B",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "color_g": {
+          "default": 0,
+          "description": "Fill color green channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Color G",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "color_r": {
+          "default": 0,
+          "description": "Fill color red channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Color R",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "x1": {
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "X1",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "x2": {
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "X2",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "y1": {
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Y1",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "y2": {
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Y2",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Fill Rect",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "canvas",
+      "x-zennode-id": "zenpipe.fill_rect",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "fill",
+        "rect",
+        "draw",
+        "canvas"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.overlay": {
+      "additionalProperties": false,
+      "description": "Overlay a small image (watermark, logo) at absolute coordinates.  Single input (the background). The overlay image data is provided via io_id (loaded from a separate input buffer).  Overlay is auto-converted to premultiplied linear f32. Opacity scales the overlay's alpha channel before compositing.",
+      "properties": {
+        "blend_mode": {
+          "default": "source_over",
+          "description": "Blend mode: \"source_over\" (default), \"multiply\", \"screen\", etc.",
+          "title": "Blend Mode",
+          "type": "string",
+          "x-zennode-section": "Blending",
+          "x-zennode-slider": "linear"
+        },
+        "io_id": {
+          "default": 0,
+          "description": "I/O ID of the overlay image source.",
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Overlay IO ID",
+          "type": "integer",
+          "x-zennode-section": "Source",
+          "x-zennode-slider": "linear"
+        },
+        "opacity": {
+          "default": 1.0,
+          "description": "Overlay opacity (0.0 = invisible, 1.0 = fully opaque).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Opacity",
+          "type": "number",
+          "x-zennode-identity": 1.0,
+          "x-zennode-section": "Blending",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "x": {
+          "default": 0,
+          "description": "X position on the background canvas.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "X",
+          "type": "integer",
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "y": {
+          "default": 0,
+          "description": "Y position on the background canvas.",
+          "maximum": 65535,
+          "minimum": -65535,
+          "title": "Y",
+          "type": "integer",
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Overlay",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "composite",
+      "x-zennode-id": "zenpipe.overlay",
+      "x-zennode-inputs": [
+        {
+          "edge_kind": "input",
+          "from_io_id": false,
+          "label": "Background image",
+          "name": "input",
+          "required": true,
+          "variadic": false
+        },
+        {
+          "edge_kind": "input",
+          "from_io_id": true,
+          "label": "Overlay image (io_id)",
+          "name": "from_io",
+          "required": true,
+          "variadic": false
+        }
+      ],
+      "x-zennode-role": "composite",
+      "x-zennode-tags": [
+        "overlay",
+        "watermark",
+        "logo",
+        "composite"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.remove_alpha": {
+      "additionalProperties": false,
+      "description": "Remove alpha channel by compositing onto a solid matte color.  Produces RGB output suitable for JPEG encoding. The compositing is done in sRGB space (matching browser behavior for CSS background-color).  JSON: `{ \"matte_r\": 255, \"matte_g\": 255, \"matte_b\": 255 }`",
+      "properties": {
+        "matte_b": {
+          "default": 255,
+          "description": "Matte blue channel (sRGB, 0–255).",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Matte B",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "matte_g": {
+          "default": 255,
+          "description": "Matte green channel (sRGB, 0–255).",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Matte G",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "matte_r": {
+          "default": 255,
+          "description": "Matte red channel (sRGB, 0–255).",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Matte R",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Remove Alpha",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "color",
+      "x-zennode-id": "zenpipe.remove_alpha",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "alpha",
+        "matte",
+        "composite",
+        "flatten"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.riapi.autorotate": {
+      "additionalProperties": false,
+      "description": "Apply EXIF orientation correction via querystring",
+      "properties": {},
+      "title": "Auto-Rotate (RIAPI)",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "srgb8"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenpipe.riapi.autorotate",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "autorotate",
+        "exif",
+        "riapi",
+        "adapter"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.riapi.crop": {
+      "additionalProperties": false,
+      "description": "Crop image to rectangle via querystring coordinates",
+      "properties": {},
+      "title": "Crop (RIAPI)",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "srgb8"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenpipe.riapi.crop",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "crop",
+        "riapi",
+        "adapter"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.riapi.flip": {
+      "additionalProperties": false,
+      "description": "Flip image horizontally and/or vertically via querystring",
+      "properties": {},
+      "title": "Flip (RIAPI)",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "srgb8"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenpipe.riapi.flip",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "flip",
+        "riapi",
+        "adapter"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.riapi.frame": {
+      "additionalProperties": false,
+      "description": "Select a specific frame from animated/multi-page images",
+      "properties": {},
+      "title": "Frame Select (RIAPI)",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "srgb8"
+      },
+      "x-zennode-group": "decode",
+      "x-zennode-id": "zenpipe.riapi.frame",
+      "x-zennode-role": "decode",
+      "x-zennode-tags": [
+        "frame",
+        "page",
+        "animation",
+        "riapi",
+        "adapter"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.riapi.rotate": {
+      "additionalProperties": false,
+      "description": "Rotate image by 90/180/270 degrees via querystring",
+      "properties": {},
+      "title": "Rotate (RIAPI)",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "srgb8"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenpipe.riapi.rotate",
+      "x-zennode-role": "orient",
+      "x-zennode-tags": [
+        "rotate",
+        "riapi",
+        "adapter"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpipe.round_corners": {
+      "additionalProperties": false,
+      "description": "Apply rounded corners with anti-aliased masking.  Generates a `RoundedRectMask` (via zenblend) and applies it to the alpha channel. Transparent corners reveal the background color, or remain transparent for PNG/WebP/AVIF output.  Supports uniform radius, per-corner radii, percentage-based radii, and circle mode (elliptical crop for non-square images).  JSON: `{ \"radius\": 20.0, \"bg_color\": [0, 0, 0, 0] }`",
+      "properties": {
+        "bg_a": {
+          "default": 0,
+          "description": "Background color alpha channel. 0 = transparent (preserve alpha).",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Bg A",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "bg_b": {
+          "default": 0,
+          "description": "Background color blue channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Bg B",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "bg_g": {
+          "default": 0,
+          "description": "Background color green channel.",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Bg G",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "bg_r": {
+          "default": 0,
+          "description": "Background color red channel (for compositing transparent corners).",
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Bg R",
+          "type": "integer",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "mode": {
+          "default": "pixels",
+          "description": "Rounding mode: \"pixels\" (default), \"percentage\", \"circle\", \"pixels_custom\", \"percentage_custom\".",
+          "title": "Mode",
+          "type": "string",
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "radius": {
+          "default": 0.0,
+          "description": "Corner radius in pixels (uniform). Clamped to min(width, height) / 2. Used when mode is \"pixels\" (default) or as fallback.  RIAPI: `?s.roundcorners=20` (single value) or `?s.roundcorners=10,20,30,40` (TL,TR,BR,BL)",
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Radius",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "s.roundcorners"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "px"
+        },
+        "radius_bl": {
+          "default": -1.0,
+          "description": "Bottom-left corner radius (for per-corner modes).",
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Radius Bl",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "radius_br": {
+          "default": -1.0,
+          "description": "Bottom-right corner radius (for per-corner modes).",
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Radius Br",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "radius_tl": {
+          "default": -1.0,
+          "description": "Top-left corner radius (for per-corner modes).",
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Radius Tl",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "radius_tr": {
+          "default": -1.0,
+          "description": "Top-right corner radius (for per-corner modes).",
+          "maximum": 10000.0,
+          "minimum": 0.0,
+          "title": "Radius Tr",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        }
+      },
+      "title": "Round Corners",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "canvas",
+      "x-zennode-id": "zenpipe.round_corners",
+      "x-zennode-role": "filter",
+      "x-zennode-tags": [
+        "corners",
+        "rounded",
+        "mask",
+        "border-radius"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenpng.encode": {
+      "additionalProperties": false,
+      "description": "PNG encoding with quality, lossless mode, and compression options.",
+      "properties": {
+        "lossless": {
+          "default": true,
+          "title": "Lossless",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "png.lossless"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "max_deflate": {
+          "default": false,
+          "title": "Max Deflate",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "png.max_deflate"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "min_quality": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Min Quality",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "png.min_quality"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "png_quality": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "PNG Quality",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "png.quality"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Png",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenpng.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "codec",
+        "png",
+        "lossless",
+        "encode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenquant.quantize": {
+      "additionalProperties": false,
+      "description": "Palette quantization with perceptual masking.",
+      "properties": {
+        "dither_strength": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Dithering",
+          "type": "number",
+          "x-zennode-identity": 0.5,
+          "x-zennode-kv-keys": [
+            "quant.dither_strength",
+            "dither_strength"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.05000000074505806
+        },
+        "max_colors": {
+          "default": 256,
+          "maximum": 256,
+          "minimum": 2,
+          "title": "Max Colors",
+          "type": "integer",
+          "x-zennode-kv-keys": [
+            "quant.max_colors",
+            "max_colors"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "colors"
+        },
+        "quality": {
+          "default": "best",
+          "title": "Quality",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "quant.quality"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Quantize",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "quantize",
+      "x-zennode-id": "zenquant.quantize",
+      "x-zennode-role": "quantize",
+      "x-zennode-tags": [
+        "quantize",
+        "palette",
+        "indexed"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenresize.constrain": {
+      "additionalProperties": false,
+      "description": "Constrain image dimensions with resize, crop, or pad modes.  The unified resize/layout node — combines layout geometry with resampling hints in a single node, matching imageflow's ergonomic Constrain API.  Optional parameters (`Option<T>`) use `None` for \"not specified\" — the engine picks sensible defaults based on the operation.  # Gravity  Two ways to specify gravity: - **Named anchor** (`gravity`): \"center\", \"top_left\", \"bottom_right\", etc. - **Percentage** (`gravity_x`/`gravity_y`): 0.0–1.0, overrides named anchor when set.  If `gravity_x` and `gravity_y` are both set, the named `gravity` is ignored.  # JSON API  Simple (named anchor): ```json { \"w\": 800, \"h\": 600, \"mode\": \"fit_crop\", \"gravity\": \"top_left\" } ```  Precise (percentage gravity): ```json { \"w\": 800, \"h\": 600, \"mode\": \"fit_crop\", \"gravity_x\": 0.33, \"gravity_y\": 0.0, \"down_filter\": \"lanczos\", \"unsharp_percent\": 15.0 } ```  RIAPI: `?w=800&h=600&mode=fit_crop&anchor=top_left&down.filter=lanczos`",
+      "properties": {
+        "canvas_color": {
+          "default": "",
+          "description": "Fill color for exterior padding regions added around the image.  Used by pad modes (fit_pad, within_pad, pad_within) to fill the canvas area outside the image content. Does NOT affect pixels inside the image — use `matte_color` for alpha compositing.  None = transparent. Accepts \"transparent\", \"white\", \"black\", or hex \"#RRGGBB\" / \"#RRGGBBAA\".",
+          "title": "Canvas Color",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "bgcolor",
+            "canvas_color"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear"
+        },
+        "down_filter": {
+          "default": "",
+          "description": "Downscale resampling filter. None = auto (Robidoux).  31 filters available: \"robidoux\", \"robidoux_sharp\", \"robidoux_fast\", \"lanczos\", \"lanczos_sharp\", \"lanczos2\", \"lanczos2_sharp\", \"ginseng\", \"ginseng_sharp\", \"mitchell\", \"catmull_rom\", \"cubic\", \"cubic_sharp\", \"cubic_b_spline\", \"hermite\", \"triangle\", \"linear\", \"box\", \"fastest\", \"jinc\", \"n_cubic\", \"n_cubic_sharp\", etc.",
+          "title": "Downscale Filter",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "down.filter"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "gravity": {
+          "default": "center",
+          "description": "Named anchor for crop/pad positioning.  Controls which part of the image is preserved when cropping, or where the image is positioned when padding.  Values: \"center\", \"top_left\", \"top\", \"top_right\", \"left\", \"right\", \"bottom_left\", \"bottom\", \"bottom_right\".  Overridden by `gravity_x`/`gravity_y` when both are set.",
+          "title": "Anchor",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "anchor"
+          ],
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear"
+        },
+        "gravity_x": {
+          "default": 0.5,
+          "description": "Horizontal gravity (0.0 = left, 0.5 = center, 1.0 = right).  When both `gravity_x` and `gravity_y` are set, they override the named `gravity` anchor. Use for precise positioning beyond the 9 cardinal points (e.g., rule-of-thirds at 0.33).",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Gravity X",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-optional": true,
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "gravity_y": {
+          "default": 0.5,
+          "description": "Vertical gravity (0.0 = top, 0.5 = center, 1.0 = bottom).  When both `gravity_x` and `gravity_y` are set, they override the named `gravity` anchor.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Gravity Y",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-optional": true,
+          "x-zennode-section": "Position",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "h": {
+          "default": 0,
+          "description": "Target height in pixels. None = unconstrained (derive from width + aspect ratio).  RIAPI: `?h=600` or `?height=600` or `?maxheight=600` (legacy, implies mode=within).",
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Height",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "h",
+            "height",
+            "maxheight"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Dimensions",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "kernel_lobe_ratio": {
+          "default": 0.0,
+          "description": "Negative-lobe ratio for kernel sharpening (zero-cost).  Adjusts the resampling kernel's negative lobes during weight computation. 0.0 = flatten (maximum smoothness), above filter's natural ratio = sharpen. Zero additional cost — changes the filter shape, not a separate processing step.  For post-resize unsharp mask (separate pass), use `unsharp_percent`.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Lobe Ratio",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "lobe_ratio",
+            "kernel_lobe_ratio"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Kernel Shape",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "kernel_width_scale": {
+          "default": 1.0,
+          "description": "Kernel width scale factor (zero-cost).  Multiplies the resampling kernel window width. >1.0 = softer (wider window, less aliasing), <1.0 = sharper (narrower, aliasing risk). Combined with blur. Zero additional cost.",
+          "maximum": 4.0,
+          "minimum": 0.10000000149011612,
+          "title": "Width Scale",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-optional": true,
+          "x-zennode-section": "Kernel Shape",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.009999999776482582
+        },
+        "matte_color": {
+          "default": "",
+          "description": "Background color for alpha compositing (matte behind transparent pixels).  Applied during resize to prevent halo artifacts at transparent edges. Separate from `canvas_color` which fills exterior padding regions. When set, transparent pixels are composited against this color before the resampling kernel samples them.  None = no matte (preserve transparency). \"white\" is common for JPEG output.",
+          "title": "Matte Color",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "matte",
+            "matte_color",
+            "s.matte"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Alpha",
+          "x-zennode-slider": "linear"
+        },
+        "mode": {
+          "default": "within",
+          "description": "Constraint mode controlling how the image fits the target dimensions.  - \"distort\" / \"stretch\" — stretch to exact dimensions, ignoring aspect ratio - \"within\" / \"max\" — fit inside target, never upscale (default) - \"fit\" — fit inside target, may upscale - \"within_crop\" / \"crop\" — fill target by cropping, never upscale - \"fit_crop\" — fill target by cropping, may upscale - \"fit_pad\" / \"pad\" — fit inside target, pad to exact dimensions - \"within_pad\" — fit inside target without upscale, pad to exact dimensions - \"pad_within\" — never upscale, always pad to exact canvas - \"aspect_crop\" / \"aspectcrop\" — crop to target aspect ratio without resizing - \"larger_than\" — upscale if needed to meet target, never downscale",
+          "title": "Mode",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "mode"
+          ],
+          "x-zennode-section": "Layout",
+          "x-zennode-slider": "linear"
+        },
+        "post_blur": {
+          "default": 0.0,
+          "description": "Post-resize Gaussian blur sigma (real cost).  Applied as a separable H+V pass after resize. NOT equivalent to `kernel_width_scale` (which changes the kernel itself at zero cost).",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Gaussian Blur",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-optional": true,
+          "x-zennode-section": "Post-Processing",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612
+        },
+        "resample_when": {
+          "default": "size_differs",
+          "description": "When to apply resampling.  - \"size_differs\" — only resample when dimensions change (default) - \"size_differs_or_sharpening_requested\" — resample when dimensions change or when sharpening is requested (allows sharpening without resize) - \"always\" — always resample, even at identity dimensions",
+          "title": "Resample When",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "resample_when"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "scale": {
+          "default": "",
+          "description": "Scale control: when to allow scaling.  - \"down\" / \"downscaleonly\" — only downscale, never upscale - \"up\" / \"upscaleonly\" — only upscale, never downscale - \"both\" — allow both (default) - \"canvas\" / \"upscalecanvas\" — upscale canvas (pad) only  RIAPI: `?scale=down`",
+          "title": "Scale",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "scale"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Layout",
+          "x-zennode-slider": "linear"
+        },
+        "scaling_colorspace": {
+          "default": "",
+          "description": "Color space for resampling math. None = auto (\"linear\" for most operations).  - \"linear\" — resize in linear light (gamma-correct, default) - \"srgb\" — resize in sRGB gamma space (faster, less correct)  RIAPI: `?down.colorspace=linear` or `?up.colorspace=srgb`",
+          "title": "Scaling Colorspace",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "down.colorspace",
+            "up.colorspace"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "sharpen_when": {
+          "default": "downscaling",
+          "description": "When to apply sharpening.  - \"downscaling\" — sharpen only when downscaling (default) - \"upscaling\" — sharpen only when upscaling - \"size_differs\" — sharpen whenever dimensions change - \"always\" — always sharpen, even at identity dimensions",
+          "title": "Sharpen When",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "sharpen_when"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "unsharp_percent": {
+          "default": 0.0,
+          "description": "Post-resize unsharp mask strength (0 = none, 100 = maximum).  Applied as a separate pass AFTER resampling. Adds real computational cost proportional to output dimensions. For zero-cost sharpening that adjusts the resampling kernel itself, use `kernel_lobe_ratio`.  None = no unsharp mask.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Unsharp Mask",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "f.sharpen",
+            "unsharp"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Post-Processing",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "%"
+        },
+        "up_filter": {
+          "default": "",
+          "description": "Upscale resampling filter. None = auto (Ginseng).  Same filter names as down_filter.",
+          "title": "Upscale Filter",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "up.filter"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "w": {
+          "default": 0,
+          "description": "Target width in pixels. None = unconstrained (derive from height + aspect ratio).  RIAPI: `?w=800` or `?width=800` or `?maxwidth=800` (legacy, implies mode=within).",
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Width",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "w",
+            "width",
+            "maxwidth"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Dimensions",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "zoom": {
+          "default": 1.0,
+          "description": "Device pixel ratio / zoom multiplier.  Multiplies target dimensions. 2.0 means w and h are doubled. RIAPI: `?zoom=2`, `?dpr=2x`, `?dppx=1.5`",
+          "maximum": 10.0,
+          "minimum": 0.10000000149011612,
+          "title": "DPR / Zoom",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "zoom",
+            "dpr",
+            "dppx"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Layout",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612
+        }
+      },
+      "title": "Constrain",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "linear_f32"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenresize.constrain",
+      "x-zennode-role": "resize",
+      "x-zennode-tags": [
+        "resize",
+        "geometry",
+        "scale"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenresize.resize": {
+      "additionalProperties": false,
+      "description": "Forced resize to exact dimensions (no layout planning).  Unlike [`Constrain`] which applies constraint modes (fit, crop, pad), this resizes unconditionally to the specified width × height. Used when the caller has already determined the target dimensions.  Skipped at compile time when input dimensions match target (identity resize).  JSON: `{ \"w\": 400, \"h\": 300, \"filter\": \"robidoux\" }` RIAPI: Not directly exposed — use Constrain for querystring-driven resize.",
+      "properties": {
+        "filter": {
+          "default": "",
+          "description": "Resampling filter name (e.g., \"robidoux\", \"lanczos\", \"mitchell\"). Empty string = default (Robidoux).",
+          "title": "Filter",
+          "type": "string",
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear"
+        },
+        "h": {
+          "default": 1,
+          "description": "Target height in pixels.",
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer",
+          "x-zennode-section": "Dimensions",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        },
+        "sharpen": {
+          "default": 0.0,
+          "description": "Post-resize sharpening percentage (0–100). 0 = no sharpening.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Sharpen",
+          "type": "number",
+          "x-zennode-identity": 0.0,
+          "x-zennode-section": "Quality",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0,
+          "x-zennode-unit": "%"
+        },
+        "w": {
+          "default": 1,
+          "description": "Target width in pixels.",
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer",
+          "x-zennode-section": "Dimensions",
+          "x-zennode-slider": "linear",
+          "x-zennode-unit": "px"
+        }
+      },
+      "title": "Resize",
+      "type": "object",
+      "x-zennode-coalesce": {
+        "fusable": true,
+        "group": "layout_plan",
+        "is_target": false
+      },
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": true,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "geometry",
+      "x-zennode-id": "zenresize.resize",
+      "x-zennode-role": "resize",
+      "x-zennode-tags": [
+        "resize",
+        "scale",
+        "resample"
+      ],
+      "x-zennode-version": 1
+    },
+    "zentiff.encode": {
+      "additionalProperties": false,
+      "description": "TIFF encoding with compression and predictor options.",
+      "properties": {
+        "big_tiff": {
+          "default": false,
+          "title": "Big Tiff",
+          "type": "boolean",
+          "x-zennode-kv-keys": [
+            "tiff.big_tiff"
+          ],
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "compression": {
+          "default": "lzw",
+          "title": "Compression",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "tiff.compression"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "predictor": {
+          "default": "horizontal",
+          "title": "Predictor",
+          "type": "string",
+          "x-zennode-kv-keys": [
+            "tiff.predictor"
+          ],
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Tiff",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zentiff.encode",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "codec",
+        "tiff",
+        "lossless",
+        "encode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenwebp.decode": {
+      "additionalProperties": false,
+      "description": "WebP decode node.",
+      "properties": {
+        "dithering_strength": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Dithering Strength",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.dithering",
+            "webp.dither"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "upsampling": {
+          "default": "",
+          "title": "Upsampling",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.upsampling"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Decode Webp",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "decode",
+      "x-zennode-id": "zenwebp.decode",
+      "x-zennode-role": "decode",
+      "x-zennode-tags": [
+        "webp",
+        "decode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenwebp.encode_lossless": {
+      "additionalProperties": false,
+      "description": "WebP lossless (VP8L) encode node.",
+      "properties": {
+        "alpha_quality": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Alpha Quality",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.alpha_quality",
+            "webp.aq"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Alpha",
+          "x-zennode-slider": "linear"
+        },
+        "effort": {
+          "default": 0.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Compression Effort",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "webp.effort"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "exact": {
+          "default": false,
+          "title": "Exact",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.exact"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "method": {
+          "default": 0,
+          "description": "VP8L compression method (0 = fastest, 6 = best). Separate from effort — method controls the algorithm tier, effort controls quality within that tier.",
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Method",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.method"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "near_lossless": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Near-Lossless",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.near_lossless",
+            "webp.nl"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "target_size": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Target Size",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.target_size"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Target",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Webp Lossless",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenwebp.encode_lossless",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "webp",
+        "lossless",
+        "encode"
+      ],
+      "x-zennode-version": 1
+    },
+    "zenwebp.encode_lossy": {
+      "additionalProperties": false,
+      "description": "WebP lossy (VP8) encode node.",
+      "properties": {
+        "alpha_quality": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Alpha Quality",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.alpha_quality",
+            "webp.aq"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Alpha",
+          "x-zennode-slider": "linear"
+        },
+        "effort": {
+          "default": 0.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Effort",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "webp.effort"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "filter_sharpness": {
+          "default": 0,
+          "maximum": 7,
+          "minimum": 0,
+          "title": "Filter Sharpness",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.sharpness"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "filter_strength": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Filter Strength",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.filter"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "preset": {
+          "default": "",
+          "title": "Preset",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.preset"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "quality": {
+          "default": 0.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Quality",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "webp.quality",
+            "webp.q"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 1.0
+        },
+        "segments": {
+          "default": 0,
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Segments",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.segments"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "sharp_yuv": {
+          "default": false,
+          "title": "Sharp YUV",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.sharp_yuv"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Main",
+          "x-zennode-slider": "linear"
+        },
+        "sns_strength": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "SNS Strength",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.sns"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Advanced",
+          "x-zennode-slider": "linear"
+        },
+        "target_psnr": {
+          "default": 0.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Target PSNR",
+          "type": [
+            "number",
+            "null"
+          ],
+          "x-zennode-identity": 0.0,
+          "x-zennode-kv-keys": [
+            "webp.target_psnr"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Target",
+          "x-zennode-slider": "linear",
+          "x-zennode-step": 0.10000000149011612
+        },
+        "target_size": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Target Size",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-zennode-kv-keys": [
+            "webp.target_size"
+          ],
+          "x-zennode-optional": true,
+          "x-zennode-section": "Target",
+          "x-zennode-slider": "linear"
+        }
+      },
+      "title": "Encode Webp Lossy",
+      "type": "object",
+      "x-zennode-compat-version": 1,
+      "x-zennode-format": {
+        "alpha": "process",
+        "changes_dimensions": false,
+        "is_neighborhood": false,
+        "preferred": "any"
+      },
+      "x-zennode-group": "encode",
+      "x-zennode-id": "zenwebp.encode_lossy",
+      "x-zennode-role": "encode",
+      "x-zennode-tags": [
+        "webp",
+        "lossy",
+        "encode"
+      ],
+      "x-zennode-version": 1
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

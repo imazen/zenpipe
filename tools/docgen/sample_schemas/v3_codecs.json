@@ -1,14 +1,252 @@
 {
   "codecs": [
-    {"name": "jpeg", "mime_type": "image/jpeg", "mime_types": ["image/jpeg"], "extension": "jpg", "extensions": ["jpg", "jpeg", "jpe", "jfif"], "supports_alpha": false, "supports_lossless": false, "supports_animation": false, "can_decode": true, "can_encode": true},
-    {"name": "png", "mime_type": "image/png", "mime_types": ["image/png"], "extension": "png", "extensions": ["png"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
-    {"name": "webp", "mime_type": "image/webp", "mime_types": ["image/webp"], "extension": "webp", "extensions": ["webp"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
-    {"name": "avif", "mime_type": "image/avif", "mime_types": ["image/avif"], "extension": "avif", "extensions": ["avif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
-    {"name": "jxl", "mime_type": "image/jxl", "mime_types": ["image/jxl"], "extension": "jxl", "extensions": ["jxl"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
-    {"name": "gif", "mime_type": "image/gif", "mime_types": ["image/gif"], "extension": "gif", "extensions": ["gif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": true, "can_decode": true, "can_encode": true},
-    {"name": "bmp", "mime_type": "image/bmp", "mime_types": ["image/bmp", "image/x-bmp"], "extension": "bmp", "extensions": ["bmp", "dib"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
-    {"name": "tiff", "mime_type": "image/tiff", "mime_types": ["image/tiff"], "extension": "tiff", "extensions": ["tiff", "tif"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
-    {"name": "qoi", "mime_type": "image/qoi", "mime_types": ["image/qoi"], "extension": "qoi", "extensions": ["qoi"], "supports_alpha": true, "supports_lossless": true, "supports_animation": false, "can_decode": true, "can_encode": true},
-    {"name": "hdr", "mime_type": "image/vnd.radiance", "mime_types": ["image/vnd.radiance"], "extension": "hdr", "extensions": ["hdr", "rgbe"], "supports_alpha": false, "supports_lossless": false, "supports_animation": false, "can_decode": true, "can_encode": true}
+    {
+      "can_decode": true,
+      "can_encode": true,
+      "extension": "jpg",
+      "extensions": [
+        "jpg",
+        "jpeg",
+        "jpe",
+        "jfif"
+      ],
+      "mime_type": "image/jpeg",
+      "mime_types": [
+        "image/jpeg"
+      ],
+      "name": "jpeg",
+      "supports_alpha": false,
+      "supports_animation": false,
+      "supports_lossless": false
+    },
+    {
+      "can_decode": true,
+      "can_encode": true,
+      "extension": "png",
+      "extensions": [
+        "png"
+      ],
+      "mime_type": "image/png",
+      "mime_types": [
+        "image/png"
+      ],
+      "name": "png",
+      "supports_alpha": true,
+      "supports_animation": true,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": true,
+      "can_encode": true,
+      "extension": "gif",
+      "extensions": [
+        "gif"
+      ],
+      "mime_type": "image/gif",
+      "mime_types": [
+        "image/gif"
+      ],
+      "name": "gif",
+      "supports_alpha": true,
+      "supports_animation": true,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": true,
+      "can_encode": true,
+      "extension": "webp",
+      "extensions": [
+        "webp"
+      ],
+      "mime_type": "image/webp",
+      "mime_types": [
+        "image/webp"
+      ],
+      "name": "webp",
+      "supports_alpha": true,
+      "supports_animation": true,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "avif",
+      "extensions": [
+        "avif"
+      ],
+      "mime_type": "image/avif",
+      "mime_types": [
+        "image/avif"
+      ],
+      "name": "avif",
+      "supports_alpha": true,
+      "supports_animation": true,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "jxl",
+      "extensions": [
+        "jxl"
+      ],
+      "mime_type": "image/jxl",
+      "mime_types": [
+        "image/jxl"
+      ],
+      "name": "jxl",
+      "supports_alpha": true,
+      "supports_animation": true,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "heif",
+      "extensions": [
+        "heic",
+        "heif",
+        "hif"
+      ],
+      "mime_type": "image/heif",
+      "mime_types": [
+        "image/heif",
+        "image/heic"
+      ],
+      "name": "heic",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": false
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "bmp",
+      "extensions": [
+        "bmp"
+      ],
+      "mime_type": "image/bmp",
+      "mime_types": [
+        "image/bmp",
+        "image/x-bmp"
+      ],
+      "name": "bmp",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "tiff",
+      "extensions": [
+        "tiff",
+        "tif"
+      ],
+      "mime_type": "image/tiff",
+      "mime_types": [
+        "image/tiff"
+      ],
+      "name": "tiff",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "pnm",
+      "extensions": [
+        "pnm",
+        "ppm",
+        "pgm",
+        "pbm",
+        "pam",
+        "pfm"
+      ],
+      "mime_type": "image/x-portable-anymap",
+      "mime_types": [
+        "image/x-portable-anymap",
+        "image/x-portable-pixmap",
+        "image/x-portable-graymap",
+        "image/x-portable-bitmap"
+      ],
+      "name": "pnm",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "ff",
+      "extensions": [
+        "ff"
+      ],
+      "mime_type": "image/x-farbfeld",
+      "mime_types": [
+        "image/x-farbfeld"
+      ],
+      "name": "farbfeld",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "qoi",
+      "extensions": [
+        "qoi"
+      ],
+      "mime_type": "image/x-qoi",
+      "mime_types": [
+        "image/x-qoi"
+      ],
+      "name": "qoi",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "hdr",
+      "extensions": [
+        "hdr",
+        "rgbe",
+        "pic"
+      ],
+      "mime_type": "image/vnd.radiance",
+      "mime_types": [
+        "image/vnd.radiance",
+        "image/x-hdr"
+      ],
+      "name": "hdr",
+      "supports_alpha": false,
+      "supports_animation": false,
+      "supports_lossless": false
+    },
+    {
+      "can_decode": false,
+      "can_encode": false,
+      "extension": "tga",
+      "extensions": [
+        "tga",
+        "targa",
+        "icb",
+        "vda",
+        "vst"
+      ],
+      "mime_type": "image/x-tga",
+      "mime_types": [
+        "image/x-tga",
+        "image/x-targa"
+      ],
+      "name": "tga",
+      "supports_alpha": true,
+      "supports_animation": false,
+      "supports_lossless": true
+    }
   ]
 }

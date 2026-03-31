@@ -1,33 +1,1223 @@
 {
-  "version": 1,
   "nodes": {
-    "zenresize.constrain": {
-      "label": "Constrain Size",
+    "heic.decode": {
       "keys": [
-        {"key": "w", "param": "w", "label": "Width", "description": "Target width in pixels", "aliases": ["width", "maxwidth"], "value_schema": {"type": "integer", "minimum": 0, "maximum": 65535}},
-        {"key": "h", "param": "h", "label": "Height", "description": "Target height in pixels", "aliases": ["height", "maxheight"], "value_schema": {"type": "integer", "minimum": 0, "maximum": 65535}},
-        {"key": "mode", "param": "mode", "label": "Mode", "description": "Constraint mode", "aliases": [], "value_schema": {"type": "string"}},
-        {"key": "down.filter", "param": "down_filter", "label": "Downscale Filter", "description": "Resampling filter for downscaling", "aliases": [], "value_schema": {"type": "string"}},
-        {"key": "f.sharpen", "param": "unsharp_percent", "label": "Unsharp Mask", "description": "Post-resize sharpening (0-100%)", "aliases": ["unsharp"], "value_schema": {"type": "number"}},
-        {"key": "bgcolor", "param": "bgcolor", "label": "Canvas Color", "description": "Background color for padding", "aliases": ["canvas_color"], "value_schema": {"type": "string"}}
-      ]
+        {
+          "key": "heic.gain_map",
+          "label": "Extract Gain Map",
+          "param": "extract_gain_map",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "heic.depth",
+          "label": "Extract Depth Map",
+          "param": "extract_depth",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Placeholder — not yet wired to the decoder.",
+          "key": "heic.mattes",
+          "label": "Extract Mattes",
+          "param": "extract_mattes",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Placeholder — not yet wired to the decoder.",
+          "key": "heic.thumbnail",
+          "label": "Decode Thumbnail",
+          "param": "decode_thumbnail",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Decode Heic"
     },
-    "zenfilters.exposure": {
-      "label": "Exposure",
+    "zenavif.encode": {
       "keys": [
-        {"key": "s.brightness", "param": "stops", "label": "Brightness/Exposure", "description": "Exposure adjustment in stops", "aliases": [], "value_schema": {"type": "number", "minimum": -5.0, "maximum": 5.0}}
-      ]
+        {
+          "aliases": [
+            "avif.quality"
+          ],
+          "key": "avif.q",
+          "label": "Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": 75.0,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "avif.speed",
+          "label": "Speed",
+          "param": "speed",
+          "value_schema": {
+            "default": 4,
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "aliases": [
+            "avif.aq"
+          ],
+          "key": "avif.alpha_quality",
+          "label": "Alpha Quality",
+          "param": "alpha_quality",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "avif.depth",
+          "label": "Bit Depth",
+          "param": "bit_depth",
+          "value_schema": {
+            "default": "auto",
+            "type": "string"
+          }
+        },
+        {
+          "key": "avif.color_model",
+          "label": "Color Model",
+          "param": "color_model",
+          "value_schema": {
+            "default": "ycbcr",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "avif.alpha_mode"
+          ],
+          "key": "avif.alpha_color_mode",
+          "label": "Alpha Color Mode",
+          "param": "alpha_color_mode",
+          "value_schema": {
+            "default": "clean",
+            "type": "string"
+          }
+        },
+        {
+          "key": "avif.lossless",
+          "label": "Lossless",
+          "param": "lossless",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Avif Encode"
+    },
+    "zenbitmaps.encode_bmp": {
+      "keys": [
+        {
+          "aliases": [
+            "bits"
+          ],
+          "key": "bmp.bits",
+          "label": "Bit Depth",
+          "param": "bits",
+          "value_schema": {
+            "default": 24,
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Encode Bmp"
     },
     "zencodecs.quality_intent": {
-      "label": "Quality & Format",
       "keys": [
-        {"key": "qp", "param": "profile", "label": "Quality Profile", "description": "Named quality preset", "aliases": [], "value_schema": {"type": "string"}},
-        {"key": "format", "param": "format", "label": "Output Format", "description": "Target image format", "aliases": ["thumbnail"], "value_schema": {"type": "string"}},
-        {"key": "quality", "param": "quality_fallback", "label": "Quality (legacy)", "description": "Numeric quality 0-100", "aliases": [], "value_schema": {"type": "number"}},
-        {"key": "lossless", "param": "lossless", "label": "Lossless", "aliases": [], "value_schema": {"type": "string"}},
-        {"key": "accept.webp", "param": "allow_webp", "label": "Accept WebP", "aliases": [], "value_schema": {"type": "boolean"}},
-        {"key": "accept.avif", "param": "allow_avif", "label": "Accept AVIF", "aliases": [], "value_schema": {"type": "boolean"}}
-      ]
+        {
+          "description": "Quality profile: named preset or numeric 0-100.  Named presets: \"lowest\", \"low\", \"medium_low\", \"medium\", \"good\", \"high\", \"highest\", \"lossless\". Numeric: \"0\" to \"100\" (codec-specific mapping).",
+          "key": "qp",
+          "label": "Quality Profile",
+          "param": "profile",
+          "value_schema": {
+            "default": "high",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Legacy quality fallback (0-100). Used when `qp` is not set.  RIAPI: `?quality=85` — sets a numeric quality as fallback for all codecs. Prefer `qp` (quality profile) for new code.",
+          "key": "quality",
+          "label": "Quality (legacy)",
+          "param": "quality_fallback",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "aliases": [
+            "thumbnail"
+          ],
+          "description": "Explicit output format. Empty = auto-select from allowed formats.  Values: \"jpeg\", \"png\", \"webp\", \"gif\", \"avif\", \"jxl\", \"keep\", or \"\". \"keep\" preserves the source format. \"thumbnail\" is an alias for the key.",
+          "key": "format",
+          "label": "Output Format",
+          "param": "format",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "qp.dppx",
+            "dpr",
+            "dppx"
+          ],
+          "description": "Device pixel ratio for quality adjustment.  Higher DPR screens tolerate lower quality (smaller pixels). Default 1.0 = no adjustment.",
+          "key": "qp.dpr",
+          "label": "Dpr",
+          "param": "dpr",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": 0.5,
+            "type": "number"
+          }
+        },
+        {
+          "description": "Global lossless preference. Empty = default (lossy).  Accepts \"true\", \"false\", or \"keep\" (match source losslessness).",
+          "key": "lossless",
+          "label": "Lossless",
+          "param": "lossless",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Allow WebP output. Must be explicitly enabled.",
+          "key": "accept.webp",
+          "label": "Allow Webp",
+          "param": "allow_webp",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Allow AVIF output. Must be explicitly enabled.",
+          "key": "accept.avif",
+          "label": "Allow Avif",
+          "param": "allow_avif",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Allow JPEG XL output. Must be explicitly enabled.",
+          "key": "accept.jxl",
+          "label": "Allow Jxl",
+          "param": "allow_jxl",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Allow non-sRGB color profiles in the output.",
+          "key": "accept.color_profiles",
+          "label": "Allow Color Profiles",
+          "param": "allow_color_profiles",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Quality Intent Node"
+    },
+    "zengif.encode": {
+      "keys": [
+        {
+          "key": "gif.quality",
+          "label": "Palette Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": 80.0,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "type": "number"
+          }
+        },
+        {
+          "aliases": [
+            "gif.dither"
+          ],
+          "key": "gif.dithering",
+          "label": "Dithering",
+          "param": "dithering",
+          "value_schema": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "gif.lossy",
+          "label": "Lossy Tolerance",
+          "param": "lossy_tolerance",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "gif.quantizer",
+          "label": "Quantizer",
+          "param": "quantizer",
+          "value_schema": {
+            "default": "auto",
+            "type": "string"
+          }
+        },
+        {
+          "key": "gif.shared_palette",
+          "label": "Shared Palette",
+          "param": "shared_palette",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "gif.palette_threshold",
+          "label": "Palette Error Threshold",
+          "param": "palette_error_threshold",
+          "value_schema": {
+            "default": 5.0,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "gif.loop",
+          "label": "Loop",
+          "param": "loop_count",
+          "value_schema": {
+            "default": "infinite",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "gif.transparency"
+          ],
+          "key": "gif.use_transparency",
+          "label": "Use Transparency",
+          "param": "use_transparency",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Encode Gif"
+    },
+    "zenjpeg.decode": {
+      "keys": [
+        {
+          "key": "jpeg.strictness",
+          "label": "Strictness",
+          "param": "strictness",
+          "value_schema": {
+            "default": "balanced",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "jpeg.auto_orient"
+          ],
+          "key": "jpeg.orient",
+          "label": "Auto Orient",
+          "param": "auto_orient",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "jpeg.max_megapixels",
+          "label": "Max Megapixels",
+          "param": "max_megapixels",
+          "value_schema": {
+            "default": 100,
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Decode Jpeg"
+    },
+    "zenjpeg.encode": {
+      "keys": [
+        {
+          "aliases": [
+            "jpeg.q"
+          ],
+          "key": "jpeg.quality",
+          "label": "Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": 85.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "jpeg.effort",
+          "label": "Effort",
+          "param": "effort",
+          "value_schema": {
+            "default": 1,
+            "maximum": 2,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "jpeg.colorspace",
+          "label": "Color Space",
+          "param": "color_space",
+          "value_schema": {
+            "default": "ycbcr",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "jpeg.ss"
+          ],
+          "key": "jpeg.subsampling",
+          "label": "Chroma Subsampling",
+          "param": "subsampling",
+          "value_schema": {
+            "default": "quarter",
+            "type": "string"
+          }
+        },
+        {
+          "key": "jpeg.chroma_method",
+          "label": "Chroma Downsampling",
+          "param": "chroma_downsampling",
+          "value_schema": {
+            "default": "average",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "jpeg.mode"
+          ],
+          "key": "jpeg.progressive",
+          "label": "Scan Mode",
+          "param": "scan_mode",
+          "value_schema": {
+            "default": "progressive",
+            "type": "string"
+          }
+        },
+        {
+          "key": "jpeg.tables",
+          "label": "Quantization Tables",
+          "param": "quant_tables",
+          "value_schema": {
+            "default": "jpegli",
+            "type": "string"
+          }
+        },
+        {
+          "key": "jpeg.deringing",
+          "label": "Deringing",
+          "param": "deringing",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "jpeg.aq",
+          "label": "Adaptive Quantization",
+          "param": "aq",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Encode Jpeg"
+    },
+    "zenjpeg.encode_mozjpeg": {
+      "keys": [
+        {
+          "aliases": [
+            "mozjpeg.q"
+          ],
+          "key": "mozjpeg.quality",
+          "label": "Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": 85.0,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "mozjpeg.effort",
+          "label": "Effort",
+          "param": "effort",
+          "value_schema": {
+            "default": 1,
+            "maximum": 2,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "aliases": [
+            "mozjpeg.ss"
+          ],
+          "key": "mozjpeg.subsampling",
+          "label": "Chroma Subsampling",
+          "param": "subsampling",
+          "value_schema": {
+            "default": "quarter",
+            "type": "string"
+          }
+        }
+      ],
+      "label": "Encode Mozjpeg"
+    },
+    "zenjxl.decode": {
+      "keys": [
+        {
+          "key": "jxl.orient",
+          "label": "Adjust Orientation",
+          "param": "adjust_orientation",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "jxl.nits",
+          "label": "Intensity Target",
+          "param": "intensity_target",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Decode Jxl"
+    },
+    "zenjxl.encode": {
+      "keys": [
+        {
+          "aliases": [
+            "jxl.q"
+          ],
+          "key": "jxl.quality",
+          "label": "JXL Quality",
+          "param": "jxl_quality",
+          "value_schema": {
+            "default": 75.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "aliases": [
+            "jxl.d"
+          ],
+          "key": "jxl.distance",
+          "label": "Distance",
+          "param": "distance",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 25.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "jxl.lossless",
+          "label": "Lossless",
+          "param": "lossless",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "aliases": [
+            "jxl.e"
+          ],
+          "key": "jxl.effort",
+          "label": "Effort",
+          "param": "effort",
+          "value_schema": {
+            "default": 7,
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "jxl.noise",
+          "label": "Noise",
+          "param": "noise",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Encode Jxl"
+    },
+    "zenlayout.orient": {
+      "keys": [
+        {
+          "description": "EXIF orientation value (1-8). 1 = no transformation.",
+          "key": "srotate",
+          "label": "Orientation",
+          "param": "orientation",
+          "value_schema": {
+            "default": 1,
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Orient"
+    },
+    "zenpipe.crop_whitespace": {
+      "keys": [
+        {
+          "description": "Color distance threshold (0–255).  Pixels within this distance of the border color are considered \"whitespace\". Lower = stricter, higher = more tolerant.",
+          "key": "trim.threshold",
+          "label": "Threshold",
+          "param": "threshold",
+          "value_schema": {
+            "default": 80,
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Padding around detected content as a percentage of content dimensions.  0.0 = tight crop, 0.5 = 0.5% padding on each side.",
+          "key": "trim.percentpadding",
+          "label": "Padding",
+          "param": "percent_padding",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Crop Whitespace"
+    },
+    "zenpipe.round_corners": {
+      "keys": [
+        {
+          "description": "Corner radius in pixels (uniform). Clamped to min(width, height) / 2. Used when mode is \"pixels\" (default) or as fallback.  RIAPI: `?s.roundcorners=20` (single value) or `?s.roundcorners=10,20,30,40` (TL,TR,BR,BL)",
+          "key": "s.roundcorners",
+          "label": "Radius",
+          "param": "radius",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Round Corners"
+    },
+    "zenpng.encode": {
+      "keys": [
+        {
+          "key": "png.quality",
+          "label": "PNG Quality",
+          "param": "png_quality",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "png.min_quality",
+          "label": "Min Quality",
+          "param": "min_quality",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "png.lossless",
+          "label": "Lossless",
+          "param": "lossless",
+          "value_schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "key": "png.max_deflate",
+          "label": "Max Deflate",
+          "param": "max_deflate",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Encode Png"
+    },
+    "zenquant.quantize": {
+      "keys": [
+        {
+          "aliases": [
+            "max_colors"
+          ],
+          "key": "quant.max_colors",
+          "label": "Max Colors",
+          "param": "max_colors",
+          "value_schema": {
+            "default": 256,
+            "maximum": 256,
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "quant.quality",
+          "label": "Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": "best",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "dither_strength"
+          ],
+          "key": "quant.dither_strength",
+          "label": "Dithering",
+          "param": "dither_strength",
+          "value_schema": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        }
+      ],
+      "label": "Quantize"
+    },
+    "zenresize.constrain": {
+      "keys": [
+        {
+          "aliases": [
+            "width",
+            "maxwidth"
+          ],
+          "description": "Target width in pixels. None = unconstrained (derive from height + aspect ratio).  RIAPI: `?w=800` or `?width=800` or `?maxwidth=800` (legacy, implies mode=within).",
+          "key": "w",
+          "label": "Width",
+          "param": "w",
+          "value_schema": {
+            "default": 0,
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "aliases": [
+            "height",
+            "maxheight"
+          ],
+          "description": "Target height in pixels. None = unconstrained (derive from width + aspect ratio).  RIAPI: `?h=600` or `?height=600` or `?maxheight=600` (legacy, implies mode=within).",
+          "key": "h",
+          "label": "Height",
+          "param": "h",
+          "value_schema": {
+            "default": 0,
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Constraint mode controlling how the image fits the target dimensions.  - \"distort\" / \"stretch\" — stretch to exact dimensions, ignoring aspect ratio - \"within\" / \"max\" — fit inside target, never upscale (default) - \"fit\" — fit inside target, may upscale - \"within_crop\" / \"crop\" — fill target by cropping, never upscale - \"fit_crop\" — fill target by cropping, may upscale - \"fit_pad\" / \"pad\" — fit inside target, pad to exact dimensions - \"within_pad\" — fit inside target without upscale, pad to exact dimensions - \"pad_within\" — never upscale, always pad to exact canvas - \"aspect_crop\" / \"aspectcrop\" — crop to target aspect ratio without resizing - \"larger_than\" — upscale if needed to meet target, never downscale",
+          "key": "mode",
+          "label": "Mode",
+          "param": "mode",
+          "value_schema": {
+            "default": "within",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Scale control: when to allow scaling.  - \"down\" / \"downscaleonly\" — only downscale, never upscale - \"up\" / \"upscaleonly\" — only upscale, never downscale - \"both\" — allow both (default) - \"canvas\" / \"upscalecanvas\" — upscale canvas (pad) only  RIAPI: `?scale=down`",
+          "key": "scale",
+          "label": "Scale",
+          "param": "scale",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "dpr",
+            "dppx"
+          ],
+          "description": "Device pixel ratio / zoom multiplier.  Multiplies target dimensions. 2.0 means w and h are doubled. RIAPI: `?zoom=2`, `?dpr=2x`, `?dppx=1.5`",
+          "key": "zoom",
+          "label": "DPR / Zoom",
+          "param": "zoom",
+          "value_schema": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": 0.10000000149011612,
+            "type": "number"
+          }
+        },
+        {
+          "description": "Named anchor for crop/pad positioning.  Controls which part of the image is preserved when cropping, or where the image is positioned when padding.  Values: \"center\", \"top_left\", \"top\", \"top_right\", \"left\", \"right\", \"bottom_left\", \"bottom\", \"bottom_right\".  Overridden by `gravity_x`/`gravity_y` when both are set.",
+          "key": "anchor",
+          "label": "Anchor",
+          "param": "gravity",
+          "value_schema": {
+            "default": "center",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "canvas_color"
+          ],
+          "description": "Fill color for exterior padding regions added around the image.  Used by pad modes (fit_pad, within_pad, pad_within) to fill the canvas area outside the image content. Does NOT affect pixels inside the image — use `matte_color` for alpha compositing.  None = transparent. Accepts \"transparent\", \"white\", \"black\", or hex \"#RRGGBB\" / \"#RRGGBBAA\".",
+          "key": "bgcolor",
+          "label": "Canvas Color",
+          "param": "canvas_color",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "matte_color",
+            "s.matte"
+          ],
+          "description": "Background color for alpha compositing (matte behind transparent pixels).  Applied during resize to prevent halo artifacts at transparent edges. Separate from `canvas_color` which fills exterior padding regions. When set, transparent pixels are composited against this color before the resampling kernel samples them.  None = no matte (preserve transparency). \"white\" is common for JPEG output.",
+          "key": "matte",
+          "label": "Matte Color",
+          "param": "matte_color",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Downscale resampling filter. None = auto (Robidoux).  31 filters available: \"robidoux\", \"robidoux_sharp\", \"robidoux_fast\", \"lanczos\", \"lanczos_sharp\", \"lanczos2\", \"lanczos2_sharp\", \"ginseng\", \"ginseng_sharp\", \"mitchell\", \"catmull_rom\", \"cubic\", \"cubic_sharp\", \"cubic_b_spline\", \"hermite\", \"triangle\", \"linear\", \"box\", \"fastest\", \"jinc\", \"n_cubic\", \"n_cubic_sharp\", etc.",
+          "key": "down.filter",
+          "label": "Downscale Filter",
+          "param": "down_filter",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Upscale resampling filter. None = auto (Ginseng).  Same filter names as down_filter.",
+          "key": "up.filter",
+          "label": "Upscale Filter",
+          "param": "up_filter",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "up.colorspace"
+          ],
+          "description": "Color space for resampling math. None = auto (\"linear\" for most operations).  - \"linear\" — resize in linear light (gamma-correct, default) - \"srgb\" — resize in sRGB gamma space (faster, less correct)  RIAPI: `?down.colorspace=linear` or `?up.colorspace=srgb`",
+          "key": "down.colorspace",
+          "label": "Scaling Colorspace",
+          "param": "scaling_colorspace",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "unsharp"
+          ],
+          "description": "Post-resize unsharp mask strength (0 = none, 100 = maximum).  Applied as a separate pass AFTER resampling. Adds real computational cost proportional to output dimensions. For zero-cost sharpening that adjusts the resampling kernel itself, use `kernel_lobe_ratio`.  None = no unsharp mask.",
+          "key": "f.sharpen",
+          "label": "Unsharp Mask",
+          "param": "unsharp_percent",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "aliases": [
+            "kernel_lobe_ratio"
+          ],
+          "description": "Negative-lobe ratio for kernel sharpening (zero-cost).  Adjusts the resampling kernel's negative lobes during weight computation. 0.0 = flatten (maximum smoothness), above filter's natural ratio = sharpen. Zero additional cost — changes the filter shape, not a separate processing step.  For post-resize unsharp mask (separate pass), use `unsharp_percent`.",
+          "key": "lobe_ratio",
+          "label": "Lobe Ratio",
+          "param": "kernel_lobe_ratio",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "description": "When to apply resampling.  - \"size_differs\" — only resample when dimensions change (default) - \"size_differs_or_sharpening_requested\" — resample when dimensions change or when sharpening is requested (allows sharpening without resize) - \"always\" — always resample, even at identity dimensions",
+          "key": "resample_when",
+          "label": "Resample When",
+          "param": "resample_when",
+          "value_schema": {
+            "default": "size_differs",
+            "type": "string"
+          }
+        },
+        {
+          "description": "When to apply sharpening.  - \"downscaling\" — sharpen only when downscaling (default) - \"upscaling\" — sharpen only when upscaling - \"size_differs\" — sharpen whenever dimensions change - \"always\" — always sharpen, even at identity dimensions",
+          "key": "sharpen_when",
+          "label": "Sharpen When",
+          "param": "sharpen_when",
+          "value_schema": {
+            "default": "downscaling",
+            "type": "string"
+          }
+        }
+      ],
+      "label": "Constrain"
+    },
+    "zentiff.encode": {
+      "keys": [
+        {
+          "key": "tiff.compression",
+          "label": "Compression",
+          "param": "compression",
+          "value_schema": {
+            "default": "lzw",
+            "type": "string"
+          }
+        },
+        {
+          "key": "tiff.predictor",
+          "label": "Predictor",
+          "param": "predictor",
+          "value_schema": {
+            "default": "horizontal",
+            "type": "string"
+          }
+        },
+        {
+          "key": "tiff.big_tiff",
+          "label": "Big Tiff",
+          "param": "big_tiff",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "label": "Encode Tiff"
+    },
+    "zenwebp.decode": {
+      "keys": [
+        {
+          "key": "webp.upsampling",
+          "label": "Upsampling",
+          "param": "upsampling",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "aliases": [
+            "webp.dither"
+          ],
+          "key": "webp.dithering",
+          "label": "Dithering Strength",
+          "param": "dithering_strength",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Decode Webp"
+    },
+    "zenwebp.encode_lossless": {
+      "keys": [
+        {
+          "key": "webp.effort",
+          "label": "Compression Effort",
+          "param": "effort",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "description": "VP8L compression method (0 = fastest, 6 = best). Separate from effort — method controls the algorithm tier, effort controls quality within that tier.",
+          "key": "webp.method",
+          "label": "Method",
+          "param": "method",
+          "value_schema": {
+            "default": 0,
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "aliases": [
+            "webp.nl"
+          ],
+          "key": "webp.near_lossless",
+          "label": "Near-Lossless",
+          "param": "near_lossless",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.exact",
+          "label": "Exact",
+          "param": "exact",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "aliases": [
+            "webp.aq"
+          ],
+          "key": "webp.alpha_quality",
+          "label": "Alpha Quality",
+          "param": "alpha_quality",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.target_size",
+          "label": "Target Size",
+          "param": "target_size",
+          "value_schema": {
+            "default": 0,
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Encode Webp Lossless"
+    },
+    "zenwebp.encode_lossy": {
+      "keys": [
+        {
+          "aliases": [
+            "webp.q"
+          ],
+          "key": "webp.quality",
+          "label": "Quality",
+          "param": "quality",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "webp.effort",
+          "label": "Effort",
+          "param": "effort",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "webp.preset",
+          "label": "Preset",
+          "param": "preset",
+          "value_schema": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        {
+          "key": "webp.sharp_yuv",
+          "label": "Sharp YUV",
+          "param": "sharp_yuv",
+          "value_schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        {
+          "aliases": [
+            "webp.aq"
+          ],
+          "key": "webp.alpha_quality",
+          "label": "Alpha Quality",
+          "param": "alpha_quality",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.target_size",
+          "label": "Target Size",
+          "param": "target_size",
+          "value_schema": {
+            "default": 0,
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.target_psnr",
+          "label": "Target PSNR",
+          "param": "target_psnr",
+          "value_schema": {
+            "default": 0.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        {
+          "key": "webp.segments",
+          "label": "Segments",
+          "param": "segments",
+          "value_schema": {
+            "default": 0,
+            "maximum": 4,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.sns",
+          "label": "SNS Strength",
+          "param": "sns_strength",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.filter",
+          "label": "Filter Strength",
+          "param": "filter_strength",
+          "value_schema": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "key": "webp.sharpness",
+          "label": "Filter Sharpness",
+          "param": "filter_sharpness",
+          "value_schema": {
+            "default": 0,
+            "maximum": 7,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "label": "Encode Webp Lossy"
     }
-  }
+  },
+  "version": 1
 }

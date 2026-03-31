@@ -53,21 +53,27 @@ def role_emoji(role: str) -> str:
 
 
 def group_emoji(group: str) -> str:
+    g = group.lower()
     return {
-        "Tone": "☀️",
-        "Color": "🎨",
-        "Detail": "🔍",
-        "Effects": "✨",
-        "Geometry": "📐",
-        "Layout": "📏",
-        "Encode": "📤",
-        "Decode": "📥",
-        "Composite": "🔲",
-        "Canvas": "🖼️",
-        "Quantize": "🎯",
-        "Analysis": "📊",
-        "Hdr": "🌅",
-    }.get(group, "⚙️")
+        "tone": "☀️",
+        "tonerange": "☀️",
+        "tonemap": "☀️",
+        "color": "🎨",
+        "detail": "🔍",
+        "effects": "✨",
+        "geometry": "📐",
+        "layout": "📏",
+        "encode": "📤",
+        "decode": "📥",
+        "composite": "🔲",
+        "canvas": "🖼️",
+        "quantize": "🎯",
+        "analysis": "📊",
+        "hdr": "🌅",
+        "raw": "📷",
+        "auto": "🔄",
+        "other": "⚙️",
+    }.get(g, "⚙️")
 
 
 def type_label(prop: dict) -> str:
