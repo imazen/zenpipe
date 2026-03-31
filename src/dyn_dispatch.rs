@@ -19,7 +19,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::trace::{SelectionStep, SelectionTrace};
 use crate::{CodecError, ImageFormat, Limits, StopToken};
-use whereat::at;
+use whereat::{ResultAtExt, at, at_crate};
 use zencodec::decode::{DecodeJob as _, DecoderConfig as _, DynDecoderConfig, OutputInfo};
 
 /// Wrap a BoxedError from a codec into a CodecError.
@@ -150,6 +150,7 @@ pub(crate) fn dyn_push_decode(
     params: &DecodeParams<'_>,
     sink: &mut dyn zencodec::decode::DecodeRowSink,
 ) -> Result<OutputInfo> {
+    // For codecs that return plain errors (zenjpeg, zenbitmaps).
     macro_rules! push_dec {
         ($config:expr) => {{
             let config = $config;
@@ -170,6 +171,27 @@ pub(crate) fn dyn_push_decode(
                 .map_err(|e| at!(CodecError::from_codec(format, e)))
         }};
     }
+    // For codecs that return At<E> (instrumented crates: zengif, zenpng, zenwebp, etc.).
+    macro_rules! push_dec_at {
+        ($config:expr) => {{
+            let config = $config;
+            let mut job = config.job();
+            if let Some(lim) = params.limits {
+                job = job.with_limits(to_resource_limits(lim));
+            }
+            if let Some(ref s) = params.stop {
+                job = job.with_stop(s.clone());
+            }
+            if let Some(dp) = params.decode_policy {
+                job = job.with_policy(dp);
+            }
+            if params.extract_gain_map {
+                job = job.with_extract_gain_map(true);
+            }
+            at_crate!(job.push_decoder(Cow::Borrowed(params.data), sink, params.preferred))
+                .map_err_at(|e| CodecError::from_codec(format, e))
+        }};
+    }
 
     match format {
         #[cfg(feature = "jpeg")]
@@ -178,32 +200,32 @@ pub(crate) fn dyn_push_decode(
         ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "webp")]
-        ImageFormat::WebP => push_dec!(build_webp_decoder(params.codec_config, params.limits)),
+        ImageFormat::WebP => push_dec_at!(build_webp_decoder(params.codec_config, params.limits)),
         #[cfg(not(feature = "webp"))]
         ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "gif")]
-        ImageFormat::Gif => push_dec!(zengif::GifDecoderConfig::new()),
+        ImageFormat::Gif => push_dec_at!(zengif::GifDecoderConfig::new()),
         #[cfg(not(feature = "gif"))]
         ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "png")]
-        ImageFormat::Png => push_dec!(zenpng::PngDecoderConfig::new()),
+        ImageFormat::Png => push_dec_at!(zenpng::PngDecoderConfig::new()),
         #[cfg(not(feature = "png"))]
         ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "avif-decode")]
-        ImageFormat::Avif => push_dec!(build_avif_decoder(params.codec_config)),
+        ImageFormat::Avif => push_dec_at!(build_avif_decoder(params.codec_config)),
         #[cfg(not(feature = "avif-decode"))]
         ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "jxl-decode")]
-        ImageFormat::Jxl => push_dec!(zenjxl::JxlDecoderConfig::new()),
+        ImageFormat::Jxl => push_dec_at!(zenjxl::JxlDecoderConfig::new()),
         #[cfg(not(feature = "jxl-decode"))]
         ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "heic-decode")]
-        ImageFormat::Heic => push_dec!(heic::HeicDecoderConfig::new()),
+        ImageFormat::Heic => push_dec_at!(heic::HeicDecoderConfig::new()),
         #[cfg(not(feature = "heic-decode"))]
         ImageFormat::Heic => Err(at!(CodecError::UnsupportedFormat(format))),
 
@@ -223,7 +245,7 @@ pub(crate) fn dyn_push_decode(
         ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "tiff")]
-        ImageFormat::Tiff => push_dec!(zentiff::codec::TiffDecoderCodecConfig::new()),
+        ImageFormat::Tiff => push_dec_at!(zentiff::codec::TiffDecoderCodecConfig::new()),
         #[cfg(not(feature = "tiff"))]
         ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
 
@@ -322,6 +344,7 @@ pub(crate) fn dyn_streaming_decoder(
 ) -> Result<Box<dyn zencodec::decode::DynStreamingDecoder + 'static>> {
     use zencodec::decode::{DecodeJob as _, DecoderConfig as _};
 
+    // For instrumented codecs that return At<E> from streaming_decoder.
     macro_rules! stream_dec {
         ($config:expr) => {{
             let config = $config;
@@ -338,9 +361,9 @@ pub(crate) fn dyn_streaming_decoder(
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
             }
-            let dec = job
-                .streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred)
-                .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            let dec = at_crate!(job
+                .streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred))
+                .map_err_at(|e| CodecError::from_codec(format, e))?;
             Ok(Box::new(OwnedStreamingDecoderShim(dec)))
         }};
     }
@@ -364,6 +387,7 @@ pub(crate) fn dyn_streaming_decoder(
 
         // JPEG/PNG: job(self) consumes the config, producing a 'static Job.
         // Combined with Cow::Owned data, the streaming decoder is 'static.
+        // Note: zenjpeg returns plain errors (not At<E>), so at!() is used here.
         #[cfg(feature = "jpeg")]
         ImageFormat::Jpeg => {
             let mut job = build_jpeg_decoder(params.codec_config).job();
@@ -396,9 +420,9 @@ pub(crate) fn dyn_streaming_decoder(
             if let Some(dp) = params.decode_policy {
                 job = job.with_policy(dp);
             }
-            let dec = job
-                .streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred)
-                .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            let dec = at_crate!(job
+                .streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred))
+                .map_err_at(|e| CodecError::from_codec(format, e))?;
             Ok(Box::new(OwnedStreamingDecoderShim(dec)))
         }
         #[cfg(not(feature = "png"))]

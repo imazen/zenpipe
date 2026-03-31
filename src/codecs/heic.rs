@@ -7,15 +7,15 @@ use crate::limits::to_resource_limits;
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, StopToken,
 };
-use whereat::at;
+use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::Decode;
 
 /// Probe HEIC metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
     let dec = heic::HeicDecoderConfig::new();
     let job = dec.job();
-    job.probe(data)
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Heic, e)))
+    at_crate!(job.probe(data))
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))
 }
 
 /// Decode HEIC to pixels.
@@ -40,8 +40,8 @@ pub(crate) fn decode(
     if let Some(dp) = decode_policy {
         job = job.with_policy(dp);
     }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Heic, e)))?
-        .decode()
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Heic, e)))
+    let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))?;
+    at_crate!(decoder.decode())
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))
 }

@@ -5,15 +5,15 @@ use alloc::borrow::Cow;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, StopToken};
-use whereat::at;
+use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
 
 /// Probe TIFF metadata without decoding pixels.
 pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
-    zentiff::codec::TiffDecoderCodecConfig::new()
+    at_crate!(zentiff::codec::TiffDecoderCodecConfig::new()
         .job()
-        .probe(data)
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Tiff, e)))
+        .probe(data))
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Tiff, e))
 }
 
 /// Decode TIFF to pixels.
@@ -34,10 +34,10 @@ pub(crate) fn decode(
     if let Some(dp) = decode_policy {
         job = job.with_policy(dp);
     }
-    job.decoder(Cow::Borrowed(data), &[])
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Tiff, e)))?
-        .decode()
-        .map_err(|e| at!(CodecError::from_codec(ImageFormat::Tiff, e)))
+    let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Tiff, e))?;
+    at_crate!(decoder.decode())
+        .map_err_at(|e| CodecError::from_codec(ImageFormat::Tiff, e))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
