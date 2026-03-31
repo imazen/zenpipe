@@ -421,7 +421,11 @@ pub struct EncodeJxl {
     #[kv("jxl.lossless")]
     pub lossless: Option<bool>,
 
-    #[param(range(1..=10), default = 7)]
+    /// Generic effort (0 = fastest, 10 = best compression).
+    ///
+    /// Mapped to libjxl speed tiers: 0-1 map to tier 1 (Lightning),
+    /// 10 maps to tier 10 (Tortoise).
+    #[param(range(0..=10), default = 7)]
     #[param(section = "Speed", label = "Effort")]
     #[kv("jxl.effort", "jxl.e")]
     pub effort: Option<i32>,
