@@ -40,6 +40,7 @@ use crate::bridge::NodeConverter;
 use whereat::at;
 #[allow(unused_imports)]
 use whereat::at_crate;
+use whereat::ResultAtExt as _;
 
 use crate::error::PipeError;
 use crate::format::PixelFormat;
@@ -434,7 +435,7 @@ impl<'a> ImageJob<'a> {
 
         // 2. Probe the source.
         let image_info = at_crate!(zencodecs::from_bytes_with_registry(input_bytes, &self.registry))
-            .map_err(|e| at!(PipeError::Op(alloc::format!("probe failed: {e}"))))?;
+            .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         let decode_info = DecodeInfo {
             io_id: self.decode_io_id,
@@ -456,7 +457,7 @@ impl<'a> ImageJob<'a> {
             &self.registry,
             &zencodecs::CodecPolicy::default(),
         ))
-        .map_err(|e| at!(PipeError::Op(alloc::format!("format selection failed: {e}"))))?;
+        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         // 5. Decode the source to a pixel stream, optionally extracting gain map.
         //
@@ -554,7 +555,7 @@ impl<'a> ImageJob<'a> {
                 let decoded = at_crate!(zencodecs::DecodeRequest::new(data)
                     .with_registry(&self.registry)
                     .decode_full_frame())
-                    .map_err(|e| at!(PipeError::Op(alloc::format!("decode failed: {e}"))))?;
+                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let pixels = decoded.pixels();
                 let w = decoded.width();
@@ -587,7 +588,7 @@ impl<'a> ImageJob<'a> {
 
         let (decoded, gain_map) = at_crate!(request
             .decode_gain_map())
-            .map_err(|e| at!(PipeError::Op(alloc::format!("decode with gain map failed: {e}"))))?;
+            .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         // Convert base image to Source.
         let pixels = decoded.pixels();
@@ -845,14 +846,14 @@ impl<'a> ImageJob<'a> {
             None => {
                 // One-shot encode (full-frame materialize).
                 let materialized = crate::sources::MaterializedSource::from_source(source)?;
-                let pixels = zenpixels::PixelSlice::new(
+                let pixels = at_crate!(zenpixels::PixelSlice::new(
                     materialized.data(),
                     materialized.width(),
                     materialized.height(),
                     materialized.stride(),
                     src_format,
-                )
-                .map_err(|e| at!(PipeError::Op(alloc::format!("PixelSlice failed: {e}"))))?;
+                ))
+                .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
                     .with_quality(decision.quality.quality)
@@ -872,7 +873,7 @@ impl<'a> ImageJob<'a> {
 
                 let encode_output = at_crate!(oneshot_request
                     .encode(pixels, format.has_alpha()))
-                    .map_err(|e| at!(PipeError::Op(alloc::format!("encode failed: {e}"))))?;
+                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 Ok(EncodeResult {
                     io_id: self.encode_io_id,
@@ -1067,7 +1068,7 @@ mod tests {
         let err = result.unwrap_err();
         let msg = alloc::format!("{err}");
         assert!(
-            msg.contains("probe failed"),
+            msg.contains("unrecognized") || msg.contains("codec") || msg.contains("format"),
             "expected probe error, got: {msg}"
         );
     }

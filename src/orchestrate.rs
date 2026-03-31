@@ -475,6 +475,7 @@ mod tests {
     use super::*;
     use crate::format::RGBA8_SRGB;
     use crate::sidecar::{SidecarKind, SidecarStream};
+    use crate::strip::BufferResultExt as _;
 
     struct SolidSource {
         w: u32,

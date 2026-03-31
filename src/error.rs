@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::string::String;
 use core::fmt;
 
@@ -22,6 +23,8 @@ pub enum PipeError {
     Cancelled,
     /// Generic operation error.
     Op(String),
+    /// Error from a codec or downstream crate, with preserved error type.
+    Codec(Box<dyn core::error::Error + Send + Sync>),
 }
 
 impl fmt::Display for PipeError {
@@ -35,11 +38,19 @@ impl fmt::Display for PipeError {
             Self::LimitExceeded(msg) => write!(f, "limit exceeded: {msg}"),
             Self::Cancelled => write!(f, "cancelled"),
             Self::Op(msg) => write!(f, "operation: {msg}"),
+            Self::Codec(e) => write!(f, "codec: {e}"),
         }
     }
 }
 
-impl core::error::Error for PipeError {}
+impl core::error::Error for PipeError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Codec(e) => Some(e.as_ref()),
+            _ => None,
+        }
+    }
+}
 
 impl From<enough::StopReason> for PipeError {
     fn from(_: enough::StopReason) -> Self {
