@@ -24,10 +24,10 @@ bytemuck = { version = "1.21", default-features = false, features = ["extern_cra
 linear-srgb = "0.6.6"
 magetypes = "0.9.15"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
-zenpixels = { version = "0.2.1", features = ["planar"] }
+zenpixels = { version = "0.2.2", features = ["planar"] }
 whereat = "0.1.5"
 zennode = { version = "0.1", path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
-zenpixels-convert = { version = "0.2.1" }
+zenpixels-convert = { version = "0.2.2" }
 
 [dev-dependencies]
 imgref = "1.12"
@@ -40,8 +40,8 @@ zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 libblur = { version = "0.23", default-features = true }
 zenresize = { version = "0.2", path = "../zenresize", default-features = false, features = ["std"] }
 zensim = { version = "0.2.4", default-features = false }
-zenpixels = { version = "0.2.1", features = ["planar", "rgb"] }
-zenpixels-convert = { version = "0.2.1", features = ["planar"] }
+zenpixels = { version = "0.2.2", features = ["planar", "rgb"] }
+zenpixels-convert = { version = "0.2.2", features = ["planar"] }
 
 # Keep image only for tests that still need it (reference_validation, quality_validation)
 image = "0.25"
