@@ -86,7 +86,7 @@ linear-srgb = { path = "../linear-srgb", default-features = false }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation
-hashbrown = "0.15"
+hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
 zenfilters = { path = "../zenfilters", optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
