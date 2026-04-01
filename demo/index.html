@@ -28,7 +28,6 @@ body {
   grid-template-rows: auto 1fr;
 }
 
-/* ─── Header ─── */
 header {
   grid-column: 1 / -1;
   display: flex;
@@ -39,32 +38,17 @@ header {
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
-
-header h1 {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-}
-
-#status {
-  color: var(--text-dim);
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
+header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+#status { color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
 
 .btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 4px 12px; border-radius: 4px;
+  cursor: pointer; font-size: 12px;
 }
 .btn:hover { border-color: var(--accent); }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ─── Main viewport ─── */
 main {
   display: grid;
   grid-template-rows: 1fr auto;
@@ -73,149 +57,73 @@ main {
   overflow: hidden;
 }
 
-/* ─── Detail view (large) ─── */
 #detail-wrap {
-  position: relative;
-  overflow: hidden;
-  border-radius: 6px;
-  background: #111;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative; overflow: hidden; border-radius: 6px;
+  background: #111; display: flex; align-items: center; justify-content: center;
 }
-
 #detail-canvas {
-  image-rendering: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  image-rendering: auto; max-width: 100%; max-height: 100%; object-fit: contain;
 }
 
-/* Spinner overlay */
 .spinner-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; pointer-events: none; opacity: 0; transition: opacity 0.15s;
 }
 .spinner-overlay.active { opacity: 1; }
-
 .spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ─── Overview strip (bottom of main) ─── */
 #overview-wrap {
-  position: relative;
-  height: 120px;
-  min-height: 80px;
-  background: #111;
-  border-radius: 6px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  position: relative; height: 120px; min-height: 80px; background: #111;
+  border-radius: 6px; overflow: hidden; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
 }
-
 #overview-canvas {
-  max-height: 100%;
-  max-width: 100%;
-  object-fit: contain;
-  filter: blur(1px);
-  transition: filter 0.2s;
+  max-height: 100%; max-width: 100%; object-fit: contain;
+  filter: blur(1px); transition: filter 0.2s;
 }
 #overview-canvas.sharp { filter: none; }
 
-/* Draggable region selector on overview */
 #region-selector {
-  position: absolute;
-  border: 2px solid var(--accent);
-  background: var(--accent-dim);
-  cursor: move;
-  border-radius: 2px;
-  min-width: 20px;
-  min-height: 20px;
-  touch-action: none;
+  position: absolute; border: 2px solid var(--accent);
+  background: var(--accent-dim); cursor: move; border-radius: 2px;
+  min-width: 20px; min-height: 20px; touch-action: none;
 }
 
-/* ─── Sidebar (sliders) ─── */
 aside {
-  overflow-y: auto;
-  padding: 12px;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  overflow-y: auto; padding: 12px; background: var(--surface);
+  border-left: 1px solid var(--border); display: flex;
+  flex-direction: column; gap: 2px;
 }
-
-.slider-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 0;
-}
-
+.slider-group { padding: 6px 0; }
 .slider-group h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-  margin-bottom: 4px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-dim); margin-bottom: 4px; padding: 0 0 2px;
+  border-bottom: 1px solid var(--border);
 }
-
 .slider-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 36px;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
+  display: grid; grid-template-columns: 80px 1fr 36px;
+  align-items: center; gap: 6px; height: 24px;
 }
-
-.slider-row label {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.slider-row input[type="range"] {
-  width: 100%;
-  accent-color: var(--accent);
-  height: 4px;
-}
-
+.slider-row label { font-size: 12px; color: var(--text-dim); cursor: pointer; }
+.slider-row label:hover { color: var(--text); }
+.slider-row input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; }
 .slider-row .val {
-  font-size: 11px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
 
-/* ─── Drop zone ─── */
 #dropzone {
-  grid-column: 1 / -1;
-  grid-row: 2 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  color: var(--text-dim);
-  font-size: 14px;
+  grid-column: 1 / -1; grid-row: 2 / -1; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; color: var(--text-dim); font-size: 14px;
 }
 #dropzone.hidden { display: none; }
 #dropzone.dragover { background: var(--accent-dim); }
-
 #editor-ui { display: contents; }
 #editor-ui.hidden > * { display: none !important; }
 </style>
@@ -230,7 +138,6 @@ aside {
   <span id="status">Drop an image to start</span>
 </header>
 
-<!-- Drop zone (shown before image loaded) -->
 <div id="dropzone">
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
     <path d="M12 16V4M12 4l-4 4m4-4l4 4"/>
@@ -240,219 +147,301 @@ aside {
   <input type="file" id="file-input" accept="image/*" hidden>
 </div>
 
-<!-- Editor UI (hidden until image loaded) -->
 <div id="editor-ui" class="hidden">
   <main>
     <div id="detail-wrap">
       <canvas id="detail-canvas"></canvas>
-      <div class="spinner-overlay" id="detail-spinner">
-        <div class="spinner"></div>
-      </div>
+      <div class="spinner-overlay" id="detail-spinner"><div class="spinner"></div></div>
     </div>
     <div id="overview-wrap">
       <canvas id="overview-canvas"></canvas>
       <div id="region-selector"></div>
-      <div class="spinner-overlay" id="overview-spinner">
-        <div class="spinner"></div>
-      </div>
+      <div class="spinner-overlay" id="overview-spinner"><div class="spinner"></div></div>
     </div>
   </main>
-
-  <aside>
-    <div class="slider-group">
-      <h3>Light</h3>
-      <div class="slider-row">
-        <label>Exposure</label>
-        <input type="range" id="s-exposure" min="-3" max="3" step="0.05" value="0">
-        <span class="val" id="v-exposure">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Contrast</label>
-        <input type="range" id="s-contrast" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-contrast">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Highlights</label>
-        <input type="range" id="s-highlights" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-highlights">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Shadows</label>
-        <input type="range" id="s-shadows" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-shadows">0.0</span>
-      </div>
-    </div>
-
-    <div class="slider-group">
-      <h3>Color</h3>
-      <div class="slider-row">
-        <label>Saturation</label>
-        <input type="range" id="s-saturation" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-saturation">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Vibrance</label>
-        <input type="range" id="s-vibrance" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-vibrance">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Temperature</label>
-        <input type="range" id="s-temperature" min="-1" max="1" step="0.05" value="0">
-        <span class="val" id="v-temperature">0.0</span>
-      </div>
-    </div>
-
-    <div class="slider-group">
-      <h3>Detail</h3>
-      <div class="slider-row">
-        <label>Clarity</label>
-        <input type="range" id="s-clarity" min="0" max="1" step="0.05" value="0">
-        <span class="val" id="v-clarity">0.0</span>
-      </div>
-      <div class="slider-row">
-        <label>Sharpen</label>
-        <input type="range" id="s-sharpen" min="0" max="1" step="0.05" value="0">
-        <span class="val" id="v-sharpen">0.0</span>
-      </div>
-    </div>
-  </aside>
+  <aside id="sidebar"><!-- Generated from schema --></aside>
 </div>
 
 <script>
 // =====================================================================
-// State
+// Constants & State
 // =====================================================================
 
 const OVERVIEW_MAX = 512;
-const DETAIL_SIZE = 800; // detail crop output size
+const DETAIL_MAX = 800;
 
-let sourceImage = null;   // original HTMLImageElement (decoded by browser)
-let sourceWidth = 0;
-let sourceHeight = 0;
+let worker = null;
+let nextMsgId = 0;
+const pending = new Map();  // id → { resolve, reject }
 
-// Normalized region rect (0..1) — what the detail view shows
+let sourceImage = null;
+let sourceWidth = 0, sourceHeight = 0;
 let region = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
-
-// Current adjustment values
 const adjustments = {};
-const sliderNames = [
-  'exposure', 'contrast', 'highlights', 'shadows',
-  'saturation', 'vibrance', 'temperature',
-  'clarity', 'sharpen',
-];
-
-// Render state
-let overviewRenderId = 0;
-let detailRenderId = 0;
+let sliderNodes = [];  // Populated from schema
 let renderRafId = null;
-
-// =====================================================================
-// Elements
-// =====================================================================
+let overviewRenderId = 0, detailRenderId = 0;
 
 const $ = id => document.getElementById(id);
-const dropzone = $('dropzone');
-const editorUI = $('editor-ui');
-const overviewCanvas = $('overview-canvas');
-const detailCanvas = $('detail-canvas');
-const overviewCtx = overviewCanvas.getContext('2d');
-const detailCtx = detailCanvas.getContext('2d');
-const regionSelector = $('region-selector');
-const overviewSpinner = $('overview-spinner');
-const detailSpinner = $('detail-spinner');
-const statusEl = $('status');
+
+// =====================================================================
+// Worker Communication
+// =====================================================================
+
+function initWorker() {
+  worker = new Worker('worker.js');
+  worker.addEventListener('message', e => {
+    const msg = e.data;
+    const p = pending.get(msg.id);
+    if (!p) return;
+    pending.delete(msg.id);
+    if (msg.type === 'error') p.reject(new Error(msg.message));
+    else p.resolve(msg);
+  });
+}
+
+function sendToWorker(type, data) {
+  const id = nextMsgId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    const msg = { id, type, ...data };
+    // Transfer ArrayBuffer if present
+    const transfer = [];
+    if (data?.data instanceof ArrayBuffer) transfer.push(data.data);
+    if (data?.data instanceof Uint8Array) transfer.push(data.data.buffer);
+    worker.postMessage(msg, transfer);
+  });
+}
 
 // =====================================================================
 // CSS Filter Approximation
 // =====================================================================
 
-function toCssFilter(adj) {
+const CSS_FILTER_MAP = {
+  'zenfilters.exposure': (v) => v ? `brightness(${Math.pow(2, v).toFixed(3)})` : null,
+  'zenfilters.contrast': (v) => v ? `contrast(${(1 + v).toFixed(3)})` : null,
+  'zenfilters.saturation': (v) => v ? `saturate(${v.toFixed(3)})` : null,  // factor, not offset
+};
+
+function toCssFilter() {
   const parts = [];
-  const exp = adj.exposure || 0;
-  if (Math.abs(exp) > 0.001) parts.push(`brightness(${Math.pow(2, exp).toFixed(3)})`);
-  const con = adj.contrast || 0;
-  if (Math.abs(con) > 0.001) parts.push(`contrast(${(1 + con).toFixed(3)})`);
-  const sat = (adj.saturation || 0) + (adj.vibrance || 0) * 0.5;
-  if (Math.abs(sat) > 0.001) parts.push(`saturate(${(1 + sat).toFixed(3)})`);
+  for (const node of sliderNodes) {
+    const mapper = CSS_FILTER_MAP[node.id];
+    if (!mapper) continue;
+    for (const param of node.params) {
+      const v = adjustments[param.adjustKey];
+      if (v === undefined || v === param.identity) continue;
+      const css = mapper(v);
+      if (css) parts.push(css);
+    }
+  }
   return parts.length ? parts.join(' ') : 'none';
 }
 
 function applyCssPreview() {
-  const f = toCssFilter(adjustments);
-  overviewCanvas.style.filter = f;
-  detailCanvas.style.filter = f;
+  const f = toCssFilter();
+  $('overview-canvas').style.filter = f;
+  $('detail-canvas').style.filter = f;
 }
 
 function clearCssPreview() {
-  overviewCanvas.style.filter = 'none';
-  detailCanvas.style.filter = 'none';
+  $('overview-canvas').style.filter = 'none';
+  $('detail-canvas').style.filter = 'none';
 }
 
 // =====================================================================
-// Rendering (browser-based for now — will be WASM worker)
-//
-// This mock renders using canvas2d to validate the UI architecture.
-// In production, postMessage to a worker running zenpipe Session.
+// Schema-Driven Sidebar Generation
 // =====================================================================
 
-function renderOverview() {
+/** Group display order and labels. */
+const GROUP_ORDER = [
+  'tone', 'tone_range', 'color', 'detail', 'effects',
+  'local', 'creative', 'lens', 'auto',
+];
+const GROUP_LABELS = {
+  tone: 'Tone', tone_range: 'Tone Range', color: 'Color',
+  detail: 'Detail', effects: 'Effects', local: 'Local',
+  creative: 'Creative', lens: 'Lens', auto: 'Auto',
+};
+
+/** Curated list of nodes to show (ordered). Others are hidden. */
+const VISIBLE_NODES = [
+  'zenfilters.exposure', 'zenfilters.contrast',
+  'zenfilters.highlights_shadows',
+  'zenfilters.saturation', 'zenfilters.vibrance', 'zenfilters.temperature', 'zenfilters.tint',
+  'zenfilters.clarity', 'zenfilters.sharpen',
+  'zenfilters.dehaze', 'zenfilters.vignette',
+  'zenfilters.black_point', 'zenfilters.white_point',
+  'zenfilters.auto_levels', 'zenfilters.auto_exposure',
+];
+
+async function loadSchemaAndBuildUI() {
+  let schema;
+  try {
+    const resp = await fetch('schema.json');
+    schema = await resp.json();
+  } catch {
+    $('sidebar').innerHTML = '<p style="color:var(--text-dim);padding:8px">Failed to load schema</p>';
+    return;
+  }
+
+  const defs = schema.$defs || {};
+  const sidebar = $('sidebar');
+  sidebar.innerHTML = '';
+
+  // Group nodes by x-zennode-group
+  const groups = new Map();
+  for (const nodeId of VISIBLE_NODES) {
+    const def = defs[nodeId];
+    if (!def) continue;
+    const group = def['x-zennode-group'] || 'other';
+    if (!groups.has(group)) groups.set(group, []);
+
+    const params = [];
+    for (const [paramName, paramSchema] of Object.entries(def.properties || {})) {
+      if (paramSchema.type !== 'number' && paramSchema.type !== 'integer') continue;
+      const min = paramSchema.minimum ?? 0;
+      const max = paramSchema.maximum ?? 1;
+      const step = paramSchema['x-zennode-step'] ?? 0.05;
+      const defaultVal = paramSchema.default ?? 0;
+      const identity = paramSchema['x-zennode-identity'] ?? defaultVal;
+      const label = paramSchema.title || paramName;
+      const adjustKey = nodeId.replace('zenfilters.', '') + (params.length > 0 ? '_' + paramName : '');
+
+      adjustments[adjustKey] = identity;
+      params.push({ paramName, label, min, max, step, defaultVal, identity, adjustKey });
+    }
+
+    if (params.length > 0) {
+      groups.get(group).push({
+        id: nodeId,
+        title: def.title || nodeId,
+        params,
+      });
+    }
+  }
+
+  // Render groups in order
+  for (const groupKey of GROUP_ORDER) {
+    const nodes = groups.get(groupKey);
+    if (!nodes || nodes.length === 0) continue;
+
+    const groupEl = document.createElement('div');
+    groupEl.className = 'slider-group';
+    groupEl.innerHTML = `<h3>${GROUP_LABELS[groupKey] || groupKey}</h3>`;
+
+    for (const node of nodes) {
+      sliderNodes.push(node);
+      for (const param of node.params) {
+        const row = document.createElement('div');
+        row.className = 'slider-row';
+        row.innerHTML = `
+          <label title="${node.title}: ${param.paramName}">${param.label}</label>
+          <input type="range" min="${param.min}" max="${param.max}"
+                 step="${param.step}" value="${param.identity}"
+                 data-key="${param.adjustKey}" data-identity="${param.identity}">
+          <span class="val">${formatVal(param.identity)}</span>
+        `;
+        const slider = row.querySelector('input');
+        const display = row.querySelector('.val');
+
+        slider.addEventListener('input', () => {
+          adjustments[param.adjustKey] = parseFloat(slider.value);
+          display.textContent = formatVal(adjustments[param.adjustKey]);
+          scheduleRender();
+        });
+
+        // Double-click to reset
+        slider.addEventListener('dblclick', () => {
+          slider.value = param.identity;
+          adjustments[param.adjustKey] = param.identity;
+          display.textContent = formatVal(param.identity);
+          scheduleRender();
+        });
+
+        groupEl.appendChild(row);
+      }
+    }
+    sidebar.appendChild(groupEl);
+  }
+}
+
+function formatVal(v) {
+  return Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(2);
+}
+
+// =====================================================================
+// Rendering
+// =====================================================================
+
+function getFilterAdjustments() {
+  // Map adjustKeys back to the short names the worker expects
+  const adj = {};
+  for (const [key, val] of Object.entries(adjustments)) {
+    // Find identity for this key
+    let identity = 0;
+    for (const node of sliderNodes) {
+      for (const p of node.params) {
+        if (p.adjustKey === key) { identity = p.identity; break; }
+      }
+    }
+    if (val !== identity) adj[key] = val;
+  }
+  return adj;
+}
+
+async function renderOverview() {
   if (!sourceImage) return;
   const id = ++overviewRenderId;
-  overviewSpinner.classList.add('active');
+  $('overview-spinner').classList.add('active');
 
-  // Compute overview dimensions
-  const scale = Math.min(OVERVIEW_MAX / sourceWidth, OVERVIEW_MAX / sourceHeight, 1);
-  const ow = Math.round(sourceWidth * scale);
-  const oh = Math.round(sourceHeight * scale);
-  overviewCanvas.width = ow;
-  overviewCanvas.height = oh;
-
-  // Simulate async render (in production: worker postMessage)
-  requestAnimationFrame(() => {
+  try {
+    const result = await sendToWorker('overview', {
+      adjustments: getFilterAdjustments(),
+      maxDim: OVERVIEW_MAX,
+    });
     if (id !== overviewRenderId) return; // superseded
-    overviewCtx.drawImage(sourceImage, 0, 0, ow, oh);
-    overviewCanvas.classList.add('sharp');
-    overviewSpinner.classList.remove('active');
-    clearCssPreview();
-    updateRegionSelector();
-    statusEl.textContent = `Overview: ${ow}x${oh}`;
-  });
+    const canvas = $('overview-canvas');
+    canvas.width = result.width;
+    canvas.height = result.height;
+    const ctx = canvas.getContext('2d');
+    ctx.putImageData(result.imageData, 0, 0);
+    canvas.classList.add('sharp');
+  } catch (e) {
+    $('status').textContent = `Overview error: ${e.message}`;
+  }
+  $('overview-spinner').classList.remove('active');
+  clearCssPreview();
+  updateRegionSelector();
 }
 
-function renderDetail() {
+async function renderDetail() {
   if (!sourceImage) return;
   const id = ++detailRenderId;
-  detailSpinner.classList.add('active');
+  $('detail-spinner').classList.add('active');
 
-  // Source crop in pixels
-  const sx = Math.round(region.x * sourceWidth);
-  const sy = Math.round(region.y * sourceHeight);
-  const sw = Math.round(region.w * sourceWidth);
-  const sh = Math.round(region.h * sourceHeight);
-
-  // Output size: fit detail canvas
-  const wrap = $('detail-wrap');
-  const maxW = wrap.clientWidth || DETAIL_SIZE;
-  const maxH = wrap.clientHeight || DETAIL_SIZE;
-  const detailScale = Math.min(maxW / sw, maxH / sh, 2); // max 2x upscale
-  const dw = Math.round(sw * detailScale);
-  const dh = Math.round(sh * detailScale);
-  detailCanvas.width = dw;
-  detailCanvas.height = dh;
-
-  // Simulate async render
-  requestAnimationFrame(() => {
+  try {
+    const result = await sendToWorker('region', {
+      adjustments: getFilterAdjustments(),
+      rect: region,
+      maxDim: DETAIL_MAX,
+    });
     if (id !== detailRenderId) return;
-    detailCtx.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, dw, dh);
-    detailSpinner.classList.remove('active');
-    clearCssPreview();
-    statusEl.textContent = `Detail: ${sw}x${sh} → ${dw}x${dh} (region ${Math.round(region.x*100)}%,${Math.round(region.y*100)}%)`;
-  });
+    const canvas = $('detail-canvas');
+    canvas.width = result.width;
+    canvas.height = result.height;
+    const ctx = canvas.getContext('2d');
+    ctx.putImageData(result.imageData, 0, 0);
+  } catch (e) {
+    $('status').textContent = `Detail error: ${e.message}`;
+  }
+  $('detail-spinner').classList.remove('active');
+  clearCssPreview();
 }
 
 function scheduleRender() {
   applyCssPreview();
-  overviewCanvas.classList.remove('sharp');
+  $('overview-canvas').classList.remove('sharp');
   if (renderRafId) cancelAnimationFrame(renderRafId);
   renderRafId = requestAnimationFrame(() => {
     renderOverview();
@@ -462,62 +451,51 @@ function scheduleRender() {
 }
 
 // =====================================================================
-// Region Selector (draggable rectangle on overview)
+// Region Selector
 // =====================================================================
 
 function updateRegionSelector() {
-  const rect = overviewCanvas.getBoundingClientRect();
+  const canvas = $('overview-canvas');
+  const rect = canvas.getBoundingClientRect();
   const wrap = $('overview-wrap').getBoundingClientRect();
-
-  // Canvas position within wrapper
   const cx = rect.left - wrap.left;
   const cy = rect.top - wrap.top;
-
-  regionSelector.style.left = (cx + region.x * rect.width) + 'px';
-  regionSelector.style.top = (cy + region.y * rect.height) + 'px';
-  regionSelector.style.width = (region.w * rect.width) + 'px';
-  regionSelector.style.height = (region.h * rect.height) + 'px';
+  const sel = $('region-selector');
+  sel.style.left = (cx + region.x * rect.width) + 'px';
+  sel.style.top = (cy + region.y * rect.height) + 'px';
+  sel.style.width = (region.w * rect.width) + 'px';
+  sel.style.height = (region.h * rect.height) + 'px';
 }
 
-// Drag logic
 (function() {
-  let dragging = false;
-  let startX, startY, startRegionX, startRegionY;
+  let dragging = false, startX, startY, startRX, startRY;
+  const sel = $('region-selector');
 
-  regionSelector.addEventListener('pointerdown', e => {
+  sel.addEventListener('pointerdown', e => {
     dragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startRegionX = region.x;
-    startRegionY = region.y;
-    regionSelector.setPointerCapture(e.pointerId);
+    startX = e.clientX; startY = e.clientY;
+    startRX = region.x; startRY = region.y;
+    sel.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
 
   window.addEventListener('pointermove', e => {
     if (!dragging) return;
-    const rect = overviewCanvas.getBoundingClientRect();
-    const dx = (e.clientX - startX) / rect.width;
-    const dy = (e.clientY - startY) / rect.height;
-    region.x = Math.max(0, Math.min(1 - region.w, startRegionX + dx));
-    region.y = Math.max(0, Math.min(1 - region.h, startRegionY + dy));
+    const rect = $('overview-canvas').getBoundingClientRect();
+    region.x = Math.max(0, Math.min(1 - region.w, startRX + (e.clientX - startX) / rect.width));
+    region.y = Math.max(0, Math.min(1 - region.h, startRY + (e.clientY - startY) / rect.height));
     updateRegionSelector();
-    // Debounced detail re-render
-    detailSpinner.classList.add('active');
+    $('detail-spinner').classList.add('active');
     if (renderRafId) cancelAnimationFrame(renderRafId);
-    renderRafId = requestAnimationFrame(() => {
-      renderDetail();
-      renderRafId = null;
-    });
+    renderRafId = requestAnimationFrame(() => { renderDetail(); renderRafId = null; });
   });
 
   window.addEventListener('pointerup', () => { dragging = false; });
 })();
 
-// Click on overview to move region center
 $('overview-wrap').addEventListener('click', e => {
-  if (e.target === regionSelector) return;
-  const rect = overviewCanvas.getBoundingClientRect();
+  if (e.target === $('region-selector')) return;
+  const rect = $('overview-canvas').getBoundingClientRect();
   const nx = (e.clientX - rect.left) / rect.width;
   const ny = (e.clientY - rect.top) / rect.height;
   region.x = Math.max(0, Math.min(1 - region.w, nx - region.w / 2));
@@ -526,91 +504,94 @@ $('overview-wrap').addEventListener('click', e => {
   renderDetail();
 });
 
-// Resize observer for region selector
 new ResizeObserver(() => updateRegionSelector()).observe($('overview-wrap'));
-
-// =====================================================================
-// Sliders
-// =====================================================================
-
-sliderNames.forEach(name => {
-  const slider = $('s-' + name);
-  const display = $('v-' + name);
-  adjustments[name] = parseFloat(slider.value);
-
-  slider.addEventListener('input', () => {
-    adjustments[name] = parseFloat(slider.value);
-    display.textContent = adjustments[name].toFixed(1);
-    scheduleRender();
-  });
-});
-
-$('reset-btn').addEventListener('click', () => {
-  sliderNames.forEach(name => {
-    const slider = $('s-' + name);
-    slider.value = 0;
-    $('v-' + name).textContent = '0.0';
-    adjustments[name] = 0;
-  });
-  scheduleRender();
-});
 
 // =====================================================================
 // File Loading
 // =====================================================================
 
-function loadImage(file) {
-  statusEl.textContent = 'Loading...';
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    sourceImage = img;
-    sourceWidth = img.naturalWidth;
-    sourceHeight = img.naturalHeight;
+async function loadImage(file) {
+  $('status').textContent = 'Loading...';
 
-    // Set initial region: center 50%
-    const aspect = sourceWidth / sourceHeight;
-    if (aspect > 1) {
-      region = { x: 0.25, y: 0.1, w: 0.5, h: 0.8 };
-    } else {
-      region = { x: 0.1, y: 0.25, w: 0.8, h: 0.5 };
-    }
+  // Send raw bytes to worker for decoding
+  const buffer = await file.arrayBuffer();
+  const result = await sendToWorker('init', { data: buffer });
 
-    // Show editor
-    dropzone.classList.add('hidden');
-    editorUI.classList.remove('hidden');
+  sourceWidth = result.width;
+  sourceHeight = result.height;
+  sourceImage = true;
 
-    statusEl.textContent = `${sourceWidth}x${sourceHeight} — ${file.name}`;
-    renderOverview();
-    renderDetail();
-  };
-  img.onerror = () => { statusEl.textContent = 'Failed to load image'; };
-  img.src = url;
+  // Set initial region
+  const aspect = sourceWidth / sourceHeight;
+  region = aspect > 1
+    ? { x: 0.25, y: 0.1, w: 0.5, h: 0.8 }
+    : { x: 0.1, y: 0.25, w: 0.8, h: 0.5 };
+
+  $('dropzone').classList.add('hidden');
+  $('editor-ui').classList.remove('hidden');
+  $('status').textContent = `${sourceWidth}\u00d7${sourceHeight} \u2014 ${file.name}`;
+
+  renderOverview();
+  renderDetail();
 }
 
-// File input
 $('file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadImage(e.target.files[0]);
 });
 $('open-btn').addEventListener('click', () => $('file-input').click());
 
-// Drag and drop
-document.addEventListener('dragover', e => {
-  e.preventDefault();
-  dropzone.classList.add('dragover');
-});
-document.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+document.addEventListener('dragover', e => { e.preventDefault(); $('dropzone').classList.add('dragover'); });
+document.addEventListener('dragleave', () => $('dropzone').classList.remove('dragover'));
 document.addEventListener('drop', e => {
   e.preventDefault();
-  dropzone.classList.remove('dragover');
+  $('dropzone').classList.remove('dragover');
   const file = e.dataTransfer?.files[0];
-  if (file && file.type.startsWith('image/')) loadImage(file);
+  if (file?.type.startsWith('image/')) loadImage(file);
 });
 
-// Export (placeholder)
-$('export-btn').addEventListener('click', () => {
-  statusEl.textContent = 'Export not yet connected to WASM worker';
+// Reset all sliders to identity
+$('reset-btn').addEventListener('click', () => {
+  for (const row of document.querySelectorAll('.slider-row')) {
+    const slider = row.querySelector('input');
+    const display = row.querySelector('.val');
+    const identity = parseFloat(slider.dataset.identity);
+    slider.value = identity;
+    adjustments[slider.dataset.key] = identity;
+    display.textContent = formatVal(identity);
+  }
+  scheduleRender();
 });
+
+// Export
+$('export-btn').addEventListener('click', async () => {
+  if (!sourceImage) return;
+  $('status').textContent = 'Exporting...';
+  try {
+    const result = await sendToWorker('export', {
+      adjustments: getFilterAdjustments(),
+      format: 'jpeg',
+      quality: 90,
+    });
+    const blob = new Blob([result.data], { type: 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'export.jpg'; a.click();
+    URL.revokeObjectURL(url);
+    $('status').textContent = `Exported ${(result.size / 1024).toFixed(0)} KB`;
+  } catch (e) {
+    $('status').textContent = `Export error: ${e.message}`;
+  }
+});
+
+// =====================================================================
+// Init
+// =====================================================================
+
+(async function init() {
+  initWorker();
+  await loadSchemaAndBuildUI();
+  $('status').textContent = `${sliderNodes.length} filters loaded \u2014 drop an image to start`;
+})();
 
 </script>
 </body>
