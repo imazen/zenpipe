@@ -179,7 +179,6 @@ let sourceWidth = 0, sourceHeight = 0;
 let region = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
 const adjustments = {};
 let sliderNodes = [];  // Populated from schema
-let renderRafId = null;
 let overviewRenderId = 0, detailRenderId = 0;
 
 const $ = id => document.getElementById(id);
@@ -451,15 +450,30 @@ async function renderDetail() {
   clearCssPreview();
 }
 
+let renderDebounceId = null;
+const RENDER_DEBOUNCE_MS = 50; // Wait for slider to settle
+
 function scheduleRender() {
   applyCssPreview();
   $('overview-canvas').classList.remove('sharp');
-  if (renderRafId) cancelAnimationFrame(renderRafId);
-  renderRafId = requestAnimationFrame(() => {
+  // Debounce: wait for slider activity to pause before dispatching to worker.
+  // CSS preview is instant; worker render waits for the slider to settle.
+  if (renderDebounceId) clearTimeout(renderDebounceId);
+  renderDebounceId = setTimeout(() => {
+    renderDebounceId = null;
+    // Bump version IDs — any in-flight renders will be discarded on arrival.
     renderOverview();
     renderDetail();
-    renderRafId = null;
-  });
+  }, RENDER_DEBOUNCE_MS);
+}
+
+function scheduleDetailOnly() {
+  $('detail-spinner').classList.add('active');
+  if (renderDebounceId) clearTimeout(renderDebounceId);
+  renderDebounceId = setTimeout(() => {
+    renderDebounceId = null;
+    renderDetail();
+  }, RENDER_DEBOUNCE_MS);
 }
 
 // =====================================================================
@@ -497,9 +511,7 @@ function updateRegionSelector() {
     region.x = Math.max(0, Math.min(1 - region.w, startRX + (e.clientX - startX) / rect.width));
     region.y = Math.max(0, Math.min(1 - region.h, startRY + (e.clientY - startY) / rect.height));
     updateRegionSelector();
-    $('detail-spinner').classList.add('active');
-    if (renderRafId) cancelAnimationFrame(renderRafId);
-    renderRafId = requestAnimationFrame(() => { renderDetail(); renderRafId = null; });
+    scheduleDetailOnly();
   });
 
   window.addEventListener('pointerup', () => { dragging = false; });
@@ -513,7 +525,7 @@ $('overview-wrap').addEventListener('click', e => {
   region.x = Math.max(0, Math.min(1 - region.w, nx - region.w / 2));
   region.y = Math.max(0, Math.min(1 - region.h, ny - region.h / 2));
   updateRegionSelector();
-  renderDetail();
+  scheduleDetailOnly();
 });
 
 new ResizeObserver(() => updateRegionSelector()).observe($('overview-wrap'));
