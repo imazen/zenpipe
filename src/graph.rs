@@ -876,6 +876,15 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let out_fmt = format::RGB8_SRGB;
+                // Short-circuit: no extra buffers needed when upstream
+                // already lacks alpha (matte compositing is skipped).
+                if !upstream.format.has_alpha() {
+                    return Ok(SourceInfo {
+                        width: upstream.width,
+                        height: upstream.height,
+                        format: out_fmt,
+                    });
+                }
                 est.streaming_bytes += strip_mem(upstream.width, out_fmt);
                 Ok(SourceInfo {
                     width: upstream.width,
@@ -1573,6 +1582,12 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
+                // Short-circuit: if upstream has no alpha channel, matte
+                // compositing is a no-op — just ensure RGB8 output.
+                if !upstream.format().has_alpha() {
+                    let upstream = ensure_fmt!(upstream, format::RGB8_SRGB, "RemoveAlpha")?;
+                    return Ok((upstream, meta));
+                }
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "RemoveAlpha")?;
                 let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
                 Ok((Box::new(TransformSource::new(upstream).push(op)), meta))
