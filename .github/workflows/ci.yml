@@ -66,8 +66,8 @@ jobs:
         run: cargo test --no-default-features --features "jpeg,webp,png" --lib
       - name: Test (web codecs)
         run: cargo test --no-default-features --features "jpeg,webp,gif,gif-zenquant,png,png-zenquant" --lib
-      - name: Test (avif + jxl decode)
-        run: cargo test --no-default-features --features "avif-decode,jxl-decode" --lib
+      - name: Test (avif + jxl decode + core encoders)
+        run: cargo test --no-default-features --features "avif-decode,jxl-decode,jpeg,webp,png" --lib
       - name: Test (default features)
         run: cargo test --lib
       - name: Test (default + tiff + bitmaps)
