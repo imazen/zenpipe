@@ -15,6 +15,8 @@ use crate::editor::{Editor, Region};
 #[wasm_bindgen]
 pub struct WasmEditor {
     inner: Editor,
+    /// Cached preset thumbnail pixel data from the last render_preset_thumbnails call.
+    preset_thumbnails: Vec<(String, Vec<u8>)>,
 }
 
 /// Result of a render operation: RGBA pixels + dimensions.
@@ -76,6 +78,7 @@ impl WasmEditor {
         }
         Ok(WasmEditor {
             inner: Editor::from_rgba(rgba_data.to_vec(), width, height, overview_max, detail_max),
+            preset_thumbnails: Vec::new(),
         })
     }
 
@@ -95,12 +98,17 @@ impl WasmEditor {
     ///
     /// `adjustments_json` is a JSON object mapping adjustment keys to values,
     /// e.g., `{"exposure": 0.5, "contrast": 0.3}`.
+    /// `film_preset` is an optional film look preset ID (e.g., "portra", "velvia").
     #[wasm_bindgen]
-    pub fn render_overview(&mut self, adjustments_json: &str) -> Result<WasmRenderResult, JsError> {
+    pub fn render_overview(
+        &mut self,
+        adjustments_json: &str,
+        film_preset: Option<String>,
+    ) -> Result<WasmRenderResult, JsError> {
         let adj = parse_adjustments(adjustments_json)?;
         let out = self
             .inner
-            .render_overview(&adj)
+            .render_overview_with_preset(&adj, film_preset.as_deref())
             .map_err(|e| JsError::new(&e))?;
         Ok(WasmRenderResult {
             data: out.data,
@@ -120,18 +128,76 @@ impl WasmEditor {
         y: f32,
         w: f32,
         h: f32,
+        film_preset: Option<String>,
     ) -> Result<WasmRenderResult, JsError> {
         let adj = parse_adjustments(adjustments_json)?;
         let region = Region { x, y, w, h };
         let out = self
             .inner
-            .render_region(&adj, &region)
+            .render_region_with_preset(&adj, &region, film_preset.as_deref())
             .map_err(|e| JsError::new(&e))?;
         Ok(WasmRenderResult {
             data: out.data,
             width: out.width,
             height: out.height,
         })
+    }
+
+    /// Render all film preset thumbnails as a batch.
+    ///
+    /// Returns a JSON string: `[{"id": "portra", "name": "Portra", "width": 48, "height": 36}, ...]`
+    /// The RGBA pixel data for each is returned separately via `get_preset_thumbnail_data`.
+    #[wasm_bindgen]
+    pub fn render_preset_thumbnails(&mut self, thumb_size: u32) -> Result<String, JsError> {
+        let results = self.inner.render_preset_thumbnails(thumb_size);
+        let mut entries = Vec::new();
+        self.preset_thumbnails.clear();
+
+        for (id, name, result) in results {
+            match result {
+                Ok(out) => {
+                    entries.push(serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "width": out.width,
+                        "height": out.height,
+                    }));
+                    self.preset_thumbnails.push((id, out.data));
+                }
+                Err(e) => {
+                    entries.push(serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "error": e,
+                    }));
+                }
+            }
+        }
+
+        Ok(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Get the RGBA pixel data for a specific preset thumbnail by index.
+    ///
+    /// Call after `render_preset_thumbnails`. Index matches the JSON array order.
+    #[wasm_bindgen]
+    pub fn get_preset_thumbnail_data(&self, index: usize) -> Option<js_sys::Uint8Array> {
+        self.preset_thumbnails
+            .get(index)
+            .map(|(_, data)| js_sys::Uint8Array::from(data.as_slice()))
+    }
+
+    /// List all available film preset IDs and names as JSON.
+    ///
+    /// Returns `[{"id": "portra", "name": "Portra"}, ...]`
+    #[wasm_bindgen]
+    pub fn list_presets() -> String {
+        let presets = crate::editor::Editor::list_presets();
+        let entries: Vec<serde_json::Value> = presets
+            .into_iter()
+            .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
+            .collect();
+        serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
     }
 
     /// Get the filter node schema as a JSON string.
