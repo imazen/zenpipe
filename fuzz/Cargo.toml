@@ -26,6 +26,9 @@ zencodec = { path = "../../zencodec" }
 zenjpeg = { path = "../../zenjpeg/zenjpeg" }
 moxcms = { path = "../../../moxcms" }
 zenlayout = { path = "../../zenlayout" }
+ultrahdr-core = { path = "../../ultrahdr/ultrahdr-core" }
+zenavif-parse = { path = "../../zenavif-parse" }
+zennode = { path = "../../zennode/zennode" }
 
 [[bin]]
 name = "fuzz_job_decode"
