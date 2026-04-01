@@ -146,7 +146,7 @@ impl Editor {
         Ok(RenderOutput {
             width: mat.width(),
             height: mat.height(),
-            data: mat.into_data(),
+            data: pack_rgba(&mat),
         })
     }
 
@@ -216,7 +216,7 @@ impl Editor {
         Ok(RenderOutput {
             width: mat.width(),
             height: mat.height(),
-            data: mat.into_data(),
+            data: pack_rgba(&mat),
         })
     }
 }
@@ -278,6 +278,46 @@ impl zenpipe::bridge::NodeConverter for FiltersConverter {
 
 /// Static converter instance for passing to ProcessConfig.
 static FILTERS_CONVERTER: FiltersConverter = FiltersConverter;
+
+/// Extract tightly-packed RGBA8 pixels from a MaterializedSource,
+/// stripping any stride padding and expanding RGB→RGBA if needed.
+fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
+    let w = mat.width() as usize;
+    let h = mat.height() as usize;
+    let bpp = mat.format().bytes_per_pixel();
+    let stride = mat.stride();
+
+    if bpp == 4 {
+        // RGBA8 — just strip stride padding.
+        let row_bytes = w * 4;
+        if stride == row_bytes {
+            return mat.data()[..row_bytes * h].to_vec();
+        }
+        let mut packed = Vec::with_capacity(row_bytes * h);
+        for y in 0..h {
+            let start = y * stride;
+            packed.extend_from_slice(&mat.data()[start..start + row_bytes]);
+        }
+        packed
+    } else if bpp == 3 {
+        // RGB8 → expand to RGBA8 with alpha=255.
+        let mut packed = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            let row_start = y * stride;
+            for x in 0..w {
+                let px = row_start + x * 3;
+                packed.push(mat.data()[px]);
+                packed.push(mat.data()[px + 1]);
+                packed.push(mat.data()[px + 2]);
+                packed.push(255);
+            }
+        }
+        packed
+    } else {
+        // Unsupported format — return empty (shouldn't happen).
+        vec![0u8; w * h * 4]
+    }
+}
 
 fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
     SourceImageInfo {
