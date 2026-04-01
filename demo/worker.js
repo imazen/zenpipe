@@ -48,9 +48,11 @@ class WasmEditorWrapper {
     this.height = h;
   }
 
-  renderOverview(adjustments, maxDim) {
+  renderOverview(adjustments, maxDim, filmPreset) {
     const json = JSON.stringify(adjustments);
-    const result = this.inner.render_overview(json);
+    const result = filmPreset
+      ? this.inner.render_overview(json, filmPreset)
+      : this.inner.render_overview(json);
     const w = result.width;
     const h = result.height;
     const data = new Uint8ClampedArray(result.data.slice().buffer);
@@ -58,9 +60,11 @@ class WasmEditorWrapper {
     return new ImageData(data, w, h);
   }
 
-  renderRegion(adjustments, region, maxDim) {
+  renderRegion(adjustments, region, maxDim, filmPreset) {
     const json = JSON.stringify(adjustments);
-    const result = this.inner.render_region(json, region.x, region.y, region.w, region.h);
+    const result = filmPreset
+      ? this.inner.render_region(json, region.x, region.y, region.w, region.h, filmPreset)
+      : this.inner.render_region(json, region.x, region.y, region.w, region.h);
     const w = result.width;
     const h = result.height;
     const data = new Uint8ClampedArray(result.data.slice().buffer);
@@ -86,7 +90,7 @@ class MockEditor {
     this.height = imageData.height;
   }
 
-  renderOverview(adjustments, maxDim) {
+  renderOverview(adjustments, maxDim, _filmPreset) {
     const scale = Math.min(maxDim / this.width, maxDim / this.height, 1);
     const w = Math.round(this.width * scale);
     const h = Math.round(this.height * scale);
@@ -97,7 +101,7 @@ class MockEditor {
     return ctx.getImageData(0, 0, w, h);
   }
 
-  renderRegion(adjustments, region, maxDim) {
+  renderRegion(adjustments, region, maxDim, _filmPreset) {
     const sx = Math.round(region.x * this.width);
     const sy = Math.round(region.y * this.height);
     const sw = Math.max(1, Math.round(region.w * this.width));
@@ -174,6 +178,7 @@ self.addEventListener('message', async (e) => {
         const result = editor.renderOverview(
           msg.adjustments || {},
           msg.maxDim || 512,
+          msg.film_preset || null,
         );
         // Send raw RGBA bytes + dimensions (not ImageData — its buffer
         // gets detached on transfer, breaking putImageData on the main thread).
@@ -191,6 +196,7 @@ self.addEventListener('message', async (e) => {
           msg.adjustments || {},
           msg.rect || { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },
           msg.maxDim || 800,
+          msg.film_preset || null,
         );
         const pixels = new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
         self.postMessage(
@@ -206,6 +212,7 @@ self.addEventListener('message', async (e) => {
         const result = editor.renderOverview(
           msg.adjustments || {},
           Math.max(editor.width, editor.height),
+          msg.film_preset || null,
         );
         const canvas = new OffscreenCanvas(result.width, result.height);
         const ctx = canvas.getContext('2d');
