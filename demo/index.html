@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zenpipe Editor</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1a1a;
+  --surface: #242424;
+  --border: #333;
+  --text: #e0e0e0;
+  --text-dim: #888;
+  --accent: #4a9eff;
+  --accent-dim: rgba(74, 158, 255, 0.3);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  grid-template-rows: auto 1fr;
+}
+
+/* ─── Header ─── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+#status {
+  color: var(--text-dim);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ─── Main viewport ─── */
+main {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* ─── Detail view (large) ─── */
+#detail-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#detail-canvas {
+  image-rendering: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Spinner overlay */
+.spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.spinner-overlay.active { opacity: 1; }
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Overview strip (bottom of main) ─── */
+#overview-wrap {
+  position: relative;
+  height: 120px;
+  min-height: 80px;
+  background: #111;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#overview-canvas {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  filter: blur(1px);
+  transition: filter 0.2s;
+}
+#overview-canvas.sharp { filter: none; }
+
+/* Draggable region selector on overview */
+#region-selector {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: var(--accent-dim);
+  cursor: move;
+  border-radius: 2px;
+  min-width: 20px;
+  min-height: 20px;
+  touch-action: none;
+}
+
+/* ─── Sidebar (sliders) ─── */
+aside {
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.slider-group h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 36px;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+}
+
+.slider-row label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.slider-row .val {
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* ─── Drop zone ─── */
+#dropzone {
+  grid-column: 1 / -1;
+  grid-row: 2 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+#dropzone.hidden { display: none; }
+#dropzone.dragover { background: var(--accent-dim); }
+
+#editor-ui { display: contents; }
+#editor-ui.hidden > * { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>zenpipe</h1>
+  <button class="btn" id="open-btn">Open</button>
+  <button class="btn" id="reset-btn">Reset</button>
+  <button class="btn btn-primary" id="export-btn">Export</button>
+  <span id="status">Drop an image to start</span>
+</header>
+
+<!-- Drop zone (shown before image loaded) -->
+<div id="dropzone">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <path d="M12 16V4M12 4l-4 4m4-4l4 4"/>
+    <path d="M20 16v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2"/>
+  </svg>
+  <span>Drop an image here, or click Open</span>
+  <input type="file" id="file-input" accept="image/*" hidden>
+</div>
+
+<!-- Editor UI (hidden until image loaded) -->
+<div id="editor-ui" class="hidden">
+  <main>
+    <div id="detail-wrap">
+      <canvas id="detail-canvas"></canvas>
+      <div class="spinner-overlay" id="detail-spinner">
+        <div class="spinner"></div>
+      </div>
+    </div>
+    <div id="overview-wrap">
+      <canvas id="overview-canvas"></canvas>
+      <div id="region-selector"></div>
+      <div class="spinner-overlay" id="overview-spinner">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </main>
+
+  <aside>
+    <div class="slider-group">
+      <h3>Light</h3>
+      <div class="slider-row">
+        <label>Exposure</label>
+        <input type="range" id="s-exposure" min="-3" max="3" step="0.05" value="0">
+        <span class="val" id="v-exposure">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Contrast</label>
+        <input type="range" id="s-contrast" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-contrast">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Highlights</label>
+        <input type="range" id="s-highlights" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-highlights">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Shadows</label>
+        <input type="range" id="s-shadows" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-shadows">0.0</span>
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <h3>Color</h3>
+      <div class="slider-row">
+        <label>Saturation</label>
+        <input type="range" id="s-saturation" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-saturation">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Vibrance</label>
+        <input type="range" id="s-vibrance" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-vibrance">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Temperature</label>
+        <input type="range" id="s-temperature" min="-1" max="1" step="0.05" value="0">
+        <span class="val" id="v-temperature">0.0</span>
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <h3>Detail</h3>
+      <div class="slider-row">
+        <label>Clarity</label>
+        <input type="range" id="s-clarity" min="0" max="1" step="0.05" value="0">
+        <span class="val" id="v-clarity">0.0</span>
+      </div>
+      <div class="slider-row">
+        <label>Sharpen</label>
+        <input type="range" id="s-sharpen" min="0" max="1" step="0.05" value="0">
+        <span class="val" id="v-sharpen">0.0</span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// =====================================================================
+// State
+// =====================================================================
+
+const OVERVIEW_MAX = 512;
+const DETAIL_SIZE = 800; // detail crop output size
+
+let sourceImage = null;   // original HTMLImageElement (decoded by browser)
+let sourceWidth = 0;
+let sourceHeight = 0;
+
+// Normalized region rect (0..1) — what the detail view shows
+let region = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+
+// Current adjustment values
+const adjustments = {};
+const sliderNames = [
+  'exposure', 'contrast', 'highlights', 'shadows',
+  'saturation', 'vibrance', 'temperature',
+  'clarity', 'sharpen',
+];
+
+// Render state
+let overviewRenderId = 0;
+let detailRenderId = 0;
+let renderRafId = null;
+
+// =====================================================================
+// Elements
+// =====================================================================
+
+const $ = id => document.getElementById(id);
+const dropzone = $('dropzone');
+const editorUI = $('editor-ui');
+const overviewCanvas = $('overview-canvas');
+const detailCanvas = $('detail-canvas');
+const overviewCtx = overviewCanvas.getContext('2d');
+const detailCtx = detailCanvas.getContext('2d');
+const regionSelector = $('region-selector');
+const overviewSpinner = $('overview-spinner');
+const detailSpinner = $('detail-spinner');
+const statusEl = $('status');
+
+// =====================================================================
+// CSS Filter Approximation
+// =====================================================================
+
+function toCssFilter(adj) {
+  const parts = [];
+  const exp = adj.exposure || 0;
+  if (Math.abs(exp) > 0.001) parts.push(`brightness(${Math.pow(2, exp).toFixed(3)})`);
+  const con = adj.contrast || 0;
+  if (Math.abs(con) > 0.001) parts.push(`contrast(${(1 + con).toFixed(3)})`);
+  const sat = (adj.saturation || 0) + (adj.vibrance || 0) * 0.5;
+  if (Math.abs(sat) > 0.001) parts.push(`saturate(${(1 + sat).toFixed(3)})`);
+  return parts.length ? parts.join(' ') : 'none';
+}
+
+function applyCssPreview() {
+  const f = toCssFilter(adjustments);
+  overviewCanvas.style.filter = f;
+  detailCanvas.style.filter = f;
+}
+
+function clearCssPreview() {
+  overviewCanvas.style.filter = 'none';
+  detailCanvas.style.filter = 'none';
+}
+
+// =====================================================================
+// Rendering (browser-based for now — will be WASM worker)
+//
+// This mock renders using canvas2d to validate the UI architecture.
+// In production, postMessage to a worker running zenpipe Session.
+// =====================================================================
+
+function renderOverview() {
+  if (!sourceImage) return;
+  const id = ++overviewRenderId;
+  overviewSpinner.classList.add('active');
+
+  // Compute overview dimensions
+  const scale = Math.min(OVERVIEW_MAX / sourceWidth, OVERVIEW_MAX / sourceHeight, 1);
+  const ow = Math.round(sourceWidth * scale);
+  const oh = Math.round(sourceHeight * scale);
+  overviewCanvas.width = ow;
+  overviewCanvas.height = oh;
+
+  // Simulate async render (in production: worker postMessage)
+  requestAnimationFrame(() => {
+    if (id !== overviewRenderId) return; // superseded
+    overviewCtx.drawImage(sourceImage, 0, 0, ow, oh);
+    overviewCanvas.classList.add('sharp');
+    overviewSpinner.classList.remove('active');
+    clearCssPreview();
+    updateRegionSelector();
+    statusEl.textContent = `Overview: ${ow}x${oh}`;
+  });
+}
+
+function renderDetail() {
+  if (!sourceImage) return;
+  const id = ++detailRenderId;
+  detailSpinner.classList.add('active');
+
+  // Source crop in pixels
+  const sx = Math.round(region.x * sourceWidth);
+  const sy = Math.round(region.y * sourceHeight);
+  const sw = Math.round(region.w * sourceWidth);
+  const sh = Math.round(region.h * sourceHeight);
+
+  // Output size: fit detail canvas
+  const wrap = $('detail-wrap');
+  const maxW = wrap.clientWidth || DETAIL_SIZE;
+  const maxH = wrap.clientHeight || DETAIL_SIZE;
+  const detailScale = Math.min(maxW / sw, maxH / sh, 2); // max 2x upscale
+  const dw = Math.round(sw * detailScale);
+  const dh = Math.round(sh * detailScale);
+  detailCanvas.width = dw;
+  detailCanvas.height = dh;
+
+  // Simulate async render
+  requestAnimationFrame(() => {
+    if (id !== detailRenderId) return;
+    detailCtx.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, dw, dh);
+    detailSpinner.classList.remove('active');
+    clearCssPreview();
+    statusEl.textContent = `Detail: ${sw}x${sh} → ${dw}x${dh} (region ${Math.round(region.x*100)}%,${Math.round(region.y*100)}%)`;
+  });
+}
+
+function scheduleRender() {
+  applyCssPreview();
+  overviewCanvas.classList.remove('sharp');
+  if (renderRafId) cancelAnimationFrame(renderRafId);
+  renderRafId = requestAnimationFrame(() => {
+    renderOverview();
+    renderDetail();
+    renderRafId = null;
+  });
+}
+
+// =====================================================================
+// Region Selector (draggable rectangle on overview)
+// =====================================================================
+
+function updateRegionSelector() {
+  const rect = overviewCanvas.getBoundingClientRect();
+  const wrap = $('overview-wrap').getBoundingClientRect();
+
+  // Canvas position within wrapper
+  const cx = rect.left - wrap.left;
+  const cy = rect.top - wrap.top;
+
+  regionSelector.style.left = (cx + region.x * rect.width) + 'px';
+  regionSelector.style.top = (cy + region.y * rect.height) + 'px';
+  regionSelector.style.width = (region.w * rect.width) + 'px';
+  regionSelector.style.height = (region.h * rect.height) + 'px';
+}
+
+// Drag logic
+(function() {
+  let dragging = false;
+  let startX, startY, startRegionX, startRegionY;
+
+  regionSelector.addEventListener('pointerdown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startRegionX = region.x;
+    startRegionY = region.y;
+    regionSelector.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rect = overviewCanvas.getBoundingClientRect();
+    const dx = (e.clientX - startX) / rect.width;
+    const dy = (e.clientY - startY) / rect.height;
+    region.x = Math.max(0, Math.min(1 - region.w, startRegionX + dx));
+    region.y = Math.max(0, Math.min(1 - region.h, startRegionY + dy));
+    updateRegionSelector();
+    // Debounced detail re-render
+    detailSpinner.classList.add('active');
+    if (renderRafId) cancelAnimationFrame(renderRafId);
+    renderRafId = requestAnimationFrame(() => {
+      renderDetail();
+      renderRafId = null;
+    });
+  });
+
+  window.addEventListener('pointerup', () => { dragging = false; });
+})();
+
+// Click on overview to move region center
+$('overview-wrap').addEventListener('click', e => {
+  if (e.target === regionSelector) return;
+  const rect = overviewCanvas.getBoundingClientRect();
+  const nx = (e.clientX - rect.left) / rect.width;
+  const ny = (e.clientY - rect.top) / rect.height;
+  region.x = Math.max(0, Math.min(1 - region.w, nx - region.w / 2));
+  region.y = Math.max(0, Math.min(1 - region.h, ny - region.h / 2));
+  updateRegionSelector();
+  renderDetail();
+});
+
+// Resize observer for region selector
+new ResizeObserver(() => updateRegionSelector()).observe($('overview-wrap'));
+
+// =====================================================================
+// Sliders
+// =====================================================================
+
+sliderNames.forEach(name => {
+  const slider = $('s-' + name);
+  const display = $('v-' + name);
+  adjustments[name] = parseFloat(slider.value);
+
+  slider.addEventListener('input', () => {
+    adjustments[name] = parseFloat(slider.value);
+    display.textContent = adjustments[name].toFixed(1);
+    scheduleRender();
+  });
+});
+
+$('reset-btn').addEventListener('click', () => {
+  sliderNames.forEach(name => {
+    const slider = $('s-' + name);
+    slider.value = 0;
+    $('v-' + name).textContent = '0.0';
+    adjustments[name] = 0;
+  });
+  scheduleRender();
+});
+
+// =====================================================================
+// File Loading
+// =====================================================================
+
+function loadImage(file) {
+  statusEl.textContent = 'Loading...';
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    sourceImage = img;
+    sourceWidth = img.naturalWidth;
+    sourceHeight = img.naturalHeight;
+
+    // Set initial region: center 50%
+    const aspect = sourceWidth / sourceHeight;
+    if (aspect > 1) {
+      region = { x: 0.25, y: 0.1, w: 0.5, h: 0.8 };
+    } else {
+      region = { x: 0.1, y: 0.25, w: 0.8, h: 0.5 };
+    }
+
+    // Show editor
+    dropzone.classList.add('hidden');
+    editorUI.classList.remove('hidden');
+
+    statusEl.textContent = `${sourceWidth}x${sourceHeight} — ${file.name}`;
+    renderOverview();
+    renderDetail();
+  };
+  img.onerror = () => { statusEl.textContent = 'Failed to load image'; };
+  img.src = url;
+}
+
+// File input
+$('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadImage(e.target.files[0]);
+});
+$('open-btn').addEventListener('click', () => $('file-input').click());
+
+// Drag and drop
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+});
+document.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer?.files[0];
+  if (file && file.type.startsWith('image/')) loadImage(file);
+});
+
+// Export (placeholder)
+$('export-btn').addEventListener('click', () => {
+  statusEl.textContent = 'Export not yet connected to WASM worker';
+});
+
+</script>
+</body>
+</html>
