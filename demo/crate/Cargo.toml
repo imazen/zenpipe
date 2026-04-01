@@ -16,6 +16,7 @@ zenpipe = { path = "../..", features = ["zennode", "std", "nodes-filters", "json
 zennode = { path = "../../../zennode/zennode", features = ["derive"] }
 zenfilters = { path = "../../../zenfilters", features = ["zennode"] }
 zencodec = { path = "../../../zencodec", default-features = false }
+enough = { version = "0.4", default-features = false }
 serde_json = "1"
 
 # WASM-specific deps (optional for native testing)

@@ -2,12 +2,27 @@
 //! from cached geometry prefixes when only filters change.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use zenpipe::Source;
 use zenpipe::format::RGBA8_SRGB;
 use zenpipe::orchestrate::{ProcessConfig, SourceImageInfo};
 use zenpipe::session::Session;
 use zenpipe::sources::MaterializedSource;
+
+/// AtomicBool-backed cancellation token for `enough::Stop`.
+struct AtomicStop(Arc<AtomicBool>);
+
+impl enough::Stop for AtomicStop {
+    fn check(&self) -> Result<(), enough::StopReason> {
+        if self.0.load(Ordering::Relaxed) {
+            Err(enough::StopReason::Cancelled)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 /// Normalized rectangle (0..1 coordinates relative to source image).
 #[derive(Clone, Debug)]
@@ -59,6 +74,14 @@ pub struct Editor {
 
     /// Source hash for Session cache keying.
     source_hash: u64,
+
+    /// Cancel flag for the current overview render.
+    /// Calling `cancel_overview()` sets this to `true`. Each new render
+    /// replaces the Arc with a fresh `false` flag — prior cancellations
+    /// don't affect new renders.
+    overview_cancel: Arc<AtomicBool>,
+    /// Cancel flag for the current detail render.
+    detail_cancel: Arc<AtomicBool>,
 }
 
 impl Editor {
@@ -92,7 +115,19 @@ impl Editor {
             overview_max,
             detail_max,
             source_hash,
+            overview_cancel: Arc::new(AtomicBool::new(false)),
+            detail_cancel: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Cancel any in-progress overview render.
+    pub fn cancel_overview(&self) {
+        self.overview_cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Cancel any in-progress detail render.
+    pub fn cancel_detail(&self) {
+        self.detail_cancel.store(true, Ordering::Relaxed);
     }
 
     pub fn source_width(&self) -> u32 {
@@ -146,12 +181,18 @@ impl Editor {
             trace_config: None,
         };
 
+        // Cancel any in-flight overview render, then swap in a fresh flag.
+        self.overview_cancel.store(true, Ordering::Relaxed);
+        let fresh = Arc::new(AtomicBool::new(false));
+        self.overview_cancel = Arc::clone(&fresh);
+        let stop = AtomicStop(fresh);
+
         let output = self
             .overview_session
-            .stream(source, &config, None, self.source_hash)
+            .stream_stoppable(source, &config, None, self.source_hash, &stop)
             .map_err(|e| format!("overview render: {e}"))?;
 
-        let mat = MaterializedSource::from_source(output.source)
+        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
             .map_err(|e| format!("overview materialize: {e}"))?;
 
         Ok(RenderOutput {
@@ -227,12 +268,18 @@ impl Editor {
             h.finish()
         };
 
+        // Cancel any in-flight detail render, then swap in a fresh flag.
+        self.detail_cancel.store(true, Ordering::Relaxed);
+        let fresh = Arc::new(AtomicBool::new(false));
+        self.detail_cancel = Arc::clone(&fresh);
+        let stop = AtomicStop(fresh);
+
         let output = self
             .detail_session
-            .stream(source, &config, None, region_hash)
+            .stream_stoppable(source, &config, None, region_hash, &stop)
             .map_err(|e| format!("detail render: {e}"))?;
 
-        let mat = MaterializedSource::from_source(output.source)
+        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
             .map_err(|e| format!("detail materialize: {e}"))?;
 
         Ok(RenderOutput {
@@ -682,6 +729,56 @@ mod tests {
         adj.insert("saturation".into(), 0.2);
         let out = editor.render_overview(&adj).unwrap();
         assert!(out.width > 0);
+    }
+
+    #[test]
+    fn cancel_then_next_render_succeeds() {
+        let pixels = solid_rgba(400, 300, 128, 128, 128);
+        let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
+        let mut adj = BTreeMap::new();
+        adj.insert("exposure".into(), 0.5);
+
+        // Cancel the (nonexistent) in-flight render.
+        editor.cancel_overview();
+
+        // Next render gets a fresh flag and should succeed.
+        let result = editor.render_overview(&adj);
+        assert!(result.is_ok(), "render after cancel should succeed");
+    }
+
+    #[test]
+    fn cancel_detail_then_render_succeeds() {
+        let pixels = solid_rgba(400, 300, 128, 128, 128);
+        let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
+        let mut adj = BTreeMap::new();
+        adj.insert("exposure".into(), 0.5);
+        let region = Region::default();
+
+        editor.cancel_detail();
+        let result = editor.render_region(&adj, &region);
+        assert!(result.is_ok(), "render after cancel should succeed");
+    }
+
+    #[test]
+    fn concurrent_cancel_flag_is_independent() {
+        let pixels = solid_rgba(400, 300, 128, 128, 128);
+        let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
+        let mut adj = BTreeMap::new();
+        adj.insert("exposure".into(), 0.5);
+
+        // Capture the cancel flag before rendering.
+        let old_cancel = Arc::clone(&editor.overview_cancel);
+
+        // Render — this swaps in a fresh flag.
+        let _out = editor.render_overview(&adj).unwrap();
+
+        // The old flag should NOT affect the new render.
+        old_cancel.store(true, Ordering::Relaxed);
+        let result = editor.render_overview(&adj);
+        assert!(
+            result.is_ok(),
+            "old cancel flag should not affect new render"
+        );
     }
 
     #[test]

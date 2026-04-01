@@ -660,6 +660,7 @@ dependencies = [
 name = "zenpipe-demo"
 version = "0.1.0"
 dependencies = [
+ "enough",
  "js-sys",
  "serde_json",
  "wasm-bindgen",
