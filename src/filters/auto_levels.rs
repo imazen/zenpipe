@@ -141,7 +141,10 @@ impl AutoLevels {
         let (in_black, in_white) = if self.clip_low < 1e-7 && self.clip_high < 1e-7 {
             // Smart plateau detection: walk inward until we hit a significant bin.
             let low_bin = hist.iter().position(|&v| v >= threshold).unwrap_or(0);
-            let high_bin = hist.iter().rposition(|&v| v >= threshold).unwrap_or(HIST_BINS - 1);
+            let high_bin = hist
+                .iter()
+                .rposition(|&v| v >= threshold)
+                .unwrap_or(HIST_BINS - 1);
             if high_bin <= low_bin {
                 return None;
             }
@@ -340,8 +343,7 @@ static AUTO_LEVELS_SCHEMA: FilterSchema = FilterSchema {
         ParamDesc {
             name: "clip_low",
             label: "Clip Low",
-            description:
-                "Fraction of pixels to clip at the dark end. 0 = smart plateau detection.",
+            description: "Fraction of pixels to clip at the dark end. 0 = smart plateau detection.",
             kind: ParamKind::Float {
                 min: 0.0,
                 max: 0.1,
@@ -356,8 +358,7 @@ static AUTO_LEVELS_SCHEMA: FilterSchema = FilterSchema {
         ParamDesc {
             name: "clip_high",
             label: "Clip High",
-            description:
-                "Fraction of pixels to clip at the bright end. 0 = smart plateau detection.",
+            description: "Fraction of pixels to clip at the bright end. 0 = smart plateau detection.",
             kind: ParamKind::Float {
                 min: 0.0,
                 max: 0.1,
@@ -372,8 +373,7 @@ static AUTO_LEVELS_SCHEMA: FilterSchema = FilterSchema {
         ParamDesc {
             name: "target_midpoint",
             label: "Midpoint Target",
-            description:
-                "Move the median luminance to this value via gamma correction. 0 = off.",
+            description: "Move the median luminance to this value via gamma correction. 0 = off.",
             kind: ParamKind::Float {
                 min: 0.0,
                 max: 1.0,
@@ -388,8 +388,7 @@ static AUTO_LEVELS_SCHEMA: FilterSchema = FilterSchema {
         ParamDesc {
             name: "scale_chroma",
             label: "Scale Chroma",
-            description:
-                "Scale a/b channels by the same factor as L (raises saturation on stretch).",
+            description: "Scale a/b channels by the same factor as L (raises saturation on stretch).",
             kind: ParamKind::Bool { default: false },
             unit: "",
             section: "Color",
@@ -527,7 +526,11 @@ mod tests {
         let n = 1001usize;
         let mut planes = OklabPlanes::new(n as u32, 1);
         for (i, v) in planes.l.iter_mut().enumerate() {
-            *v = if i == 0 { 0.95 } else { 0.2 + (i as f32 / n as f32) * 0.4 };
+            *v = if i == 0 {
+                0.95
+            } else {
+                0.2 + (i as f32 / n as f32) * 0.4
+            };
         }
         AutoLevels::default().apply(&mut planes, &mut FilterContext::new());
         // The outlier (index 0) should be clipped to 1.0, not drive the stretch.
@@ -549,7 +552,15 @@ mod tests {
         // 100 pixels: 5 low outliers (0.05), 90 body (0.5), 5 high outliers (0.95).
         let mut planes = OklabPlanes::new(100, 1);
         planes.l = (0..100)
-            .map(|i| if i < 5 { 0.05f32 } else if i >= 95 { 0.95 } else { 0.5 })
+            .map(|i| {
+                if i < 5 {
+                    0.05f32
+                } else if i >= 95 {
+                    0.95
+                } else {
+                    0.5
+                }
+            })
             .collect();
         AutoLevels {
             clip_low: 0.06,
@@ -562,7 +573,10 @@ mod tests {
         // All body pixels should end up at the same value.
         let body: alloc::vec::Vec<_> = planes.l[5..95].to_vec();
         let all_same = body.windows(2).all(|w| (w[0] - w[1]).abs() < 1e-4);
-        assert!(all_same, "body pixels should all map to same value after clip");
+        assert!(
+            all_same,
+            "body pixels should all map to same value after clip"
+        );
     }
 
     #[test]
@@ -602,7 +616,10 @@ mod tests {
         }
         .apply(&mut planes, &mut FilterContext::new());
         for (a, b) in planes.a.iter().zip(original_a.iter()) {
-            assert!((a - b).abs() < 1e-6, "chroma changed with scale_chroma=false");
+            assert!(
+                (a - b).abs() < 1e-6,
+                "chroma changed with scale_chroma=false"
+            );
         }
     }
 

@@ -2198,7 +2198,10 @@ pub fn node_to_filter(
                     })
                     .collect()
             }
-            fn str_param(node: &dyn zennode::traits::NodeInstance, name: &str) -> alloc::string::String {
+            fn str_param(
+                node: &dyn zennode::traits::NodeInstance,
+                name: &str,
+            ) -> alloc::string::String {
                 node.get_param(name)
                     .and_then(|p| match p {
                         ParamValue::Str(s) => Some(s),
@@ -2210,7 +2213,9 @@ pub fn node_to_filter(
             let g_pts = parse_curve_points(&str_param(node, "green_points"));
             let b_pts = parse_curve_points(&str_param(node, "blue_points"));
             if r_pts.len() >= 2 && g_pts.len() >= 2 && b_pts.len() >= 2 {
-                Some(alloc::boxed::Box::new(ChannelCurves::from_points(&r_pts, &g_pts, &b_pts)))
+                Some(alloc::boxed::Box::new(ChannelCurves::from_points(
+                    &r_pts, &g_pts, &b_pts,
+                )))
             } else {
                 Some(alloc::boxed::Box::new(ChannelCurves::default()))
             }
@@ -2227,7 +2232,8 @@ pub fn node_to_filter(
             },
         })),
         "zenfilters.edge_detect" => {
-            let mode_int = node.get_param("mode")
+            let mode_int = node
+                .get_param("mode")
                 .and_then(|p| match p {
                     ParamValue::I32(v) => Some(v),
                     _ => None,
@@ -2281,19 +2287,24 @@ pub fn node_to_filter(
             },
         })),
         "zenfilters.median_blur" => {
-            let radius = node.get_param("radius")
+            let radius = node
+                .get_param("radius")
                 .and_then(|p| match p {
                     ParamValue::I32(v) => Some(v as u32),
                     _ => None,
                 })
                 .unwrap_or(1);
-            let filter_chroma = node.get_param("filter_chroma")
+            let filter_chroma = node
+                .get_param("filter_chroma")
                 .and_then(|p| match p {
                     ParamValue::Bool(v) => Some(v),
                     _ => None,
                 })
                 .unwrap_or(false);
-            Some(alloc::boxed::Box::new(MedianBlur { radius, filter_chroma }))
+            Some(alloc::boxed::Box::new(MedianBlur {
+                radius,
+                filter_chroma,
+            }))
         }
         "zenfilters.tone_equalizer" => {
             let zones = match node.get_param("zones") {
