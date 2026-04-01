@@ -18,14 +18,14 @@ use zennode::*;
 use zenpipe::bridge::{self, NodeConverter};
 use zenpipe::graph::NodeOp;
 use zenpipe::sources::MaterializedSource;
-use zenpipe::{PipeError, Source, format};
+use zenpipe::{Source, format};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Test infrastructure
 // ═══════════════════════════════════════════════════════════════════════
 
 fn solid_source(w: u32, h: u32) -> Box<dyn Source> {
-    let bpp = format::RGBA8_SRGB.bytes_per_pixel() as usize;
+    let bpp = format::RGBA8_SRGB.bytes_per_pixel();
     let data = vec![128u8; w as usize * h as usize * bpp];
     Box::new(MaterializedSource::from_data(
         data,

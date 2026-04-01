@@ -131,6 +131,10 @@ codec-corpus = "1"
 imgref = "1.12"
 rgb = { version = "0.8", features = ["as-bytes"] }
 
+[[example]]
+name = "bench_windowed"
+required-features = ["std"]
+
 [package.metadata.superwork.ci]
 strategy = "git_url"
 delete = ["imageflow_types", "imageflow_riapi"]

@@ -442,8 +442,10 @@ fn lossless_fallback_for_non_jpeg_output() {
     let jpeg_data = generate_test_jpeg(64, 48);
 
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockRotate90Node::boxed()];
-    let mut encode_config = EncodeConfig::default();
-    encode_config.format = Some("webp".to_string());
+    let encode_config = EncodeConfig {
+        format: Some("webp".to_string()),
+        ..Default::default()
+    };
 
     let result = try_lossless_jpeg(&jpeg_data, &nodes, &encode_config, 1, &enough::Unstoppable)
         .expect("should not error");

@@ -994,6 +994,7 @@ fn graph_crop_whitespace_uniform_image_noop() {
 // Graph compilation: Analyze
 // =============================================================================
 
+#[cfg(feature = "std")]
 #[test]
 fn graph_analyze_custom_analysis() {
     // Analyze: materialize, inspect, return as-is
@@ -1024,6 +1025,7 @@ fn graph_analyze_custom_analysis() {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn graph_analyze_modifies_pipeline() {
     // Analyze: materialize, then crop via returned source
@@ -1290,6 +1292,7 @@ fn estimate_crop_whitespace() {
     assert!(est.materializes);
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn estimate_analyze() {
     let mut g = PipelineGraph::new();

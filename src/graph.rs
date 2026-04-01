@@ -469,8 +469,9 @@ const MAX_GRAPH_DEPTH: usize = 256;
 #[cfg(feature = "std")]
 use crate::trace::UpstreamMeta;
 
-// Minimal UpstreamMeta for no_std builds.
+// Minimal UpstreamMeta for no_std builds — fields captured for API parity but not consumed.
 #[cfg(not(feature = "std"))]
+#[allow(dead_code)]
 struct UpstreamMeta {
     format: PixelFormat,
     width: u32,
