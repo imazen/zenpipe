@@ -105,9 +105,9 @@ mod tests {
 
         // After flip, order should be D, C, B, A.
         // D: white
-        assert_eq!(&row[0 * bpp..1 * bpp], &[255, 255, 255, 255]);
+        assert_eq!(&row[..bpp], &[255, 255, 255, 255]);
         // C: blue
-        assert_eq!(&row[1 * bpp..2 * bpp], &[0, 0, 255, 255]);
+        assert_eq!(&row[bpp..2 * bpp], &[0, 0, 255, 255]);
         // B: green
         assert_eq!(&row[2 * bpp..3 * bpp], &[0, 255, 0, 255]);
         // A: red

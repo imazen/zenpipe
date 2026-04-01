@@ -45,9 +45,10 @@ pub enum FitMode {
 }
 
 /// How to compute the bounding box from canvas dimensions.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum FitBox {
     /// Full canvas (no margins).
+    #[default]
     FullCanvas,
     /// Pixel margins from canvas edges.
     Margins {
@@ -61,11 +62,6 @@ pub enum FitBox {
     Percentage { x1: f32, y1: f32, x2: f32, y2: f32 },
 }
 
-impl Default for FitBox {
-    fn default() -> Self {
-        Self::FullCanvas
-    }
-}
 
 /// Gravity: where to anchor the watermark within its bounding box.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

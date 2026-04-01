@@ -1150,7 +1150,7 @@ impl NodeDef for FlipRiapiDef {
                 kv.warn(
                     "flip",
                     zennode::kv::KvWarningKind::InvalidValue,
-                    &alloc::format!("unknown flip value '{val}', expected h/v/both/none"),
+                    alloc::format!("unknown flip value '{val}', expected h/v/both/none"),
                 );
                 Ok(None)
             }
@@ -1215,7 +1215,7 @@ impl NodeDef for RotateRiapiDef {
             kv.warn(
                 "rotate",
                 zennode::kv::KvWarningKind::InvalidValue,
-                &alloc::format!("cannot parse '{val}' as degrees"),
+                alloc::format!("cannot parse '{val}' as degrees"),
             );
             0.0
         });
@@ -1463,7 +1463,7 @@ impl NodeDef for CropRiapiDef {
             kv.warn(
                 "crop",
                 zennode::kv::KvWarningKind::InvalidValue,
-                &alloc::format!(
+                alloc::format!(
                     "crop requires 4 comma-separated values, got {}",
                     parts.len()
                 ),
@@ -1474,7 +1474,7 @@ impl NodeDef for CropRiapiDef {
         let parse_f = |s: &str, idx: usize| -> core::result::Result<f32, NodeError> {
             s.trim().parse::<f32>().map_err(|_| {
                 NodeError::Other(
-                    alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32").into(),
+                    alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32"),
                 )
             })
         };

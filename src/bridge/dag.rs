@@ -273,9 +273,9 @@ fn identify_chains(dag: &[DagNode], successor_count: &[usize]) -> Vec<Chain> {
     }
 
     // Pick up any unvisited nodes (isolated or in cycles — shouldn't happen in valid DAGs).
-    for i in 0..dag.len() {
-        if !visited[i] {
-            visited[i] = true;
+    for (i, v) in visited[..dag.len()].iter_mut().enumerate() {
+        if !*v {
+            *v = true;
             chains.push(Chain::Single(i));
         }
     }
@@ -445,9 +445,10 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn make_source(w: u32, h: u32) -> Box<dyn crate::Source> {
         use crate::sources::MaterializedSource;
-        let bpp = crate::format::RGBA8_SRGB.bytes_per_pixel() as usize;
+        let bpp = crate::format::RGBA8_SRGB.bytes_per_pixel();
         let data = alloc::vec![128u8; w as usize * h as usize * bpp];
         let mat = MaterializedSource::from_data(data, w, h, crate::format::RGBA8_SRGB);
         Box::new(mat)

@@ -1348,7 +1348,7 @@ mod core_tests {
 }
 
 // Bridge tests requiring `zennode_defs` modules in zenresize and zenlayout.
-#[cfg(all(test, feature = "zennode-defs"))]
+#[cfg(all(test, feature = "zennode"))]
 mod tests {
     use super::*;
     use zennode::NodeDef;

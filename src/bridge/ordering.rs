@@ -212,7 +212,6 @@ fn role_phase_order(role: NodeRole) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::string::String;
     use alloc::vec;
     use alloc::vec::Vec;
     use core::any::Any;
@@ -457,7 +456,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(
             ids,
@@ -485,7 +484,7 @@ mod tests {
         // All are Filter — original relative order preserved (stable sort).
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.contrast", "test.exposure", "test.sharpen"]);
     }
@@ -504,7 +503,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.exposure", "test.crop", "test.resize"]);
     }
@@ -518,7 +517,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.orient", "test.crop"]);
     }
@@ -533,7 +532,7 @@ mod tests {
         // Crop before resize is a Speed-level optimization, not Lossless.
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.resize", "test.crop"]);
     }
@@ -547,7 +546,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.crop", "test.resize"]);
     }
@@ -561,7 +560,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.crop", "test.exposure"]);
     }
@@ -577,7 +576,7 @@ mod tests {
         // The rule only applies to non-neighborhood filters.
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.sharpen", "test.crop"]);
     }
@@ -592,7 +591,7 @@ mod tests {
         // Moving resize before sharpen destroys detail — unsafe reordering.
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(ids, &["test.sharpen", "test.resize"]);
     }
@@ -617,7 +616,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(
             ids,
@@ -648,7 +647,7 @@ mod tests {
 
         let ids: Vec<&str> = nodes
             .iter()
-            .map(|n: &Box<dyn NodeInstance>| n.schema().id)
+            .map(|n| n.schema().id)
             .collect();
         assert_eq!(
             ids,

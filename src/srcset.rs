@@ -302,10 +302,10 @@ fn parse_format_tuning(
         }
 
         // Prefixed values: d (distance), s (speed), e (effort), q (quality), mq (min quality)
-        if arg.starts_with("mq") {
-            if let Ok(v) = arg[2..].parse::<f32>() {
+        if let Some(rest) = arg.strip_prefix("mq") {
+            if let Ok(v) = rest.parse::<f32>() {
                 if format == "png" {
-                    map.insert("png.min_quality".into(), format_f32(v.max(0.0).min(100.0)));
+                    map.insert("png.min_quality".into(), format_f32(v.clamp(0.0, 100.0)));
                 }
                 continue;
             }
@@ -327,7 +327,7 @@ fn parse_format_tuning(
                         if format == "jxl" {
                             map.insert(
                                 "jxl.effort".into(),
-                                alloc::format!("{}", v.max(0.0).min(255.0) as u8),
+                                alloc::format!("{}", v.clamp(0.0, 255.0) as u8),
                             );
                         }
                         continue;
@@ -338,7 +338,7 @@ fn parse_format_tuning(
                         if format == "avif" {
                             map.insert(
                                 "avif.speed".into(),
-                                alloc::format!("{}", v.max(0.0).min(255.0) as u8),
+                                alloc::format!("{}", v.clamp(0.0, 255.0) as u8),
                             );
                         }
                         continue;
@@ -514,7 +514,7 @@ mod tests {
     fn format_only() {
         let map = parse_srcset("webp");
         assert_eq!(map.get("format").map(String::as_str), Some("webp"));
-        assert!(map.get("webp.quality").is_none());
+        assert!(!map.contains_key("webp.quality"));
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn crop_incomplete_ignored() {
         let map = parse_srcset("crop-10-20");
-        assert!(map.get("c").is_none());
+        assert!(!map.contains_key("c"));
     }
 
     #[test]

@@ -89,6 +89,13 @@ pub type AnalyzeBuilder = Box<
 pub type AnalyzeBuilder =
     Box<dyn FnOnce(MaterializedSource) -> crate::PipeResult<Box<dyn Source>> + Send>;
 
+/// Return type of [`PipeGraph::compile_traced`]: the pipeline source plus the shared trace.
+#[cfg(feature = "std")]
+pub type TracedPipelineResult = crate::PipeResult<(
+    Box<dyn Source>,
+    alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
+)>;
+
 /// Metadata about a source, used by [`PipelineGraph::estimate`].
 ///
 /// Provide one per [`NodeOp::Source`] node so the estimator can propagate
@@ -987,10 +994,7 @@ impl PipelineGraph {
         mut self,
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
         config: &crate::trace::TraceConfig,
-    ) -> crate::PipeResult<(
-        Box<dyn Source>,
-        alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
-    )> {
+    ) -> TracedPipelineResult {
         self.validate()?;
         let trace =
             alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
@@ -1744,9 +1748,8 @@ impl PipelineGraph {
                     for x in x1..x2 {
                         let off = y * stride + x * bpp;
                         if off + bpp <= data.len() {
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = color[c];
-                            }
+                            let n = bpp.min(4);
+                            data[off..off + n].copy_from_slice(&color[..n]);
                         }
                     }
                 }

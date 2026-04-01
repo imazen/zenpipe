@@ -220,9 +220,9 @@ mod tests {
         let rows = drain_all_rows(&mut src);
         assert_eq!(rows.len(), h as usize);
 
-        for y in 0..h as usize {
+        for (y, row) in rows.iter().enumerate() {
             let expected: Vec<u8> = (0..stride).map(|x| (y * 10 + x) as u8).collect();
-            assert_eq!(rows[y], expected, "row {y} mismatch");
+            assert_eq!(row, &expected, "row {y} mismatch");
         }
     }
 

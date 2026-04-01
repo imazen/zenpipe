@@ -627,9 +627,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
                     let row_start = y * width as usize * bpp;
                     for x in x1..x2 {
                         let off = row_start + x * bpp;
-                        for c in 0..bpp.min(4) {
-                            data[off + c] = bg[c];
-                        }
+                        let n = bpp.min(4);
+                        data[off..off + n].copy_from_slice(&bg[..n]);
                     }
                 }
             };
@@ -766,9 +765,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
                         let row_start = y as usize * width as usize * bpp;
                         for x in clear_x_from as usize..clear_x_to as usize {
                             let off = row_start + x * bpp;
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = bg[c];
-                            }
+                            let n = bpp.min(4);
+                            data[off..off + n].copy_from_slice(&bg[..n]);
                         }
                     }
                 }
@@ -792,16 +790,14 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
                     if q.is_left {
                         for x in start_x..edge_influence_x1.min(end_x) {
                             let off = row_start + x * bpp;
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = bg[c];
-                            }
+                            let n = bpp.min(4);
+                            data[off..off + n].copy_from_slice(&bg[..n]);
                         }
                     } else {
                         for x in edge_influence_x2.max(start_x)..end_x {
                             let off = row_start + x * bpp;
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = bg[c];
-                            }
+                            let n = bpp.min(4);
+                            data[off..off + n].copy_from_slice(&bg[..n]);
                         }
                     }
 
@@ -819,9 +815,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
 
                         if distance > radius_of_influence {
                             let off = row_start + x * bpp;
-                            for c in 0..bpp.min(4) {
-                                data[off + c] = bg[c];
-                            }
+                            let n = bpp.min(4);
+                            data[off..off + n].copy_from_slice(&bg[..n]);
                         } else if distance > radius_of_solid {
                             let intensity = (distance - radius_of_solid) / alias_width;
                             let off = row_start + x * bpp;
@@ -845,9 +840,8 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
                                     data[off + 3] = (final_a * 255.0 + 0.5).min(255.0) as u8;
                                 }
                             } else {
-                                for c in 0..bpp.min(4) {
-                                    data[off + c] = bg[c];
-                                }
+                                let n = bpp.min(4);
+                                data[off..off + n].copy_from_slice(&bg[..n]);
                             }
                         }
                     }

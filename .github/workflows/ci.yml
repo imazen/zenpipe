@@ -63,7 +63,8 @@ jobs:
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
             -e '/zensally/d' \
-            -e '/imageflow_types\|imageflow_riapi/d' \
+            -e '/imageflow_types/d' \
+            -e '/imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
@@ -113,7 +114,8 @@ jobs:
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
             -e '/zensally/d' \
-            -e '/imageflow_types\|imageflow_riapi/d' \
+            -e '/imageflow_types/d' \
+            -e '/imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
@@ -156,7 +158,8 @@ jobs:
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
             -e '/zensally/d' \
-            -e '/imageflow_types\|imageflow_riapi/d' \
+            -e '/imageflow_types/d' \
+            -e '/imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
             Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml

@@ -609,6 +609,7 @@ impl Tracer {
     /// Add a runtime note to the trace (e.g., content-adaptive detection results).
     ///
     /// Pushes an implicit entry with the given name and description. No-op when inactive.
+    #[allow(clippy::too_many_arguments)]
     pub fn note_implicit(
         &self,
         name: &str,
@@ -1317,10 +1318,10 @@ impl FullPipelineTrace {
         let svg_h = margin * 2 + node_h + gap_y + timeline_h;
 
         let mut s = String::with_capacity(8192);
-        let _ = write!(
+        let _ = writeln!(
             s,
             "<svg xmlns='http://www.w3.org/2000/svg' width='{svg_w}' height='{svg_h}' \
-             font-family='monospace' font-size='11'>\n"
+             font-family='monospace' font-size='11'>"
         );
 
         // Color map for node kinds.
@@ -1368,9 +1369,9 @@ impl FullPipelineTrace {
         }
 
         // Generate CSS keyframes for each UID.
-        let _ = write!(s, "<defs><style>\n");
+        let _ = writeln!(s, "<defs><style>");
         for (uid, frames) in &uid_frames {
-            let _ = write!(s, "@keyframes n{uid} {{\n");
+            let _ = writeln!(s, "@keyframes n{uid} {{");
             for (fi, frame) in frames.iter().enumerate() {
                 let pct_start = (fi as f32 / num_frames as f32 * 100.0) as u32;
                 let pct_end = ((fi as f32 + 0.9) / num_frames as f32 * 100.0).min(100.0) as u32;
@@ -1378,12 +1379,12 @@ impl FullPipelineTrace {
                     Some(f) => (f.x, f.y, f.opacity),
                     None => (0, 0, 0.0), // not present in this frame
                 };
-                let _ = write!(
+                let _ = writeln!(
                     s,
-                    "  {pct_start}%,{pct_end}% {{ transform:translate({x}px,{y}px); opacity:{opacity}; }}\n"
+                    "  {pct_start}%,{pct_end}% {{ transform:translate({x}px,{y}px); opacity:{opacity}; }}"
                 );
             }
-            let _ = write!(s, "}}\n");
+            let _ = writeln!(s, "}}");
         }
 
         // Timeline indicator animation.
@@ -1393,21 +1394,21 @@ impl FullPipelineTrace {
             let x = margin + fi as u32 * (svg_w - margin * 2) / num_frames.max(1) as u32;
             let _ = write!(s, " {pct}% {{ transform:translateX({x}px); }}");
         }
-        let _ = write!(s, " }}\n");
+        let _ = writeln!(s, " }}");
 
-        let _ = write!(
+        let _ = writeln!(
             s,
-            ".node {{ animation-duration:{total_dur}s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }}\n"
+            ".node {{ animation-duration:{total_dur}s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }}"
         );
-        let _ = write!(
+        let _ = writeln!(
             s,
-            ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}\n"
+            ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}"
         );
-        let _ = write!(
+        let _ = writeln!(
             s,
-            "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}\n"
+            "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}"
         );
-        let _ = write!(s, "</style></defs>\n");
+        let _ = writeln!(s, "</style></defs>");
 
         // Render nodes — each is a group with CSS animation.
         for (uid, frames) in &uid_frames {
@@ -1425,21 +1426,21 @@ impl FullPipelineTrace {
                 label
             };
 
-            let _ = write!(
+            let _ = writeln!(
                 s,
                 "<g class='node' style='animation-name:n{uid}'>\
                  <rect class='nb' x='0' y='0' width='{node_w}' height='{node_h}' fill='{fill}'/>\
                  <text x='6' y='15' font-weight='bold' font-size='10'>{display_label}</text>\
                  <text x='6' y='30' fill='#888' font-size='9'>#{uid}</text>\
-                 </g>\n"
+                 </g>"
             );
         }
 
         // Timeline bar at bottom.
         let tl_y = svg_h - timeline_h;
-        let _ = write!(
+        let _ = writeln!(
             s,
-            "<rect x='{margin}' y='{tl_y}' width='{}' height='30' fill='#f0f0f0' rx='4'/>\n",
+            "<rect x='{margin}' y='{tl_y}' width='{}' height='30' fill='#f0f0f0' rx='4'/>",
             svg_w - margin * 2
         );
 
@@ -1451,17 +1452,17 @@ impl FullPipelineTrace {
             } else {
                 &snap.label
             };
-            let _ = write!(
+            let _ = writeln!(
                 s,
-                "<text x='{x}' y='{}' font-size='9' fill='#666'>{label}</text>\n",
+                "<text x='{x}' y='{}' font-size='9' fill='#666'>{label}</text>",
                 tl_y + 18
             );
         }
 
         // Animated timeline marker.
-        let _ = write!(
+        let _ = writeln!(
             s,
-            "<circle class='tmark' cx='0' cy='{}' r='5' fill='#e63946'/>\n",
+            "<circle class='tmark' cx='0' cy='{}' r='5' fill='#e63946'/>",
             tl_y + 15
         );
 
