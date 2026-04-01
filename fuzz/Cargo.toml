@@ -1,0 +1,38 @@
+[package]
+name = "zenpipe-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace — excluded from parent to avoid LTO conflicts
+# with ASAN sanitizer coverage instrumentation.
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+zenpipe = { path = "..", features = ["job", "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif"] }
+zencodecs = { path = "../../zencodecs", default-features = false }
+
+# Replicate [patch.crates-io] so transitive deps resolve to local crates.
+[patch.crates-io]
+zenpixels = { path = "../../zenpixels/zenpixels" }
+zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
+zencodec = { path = "../../zencodec" }
+zenjpeg = { path = "../../zenjpeg/zenjpeg" }
+moxcms = { path = "../../../moxcms" }
+zenlayout = { path = "../../zenlayout" }
+
+[[bin]]
+name = "fuzz_job_decode"
+path = "fuzz_targets/fuzz_job_decode.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_job_transcode"
+path = "fuzz_targets/fuzz_job_transcode.rs"
+doc = false

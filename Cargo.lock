@@ -1869,7 +1869,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "ultrahdr-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -2509,7 +2509,7 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "zennode"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "zennode-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2684,7 +2684,7 @@ dependencies = [
 
 [[package]]
 name = "zenpng"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -2795,7 +2795,7 @@ version = "0.1.0"
 
 [[package]]
 name = "zenwebp"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "archmage",
  "bytemuck",

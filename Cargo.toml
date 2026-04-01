@@ -72,15 +72,15 @@ zenlayout = { path = "../zenlayout", default-features = false, features = ["smar
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
 zenblend = { path = "../zenblend", default-features = false }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
-zenpixels-convert = { version = "0.2.2", default-features = false }
+zenpixels-convert = { version = "0.2.2", default-features = false , path = "../zenpixels/zenpixels-convert" }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
-zenpixels = { version = "0.2.2", default-features = false }
+zenpixels = { version = "0.2.2", default-features = false , path = "../zenpixels/zenpixels" }
 # Codec trait abstraction (decode/encode, animation, streaming)
-zencodec = { version = "0.1.8", default-features = false }
+zencodec = { version = "0.1.8", default-features = false , path = "../zencodec" }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
-whereat = { version = "0.1.5", default-features = false }
+whereat = { version = "0.1.5", default-features = false , path = "../whereat" }
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
 linear-srgb = { path = "../linear-srgb", default-features = false }
 # f32 ↔ u8 reinterpretation
@@ -90,7 +90,7 @@ hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
 zenfilters = { path = "../zenfilters", optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
-moxcms = { version = "0.8", optional = true }
+moxcms = { version = "*", optional = true , path = "../../moxcms" }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
 zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 # Unified codec dispatch — node definitions for codec/quantize/quality-intent
