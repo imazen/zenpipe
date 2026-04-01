@@ -39,7 +39,17 @@ impl MaterializedSource {
     }
 
     /// Drain all strips from `upstream` into memory.
-    pub fn from_source(mut upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
+    pub fn from_source(upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
+        Self::from_source_stoppable(upstream, &enough::Unstoppable)
+    }
+
+    /// Drain all strips from `upstream` into memory, checking `stop` between strips.
+    ///
+    /// Returns `PipeError::Cancelled` if the stop signal fires mid-drain.
+    pub fn from_source_stoppable(
+        mut upstream: Box<dyn Source>,
+        stop: &dyn enough::Stop,
+    ) -> crate::PipeResult<Self> {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
@@ -48,6 +58,8 @@ impl MaterializedSource {
         let mut y = 0u32;
 
         while let Some(strip) = upstream.next()? {
+            stop.check()
+                .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
             for r in 0..strip.rows() {
                 let dst_start = (y + r) as usize * row_bytes;
                 let src_row = strip.row(r);

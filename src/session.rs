@@ -153,6 +153,36 @@ mod inner {
             sidecar: Option<SidecarStream>,
             source_hash: u64,
         ) -> crate::PipeResult<StreamingOutput> {
+            self.stream_inner(source, config, sidecar, source_hash, &enough::Unstoppable)
+        }
+
+        /// Like [`stream()`](Self::stream) but with cooperative cancellation.
+        ///
+        /// Checks `stop` between strips during prefix materialization (cache miss path).
+        /// Returns `PipeError::Cancelled` if cancelled mid-render.
+        pub fn stream_stoppable(
+            &mut self,
+            source: Box<dyn Source>,
+            config: &ProcessConfig<'_>,
+            sidecar: Option<SidecarStream>,
+            source_hash: u64,
+            stop: &dyn enough::Stop,
+        ) -> crate::PipeResult<StreamingOutput> {
+            self.stream_inner(source, config, sidecar, source_hash, stop)
+        }
+
+        /// Shared implementation for `stream` and `stream_stoppable`.
+        fn stream_inner(
+            &mut self,
+            source: Box<dyn Source>,
+            config: &ProcessConfig<'_>,
+            sidecar: Option<SidecarStream>,
+            source_hash: u64,
+            stop: &dyn enough::Stop,
+        ) -> crate::PipeResult<StreamingOutput> {
+            stop.check()
+                .map_err(|_| whereat::at!(crate::error::PipeError::Cancelled))?;
+
             self.generation += 1;
 
             let nodes = config.nodes;
@@ -230,7 +260,7 @@ mod inner {
             let prefix_output = crate::orchestrate::stream(source, &prefix_config, sidecar)?;
 
             // Materialize the prefix output so we can cache it.
-            let mat = MaterializedSource::from_source(prefix_output.source)?;
+            let mat = MaterializedSource::from_source_stoppable(prefix_output.source, stop)?;
             let cached = CachedPixels::from_materialized(mat.clone());
             let entry_bytes = cached.byte_size();
 
@@ -716,5 +746,42 @@ mod tests {
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xFF)
             .unwrap();
         assert_eq!(session.cache_len(), 0);
+    }
+
+    // ─── stream_stoppable tests ───
+
+    #[test]
+    fn session_stream_stoppable_cancellation() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct AtomicStop(Arc<AtomicBool>);
+        impl enough::Stop for AtomicStop {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                if self.0.load(Ordering::Relaxed) {
+                    Err(enough::StopReason::Cancelled)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let mut session = Session::new(64 * 1024 * 1024);
+        let cancel = Arc::new(AtomicBool::new(true)); // Pre-cancelled
+        let stop = AtomicStop(cancel);
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let source = Box::new(SolidSource::new(200, 200));
+        let result = session.stream_stoppable(source, &config, None, 0xCC, &stop);
+        assert!(result.is_err()); // Should be cancelled
     }
 }
