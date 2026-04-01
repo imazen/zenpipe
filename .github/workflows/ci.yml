@@ -62,8 +62,9 @@ jobs:
             -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally-zentract"|git = "https://github.com/imazen/zenfaces"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally"|git = "https://github.com/imazen/zenfaces"|g' \
+            -e '/zensally.*= {/d' \
+            -e 's|, "dep:zensally-zentract"||g' \
+            -e 's|, "dep:zensally"||g' \
             -e '/imageflow_types\|imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
@@ -112,8 +113,9 @@ jobs:
             -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally-zentract"|git = "https://github.com/imazen/zenfaces"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally"|git = "https://github.com/imazen/zenfaces"|g' \
+            -e '/zensally.*= {/d' \
+            -e 's|, "dep:zensally-zentract"||g' \
+            -e 's|, "dep:zensally"||g' \
             -e '/imageflow_types\|imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
@@ -155,8 +157,9 @@ jobs:
             -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
             -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
             -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally-zentract"|git = "https://github.com/imazen/zenfaces"|g' \
-            -e 's|path = "\.\./zenfaces/crates/zensally"|git = "https://github.com/imazen/zenfaces"|g' \
+            -e '/zensally.*= {/d' \
+            -e 's|, "dep:zensally-zentract"||g' \
+            -e 's|, "dep:zensally"||g' \
             -e '/imageflow_types\|imageflow_riapi/d' \
             -e 's|, "dep:imageflow_types"||g' \
             -e 's|, "dep:imageflow_riapi"||g' \
