@@ -266,10 +266,10 @@ pub enum NodeOp {
         up_filter: Option<zenresize::Filter>,
         /// When to resample: None = when size differs (default).
         /// Values: "size_differs", "size_differs_or_sharpening_requested", "always".
-        resample_when: Option<String>,
+        resample_when: Option<alloc::string::String>,
         /// When to sharpen: None = when downscaling (default).
         /// Values: "downscaling", "upscaling", "size_differs", "always".
-        sharpen_when: Option<String>,
+        sharpen_when: Option<alloc::string::String>,
     },
 
     /// Advanced resize with a pre-built [`ResizeConfig`](zenresize::ResizeConfig).
@@ -1097,7 +1097,7 @@ impl PipelineGraph {
         }
 
         #[cfg(not(feature = "std"))]
-        return result;
+        return result.map(|(source, _meta)| source);
 
         #[cfg(feature = "std")]
         result.map(|(source, _meta)| source)
@@ -1801,7 +1801,7 @@ fn compile_orient(
     orientation: zenresize::Orientation,
     depth: usize,
     #[cfg(feature = "std")] tracer: &crate::trace::Tracer,
-) -> crate::PipeResult<(Box<dyn Source>, Option<crate::trace::UpstreamMeta>)> {
+) -> crate::PipeResult<(Box<dyn Source>, Option<UpstreamMeta>)> {
     let input_id = graph.find_input(node_id, EdgeKind::Input)?;
     let upstream = graph.compile_node(input_id, sources, depth + 1)?;
     #[cfg(feature = "std")]
