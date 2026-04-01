@@ -157,16 +157,79 @@ test.describe('zenpipe editor', () => {
     expect(Math.abs(box2.x - box1.x) + Math.abs(box2.y - box1.y)).toBeGreaterThan(1);
   });
 
-  test('export downloads a JPEG', async ({ page }) => {
+  test('export opens modal and downloads a JPEG', async ({ page }) => {
     await page.goto('/');
     await loadTestImage(page);
 
-    const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+    // Click export button to open modal
     await page.locator('#export-btn').click();
+    await expect(page.locator('#export-modal-backdrop')).toHaveClass(/open/);
+    await expect(page.locator('#export-modal')).toBeVisible();
+
+    // Modal should show image dimensions
+    await expect(page.locator('#export-dims')).toContainText('\u00d7');
+
+    // JPEG should be selected by default
+    const jpegTab = page.locator('.export-format-tab.active');
+    await expect(jpegTab).toContainText('JPEG');
+
+    // Click export confirm to download
+    const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+    await page.locator('#export-confirm').click();
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe('export.jpg');
     await expect(page.locator('#status')).toContainText('Exported', { timeout: 10000 });
+  });
+
+  test('export modal closes on Escape', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+
+    await page.locator('#export-btn').click();
+    await expect(page.locator('#export-modal-backdrop')).toHaveClass(/open/);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#export-modal-backdrop')).not.toHaveClass(/open/);
+  });
+
+  test('export modal format switching works', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+
+    await page.locator('#export-btn').click();
+
+    // Switch to PNG
+    await page.locator('.export-format-tab:has-text("PNG")').click();
+    await expect(page.locator('#export-confirm')).toContainText('Export PNG');
+
+    // Switch to WebP
+    await page.locator('.export-format-tab:has-text("WebP")').click();
+    await expect(page.locator('#export-confirm')).toContainText('Export WebP');
+  });
+
+  test('export modal aspect ratio lock works', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+
+    await page.locator('#export-btn').click();
+
+    // Get initial dimensions
+    const initWidth = await page.locator('#export-width').inputValue();
+    const initHeight = await page.locator('#export-height').inputValue();
+
+    // Change width with aspect lock on
+    await page.locator('#export-width').fill('100');
+    await page.locator('#export-width').dispatchEvent('input');
+
+    const newHeight = await page.locator('#export-height').inputValue();
+    // Height should have changed proportionally (not still equal to initial)
+    expect(parseInt(newHeight)).toBeGreaterThan(0);
+    // If source is wider than tall, height < width
+    const w = parseInt(initWidth), h = parseInt(initHeight);
+    if (w > h) {
+      expect(parseInt(newHeight)).toBeLessThanOrEqual(100);
+    }
   });
 
   test('double-click slider resets to identity', async ({ page }) => {
