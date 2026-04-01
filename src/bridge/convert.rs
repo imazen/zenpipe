@@ -101,26 +101,25 @@ pub(crate) fn coalesce<'a>(nodes: &[&'a dyn NodeInstance]) -> Vec<PipelineStep<'
     for &node in nodes {
         let coalesce = node.schema().coalesce.as_ref();
 
-        if let Some(info) = coalesce {
-            if info.fusable || info.is_target {
-                // Try to merge with the previous step if same group.
-                if let Some(PipelineStep::Coalesced {
-                    group,
-                    nodes: group_nodes,
-                }) = steps.last_mut()
-                {
-                    if *group == info.group {
-                        group_nodes.push(node);
-                        continue;
-                    }
-                }
-                // Start a new coalesced group.
-                steps.push(PipelineStep::Coalesced {
-                    group: info.group,
-                    nodes: alloc::vec![node],
-                });
+        if let Some(info) = coalesce
+            && (info.fusable || info.is_target)
+        {
+            // Try to merge with the previous step if same group.
+            if let Some(PipelineStep::Coalesced {
+                group,
+                nodes: group_nodes,
+            }) = steps.last_mut()
+                && *group == info.group
+            {
+                group_nodes.push(node);
                 continue;
             }
+            // Start a new coalesced group.
+            steps.push(PipelineStep::Coalesced {
+                group: info.group,
+                nodes: alloc::vec![node],
+            });
+            continue;
         }
 
         // Not fusable — emit as a single step.
@@ -166,10 +165,12 @@ pub(crate) fn convert_step(
             // Check if all nodes in the group are geometry nodes.
             let all_geometry = nodes.iter().all(|n| is_geometry_node(n.schema().id));
 
-            if all_geometry && source_w > 0 && source_h > 0 {
-                if let Ok(op) = compile_geometry_run(nodes, source_w, source_h) {
-                    return Ok(alloc::vec![op]);
-                }
+            if all_geometry
+                && source_w > 0
+                && source_h > 0
+                && let Ok(op) = compile_geometry_run(nodes, source_w, source_h)
+            {
+                return Ok(alloc::vec![op]);
             }
 
             // Try converter fusion (fuse_group).

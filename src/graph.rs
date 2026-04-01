@@ -154,13 +154,13 @@ impl ResourceEstimate {
     /// Check this estimate against resource limits.
     pub fn check(&self, limits: &crate::Limits) -> crate::PipeResult<()> {
         limits.check(self.output_width, self.output_height, self.output_format)?;
-        if let Some(max_mem) = limits.max_memory_bytes {
-            if self.peak_memory_bytes() > max_mem {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "estimated peak memory {} bytes exceeds limit {max_mem}",
-                    self.peak_memory_bytes()
-                ))));
-            }
+        if let Some(max_mem) = limits.max_memory_bytes
+            && self.peak_memory_bytes() > max_mem
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "estimated peak memory {} bytes exceeds limit {max_mem}",
+                self.peak_memory_bytes()
+            ))));
         }
         Ok(())
     }
@@ -1571,17 +1571,7 @@ impl PipelineGraph {
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "RemoveAlpha")?;
-                let options = zenpixels_convert::policy::ConvertOptions::permissive()
-                    .with_alpha_policy(zenpixels_convert::policy::AlphaPolicy::CompositeOnto {
-                        r: matte[0],
-                        g: matte[1],
-                        b: matte[2],
-                    });
-                let op =
-                    RowConverterOp::new_explicit(format::RGBA8_SRGB, format::RGB8_SRGB, &options)
-                        .ok_or_else(|| {
-                        PipeError::Op("no conversion path for alpha removal".to_string())
-                    })?;
+                let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
                 Ok((Box::new(TransformSource::new(upstream).push(op)), meta))
             }
 

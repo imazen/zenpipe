@@ -132,6 +132,48 @@ impl PixelOp for RowConverterOp {
 // Alpha operations
 // =========================================================================
 
+/// Composite RGBA8 onto a solid sRGB matte, producing RGB8.
+///
+/// Blends in sRGB-encoded space (i.e. no gamma decode), matching browser
+/// CSS/canvas compositing behavior.
+///
+/// Formula per channel: `out = (src * alpha + matte * (255 - alpha) + 127) / 255`
+pub struct MatteFlattenOp {
+    matte: [u8; 3],
+}
+
+impl MatteFlattenOp {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { matte: [r, g, b] }
+    }
+}
+
+impl PixelOp for MatteFlattenOp {
+    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        let n = width as usize * height as usize;
+        for i in 0..n {
+            let p = &input[i * 4..i * 4 + 4];
+            let a = p[3] as u32;
+            let inv = 255 - a;
+            let o = &mut output[i * 3..i * 3 + 3];
+            for c in 0..3 {
+                o[c] = ((p[c] as u32 * a + self.matte[c] as u32 * inv + 127) / 255) as u8;
+            }
+        }
+    }
+
+    fn input_format(&self) -> PixelFormat {
+        format::RGBA8_SRGB
+    }
+    fn output_format(&self) -> PixelFormat {
+        format::RGB8_SRGB
+    }
+}
+
+// =========================================================================
+// ScaleAlphaOp
+// =========================================================================
+
 /// Scale all channels (including alpha) by a factor in premultiplied linear space.
 ///
 /// Used for opacity control on overlay/watermark sources.

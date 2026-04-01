@@ -61,26 +61,23 @@ impl TransformSource {
         );
 
         // Try to compose with the last op if both are RowConverters.
-        if let Some(new_rc) = op.as_row_converter() {
-            if let Some(last) = self.ops.last() {
-                if let Some(prev_rc) = last.as_row_converter() {
-                    if let Some(composed) = prev_rc.compose(new_rc) {
-                        let from = self.ops.last().unwrap().input_format();
-                        let to = op.output_format();
-                        self.ops.pop();
-                        if composed.is_identity() {
-                            // Total cancellation — no op needed.
-                            self.output_format = from;
-                        } else {
-                            let composed_op =
-                                crate::ops::RowConverterOp::from_converter(composed, from, to);
-                            self.output_format = to;
-                            self.ops.push(Box::new(composed_op));
-                        }
-                        return self;
-                    }
-                }
+        if let Some(new_rc) = op.as_row_converter()
+            && let Some(last) = self.ops.last()
+            && let Some(prev_rc) = last.as_row_converter()
+            && let Some(composed) = prev_rc.compose(new_rc)
+        {
+            let from = self.ops.last().unwrap().input_format();
+            let to = op.output_format();
+            self.ops.pop();
+            if composed.is_identity() {
+                // Total cancellation — no op needed.
+                self.output_format = from;
+            } else {
+                let composed_op = crate::ops::RowConverterOp::from_converter(composed, from, to);
+                self.output_format = to;
+                self.ops.push(Box::new(composed_op));
             }
+            return self;
         }
 
         self.output_format = op.output_format();

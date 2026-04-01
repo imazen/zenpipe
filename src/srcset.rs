@@ -158,10 +158,10 @@ pub fn parse_srcset(value: &str) -> BTreeMap<String, String> {
 
             // --- Sharpen ---
             "sharp" | "sharpen" => {
-                if let Some(sharpen_val) = args.next() {
-                    if let Ok(v) = sharpen_val.parse::<f32>() {
-                        map.insert("f.sharpen".into(), format_f32(v));
-                    }
+                if let Some(sharpen_val) = args.next()
+                    && let Ok(v) = sharpen_val.parse::<f32>()
+                {
+                    map.insert("f.sharpen".into(), format_f32(v));
                 }
             }
 
@@ -302,13 +302,13 @@ fn parse_format_tuning(
         }
 
         // Prefixed values: d (distance), s (speed), e (effort), q (quality), mq (min quality)
-        if let Some(rest) = arg.strip_prefix("mq") {
-            if let Ok(v) = rest.parse::<f32>() {
-                if format == "png" {
-                    map.insert("png.min_quality".into(), format_f32(v.clamp(0.0, 100.0)));
-                }
-                continue;
+        if let Some(rest) = arg.strip_prefix("mq")
+            && let Ok(v) = rest.parse::<f32>()
+        {
+            if format == "png" {
+                map.insert("png.min_quality".into(), format_f32(v.clamp(0.0, 100.0)));
             }
+            continue;
         }
 
         if let Some(first_char) = arg.chars().next() {

@@ -142,14 +142,12 @@ fn should_swap(a: &dyn NodeInstance, b: &dyn NodeInstance, level: OptimizationLe
                 && b_role == NodeRole::Filter
                 && !a_fmt.is_neighborhood
                 && !b_fmt.is_neighborhood
+                && let (Some(a_coal), Some(b_coal)) = (&a_schema.coalesce, &b_schema.coalesce)
+                // Only swap if same group — purpose is to cluster for fusion.
+                // Swap to sort by group name, so scattered same-group nodes cluster.
+                && a_coal.group > b_coal.group
             {
-                if let (Some(a_coal), Some(b_coal)) = (&a_schema.coalesce, &b_schema.coalesce) {
-                    // Only swap if same group — purpose is to cluster for fusion.
-                    // Swap to sort by group name, so scattered same-group nodes cluster.
-                    if a_coal.group > b_coal.group {
-                        return true;
-                    }
-                }
+                return true;
             }
 
             false

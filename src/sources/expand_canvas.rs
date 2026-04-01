@@ -118,10 +118,10 @@ impl ExpandCanvasSource {
     /// Pull the next upstream row, refilling the pending strip if needed.
     fn next_upstream_row(&mut self) -> crate::PipeResult<Option<()>> {
         // If pending strip has rows, use it
-        if let Some(ref p) = self.pending {
-            if p.remaining() > 0 {
-                return Ok(Some(()));
-            }
+        if let Some(ref p) = self.pending
+            && p.remaining() > 0
+        {
+            return Ok(Some(()));
         }
         self.pending = None;
 
@@ -148,12 +148,12 @@ impl ExpandCanvasSource {
 
     /// Consume one row from the pending strip.
     fn consume_pending_row(&mut self) -> Option<()> {
-        if let Some(ref mut p) = self.pending {
-            if p.remaining() > 0 {
-                p.next_row += 1;
-                self.upstream_rows_consumed += 1;
-                return Some(());
-            }
+        if let Some(ref mut p) = self.pending
+            && p.remaining() > 0
+        {
+            p.next_row += 1;
+            self.upstream_rows_consumed += 1;
+            return Some(());
         }
         None
     }
@@ -199,17 +199,16 @@ impl Source for ExpandCanvasSource {
                 let got_row = self.next_upstream_row()?.is_some();
                 if got_row {
                     // Access pending strip directly to avoid borrow conflict with buf
-                    if let Some(ref p) = self.pending {
-                        if p.remaining() > 0 {
-                            let src_row = p.row(p.next_row);
-                            let src_start = self.skip_x as usize * bpp;
-                            let src_end = src_start + self.content_w as usize * bpp;
-                            let dst_start = self.place_x as usize * bpp;
-                            let dst_end = dst_start + self.content_w as usize * bpp;
-                            let dst_row = self.buf.row_mut(r);
-                            dst_row[dst_start..dst_end]
-                                .copy_from_slice(&src_row[src_start..src_end]);
-                        }
+                    if let Some(ref p) = self.pending
+                        && p.remaining() > 0
+                    {
+                        let src_row = p.row(p.next_row);
+                        let src_start = self.skip_x as usize * bpp;
+                        let src_end = src_start + self.content_w as usize * bpp;
+                        let dst_start = self.place_x as usize * bpp;
+                        let dst_end = dst_start + self.content_w as usize * bpp;
+                        let dst_row = self.buf.row_mut(r);
+                        dst_row[dst_start..dst_end].copy_from_slice(&src_row[src_start..src_end]);
                     }
                     self.consume_pending_row();
                 }

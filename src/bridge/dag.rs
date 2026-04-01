@@ -336,12 +336,11 @@ fn find_chain_output(
     }
     // Search chains for this index — use the last node's graph ID.
     for chain in chains {
-        if let Chain::Linear(indices) = chain {
-            if indices.contains(&dag_idx) {
-                if let Some(&last) = indices.last() {
-                    return dag_to_graph[last];
-                }
-            }
+        if let Chain::Linear(indices) = chain
+            && indices.contains(&dag_idx)
+            && let Some(&last) = indices.last()
+        {
+            return dag_to_graph[last];
         }
     }
     None

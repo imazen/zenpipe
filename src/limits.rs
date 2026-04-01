@@ -131,27 +131,27 @@ impl Limits {
     ///
     /// Use before decoding when the pixel format is not yet known.
     pub fn check_dimensions(&self, width: u32, height: u32) -> crate::PipeResult<()> {
-        if let Some(max_w) = self.max_width {
-            if width > max_w {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "width {width} exceeds max {max_w}"
-                ))));
-            }
+        if let Some(max_w) = self.max_width
+            && width > max_w
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "width {width} exceeds max {max_w}"
+            ))));
         }
-        if let Some(max_h) = self.max_height {
-            if height > max_h {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "height {height} exceeds max {max_h}"
-                ))));
-            }
+        if let Some(max_h) = self.max_height
+            && height > max_h
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "height {height} exceeds max {max_h}"
+            ))));
         }
         let pixels = width as u64 * height as u64;
-        if let Some(max_px) = self.max_pixels {
-            if pixels > max_px {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "pixel count {pixels} exceeds max {max_px}"
-                ))));
-            }
+        if let Some(max_px) = self.max_pixels
+            && pixels > max_px
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "pixel count {pixels} exceeds max {max_px}"
+            ))));
         }
         Ok(())
     }
@@ -160,28 +160,28 @@ impl Limits {
     ///
     /// Returns `Ok(())` if within limits, `Err(at!(PipeError::LimitExceeded))` otherwise.
     pub fn check(&self, width: u32, height: u32, format: PixelFormat) -> crate::PipeResult<()> {
-        if let Some(max_w) = self.max_width {
-            if width > max_w {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "width {width} exceeds max {max_w}"
-                ))));
-            }
+        if let Some(max_w) = self.max_width
+            && width > max_w
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "width {width} exceeds max {max_w}"
+            ))));
         }
-        if let Some(max_h) = self.max_height {
-            if height > max_h {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "height {height} exceeds max {max_h}"
-                ))));
-            }
+        if let Some(max_h) = self.max_height
+            && height > max_h
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "height {height} exceeds max {max_h}"
+            ))));
         }
 
         let pixels = width as u64 * height as u64;
-        if let Some(max_px) = self.max_pixels {
-            if pixels > max_px {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "pixel count {pixels} exceeds max {max_px}"
-                ))));
-            }
+        if let Some(max_px) = self.max_pixels
+            && pixels > max_px
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "pixel count {pixels} exceeds max {max_px}"
+            ))));
         }
 
         if let Some(max_mem) = self.max_memory_bytes {
@@ -200,12 +200,12 @@ impl Limits {
     ///
     /// `total_pixels` is typically `width * height * frame_count`.
     pub fn check_total_pixels(&self, total_pixels: u64) -> crate::PipeResult<()> {
-        if let Some(max) = self.max_total_pixels {
-            if total_pixels > max {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "total pixel count {total_pixels} exceeds max {max}"
-                ))));
-            }
+        if let Some(max) = self.max_total_pixels
+            && total_pixels > max
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "total pixel count {total_pixels} exceeds max {max}"
+            ))));
         }
         Ok(())
     }
@@ -214,12 +214,12 @@ impl Limits {
     ///
     /// Returns `Ok(())` if within limits or no frame limit is set.
     pub fn check_frames(&self, count: u32) -> crate::PipeResult<()> {
-        if let Some(max) = self.max_frames {
-            if count > max {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "frame count {count} exceeds max {max}"
-                ))));
-            }
+        if let Some(max) = self.max_frames
+            && count > max
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "frame count {count} exceeds max {max}"
+            ))));
         }
         Ok(())
     }
