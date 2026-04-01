@@ -279,16 +279,21 @@ impl zenpipe::bridge::NodeConverter for FiltersConverter {
 /// Static converter instance for passing to ProcessConfig.
 static FILTERS_CONVERTER: FiltersConverter = FiltersConverter;
 
-/// Extract tightly-packed RGBA8 pixels from a MaterializedSource,
-/// stripping any stride padding and expanding RGB→RGBA if needed.
+/// Convert a MaterializedSource to tightly-packed RGBA8 sRGB pixels.
+///
+/// Handles any pipeline output format:
+/// - RGBA8 sRGB: strip stride padding
+/// - RGB8: expand to RGBA8 with alpha=255
+/// - RgbaF32 linear: convert linear→sRGB, clamp, quantize to u8
+/// - Other: use zenpixels RowConverter
 fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
     let w = mat.width() as usize;
     let h = mat.height() as usize;
     let bpp = mat.format().bytes_per_pixel();
     let stride = mat.stride();
 
-    if bpp == 4 {
-        // RGBA8 — just strip stride padding.
+    if mat.format() == RGBA8_SRGB {
+        // Fast path: RGBA8 sRGB — just strip stride padding.
         let row_bytes = w * 4;
         if stride == row_bytes {
             return mat.data()[..row_bytes * h].to_vec();
@@ -298,8 +303,10 @@ fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
             let start = y * stride;
             packed.extend_from_slice(&mat.data()[start..start + row_bytes]);
         }
-        packed
-    } else if bpp == 3 {
+        return packed;
+    }
+
+    if bpp == 3 {
         // RGB8 → expand to RGBA8 with alpha=255.
         let mut packed = Vec::with_capacity(w * h * 4);
         for y in 0..h {
@@ -312,11 +319,62 @@ fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
                 packed.push(255);
             }
         }
-        packed
-    } else {
-        // Unsupported format — return empty (shouldn't happen).
-        vec![0u8; w * h * 4]
+        return packed;
     }
+
+    if bpp == 16 {
+        // RgbaF32 (linear) → convert to sRGB u8.
+        let data = mat.data();
+        let mut packed = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            let row_start = y * stride;
+            for x in 0..w {
+                let px = row_start + x * 16;
+                let r = f32::from_le_bytes([data[px], data[px + 1], data[px + 2], data[px + 3]]);
+                let g =
+                    f32::from_le_bytes([data[px + 4], data[px + 5], data[px + 6], data[px + 7]]);
+                let b =
+                    f32::from_le_bytes([data[px + 8], data[px + 9], data[px + 10], data[px + 11]]);
+                let a = f32::from_le_bytes([
+                    data[px + 12],
+                    data[px + 13],
+                    data[px + 14],
+                    data[px + 15],
+                ]);
+                // Linear → sRGB gamma, clamp to [0,1], quantize to u8.
+                packed.push(linear_to_srgb_u8(r));
+                packed.push(linear_to_srgb_u8(g));
+                packed.push(linear_to_srgb_u8(b));
+                packed.push((a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8);
+            }
+        }
+        return packed;
+    }
+
+    // Fallback: 4bpp non-sRGB (e.g., RGBX8 or different transfer).
+    if bpp == 4 {
+        let row_bytes = w * 4;
+        let mut packed = Vec::with_capacity(row_bytes * h);
+        for y in 0..h {
+            let start = y * stride;
+            packed.extend_from_slice(&mat.data()[start..start + row_bytes]);
+        }
+        return packed;
+    }
+
+    // Should not happen.
+    vec![0u8; w * h * 4]
+}
+
+/// Convert a single linear f32 channel value to sRGB u8.
+fn linear_to_srgb_u8(v: f32) -> u8 {
+    let c = v.clamp(0.0, 1.0);
+    let s = if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    };
+    (s * 255.0 + 0.5) as u8
 }
 
 fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
@@ -535,5 +593,30 @@ mod tests {
         adj.insert("saturation".into(), 0.2);
         let out = editor.render_overview(&adj).unwrap();
         assert!(out.width > 0);
+    }
+
+    #[test]
+    fn render_overview_exposure_has_nonzero_pixels() {
+        let pixels = solid_rgba(200, 150, 128, 128, 128);
+        let mut editor = Editor::from_rgba(pixels, 200, 150, 200, 400);
+        let mut adj = BTreeMap::new();
+        adj.insert("exposure".into(), 1.0);
+        let out = editor.render_overview(&adj).unwrap();
+        eprintln!(
+            "output: {}x{} format={} data_len={}",
+            out.width,
+            out.height,
+            "?",
+            out.data.len()
+        );
+        eprintln!("first 16 bytes: {:?}", &out.data[..16.min(out.data.len())]);
+        assert!(out.width > 0);
+        assert_eq!(out.data.len(), (out.width * out.height * 4) as usize);
+        let nonzero = out.data.iter().filter(|&&b| b > 0).count();
+        assert!(
+            nonzero > 100,
+            "expected nonzero pixels, got {nonzero} out of {}",
+            out.data.len()
+        );
     }
 }

@@ -215,3 +215,56 @@ test.describe('zenpipe editor', () => {
     expect(parseInt(dw)).toBeGreaterThan(0);
   });
 });
+
+test.describe('pixel verification', () => {
+  test('overview has non-zero pixels after slider change', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.waitForTimeout(500);
+
+    // Change exposure
+    await page.evaluate(() => {
+      const s = document.querySelectorAll('input[type="range"]')[0];
+      s.value = '1';
+      s.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(1500);
+
+    const result = await page.evaluate(() => {
+      const c = document.getElementById('overview-canvas');
+      if (c.width === 0) return { error: 'width is 0' };
+      const ctx = c.getContext('2d');
+      const d = ctx.getImageData(0, 0, c.width, c.height);
+      const nonZero = d.data.filter(v => v > 0).length;
+      return { w: c.width, h: c.height, nonZero, total: d.data.length };
+    });
+
+    expect(result.w).toBeGreaterThan(0);
+    expect(result.nonZero).toBeGreaterThan(100);
+  });
+
+  test('detail has non-zero pixels after slider change', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.waitForTimeout(500);
+
+    await page.evaluate(() => {
+      const s = document.querySelectorAll('input[type="range"]')[0];
+      s.value = '1';
+      s.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(1500);
+
+    const result = await page.evaluate(() => {
+      const c = document.getElementById('detail-canvas');
+      if (c.width === 0) return { error: 'width is 0' };
+      const ctx = c.getContext('2d');
+      const d = ctx.getImageData(0, 0, c.width, c.height);
+      const nonZero = d.data.filter(v => v > 0).length;
+      return { w: c.width, h: c.height, nonZero, total: d.data.length };
+    });
+
+    expect(result.w).toBeGreaterThan(0);
+    expect(result.nonZero).toBeGreaterThan(100);
+  });
+});

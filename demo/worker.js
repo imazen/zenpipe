@@ -175,9 +175,12 @@ self.addEventListener('message', async (e) => {
           msg.adjustments || {},
           msg.maxDim || 512,
         );
+        // Send raw RGBA bytes + dimensions (not ImageData — its buffer
+        // gets detached on transfer, breaking putImageData on the main thread).
+        const pixels = new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
         self.postMessage(
-          { id, type: 'result', imageData: result, width: result.width, height: result.height, backend },
-          { transfer: [result.data.buffer] },
+          { id, type: 'result', pixels, width: result.width, height: result.height, backend },
+          { transfer: [pixels.buffer] },
         );
         break;
       }
@@ -189,9 +192,10 @@ self.addEventListener('message', async (e) => {
           msg.rect || { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },
           msg.maxDim || 800,
         );
+        const pixels = new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
         self.postMessage(
-          { id, type: 'result', imageData: result, width: result.width, height: result.height, backend },
-          { transfer: [result.data.buffer] },
+          { id, type: 'result', pixels, width: result.width, height: result.height, backend },
+          { transfer: [pixels.buffer] },
         );
         break;
       }

@@ -405,9 +405,19 @@ async function renderOverview() {
     canvas.width = result.width;
     canvas.height = result.height;
     const ctx = canvas.getContext('2d');
-    ctx.putImageData(result.imageData, 0, 0);
+    // result.pixels is a Uint8Array transferred from the worker.
+    // Reconstruct as Uint8ClampedArray for ImageData.
+    const px = result.pixels;
+    const expected = result.width * result.height * 4;
+    if (!px || px.byteLength !== expected) {
+      console.error(`Overview pixel mismatch: got ${px?.byteLength}, expected ${expected}, type=${px?.constructor?.name}`);
+    }
+    const clamped = new Uint8ClampedArray(px.buffer, px.byteOffset, expected);
+    const imgData = new ImageData(clamped, result.width, result.height);
+    ctx.putImageData(imgData, 0, 0);
     canvas.classList.add('sharp');
   } catch (e) {
+    console.error('Overview render failed:', e);
     $('status').textContent = `Overview error: ${e.message}`;
   }
   $('overview-spinner').classList.remove('active');
@@ -431,8 +441,10 @@ async function renderDetail() {
     canvas.width = result.width;
     canvas.height = result.height;
     const ctx = canvas.getContext('2d');
-    ctx.putImageData(result.imageData, 0, 0);
+    const imgData = new ImageData(new Uint8ClampedArray(result.pixels.buffer), result.width, result.height);
+    ctx.putImageData(imgData, 0, 0);
   } catch (e) {
+    console.error('Detail render failed:', e);
     $('status').textContent = `Detail error: ${e.message}`;
   }
   $('detail-spinner').classList.remove('active');

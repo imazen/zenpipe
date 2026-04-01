@@ -405,6 +405,8 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "ultrahdr-core"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01015be39d1868f1582778471668616c421a417375dc0f78b1bc60bf2852f410"
 dependencies = [
  "bytemuck",
  "enough",
@@ -574,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aligned-vec",
  "archmage",
