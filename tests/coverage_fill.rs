@@ -8,7 +8,9 @@
 use hashbrown::HashMap;
 
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph, SourceInfo};
-use zenpipe::sources::{CallbackSource, ExpandCanvasSource, FlipHSource, MaterializedSource};
+#[cfg(feature = "std")]
+use zenpipe::sources::MaterializedSource;
+use zenpipe::sources::{CallbackSource, ExpandCanvasSource, FlipHSource};
 use zenpipe::{PipeError, Source, format};
 
 // =============================================================================
