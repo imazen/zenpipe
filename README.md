@@ -1,4 +1,4 @@
-# zencodecs [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodecs/ci.yml?branch=main&style=for-the-badge)](https://github.com/imazen/zencodecs/actions/workflows/ci.yml) [![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=for-the-badge)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=for-the-badge)](https://github.com/imazen/zencodecs#license)
+# zencodecs ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodecs/ci.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/zencodecs?style=flat-square) [![lib.rs](https://img.shields.io/crates/v/zencodecs?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodecs) ![docs.rs](https://img.shields.io/docsrs/zencodecs?style=flat-square) ![license](https://img.shields.io/crates/l/zencodecs?style=flat-square)
 
 Unified image codec dispatch for Rust. Thin layer over format-specific encoders and decoders:
 [zenjpeg](https://github.com/imazen/zenjpeg),

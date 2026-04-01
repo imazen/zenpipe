@@ -165,19 +165,6 @@ pub use depthmap::{
     DepthSource, DepthUnits,
 };
 
-// Container / MPF types from ultrahdr-core (for typed multi-image parsing)
-//
-// These types model the GContainer XMP directory (ItemSemantic, ContainerItem)
-// and MPF (Multi-Picture Format) entries (MpImageType, MpfEntry) used by
-// JPEG UltraHDR, Android Dynamic Depth Format, and iPhone portrait mode.
-//
-// Mapping to DepthSource:
-// - MpImageType::Disparity → DepthSource::AppleMpf
-// - ItemSemantic::DepthMap → DepthSource::AndroidDdf
-// - ItemSemantic::GainMap → used by gain map extraction (not depth)
-#[cfg(feature = "jpeg-ultrahdr")]
-pub use ultrahdr_core::{ContainerItem, ItemSemantic, MpImageType, MpfEntry};
-
 // zencodec trait re-exports
 pub use zencodec::decode::{
     DecodeJob, DecodePolicy, DecodeRowSink, DecoderConfig, DynAnimationFrameDecoder,

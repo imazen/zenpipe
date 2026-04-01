@@ -22,12 +22,9 @@ zenpixels = { version = "0.2.2", default-features = false, features = ["imgref"]
 zenpixels-convert = { version = "0.2.2", features = ["imgref"] }
 linear-srgb = { version = "0.6.6", default-features = false }
 
-# UltraHDR container types (optional, for re-exporting container/MPF types)
-ultrahdr-core = { version = "0.4.0", optional = true, default-features = false }
-
 # Codecs (all optional, feature-gated)
 zenjpeg = { version = "0.7.1", optional = true, features = ["decoder", "zencodec", "trellis"] }
-zenwebp = { version = "0.4.0", optional = true, features = ["zencodec"] }
+zenwebp = { version = "0.4.1", optional = true, features = ["zencodec"] }
 zengif = { version = "0.7.0", optional = true, features = ["zencodec"] }
 zenavif = { version = "0.1.0", optional = true, features = ["zencodec"] }
 zenavif-parse = { version = "0.5.1", optional = true, features = ["eager"] }
@@ -42,7 +39,7 @@ zenraw = { version = "0.1.0", optional = true, default-features = false, feature
 zennode = { version = "0.1.0", default-features = false, features = ["derive"], optional = true }
 
 # Color management (optional)
-moxcms = { version = "*", optional = true, default-features = false }
+moxcms = { version = "0.8.1", optional = true, default-features = false }
 
 [dev-dependencies]
 png = "0.18"
@@ -58,7 +55,7 @@ std = []
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core"]
+jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
@@ -132,6 +129,4 @@ required-features = ["calibrate"]
 
 [package.metadata.superwork.ci]
 strategy = "strip_path"
-# zenjxl 0.1.0 not yet published; override with git URL until released
-git_url_override = ["zenjxl"]
 

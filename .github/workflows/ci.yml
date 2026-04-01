@@ -30,8 +30,6 @@ jobs:
         shell: bash
         run: |
           sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          # zenjxl 0.1.0 not yet published; use git until released
-          sed -i 's|zenjxl = { version = "0.1.0"|zenjxl = { git = "https://github.com/imazen/zenjxl"|g' Cargo.toml
       - name: Test (default features)
         run: cargo test
 

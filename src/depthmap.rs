@@ -158,19 +158,6 @@ impl Default for DepthMapMetadata {
 }
 
 /// Source device/format that produced the depth map.
-///
-/// # Relationship to ultrahdr-core container types
-///
-/// When the `jpeg-ultrahdr` feature is enabled, these variants correspond
-/// to typed container abstractions from `ultrahdr_core`:
-///
-/// | `DepthSource`       | ultrahdr-core type                          |
-/// |---------------------|---------------------------------------------|
-/// | `AndroidGDepth`     | GDepth XMP namespace (not in GContainer)    |
-/// | `AndroidDdf`        | `ItemSemantic::DepthMap` in GContainer XMP  |
-/// | `AppleMpf`          | `MpImageType::Disparity` in MPF directory   |
-/// | `AppleHeic`         | HEIC auxiliary depth (ISO BMFF, no mapping) |
-/// | `Avif`              | AVIF auxiliary depth (ISO BMFF, no mapping) |
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DepthSource {
