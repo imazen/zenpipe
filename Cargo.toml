@@ -130,10 +130,17 @@ serde_json = "1"
 codec-corpus = "1"
 imgref = "1.12"
 rgb = { version = "0.8", features = ["as-bytes"] }
+zenbench = "0.1.3"
+zenbitmaps = { path = "../zenbitmaps", features = ["bmp"] }
 
 [[example]]
 name = "bench_windowed"
 required-features = ["std"]
+
+[[bench]]
+name = "session_cache"
+harness = false
+required-features = ["zennode", "std"]
 
 [package.metadata.superwork.ci]
 strategy = "git_url"
