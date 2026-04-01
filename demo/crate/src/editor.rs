@@ -48,9 +48,9 @@ pub struct Editor {
     source_height: u32,
 
     /// Session for the overview (small resized image).
-    overview_session: Session,
+    pub overview_session: Session,
     /// Session for the detail (cropped region).
-    detail_session: Session,
+    pub detail_session: Session,
 
     /// Max dimension for overview output.
     overview_max: u32,

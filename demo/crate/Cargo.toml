@@ -29,6 +29,9 @@ zenjpeg = { path = "../../../zenjpeg/zenjpeg", features = ["zencodec"] }
 [patch.crates-io]
 zennode = { path = "../../../zennode/zennode" }
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [profile.release]
 opt-level = "z"
 lto = true

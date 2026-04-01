@@ -520,6 +520,7 @@ async function loadImage(file) {
   sourceWidth = result.width;
   sourceHeight = result.height;
   sourceImage = true;
+  const be = result.backend === 'wasm' ? 'WASM' : 'mock';
 
   // Set initial region
   const aspect = sourceWidth / sourceHeight;
@@ -529,7 +530,7 @@ async function loadImage(file) {
 
   $('dropzone').classList.add('hidden');
   $('editor-ui').classList.remove('hidden');
-  $('status').textContent = `${sourceWidth}\u00d7${sourceHeight} \u2014 ${file.name}`;
+  $('status').textContent = `${sourceWidth}\u00d7${sourceHeight} \u2014 ${file.name} [${be}]`;
 
   renderOverview();
   renderDetail();
