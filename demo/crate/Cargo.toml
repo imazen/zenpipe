@@ -1,0 +1,35 @@
+[package]
+name = "zenpipe-demo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["wasm"]
+wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
+
+[dependencies]
+zenpipe = { path = "../..", features = ["zennode", "std", "nodes-filters", "json-schema"] }
+zennode = { path = "../../../zennode/zennode", features = ["derive"] }
+zenfilters = { path = "../../../zenfilters", features = ["zennode"] }
+zencodec = { path = "../../../zencodec", default-features = false }
+serde_json = "1"
+
+# WASM-specific deps (optional for native testing)
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", features = ["ImageData"], optional = true }
+
+[dev-dependencies]
+zenjpeg = { path = "../../../zenjpeg/zenjpeg", features = ["zencodec"] }
+
+[patch.crates-io]
+zennode = { path = "../../../zennode/zennode" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
