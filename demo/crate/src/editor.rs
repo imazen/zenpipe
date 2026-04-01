@@ -110,6 +110,15 @@ impl Editor {
         &mut self,
         adjustments: &BTreeMap<String, f64>,
     ) -> Result<RenderOutput, String> {
+        self.render_overview_with_preset(adjustments, None)
+    }
+
+    /// Render overview with optional film look preset.
+    pub fn render_overview_with_preset(
+        &mut self,
+        adjustments: &BTreeMap<String, f64>,
+        film_preset: Option<&str>,
+    ) -> Result<RenderOutput, String> {
         let source = Box::new(self.source_pixels.clone());
 
         let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
@@ -122,7 +131,9 @@ impl Editor {
             ..Default::default()
         }));
 
-        // Filters from adjustments
+        // Film look first (applied before other adjustments)
+        append_film_look(&mut nodes, adjustments, film_preset);
+        // Then individual filter adjustments
         append_filter_nodes(&mut nodes, adjustments);
 
         let info = make_source_info(self.source_width, self.source_height);
@@ -156,6 +167,16 @@ impl Editor {
         adjustments: &BTreeMap<String, f64>,
         region: &Region,
     ) -> Result<RenderOutput, String> {
+        self.render_region_with_preset(adjustments, region, None)
+    }
+
+    /// Render detail region with optional film look preset.
+    pub fn render_region_with_preset(
+        &mut self,
+        adjustments: &BTreeMap<String, f64>,
+        region: &Region,
+        film_preset: Option<&str>,
+    ) -> Result<RenderOutput, String> {
         let source = Box::new(self.source_pixels.clone());
 
         let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
@@ -180,7 +201,8 @@ impl Editor {
             ..Default::default()
         }));
 
-        // Filters from adjustments
+        // Film look first, then individual adjustments
+        append_film_look(&mut nodes, adjustments, film_preset);
         append_filter_nodes(&mut nodes, adjustments);
 
         let info = make_source_info(self.source_width, self.source_height);
@@ -218,6 +240,84 @@ impl Editor {
             height: mat.height(),
             data: pack_rgba(&mat),
         })
+    }
+
+    /// Render all film preset thumbnails at once (fan-out).
+    ///
+    /// Returns a Vec of (preset_id, preset_name, RenderOutput) for each
+    /// preset in `FilmPreset::ALL`. Each is a tiny `thumb_size x thumb_size`
+    /// image with that preset applied at full strength.
+    ///
+    /// Uses the overview Session so the geometry prefix (resize to thumb_size)
+    /// is cached — only the first preset pays the decode+resize cost.
+    pub fn render_preset_thumbnails(
+        &mut self,
+        thumb_size: u32,
+    ) -> Vec<(String, String, Result<RenderOutput, String>)> {
+        zenfilters::filters::FilmPreset::ALL
+            .iter()
+            .map(|preset| {
+                let result = self.render_single_preset(preset.id(), thumb_size);
+                (preset.id().to_string(), preset.name().to_string(), result)
+            })
+            .collect()
+    }
+
+    fn render_single_preset(
+        &mut self,
+        preset_id: &str,
+        thumb_size: u32,
+    ) -> Result<RenderOutput, String> {
+        let source = Box::new(self.source_pixels.clone());
+
+        let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
+
+        // Geometry: resize to tiny thumbnail
+        nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
+            w: Some(thumb_size),
+            h: Some(thumb_size),
+            mode: "within".into(),
+            ..Default::default()
+        }));
+
+        // Apply the film look preset
+        nodes.push(Box::new(zenfilters::zennode_defs::FilmLook {
+            preset: preset_id.to_string(),
+            strength: 1.0,
+        }));
+
+        let info = make_source_info(self.source_width, self.source_height);
+        let converters: &[&dyn zenpipe::bridge::NodeConverter] = &[&FILTERS_CONVERTER];
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters,
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+
+        // All thumbnails share the same geometry prefix (same source + same thumb_size).
+        let output = self
+            .overview_session
+            .stream(source, &config, None, self.source_hash)
+            .map_err(|e| format!("preset {preset_id}: {e}"))?;
+
+        let mat = MaterializedSource::from_source(output.source)
+            .map_err(|e| format!("preset {preset_id} materialize: {e}"))?;
+
+        Ok(RenderOutput {
+            width: mat.width(),
+            height: mat.height(),
+            data: pack_rgba(&mat),
+        })
+    }
+
+    /// List all available film preset IDs and names.
+    pub fn list_presets() -> Vec<(String, String)> {
+        zenfilters::filters::FilmPreset::ALL
+            .iter()
+            .map(|p| (p.id().to_string(), p.name().to_string()))
+            .collect()
     }
 }
 
@@ -279,102 +379,61 @@ impl zenpipe::bridge::NodeConverter for FiltersConverter {
 /// Static converter instance for passing to ProcessConfig.
 static FILTERS_CONVERTER: FiltersConverter = FiltersConverter;
 
-/// Convert a MaterializedSource to tightly-packed RGBA8 sRGB pixels.
+/// Convert a MaterializedSource to tightly-packed RGBA8 sRGB pixels
+/// using zenpixels-convert's SIMD-accelerated RowConverter.
 ///
-/// Handles any pipeline output format:
-/// - RGBA8 sRGB: strip stride padding
-/// - RGB8: expand to RGBA8 with alpha=255
-/// - RgbaF32 linear: convert linear→sRGB, clamp, quantize to u8
-/// - Other: use zenpixels RowConverter
+/// Handles any pipeline output format (RGBA8, RGB8, RgbaF32 linear, etc.)
+/// via automatic conversion planning. Fast path when already RGBA8 sRGB.
 fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
+    use zenpipe::RowConverter;
+
     let w = mat.width() as usize;
     let h = mat.height() as usize;
-    let bpp = mat.format().bytes_per_pixel();
-    let stride = mat.stride();
+    let src_stride = mat.stride();
+    let dst_row_bytes = w * 4;
 
-    if mat.format() == RGBA8_SRGB {
-        // Fast path: RGBA8 sRGB — just strip stride padding.
-        let row_bytes = w * 4;
-        if stride == row_bytes {
-            return mat.data()[..row_bytes * h].to_vec();
+    let src_desc = mat.format();
+    let dst_desc = RGBA8_SRGB;
+
+    if src_desc == dst_desc {
+        // Fast path: already RGBA8 sRGB — just strip stride padding.
+        if src_stride == dst_row_bytes {
+            return mat.data()[..dst_row_bytes * h].to_vec();
         }
-        let mut packed = Vec::with_capacity(row_bytes * h);
+        let mut packed = Vec::with_capacity(dst_row_bytes * h);
         for y in 0..h {
-            let start = y * stride;
-            packed.extend_from_slice(&mat.data()[start..start + row_bytes]);
+            let start = y * src_stride;
+            packed.extend_from_slice(&mat.data()[start..start + dst_row_bytes]);
         }
         return packed;
     }
 
-    if bpp == 3 {
-        // RGB8 → expand to RGBA8 with alpha=255.
-        let mut packed = Vec::with_capacity(w * h * 4);
-        for y in 0..h {
-            let row_start = y * stride;
-            for x in 0..w {
-                let px = row_start + x * 3;
-                packed.push(mat.data()[px]);
-                packed.push(mat.data()[px + 1]);
-                packed.push(mat.data()[px + 2]);
-                packed.push(255);
-            }
+    // Use RowConverter for any other format (RGB8, RgbaF32 linear, RGBX8, etc.)
+    let mut converter = match RowConverter::new(src_desc, dst_desc) {
+        Ok(c) => c,
+        Err(_e) => {
+            #[cfg(test)]
+            eprintln!("pack_rgba: no conversion {src_desc} → {dst_desc}: {_e}");
+            return vec![0u8; dst_row_bytes * h];
         }
-        return packed;
-    }
-
-    if bpp == 16 {
-        // RgbaF32 (linear) → convert to sRGB u8.
-        let data = mat.data();
-        let mut packed = Vec::with_capacity(w * h * 4);
-        for y in 0..h {
-            let row_start = y * stride;
-            for x in 0..w {
-                let px = row_start + x * 16;
-                let r = f32::from_le_bytes([data[px], data[px + 1], data[px + 2], data[px + 3]]);
-                let g =
-                    f32::from_le_bytes([data[px + 4], data[px + 5], data[px + 6], data[px + 7]]);
-                let b =
-                    f32::from_le_bytes([data[px + 8], data[px + 9], data[px + 10], data[px + 11]]);
-                let a = f32::from_le_bytes([
-                    data[px + 12],
-                    data[px + 13],
-                    data[px + 14],
-                    data[px + 15],
-                ]);
-                // Linear → sRGB gamma, clamp to [0,1], quantize to u8.
-                packed.push(linear_to_srgb_u8(r));
-                packed.push(linear_to_srgb_u8(g));
-                packed.push(linear_to_srgb_u8(b));
-                packed.push((a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8);
-            }
-        }
-        return packed;
-    }
-
-    // Fallback: 4bpp non-sRGB (e.g., RGBX8 or different transfer).
-    if bpp == 4 {
-        let row_bytes = w * 4;
-        let mut packed = Vec::with_capacity(row_bytes * h);
-        for y in 0..h {
-            let start = y * stride;
-            packed.extend_from_slice(&mat.data()[start..start + row_bytes]);
-        }
-        return packed;
-    }
-
-    // Should not happen.
-    vec![0u8; w * h * 4]
-}
-
-/// Convert a single linear f32 channel value to sRGB u8.
-fn linear_to_srgb_u8(v: f32) -> u8 {
-    let c = v.clamp(0.0, 1.0);
-    let s = if c <= 0.0031308 {
-        c * 12.92
-    } else {
-        1.055 * c.powf(1.0 / 2.4) - 0.055
     };
-    (s * 255.0 + 0.5) as u8
+
+    let mut packed = vec![0u8; dst_row_bytes * h];
+    let src_bpp = src_desc.bytes_per_pixel();
+    let src_row_bytes = w * src_bpp;
+    let data = mat.data();
+
+    for y in 0..h {
+        let src_start = y * src_stride;
+        let dst_start = y * dst_row_bytes;
+        converter.convert_row(
+            &data[src_start..src_start + src_row_bytes],
+            &mut packed[dst_start..dst_start + dst_row_bytes],
+            w as u32,
+        );
+    }
+
+    packed
 }
 
 fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
@@ -395,6 +454,32 @@ fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
 ///
 /// Keys are zenfilters node IDs without the "zenfilters." prefix
 /// (e.g., "exposure", "contrast"). Values are the primary parameter.
+/// Append a film look node if present in adjustments.
+///
+/// Special handling: `film_look_preset` is a string preset ID,
+/// `film_look_strength` is a float 0..1. Both must be present and
+/// non-default for the film look to be applied.
+fn append_film_look(
+    nodes: &mut Vec<Box<dyn zennode::NodeInstance>>,
+    adjustments: &BTreeMap<String, f64>,
+    film_look_preset: Option<&str>,
+) {
+    if let Some(preset) = film_look_preset {
+        if !preset.is_empty() && preset != "none" {
+            let strength = adjustments
+                .get("film_look_strength")
+                .copied()
+                .unwrap_or(1.0) as f32;
+            if strength > 0.001 {
+                nodes.push(Box::new(zenfilters::zennode_defs::FilmLook {
+                    preset: preset.to_string(),
+                    strength,
+                }));
+            }
+        }
+    }
+}
+
 fn append_filter_nodes(
     nodes: &mut Vec<Box<dyn zennode::NodeInstance>>,
     adjustments: &BTreeMap<String, f64>,
@@ -402,6 +487,10 @@ fn append_filter_nodes(
     for (key, &value) in adjustments {
         // Skip identity values (no-op filters).
         if value == 0.0 {
+            continue;
+        }
+        // Skip film_look keys — handled separately.
+        if key.starts_with("film_look") {
             continue;
         }
 
