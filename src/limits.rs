@@ -50,6 +50,10 @@ pub struct Limits {
     pub max_height: Option<u32>,
     /// Maximum animation frame count.
     pub max_frames: Option<u32>,
+    /// Maximum total pixel count across all animation frames
+    /// (width × height × frame_count). Bounds the total decode work
+    /// for animated images independently of per-frame dimensions.
+    pub max_total_pixels: Option<u64>,
     /// Maximum job duration.
     ///
     /// Use [`to_deadline()`](Limits::to_deadline) to create a [`Deadline`]
@@ -66,18 +70,20 @@ impl Limits {
         max_width: None,
         max_height: None,
         max_frames: None,
+        max_total_pixels: None,
         #[cfg(feature = "std")]
         max_duration: None,
     };
 
     /// Server-safe defaults: 100 megapixels, 16384 max dimension, 4 GB memory,
-    /// 10 000 animation frames.
+    /// 10 000 animation frames, 1 billion total pixels across all frames.
     pub const SERVER: Self = Self {
         max_pixels: Some(100_000_000),
         max_memory_bytes: Some(4 * 1024 * 1024 * 1024),
         max_width: Some(16384),
         max_height: Some(16384),
         max_frames: Some(10_000),
+        max_total_pixels: Some(1_000_000_000),
         #[cfg(feature = "std")]
         max_duration: None,
     };
@@ -105,6 +111,12 @@ impl Limits {
     /// Set maximum animation frame count.
     pub fn with_max_frames(mut self, max: u32) -> Self {
         self.max_frames = Some(max);
+        self
+    }
+
+    /// Set maximum total pixel count across all animation frames.
+    pub fn with_max_total_pixels(mut self, max: u64) -> Self {
+        self.max_total_pixels = Some(max);
         self
     }
 
@@ -181,6 +193,20 @@ impl Limits {
             }
         }
 
+        Ok(())
+    }
+
+    /// Check whether total pixels across all frames is within limits.
+    ///
+    /// `total_pixels` is typically `width * height * frame_count`.
+    pub fn check_total_pixels(&self, total_pixels: u64) -> crate::PipeResult<()> {
+        if let Some(max) = self.max_total_pixels {
+            if total_pixels > max {
+                return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                    "total pixel count {total_pixels} exceeds max {max}"
+                ))));
+            }
+        }
         Ok(())
     }
 

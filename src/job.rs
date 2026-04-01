@@ -440,9 +440,14 @@ impl<'a> ImageJob<'a> {
         ))
         .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
-        // Enforce dimension limits before decoding.
+        // Enforce dimension and total pixel limits before decoding.
         if let Some(ref limits) = self.limits {
             limits.check_dimensions(image_info.width, image_info.height)?;
+            if let Some(frame_count) = image_info.frame_count {
+                limits.check_frames(frame_count)?;
+                let total = image_info.width as u64 * image_info.height as u64 * frame_count as u64;
+                limits.check_total_pixels(total)?;
+            }
         }
 
         let decode_info = DecodeInfo {
