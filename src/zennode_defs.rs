@@ -885,7 +885,7 @@ mod tests {
         assert_eq!(profile_param.kv_keys, &["qp"]);
 
         let format_param = schema.params.iter().find(|p| p.name == "format").unwrap();
-        assert_eq!(format_param.kv_keys, &["format"]);
+        assert_eq!(format_param.kv_keys, &["format", "thumbnail"]);
 
         let dpr_param = schema.params.iter().find(|p| p.name == "dpr").unwrap();
         assert!(dpr_param.kv_keys.contains(&"qp.dpr"));

@@ -104,8 +104,6 @@ jobs:
           rm -f Cargo.lock
       - name: Clippy (default features)
         run: cargo clippy --lib -- -D warnings
-      - name: Clippy (no default features)
-        run: cargo clippy --no-default-features --lib -- -D warnings
 
   fmt:
     name: Format

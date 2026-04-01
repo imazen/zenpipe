@@ -117,9 +117,10 @@ pub(crate) fn decode_info(data: &[u8], _codec_config: Option<&CodecConfig>) -> R
 /// Returns `None` for unrecognized preset names.
 pub fn codec_config_for_preset(preset_name: &str, quality: f32) -> Option<CodecConfig> {
     let enc = zenjpeg::JpegEncoderConfig::from_preset(preset_name, quality)?;
-    let mut config = CodecConfig::default();
-    config.jpeg_encoder = Some(Box::new(enc.inner().clone()));
-    Some(config)
+    Some(CodecConfig {
+        jpeg_encoder: Some(Box::new(enc.inner().clone())),
+        ..CodecConfig::default()
+    })
 }
 
 /// codec_config taking priority for format-specific overrides.
