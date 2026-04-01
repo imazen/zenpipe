@@ -141,6 +141,7 @@ impl SidecarPlan {
 /// let mat = MaterializedSource::from_source(source)?;
 /// let processed = ProcessedSidecar::new(mat, kind);
 /// ```
+#[derive(Clone)]
 pub struct ProcessedSidecar {
     /// The materialized pixel data.
     pub pixels: MaterializedSource,

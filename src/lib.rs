@@ -20,11 +20,13 @@ whereat::define_at_crate_info!();
 #[allow(unused_imports)]
 use whereat::at;
 
+pub mod cache;
 mod error;
 pub mod format;
 pub mod graph;
 pub mod limits;
 pub mod ops;
+pub mod session;
 pub mod sources;
 mod strip;
 #[cfg(feature = "std")]
@@ -66,6 +68,13 @@ pub use bridge::{OptimizationLevel, canonical_sort, optimize_node_order};
 // Re-export orchestration types.
 #[cfg(feature = "zennode")]
 pub use orchestrate::{ProcessConfig, ProcessedImage, SourceImageInfo, StreamingOutput};
+
+// Re-export cache types.
+pub use cache::{CacheSource, CachedPixels};
+#[cfg(feature = "zennode")]
+pub use cache::{PipelineCache, geometry_split, prefix_hash, subtree_hash};
+#[cfg(feature = "zennode")]
+pub use session::Session;
 
 // Re-export zencodecs quality types for callers resolving encode quality.
 #[cfg(feature = "zennode")]

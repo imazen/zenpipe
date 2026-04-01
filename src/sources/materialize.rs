@@ -117,6 +117,14 @@ impl MaterializedSource {
         &mut self.data
     }
 
+    /// Consume and return the owned pixel buffer.
+    ///
+    /// Used by [`CachedPixels`](crate::cache::CachedPixels) to move pixel
+    /// data into an `Arc` without copying.
+    pub fn into_data(self) -> alloc::vec::Vec<u8> {
+        self.data
+    }
+
     /// Stride (bytes per row, may include padding).
     pub fn stride(&self) -> usize {
         self.format.aligned_stride(self.width)
@@ -127,6 +135,19 @@ impl MaterializedSource {
         let stride = self.stride();
         let start = y as usize * stride;
         &self.data[start..start + stride]
+    }
+}
+
+impl Clone for MaterializedSource {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            strip_height: self.strip_height,
+            y: 0, // Reset cursor — clone starts from the beginning.
+        }
     }
 }
 
