@@ -687,7 +687,7 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
 
     // Parse ISO 21496-1 binary metadata from the jhgm bundle
     let metadata = if !bundle.metadata.is_empty() {
-        zenjpeg::ultrahdr::parse_iso21496(&bundle.metadata).ok()?
+        zenjpeg::ultrahdr::parse_iso21496(&bundle.metadata, zenjpeg::ultrahdr::Iso21496Format::JpegApp2).ok()?
     } else {
         crate::gainmap::GainMapMetadata::default()
     };
