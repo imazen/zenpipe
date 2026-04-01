@@ -51,7 +51,9 @@ use whereat::at;
 
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
-use crate::ops::{PixelOp, RowConverterOp};
+use crate::ops::PixelOp;
+#[cfg(not(feature = "std"))]
+use crate::ops::RowConverterOp;
 #[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{

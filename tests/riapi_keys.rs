@@ -594,6 +594,7 @@ fn crop_custom_units() {
 //  GRAYSCALE & INVERT (RIAPI via #[kv])
 // ═══════════════════════════════════════════════════════════════════════
 
+#[cfg(feature = "nodes-filters")]
 #[test]
 fn s_grayscale() {
     let r = parse("s.grayscale=ntsc");
@@ -602,6 +603,7 @@ fn s_grayscale() {
     assert!(g.is_some(), "s.grayscale should produce Grayscale node");
 }
 
+#[cfg(feature = "nodes-filters")]
 #[test]
 fn s_invert() {
     let r = parse("s.invert=true");
