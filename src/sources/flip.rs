@@ -74,6 +74,10 @@ mod tests {
     use super::*;
     use crate::format::RGBA8_SRGB;
     use crate::sources::materialize::MaterializedSource;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec::Vec;
 
     #[test]
     fn horizontal_flip_4x1_rgba8() {

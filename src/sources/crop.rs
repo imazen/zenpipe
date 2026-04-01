@@ -136,6 +136,10 @@ mod tests {
     use super::*;
     use crate::format::RGBA8_SRGB;
     use crate::sources::materialize::MaterializedSource;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec::Vec;
 
     /// Helper: collect all pixel rows from a Source.
     fn drain_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {

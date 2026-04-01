@@ -164,6 +164,10 @@ mod tests {
     use crate::format::{RGB8_SRGB, RGBA8_SRGB};
     use crate::ops::RowConverterOp;
     use crate::sources::materialize::MaterializedSource;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec::Vec;
 
     #[test]
     fn passthrough_no_ops() {

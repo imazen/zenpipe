@@ -3,6 +3,9 @@
 //! Validates that the graph compiler uses `ideal_format()` / negotiate logic
 //! to avoid unnecessary format conversions, and that conversion costs are
 //! recorded in traces.
+//!
+//! Requires `std` because it uses `compile_traced` and the `trace` module.
+#![cfg(feature = "std")]
 
 use hashbrown::HashMap;
 

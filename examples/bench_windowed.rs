@@ -5,8 +5,8 @@
 use std::time::Instant;
 
 use zenpipe::format;
-use zenpipe::sources::{MaterializedSource, WindowedFilterSource};
-use zenpipe::{PipeError, PixelFormat, Source, Strip};
+use zenpipe::sources::WindowedFilterSource;
+use zenpipe::{PixelFormat, Source, Strip};
 
 struct SyntheticSource {
     width: u32,

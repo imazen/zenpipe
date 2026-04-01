@@ -2,7 +2,7 @@ use zenpipe::ops::RowConverterOp;
 use zenpipe::sources::{
     CallbackSource, CropSource, EdgeReplicateSource, MaterializedSource, TransformSource,
 };
-use zenpipe::{PipeError, Source, Strip, format};
+use zenpipe::{Source, Strip, format};
 
 /// Collect all strips from a source into a flat Vec<u8>.
 fn drain(source: &mut dyn Source) -> Vec<u8> {

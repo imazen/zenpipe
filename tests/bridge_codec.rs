@@ -10,7 +10,6 @@
 use zencodec::decode::{DecodeJob, DecoderConfig};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::encoder::ChromaSubsampling;
-use zennode::NodeDef;
 
 use zenpipe::bridge;
 use zenpipe::codec::EncoderSink;

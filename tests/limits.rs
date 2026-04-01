@@ -45,7 +45,7 @@ fn limits_check_pixels_exceeded() {
     let result = limits.check(20, 20, format::RGBA8_SRGB);
     assert!(result.is_err());
     assert!(matches!(
-        result.unwrap_err().into_inner(),
+        result.unwrap_err().decompose().0,
         PipeError::LimitExceeded(_)
     ));
 }
@@ -278,7 +278,7 @@ fn tracker_exceeds_limit() {
     let err = tracker.allocate(500);
     assert!(err.is_err());
     assert!(matches!(
-        err.unwrap_err().into_inner(),
+        err.unwrap_err().decompose().0,
         PipeError::LimitExceeded(_)
     ));
 
@@ -349,12 +349,15 @@ fn tracker_from_limits() {
 }
 
 // =========================================================================
-// Deadline
+// Deadline (std-only: Deadline and with_max_duration require std)
 // =========================================================================
 
+#[cfg(feature = "std")]
 use std::time::Duration;
+#[cfg(feature = "std")]
 use zenpipe::Deadline;
 
+#[cfg(feature = "std")]
 #[test]
 fn deadline_fresh_passes_check() {
     let deadline = Deadline::new(Duration::from_secs(60));
@@ -363,6 +366,7 @@ fn deadline_fresh_passes_check() {
     assert!(deadline.remaining() > Duration::ZERO);
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn deadline_expired_fails_check() {
     let deadline = Deadline::new(Duration::from_nanos(1));
@@ -373,6 +377,7 @@ fn deadline_expired_fails_check() {
     assert_eq!(deadline.remaining(), Duration::ZERO);
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn deadline_from_limits() {
     let limits = Limits::default().with_max_duration(Duration::from_secs(5));
@@ -385,6 +390,7 @@ fn deadline_from_limits() {
     assert!(no_deadline.is_none());
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn deadline_compose_with_execute() {
     // A deadline that has already expired should cancel execute_with_stop

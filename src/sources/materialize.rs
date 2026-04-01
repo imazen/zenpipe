@@ -171,6 +171,10 @@ impl Source for MaterializedSource {
 mod tests {
     use super::*;
     use crate::format::{RGB8_SRGB, RGBA8_SRGB};
+    #[cfg(not(feature = "std"))]
+    use alloc::vec;
+    #[cfg(not(feature = "std"))]
+    use alloc::vec::Vec;
 
     /// Helper: collect all rows from a Source into a flat Vec.
     fn drain_all_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
