@@ -1,13 +1,14 @@
-//! WASM runtime demo — runs under wasmtime via `wasm32-wasip1`.
+//! Native x86_64 benchmark — same operations as wasm-demo for fair comparison.
 //!
-//! Build:  RUSTFLAGS="-C target-feature=+simd128" cargo build --target wasm32-wasip1 --release --bin wasm-demo
-//! Run:    wasmtime --wasm simd target/wasm32-wasip1/release/wasm-demo.wasm
+//! Build: cargo build --release --bin native-bench
+//! Run:   target/release/native-bench
 //!
-//! Generates a 256x256 gradient, runs it through the full pipeline, prints timings.
+//! For SSE2-only (128-bit, same width as wasm simd128):
+//!   SCALAR_ONLY=1 target/release/native-bench
 
 use std::time::Instant;
-use zencodec::encode::DynEncoderConfig;
 use zencodec::decode::DynDecoderConfig;
+use zencodec::encode::DynEncoderConfig;
 
 fn generate_gradient(w: u32, h: u32) -> Vec<u8> {
     let mut buf = Vec::with_capacity((w * h * 4) as usize);
@@ -70,7 +71,7 @@ fn decode_via_zencodec(name: &str, cfg: &dyn DynDecoderConfig, data: &[u8]) {
 fn main() {
     let w: u32 = 3840;
     let h: u32 = 2160;
-    println!("zenpipe WASM demo ({w}x{h} gradient, 4K)");
+    println!("zenpipe NATIVE benchmark ({w}x{h} gradient, 4K)");
     println!("==========================================");
 
     let pixels = generate_gradient(w, h);
@@ -133,7 +134,7 @@ fn main() {
         }
     }
 
-    // --- Zenfilters (exposure + saturation + contrast + blur + sharpen) ---
+    // --- Zenfilters (exposure + saturation + contrast) ---
     {
         let t = Instant::now();
         let fmt = zenpipe::format::RGBA8_SRGB;
@@ -221,10 +222,7 @@ fn main() {
     // WebP
     encode_via_zencodec("WebP", &zenwebp::zencodec::WebpEncoderConfig::lossy().with_quality(80.0), &pixels, w, h);
 
-    // JXL — local zenjxl behind published zencodec 0.1.3
-    // encode_via_zencodec("JXL", &zenjxl::JxlEncoderConfig::new(), &pixels, w, h);
-
-    // GIF (use smaller size since quantization is expensive at 4K)
+    // GIF
     {
         let gif_w: u32 = 256;
         let gif_h: u32 = 256;

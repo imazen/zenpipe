@@ -7,8 +7,8 @@ use zenpipe::*;
 use zenpipe::graph::*;
 use zenpipe::sources::*;
 use zenpipe::format;
-use zencodec::decode::{DynDecoderConfig, DynStreamingDecoder};
-use zencodec::encode::{DynEncoderConfig, DynEncoder};
+use zencodec::decode::DynDecoderConfig;
+use zencodec::encode::DynEncoderConfig;
 
 fn drain(mut src: Box<dyn Source>) -> Vec<u8> {
     let mut out = Vec::new();
@@ -139,7 +139,7 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
 #[unsafe(no_mangle)] pub extern "C" fn png_encode(sp:*const u8,sl:u32,w:u32,h:u32)->*mut u8{
     let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)};
     let cfg = zenpng::PngEncoderConfig::default();
-    let mut job = cfg.dyn_job();
+    let job = cfg.dyn_job();
     let desc = zenpixels::PixelDescriptor::RGBA8_SRGB;
     let Ok(mut enc) = job.into_encoder() else { return core::ptr::null_mut() };
     let slice = zenpixels::PixelSlice::new(s, w, h, w as usize * 4, desc).unwrap();
@@ -153,8 +153,8 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
 // === WebP ===
 #[unsafe(no_mangle)] pub extern "C" fn webp_encode(sp:*const u8,sl:u32,w:u32,h:u32,q:u32)->*mut u8{
     let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)};
-    let cfg = zenwebp::WebpEncoderConfig::lossy().with_quality(q as f32);
-    let mut job = cfg.dyn_job();
+    let cfg = zenwebp::zencodec::WebpEncoderConfig::lossy().with_quality(q as f32);
+    let job = cfg.dyn_job();
     let desc = zenpixels::PixelDescriptor::RGBA8_SRGB;
     let Ok(mut enc) = job.into_encoder() else { return core::ptr::null_mut() };
     let slice = zenpixels::PixelSlice::new(s, w, h, w as usize * 4, desc).unwrap();
@@ -162,25 +162,12 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
     match enc.finish() { Ok(out) => ret(out.data().to_vec()), Err(_) => core::ptr::null_mut() }
 }
 #[unsafe(no_mangle)] pub extern "C" fn webp_decode(p:*const u8,l:u32,ow:*mut u32,oh:*mut u32)->*mut u8{
-    generic_decode(&zenwebp::WebpDecoderConfig::default(), unsafe{core::slice::from_raw_parts(p,l as usize)}, ow, oh)
+    generic_decode(&zenwebp::zencodec::WebpDecoderConfig::default(), unsafe{core::slice::from_raw_parts(p,l as usize)}, ow, oh)
 }
 
 // AVIF disabled — zenavif has rav1d API compat issue (lossless/base_q_idx fields)
 
-// === JXL ===
-#[unsafe(no_mangle)] pub extern "C" fn jxl_encode(sp:*const u8,sl:u32,w:u32,h:u32,_q:u32)->*mut u8{
-    let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)};
-    let cfg = zenjxl::JxlEncoderConfig::new();
-    let mut job = cfg.dyn_job();
-    let desc = zenpixels::PixelDescriptor::RGBA8_SRGB;
-    let Ok(mut enc) = job.into_encoder() else { return core::ptr::null_mut() };
-    let slice = zenpixels::PixelSlice::new(s, w, h, w as usize * 4, desc).unwrap();
-    let _ = enc.push_rows(slice);
-    match enc.finish() { Ok(out) => ret(out.data().to_vec()), Err(_) => core::ptr::null_mut() }
-}
-#[unsafe(no_mangle)] pub extern "C" fn jxl_decode(p:*const u8,l:u32,ow:*mut u32,oh:*mut u32)->*mut u8{
-    generic_decode(&zenjxl::JxlDecoderConfig::default(), unsafe{core::slice::from_raw_parts(p,l as usize)}, ow, oh)
-}
+// JXL disabled — zenjxl has API mismatch with published zencodec (parse_iso21496_jpeg renamed)
 
 // === Memory ===
 #[unsafe(no_mangle)] pub extern "C" fn free_buffer(ptr:*mut u8,len:u32){ if !ptr.is_null(){unsafe{drop(Vec::from_raw_parts(ptr,len as usize,len as usize));}} }

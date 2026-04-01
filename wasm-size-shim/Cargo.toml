@@ -8,6 +8,10 @@ rust-version = "1.85"
 name = "wasm-demo"
 path = "src/main.rs"
 
+[[bin]]
+name = "native-bench"
+path = "src/native_bench.rs"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -16,26 +20,33 @@ zenpipe = { path = "..", features = ["std"] }
 zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
 zenblend = { path = "../../zenblend" }
 zenfilters = { path = "../../zenfilters" }
-zencodec = { version = "0.1.8" }
+zencodec = { version = "0.1.12" }
 zenpixels = { path = "../../zenpixels/zenpixels" }
-hashbrown = "0.15"
+hashbrown = "0.16"
 rgb = "0.8"
 bytemuck = { version = "1", features = ["derive"] }
 imgref = "1"
 
 # Codecs
-zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["std", "yuv", "trellis", "zencodec"] }
+zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["yuv", "trellis", "zencodec"] }
 zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr", "zencodec"] }
 zenpng = { path = "../../zenpng" }
 zenwebp = { path = "../../zenwebp", features = ["zencodec"] }
 # zenavif: rav1d API change (lossless/base_q_idx fields removed from AV1Metadata)
 # zenavif = { path = "../../zenavif", features = ["zencodec"] }
-zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
+# zenjxl: API mismatch with published zencodec (parse_iso21496_jpeg renamed)
+# zenjxl = { path = "../../zenjxl", features = ["encode", "decode", "zencodec"] }
 # zentiff: build error with tiff crate version mismatch (color_map, DeflateLevel)
 # zenbitmaps: included if zentiff compiles
 # zentiff = { path = "../../zentiff", features = ["zencodec"] }
 # zenbitmaps = { path = "../../zenbitmaps", features = ["zencodec"] }
 
+
+[patch.crates-io]
+zennode = { path = "../../zennode/zennode" }
+zennode-derive = { path = "../../zennode/zennode-derive" }
+zenpixels = { path = "../../zenpixels/zenpixels" }
+zencodec = { path = "../../zencodec" }
 
 [profile.release]
 lto = true
