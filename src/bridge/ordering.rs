@@ -454,10 +454,7 @@ mod tests {
 
         canonical_sort(&mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(
             ids,
             &[
@@ -482,10 +479,7 @@ mod tests {
         canonical_sort(&mut nodes);
 
         // All are Filter — original relative order preserved (stable sort).
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.contrast", "test.exposure", "test.sharpen"]);
     }
 
@@ -501,10 +495,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::None, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.exposure", "test.crop", "test.resize"]);
     }
 
@@ -515,10 +506,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Lossless, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.orient", "test.crop"]);
     }
 
@@ -530,10 +518,7 @@ mod tests {
         optimize_node_order(OptimizationLevel::Lossless, &mut nodes);
 
         // Crop before resize is a Speed-level optimization, not Lossless.
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.resize", "test.crop"]);
     }
 
@@ -544,10 +529,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.crop", "test.resize"]);
     }
 
@@ -558,10 +540,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.crop", "test.exposure"]);
     }
 
@@ -574,10 +553,7 @@ mod tests {
 
         // Sharpen is a neighborhood filter — crop after sharpen changes output.
         // The rule only applies to non-neighborhood filters.
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.sharpen", "test.crop"]);
     }
 
@@ -589,10 +565,7 @@ mod tests {
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
         // Moving resize before sharpen destroys detail — unsafe reordering.
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(ids, &["test.sharpen", "test.resize"]);
     }
 
@@ -614,10 +587,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(
             ids,
             &[
@@ -645,10 +615,7 @@ mod tests {
 
         optimize_node_order(OptimizationLevel::Speed, &mut nodes);
 
-        let ids: Vec<&str> = nodes
-            .iter()
-            .map(|n| n.schema().id)
-            .collect();
+        let ids: Vec<&str> = nodes.iter().map(|n| n.schema().id).collect();
         assert_eq!(
             ids,
             &["test.crop", "test.resize", "test.exposure", "test.sharpen"]

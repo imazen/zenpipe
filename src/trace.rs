@@ -1404,10 +1404,7 @@ impl FullPipelineTrace {
             s,
             ".tmark {{ animation:timeline {total_dur}s infinite steps({num_frames}); }}"
         );
-        let _ = writeln!(
-            s,
-            "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}"
-        );
+        let _ = writeln!(s, "rect.nb {{ rx:6; ry:6; stroke:#bbb; stroke-width:1; }}");
         let _ = writeln!(s, "</style></defs>");
 
         // Render nodes — each is a group with CSS animation.

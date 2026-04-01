@@ -1473,9 +1473,9 @@ impl NodeDef for CropRiapiDef {
 
         let parse_f = |s: &str, idx: usize| -> core::result::Result<f32, NodeError> {
             s.trim().parse::<f32>().map_err(|_| {
-                NodeError::Other(
-                    alloc::format!("cannot parse crop coordinate[{idx}] '{s}' as f32"),
-                )
+                NodeError::Other(alloc::format!(
+                    "cannot parse crop coordinate[{idx}] '{s}' as f32"
+                ))
             })
         };
 
