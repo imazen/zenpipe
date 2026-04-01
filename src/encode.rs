@@ -7,6 +7,7 @@
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
 use crate::error::Result;
+#[cfg(feature = "jpeg-ultrahdr")]
 use crate::pixel::{ImgRef, Rgb, Rgba};
 use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
