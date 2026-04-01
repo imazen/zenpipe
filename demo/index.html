@@ -217,22 +217,28 @@ function sendToWorker(type, data) {
 // =====================================================================
 
 const CSS_FILTER_MAP = {
-  'zenfilters.exposure': (v) => v ? `brightness(${Math.pow(2, v).toFixed(3)})` : null,
-  'zenfilters.contrast': (v) => v ? `contrast(${(1 + v).toFixed(3)})` : null,
-  'zenfilters.saturation': (v) => v ? `saturate(${v.toFixed(3)})` : null,  // factor, not offset
+  'zenfilters.exposure': (params) => {
+    const v = params.stops;
+    return (v !== undefined && v !== 0) ? `brightness(${Math.pow(2, v).toFixed(3)})` : null;
+  },
+  'zenfilters.contrast': (params) => {
+    const v = params.amount;
+    return (v !== undefined && v !== 0) ? `contrast(${(1 + v).toFixed(3)})` : null;
+  },
+  'zenfilters.saturation': (params) => {
+    const v = params.factor;
+    return (v !== undefined && v !== 1) ? `saturate(${v.toFixed(3)})` : null;
+  },
 };
 
 function toCssFilter() {
   const parts = [];
-  for (const node of sliderNodes) {
-    const mapper = CSS_FILTER_MAP[node.id];
+  const adj = getFilterAdjustments();
+  for (const [nodeId, params] of Object.entries(adj)) {
+    const mapper = CSS_FILTER_MAP[nodeId];
     if (!mapper) continue;
-    for (const param of node.params) {
-      const v = adjustments[param.adjustKey];
-      if (v === undefined || v === param.identity) continue;
-      const css = mapper(v);
-      if (css) parts.push(css);
-    }
+    const css = mapper(params);
+    if (css) parts.push(css);
   }
   return parts.length ? parts.join(' ') : 'none';
 }
@@ -254,25 +260,14 @@ function clearCssPreview() {
 
 /** Group display order and labels. */
 const GROUP_ORDER = [
-  'tone', 'tone_range', 'color', 'detail', 'effects',
+  'tone', 'tone_range', 'tone_map', 'color', 'detail', 'effects',
   'local', 'creative', 'lens', 'auto',
 ];
 const GROUP_LABELS = {
-  tone: 'Tone', tone_range: 'Tone Range', color: 'Color',
-  detail: 'Detail', effects: 'Effects', local: 'Local',
-  creative: 'Creative', lens: 'Lens', auto: 'Auto',
+  tone: 'Tone', tone_range: 'Tone Range', tone_map: 'Tone Map',
+  color: 'Color', detail: 'Detail', effects: 'Effects',
+  local: 'Local', creative: 'Creative', lens: 'Lens', auto: 'Auto',
 };
-
-/** Curated list of nodes to show (ordered). Others are hidden. */
-const VISIBLE_NODES = [
-  'zenfilters.exposure', 'zenfilters.contrast',
-  'zenfilters.highlights_shadows',
-  'zenfilters.saturation', 'zenfilters.vibrance', 'zenfilters.temperature', 'zenfilters.tint',
-  'zenfilters.clarity', 'zenfilters.sharpen',
-  'zenfilters.dehaze', 'zenfilters.vignette',
-  'zenfilters.black_point', 'zenfilters.white_point',
-  'zenfilters.auto_levels', 'zenfilters.auto_exposure',
-];
 
 async function loadSchemaAndBuildUI() {
   let schema;
@@ -288,11 +283,12 @@ async function loadSchemaAndBuildUI() {
   const sidebar = $('sidebar');
   sidebar.innerHTML = '';
 
-  // Group nodes by x-zennode-group
+  // Discover all filter nodes from schema
   const groups = new Map();
-  for (const nodeId of VISIBLE_NODES) {
-    const def = defs[nodeId];
-    if (!def) continue;
+  for (const [nodeId, def] of Object.entries(defs)) {
+    if (!nodeId.startsWith('zenfilters.')) continue;
+    if (def['x-zennode-role'] !== 'filter') continue;
+
     const group = def['x-zennode-group'] || 'other';
     if (!groups.has(group)) groups.set(group, []);
 
@@ -305,8 +301,9 @@ async function loadSchemaAndBuildUI() {
       const defaultVal = paramSchema.default ?? 0;
       const identity = paramSchema['x-zennode-identity'] ?? defaultVal;
       const label = paramSchema.title || paramName;
-      const adjustKey = nodeId.replace('zenfilters.', '') + (params.length > 0 ? '_' + paramName : '');
 
+      // adjustKey stores nodeId + paramName for internal tracking
+      const adjustKey = nodeId + '.' + paramName;
       adjustments[adjustKey] = identity;
       params.push({ paramName, label, min, max, step, defaultVal, identity, adjustKey });
     }
@@ -318,6 +315,11 @@ async function loadSchemaAndBuildUI() {
         params,
       });
     }
+  }
+
+  // Sort nodes within each group alphabetically by title
+  for (const nodes of groups.values()) {
+    nodes.sort((a, b) => a.title.localeCompare(b.title));
   }
 
   // Render groups in order
@@ -374,17 +376,18 @@ function formatVal(v) {
 // =====================================================================
 
 function getFilterAdjustments() {
-  // Map adjustKeys back to the short names the worker expects
+  // Build nested format: { "zenfilters.exposure": { "stops": 1.5 }, ... }
+  // Only include a node if at least one param differs from its identity.
   const adj = {};
-  for (const [key, val] of Object.entries(adjustments)) {
-    // Find identity for this key
-    let identity = 0;
-    for (const node of sliderNodes) {
-      for (const p of node.params) {
-        if (p.adjustKey === key) { identity = p.identity; break; }
-      }
+  for (const node of sliderNodes) {
+    const nodeParams = {};
+    let anyChanged = false;
+    for (const p of node.params) {
+      const val = adjustments[p.adjustKey];
+      nodeParams[p.paramName] = val;
+      if (val !== p.identity) anyChanged = true;
     }
-    if (val !== identity) adj[key] = val;
+    if (anyChanged) adj[node.id] = nodeParams;
   }
   return adj;
 }
