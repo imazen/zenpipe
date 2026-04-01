@@ -450,8 +450,8 @@ pub fn decode_watermark(
         let transform =
             crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
         let mat_source: Box<dyn crate::Source> = Box::new(transform);
-        let mat = crate::sources::MaterializedSource::from_source(mat_source)
-            .map_err(ZenError::from)?;
+        let mat =
+            crate::sources::MaterializedSource::from_source(mat_source).map_err(ZenError::from)?;
         mat.data().to_vec()
     };
 
