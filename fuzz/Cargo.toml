@@ -14,7 +14,7 @@ enough = "0.4.3"
 
 zencodec = "0.1.11"
 zenpixels = { version = "0.2.1", default-features = false }
-codec-corpus = "1.1"
+codec-corpus = { path = "../../../codec-corpus/crate" }
 
 [dependencies.zencodecs]
 path = ".."
@@ -33,6 +33,10 @@ features = [
 # Prevent workspace interference
 [workspace]
 members = ["."]
+
+[patch.crates-io]
+zencodec = { path = "../../zencodec" }
+zenavif-parse = { path = "../../zenavif-parse" }
 
 [profile.release]
 debug = 1
