@@ -2,7 +2,7 @@
 name = "zenpipe"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 description = "Streaming pixel pipeline — zero-materialization graph execution over zen crates"
 repository = "https://github.com/imazen/zenpipe"
@@ -24,6 +24,9 @@ std = [
 ]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
 zennode = ["dep:zennode", "zenresize/layout", "dep:zencodecs", "zencodecs/zennode"]
+# Local-dev only: gate bridge tests requiring zennode_defs modules in zenresize/zenlayout.
+# These modules are WIP (commented out in those crates) and not available via git. Never enabled in CI.
+zennode-defs = ["zennode"]
 # High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS + gain map support).
 job = ["zennode", "std", "zencodecs/cms", "zencodecs/jpeg-ultrahdr"]
 # JSON Schema / OpenAPI schema export from node registry.
