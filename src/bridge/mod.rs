@@ -43,7 +43,6 @@ use zennode::NodeInstance;
 #[allow(unused_imports)]
 use whereat::at;
 
-use crate::error::PipeError;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 
 // Re-export public types.

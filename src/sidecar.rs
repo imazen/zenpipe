@@ -14,7 +14,6 @@ use crate::Source;
 #[allow(unused_imports)]
 use whereat::at;
 
-use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 use crate::sources::MaterializedSource;

@@ -5,7 +5,6 @@ use crate::Source;
 #[allow(unused_imports)]
 use whereat::at;
 
-use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::limits::Limits;
 use crate::strip::Strip;

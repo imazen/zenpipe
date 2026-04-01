@@ -8,7 +8,6 @@ use crate::Source;
 #[allow(unused_imports)]
 use whereat::at;
 
-use crate::error::PipeError;
 use crate::format::PixelFormat;
 use crate::strip::{Strip, StripBuf};
 use crate::trace::TraceEntry;
