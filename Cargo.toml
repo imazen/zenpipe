@@ -114,8 +114,8 @@ serde_json = { version = "1", optional = true }
 imageflow_types = { path = "../../imageflow/imageflow_types", optional = true }
 imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true }
 # Face detection + saliency via zentract plugin (optional)
-zensally = { path = "../zenfaces/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true }
-zensally-zentract = { path = "../zenfaces/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true }
+zensally = { path = "../zensally/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true }
+zensally-zentract = { path = "../zensally/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true }
 
 [dev-dependencies]
 # Dev-deps enable extra features on the optional codec crates above.
