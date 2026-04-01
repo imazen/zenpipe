@@ -223,7 +223,7 @@ impl WasmEditor {
     }
 }
 
-fn parse_adjustments(json: &str) -> Result<BTreeMap<String, f64>, JsError> {
+fn parse_adjustments(json: &str) -> Result<BTreeMap<String, serde_json::Value>, JsError> {
     if json.is_empty() || json == "{}" {
         return Ok(BTreeMap::new());
     }
@@ -232,11 +232,5 @@ fn parse_adjustments(json: &str) -> Result<BTreeMap<String, f64>, JsError> {
     let obj = value
         .as_object()
         .ok_or_else(|| JsError::new("Adjustments must be a JSON object"))?;
-    let mut map = BTreeMap::new();
-    for (key, val) in obj {
-        if let Some(n) = val.as_f64() {
-            map.insert(key.clone(), n);
-        }
-    }
-    Ok(map)
+    Ok(obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
 }

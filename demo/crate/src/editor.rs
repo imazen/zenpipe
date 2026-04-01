@@ -141,9 +141,12 @@ impl Editor {
     ///
     /// Geometry prefix (decode + resize) is cached; only filter suffix
     /// re-runs when adjustments change.
+    ///
+    /// Keys are node IDs (e.g., `"zenfilters.exposure"`), values are
+    /// JSON objects of param name → value (e.g., `{"stops": 0.5}`).
     pub fn render_overview(
         &mut self,
-        adjustments: &BTreeMap<String, f64>,
+        adjustments: &BTreeMap<String, serde_json::Value>,
     ) -> Result<RenderOutput, String> {
         self.render_overview_with_preset(adjustments, None)
     }
@@ -151,7 +154,7 @@ impl Editor {
     /// Render overview with optional film look preset.
     pub fn render_overview_with_preset(
         &mut self,
-        adjustments: &BTreeMap<String, f64>,
+        adjustments: &BTreeMap<String, serde_json::Value>,
         film_preset: Option<&str>,
     ) -> Result<RenderOutput, String> {
         let source = Box::new(self.source_pixels.clone());
@@ -205,7 +208,7 @@ impl Editor {
     /// Render the detail region with the given filter adjustments.
     pub fn render_region(
         &mut self,
-        adjustments: &BTreeMap<String, f64>,
+        adjustments: &BTreeMap<String, serde_json::Value>,
         region: &Region,
     ) -> Result<RenderOutput, String> {
         self.render_region_with_preset(adjustments, region, None)
@@ -214,7 +217,7 @@ impl Editor {
     /// Render detail region with optional film look preset.
     pub fn render_region_with_preset(
         &mut self,
-        adjustments: &BTreeMap<String, f64>,
+        adjustments: &BTreeMap<String, serde_json::Value>,
         region: &Region,
         film_preset: Option<&str>,
     ) -> Result<RenderOutput, String> {
@@ -497,25 +500,20 @@ fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
     }
 }
 
-/// Map adjustment key-value pairs to zenfilters node instances.
+/// Append a film look node if a preset is specified.
 ///
-/// Keys are zenfilters node IDs without the "zenfilters." prefix
-/// (e.g., "exposure", "contrast"). Values are the primary parameter.
-/// Append a film look node if present in adjustments.
-///
-/// Special handling: `film_look_preset` is a string preset ID,
-/// `film_look_strength` is a float 0..1. Both must be present and
-/// non-default for the film look to be applied.
+/// `film_look_strength` is extracted from the adjustments map if present;
+/// defaults to 1.0. The preset is applied before individual filter nodes.
 fn append_film_look(
     nodes: &mut Vec<Box<dyn zennode::NodeInstance>>,
-    adjustments: &BTreeMap<String, f64>,
+    adjustments: &BTreeMap<String, serde_json::Value>,
     film_look_preset: Option<&str>,
 ) {
     if let Some(preset) = film_look_preset {
         if !preset.is_empty() && preset != "none" {
             let strength = adjustments
                 .get("film_look_strength")
-                .copied()
+                .and_then(|v| v.as_f64())
                 .unwrap_or(1.0) as f32;
             if strength > 0.001 {
                 nodes.push(Box::new(zenfilters::zennode_defs::FilmLook {
@@ -527,61 +525,37 @@ fn append_film_look(
     }
 }
 
+/// Create filter node instances from the adjustments map using the node registry.
+///
+/// Keys are full node IDs (e.g., `"zenfilters.exposure"`), values are JSON
+/// objects of param name → value (e.g., `{"stops": 0.5}`). Non-zenfilters
+/// keys and `film_look` keys are skipped. Unknown nodes are silently ignored.
 fn append_filter_nodes(
     nodes: &mut Vec<Box<dyn zennode::NodeInstance>>,
-    adjustments: &BTreeMap<String, f64>,
+    adjustments: &BTreeMap<String, serde_json::Value>,
 ) {
-    for (key, &value) in adjustments {
-        // Skip identity values (no-op filters).
-        if value == 0.0 {
-            continue;
-        }
-        // Skip film_look keys — handled separately.
-        if key.starts_with("film_look") {
+    let registry = zenpipe::full_registry();
+
+    for (node_id, params_json) in adjustments {
+        // Skip non-zenfilters keys and film_look keys.
+        if !node_id.starts_with("zenfilters.") {
             continue;
         }
 
-        let node: Option<Box<dyn zennode::NodeInstance>> = match key.as_str() {
-            "exposure" => Some(Box::new(zenfilters::zennode_defs::Exposure {
-                stops: value as f32,
-            })),
-            "contrast" => Some(Box::new(zenfilters::zennode_defs::Contrast {
-                amount: value as f32,
-            })),
-            "highlights" => Some(Box::new(zenfilters::zennode_defs::HighlightsShadows {
-                highlights: value as f32,
-                ..Default::default()
-            })),
-            "shadows" => Some(Box::new(zenfilters::zennode_defs::HighlightsShadows {
-                shadows: value as f32,
-                ..Default::default()
-            })),
-            "saturation" => Some(Box::new(zenfilters::zennode_defs::Saturation {
-                factor: 1.0 + value as f32,
-            })),
-            "vibrance" => Some(Box::new(zenfilters::zennode_defs::Vibrance {
-                amount: value as f32,
-                ..Default::default()
-            })),
-            "clarity" => Some(Box::new(zenfilters::zennode_defs::Clarity {
-                amount: value as f32,
-                ..Default::default()
-            })),
-            "sharpen" => Some(Box::new(zenfilters::zennode_defs::Sharpen {
-                amount: value as f32,
-                ..Default::default()
-            })),
-            "temperature" => Some(Box::new(zenfilters::zennode_defs::Temperature {
-                shift: value as f32,
-            })),
-            "dehaze" => Some(Box::new(zenfilters::zennode_defs::Dehaze {
-                strength: value as f32,
-            })),
-            _ => None,
-        };
+        // Params must be a JSON object.
+        if !params_json.is_object() {
+            continue;
+        }
 
-        if let Some(n) = node {
-            nodes.push(n);
+        // Use the registry's node_from_json which handles schema-aware
+        // type coercion (Float vs Int vs Enum etc.) from JSON values.
+        let wrapped = serde_json::json!({ node_id: params_json });
+        match registry.node_from_json(&wrapped) {
+            Ok(node) => nodes.push(node),
+            Err(_e) => {
+                #[cfg(test)]
+                eprintln!("skipping node {node_id}: {_e}");
+            }
         }
     }
 }
@@ -625,7 +599,10 @@ mod tests {
         let pixels = solid_rgba(400, 300, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 1.0);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 1.0}),
+        );
         let out = editor.render_overview(&adj).unwrap();
         assert!(out.width > 0);
         assert!(out.height > 0);
@@ -636,14 +613,20 @@ mod tests {
         let pixels = solid_rgba(400, 300, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
 
         // First render — cache miss.
         let _out1 = editor.render_overview(&adj).unwrap();
         assert_eq!(editor.overview_session.cache_len(), 1);
 
         // Second render with different filter — cache hit on geometry.
-        adj.insert("exposure".into(), 1.0);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 1.0}),
+        );
         let _out2 = editor.render_overview(&adj).unwrap();
         assert_eq!(editor.overview_session.cache_len(), 1); // Same entry, not 2.
     }
@@ -671,12 +654,18 @@ mod tests {
         };
 
         let mut adj = BTreeMap::new();
-        adj.insert("contrast".into(), 0.5);
+        adj.insert(
+            "zenfilters.contrast".into(),
+            serde_json::json!({"amount": 0.5}),
+        );
         let _out1 = editor.render_region(&adj, &region).unwrap();
         assert_eq!(editor.detail_session.cache_len(), 1);
 
         // Same region, different filter → cache hit.
-        adj.insert("contrast".into(), -0.3);
+        adj.insert(
+            "zenfilters.contrast".into(),
+            serde_json::json!({"amount": -0.3}),
+        );
         let _out2 = editor.render_region(&adj, &region).unwrap();
         assert_eq!(editor.detail_session.cache_len(), 1);
     }
@@ -687,7 +676,10 @@ mod tests {
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         // Need a filter so the session has a geometry/filter split to cache.
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
 
         let region1 = Region {
             x: 0.0,
@@ -713,8 +705,16 @@ mod tests {
         let pixels = solid_rgba(100, 100, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 100, 100, 100, 100);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.0); // Should be skipped
-        adj.insert("contrast".into(), 0.0); // Should be skipped
+        // Identity values are still valid JSON objects — the registry creates
+        // the node; the pipeline treats identity params as no-ops.
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.0}),
+        );
+        adj.insert(
+            "zenfilters.contrast".into(),
+            serde_json::json!({"amount": 0.0}),
+        );
         let out = editor.render_overview(&adj).unwrap();
         assert!(out.width > 0);
     }
@@ -724,9 +724,18 @@ mod tests {
         let pixels = solid_rgba(200, 200, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 200, 200, 100, 200);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
-        adj.insert("contrast".into(), 0.3);
-        adj.insert("saturation".into(), 0.2);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
+        adj.insert(
+            "zenfilters.contrast".into(),
+            serde_json::json!({"amount": 0.3}),
+        );
+        adj.insert(
+            "zenfilters.saturation".into(),
+            serde_json::json!({"factor": 1.2}),
+        );
         let out = editor.render_overview(&adj).unwrap();
         assert!(out.width > 0);
     }
@@ -736,7 +745,10 @@ mod tests {
         let pixels = solid_rgba(400, 300, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
 
         // Cancel the (nonexistent) in-flight render.
         editor.cancel_overview();
@@ -751,7 +763,10 @@ mod tests {
         let pixels = solid_rgba(400, 300, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
         let region = Region::default();
 
         editor.cancel_detail();
@@ -764,7 +779,10 @@ mod tests {
         let pixels = solid_rgba(400, 300, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 400, 300, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 0.5);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 0.5}),
+        );
 
         // Capture the cancel flag before rendering.
         let old_cancel = Arc::clone(&editor.overview_cancel);
@@ -786,7 +804,10 @@ mod tests {
         let pixels = solid_rgba(200, 150, 128, 128, 128);
         let mut editor = Editor::from_rgba(pixels, 200, 150, 200, 400);
         let mut adj = BTreeMap::new();
-        adj.insert("exposure".into(), 1.0);
+        adj.insert(
+            "zenfilters.exposure".into(),
+            serde_json::json!({"stops": 1.0}),
+        );
         let out = editor.render_overview(&adj).unwrap();
         eprintln!(
             "output: {}x{} format={} data_len={}",
