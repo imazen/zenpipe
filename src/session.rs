@@ -321,3 +321,400 @@ mod inner {
 
 #[cfg(feature = "zennode")]
 pub use inner::Session;
+
+#[cfg(all(test, feature = "zennode", feature = "std"))]
+mod tests {
+    use super::*;
+    use crate::format::RGBA8_SRGB;
+    use crate::orchestrate::{ProcessConfig, SourceImageInfo};
+    use crate::strip::Strip;
+    use alloc::boxed::Box;
+    use alloc::vec;
+
+    /// Solid-color test source.
+    struct SolidSource {
+        w: u32,
+        h: u32,
+        y: u32,
+    }
+    impl SolidSource {
+        fn new(w: u32, h: u32) -> Self {
+            Self { w, h, y: 0 }
+        }
+    }
+    impl crate::Source for SolidSource {
+        fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+            use crate::strip::BufferResultExt as _;
+            if self.y >= self.h {
+                return Ok(None);
+            }
+            let rows = 16.min(self.h - self.y);
+            let stride = RGBA8_SRGB.aligned_stride(self.w);
+            let data = vec![128u8; stride * rows as usize];
+            self.y += rows;
+            let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
+            Ok(Some(
+                Strip::new(leaked, self.w, rows, stride, RGBA8_SRGB).pipe_err()?,
+            ))
+        }
+        fn width(&self) -> u32 {
+            self.w
+        }
+        fn height(&self) -> u32 {
+            self.h
+        }
+        fn format(&self) -> crate::PixelFormat {
+            RGBA8_SRGB
+        }
+    }
+
+    fn source_info(w: u32, h: u32) -> SourceImageInfo {
+        SourceImageInfo {
+            width: w,
+            height: h,
+            format: RGBA8_SRGB,
+            has_alpha: true,
+            has_animation: false,
+            has_gain_map: false,
+            is_hdr: false,
+            exif_orientation: 1,
+            metadata: None,
+        }
+    }
+
+    fn make_constrain(w: u32, h: u32) -> Box<dyn zennode::NodeInstance> {
+        Box::new(crate::zennode_defs::Constrain {
+            w: Some(w),
+            h: Some(h),
+            mode: "within".into(),
+            ..Default::default()
+        })
+    }
+
+    fn make_remove_alpha(r: u32, g: u32, b: u32) -> Box<dyn zennode::NodeInstance> {
+        Box::new(crate::zennode_defs::RemoveAlpha {
+            matte_r: r,
+            matte_g: g,
+            matte_b: b,
+        })
+    }
+
+    // ─── geometry_split tests ───
+
+    #[test]
+    fn geometry_split_all_geometry() {
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(800, 600)];
+        assert_eq!(crate::cache::geometry_split(&nodes), 1);
+    }
+
+    #[test]
+    fn geometry_split_all_filter() {
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_remove_alpha(255, 255, 255)];
+        assert_eq!(crate::cache::geometry_split(&nodes), 0);
+    }
+
+    #[test]
+    fn geometry_split_mixed() {
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(800, 600), make_remove_alpha(255, 255, 255)];
+        assert_eq!(crate::cache::geometry_split(&nodes), 1);
+    }
+
+    // ─── prefix_hash tests ───
+
+    #[test]
+    fn prefix_hash_deterministic() {
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(800, 600)];
+        let h1 = crate::cache::prefix_hash(&nodes, 4000, 3000, RGBA8_SRGB, 1);
+        let h2 = crate::cache::prefix_hash(&nodes, 4000, 3000, RGBA8_SRGB, 1);
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn prefix_hash_changes_with_params() {
+        let nodes_a: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(800, 600)];
+        let nodes_b: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(400, 300)];
+        let h1 = crate::cache::prefix_hash(&nodes_a, 4000, 3000, RGBA8_SRGB, 1);
+        let h2 = crate::cache::prefix_hash(&nodes_b, 4000, 3000, RGBA8_SRGB, 1);
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn prefix_hash_changes_with_source_dims() {
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(800, 600)];
+        let h1 = crate::cache::prefix_hash(&nodes, 4000, 3000, RGBA8_SRGB, 1);
+        let h2 = crate::cache::prefix_hash(&nodes, 2000, 1500, RGBA8_SRGB, 1);
+        assert_ne!(h1, h2);
+    }
+
+    // ─── subtree_hash tests ───
+
+    #[test]
+    fn subtree_hash_deterministic() {
+        let node = crate::zennode_defs::Constrain {
+            w: Some(800),
+            h: Some(600),
+            ..Default::default()
+        };
+        let h1 = crate::cache::subtree_hash(&node, &[42]);
+        let h2 = crate::cache::subtree_hash(&node, &[42]);
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn subtree_hash_changes_with_inputs() {
+        let node = crate::zennode_defs::Constrain {
+            w: Some(800),
+            h: Some(600),
+            ..Default::default()
+        };
+        let h1 = crate::cache::subtree_hash(&node, &[42]);
+        let h2 = crate::cache::subtree_hash(&node, &[99]);
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn subtree_hash_changes_with_params() {
+        let node_a = crate::zennode_defs::Constrain {
+            w: Some(800),
+            h: Some(600),
+            ..Default::default()
+        };
+        let node_b = crate::zennode_defs::Constrain {
+            w: Some(400),
+            h: Some(300),
+            ..Default::default()
+        };
+        let h1 = crate::cache::subtree_hash(&node_a, &[42]);
+        let h2 = crate::cache::subtree_hash(&node_b, &[42]);
+        assert_ne!(h1, h2);
+    }
+
+    // ─── Session tests ───
+
+    #[test]
+    fn session_cache_miss_then_hit() {
+        let mut session = Session::new(64 * 1024 * 1024); // 64 MB
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+
+        // First call: cache miss, full execution.
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let source = Box::new(SolidSource::new(200, 200));
+        let _output = session.stream(source, &config, None, 0xDEAD).unwrap();
+        assert_eq!(session.cache_len(), 1);
+
+        // Second call with different filter params: cache hit on geometry prefix.
+        let nodes2: Vec<Box<dyn zennode::NodeInstance>> = vec![
+            make_constrain(100, 100),   // Same geometry.
+            make_remove_alpha(0, 0, 0), // Different filter params.
+        ];
+        let config2 = ProcessConfig {
+            nodes: &nodes2,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let source2 = Box::new(SolidSource::new(200, 200));
+        let bytes_before = session.current_bytes();
+        let _output2 = session.stream(source2, &config2, None, 0xDEAD).unwrap();
+        // Cache should not have grown — hit on existing entry.
+        assert_eq!(session.cache_len(), 1);
+        assert_eq!(session.current_bytes(), bytes_before);
+    }
+
+    #[test]
+    fn session_cache_miss_on_geometry_change() {
+        let mut session = Session::new(64 * 1024 * 1024);
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xBEEF)
+            .unwrap();
+        assert_eq!(session.cache_len(), 1);
+
+        // Change geometry → different prefix hash → cache miss → new entry.
+        let nodes2: Vec<Box<dyn zennode::NodeInstance>> = vec![
+            make_constrain(50, 50), // Different geometry.
+            make_remove_alpha(255, 255, 255),
+        ];
+        let config2 = ProcessConfig {
+            nodes: &nodes2,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output2 = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config2, None, 0xBEEF)
+            .unwrap();
+        assert_eq!(session.cache_len(), 2);
+    }
+
+    #[test]
+    fn session_cache_miss_on_source_change() {
+        let mut session = Session::new(64 * 1024 * 1024);
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xAAAA)
+            .unwrap();
+        assert_eq!(session.cache_len(), 1);
+
+        // Same nodes, different source hash → miss.
+        let _output2 = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xBBBB)
+            .unwrap();
+        assert_eq!(session.cache_len(), 2);
+    }
+
+    #[test]
+    fn session_lru_eviction() {
+        // Tiny budget: only room for one cache entry.
+        // A 100x100 RGBA8 image at 4bpp = 40,000 bytes (stride may be slightly more).
+        let mut session = Session::new(50_000);
+
+        let info = source_info(200, 200);
+        let nodes_a: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let config_a = ProcessConfig {
+            nodes: &nodes_a,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config_a, None, 0xAA)
+            .unwrap();
+        assert_eq!(session.cache_len(), 1);
+
+        // Insert a second entry — should evict the first.
+        let nodes_b: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let config_b = ProcessConfig {
+            nodes: &nodes_b,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output2 = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config_b, None, 0xBB)
+            .unwrap();
+        // Should have evicted old entry to fit under budget.
+        assert_eq!(session.cache_len(), 1);
+    }
+
+    #[test]
+    fn session_no_cache_when_no_geometry() {
+        let mut session = Session::new(64 * 1024 * 1024);
+
+        // Only filter nodes, no geometry → geometry_split returns 0 → no caching.
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_remove_alpha(255, 255, 255)];
+        let info = source_info(100, 100);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(100, 100)), &config, None, 0xCC)
+            .unwrap();
+        assert_eq!(session.cache_len(), 0);
+    }
+
+    #[test]
+    fn session_no_cache_when_all_geometry() {
+        let mut session = Session::new(64 * 1024 * 1024);
+
+        // Only geometry nodes → split == nodes.len() → no suffix → no caching.
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![make_constrain(100, 100)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xDD)
+            .unwrap();
+        assert_eq!(session.cache_len(), 0);
+    }
+
+    #[test]
+    fn session_clear() {
+        let mut session = Session::new(64 * 1024 * 1024);
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xEE)
+            .unwrap();
+        assert_eq!(session.cache_len(), 1);
+
+        session.clear();
+        assert_eq!(session.cache_len(), 0);
+        assert_eq!(session.current_bytes(), 0);
+    }
+
+    #[test]
+    fn session_zero_budget_disables_caching() {
+        let mut session = Session::new(0);
+
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+            vec![make_constrain(100, 100), make_remove_alpha(255, 255, 255)];
+        let info = source_info(200, 200);
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+        let _output = session
+            .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xFF)
+            .unwrap();
+        assert_eq!(session.cache_len(), 0);
+    }
+}
