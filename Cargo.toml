@@ -23,7 +23,7 @@ zenpixels-convert = { version = "0.2.2", features = ["imgref"] }
 linear-srgb = { version = "0.6.6", default-features = false }
 
 # UltraHDR container types (optional, for re-exporting container/MPF types)
-ultrahdr-core = { path = "../ultrahdr/ultrahdr-core", version = "0.3.0", optional = true, default-features = false }
+ultrahdr-core = { path = "../ultrahdr/ultrahdr-core", version = "0.4.0", optional = true, default-features = false }
 
 # Codecs (all optional, feature-gated)
 zenjpeg = { version = "0.7.1", path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec", "trellis"] }
