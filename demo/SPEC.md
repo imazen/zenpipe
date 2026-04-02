@@ -194,6 +194,15 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Explicit CSS width/height to fill viewport (browser upscales small canvases)
 - `image-rendering: pixelated` at >6x upscale
 
+### 5.2.1 Original vs Edited Toggle ⬜
+- Hold-to-compare: hold a key (e.g., `\` or spacebar) or long-press a button to show the original (unedited) image
+- **Release returns to edited** — no flicker, no re-render delay
+- Implementation: keep a cached unedited render (overview + detail at current region) alongside the edited one
+- During drag/zoom: always show filtered (edited) — the original toggle is only for static comparison
+- Visual indicator: "Original" badge overlaid when showing unedited
+- The unedited render uses the same Session with empty adjustments (cache hit on geometry prefix, no filter suffix)
+- Must not interfere with drag/zoom — if user is panning and hits the toggle key, ignore it until panning stops
+
 ### 5.3 Zoom ✅
 - Scroll-to-zoom (proportional deltaY, smooth trackpad + discrete wheel)
 - Pinch-to-zoom on touch
