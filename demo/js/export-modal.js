@@ -273,19 +273,13 @@ export function initExportModal() {
       const exportData = {
         adjustments: getFilterAdjustments(),
         format: exportFormat,
-        quality: settings.quality || 85,
+        width: exportWidth,
+        height: exportHeight,
+        options: { ...settings },  // all format settings (quality, effort, lossless, etc.)
+        quality: settings.quality || 85,  // also top-level for browser fallback
         film_preset: state.filmPreset,
         film_preset_intensity: state.filmPresetIntensity,
       };
-      // Pass resize dimensions if different from source
-      if (exportWidth !== state.sourceWidth || exportHeight !== state.sourceHeight) {
-        exportData.width = exportWidth;
-        exportData.height = exportHeight;
-      }
-      // Pass format-specific options
-      for (const [key, val] of Object.entries(settings)) {
-        if (key !== 'quality') exportData[key] = val;
-      }
 
       const result = await sendToWorker('export', exportData);
 

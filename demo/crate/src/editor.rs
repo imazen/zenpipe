@@ -151,6 +151,62 @@ impl Editor {
         self.render_overview_with_preset(adjustments, None)
     }
 
+    /// Render at a specific max dimension (for export at arbitrary size).
+    pub fn render_at_size(
+        &mut self,
+        adjustments: &BTreeMap<String, serde_json::Value>,
+        max_dim: u32,
+        film_preset: Option<&str>,
+    ) -> Result<RenderOutput, String> {
+        let source = Box::new(self.source_pixels.clone());
+
+        let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
+
+        // Geometry: resize to requested max_dim (0 = source size, no resize)
+        if max_dim > 0 && (self.source_width > max_dim || self.source_height > max_dim) {
+            nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
+                w: Some(max_dim),
+                h: Some(max_dim),
+                mode: "within".into(),
+                ..Default::default()
+            }));
+        }
+
+        // Filters
+        append_film_look(&mut nodes, adjustments, film_preset);
+        append_filter_nodes(&mut nodes, adjustments);
+
+        let info = make_source_info(self.source_width, self.source_height);
+        let converters: &[&dyn zenpipe::bridge::NodeConverter] = &[&FILTERS_CONVERTER];
+        let config = ProcessConfig {
+            nodes: &nodes,
+            converters,
+            hdr_mode: "sdr_only",
+            source_info: &info,
+            trace_config: None,
+        };
+
+        // Use overview session (it caches by geometry hash, so different max_dim = different cache entry)
+        self.overview_cancel.store(true, Ordering::Relaxed);
+        let fresh = Arc::new(AtomicBool::new(false));
+        self.overview_cancel = Arc::clone(&fresh);
+        let stop = AtomicStop(fresh);
+
+        let output = self
+            .overview_session
+            .stream_stoppable(source, &config, None, self.source_hash, &stop)
+            .map_err(|e| format!("render: {e}"))?;
+
+        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
+            .map_err(|e| format!("materialize: {e}"))?;
+
+        Ok(RenderOutput {
+            width: mat.width(),
+            height: mat.height(),
+            data: pack_rgba(&mat),
+        })
+    }
+
     /// Render overview with optional film look preset.
     pub fn render_overview_with_preset(
         &mut self,

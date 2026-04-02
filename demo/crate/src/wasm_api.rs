@@ -271,14 +271,12 @@ impl WasmEditor {
         film_preset: Option<String>,
     ) -> Result<WasmEncodeResult, JsError> {
         let adj = parse_adjustments(adjustments_json)?;
-        // width/height hint accepted for future use; currently renders at
-        // the editor's overview_max constraint.
-        let _ = (width, height);
 
-        // Render with the current overview dimensions and filters.
+        // Render at requested dimensions (0 = source size).
+        let max_dim = if width > 0 { width.max(height) } else { 0 };
         let out = self
             .inner
-            .render_overview_with_preset(&adj, film_preset.as_deref())
+            .render_at_size(&adj, max_dim, film_preset.as_deref())
             .map_err(|e| JsError::new(&e))?;
 
         // Parse encode options.
