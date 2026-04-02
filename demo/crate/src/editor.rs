@@ -829,4 +829,105 @@ mod tests {
             out.data.len()
         );
     }
+
+    #[test]
+    fn all_schema_filter_nodes_are_recognized() {
+        // Parse the schema to get all zenfilters node IDs and their params,
+        // then try to render with each one to verify no "unrecognized node" errors.
+        let schema_json = crate::export_filter_schema();
+        let schema: serde_json::Value = serde_json::from_str(&schema_json).unwrap();
+        let defs = schema["$defs"].as_object().unwrap();
+
+        let pixels = solid_rgba(32, 32, 128, 128, 128);
+        let mut editor = Editor::from_rgba(pixels, 32, 32, 32, 32);
+
+        let mut passed = Vec::new();
+        let mut failed = Vec::new();
+
+        for (node_id, node_def) in defs {
+            // Build a params object with non-identity values for each numeric param.
+            let props = match node_def.get("properties").and_then(|p| p.as_object()) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            let mut params = serde_json::Map::new();
+            let mut has_numeric = false;
+            for (param_name, param_schema) in props {
+                match param_schema.get("type").and_then(|t| t.as_str()) {
+                    Some("number") => {
+                        // Use a value slightly away from identity toward the middle of range
+                        let min = param_schema
+                            .get("minimum")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        let max = param_schema
+                            .get("maximum")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(1.0);
+                        let identity = param_schema
+                            .get("x-zennode-identity")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        // Pick a value 10% away from identity toward the midpoint
+                        let mid = (min + max) / 2.0;
+                        let val = identity + (mid - identity) * 0.1;
+                        let val = val.max(min).min(max);
+                        params.insert(param_name.clone(), serde_json::json!(val));
+                        has_numeric = true;
+                    }
+                    Some("integer") => {
+                        let min = param_schema
+                            .get("minimum")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
+                        let max = param_schema
+                            .get("maximum")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(1);
+                        let val = (min + max) / 2;
+                        params.insert(param_name.clone(), serde_json::json!(val));
+                        has_numeric = true;
+                    }
+                    _ => {} // skip non-numeric params for this test
+                }
+            }
+
+            if !has_numeric {
+                continue;
+            }
+
+            let mut adj = BTreeMap::new();
+            adj.insert(node_id.clone(), serde_json::Value::Object(params));
+
+            match editor.render_overview(&adj) {
+                Ok(out) => {
+                    assert!(out.width > 0, "{node_id} produced 0-width output");
+                    assert!(out.data.len() > 0, "{node_id} produced empty data");
+                    passed.push(node_id.clone());
+                }
+                Err(e) => {
+                    eprintln!("FAIL: {node_id}: {e}");
+                    failed.push((node_id.clone(), e));
+                }
+            }
+        }
+
+        eprintln!("\n=== Filter node test results ===");
+        eprintln!("Passed: {}/{}", passed.len(), passed.len() + failed.len());
+        for (id, err) in &failed {
+            eprintln!("  FAIL: {id}: {err}");
+        }
+
+        assert!(
+            failed.is_empty(),
+            "{} filter nodes failed:\n{}",
+            failed.len(),
+            failed
+                .iter()
+                .map(|(id, e)| format!("  {id}: {e}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
 }
