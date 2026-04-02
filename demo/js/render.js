@@ -108,12 +108,13 @@ export function updatePixelRatioBadge() {
   // Source pixels covered by the region
   const srcPixelsW = Math.round(state.region.w * state.sourceWidth);
   const srcPixelsH = Math.round(state.region.h * state.sourceHeight);
-  // CSS display size: use getBoundingClientRect for the actual rendered size
-  // (accounts for max-width, object-fit, etc.)
+  // Device pixel display size: CSS pixels × devicePixelRatio
+  // "1:1" means 1 source pixel = 1 physical device pixel
+  const dpr = window.devicePixelRatio || 1;
   const canvasRect = canvas.getBoundingClientRect();
-  const cssDisplayW = canvasRect.width || wrap.clientWidth;
-  // Ratio: source pixels per CSS pixel
-  const ratio = srcPixelsW / cssDisplayW;
+  const deviceDisplayW = (canvasRect.width || wrap.clientWidth) * dpr;
+  // Ratio: source pixels per device pixel
+  const ratio = srcPixelsW / deviceDisplayW;
 
   const info = $('pixel-info');
   if (!info) return;
