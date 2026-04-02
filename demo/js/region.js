@@ -122,8 +122,8 @@ export function initScrollZoom() {
     const imgY = state.region.y + my * state.region.h;
 
     // Scale region dimensions
-    const newW = Math.max(0.05, Math.min(1.0, state.region.w * scaleFactor));
-    const newH = Math.max(0.05, Math.min(1.0, state.region.h * scaleFactor));
+    const newW = Math.max(0.01, Math.min(1.0, state.region.w * scaleFactor));
+    const newH = Math.max(0.01, Math.min(1.0, state.region.h * scaleFactor));
 
     // Recenter so the point under the mouse stays fixed
     state.region.w = newW;
@@ -170,8 +170,8 @@ export function initPinchZoom() {
       const dist = touchDist(e.touches[0], e.touches[1]);
       // Pinch in (fingers closer) = smaller region = zoom in
       const scale = initialDist / dist;
-      const newW = Math.max(0.05, Math.min(1.0, initialW * scale));
-      const newH = Math.max(0.05, Math.min(1.0, initialH * scale));
+      const newW = Math.max(0.01, Math.min(1.0, initialW * scale));
+      const newH = Math.max(0.01, Math.min(1.0, initialH * scale));
 
       // Midpoint in normalized detail coords
       const wrapRect = wrap.getBoundingClientRect();

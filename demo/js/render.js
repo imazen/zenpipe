@@ -114,9 +114,10 @@ export function updatePixelRatioBadge() {
     ratioClass = 'ratio-down';
   } else {
     // Upscaled: fewer source pixels than display pixels (zoomed in past 1:1)
-    const r = (1 / ratio) < 10 ? (1 / ratio).toFixed(1) : Math.round(1 / ratio);
+    const upscale = 1 / ratio;
+    const r = upscale < 10 ? upscale.toFixed(1) : Math.round(upscale);
     ratioText = `${r}:1 upscaled`;
-    ratioClass = 'ratio-up';
+    ratioClass = upscale > 4 ? 'ratio-up-warn' : 'ratio-up';
   }
 
   const renderedW = canvas.width;

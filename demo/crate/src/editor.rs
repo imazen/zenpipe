@@ -238,12 +238,17 @@ impl Editor {
             h: crop_h,
         }));
 
-        nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
-            w: Some(self.detail_max),
-            h: Some(self.detail_max),
-            mode: "within".into(),
-            ..Default::default()
-        }));
+        // Only downscale if the crop is larger than detail_max.
+        // When zoomed past 1:1 the crop is smaller — render at native
+        // pixel size (no Constrain node = no resize).
+        if crop_w > self.detail_max || crop_h > self.detail_max {
+            nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
+                w: Some(self.detail_max),
+                h: Some(self.detail_max),
+                mode: "within".into(),
+                ..Default::default()
+            }));
+        }
 
         // Film look first, then individual adjustments
         append_film_look(&mut nodes, adjustments, film_preset);
