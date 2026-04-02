@@ -91,19 +91,39 @@ export function updatePixelRatioBadge() {
   const canvas = $('detail-canvas');
   const wrap = $('detail-wrap');
   if (!canvas.width || !wrap.clientWidth) return;
-  // The region covers region.w * sourceWidth pixels, rendered into canvas.width pixels
-  const srcPixelsW = state.region.w * state.sourceWidth;
+
+  // Source pixels covered by the region
+  const srcPixelsW = Math.round(state.region.w * state.sourceWidth);
+  const srcPixelsH = Math.round(state.region.h * state.sourceHeight);
+  // CSS display size (how many screen pixels the canvas occupies)
   const cssDisplayW = Math.min(wrap.clientWidth, canvas.width);
+  // Ratio: source pixels per CSS pixel
   const ratio = srcPixelsW / cssDisplayW;
 
   const info = $('pixel-info');
   if (!info) return;
 
-  const r = ratio <= 1.05 ? 1 : Math.round(ratio);
+  let ratioText, ratioClass;
+  if (ratio >= 0.95 && ratio <= 1.05) {
+    ratioText = '1:1';
+    ratioClass = 'ratio-exact';
+  } else if (ratio > 1) {
+    // Downscaled: more source pixels than display pixels
+    const r = ratio < 10 ? ratio.toFixed(1) : Math.round(ratio);
+    ratioText = `1:${r}`;
+    ratioClass = 'ratio-down';
+  } else {
+    // Upscaled: fewer source pixels than display pixels (zoomed in past 1:1)
+    const r = (1 / ratio) < 10 ? (1 / ratio).toFixed(1) : Math.round(1 / ratio);
+    ratioText = `${r}:1 upscaled`;
+    ratioClass = 'ratio-up';
+  }
+
   const renderedW = canvas.width;
   const renderedH = canvas.height;
-  info.textContent = `1:${r} \u00b7 ${renderedW}\u00d7${renderedH} of ${state.sourceWidth}\u00d7${state.sourceHeight}`;
-  info.style.display = 'block';
+  info.innerHTML = `<span class="ratio-text ${ratioClass}">${ratioText}</span> `
+    + `<span class="ratio-dims">${srcPixelsW}\u00d7${srcPixelsH} of ${state.sourceWidth}\u00d7${state.sourceHeight}</span>`;
+  info.style.display = 'flex';
 }
 
 export function scheduleRender() {
