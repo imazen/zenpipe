@@ -114,7 +114,18 @@ main {
   position: relative; height: 120px; min-height: 80px; background: #111;
   border-radius: 6px; overflow: hidden; display: flex;
   align-items: center; justify-content: center; flex-shrink: 0;
+  transition: height 0.2s, min-height 0.2s, opacity 0.2s;
 }
+#overview-wrap.collapsed {
+  height: 0; min-height: 0; opacity: 0; overflow: hidden; padding: 0;
+}
+#minimap-toggle {
+  position: absolute; bottom: 12px; right: 12px; z-index: 5;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--border);
+  color: var(--text-dim); padding: 2px 8px; border-radius: 3px;
+  font-size: 10px; cursor: pointer;
+}
+#minimap-toggle:hover { color: var(--text); border-color: var(--accent); }
 #overview-canvas {
   max-height: 100%; max-width: 100%; object-fit: contain;
   filter: blur(1px); transition: filter 0.2s;
@@ -575,6 +586,7 @@ aside {
       <div id="pixel-info"></div>
       <div class="loading-message" id="loading-message">Loading...</div>
       <div class="spinner-overlay" id="detail-spinner"><div class="spinner"></div></div>
+      <button id="minimap-toggle" title="Toggle minimap">minimap</button>
     </div>
     <div id="overview-wrap">
       <canvas id="overview-canvas"></canvas>
