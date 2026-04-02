@@ -1123,6 +1123,7 @@ $('export-confirm').addEventListener('click', async () => {
       adjustments: getFilterAdjustments(),
       format: exportFormat,
       quality: settings.quality || 85,
+      film_preset: filmPreset,
     };
     // Pass resize dimensions if different from source
     if (exportWidth !== sourceWidth || exportHeight !== sourceHeight) {
@@ -1141,11 +1142,6 @@ $('export-confirm').addEventListener('click', async () => {
     const ext = (exportFormat === 'png') ? 'png' : fmt.ext;
 
     const blob = new Blob([result.data], { type: mime });
-      format: 'jpeg',
-      quality: 90,
-      film_preset: filmPreset,
-    });
-    const blob = new Blob([result.data], { type: 'image/jpeg' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
