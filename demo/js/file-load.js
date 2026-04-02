@@ -37,7 +37,7 @@ export async function loadImage(file) {
   const vpH = detailWrap.clientHeight || 600;
   const vpAspect = vpW / vpH;
   const clampedAspect = Math.max(3/4, Math.min(4/3, vpAspect));
-  // Calculate region size for ~1:1 device pixels = source pixels
+  // Calculate region size for ~1:1 device pixels = image pixels
   const dpr = window.devicePixelRatio || 1;
   let regionW = Math.min(1, (vpW * dpr) / state.sourceWidth);
   let regionH = Math.min(1, ((vpW * dpr) / clampedAspect) / state.sourceHeight);
@@ -59,6 +59,35 @@ export async function loadImage(file) {
 
   renderOverview();
   renderDetail();
+
+  // Phase 2: native decode upgrade (background)
+  triggerNativeUpgrade(file.name, be);
+}
+
+/**
+ * Trigger background native decode upgrade via zencodecs.
+ * Replaces browser-decoded pixels with natively-decoded pixels + metadata.
+ * Re-renders overview + detail when complete.
+ */
+async function triggerNativeUpgrade(label, backendLabel) {
+  try {
+    const result = await sendToWorker('upgrade', {});
+    // Build metadata badges for the status bar
+    const badges = [];
+    if (result.format) badges.push(result.format.toUpperCase());
+    if (result.has_icc) badges.push('ICC');
+    if (result.has_exif) badges.push('EXIF');
+    if (result.has_xmp) badges.push('XMP');
+    if (result.has_gain_map) badges.push('HDR');
+    const meta = badges.length > 0 ? ` [${badges.join(' ')}]` : '';
+    $('status').textContent = `${state.sourceWidth}\u00d7${state.sourceHeight} \u2014 ${label} [${backendLabel}]${meta}`;
+
+    // Re-render with natively-decoded source
+    renderOverview();
+    renderDetail();
+  } catch {
+    // Upgrade failed silently — browser decode preview remains active
+  }
 }
 
 // =====================================================================
@@ -147,6 +176,9 @@ export async function loadPicsumPhoto(pid, thumbEl) {
 
     renderOverview();
     renderDetail();
+
+    // Phase 2: native decode upgrade (background)
+    triggerNativeUpgrade(`picsum/${pid}`, be);
   } catch (e) {
     $('loading-message').classList.remove('active');
     $('status').textContent = `Failed to load photo: ${e.message}`;

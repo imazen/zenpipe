@@ -13,6 +13,7 @@
 
 let editor = null;       // WasmEditor or MockEditor
 let backend = 'pending'; // 'wasm' | 'mock' | 'pending'
+let originalBytes = null; // Original file bytes for native decode upgrade
 
 // ─── WASM loading ───
 
@@ -193,6 +194,9 @@ self.addEventListener('message', async (e) => {
   try {
     switch (msg.type) {
       case 'init': {
+        // Store original bytes for native decode upgrade
+        originalBytes = new Uint8Array(msg.data);
+
         const { imageData, bitmap, decoder } = await decodeImage(msg.data);
         editor = backend === 'wasm'
           ? new WasmEditorWrapper(imageData)
@@ -205,6 +209,31 @@ self.addEventListener('message', async (e) => {
           backend,
           decoder,
         });
+        break;
+      }
+
+      case 'upgrade': {
+        // Phase 2: native decode via zencodecs with metadata preservation
+        if (!editor) throw new Error('Editor not initialized');
+        if (backend !== 'wasm') throw new Error('Native decode requires WASM backend');
+        if (!originalBytes) throw new Error('No original bytes available');
+
+        const result = editor.inner.upgrade_from_bytes(originalBytes);
+        // Free the stored bytes — no longer needed
+        originalBytes = null;
+
+        self.postMessage({
+          id, type: 'result',
+          format: result.format,
+          width: result.width,
+          height: result.height,
+          has_icc: result.has_icc,
+          has_exif: result.has_exif,
+          has_xmp: result.has_xmp,
+          has_gain_map: result.has_gain_map,
+          backend,
+        });
+        result.free();
         break;
       }
 
