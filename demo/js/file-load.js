@@ -5,6 +5,7 @@
 import { $, state } from './state.js';
 import { sendToWorker } from './worker-client.js';
 import { renderOverview, renderDetail } from './render.js';
+import { showError } from './toasts.js';
 
 export async function loadImage(file) {
   $('status').textContent = 'Loading...';
@@ -21,6 +22,7 @@ export async function loadImage(file) {
   } catch (e) {
     $('loading-message').classList.remove('active');
     $('status').textContent = `Load error: ${e.message}`;
+    showError(`Image decode failed: ${e.message}`);
     return;
   }
 
@@ -66,6 +68,7 @@ const PICSUM_IDS = [10, 11, 15, 17, 24, 28, 29, 36, 37, 39, 40, 42];
 
 export function buildPhotoPicker() {
   const container = $('sample-photos');
+  const popover = $('popover-photos');
   for (const pid of PICSUM_IDS) {
     const img = document.createElement('img');
     img.className = 'photo-thumb';
@@ -75,6 +78,22 @@ export function buildPhotoPicker() {
     img.addEventListener('load', () => img.classList.add('loaded'));
     img.addEventListener('click', () => loadPicsumPhoto(pid, img));
     container.appendChild(img);
+
+    // Also add to popover if it exists
+    if (popover) {
+      const img2 = document.createElement('img');
+      img2.className = 'photo-thumb';
+      img2.src = `https://picsum.photos/id/${pid}/200/150`;
+      img2.alt = `Sample photo ${pid}`;
+      img2.dataset.picsumId = pid;
+      img2.addEventListener('load', () => img2.classList.add('loaded'));
+      img2.addEventListener('click', () => {
+        // Close popover when a photo is picked
+        $('photo-picker-popover').classList.remove('open');
+        loadPicsumPhoto(pid, img2);
+      });
+      popover.appendChild(img2);
+    }
   }
 }
 
@@ -130,6 +149,7 @@ export async function loadPicsumPhoto(pid, thumbEl) {
   } catch (e) {
     $('loading-message').classList.remove('active');
     $('status').textContent = `Failed to load photo: ${e.message}`;
+    showError(`Failed to load photo: ${e.message}`);
     console.error('Picsum load failed:', e);
   }
   thumbEl.classList.remove('loading-active');

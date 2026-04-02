@@ -19,6 +19,7 @@ export const state = {
   detailRenderId: 0,
   lastChangedSliderKey: null,
   touchedSliders: new Set(),
+  lastSafeAdjustments: {},
 };
 
 export const $ = id => document.getElementById(id);

@@ -37,6 +37,7 @@ header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  position: relative;
 }
 header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
 #status { color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
@@ -60,10 +61,22 @@ main {
 #detail-wrap {
   position: relative; overflow: hidden; border-radius: 6px;
   background: #111; display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
 }
 #detail-canvas {
-  image-rendering: auto; max-width: 100%; max-height: 100%; object-fit: contain;
+  image-rendering: auto; max-width: 100%; max-height: calc(100% - 24px); object-fit: contain;
+  touch-action: none;
 }
+#pixel-info {
+  font-size: 11px; color: var(--text-dim); text-align: center;
+  padding: 2px 10px; cursor: pointer; user-select: none;
+  background: rgba(0, 0, 0, 0.4); border-radius: 3px;
+  margin-top: 2px; flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.15s;
+  display: none;
+}
+#pixel-info:hover { color: var(--text); }
 .loading-message {
   position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; font-size: 28px; font-weight: 500;
@@ -100,6 +113,7 @@ main {
   position: absolute; border: 2px solid var(--accent);
   background: var(--accent-dim); cursor: move; border-radius: 2px;
   min-width: 20px; min-height: 20px; touch-action: none;
+  display: none;
 }
 
 aside {
@@ -107,6 +121,16 @@ aside {
   border-left: 1px solid var(--border); display: flex;
   flex-direction: column; gap: 2px;
 }
+
+/* Reset button in sidebar */
+#reset-btn {
+  width: 100%; padding: 6px 12px; margin-bottom: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 4px; cursor: pointer;
+  font-size: 12px; transition: border-color 0.15s, color 0.15s;
+}
+#reset-btn:hover { border-color: var(--accent); color: var(--text); }
+
 .slider-group { padding: 6px 0; }
 .slider-group h3 {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -153,7 +177,7 @@ aside {
 #editor-ui { display: contents; }
 #editor-ui.hidden > * { display: none !important; }
 
-/* ─── Export Modal ─── */
+/* --- Export Modal --- */
 #export-modal-backdrop {
   display: none;
   position: fixed; inset: 0; z-index: 1000;
@@ -291,7 +315,7 @@ aside {
 .export-footer .btn { padding: 6px 16px; font-size: 13px; }
 .export-footer .btn-primary { min-width: 120px; }
 
-/* ── Picsum Photo Picker ── */
+/* -- Picsum Photo Picker -- */
 #sample-photos {
   display: flex; flex-wrap: wrap; justify-content: center;
   gap: 8px; max-width: 720px; padding: 8px 0;
@@ -322,7 +346,34 @@ aside {
   width: 60px; height: 1px; background: var(--border); margin: 4px 0;
 }
 
-/* ── Film Preset Strip ── */
+/* -- Photo Picker Popover (when editor is open) -- */
+#photo-picker-popover {
+  display: none;
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 12px 16px; z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+#photo-picker-popover.open { display: block; }
+#photo-picker-popover .popover-photos {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+}
+#photo-picker-popover .photo-thumb {
+  width: 80px; height: 60px; border-radius: 4px; cursor: pointer;
+  border: 2px solid var(--border); object-fit: cover;
+  transition: border-color 0.15s, transform 0.15s, opacity 0.3s;
+  background: var(--surface); opacity: 0;
+}
+#photo-picker-popover .photo-thumb.loaded { opacity: 1; }
+#photo-picker-popover .photo-thumb:hover {
+  border-color: var(--accent); transform: scale(1.05);
+}
+#photo-picker-popover .photo-thumb.loading-active {
+  border-color: var(--accent); opacity: 0.6;
+  animation: pulse-border 1s ease-in-out infinite;
+}
+
+/* -- Film Preset Strip -- */
 #preset-strip {
   padding: 8px 0 4px; border-bottom: 1px solid var(--border);
   margin-bottom: 2px;
@@ -350,12 +401,6 @@ aside {
   font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
-/* ── Pixel ratio badge ── */
-#pixel-ratio-badge {
-  font-size: 10px; padding: 1px 5px; border-radius: 3px;
-  background: var(--accent-dim); color: var(--accent);
-  margin-left: 6px; font-variant-numeric: tabular-nums;
-}
 #preset-chips {
   display: flex; flex-wrap: wrap; gap: 4px;
 }
@@ -382,14 +427,25 @@ aside {
 .preset-chip[data-cat="cinematic"]    { border-left: 3px solid #b06ce0; }
 .preset-chip[data-cat="none"]         { border-left: 3px solid var(--text-dim); }
 
-/* ─── Error / Info Toast ─── */
+/* --- Error / Info Toast --- */
 .error-toast {
-  position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.85); color: #ff6b6b; padding: 10px 20px;
-  border-radius: 8px; font-size: 13px; max-width: 80%; text-align: center;
-  z-index: 10; pointer-events: none;
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 0, 0, 0.92); color: #ff6b6b;
+  padding: 20px 32px; border-radius: 12px;
+  font-size: 15px; max-width: 80%; text-align: center;
+  z-index: 10; cursor: pointer;
+  border: 1px solid rgba(255, 107, 107, 0.3);
   opacity: 1; transition: opacity 0.4s;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
+.error-toast .error-toast-msg {
+  margin-bottom: 8px; font-weight: 500;
+}
+.error-toast .error-toast-hint {
+  font-size: 12px; color: rgba(255, 107, 107, 0.6);
+}
+.error-toast:hover { background: rgba(40, 0, 0, 0.95); }
 .error-toast.fade-out { opacity: 0; }
 .info-toast {
   position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%);
@@ -400,18 +456,18 @@ aside {
 }
 .info-toast.fade-out { opacity: 0; }
 
-/* ─── Slider disabled state ─── */
+/* --- Slider disabled state --- */
 .slider-disabled {
   opacity: 0.4; pointer-events: none;
 }
 
-/* ─── Loading message repositioned below error toast area ─── */
+/* --- Loading message repositioned below error toast area --- */
 .loading-message {
   align-items: flex-end !important;
   padding-bottom: 20%;
 }
 
-/* ─── Responsive layout ─── */
+/* --- Responsive layout --- */
 @media (max-width: 840px) {
   body {
     grid-template-columns: 1fr;
@@ -456,10 +512,12 @@ aside {
 <header>
   <h1>zenpipe</h1>
   <button class="btn" id="open-btn">Open</button>
-  <button class="btn" id="reset-btn">Reset</button>
+  <button class="btn" id="pick-btn">Pick</button>
   <button class="btn btn-primary" id="export-btn">Export</button>
-  <span id="pixel-ratio-badge" style="display:none"></span>
   <span id="status">Drop an image to start</span>
+  <div id="photo-picker-popover">
+    <div class="popover-photos" id="popover-photos"></div>
+  </div>
 </header>
 
 <div id="dropzone">
@@ -478,6 +536,7 @@ aside {
   <main>
     <div id="detail-wrap">
       <canvas id="detail-canvas"></canvas>
+      <div id="pixel-info"></div>
       <div class="loading-message" id="loading-message">Loading...</div>
       <div class="spinner-overlay" id="detail-spinner"><div class="spinner"></div></div>
     </div>
@@ -488,6 +547,7 @@ aside {
     </div>
   </main>
   <aside id="sidebar">
+    <button id="reset-btn">Reset All</button>
     <div id="preset-strip">
       <h3><span class="collapse-icon">&#x25B8;</span>Film Looks</h3>
       <div class="preset-content">

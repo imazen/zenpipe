@@ -5,6 +5,15 @@
 import { $ } from './state.js';
 
 let errorToastTimer = null;
+let resetToLastSafeCallback = null;
+
+/**
+ * Register the callback that resets adjustments to the last safe state.
+ * Called from render.js during initialization.
+ */
+export function setResetToLastSafeCallback(cb) {
+  resetToLastSafeCallback = cb;
+}
 
 export function showError(msg) {
   const wrap = $('detail-wrap');
@@ -15,14 +24,19 @@ export function showError(msg) {
 
   const el = document.createElement('div');
   el.className = 'error-toast';
-  el.textContent = msg;
-  wrap.appendChild(el);
+  el.innerHTML = `<div class="error-toast-msg">${msg}</div><div class="error-toast-hint">Tap to reset</div>`;
 
-  errorToastTimer = setTimeout(() => {
+  function dismiss() {
     el.classList.add('fade-out');
     setTimeout(() => el.remove(), 500);
     errorToastTimer = null;
-  }, 5000);
+    if (resetToLastSafeCallback) resetToLastSafeCallback();
+  }
+
+  el.addEventListener('click', dismiss);
+  wrap.appendChild(el);
+
+  errorToastTimer = setTimeout(dismiss, 3000);
 }
 
 export function showInfo(msg) {

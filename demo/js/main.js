@@ -1,13 +1,13 @@
 // =====================================================================
-// Entry point — wires everything together
+// Entry point -- wires everything together
 // =====================================================================
 
 import { $, state } from './state.js';
 import { initWorker } from './worker-client.js';
 import { loadSchemaAndBuildUI, formatVal } from './sidebar.js';
 import { loadImage, buildPhotoPicker } from './file-load.js';
-import { initRegionDrag, initPinchZoom, initScrollZoom } from './region.js';
-import { scheduleRender } from './render.js';
+import { initRegionDrag, initPinchZoom, initScrollZoom, updateRegionSelector } from './region.js';
+import { scheduleRender, scheduleDetailOnly } from './render.js';
 import { buildPresetStrip, setActivePreset } from './presets.js';
 import { initExportModal } from './export-modal.js';
 
@@ -16,6 +16,28 @@ $('file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadImage(e.target.files[0]);
 });
 $('open-btn').addEventListener('click', () => $('file-input').click());
+
+// Pick button: scroll to photo picker or toggle popover
+$('pick-btn').addEventListener('click', () => {
+  const dropzone = $('dropzone');
+  if (!dropzone.classList.contains('hidden')) {
+    // Dropzone is visible, scroll to sample photos
+    $('sample-photos').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    // Editor is showing, toggle the photo picker popover
+    const popover = $('photo-picker-popover');
+    popover.classList.toggle('open');
+  }
+});
+
+// Close popover when clicking outside
+document.addEventListener('click', e => {
+  const popover = $('photo-picker-popover');
+  if (!popover) return;
+  if (!popover.classList.contains('open')) return;
+  if (e.target.closest('#photo-picker-popover') || e.target.closest('#pick-btn')) return;
+  popover.classList.remove('open');
+});
 
 // Drag-and-drop
 document.addEventListener('dragover', e => { e.preventDefault(); $('dropzone').classList.add('dragover'); });
@@ -28,7 +50,7 @@ document.addEventListener('drop', e => {
 });
 
 // Reset all sliders to identity and clear film preset
-$('reset-btn').addEventListener('click', () => {
+function resetAllSliders() {
   state.touchedSliders.clear();
   state.lastChangedSliderKey = null;
   for (const row of document.querySelectorAll('.slider-row')) {
@@ -48,7 +70,9 @@ $('reset-btn').addEventListener('click', () => {
   $('preset-intensity').value = 1;
   $('preset-intensity-val').textContent = '1.00';
   scheduleRender();
-});
+}
+
+$('reset-btn').addEventListener('click', resetAllSliders);
 
 // Initialize region interactions
 initRegionDrag();
@@ -57,6 +81,26 @@ initPinchZoom();
 
 // Initialize export modal
 initExportModal();
+
+// Pixel info click: reset to 1:1 pixel ratio
+$('pixel-info').addEventListener('click', () => {
+  if (!state.sourceImage) return;
+  const detailWrap = $('detail-wrap');
+  const vpW = detailWrap.clientWidth || 800;
+  const vpH = detailWrap.clientHeight || 600;
+  // Set region so that detail canvas pixels = source pixels
+  const regionW = Math.min(1, vpW / state.sourceWidth);
+  const regionH = Math.min(1, vpH / state.sourceHeight);
+  // Recenter around current region center
+  const cx = state.region.x + state.region.w / 2;
+  const cy = state.region.y + state.region.h / 2;
+  state.region.w = regionW;
+  state.region.h = regionH;
+  state.region.x = Math.max(0, Math.min(1 - regionW, cx - regionW / 2));
+  state.region.y = Math.max(0, Math.min(1 - regionH, cy - regionH / 2));
+  updateRegionSelector();
+  scheduleDetailOnly();
+});
 
 // Boot
 (async function init() {

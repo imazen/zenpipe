@@ -4,12 +4,15 @@
 
 import { $, state, OVERVIEW_MAX, DETAIL_MAX, RENDER_DEBOUNCE_MS, getFilterAdjustments } from './state.js';
 import { sendToWorker } from './worker-client.js';
-import { showError } from './toasts.js';
+import { showError, setResetToLastSafeCallback } from './toasts.js';
 import { applyCssPreview, clearCssPreview } from './css-preview.js';
 import { updateRegionSelector } from './region.js';
 import { formatVal } from './sidebar.js';
 
 let renderDebounceId = null;
+
+// Register the reset-to-last-safe callback for toasts
+setResetToLastSafeCallback(resetToLastSafe);
 
 export async function renderOverview() {
   if (!state.sourceImage) return;
@@ -39,6 +42,9 @@ export async function renderOverview() {
     const imgData = new ImageData(clamped, result.width, result.height);
     ctx.putImageData(imgData, 0, 0);
     canvas.classList.add('sharp');
+
+    // Snapshot safe adjustments after successful render
+    state.lastSafeAdjustments = JSON.parse(JSON.stringify(getFilterAdjustments()));
   } catch (e) {
     console.error('Overview render failed:', e);
     showError(`Overview: ${e.message}`);
@@ -89,15 +95,15 @@ export function updatePixelRatioBadge() {
   const srcPixelsW = state.region.w * state.sourceWidth;
   const cssDisplayW = Math.min(wrap.clientWidth, canvas.width);
   const ratio = srcPixelsW / cssDisplayW;
-  const badge = $('pixel-ratio-badge');
-  if (ratio <= 1.05) {
-    badge.textContent = '1:1';
-    badge.style.display = '';
-  } else {
-    const r = Math.round(ratio);
-    badge.textContent = `1:${r}`;
-    badge.style.display = '';
-  }
+
+  const info = $('pixel-info');
+  if (!info) return;
+
+  const r = ratio <= 1.05 ? 1 : Math.round(ratio);
+  const renderedW = canvas.width;
+  const renderedH = canvas.height;
+  info.textContent = `1:${r} \u00b7 ${renderedW}\u00d7${renderedH} of ${state.sourceWidth}\u00d7${state.sourceHeight}`;
+  info.style.display = 'block';
 }
 
 export function scheduleRender() {
@@ -123,27 +129,53 @@ export function scheduleDetailOnly() {
   }, RENDER_DEBOUNCE_MS);
 }
 
-// Auto-reset the last changed slider on render error
-export function handleRenderError() {
-  if (!state.lastChangedSliderKey) return;
-  const key = state.lastChangedSliderKey;
-  state.lastChangedSliderKey = null; // prevent re-entry
+/**
+ * Reset all adjustments to the last safe state and update all slider DOM values.
+ */
+export function resetToLastSafe() {
+  const safe = state.lastSafeAdjustments;
+  if (!safe || Object.keys(safe).length === 0) return;
 
-  const slider = document.querySelector(`input[type="range"][data-key="${key}"]`);
-  if (!slider) return;
-  const identity = parseFloat(slider.dataset.identity);
-  slider.value = identity;
-  state.adjustments[key] = identity;
+  // Flatten safe adjustments back into state.adjustments
+  // safe is in the format { "zenfilters.exposure": { "stops": 1.5 }, ... }
+  // state.adjustments uses keys like "zenfilters.exposure.stops"
+  for (const node of state.sliderNodes) {
+    for (const p of node.params) {
+      const safeNode = safe[node.id];
+      if (safeNode && safeNode[p.paramName] !== undefined) {
+        state.adjustments[p.adjustKey] = safeNode[p.paramName];
+      } else {
+        // Node wasn't in safe adjustments = all params at identity
+        state.adjustments[p.adjustKey] = p.identity;
+      }
+    }
+  }
 
-  const row = slider.closest('.slider-row');
-  if (row) {
+  // Update all slider DOM elements to match
+  for (const row of document.querySelectorAll('.slider-row')) {
+    const slider = row.querySelector('input[type="range"]');
     const display = row.querySelector('.val');
     const resetBtn = row.querySelector('.slider-reset');
-    if (display) display.textContent = formatVal(identity);
-    if (resetBtn) resetBtn.classList.remove('visible');
-    row.classList.add('slider-disabled');
-    // Re-enable after 3 seconds
-    setTimeout(() => row.classList.remove('slider-disabled'), 3000);
+    if (!slider) continue;
+    const key = slider.dataset.key;
+    const val = state.adjustments[key];
+    if (val !== undefined) {
+      slider.value = val;
+      if (display) display.textContent = formatVal(val);
+      const identity = parseFloat(slider.dataset.identity);
+      if (resetBtn) {
+        resetBtn.classList.toggle('visible', state.touchedSliders.has(key) && val !== identity);
+      }
+    }
+    row.classList.remove('slider-disabled');
   }
-  state.touchedSliders.delete(key);
+
+  state.lastChangedSliderKey = null;
+  scheduleRender();
+}
+
+// Auto-reset to last safe state on render error
+export function handleRenderError() {
+  // resetToLastSafe is called by the toast on click or auto-timeout
+  // No additional action needed here — the toast handles it
 }

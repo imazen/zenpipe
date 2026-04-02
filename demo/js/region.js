@@ -1,11 +1,12 @@
 // =====================================================================
-// Region Selector
+// Region Selector & Detail Canvas Drag
 // =====================================================================
 
 import { $, state } from './state.js';
 import { scheduleDetailOnly } from './render.js';
 
 export function updateRegionSelector() {
+  // Region selector is hidden, but keep the position math for overview click
   const canvas = $('overview-canvas');
   const rect = canvas.getBoundingClientRect();
   const wrap = $('overview-wrap').getBoundingClientRect();
@@ -18,30 +19,72 @@ export function updateRegionSelector() {
   sel.style.height = (state.region.h * rect.height) + 'px';
 }
 
-export function initRegionDrag() {
-  let dragging = false, startX, startY, startRX, startRY;
-  const sel = $('region-selector');
+/**
+ * Draw the overview canvas content upscaled into the detail canvas
+ * as an instant preview during drag/zoom.
+ */
+export function showUpscaledPreview() {
+  const overviewCanvas = $('overview-canvas');
+  const detailCanvas = $('detail-canvas');
+  if (!overviewCanvas.width || !detailCanvas.width) return;
+  const ctx = detailCanvas.getContext('2d');
+  const r = state.region;
+  // Source rect on overview canvas
+  const sx = r.x * overviewCanvas.width;
+  const sy = r.y * overviewCanvas.height;
+  const sw = r.w * overviewCanvas.width;
+  const sh = r.h * overviewCanvas.height;
+  // Draw overview crop upscaled into detail canvas
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(overviewCanvas, sx, sy, sw, sh, 0, 0, detailCanvas.width, detailCanvas.height);
+}
 
-  sel.addEventListener('pointerdown', e => {
+export function initRegionDrag() {
+  // Detail canvas drag: pan the region by dragging on the detail view
+  const detailCanvas = $('detail-canvas');
+  let dragging = false, startX, startY, startRX, startRY;
+
+  detailCanvas.addEventListener('pointerdown', e => {
+    if (!state.sourceImage) return;
     dragging = true;
     startX = e.clientX; startY = e.clientY;
     startRX = state.region.x; startRY = state.region.y;
-    sel.setPointerCapture(e.pointerId);
+    detailCanvas.setPointerCapture(e.pointerId);
+    detailCanvas.style.cursor = 'grabbing';
     e.preventDefault();
   });
 
-  window.addEventListener('pointermove', e => {
+  detailCanvas.addEventListener('pointermove', e => {
     if (!dragging) return;
-    const rect = $('overview-canvas').getBoundingClientRect();
-    state.region.x = Math.max(0, Math.min(1 - state.region.w, startRX + (e.clientX - startX) / rect.width));
-    state.region.y = Math.max(0, Math.min(1 - state.region.h, startRY + (e.clientY - startY) / rect.height));
+    const wrap = $('detail-wrap');
+    const wrapRect = wrap.getBoundingClientRect();
+    // Compute delta in normalized region coords
+    // Moving mouse right should move the region left (pan left)
+    const deltaX = -(e.clientX - startX) / wrapRect.width * state.region.w;
+    const deltaY = -(e.clientY - startY) / wrapRect.height * state.region.h;
+    state.region.x = Math.max(0, Math.min(1 - state.region.w, startRX + deltaX));
+    state.region.y = Math.max(0, Math.min(1 - state.region.h, startRY + deltaY));
     updateRegionSelector();
+    showUpscaledPreview();
+  });
+
+  detailCanvas.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    detailCanvas.style.cursor = 'grab';
     scheduleDetailOnly();
   });
 
-  window.addEventListener('pointerup', () => { dragging = false; });
+  detailCanvas.addEventListener('pointercancel', () => {
+    dragging = false;
+    detailCanvas.style.cursor = 'grab';
+  });
 
-  // Click on overview to reposition region
+  // Set default cursor style
+  detailCanvas.style.cursor = 'grab';
+
+  // Click on overview to reposition region (keep existing behavior)
   $('overview-wrap').addEventListener('click', e => {
     if (e.target === $('region-selector')) return;
     const rect = $('overview-canvas').getBoundingClientRect();
@@ -84,6 +127,7 @@ export function initScrollZoom() {
     state.region.y = Math.max(0, Math.min(1 - state.region.h, imgY - my * state.region.h));
 
     updateRegionSelector();
+    showUpscaledPreview();
     scheduleDetailOnly();
   }, { passive: false });
 }
@@ -135,6 +179,7 @@ export function initPinchZoom() {
       state.region.y = Math.max(0, Math.min(1 - state.region.h, pinchCenterY - midY * state.region.h));
 
       updateRegionSelector();
+      showUpscaledPreview();
     }
   }, { passive: false });
 
