@@ -45,7 +45,8 @@ jobs:
                       zenblend linear-srgb zencodecs zenjpeg zenpng zenwebp \
                       zengif zenjxl zenavif ravif zenrav1e zenflate zenquant \
                       zenbitmaps enough whereat archmage magetypes garb \
-                      ultrahdr safe_unaligned_simd; do
+                      ultrahdr safe_unaligned_simd heic zenavif-parse \
+                      zenavif-serialize zenjxl-decoder; do
             if [ ! -d "$repo" ]; then
               git clone --depth 1 "https://github.com/imazen/$repo.git" "$repo" 2>/dev/null || true
             fi
