@@ -72,6 +72,19 @@ export async function renderDetail() {
     const canvas = $('detail-canvas');
     canvas.width = result.width;
     canvas.height = result.height;
+
+    // Force CSS to upscale small canvases to fill the viewport.
+    // max-width:100% only constrains — it won't enlarge a 50px canvas
+    // to 800px. We set explicit CSS dimensions, maintaining aspect ratio.
+    const wrap = $('detail-wrap');
+    const wrapW = wrap.clientWidth;
+    const wrapH = wrap.clientHeight - 30; // leave room for pixel-info bar
+    const canvasAspect = result.width / result.height;
+    const fitW = Math.min(wrapW, wrapH * canvasAspect);
+    const fitH = fitW / canvasAspect;
+    canvas.style.width = Math.round(fitW) + 'px';
+    canvas.style.height = Math.round(fitH) + 'px';
+
     const ctx = canvas.getContext('2d');
     const imgData = new ImageData(new Uint8ClampedArray(result.pixels.buffer), result.width, result.height);
     ctx.putImageData(imgData, 0, 0);

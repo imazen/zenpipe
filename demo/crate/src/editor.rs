@@ -238,9 +238,9 @@ impl Editor {
             h: crop_h,
         }));
 
-        // Only downscale if the crop is larger than detail_max.
-        // When zoomed past 1:1 the crop is smaller — render at native
-        // pixel size (no Constrain node = no resize).
+        // Only downscale if crop is larger than detail_max.
+        // When zoomed past 1:1, the crop is already smaller than the viewport —
+        // render at native pixel size and let CSS upscale the canvas.
         if crop_w > self.detail_max || crop_h > self.detail_max {
             nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
                 w: Some(self.detail_max),

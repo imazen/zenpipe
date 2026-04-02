@@ -289,7 +289,8 @@ test.describe('zenpipe editor', () => {
     await expect(pixelInfo).toBeVisible();
     // Should contain the ratio format like "1:N" and dimensions
     const text = await pixelInfo.textContent();
-    expect(text).toMatch(/1:\d+/);
+    // Ratio can be "1:N" (downscale), "N:1 upscaled" (zoom), or "1:1" (exact)
+    expect(text).toMatch(/\d+.*:.*\d+/);
     expect(text).toMatch(/\d+\u00d7\d+/);
   });
 
