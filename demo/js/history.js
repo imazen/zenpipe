@@ -55,7 +55,7 @@ export function initHistory(onRestore) {
       undo();
     }
     // Ctrl+Shift+Z or Ctrl+Y (redo)
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'Z' || e.key === 'y') && (e.shiftKey || e.key === 'y')) {
+    if ((e.ctrlKey || e.metaKey) && ((e.key === 'Z' && e.shiftKey) || e.key === 'y')) {
       e.preventDefault();
       redo();
     }
