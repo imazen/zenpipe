@@ -208,22 +208,51 @@ self.addEventListener('message', async (e) => {
 
       case 'export': {
         if (!editor) throw new Error('Editor not initialized');
-        // Full-res render then encode via canvas
+
+        // Render at requested dimensions (default: source size).
+        const exportMaxDim = msg.width
+          ? Math.max(msg.width, msg.height || msg.width)
+          : Math.max(editor.width, editor.height);
+
         const result = editor.renderOverview(
           msg.adjustments || {},
-          Math.max(editor.width, editor.height),
+          exportMaxDim,
           msg.film_preset || null,
         );
+
         const canvas = new OffscreenCanvas(result.width, result.height);
         const ctx = canvas.getContext('2d');
         ctx.putImageData(result, 0, 0);
-        const blob = await canvas.convertToBlob({
-          type: msg.format === 'png' ? 'image/png' : 'image/jpeg',
-          quality: (msg.quality || 85) / 100,
-        });
+
+        // Browser-native encoding. WebP/JPEG/PNG are widely supported.
+        // AVIF/JXL/GIF would need WASM codecs (not yet integrated).
+        const MIME_MAP = {
+          jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
+          avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
+        };
+        const format = msg.format || 'jpeg';
+        const mime = MIME_MAP[format] || 'image/jpeg';
+        const quality = (format === 'png') ? undefined : (msg.quality || 85) / 100;
+
+        let blob;
+        try {
+          blob = await canvas.convertToBlob({ type: mime, quality });
+        } catch {
+          // Fallback: browser doesn't support this format, try JPEG
+          blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: quality || 0.85 });
+        }
+
         const data = new Uint8Array(await blob.arrayBuffer());
+        // Report actual format (might differ if fallback was used)
+        const actualFormat = blob.type.includes('webp') ? 'webp'
+          : blob.type.includes('png') ? 'png'
+          : blob.type.includes('avif') ? 'avif'
+          : blob.type.includes('jxl') ? 'jxl'
+          : 'jpeg';
+
         self.postMessage(
-          { id, type: 'result', data, format: msg.format || 'jpeg', size: data.length, backend },
+          { id, type: 'result', data, format: actualFormat, size: data.length,
+            width: result.width, height: result.height, backend },
           { transfer: [data.buffer] },
         );
         break;

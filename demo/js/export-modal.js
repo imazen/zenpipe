@@ -14,32 +14,34 @@ const EXPORT_FORMATS = [
   { id: 'gif',  label: 'GIF',  ext: 'gif',  mime: 'image/gif',  color: '#ec4899' },
 ];
 
+// Format controls from zencodecs audit (zencodecs/src/zennode_defs.rs)
 const FORMAT_CONTROLS = {
   jpeg: [
     { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 85, unit: '' },
-    { type: 'checkbox', key: 'progressive', label: 'Progressive', default: false },
+    { type: 'range', key: 'effort', label: 'Effort', min: 0, max: 2, default: 1, unit: '', hint: '0=fast 2=best' },
   ],
   webp: [
     { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 80, unit: '' },
+    { type: 'range', key: 'effort', label: 'Effort', min: 0, max: 10, default: 5, unit: '' },
     { type: 'checkbox', key: 'lossless', label: 'Lossless', default: false },
+    { type: 'range', key: 'near_lossless', label: 'Near-Lossless', min: 0, max: 100, default: 0, unit: '', visible_when: 'lossless' },
   ],
   png: [
-    { type: 'range', key: 'compression', label: 'Compression', min: 1, max: 9, default: 6, unit: '' },
-    { type: 'checkbox', key: 'interlace', label: 'Interlace', default: false },
+    { type: 'range', key: 'effort', label: 'Effort', min: 0, max: 12, default: 5, unit: '', hint: '0=fast 12=smallest' },
   ],
   avif: [
-    { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 65, unit: '' },
-    { type: 'range', key: 'speed', label: 'Speed', min: 1, max: 10, default: 6, unit: '' },
+    { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 75, unit: '' },
+    { type: 'range', key: 'effort', label: 'Effort', min: 0, max: 10, default: 6, unit: '' },
     { type: 'checkbox', key: 'lossless', label: 'Lossless', default: false },
   ],
   jxl: [
     { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 75, unit: '' },
-    { type: 'range', key: 'effort', label: 'Effort', min: 1, max: 9, default: 7, unit: '' },
+    { type: 'range', key: 'effort', label: 'Effort', min: 0, max: 10, default: 7, unit: '' },
     { type: 'checkbox', key: 'lossless', label: 'Lossless', default: false },
   ],
   gif: [
-    { type: 'range', key: 'colors', label: 'Colors', min: 2, max: 256, default: 256, unit: '' },
-    { type: 'checkbox', key: 'dither', label: 'Dither', default: true },
+    { type: 'range', key: 'quality', label: 'Quality', min: 1, max: 100, default: 80, unit: '' },
+    { type: 'range', key: 'dithering', label: 'Dithering', min: 0, max: 100, default: 50, unit: '%' },
   ],
 };
 
@@ -284,9 +286,14 @@ export function initExportModal() {
 
       const result = await sendToWorker('export', exportData);
 
-      // Determine MIME type (worker may only support jpeg/png via canvas)
-      const mime = (exportFormat === 'png') ? 'image/png' : 'image/jpeg';
-      const ext = (exportFormat === 'png') ? 'png' : fmt.ext;
+      // Use the actual format the worker encoded (may differ if browser fallback)
+      const actualFmt = EXPORT_FORMATS.find(f => f.id === result.format) || fmt;
+      const MIME_MAP = {
+        jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
+        avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
+      };
+      const mime = MIME_MAP[result.format] || 'image/jpeg';
+      const ext = actualFmt.ext;
 
       const blob = new Blob([result.data], { type: mime });
       const url = URL.createObjectURL(blob);
@@ -295,7 +302,11 @@ export function initExportModal() {
       a.download = `export.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
-      $('status').textContent = `Exported ${fmt.label} ${(result.size / 1024).toFixed(0)} KB`;
+
+      const dims = result.width ? `${result.width}\u00d7${result.height} ` : '';
+      const sizeKB = (result.size / 1024).toFixed(0);
+      const fallback = result.format !== exportFormat ? ` (${actualFmt.label} fallback)` : '';
+      $('status').textContent = `Exported ${dims}${actualFmt.label} ${sizeKB} KB${fallback}`;
     } catch (e) {
       $('status').textContent = `Export error: ${e.message}`;
     }
