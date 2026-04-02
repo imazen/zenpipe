@@ -381,6 +381,74 @@ aside {
 .preset-chip[data-cat="digital"]      { border-left: 3px solid #5cccd4; }
 .preset-chip[data-cat="cinematic"]    { border-left: 3px solid #b06ce0; }
 .preset-chip[data-cat="none"]         { border-left: 3px solid var(--text-dim); }
+
+/* ─── Error / Info Toast ─── */
+.error-toast {
+  position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.85); color: #ff6b6b; padding: 10px 20px;
+  border-radius: 8px; font-size: 13px; max-width: 80%; text-align: center;
+  z-index: 10; pointer-events: none;
+  opacity: 1; transition: opacity 0.4s;
+}
+.error-toast.fade-out { opacity: 0; }
+.info-toast {
+  position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.7); color: var(--text-dim); padding: 8px 16px;
+  border-radius: 8px; font-size: 13px; max-width: 80%; text-align: center;
+  z-index: 9; pointer-events: none;
+  opacity: 1; transition: opacity 0.4s;
+}
+.info-toast.fade-out { opacity: 0; }
+
+/* ─── Slider disabled state ─── */
+.slider-disabled {
+  opacity: 0.4; pointer-events: none;
+}
+
+/* ─── Loading message repositioned below error toast area ─── */
+.loading-message {
+  align-items: flex-end !important;
+  padding-bottom: 20%;
+}
+
+/* ─── Responsive layout ─── */
+@media (max-width: 840px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+  aside {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  .slider-row {
+    grid-template-columns: 1fr 16px;
+    grid-template-rows: auto auto;
+    height: auto;
+    gap: 2px 6px;
+    padding: 4px 0;
+  }
+  .slider-row label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .slider-row .val {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: right;
+  }
+  .slider-row input[type="range"] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .slider-row .slider-reset {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+}
 </style>
 </head>
 <body>
@@ -505,6 +573,54 @@ let sliderNodes = [];  // Populated from schema
 let overviewRenderId = 0, detailRenderId = 0;
 
 const $ = id => document.getElementById(id);
+
+// Track which slider was last changed (for error recovery)
+let lastChangedSliderKey = null;
+// Track which sliders have been touched by the user
+const touchedSliders = new Set();
+
+// =====================================================================
+// Error / Info Toast
+// =====================================================================
+
+let errorToastTimer = null;
+
+function showError(msg) {
+  const wrap = $('detail-wrap');
+  // Remove any existing error toast
+  const existing = wrap.querySelector('.error-toast');
+  if (existing) existing.remove();
+  if (errorToastTimer) { clearTimeout(errorToastTimer); errorToastTimer = null; }
+
+  const el = document.createElement('div');
+  el.className = 'error-toast';
+  el.textContent = msg;
+  wrap.appendChild(el);
+
+  errorToastTimer = setTimeout(() => {
+    el.classList.add('fade-out');
+    setTimeout(() => el.remove(), 500);
+    errorToastTimer = null;
+  }, 5000);
+}
+
+function showInfo(msg) {
+  const wrap = $('detail-wrap');
+  // Remove any existing info toast
+  const existing = wrap.querySelector('.info-toast');
+  if (existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.className = 'info-toast';
+  el.textContent = msg;
+  wrap.appendChild(el);
+
+  // Auto-dismiss after 3 seconds
+  setTimeout(() => {
+    el.classList.add('fade-out');
+    setTimeout(() => el.remove(), 500);
+  }, 3000);
+}
 
 // =====================================================================
 // Worker Communication
@@ -683,10 +799,12 @@ async function loadSchemaAndBuildUI() {
 
         function updateResetVisibility() {
           const isIdentity = parseFloat(slider.value) === param.identity;
-          resetBtn.classList.toggle('visible', !isIdentity);
+          resetBtn.classList.toggle('visible', touchedSliders.has(param.adjustKey) && !isIdentity);
         }
 
         slider.addEventListener('input', () => {
+          touchedSliders.add(param.adjustKey);
+          lastChangedSliderKey = param.adjustKey;
           adjustments[param.adjustKey] = parseFloat(slider.value);
           display.textContent = formatVal(adjustments[param.adjustKey]);
           updateResetVisibility();
@@ -698,6 +816,7 @@ async function loadSchemaAndBuildUI() {
           slider.value = param.identity;
           adjustments[param.adjustKey] = param.identity;
           display.textContent = formatVal(param.identity);
+          touchedSliders.delete(param.adjustKey);
           updateResetVisibility();
           scheduleRender();
         });
@@ -707,6 +826,7 @@ async function loadSchemaAndBuildUI() {
           slider.value = param.identity;
           adjustments[param.adjustKey] = param.identity;
           display.textContent = formatVal(param.identity);
+          touchedSliders.delete(param.adjustKey);
           updateResetVisibility();
           scheduleRender();
         });
@@ -774,7 +894,8 @@ async function renderOverview() {
     canvas.classList.add('sharp');
   } catch (e) {
     console.error('Overview render failed:', e);
-    $('status').textContent = `Overview error: ${e.message}`;
+    showError(`Overview: ${e.message}`);
+    handleRenderError();
   }
   $('overview-spinner').classList.remove('active');
   clearCssPreview();
@@ -806,7 +927,8 @@ async function renderDetail() {
     updatePixelRatioBadge();
   } catch (e) {
     console.error('Detail render failed:', e);
-    $('status').textContent = `Detail error: ${e.message}`;
+    showError(`Detail: ${e.message}`);
+    handleRenderError();
   }
   $('detail-spinner').classList.remove('active');
   clearCssPreview();
@@ -855,6 +977,31 @@ function scheduleDetailOnly() {
     renderDebounceId = null;
     renderDetail();
   }, RENDER_DEBOUNCE_MS);
+}
+
+// Auto-reset the last changed slider on render error
+function handleRenderError() {
+  if (!lastChangedSliderKey) return;
+  const key = lastChangedSliderKey;
+  lastChangedSliderKey = null; // prevent re-entry
+
+  const slider = document.querySelector(`input[type="range"][data-key="${key}"]`);
+  if (!slider) return;
+  const identity = parseFloat(slider.dataset.identity);
+  slider.value = identity;
+  adjustments[key] = identity;
+
+  const row = slider.closest('.slider-row');
+  if (row) {
+    const display = row.querySelector('.val');
+    const resetBtn = row.querySelector('.slider-reset');
+    if (display) display.textContent = formatVal(identity);
+    if (resetBtn) resetBtn.classList.remove('visible');
+    row.classList.add('slider-disabled');
+    // Re-enable after 3 seconds
+    setTimeout(() => row.classList.remove('slider-disabled'), 3000);
+  }
+  touchedSliders.delete(key);
 }
 
 // =====================================================================
@@ -983,6 +1130,8 @@ document.addEventListener('drop', e => {
 
 // Reset all sliders to identity and clear film preset
 $('reset-btn').addEventListener('click', () => {
+  touchedSliders.clear();
+  lastChangedSliderKey = null;
   for (const row of document.querySelectorAll('.slider-row')) {
     const slider = row.querySelector('input[type="range"]');
     const display = row.querySelector('.val');
@@ -992,6 +1141,7 @@ $('reset-btn').addEventListener('click', () => {
     adjustments[slider.dataset.key] = identity;
     display.textContent = formatVal(identity);
     if (resetBtn) resetBtn.classList.remove('visible');
+    row.classList.remove('slider-disabled');
   }
   setActivePreset(null);
   // Reset intensity
@@ -1472,6 +1622,105 @@ function setActivePreset(presetId) {
     c.classList.toggle('active', cid === (presetId || ''));
   });
 }
+
+// =====================================================================
+// Scroll-to-zoom on detail canvas
+// =====================================================================
+
+$('detail-wrap').addEventListener('wheel', e => {
+  if (!sourceImage) return;
+  e.preventDefault();
+
+  const scaleFactor = Math.pow(0.9, Math.sign(e.deltaY));
+
+  // Mouse position within overview canvas (normalized 0..1)
+  const overviewCanvas = $('overview-canvas');
+  const overviewRect = overviewCanvas.getBoundingClientRect();
+  // Map mouse position in detail-wrap to normalized image coordinates
+  // The detail view shows the current region, so mouse position maps into that region
+  const detailWrap = $('detail-wrap');
+  const wrapRect = detailWrap.getBoundingClientRect();
+  const mx = (e.clientX - wrapRect.left) / wrapRect.width;
+  const my = (e.clientY - wrapRect.top) / wrapRect.height;
+  // Convert to image coordinates
+  const imgX = region.x + mx * region.w;
+  const imgY = region.y + my * region.h;
+
+  // Scale region dimensions
+  const newW = Math.max(0.05, Math.min(1.0, region.w * scaleFactor));
+  const newH = Math.max(0.05, Math.min(1.0, region.h * scaleFactor));
+
+  // Recenter so the point under the mouse stays fixed
+  region.w = newW;
+  region.h = newH;
+  region.x = Math.max(0, Math.min(1 - region.w, imgX - mx * region.w));
+  region.y = Math.max(0, Math.min(1 - region.h, imgY - my * region.h));
+
+  updateRegionSelector();
+  scheduleDetailOnly();
+}, { passive: false });
+
+// =====================================================================
+// Pinch-to-zoom on detail canvas
+// =====================================================================
+
+(function() {
+  const wrap = $('detail-wrap');
+  let initialDist = 0;
+  let initialW = 0, initialH = 0;
+  let pinchCenterX = 0, pinchCenterY = 0;
+
+  function touchDist(t1, t2) {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      initialDist = touchDist(e.touches[0], e.touches[1]);
+      initialW = region.w;
+      initialH = region.h;
+      // Midpoint in normalized image coords
+      const wrapRect = wrap.getBoundingClientRect();
+      const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - wrapRect.left) / wrapRect.width;
+      const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - wrapRect.top) / wrapRect.height;
+      pinchCenterX = region.x + midX * region.w;
+      pinchCenterY = region.y + midY * region.h;
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && initialDist > 0) {
+      e.preventDefault();
+      const dist = touchDist(e.touches[0], e.touches[1]);
+      // Pinch in (fingers closer) = smaller region = zoom in
+      const scale = initialDist / dist;
+      const newW = Math.max(0.05, Math.min(1.0, initialW * scale));
+      const newH = Math.max(0.05, Math.min(1.0, initialH * scale));
+
+      // Midpoint in normalized detail coords
+      const wrapRect = wrap.getBoundingClientRect();
+      const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - wrapRect.left) / wrapRect.width;
+      const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - wrapRect.top) / wrapRect.height;
+
+      region.w = newW;
+      region.h = newH;
+      region.x = Math.max(0, Math.min(1 - region.w, pinchCenterX - midX * region.w));
+      region.y = Math.max(0, Math.min(1 - region.h, pinchCenterY - midY * region.h));
+
+      updateRegionSelector();
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', e => {
+    if (e.touches.length < 2 && initialDist > 0) {
+      initialDist = 0;
+      scheduleDetailOnly();
+    }
+  });
+})();
 
 // =====================================================================
 // Init
