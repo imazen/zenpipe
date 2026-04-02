@@ -37,9 +37,10 @@ export async function loadImage(file) {
   const vpH = detailWrap.clientHeight || 600;
   const vpAspect = vpW / vpH;
   const clampedAspect = Math.max(3/4, Math.min(4/3, vpAspect));
-  // Calculate region size for ~1:1 CSS pixels = image pixels
-  let regionW = Math.min(1, vpW / state.sourceWidth);
-  let regionH = Math.min(1, (vpW / clampedAspect) / state.sourceHeight);
+  // Calculate region size for ~1:1 device pixels = source pixels
+  const dpr = window.devicePixelRatio || 1;
+  let regionW = Math.min(1, (vpW * dpr) / state.sourceWidth);
+  let regionH = Math.min(1, ((vpW * dpr) / clampedAspect) / state.sourceHeight);
   // Clamp if region would exceed max real-time rendering (1920*1080 pixels)
   const maxPixels = 1920 * 1080;
   const regionPixels = (regionW * state.sourceWidth) * (regionH * state.sourceHeight);

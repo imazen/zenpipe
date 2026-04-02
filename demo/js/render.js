@@ -61,10 +61,15 @@ export async function renderDetail() {
   $('detail-spinner').classList.add('active');
 
   try {
+    // Render at device pixel resolution for sharp display on HiDPI screens.
+    // The viewport is cssW × cssH CSS pixels = (cssW*dpr) × (cssH*dpr) device pixels.
+    const dpr = window.devicePixelRatio || 1;
+    const wrap = $('detail-wrap');
+    const detailMaxDim = Math.round(Math.max(wrap.clientWidth, wrap.clientHeight) * dpr);
     const result = await sendToWorker('region', {
       adjustments: getFilterAdjustments(),
       rect: state.region,
-      maxDim: DETAIL_MAX,
+      maxDim: Math.min(detailMaxDim, DETAIL_MAX * dpr),
       film_preset: state.filmPreset,
       film_preset_intensity: state.filmPresetIntensity,
     });
@@ -108,10 +113,12 @@ export function updatePixelRatioBadge() {
   // Source pixels covered by the region
   const srcPixelsW = Math.round(state.region.w * state.sourceWidth);
   const srcPixelsH = Math.round(state.region.h * state.sourceHeight);
-  // CSS display size — "1:1" means 1 source pixel = 1 CSS pixel
+  // "1:1" means 1 source pixel = 1 device pixel.
+  // Device pixels = CSS pixels × devicePixelRatio.
+  const dpr = window.devicePixelRatio || 1;
   const canvasRect = canvas.getBoundingClientRect();
-  const cssDisplayW = canvasRect.width || wrap.clientWidth;
-  const ratio = srcPixelsW / cssDisplayW;
+  const devicePixelsW = (canvasRect.width || wrap.clientWidth) * dpr;
+  const ratio = srcPixelsW / devicePixelsW;
 
   const info = $('pixel-info');
   if (!info) return;
@@ -139,8 +146,9 @@ export function updatePixelRatioBadge() {
 
   const renderedW = canvas.width;
   const renderedH = canvas.height;
+  const dprNote = dpr > 1.05 ? ` @${dpr.toFixed(1)}x` : '';
   info.innerHTML = `<span class="ratio-text ${ratioClass}">${ratioText}</span> `
-    + `<span class="ratio-dims">${srcPixelsW}\u00d7${srcPixelsH} of ${state.sourceWidth}\u00d7${state.sourceHeight}</span>`;
+    + `<span class="ratio-dims">${srcPixelsW}\u00d7${srcPixelsH} of ${state.sourceWidth}\u00d7${state.sourceHeight}${dprNote}</span>`;
   info.style.display = 'flex';
 }
 

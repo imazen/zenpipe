@@ -88,9 +88,12 @@ $('pixel-info').addEventListener('click', () => {
   const detailWrap = $('detail-wrap');
   const vpW = detailWrap.clientWidth || 800;
   const vpH = detailWrap.clientHeight || 600;
-  // Set region so 1 source pixel = 1 CSS pixel
-  const regionW = Math.min(1, vpW / state.sourceWidth);
-  const regionH = Math.min(1, vpH / state.sourceHeight);
+  // Set region so 1 source pixel = 1 device pixel
+  const dpr = window.devicePixelRatio || 1;
+  const deviceW = vpW * dpr;
+  const deviceH = vpH * dpr;
+  const regionW = Math.min(1, deviceW / state.sourceWidth);
+  const regionH = Math.min(1, deviceH / state.sourceHeight);
   // Recenter around current region center
   const cx = state.region.x + state.region.w / 2;
   const cy = state.region.y + state.region.h / 2;
