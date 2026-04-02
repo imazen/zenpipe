@@ -194,14 +194,19 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Explicit CSS width/height to fill viewport (browser upscales small canvases)
 - `image-rendering: pixelated` at >6x upscale
 
-### 5.2.1 Original vs Edited Toggle ⬜
-- Hold-to-compare: hold a key (e.g., `\` or spacebar) or long-press a button to show the original (unedited) image
-- **Release returns to edited** — no flicker, no re-render delay
-- Implementation: keep a cached unedited render (overview + detail at current region) alongside the edited one
-- During drag/zoom: always show filtered (edited) — the original toggle is only for static comparison
-- Visual indicator: "Original" badge overlaid when showing unedited
-- The unedited render uses the same Session with empty adjustments (cache hit on geometry prefix, no filter suffix)
-- Must not interfere with drag/zoom — if user is panning and hits the toggle key, ignore it until panning stops
+### 5.2.1 Original vs Edited Compare ⬜
+- **Mobile-first**: tap-and-hold the image to see original, release to see edited
+  - Touch: `touchstart` on detail canvas → show original after 200ms hold (distinguishes from drag start)
+  - If finger moves > 10px before 200ms, it's a drag — cancel the compare
+  - `touchend` → snap back to edited instantly
+- **Desktop**: same tap-hold works with mouse; also `\` key as shortcut (hold = original, release = edited)
+- **Visual**: large "ORIGINAL" badge centered on the image while showing unedited; fades instantly on release
+- **Implementation**: keep a pre-rendered unedited canvas (or ImageData) alongside the edited one
+  - Render original using same Session with empty adjustments → geometry prefix cache hit, no filter suffix → fast
+  - Swap canvas content (not CSS filter removal — that would show wrong result for non-CSS-approximated filters)
+  - Original render updates when region changes (drag/zoom), but only when compare is not active
+- **Never interfere with interaction**: if user is dragging/zooming, ignore compare gesture entirely
+- **Split-screen option** (future): swipe a divider left/right to reveal original on one side
 
 ### 5.3 Zoom ✅
 - Scroll-to-zoom (proportional deltaY, smooth trackpad + discrete wheel)
