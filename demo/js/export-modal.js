@@ -82,6 +82,7 @@ function renderFormatControls() {
 
   const controls = FORMAT_CONTROLS[exportFormat];
   const settings = exportSettings[exportFormat];
+  const conditionalRows = []; // { row, visibleWhen } for visibility updates
 
   for (const ctrl of controls) {
     if (ctrl.type === 'range') {
@@ -100,6 +101,7 @@ function renderFormatControls() {
         valSpan.textContent = slider.value;
         updateExportEstimates();
       });
+      if (ctrl.visible_when) conditionalRows.push({ row, visibleWhen: ctrl.visible_when });
       container.appendChild(row);
     } else if (ctrl.type === 'checkbox') {
       const row = document.createElement('div');
@@ -112,11 +114,20 @@ function renderFormatControls() {
       const chk = row.querySelector('input');
       chk.addEventListener('change', () => {
         settings[ctrl.key] = chk.checked;
+        updateVisibility();
         updateExportEstimates();
       });
       container.appendChild(row);
     }
   }
+
+  function updateVisibility() {
+    for (const { row, visibleWhen } of conditionalRows) {
+      // visibleWhen is a settings key — show row when that key is truthy
+      row.style.display = settings[visibleWhen] ? '' : 'none';
+    }
+  }
+  updateVisibility();
 }
 
 function updateExportDims() {

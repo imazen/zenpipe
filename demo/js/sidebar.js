@@ -141,10 +141,11 @@ function parseParam(paramName, paramSchema, nodeId) {
 
     if (slider === 'not_slider') return null; // skip non-slider numeric params
 
+    const visibleWhen = paramSchema['x-zennode-visible-when'] || null;
     const adjustKey = nodeId + '.' + paramName;
     return {
       kind: 'number', paramName, label, min, max, step, defaultVal,
-      identity, adjustKey, unit, section, slider,
+      identity, adjustKey, unit, section, slider, visibleWhen,
     };
   }
 
