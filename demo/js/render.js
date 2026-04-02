@@ -104,6 +104,7 @@ export function updatePixelRatioBadge() {
   if (!info) return;
 
   let ratioText, ratioClass;
+  canvas.style.imageRendering = 'auto'; // reset; upscale path overrides below
   if (ratio >= 0.95 && ratio <= 1.05) {
     ratioText = '1:1';
     ratioClass = 'ratio-exact';
@@ -118,6 +119,9 @@ export function updatePixelRatioBadge() {
     const r = upscale < 10 ? upscale.toFixed(1) : Math.round(upscale);
     ratioText = `${r}:1 upscaled`;
     ratioClass = upscale > 4 ? 'ratio-up-warn' : 'ratio-up';
+
+    // Switch to pixelated rendering past 6x so users see actual pixels
+    canvas.style.imageRendering = upscale > 6 ? 'pixelated' : 'auto';
   }
 
   const renderedW = canvas.width;
