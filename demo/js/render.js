@@ -136,8 +136,8 @@ export function updatePixelRatioBadge() {
     ratioText = `${r}:1 upscaled`;
     ratioClass = upscale > 4 ? 'ratio-up-warn' : 'ratio-up';
 
-    // Switch to pixelated rendering past 6x so users see actual pixels
-    canvas.style.imageRendering = upscale > 6 ? 'pixelated' : 'auto';
+    // Pixelated when any upscale — each source pixel maps to >1 CSS pixel
+    canvas.style.imageRendering = 'pixelated';
   }
 
   const renderedW = canvas.width;

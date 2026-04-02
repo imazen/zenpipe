@@ -660,20 +660,45 @@ aside {
   padding-bottom: 20%;
 }
 
+/* --- Dock positions --- */
+/* Default: right (already set on body) */
+body.dock-left {
+  grid-template-columns: 280px 1fr;
+}
+body.dock-left aside {
+  border-left: none; border-right: 1px solid var(--border);
+  order: -1;
+}
+body.dock-left main { order: 0; }
+
+body.dock-bottom {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+}
+body.dock-bottom aside {
+  border-left: none; border-top: 1px solid var(--border);
+  max-height: 40vh; overflow-y: auto;
+}
+
+#dock-toggle {
+  font-size: 11px; padding: 2px 6px; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 3px;
+}
+#dock-toggle:hover { color: var(--text); border-color: var(--accent); }
+
 /* --- Responsive layout --- */
 @media (max-width: 840px) {
-  body {
+  body, body.dock-left, body.dock-right {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
   }
   aside {
-    border-left: none;
+    border-left: none !important; border-right: none !important;
     border-top: 1px solid var(--border);
     max-height: 40vh;
     overflow-y: auto;
   }
-  /* Slider layout is already label-above-slider in both modes.
-     Just ensure proper spacing in narrow mode. */
   .slider-row {
     padding: 4px 0;
   }
@@ -687,6 +712,7 @@ aside {
   <button class="btn" id="open-btn">Open</button>
   <button class="btn" id="pick-btn">Pick</button>
   <button class="btn btn-primary" id="export-btn">Export</button>
+  <button id="dock-toggle" title="Dock sidebar: right / left / bottom">R</button>
   <span id="status">Drop an image to start</span>
   <div id="photo-picker-popover">
     <div class="popover-photos" id="popover-photos"></div>

@@ -104,6 +104,28 @@ $('pixel-info').addEventListener('click', () => {
   scheduleDetailOnly();
 });
 
+// Dock position toggle: right → left → bottom → right
+const DOCK_POSITIONS = ['right', 'left', 'bottom'];
+const DOCK_LABELS = { right: 'R', left: 'L', bottom: 'B' };
+let dockIndex = 0;
+// Restore from localStorage
+try {
+  const saved = localStorage.getItem('zenpipe-dock');
+  if (saved && DOCK_POSITIONS.includes(saved)) {
+    dockIndex = DOCK_POSITIONS.indexOf(saved);
+    if (dockIndex > 0) document.body.classList.add('dock-' + DOCK_POSITIONS[dockIndex]);
+    $('dock-toggle').textContent = DOCK_LABELS[DOCK_POSITIONS[dockIndex]];
+  }
+} catch {}
+$('dock-toggle').addEventListener('click', () => {
+  document.body.classList.remove('dock-' + DOCK_POSITIONS[dockIndex]);
+  dockIndex = (dockIndex + 1) % DOCK_POSITIONS.length;
+  const pos = DOCK_POSITIONS[dockIndex];
+  if (pos !== 'right') document.body.classList.add('dock-' + pos);
+  $('dock-toggle').textContent = DOCK_LABELS[pos];
+  try { localStorage.setItem('zenpipe-dock', pos); } catch {}
+});
+
 // Minimap overlay toggle
 $('minimap-toggle').addEventListener('click', () => {
   const wrap = $('overview-wrap');
