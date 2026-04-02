@@ -84,11 +84,15 @@ pub struct Editor {
     detail_cancel: Arc<AtomicBool>,
 
     /// Pre-encode cache: rendered RGBA pixels ready for encoding.
-    /// Keyed by a hash of adjustments + film preset + max_dim.
-    /// When the user tweaks quality/effort/format in the export modal,
-    /// the filter output hasn't changed — only encode settings differ.
-    /// This cache avoids re-running the 500ms+ filter pipeline on 4K images.
     pre_encode_cache: Option<PreEncodeCache>,
+
+    /// Metadata from native decode (ICC, EXIF, XMP, CICP).
+    /// `None` when initialized from browser-decoded RGBA (no metadata available).
+    /// Populated by `upgrade_source()` after native decode completes.
+    metadata: Option<zencodec::Metadata>,
+
+    /// Source image format detected by native decode.
+    source_format: Option<zencodec::ImageFormat>,
 }
 
 /// Cached rendered pixels for re-encoding with different codec settings.
@@ -135,6 +139,8 @@ impl Editor {
             overview_cancel: Arc::new(AtomicBool::new(false)),
             detail_cancel: Arc::new(AtomicBool::new(false)),
             pre_encode_cache: None,
+            metadata: None,
+            source_format: None,
         }
     }
 
@@ -153,6 +159,45 @@ impl Editor {
     }
     pub fn source_height(&self) -> u32 {
         self.source_height
+    }
+    pub fn metadata(&self) -> Option<&zencodec::Metadata> {
+        self.metadata.as_ref()
+    }
+    pub fn source_format(&self) -> Option<zencodec::ImageFormat> {
+        self.source_format
+    }
+
+    /// Replace the source pixels with natively-decoded data + metadata.
+    ///
+    /// Called after background native decode completes (two-phase upgrade).
+    /// Changes source_hash so Session caches auto-invalidate on next render.
+    pub fn upgrade_source(
+        &mut self,
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+        metadata: zencodec::Metadata,
+        format: zencodec::ImageFormat,
+    ) {
+        self.source_pixels = MaterializedSource::from_data(pixels, width, height, RGBA8_SRGB);
+        self.source_width = width;
+        self.source_height = height;
+        self.metadata = Some(metadata);
+        self.source_format = Some(format);
+        self.pre_encode_cache = None;
+
+        // New content-based hash so Session caches invalidate.
+        // Include a discriminator so it differs from the browser-decode hash.
+        let source_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            b"native".hash(&mut h);
+            width.hash(&mut h);
+            height.hash(&mut h);
+            format.extension().hash(&mut h);
+            h.finish()
+        };
+        self.source_hash = source_hash;
     }
 
     /// Render the overview image with the given filter adjustments.

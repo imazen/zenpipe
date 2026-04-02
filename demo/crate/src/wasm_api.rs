@@ -103,6 +103,50 @@ impl WasmEncodeResult {
     }
 }
 
+/// Result of a native decode upgrade: metadata summary for the UI.
+#[wasm_bindgen]
+pub struct WasmUpgradeResult {
+    format: String,
+    width: u32,
+    height: u32,
+    has_icc: bool,
+    has_exif: bool,
+    has_xmp: bool,
+    has_gain_map: bool,
+}
+
+#[wasm_bindgen]
+impl WasmUpgradeResult {
+    #[wasm_bindgen(getter)]
+    pub fn format(&self) -> String {
+        self.format.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+    #[wasm_bindgen(getter)]
+    pub fn has_icc(&self) -> bool {
+        self.has_icc
+    }
+    #[wasm_bindgen(getter)]
+    pub fn has_exif(&self) -> bool {
+        self.has_exif
+    }
+    #[wasm_bindgen(getter)]
+    pub fn has_xmp(&self) -> bool {
+        self.has_xmp
+    }
+    #[wasm_bindgen(getter)]
+    pub fn has_gain_map(&self) -> bool {
+        self.has_gain_map
+    }
+}
+
 #[wasm_bindgen]
 impl WasmEditor {
     /// Create an editor from RGBA8 pixel data.
@@ -129,6 +173,58 @@ impl WasmEditor {
             inner: Editor::from_rgba(rgba_data.to_vec(), width, height, overview_max, detail_max),
             preset_thumbnails: Vec::new(),
         })
+    }
+
+    /// Upgrade the editor's source by decoding original image bytes natively.
+    ///
+    /// Replaces browser-decoded pixels with zencodecs-decoded pixels and
+    /// preserves metadata (ICC, EXIF, XMP, CICP). Session caches invalidate
+    /// automatically — the next render will use the new source.
+    ///
+    /// Call this in the background after showing the initial browser-decoded
+    /// preview. The UI re-renders when this completes.
+    #[wasm_bindgen]
+    pub fn upgrade_from_bytes(&mut self, bytes: &[u8]) -> Result<WasmUpgradeResult, JsError> {
+        let decoded = crate::decode::decode_native(bytes)
+            .map_err(|e| JsError::new(&e))?;
+
+        let has_icc = decoded.metadata.icc_profile.is_some();
+        let has_exif = decoded.metadata.exif.is_some();
+        let has_xmp = decoded.metadata.xmp.is_some();
+        let has_gain_map = decoded.has_gain_map;
+        let format_str = decoded.format.extension().to_string();
+        let width = decoded.width;
+        let height = decoded.height;
+
+        self.inner.upgrade_source(
+            decoded.data,
+            decoded.width,
+            decoded.height,
+            decoded.metadata,
+            decoded.format,
+        );
+
+        Ok(WasmUpgradeResult {
+            format: format_str,
+            width,
+            height,
+            has_icc,
+            has_exif,
+            has_xmp,
+            has_gain_map,
+        })
+    }
+
+    /// Whether the editor has metadata from native decode.
+    #[wasm_bindgen(getter)]
+    pub fn has_metadata(&self) -> bool {
+        self.inner.metadata().is_some()
+    }
+
+    /// Source format detected by native decode (e.g., "jpeg", "png").
+    #[wasm_bindgen(getter)]
+    pub fn source_format(&self) -> Option<String> {
+        self.inner.source_format().map(|f| f.extension().to_string())
     }
 
     /// Source image width.

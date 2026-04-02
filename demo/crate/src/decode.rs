@@ -1,17 +1,29 @@
 //! Image decoding — detects format and decodes to RGBA8 pixels.
 //!
-//! Used as fallback when the browser's `createImageBitmap` doesn't
-//! support the format (e.g., JXL in Chrome, HEIC in Firefox).
+//! Two decode paths:
+//! - `try_decode()` — streaming fallback for JXL/AVIF when browser can't decode
+//! - `decode_native()` — full zencodecs decode with metadata preservation
+//!   (used for two-phase upgrade: browser preview → native decode in background)
 
 use std::borrow::Cow;
 use zencodec::decode::{DecodeJob, DecoderConfig, StreamingDecode};
 use zenpixels::PixelDescriptor;
 
-/// Decoded image: RGBA8 pixels + dimensions.
+/// Decoded image: RGBA8 pixels + dimensions (no metadata).
 pub struct DecodedImage {
     pub data: Vec<u8>,
     pub width: u32,
     pub height: u32,
+}
+
+/// Native decode result: RGBA8 pixels + metadata + format info.
+pub struct NativeDecodeOutput {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub metadata: zencodec::Metadata,
+    pub format: zencodec::ImageFormat,
+    pub has_gain_map: bool,
 }
 
 /// Try to decode image bytes using WASM codecs.
@@ -29,6 +41,71 @@ pub fn try_decode(bytes: &[u8]) -> Option<DecodedImage> {
         // fallback for formats browsers don't support.
         _ => None,
     }
+}
+
+/// Decode image bytes natively via zencodecs with full metadata preservation.
+///
+/// Returns RGBA8 sRGB pixels + ICC/EXIF/XMP/CICP metadata + detected format.
+/// Used for the two-phase upgrade: browser shows instant preview, then this
+/// runs in background to provide the authoritative decode with metadata.
+pub fn decode_native(bytes: &[u8]) -> Result<NativeDecodeOutput, String> {
+    let output = zencodecs::DecodeRequest::new(bytes)
+        .decode_full_frame()
+        .map_err(|e| format!("decode: {e}"))?;
+
+    let width = output.width();
+    let height = output.height();
+    let metadata = output.metadata();
+    let format = output.format();
+    let has_gain_map = matches!(output.info().gain_map, zencodec::gainmap::GainMapPresence::Available(_));
+    let src_desc = output.descriptor();
+
+    // Convert decoded pixels to tightly-packed RGBA8 sRGB.
+    let dst_desc = PixelDescriptor::RGBA8_SRGB;
+    let pixels = output.pixels();
+    let src_stride = pixels.stride();
+    let src_bpp = src_desc.bytes_per_pixel();
+    let src_row_bytes = width as usize * src_bpp;
+    let dst_row_bytes = width as usize * 4;
+
+    let data = if src_desc == dst_desc {
+        // Fast path: already RGBA8 sRGB
+        if src_stride == dst_row_bytes {
+            pixels.as_strided_bytes()[..dst_row_bytes * height as usize].to_vec()
+        } else {
+            let mut packed = Vec::with_capacity(dst_row_bytes * height as usize);
+            for y in 0..height as usize {
+                let start = y * src_stride;
+                packed.extend_from_slice(&pixels.as_strided_bytes()[start..start + dst_row_bytes]);
+            }
+            packed
+        }
+    } else {
+        // Use RowConverter for any other format
+        let mut converter = zenpipe::RowConverter::new(src_desc, dst_desc)
+            .map_err(|e| format!("pixel conversion {src_desc} → {dst_desc}: {e}"))?;
+        let mut packed = vec![0u8; dst_row_bytes * height as usize];
+        let src_data = pixels.as_strided_bytes();
+        for y in 0..height as usize {
+            let src_start = y * src_stride;
+            let dst_start = y * dst_row_bytes;
+            converter.convert_row(
+                &src_data[src_start..src_start + src_row_bytes],
+                &mut packed[dst_start..dst_start + dst_row_bytes],
+                width,
+            );
+        }
+        packed
+    };
+
+    Ok(NativeDecodeOutput {
+        data,
+        width,
+        height,
+        metadata,
+        format,
+        has_gain_map,
+    })
 }
 
 /// List of formats this decoder supports (for UI display).
