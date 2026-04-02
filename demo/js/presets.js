@@ -4,6 +4,7 @@
 
 import { $, state } from './state.js';
 import { scheduleRender } from './render.js';
+import { pushState } from './history.js';
 
 const FILM_PRESETS = [
   { id: null,              name: 'None',             cat: 'none' },
@@ -70,6 +71,7 @@ export function buildPresetStrip() {
     if (preset.id === null) chip.classList.add('active');
     chip.addEventListener('click', () => {
       setActivePreset(preset.id);
+      pushState();
       scheduleRender();
     });
     container.appendChild(chip);
@@ -87,6 +89,7 @@ export function buildPresetStrip() {
   intensitySlider.addEventListener('input', () => {
     state.filmPresetIntensity = parseFloat(intensitySlider.value);
     intensityVal.textContent = state.filmPresetIntensity.toFixed(2);
+    pushState();
     if (state.filmPreset) scheduleRender();
   });
   intensitySlider.addEventListener('dblclick', () => {

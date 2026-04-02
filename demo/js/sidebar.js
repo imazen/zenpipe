@@ -4,6 +4,7 @@
 
 import { $, state } from './state.js';
 import { scheduleRender } from './render.js';
+import { pushState } from './history.js';
 
 /** Group display order and labels. */
 const GROUP_ORDER = [
@@ -420,6 +421,7 @@ function renderSlider(param, container, node, isSingleParam) {
     state.lastChangedSliderKey = param.adjustKey;
     updateValue();
     updateResetVisibility();
+    pushState();
     scheduleRender();
   });
 
@@ -442,6 +444,7 @@ function resetSlider(slider, param, display, resetBtn) {
   display.textContent = formatVal(param.identity, param.unit);
   state.touchedSliders.delete(param.adjustKey);
   resetBtn.classList.toggle('visible', false);
+  pushState();
   scheduleRender();
 }
 
@@ -463,6 +466,7 @@ function renderCheckbox(param, container, node, isSingleParam) {
     state.touchedSliders.add(param.adjustKey);
     state.lastChangedSliderKey = param.adjustKey;
     state.adjustments[param.adjustKey] = checkbox.checked;
+    pushState();
     scheduleRender();
   });
 

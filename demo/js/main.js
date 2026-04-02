@@ -10,6 +10,7 @@ import { initRegionDrag, initPinchZoom, initScrollZoom, updateRegionSelector } f
 import { scheduleRender, scheduleDetailOnly } from './render.js';
 import { buildPresetStrip, setActivePreset } from './presets.js';
 import { initExportModal } from './export-modal.js';
+import { initHistory, pushState } from './history.js';
 
 // File input and open button
 $('file-input').addEventListener('change', e => {
@@ -66,6 +67,7 @@ function resetAllSliders() {
   state.filmPresetIntensity = 1.0;
   $('preset-intensity').value = 1;
   $('preset-intensity-val').textContent = '1.00';
+  pushState();
   scheduleRender();
 }
 
@@ -113,5 +115,13 @@ $('crop-toggle').addEventListener('click', () => {
   buildPhotoPicker();
   buildPresetStrip();
   await loadSchemaAndBuildUI();
+  initHistory(() => {
+    // On undo/redo: sync slider DOM, update preset chip, re-render
+    syncDOMToState();
+    setActivePreset(state.filmPreset);
+    $('preset-intensity').value = state.filmPresetIntensity;
+    $('preset-intensity-val').textContent = state.filmPresetIntensity.toFixed(2);
+    scheduleRender();
+  });
   $('status').textContent = `${state.sliderNodes.length} filters loaded \u2014 drop an image to start`;
 })();

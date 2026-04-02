@@ -6,6 +6,7 @@ import { $, state } from './state.js';
 import { sendToWorker } from './worker-client.js';
 import { renderOverview, renderDetail } from './render.js';
 import { showError } from './toasts.js';
+import { resetHistory } from './history.js';
 
 export async function loadImage(file) {
   $('status').textContent = 'Loading...';
@@ -29,6 +30,7 @@ export async function loadImage(file) {
   state.sourceWidth = result.width;
   state.sourceHeight = result.height;
   state.sourceImage = true;
+  resetHistory();
   const be = result.backend === 'wasm' ? 'WASM' : 'mock';
 
   // Smart region initialization: match detail viewport aspect ratio, clamped to 4:3/3:4
@@ -150,6 +152,7 @@ export async function loadPicsumPhoto(pid, thumbEl) {
     state.sourceWidth = result.width;
     state.sourceHeight = result.height;
     state.sourceImage = true;
+  resetHistory();
     const be = result.backend === 'wasm' ? 'WASM' : 'mock';
 
     // Smart region initialization
