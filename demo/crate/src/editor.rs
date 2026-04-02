@@ -82,6 +82,23 @@ pub struct Editor {
     overview_cancel: Arc<AtomicBool>,
     /// Cancel flag for the current detail render.
     detail_cancel: Arc<AtomicBool>,
+
+    /// Pre-encode cache: rendered RGBA pixels ready for encoding.
+    /// Keyed by a hash of adjustments + film preset + max_dim.
+    /// When the user tweaks quality/effort/format in the export modal,
+    /// the filter output hasn't changed — only encode settings differ.
+    /// This cache avoids re-running the 500ms+ filter pipeline on 4K images.
+    pre_encode_cache: Option<PreEncodeCache>,
+}
+
+/// Cached rendered pixels for re-encoding with different codec settings.
+struct PreEncodeCache {
+    /// Hash of adjustments JSON + film preset + max_dim.
+    key: u64,
+    /// Rendered RGBA8 pixels (tightly packed, ready for PixelSlice).
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
 }
 
 impl Editor {
@@ -117,6 +134,7 @@ impl Editor {
             source_hash,
             overview_cancel: Arc::new(AtomicBool::new(false)),
             detail_cancel: Arc::new(AtomicBool::new(false)),
+            pre_encode_cache: None,
         }
     }
 
@@ -694,8 +712,33 @@ fn encode_pixels(
     })
 }
 
+/// Compute a hash key for the pre-encode cache from adjustments + preset + size.
+fn pre_encode_key(
+    adjustments: &BTreeMap<String, serde_json::Value>,
+    film_preset: Option<&str>,
+    max_dim: u32,
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    // Hash adjustments deterministically (BTreeMap iterates in order)
+    for (k, v) in adjustments {
+        k.hash(&mut h);
+        // Hash the JSON string representation for simplicity
+        let s = v.to_string();
+        s.hash(&mut h);
+    }
+    film_preset.hash(&mut h);
+    max_dim.hash(&mut h);
+    h.finish()
+}
+
 impl Editor {
-    /// Encode at overview size — reuses overview session cache for near-instant preview.
+    /// Encode at overview size — near-instant when only codec settings change.
+    ///
+    /// Uses a pre-encode cache: if adjustments + film preset haven't changed
+    /// since the last call, skips the render pipeline entirely and re-encodes
+    /// from cached RGBA pixels. This matters on 4K images where filters take
+    /// 500ms+ — the user only changed quality/effort, not the image.
     pub fn encode_at_overview_size(
         &mut self,
         adjustments: &BTreeMap<String, serde_json::Value>,
@@ -703,11 +746,29 @@ impl Editor {
         options: &serde_json::Value,
         film_preset: Option<&str>,
     ) -> Result<EncodeResult, String> {
+        let key = pre_encode_key(adjustments, film_preset, self.overview_max);
+
+        // Check pre-encode cache
+        if let Some(ref cache) = self.pre_encode_cache {
+            if cache.key == key {
+                return encode_pixels(&cache.data, cache.width, cache.height, format, options);
+            }
+        }
+
+        // Cache miss — render and cache
         let rendered = self.render_overview_with_preset(adjustments, film_preset)?;
+        self.pre_encode_cache = Some(PreEncodeCache {
+            key,
+            data: rendered.data.clone(),
+            width: rendered.width,
+            height: rendered.height,
+        });
         encode_pixels(&rendered.data, rendered.width, rendered.height, format, options)
     }
 
     /// Encode at requested size — for full-resolution export.
+    ///
+    /// Also uses the pre-encode cache keyed by adjustments + preset + max_dim.
     pub fn encode_at_size(
         &mut self,
         adjustments: &BTreeMap<String, serde_json::Value>,
@@ -716,7 +777,21 @@ impl Editor {
         options: &serde_json::Value,
         film_preset: Option<&str>,
     ) -> Result<EncodeResult, String> {
+        let key = pre_encode_key(adjustments, film_preset, max_dim);
+
+        if let Some(ref cache) = self.pre_encode_cache {
+            if cache.key == key {
+                return encode_pixels(&cache.data, cache.width, cache.height, format, options);
+            }
+        }
+
         let rendered = self.render_at_size(adjustments, max_dim, film_preset)?;
+        self.pre_encode_cache = Some(PreEncodeCache {
+            key,
+            data: rendered.data.clone(),
+            width: rendered.width,
+            height: rendered.height,
+        });
         encode_pixels(&rendered.data, rendered.width, rendered.height, format, options)
     }
 }
