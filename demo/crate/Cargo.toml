@@ -29,9 +29,6 @@ zencodecs = { path = "../../../zencodecs", default-features = false, features = 
     "jxl-encode", "jxl-decode", "avif-encode", "avif-decode", "heic-decode",
     "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
 ] }
-# Direct deps for WASM decode fallback (streaming decoder API not re-exported by zencodecs)
-zenjxl = { version = "0.1.1", default-features = false, features = ["zencodec", "decode"] }
-zenavif = { version = "0.1.3", default-features = false, features = ["zencodec"] }
 
 # WASM-specific deps (optional for native testing)
 wasm-bindgen = { version = "0.2", optional = true }

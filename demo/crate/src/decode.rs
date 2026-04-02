@@ -5,8 +5,6 @@
 //! - `decode_native()` — full zencodecs decode with metadata preservation
 //!   (used for two-phase upgrade: browser preview → native decode in background)
 
-use std::borrow::Cow;
-use zencodec::decode::{DecodeJob, DecoderConfig, StreamingDecode};
 use zenpixels::PixelDescriptor;
 
 /// Decoded image: RGBA8 pixels + dimensions (no metadata).
@@ -38,13 +36,8 @@ pub fn try_decode(bytes: &[u8]) -> Option<DecodedImage> {
         return None;
     }
 
-    // JXL and AVIF have optimized streaming decoders
-    match format {
-        zencodec::ImageFormat::Jxl => decode_jxl(bytes),
-        zencodec::ImageFormat::Avif => decode_avif(bytes),
-        // Everything else (HEIC, BMP, QOI, TGA, HDR, PNM, farbfeld, etc.)
-        _ => decode_via_native(bytes),
-    }
+    // All non-browser formats go through zencodecs DecodeRequest.
+    decode_via_native(bytes)
 }
 
 /// Check if WASM can decode this format (non-browser formats only).
@@ -138,80 +131,7 @@ fn browser_handles(format: zencodec::ImageFormat) -> bool {
     )
 }
 
-fn decode_jxl(bytes: &[u8]) -> Option<DecodedImage> {
-    let config = zenjxl::JxlDecoderConfig::new();
-    let job = config.job();
-    let mut decoder = job
-        .streaming_decoder(Cow::Borrowed(bytes), &[PixelDescriptor::RGBA8_SRGB])
-        .ok()?;
-
-    let info = decoder.info();
-    let width = info.width;
-    let height = info.height;
-    let bpp = 4usize;
-    let row_bytes = width as usize * bpp;
-    let mut data = vec![0u8; row_bytes * height as usize];
-    let mut y = 0u32;
-
-    while let Ok(Some((_batch_y, pixels))) = decoder.next_batch() {
-        let rows = pixels.rows();
-        for r in 0..rows {
-            let row = pixels.row(r);
-            let dst = (y + r) as usize * row_bytes;
-            data[dst..dst + row_bytes].copy_from_slice(&row[..row_bytes]);
-        }
-        y += rows;
-    }
-
-    if y == 0 {
-        return None;
-    }
-
-    Some(DecodedImage {
-        data,
-        width,
-        height,
-    })
-}
-
-fn decode_avif(bytes: &[u8]) -> Option<DecodedImage> {
-    let config = zenavif::AvifDecoderConfig::new();
-    let job = config.job();
-    let mut decoder = job
-        .streaming_decoder(Cow::Borrowed(bytes), &[PixelDescriptor::RGBA8_SRGB])
-        .ok()?;
-
-    let info = decoder.info();
-    let width = info.width;
-    let height = info.height;
-    let bpp = 4usize;
-    let row_bytes = width as usize * bpp;
-    let mut data = vec![0u8; row_bytes * height as usize];
-    let mut y = 0u32;
-
-    while let Ok(Some((_batch_y, pixels))) = decoder.next_batch() {
-        let rows = pixels.rows();
-        for r in 0..rows {
-            let row = pixels.row(r);
-            let dst = (y + r) as usize * row_bytes;
-            data[dst..dst + row_bytes].copy_from_slice(&row[..row_bytes]);
-        }
-        y += rows;
-    }
-
-    if y == 0 {
-        return None;
-    }
-
-    Some(DecodedImage {
-        data,
-        width,
-        height,
-    })
-}
-
-/// Decode any format via the full zencodecs native path.
-/// Used for HEIC, BMP, QOI, HDR — formats without separate streaming decoders.
+/// Decode any format via zencodecs DecodeRequest.
 fn decode_via_native(bytes: &[u8]) -> Option<DecodedImage> {
     let output = decode_native(bytes).ok()?;
     Some(DecodedImage {
