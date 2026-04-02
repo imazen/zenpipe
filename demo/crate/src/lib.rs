@@ -10,11 +10,9 @@
 
 pub mod decode;
 mod editor;
-pub mod encode;
 mod schema;
 
-pub use editor::{Editor, Region, RenderOutput};
-pub use encode::{EncodedImage, encode};
+pub use editor::{Editor, EncodeResult, Region, RenderOutput};
 pub use schema::export_filter_schema;
 
 #[cfg(feature = "wasm")]

@@ -624,6 +624,103 @@ fn append_filter_nodes(
     }
 }
 
+// ─── Encoding via zencodecs ───
+
+/// Result of encoding pixels to a specific format.
+pub struct EncodeResult {
+    pub data: Vec<u8>,
+    pub mime: &'static str,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Parse a format string into a zencodecs ImageFormat.
+fn parse_image_format(format: &str) -> Result<zencodecs::ImageFormat, String> {
+    match format {
+        "jpeg" | "jpg" => Ok(zencodecs::ImageFormat::Jpeg),
+        "webp" => Ok(zencodecs::ImageFormat::WebP),
+        "png" => Ok(zencodecs::ImageFormat::Png),
+        "gif" => Ok(zencodecs::ImageFormat::Gif),
+        "jxl" => Ok(zencodecs::ImageFormat::Jxl),
+        "avif" => Ok(zencodecs::ImageFormat::Avif),
+        _ => Err(format!("Unsupported format: {format}")),
+    }
+}
+
+/// Encode RGBA8 sRGB pixels via zencodecs EncodeRequest.
+fn encode_pixels(
+    rgba_data: &[u8],
+    width: u32,
+    height: u32,
+    format: &str,
+    options: &serde_json::Value,
+) -> Result<EncodeResult, String> {
+    let image_format = parse_image_format(format)?;
+
+    let stride = width as usize * 4;
+    let pixels = zenpixels::PixelSlice::new(
+        rgba_data,
+        width,
+        height,
+        stride,
+        zenpixels::PixelDescriptor::RGBA8_SRGB,
+    )
+    .map_err(|e| format!("PixelSlice: {e}"))?;
+
+    let quality = options.get("quality").and_then(|v| v.as_f64()).map(|q| q as f32);
+    let effort = options.get("effort").and_then(|v| v.as_u64()).map(|e| e as u32);
+    let lossless = options
+        .get("lossless")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let mut req = zencodecs::EncodeRequest::new(image_format).with_lossless(lossless);
+    if let Some(q) = quality {
+        req = req.with_quality(q);
+    }
+    if let Some(e) = effort {
+        req = req.with_effort(e);
+    }
+
+    let output = req
+        .encode(pixels, false)
+        .map_err(|e| format!("{format} encode: {e}"))?;
+    let mime = image_format.mime_type();
+    Ok(EncodeResult {
+        data: output.into_vec(),
+        mime,
+        width,
+        height,
+    })
+}
+
+impl Editor {
+    /// Encode at overview size — reuses overview session cache for near-instant preview.
+    pub fn encode_at_overview_size(
+        &mut self,
+        adjustments: &BTreeMap<String, serde_json::Value>,
+        format: &str,
+        options: &serde_json::Value,
+        film_preset: Option<&str>,
+    ) -> Result<EncodeResult, String> {
+        let rendered = self.render_overview_with_preset(adjustments, film_preset)?;
+        encode_pixels(&rendered.data, rendered.width, rendered.height, format, options)
+    }
+
+    /// Encode at requested size — for full-resolution export.
+    pub fn encode_at_size(
+        &mut self,
+        adjustments: &BTreeMap<String, serde_json::Value>,
+        max_dim: u32,
+        format: &str,
+        options: &serde_json::Value,
+        film_preset: Option<&str>,
+    ) -> Result<EncodeResult, String> {
+        let rendered = self.render_at_size(adjustments, max_dim, film_preset)?;
+        encode_pixels(&rendered.data, rendered.width, rendered.height, format, options)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -995,5 +1092,69 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    // ─── Encode tests (via zencodecs::EncodeRequest) ───
+
+    #[test]
+    fn encode_jpeg() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({"quality": 85});
+        let result = encode_pixels(&data, 64, 48, "jpeg", &opts).unwrap();
+        assert_eq!(&result.data[..2], &[0xFF, 0xD8], "JPEG magic bytes");
+        assert!(result.data.len() > 100);
+    }
+
+    #[test]
+    fn encode_webp() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({"quality": 75});
+        let result = encode_pixels(&data, 64, 48, "webp", &opts).unwrap();
+        assert_eq!(&result.data[..4], b"RIFF", "WebP RIFF header");
+    }
+
+    #[test]
+    fn encode_png() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode_pixels(&data, 64, 48, "png", &opts).unwrap();
+        assert_eq!(&result.data[..4], &[0x89, 0x50, 0x4E, 0x47], "PNG signature");
+    }
+
+    #[test]
+    fn encode_gif() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode_pixels(&data, 64, 48, "gif", &opts).unwrap();
+        assert_eq!(&result.data[..3], b"GIF", "GIF signature");
+    }
+
+    #[test]
+    fn encode_jxl() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode_pixels(&data, 64, 48, "jxl", &opts).unwrap();
+        assert!(
+            result.data[..2] == [0xFF, 0x0A]
+                || result.data[..12]
+                    == [0, 0, 0, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A],
+            "JXL magic bytes"
+        );
+    }
+
+    #[test]
+    fn encode_avif() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode_pixels(&data, 64, 48, "avif", &opts).unwrap();
+        assert!(result.data.len() > 10, "AVIF output too small");
+    }
+
+    #[test]
+    fn encode_unsupported_format() {
+        let data = solid_rgba(8, 8, 128, 128, 128);
+        let opts = serde_json::json!({});
+        let result = encode_pixels(&data, 8, 8, "bmp", &opts);
+        assert!(result.is_err());
     }
 }

@@ -23,13 +23,14 @@ zenpixels = { version = "0.2.2", default-features = false }
 enough = { version = "0.4", default-features = false }
 serde_json = "1"
 
-# Codec encoders + decoders — crates.io versions
-zenjpeg = { version = "0.8.1", default-features = false, features = ["zencodec"] }
-zenpng = { version = "0.1.2", default-features = false, features = ["zencodec"] }
-zenwebp = { version = "0.4.2", default-features = false, features = ["zencodec"] }
-zengif = { version = "0.7.1", default-features = false, features = ["zencodec", "quantizr"] }
-zenjxl = { version = "0.1.1", default-features = false, features = ["zencodec", "encode", "decode"] }
-zenavif = { version = "0.1.3", default-features = false, features = ["zencodec", "encode"] }
+# Unified codec library — encoding goes through zencodecs::EncodeRequest
+zencodecs = { path = "../../../zencodecs", default-features = false, features = [
+    "jpeg", "png", "webp", "gif", "gif-quantizr",
+    "jxl-encode", "jxl-decode", "avif-encode", "avif-decode",
+] }
+# Direct deps for WASM decode fallback (streaming decoder API not re-exported by zencodecs)
+zenjxl = { version = "0.1.1", default-features = false, features = ["zencodec", "decode"] }
+zenavif = { version = "0.1.3", default-features = false, features = ["zencodec"] }
 
 # WASM-specific deps (optional for native testing)
 wasm-bindgen = { version = "0.2", optional = true }

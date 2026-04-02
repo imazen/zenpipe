@@ -249,19 +249,46 @@ impl WasmEditor {
         serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
     }
 
-    /// Render and encode an image to a specific format.
+    /// Encode at overview size for inline preview in the export modal.
     ///
-    /// Renders at the given `width`/`height` (using the larger dimension as
-    /// the constrain limit), applies filters and optional film preset, then
-    /// encodes to the requested format (jpeg, webp, png, gif).
+    /// Reuses the overview session cache — geometry prefix is a cache hit,
+    /// only filters re-run (~3ms), then encoding adds codec-specific time.
+    /// Near-instant for live quality slider feedback.
     ///
-    /// `options_json` is a JSON object with format-specific settings
-    /// (e.g., `{"quality": 85}` for JPEG/WebP, `{"effort": 5}` for PNG).
-    ///
-    /// Returns encoded bytes with format metadata. For unsupported formats
-    /// (avif, jxl), returns an error — use browser-native encoding instead.
+    /// `options_json`: `{"quality": 85}`, `{"effort": 5}`, `{"lossless": true}`, etc.
     #[wasm_bindgen]
-    pub fn encode_image(
+    pub fn encode_preview(
+        &mut self,
+        adjustments_json: &str,
+        format: &str,
+        options_json: &str,
+        film_preset: Option<String>,
+    ) -> Result<WasmEncodeResult, JsError> {
+        let adj = parse_adjustments(adjustments_json)?;
+        let options = parse_options(options_json)?;
+
+        let result = self
+            .inner
+            .encode_at_overview_size(&adj, format, &options, film_preset.as_deref())
+            .map_err(|e| JsError::new(&e))?;
+
+        Ok(WasmEncodeResult {
+            data: result.data,
+            format: format.to_string(),
+            mime: result.mime.to_string(),
+            width: result.width,
+            height: result.height,
+        })
+    }
+
+    /// Encode at full resolution for export/download.
+    ///
+    /// Renders at the given dimensions (larger dimension as constrain limit),
+    /// applies filters and optional film preset, then encodes via zencodecs.
+    ///
+    /// `options_json`: `{"quality": 85}`, `{"effort": 5}`, `{"lossless": true}`, etc.
+    #[wasm_bindgen]
+    pub fn encode_full(
         &mut self,
         adjustments_json: &str,
         width: u32,
@@ -271,32 +298,20 @@ impl WasmEditor {
         film_preset: Option<String>,
     ) -> Result<WasmEncodeResult, JsError> {
         let adj = parse_adjustments(adjustments_json)?;
+        let options = parse_options(options_json)?;
 
-        // Render at requested dimensions (0 = source size).
         let max_dim = if width > 0 { width.max(height) } else { 0 };
-        let out = self
+        let result = self
             .inner
-            .render_at_size(&adj, max_dim, film_preset.as_deref())
-            .map_err(|e| JsError::new(&e))?;
-
-        // Parse encode options.
-        let options: serde_json::Value = if options_json.is_empty() || options_json == "{}" {
-            serde_json::Value::Object(serde_json::Map::new())
-        } else {
-            serde_json::from_str(options_json)
-                .map_err(|e| JsError::new(&format!("Invalid options JSON: {e}")))?
-        };
-
-        // Encode the rendered RGBA pixels.
-        let encoded = crate::encode::encode(&out.data, out.width, out.height, format, &options)
+            .encode_at_size(&adj, max_dim, format, &options, film_preset.as_deref())
             .map_err(|e| JsError::new(&e))?;
 
         Ok(WasmEncodeResult {
-            data: encoded.data,
-            format: encoded.format.to_string(),
-            mime: encoded.mime.to_string(),
-            width: out.width,
-            height: out.height,
+            data: result.data,
+            format: format.to_string(),
+            mime: result.mime.to_string(),
+            width: result.width,
+            height: result.height,
         })
     }
 
@@ -333,6 +348,15 @@ fn parse_adjustments(json: &str) -> Result<BTreeMap<String, serde_json::Value>, 
         .as_object()
         .ok_or_else(|| JsError::new("Adjustments must be a JSON object"))?;
     Ok(obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+}
+
+fn parse_options(json: &str) -> Result<serde_json::Value, JsError> {
+    if json.is_empty() || json == "{}" {
+        Ok(serde_json::Value::Object(serde_json::Map::new()))
+    } else {
+        serde_json::from_str(json)
+            .map_err(|e| JsError::new(&format!("Invalid options JSON: {e}")))
+    }
 }
 
 /// Try to decode image bytes using WASM codecs (JXL, AVIF).
