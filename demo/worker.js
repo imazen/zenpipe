@@ -184,8 +184,18 @@ async function decodeImage(buffer) {
 
 // ─── Message handler ───
 
-self.addEventListener('message', async (e) => {
+// Serialize all message processing to prevent concurrent &mut self borrows
+// on WasmEditor. Without this, two async handlers (e.g., encode_preview +
+// export) can both suspend at `await wasmReady`, both resume, and both
+// try to borrow &mut self — causing wasm-bindgen's aliasing error.
+let messageQueue = Promise.resolve();
+
+self.addEventListener('message', (e) => {
   const msg = e.data;
+  messageQueue = messageQueue.then(() => handleMessage(msg)).catch(() => {});
+});
+
+async function handleMessage(msg) {
   const id = msg.id;
 
   // Wait for WASM init to complete (or fail)
@@ -378,4 +388,4 @@ self.addEventListener('message', async (e) => {
   } catch (err) {
     self.postMessage({ id, type: 'error', message: err.message || String(err) });
   }
-});
+}
