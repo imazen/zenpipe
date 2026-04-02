@@ -455,10 +455,11 @@ fn parse_options(json: &str) -> Result<serde_json::Value, JsError> {
     }
 }
 
-/// Try to decode image bytes using WASM codecs (JXL, AVIF).
+/// Try to decode image bytes using WASM codecs.
 ///
-/// Returns null if the format is not recognized or supported.
-/// For JPEG/PNG/WebP/GIF, the browser's native decoder is faster.
+/// Returns null if the format is not recognized or not supported.
+/// For JPEG/PNG/WebP/GIF, the browser's native decoder is usually faster,
+/// but WASM handles JXL, AVIF, HEIC, BMP, QOI, TGA, HDR natively.
 #[wasm_bindgen]
 pub fn wasm_decode_image(bytes: &[u8]) -> Option<WasmRenderResult> {
     let decoded = crate::decode::try_decode(bytes)?;
@@ -470,28 +471,10 @@ pub fn wasm_decode_image(bytes: &[u8]) -> Option<WasmRenderResult> {
 }
 
 /// Check if WASM can decode a format that the browser might not support.
+///
+/// Uses zencodec's format registry for detection. Returns true for any
+/// format except JPEG/PNG/WebP/GIF (which browsers handle natively).
 #[wasm_bindgen]
 pub fn wasm_can_decode(bytes: &[u8]) -> bool {
-    if bytes.len() < 12 {
-        return false;
-    }
-    // JXL
-    if bytes[0] == 0xFF && bytes[1] == 0x0A {
-        return true;
-    }
-    if bytes[..12]
-        == [
-            0, 0, 0, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A,
-        ]
-    {
-        return true;
-    }
-    // AVIF
-    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
-        let brand = &bytes[8..12];
-        if brand == b"avif" || brand == b"avis" || brand == b"mif1" {
-            return true;
-        }
-    }
-    false
+    crate::decode::try_decode_check(bytes)
 }

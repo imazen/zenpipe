@@ -31,16 +31,25 @@ pub struct NativeDecodeOutput {
 /// Probes the format from magic bytes, then decodes to RGBA8 sRGB.
 /// Returns `None` if the format is not recognized or not supported.
 pub fn try_decode(bytes: &[u8]) -> Option<DecodedImage> {
-    // Detect format from magic bytes
     let format = detect_format(bytes)?;
 
-    match format {
-        "jxl" => decode_jxl(bytes),
-        "avif" => decode_avif(bytes),
-        // JPEG/PNG/WebP/GIF are handled by the browser — we only need
-        // fallback for formats browsers don't support.
-        _ => None,
+    // Browser handles JPEG/PNG/WebP/GIF natively — skip WASM for those.
+    if browser_handles(format) {
+        return None;
     }
+
+    // JXL and AVIF have optimized streaming decoders
+    match format {
+        zencodec::ImageFormat::Jxl => decode_jxl(bytes),
+        zencodec::ImageFormat::Avif => decode_avif(bytes),
+        // Everything else (HEIC, BMP, QOI, TGA, HDR, PNM, farbfeld, etc.)
+        _ => decode_via_native(bytes),
+    }
+}
+
+/// Check if WASM can decode this format (non-browser formats only).
+pub fn try_decode_check(bytes: &[u8]) -> bool {
+    detect_format(bytes).is_some_and(|f| !browser_handles(f))
 }
 
 /// Decode image bytes natively via zencodecs with full metadata preservation.
@@ -110,52 +119,23 @@ pub fn decode_native(bytes: &[u8]) -> Result<NativeDecodeOutput, String> {
 
 /// List of formats this decoder supports (for UI display).
 pub fn supported_formats() -> &'static [&'static str] {
-    &["jxl", "avif"]
+    &["jxl", "avif", "heic", "bmp", "qoi", "tga", "hdr"]
 }
 
-fn detect_format(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.len() < 12 {
-        return None;
-    }
-    // JXL naked codestream
-    if bytes[0] == 0xFF && bytes[1] == 0x0A {
-        return Some("jxl");
-    }
-    // JXL container
-    if bytes[..12]
-        == [
-            0, 0, 0, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A,
-        ]
-    {
-        return Some("jxl");
-    }
-    // AVIF/HEIF (ftyp box)
-    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
-        let brand = &bytes[8..12];
-        if brand == b"avif" || brand == b"avis" || brand == b"mif1" {
-            return Some("avif");
-        }
-        if brand == b"heic" || brand == b"heix" || brand == b"hevc" || brand == b"hevx" {
-            return Some("heic");
-        }
-    }
-    // JPEG
-    if bytes[0] == 0xFF && bytes[1] == 0xD8 {
-        return Some("jpeg");
-    }
-    // PNG
-    if bytes[..4] == [0x89, 0x50, 0x4E, 0x47] {
-        return Some("png");
-    }
-    // WebP
-    if bytes[..4] == *b"RIFF" && bytes.len() >= 12 && bytes[8..12] == *b"WEBP" {
-        return Some("webp");
-    }
-    // GIF
-    if bytes[..3] == *b"GIF" {
-        return Some("gif");
-    }
-    None
+/// Detect image format from magic bytes via zencodec's built-in registry.
+fn detect_format(bytes: &[u8]) -> Option<zencodec::ImageFormat> {
+    zencodec::ImageFormatRegistry::common().detect(bytes)
+}
+
+/// Formats the browser can decode natively — we skip WASM fallback for these.
+fn browser_handles(format: zencodec::ImageFormat) -> bool {
+    matches!(
+        format,
+        zencodec::ImageFormat::Jpeg
+            | zencodec::ImageFormat::Png
+            | zencodec::ImageFormat::WebP
+            | zencodec::ImageFormat::Gif
+    )
 }
 
 fn decode_jxl(bytes: &[u8]) -> Option<DecodedImage> {
@@ -230,6 +210,17 @@ fn decode_avif(bytes: &[u8]) -> Option<DecodedImage> {
     })
 }
 
+/// Decode any format via the full zencodecs native path.
+/// Used for HEIC, BMP, QOI, HDR — formats without separate streaming decoders.
+fn decode_via_native(bytes: &[u8]) -> Option<DecodedImage> {
+    let output = decode_native(bytes).ok()?;
+    Some(DecodedImage {
+        data: output.data,
+        width: output.width,
+        height: output.height,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,7 +229,7 @@ mod tests {
     fn detect_jpeg() {
         assert_eq!(
             detect_format(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            Some("jpeg")
+            Some(zencodec::ImageFormat::Jpeg)
         );
     }
 
@@ -246,7 +237,7 @@ mod tests {
     fn detect_jxl_codestream() {
         assert_eq!(
             detect_format(&[0xFF, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            Some("jxl")
+            Some(zencodec::ImageFormat::Jxl)
         );
     }
 
@@ -255,6 +246,30 @@ mod tests {
         let mut bytes = vec![0u8; 12];
         bytes[4..8].copy_from_slice(b"ftyp");
         bytes[8..12].copy_from_slice(b"avif");
-        assert_eq!(detect_format(&bytes), Some("avif"));
+        assert_eq!(detect_format(&bytes), Some(zencodec::ImageFormat::Avif));
+    }
+
+    #[test]
+    fn detect_heic() {
+        let mut bytes = vec![0u8; 12];
+        bytes[4..8].copy_from_slice(b"ftyp");
+        bytes[8..12].copy_from_slice(b"heic");
+        assert_eq!(detect_format(&bytes), Some(zencodec::ImageFormat::Heic));
+    }
+
+    #[test]
+    fn detect_bmp() {
+        let mut bytes = vec![0u8; 18];
+        bytes[0] = b'B';
+        bytes[1] = b'M';
+        assert_eq!(detect_format(&bytes), Some(zencodec::ImageFormat::Bmp));
+    }
+
+    #[test]
+    fn browser_formats_skipped() {
+        assert!(browser_handles(zencodec::ImageFormat::Jpeg));
+        assert!(browser_handles(zencodec::ImageFormat::Png));
+        assert!(!browser_handles(zencodec::ImageFormat::Jxl));
+        assert!(!browser_handles(zencodec::ImageFormat::Heic));
     }
 }

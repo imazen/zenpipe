@@ -26,7 +26,8 @@ serde_json = "1"
 # Unified codec library — encoding goes through zencodecs::EncodeRequest
 zencodecs = { path = "../../../zencodecs", default-features = false, features = [
     "jpeg", "png", "webp", "gif", "gif-quantizr",
-    "jxl-encode", "jxl-decode", "avif-encode", "avif-decode",
+    "jxl-encode", "jxl-decode", "avif-encode", "avif-decode", "heic-decode",
+    "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
 ] }
 # Direct deps for WASM decode fallback (streaming decoder API not re-exported by zencodecs)
 zenjxl = { version = "0.1.1", default-features = false, features = ["zencodec", "decode"] }
