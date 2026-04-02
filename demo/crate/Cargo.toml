@@ -25,6 +25,7 @@ zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, feature
 zenpng = { path = "../../../zenpng", default-features = false, features = ["zencodec"] }
 zenwebp = { path = "../../../zenwebp", default-features = false, features = ["zencodec"] }
 zengif = { path = "../../../zengif", default-features = false, features = ["zencodec", "quantizr"] }
+zenjxl = { path = "../../../zenjxl", default-features = false, features = ["zencodec", "encode"] }
 
 # WASM-specific deps (optional for native testing)
 wasm-bindgen = { version = "0.2", optional = true }

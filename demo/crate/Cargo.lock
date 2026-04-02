@@ -200,6 +200,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "jxl-encoder"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9420865e6fca2f6682ad484e258ab8f36f8dc01ebf4cb39cb3e47490b5457e68"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "enough",
+ "hashbrown",
+ "imgref",
+ "jxl-encoder-simd",
+ "once_cell",
+ "rgb",
+ "thiserror",
+ "whereat",
+]
+
+[[package]]
+name = "jxl-encoder-simd"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "608869c437803761c5413fdb98b193e4a1ba56330cb62225337889758d8563f7"
+dependencies = [
+ "archmage",
+ "magetypes",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -646,6 +674,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenjxl"
+version = "0.1.1"
+dependencies = [
+ "enough",
+ "imgref",
+ "jxl-encoder",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
 name = "zenlayout"
 version = "0.2.1"
 dependencies = [
@@ -715,6 +758,7 @@ dependencies = [
  "zenfilters",
  "zengif",
  "zenjpeg",
+ "zenjxl",
  "zennode",
  "zenpipe",
  "zenpixels",

@@ -6,12 +6,12 @@ import { $, state, getFilterAdjustments } from './state.js';
 import { sendToWorker } from './worker-client.js';
 
 const EXPORT_FORMATS = [
-  { id: 'jpeg', label: 'JPEG', ext: 'jpg', mime: 'image/jpeg', color: '#f59e0b' },
-  { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', color: '#10b981' },
-  { id: 'png',  label: 'PNG',  ext: 'png',  mime: 'image/png',  color: '#6366f1' },
-  { id: 'avif', label: 'AVIF', ext: 'avif', mime: 'image/avif', color: '#ef4444' },
-  { id: 'jxl',  label: 'JXL',  ext: 'jxl',  mime: 'image/jxl',  color: '#8b5cf6' },
-  { id: 'gif',  label: 'GIF',  ext: 'gif',  mime: 'image/gif',  color: '#ec4899' },
+  { id: 'jpeg', label: 'JPEG', ext: 'jpg', mime: 'image/jpeg', color: '#f59e0b', engine: 'zen' },
+  { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', color: '#10b981', engine: 'zen' },
+  { id: 'png',  label: 'PNG',  ext: 'png',  mime: 'image/png',  color: '#6366f1', engine: 'zen' },
+  { id: 'jxl',  label: 'JXL',  ext: 'jxl',  mime: 'image/jxl',  color: '#8b5cf6', engine: 'zen' },
+  { id: 'gif',  label: 'GIF',  ext: 'gif',  mime: 'image/gif',  color: '#ec4899', engine: 'zen' },
+  { id: 'avif', label: 'AVIF', ext: 'avif', mime: 'image/avif', color: '#ef4444', engine: 'browser' },
 ];
 
 // Format controls from zencodecs audit (zencodecs/src/zennode_defs.rs)
@@ -194,7 +194,10 @@ export function openExportModal() {
     const tab = document.createElement('button');
     tab.className = 'export-format-tab' + (fmt.id === exportFormat ? ' active' : '');
     tab.dataset.format = fmt.id;
-    tab.innerHTML = `<span class="export-format-dot" style="background:${fmt.color}"></span>${fmt.label}`;
+    const engineBadge = fmt.engine === 'browser'
+      ? '<span class="export-engine browser" title="Browser-native encoding">browser</span>'
+      : '<span class="export-engine zen" title="WASM zen codec encoding">zen</span>';
+    tab.innerHTML = `<span class="export-format-dot" style="background:${fmt.color}"></span>${fmt.label} ${engineBadge}`;
     tab.addEventListener('click', () => selectExportFormat(fmt.id));
     tabsEl.appendChild(tab);
   }

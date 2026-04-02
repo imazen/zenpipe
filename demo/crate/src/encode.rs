@@ -45,6 +45,7 @@ pub fn encode(
         "webp" => encode_webp(pixels, options),
         "png" => encode_png(pixels, options),
         "gif" => encode_gif(pixels, options),
+        "jxl" => encode_jxl(pixels, options),
         _ => Err(format!("Unsupported format: {format}")),
     }
 }
@@ -103,6 +104,30 @@ fn encode_png(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<Encode
         .encode(pixels)
         .map_err(|e| format!("PNG encode: {e}"))?;
     Ok(into_encoded(output, "png", "image/png"))
+}
+
+fn encode_jxl(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<EncodedImage, String> {
+    let quality = opts.get("quality").and_then(|v| v.as_f64()).unwrap_or(75.0) as f32;
+    let effort = opts.get("effort").and_then(|v| v.as_i64()).unwrap_or(7) as i32;
+    let lossless = opts
+        .get("lossless")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let mut config = zenjxl::JxlEncoderConfig::new();
+    config = config.with_generic_quality(quality);
+    config = config.with_generic_effort(effort);
+    if lossless {
+        config = config.with_lossless(true);
+    }
+
+    let output = config
+        .job()
+        .encoder()
+        .map_err(|e| format!("JXL encoder init: {e}"))?
+        .encode(pixels)
+        .map_err(|e| format!("JXL encode: {e}"))?;
+    Ok(into_encoded(output, "jxl", "image/jxl"))
 }
 
 fn encode_gif(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<EncodedImage, String> {
@@ -180,6 +205,35 @@ mod tests {
         assert!(result.data.len() > 10, "GIF output too small");
         // GIF signature
         assert_eq!(&result.data[..3], b"GIF");
+    }
+
+    #[test]
+    fn encode_jxl_default() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode(&data, 64, 48, "jxl", &opts).unwrap();
+        assert_eq!(result.format, "jxl");
+        assert_eq!(result.mime, "image/jxl");
+        assert!(result.data.len() > 10, "JXL output too small");
+        // JXL signature: 0xFF 0x0A (naked codestream) or container
+        assert!(
+            result.data[..2] == [0xFF, 0x0A]
+                || result.data[..12]
+                    == [
+                        0, 0, 0, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A
+                    ],
+            "Expected JXL magic bytes, got {:?}",
+            &result.data[..12.min(result.data.len())]
+        );
+    }
+
+    #[test]
+    fn encode_jxl_lossless() {
+        let data = solid_rgba(32, 32, 100, 150, 200);
+        let opts = serde_json::json!({"lossless": true});
+        let result = encode(&data, 32, 32, "jxl", &opts).unwrap();
+        assert_eq!(result.format, "jxl");
+        assert!(result.data.len() > 10);
     }
 
     #[test]
