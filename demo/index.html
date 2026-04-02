@@ -580,6 +580,34 @@ aside {
 }
 .info-toast.fade-out { opacity: 0; }
 
+/* --- User Presets --- */
+#user-presets-section {
+  padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px;
+}
+.user-presets-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.user-presets-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim);
+}
+.user-presets-actions { display: flex; gap: 4px; }
+.user-preset-btn { font-size: 10px; padding: 2px 6px; }
+.user-preset-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 0; font-size: 12px;
+}
+.user-preset-name {
+  color: var(--text-dim); cursor: pointer; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.user-preset-name:hover { color: var(--accent); }
+.user-preset-del {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 14px; padding: 0 4px; line-height: 1; opacity: 0.5;
+}
+.user-preset-del:hover { opacity: 1; color: #ef4444; }
+
 /* --- Compare badge --- */
 #compare-badge {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);

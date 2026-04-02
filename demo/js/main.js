@@ -12,6 +12,7 @@ import { buildPresetStrip, setActivePreset } from './presets.js';
 import { initExportModal } from './export-modal.js';
 import { initHistory, pushState } from './history.js';
 import { initCompare, invalidateOriginal } from './compare.js';
+import { initUserPresets } from './user-presets.js';
 
 // File input and open button
 $('file-input').addEventListener('change', e => {
@@ -117,6 +118,7 @@ $('crop-toggle').addEventListener('click', () => {
   buildPresetStrip();
   await loadSchemaAndBuildUI();
   initCompare();
+  initUserPresets();
   initHistory(() => {
     // On undo/redo: sync slider DOM, update preset chip, re-render
     invalidateOriginal();
