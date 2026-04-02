@@ -241,6 +241,35 @@ self.addEventListener('message', async (e) => {
         break;
       }
 
+      case 'encode_preview': {
+        // Encode at overview size for inline preview (cache hit, near-instant)
+        if (!editor) throw new Error('Editor not initialized');
+        if (backend !== 'wasm') throw new Error('Encode preview requires WASM backend');
+
+        const adjustmentsJson = JSON.stringify(msg.adjustments || {});
+        const optionsJson = JSON.stringify(msg.options || {});
+        const filmPreset = msg.film_preset || undefined;
+
+        const encResult = editor.inner.encode_preview(
+          adjustmentsJson, msg.format || 'jpeg', optionsJson, filmPreset,
+        );
+
+        const data = new Uint8Array(encResult.data.slice().buffer);
+        const w = encResult.width;
+        const h = encResult.height;
+        const size = encResult.size;
+        const mime = encResult.mime;
+        encResult.free();
+
+        self.postMessage(
+          { id, type: 'result', data, format: msg.format, mime,
+            size, width: w, height: h,
+            bpp: (size * 8 / (w * h)).toFixed(2), backend },
+          { transfer: [data.buffer] },
+        );
+        break;
+      }
+
       case 'export': {
         if (!editor) throw new Error('Editor not initialized');
 
@@ -248,24 +277,17 @@ self.addEventListener('message', async (e) => {
         const exportWidth = msg.width || editor.width;
         const exportHeight = msg.height || editor.height;
 
-        // WASM-native codec encoding for supported formats.
-        const WASM_FORMATS = new Set(['jpeg', 'webp', 'png', 'gif', 'jxl', 'avif']);
-        if (backend === 'wasm' && WASM_FORMATS.has(format)) {
+        if (backend === 'wasm') {
           const adjustmentsJson = JSON.stringify(msg.adjustments || {});
           const optionsJson = JSON.stringify(msg.options || {});
           const filmPreset = msg.film_preset || undefined;
 
-          const encResult = editor.inner.encode_image(
-            adjustmentsJson,
-            exportWidth,
-            exportHeight,
-            format,
-            optionsJson,
-            filmPreset,
+          const encResult = editor.inner.encode_full(
+            adjustmentsJson, exportWidth, exportHeight,
+            format, optionsJson, filmPreset,
           );
 
           const data = new Uint8Array(encResult.data.slice().buffer);
-          const resultFormat = encResult.format;
           const resultMime = encResult.mime;
           const resultWidth = encResult.width;
           const resultHeight = encResult.height;
@@ -273,21 +295,16 @@ self.addEventListener('message', async (e) => {
           encResult.free();
 
           self.postMessage(
-            { id, type: 'result', data, format: resultFormat, mime: resultMime,
+            { id, type: 'result', data, format, mime: resultMime,
               size: resultSize, width: resultWidth, height: resultHeight, backend },
             { transfer: [data.buffer] },
           );
           break;
         }
 
-        // Fallback: browser-native encoding (mock backend, or AVIF/JXL).
+        // Fallback: browser-native encoding (mock backend).
         const exportMaxDim = Math.max(exportWidth, exportHeight);
-
-        const result = editor.renderOverview(
-          msg.adjustments || {},
-          exportMaxDim,
-          msg.film_preset || null,
-        );
+        const result = editor.renderOverview(msg.adjustments || {}, exportMaxDim, msg.film_preset || null);
 
         const canvas = new OffscreenCanvas(result.width, result.height);
         const ctx = canvas.getContext('2d');
@@ -304,20 +321,12 @@ self.addEventListener('message', async (e) => {
         try {
           blob = await canvas.convertToBlob({ type: mime, quality });
         } catch {
-          // Fallback: browser doesn't support this format, try JPEG
           blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: quality || 0.85 });
         }
 
         const data = new Uint8Array(await blob.arrayBuffer());
-        // Report actual format (might differ if fallback was used)
-        const actualFormat = blob.type.includes('webp') ? 'webp'
-          : blob.type.includes('png') ? 'png'
-          : blob.type.includes('avif') ? 'avif'
-          : blob.type.includes('jxl') ? 'jxl'
-          : 'jpeg';
-
         self.postMessage(
-          { id, type: 'result', data, format: actualFormat, size: data.length,
+          { id, type: 'result', data, format, size: data.length,
             width: result.width, height: result.height, backend },
           { transfer: [data.buffer] },
         );

@@ -45,20 +45,12 @@ const FORMAT_CONTROLS = {
   ],
 };
 
-// bytes per pixel at default quality/settings
-const BPP_ESTIMATES = {
-  jpeg: 0.5, webp: 0.3, png: 1.5, avif: 0.2, jxl: 0.25, gif: 0.8,
-};
-
-// ms per 1000 pixels at default settings
-const TIME_PER_KPIX = {
-  jpeg: 0.5, webp: 0.5, png: 0.5, avif: 5, jxl: 3, gif: 2,
-};
-
 let exportFormat = 'jpeg';
 let exportAspectLocked = true;
 let exportWidth = 0, exportHeight = 0;
 const exportSettings = {}; // format -> { key: value }
+let previewDebounceId = null;
+let previewBlobUrl = null;
 
 // Initialize default settings for each format
 for (const fmt of EXPORT_FORMATS) {
@@ -136,43 +128,67 @@ function updateExportDims() {
 }
 
 function updateExportEstimates() {
-  const pixels = exportWidth * exportHeight;
-  const kpix = pixels / 1000;
-  const settings = exportSettings[exportFormat];
-
-  // Time estimate
-  let baseTime = TIME_PER_KPIX[exportFormat] * kpix;
-  // Apply effort/speed factor for relevant formats
-  if (exportFormat === 'jxl' && settings.effort) {
-    baseTime *= settings.effort / 7;
-  }
-  if (exportFormat === 'avif' && settings.speed) {
-    // Lower speed = slower encoding
-    baseTime *= (11 - settings.speed) / 5;
-  }
-  $('export-est-time').textContent = formatTime(baseTime);
-
-  // Size estimate
-  let bpp = BPP_ESTIMATES[exportFormat];
-  // Adjust for quality
-  if (settings.quality !== undefined) {
-    bpp *= settings.quality / 75; // normalize around a mid-point
-  }
-  if (settings.lossless) {
-    bpp *= 3; // lossless is much bigger
-  }
-  if (exportFormat === 'gif' && settings.colors !== undefined) {
-    bpp *= settings.colors / 256;
-  }
-  const sizeBytes = pixels * bpp;
-  $('export-est-size').textContent = formatSize(sizeBytes);
+  // Trigger a debounced encode preview — real data replaces heuristics
+  scheduleEncodePreview();
 }
 
-function formatTime(ms) {
-  if (ms < 1000) return '< 1s';
-  if (ms < 10000) return `~${Math.round(ms / 1000)}s`;
-  if (ms < 60000) return `~${Math.round(ms / 1000)}s`;
-  return `~${(ms / 60000).toFixed(1)}m`;
+/** Request an encode preview from the worker (debounced 200ms). */
+function scheduleEncodePreview() {
+  if (previewDebounceId) clearTimeout(previewDebounceId);
+  previewDebounceId = setTimeout(runEncodePreview, 200);
+}
+
+async function runEncodePreview() {
+  previewDebounceId = null;
+  if (!state.sourceImage) return;
+
+  const wrap = $('export-preview-wrap');
+  wrap.classList.add('loading');
+
+  try {
+    const settings = exportSettings[exportFormat];
+    const result = await sendToWorker('encode_preview', {
+      adjustments: getFilterAdjustments(),
+      format: exportFormat,
+      options: { ...settings },
+      film_preset: state.filmPreset,
+    });
+
+    // Update preview image
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    const MIME_MAP = {
+      jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
+      avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
+    };
+    const mime = MIME_MAP[exportFormat] || 'image/jpeg';
+    const blob = new Blob([result.data], { type: mime });
+    previewBlobUrl = URL.createObjectURL(blob);
+    const img = $('export-preview-img');
+    img.src = previewBlobUrl;
+    img.style.display = 'block';
+
+    // Stats overlay on preview
+    const bpp = (result.size * 8 / (result.width * result.height)).toFixed(2);
+    $('export-preview-stats').textContent = `${formatSize(result.size)} · ${bpp} bpp`;
+
+    // Estimates from real preview data
+    const previewPixels = result.width * result.height;
+    const fullPixels = exportWidth * exportHeight;
+    const ratio = fullPixels / previewPixels;
+    const estFullSize = result.size * ratio;
+
+    $('export-est-size').textContent = formatSize(result.size);
+    $('export-est-full').textContent = `~${formatSize(estFullSize)}`;
+    $('export-est-bpp').textContent = bpp;
+  } catch (e) {
+    // Preview failed — show placeholder
+    $('export-preview-img').style.display = 'none';
+    $('export-preview-stats').textContent = '';
+    $('export-est-size').textContent = '--';
+    $('export-est-full').textContent = '--';
+    $('export-est-bpp').textContent = '--';
+  }
+  wrap.classList.remove('loading');
 }
 
 function formatSize(bytes) {
@@ -211,6 +227,8 @@ export function openExportModal() {
 
 export function closeExportModal() {
   $('export-modal-backdrop').classList.remove('open');
+  if (previewDebounceId) { clearTimeout(previewDebounceId); previewDebounceId = null; }
+  if (previewBlobUrl) { URL.revokeObjectURL(previewBlobUrl); previewBlobUrl = null; }
 }
 
 export function initExportModal() {
@@ -275,10 +293,8 @@ export function initExportModal() {
         format: exportFormat,
         width: exportWidth,
         height: exportHeight,
-        options: { ...settings },  // all format settings (quality, effort, lossless, etc.)
-        quality: settings.quality || 85,  // also top-level for browser fallback
+        options: { ...settings },
         film_preset: state.filmPreset,
-        film_preset_intensity: state.filmPresetIntensity,
       };
 
       const result = await sendToWorker('export', exportData);

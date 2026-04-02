@@ -386,6 +386,31 @@ aside {
 .export-aspect-lock.locked { color: var(--accent); border-color: var(--accent); }
 .export-resize-px { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
 
+/* Encode preview */
+.export-preview-wrap {
+  position: relative; margin-bottom: 16px;
+  background: var(--bg); border-radius: 6px; overflow: hidden;
+  min-height: 60px; display: flex; align-items: center; justify-content: center;
+}
+.export-preview-wrap img {
+  max-width: 100%; max-height: 200px; object-fit: contain;
+  display: block; border-radius: 4px;
+}
+.export-preview-stats {
+  position: absolute; bottom: 4px; right: 6px;
+  font-size: 10px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.5);
+  padding: 2px 6px; border-radius: 3px; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.export-preview-spinner {
+  display: none; width: 20px; height: 20px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+  position: absolute;
+}
+.export-preview-wrap.loading .export-preview-spinner { display: block; }
+.export-preview-wrap.loading img { opacity: 0.5; }
+
 /* Estimates */
 .export-estimates {
   display: flex; gap: 20px; padding: 12px 16px;
@@ -673,14 +698,24 @@ aside {
         </div>
       </div>
 
+      <div class="export-preview-wrap" id="export-preview-wrap">
+        <img id="export-preview-img" alt="">
+        <div class="export-preview-stats" id="export-preview-stats"></div>
+        <div class="export-preview-spinner" id="export-preview-spinner"></div>
+      </div>
+
       <div class="export-estimates">
         <div class="export-estimate">
-          <span class="export-estimate-label">Est. Time</span>
-          <span class="export-estimate-value" id="export-est-time">--</span>
+          <span class="export-estimate-label">Preview Size</span>
+          <span class="export-estimate-value" id="export-est-size">--</span>
         </div>
         <div class="export-estimate">
-          <span class="export-estimate-label">Est. Size</span>
-          <span class="export-estimate-value" id="export-est-size">--</span>
+          <span class="export-estimate-label">Est. Full Size</span>
+          <span class="export-estimate-value" id="export-est-full">--</span>
+        </div>
+        <div class="export-estimate">
+          <span class="export-estimate-label">Bits/Pixel</span>
+          <span class="export-estimate-value" id="export-est-bpp">--</span>
         </div>
       </div>
     </div>
