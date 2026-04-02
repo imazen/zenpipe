@@ -547,9 +547,12 @@ fn append_filter_nodes(
             continue;
         }
 
-        // Use the registry's node_from_json which handles schema-aware
-        // type coercion (Float vs Int vs Enum etc.) from JSON values.
-        let wrapped = serde_json::json!({ node_id: params_json });
+        // node_from_json expects {"node.id": {params...}} — a single-key object.
+        // serde_json::json! doesn't interpolate variable names as keys,
+        // so build the wrapper object manually.
+        let mut wrapper = serde_json::Map::new();
+        wrapper.insert(node_id.clone(), params_json.clone());
+        let wrapped = serde_json::Value::Object(wrapper);
         match registry.node_from_json(&wrapped) {
             Ok(node) => nodes.push(node),
             Err(_e) => {
