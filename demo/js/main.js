@@ -104,6 +104,13 @@ $('pixel-info').addEventListener('click', () => {
   scheduleDetailOnly();
 });
 
+// Minimap overlay toggle
+$('minimap-toggle').addEventListener('click', () => {
+  const wrap = $('overview-wrap');
+  wrap.classList.toggle('collapsed');
+  $('minimap-toggle').textContent = wrap.classList.contains('collapsed') ? 'minimap' : 'minimap ✓';
+});
+
 // Crop region toggle
 $('crop-toggle').addEventListener('click', () => {
   const sel = $('region-selector');

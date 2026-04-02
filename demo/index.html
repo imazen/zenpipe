@@ -55,8 +55,7 @@ header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
 
 main {
   display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 8px;
+  grid-template-rows: 1fr;
   padding: 8px;
   overflow: hidden;
 }
@@ -111,23 +110,31 @@ main {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 #overview-wrap {
-  position: relative; height: 120px; min-height: 80px; background: #111;
+  position: absolute; bottom: 36px; left: 8px; z-index: 6;
+  width: 180px; height: 135px;
+  background: rgba(0,0,0,0.7); border: 1px solid var(--border);
   border-radius: 6px; overflow: hidden; display: flex;
-  align-items: center; justify-content: center; flex-shrink: 0;
-  transition: height 0.2s, min-height 0.2s, opacity 0.2s;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+  transition: opacity 0.2s, transform 0.2s;
 }
 #overview-wrap.collapsed {
-  height: 0; min-height: 0; opacity: 0; overflow: hidden; padding: 0;
+  opacity: 0; pointer-events: none; transform: scale(0.8);
 }
 #minimap-toggle {
-  position: absolute; bottom: 12px; right: 12px; z-index: 5;
+  position: absolute; bottom: 8px; left: 8px; z-index: 7;
   background: rgba(0,0,0,0.5); border: 1px solid var(--border);
   color: var(--text-dim); padding: 2px 8px; border-radius: 3px;
   font-size: 10px; cursor: pointer;
 }
 #minimap-toggle:hover { color: var(--text); border-color: var(--accent); }
+/* When minimap is visible, move toggle above it */
+#overview-wrap:not(.collapsed) ~ #minimap-toggle,
+#detail-wrap:has(#overview-wrap:not(.collapsed)) > #minimap-toggle {
+  bottom: 178px;
+}
 #overview-canvas {
-  max-height: 100%; max-width: 100%; object-fit: contain;
+  max-height: 100%; max-width: 100%; object-fit: contain; border-radius: 4px;
   filter: blur(1px); transition: filter 0.2s;
 }
 #overview-canvas.sharp { filter: none; }
@@ -706,12 +713,12 @@ aside {
       <div class="loading-message" id="loading-message">Loading...</div>
       <div class="spinner-overlay" id="detail-spinner"><div class="spinner"></div></div>
       <button id="minimap-toggle" title="Toggle minimap">minimap</button>
-    </div>
-    <div id="overview-wrap">
-      <canvas id="overview-canvas"></canvas>
-      <div id="region-selector"></div>
-      <button id="crop-toggle" title="Toggle crop region">crop</button>
-      <div class="spinner-overlay" id="overview-spinner"><div class="spinner"></div></div>
+      <div id="overview-wrap">
+        <canvas id="overview-canvas"></canvas>
+        <div id="region-selector"></div>
+        <button id="crop-toggle" title="Toggle crop region">crop</button>
+        <div class="spinner-overlay" id="overview-spinner"><div class="spinner"></div></div>
+      </div>
     </div>
   </main>
   <aside id="sidebar">
