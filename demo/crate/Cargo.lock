@@ -370,16 +370,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "heic"
-version = "0.1.1"
-dependencies = [
- "archmage",
- "enough",
- "safe_unaligned_simd",
- "whereat",
-]
-
-[[package]]
 name = "imgref"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1189,6 +1179,8 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527d0746cbfd04dab65c0fc6312bf64ef653e01d874d56f4039982491f5106a0"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1259,6 +1251,8 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44b6c541d0acd8e6b58f0650c6005daab795140a4d022fa425de4052f85a9372"
 dependencies = [
  "almost-enough",
  "enough",
@@ -1311,6 +1305,8 @@ dependencies = [
 [[package]]
 name = "zengif"
 version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35b4f27d9087f6288b478d5483cfd9a4d5bd73651057e5fbe109bb5c16377132"
 dependencies = [
  "bytemuck",
  "enough",
@@ -1348,8 +1344,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenjpeg"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "281e81fe88094c37d8ea4e8b2272af7416460ebc9309c6949c619bbd5d908df2"
+dependencies = [
+ "aligned-vec",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "magetypes",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror",
+ "tinyvec",
+ "ultrahdr-core",
+ "whereat",
+ "wide",
+ "yuv",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
 name = "zenjxl"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b3bd1890c03fd334d21f4d89d3eee245e5fccb029ff1b03faed11a39c0e060f"
 dependencies = [
  "enough",
  "imgref",
@@ -1366,6 +1389,8 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b90733a3e999f8d51295bb6d6fcc78e982a42aa83ebc8bad3e6d0e37fb4f29ff"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -1385,6 +1410,8 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffc104ace76dabcb676383efe30fba11e989ef87b0ede430f3d6d89c7a802129"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -1395,6 +1422,8 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07109c006b94f53f54097e44c4467356807de50e4b40c68cef3cf3280f284c72"
 dependencies = [
  "archmage",
  "paste",
@@ -1449,7 +1478,7 @@ dependencies = [
  "zencodec",
  "zencodecs",
  "zenfilters",
- "zenjpeg",
+ "zenjpeg 0.8.1",
  "zenlayout 0.2.1",
  "zennode",
  "zenpixels",
@@ -1462,7 +1491,6 @@ name = "zenpipe-demo"
 version = "0.1.0"
 dependencies = [
  "enough",
- "heic",
  "js-sys",
  "serde_json",
  "wasm-bindgen",
@@ -1471,7 +1499,7 @@ dependencies = [
  "zencodec",
  "zenfilters",
  "zengif",
- "zenjpeg",
+ "zenjpeg 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenjxl",
  "zennode",
  "zenpipe",
@@ -1483,6 +1511,8 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6671ce2ea4d3110e2aef9514cc48267291f50fab7b7eead43b36e7c887fb740"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1509,6 +1539,8 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ef91ed8ccf2d487fd6cb7be36b319aaca3f3ae0c0ab2074457de1febb035503"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1596,6 +1628,8 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8208dbb153c50609e3b8e7d1760589b02902b6ed990d174127ecdf0c7a16f317"
 dependencies = [
  "archmage",
  "bytemuck",

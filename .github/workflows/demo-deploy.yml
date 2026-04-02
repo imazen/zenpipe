@@ -38,15 +38,15 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Clone sibling repos
+      - name: Clone sibling repos (path deps only)
         run: |
           cd ..
-          for repo in zennode zenfilters zencodec zenpixels zenresize zenlayout \
-                      zenblend linear-srgb zencodecs zenjpeg zenpng zenwebp \
-                      zengif zenjxl zenavif ravif zenrav1e zenflate zenquant \
-                      zenbitmaps enough whereat archmage magetypes garb \
-                      ultrahdr safe_unaligned_simd heic zenavif-parse \
-                      zenavif-serialize zenjxl-decoder; do
+          # Only need path deps: zennode, zenfilters, and zenpipe's own deps
+          # All codec crates come from crates.io
+          for repo in zennode zenfilters zencodecs zenresize zenlayout \
+                      zenblend linear-srgb zenpixels enough whereat \
+                      archmage magetypes garb ultrahdr safe_unaligned_simd \
+                      zenflate zenquant zenbitmaps; do
             if [ ! -d "$repo" ]; then
               git clone --depth 1 "https://github.com/imazen/$repo.git" "$repo" 2>/dev/null || true
             fi

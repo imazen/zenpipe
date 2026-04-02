@@ -12,21 +12,24 @@ default = ["wasm"]
 wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
+# Core pipeline — path deps (actively edited)
 zenpipe = { path = "../..", features = ["zennode", "std", "nodes-filters", "json-schema"] }
 zennode = { path = "../../../zennode/zennode", features = ["derive"] }
 zenfilters = { path = "../../../zenfilters", features = ["zennode"] }
-zencodec = { path = "../../../zencodec", default-features = false }
-zenpixels = { path = "../../../zenpixels/zenpixels", default-features = false }
+
+# Codec infrastructure — crates.io versions
+zencodec = { version = "0.1.12", default-features = false }
+zenpixels = { version = "0.2.2", default-features = false }
 enough = { version = "0.4", default-features = false }
 serde_json = "1"
 
-# Codec encoders for WASM-native export
-zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
-zenpng = { path = "../../../zenpng", default-features = false, features = ["zencodec"] }
-zenwebp = { path = "../../../zenwebp", default-features = false, features = ["zencodec"] }
-zengif = { path = "../../../zengif", default-features = false, features = ["zencodec", "quantizr"] }
-zenjxl = { path = "../../../zenjxl", default-features = false, features = ["zencodec", "encode", "decode"] }
-zenavif = { path = "../../../zenavif", default-features = false, features = ["zencodec", "encode"] }
+# Codec encoders + decoders — crates.io versions
+zenjpeg = { version = "0.8.1", default-features = false, features = ["zencodec"] }
+zenpng = { version = "0.1.2", default-features = false, features = ["zencodec"] }
+zenwebp = { version = "0.4.2", default-features = false, features = ["zencodec"] }
+zengif = { version = "0.7.1", default-features = false, features = ["zencodec", "quantizr"] }
+zenjxl = { version = "0.1.1", default-features = false, features = ["zencodec", "encode", "decode"] }
+zenavif = { version = "0.1.3", default-features = false, features = ["zencodec", "encode"] }
 
 # WASM-specific deps (optional for native testing)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -36,8 +39,6 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 [patch.crates-io]
 zennode = { path = "../../../zennode/zennode" }
 zennode-derive = { path = "../../../zennode/zennode-derive" }
-zenpixels = { path = "../../../zenpixels/zenpixels" }
-zencodec = { path = "../../../zencodec" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
