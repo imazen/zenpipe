@@ -580,6 +580,31 @@ aside {
 }
 .info-toast.fade-out { opacity: 0; }
 
+/* --- Export History --- */
+.export-history-section { margin-top: 8px; }
+.export-history-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.export-history-thumb {
+  width: 48px; height: 36px; object-fit: cover; border-radius: 3px;
+  background: var(--bg); flex-shrink: 0;
+}
+.export-history-info {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11px;
+  color: var(--text-dim); flex: 1; font-variant-numeric: tabular-nums;
+}
+.export-history-format {
+  font-weight: 600; color: var(--text); font-size: 10px;
+  background: var(--accent-dim); padding: 1px 4px; border-radius: 2px;
+}
+.export-history-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.export-history-actions a {
+  font-size: 16px; color: var(--text-dim); text-decoration: none;
+  padding: 2px; line-height: 1;
+}
+.export-history-actions a:hover { color: var(--accent); }
+
 /* --- User Presets --- */
 #user-presets-section {
   padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px;

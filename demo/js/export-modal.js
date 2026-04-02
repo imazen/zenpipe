@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { $, state, getFilterAdjustments } from './state.js';
+import { recordExport, initExportHistory } from './export-history.js';
 import { sendToWorker } from './worker-client.js';
 
 const EXPORT_FORMATS = [
@@ -243,6 +244,8 @@ export function closeExportModal() {
 }
 
 export function initExportModal() {
+  initExportHistory();
+
   // Aspect ratio lock
   $('export-aspect-lock').addEventListener('click', () => {
     exportAspectLocked = !exportAspectLocked;
@@ -318,6 +321,9 @@ export function initExportModal() {
       };
       const mime = MIME_MAP[result.format] || 'image/jpeg';
       const ext = actualFmt.ext;
+
+      // Record in export history
+      recordExport({ ...result, mime });
 
       const blob = new Blob([result.data], { type: mime });
       const url = URL.createObjectURL(blob);
