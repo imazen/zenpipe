@@ -125,8 +125,17 @@ main {
   position: absolute; border: 2px solid var(--accent);
   background: var(--accent-dim); cursor: move; border-radius: 2px;
   min-width: 20px; min-height: 20px; touch-action: none;
-  display: none;
 }
+#region-selector.hidden { display: none; }
+
+/* Toggle button for crop window */
+#crop-toggle {
+  position: absolute; top: 4px; right: 4px; z-index: 5;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--border);
+  color: var(--text-dim); padding: 2px 6px; border-radius: 3px;
+  font-size: 10px; cursor: pointer;
+}
+#crop-toggle:hover { color: var(--text); border-color: var(--accent); }
 
 aside {
   overflow-y: auto; padding: 12px; background: var(--surface);
@@ -156,18 +165,39 @@ aside {
 }
 .slider-group.collapsed h3 .collapse-icon { transform: rotate(0deg); }
 .slider-group:not(.collapsed) h3 .collapse-icon { transform: rotate(90deg); }
-.slider-group.collapsed .slider-row { display: none; }
+.slider-group.collapsed .slider-row,
+.slider-group.collapsed .node-header { display: none; }
+
+/* Node sub-header within a group (e.g., "Clarity", "Vignette") */
+.node-header {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  padding: 6px 0 2px; margin-top: 4px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.node-header:first-of-type { margin-top: 0; }
+.node-header .node-val-reset {
+  display: flex; align-items: center; gap: 4px;
+}
+
+/* Single-param node: label + value + reset on header line, slider below */
 .slider-row {
-  display: grid; grid-template-columns: 80px 1fr 36px 16px;
-  align-items: center; gap: 6px; height: 24px;
+  display: flex; flex-direction: column; gap: 2px; padding: 0 0 2px;
 }
-.slider-row label { font-size: 12px; color: var(--text-dim); cursor: pointer; }
-.slider-row label:hover { color: var(--text); }
+.slider-row .slider-label-line {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px;
+}
+.slider-row .slider-label-line label {
+  color: var(--text-dim); cursor: pointer;
+}
+.slider-row .slider-label-line label:hover { color: var(--text); }
+.slider-row .slider-label-line .val-reset {
+  display: flex; align-items: center; gap: 4px;
+}
+.slider-row .slider-label-line .val {
+  font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim);
+}
 .slider-row input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; }
-.slider-row .val {
-  font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
 .slider-row .slider-reset {
   font-size: 13px; color: var(--text-dim); cursor: pointer;
   background: none; border: none; padding: 0; line-height: 1;
@@ -505,30 +535,10 @@ aside {
     max-height: 40vh;
     overflow-y: auto;
   }
+  /* Slider layout is already label-above-slider in both modes.
+     Just ensure proper spacing in narrow mode. */
   .slider-row {
-    grid-template-columns: 1fr 16px;
-    grid-template-rows: auto auto;
-    height: auto;
-    gap: 2px 6px;
     padding: 4px 0;
-  }
-  .slider-row label {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .slider-row .val {
-    grid-column: 1;
-    grid-row: 1;
-    text-align: right;
-  }
-  .slider-row input[type="range"] {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .slider-row .slider-reset {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    align-self: center;
   }
 }
 </style>
@@ -569,6 +579,7 @@ aside {
     <div id="overview-wrap">
       <canvas id="overview-canvas"></canvas>
       <div id="region-selector"></div>
+      <button id="crop-toggle" title="Toggle crop region">crop</button>
       <div class="spinner-overlay" id="overview-spinner"><div class="spinner"></div></div>
     </div>
   </main>

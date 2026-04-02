@@ -103,6 +103,13 @@ $('pixel-info').addEventListener('click', () => {
   scheduleDetailOnly();
 });
 
+// Crop region toggle
+$('crop-toggle').addEventListener('click', () => {
+  const sel = $('region-selector');
+  sel.classList.toggle('hidden');
+  $('crop-toggle').textContent = sel.classList.contains('hidden') ? 'crop' : 'crop ✓';
+});
+
 // Boot
 (async function init() {
   initWorker();

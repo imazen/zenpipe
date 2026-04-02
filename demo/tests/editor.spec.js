@@ -44,8 +44,8 @@ test.describe('zenpipe editor', () => {
     await expect(page.locator('#overview-canvas')).toBeVisible();
     await expect(page.locator('#detail-canvas')).toBeVisible();
 
-    // Region selector should be hidden (display:none) per UX overhaul
-    await expect(page.locator('#region-selector')).toBeHidden();
+    // Region selector is toggleable (visible by default)
+    await expect(page.locator('#region-selector')).toBeVisible();
 
     // Sliders should be visible
     const groups = page.locator('.slider-group');
@@ -56,13 +56,14 @@ test.describe('zenpipe editor', () => {
     const sliderCount = await sliders.count();
     expect(sliderCount).toBeGreaterThan(5);
 
-    // Check a known slider exists
-    await expect(page.locator('label:has-text("Stops")')).toBeVisible();
+    // Check a known slider exists (single-param nodes show node title)
+    await expect(page.locator('label:has-text("Exposure")').first()).toBeVisible();
   });
 
   test('overview canvas has pixels after load', async ({ page }) => {
     await page.goto('/');
     await loadTestImage(page);
+    await page.waitForTimeout(500); // wait for overview render
 
     const ow = await page.locator('#overview-canvas').getAttribute('width');
     const oh = await page.locator('#overview-canvas').getAttribute('height');

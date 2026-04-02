@@ -117,18 +117,36 @@ export async function loadSchemaAndBuildUI() {
 
     for (const node of nodes) {
       state.sliderNodes.push(node);
+      const isSingleParam = node.params.length === 1;
+
+      // For multi-param nodes, show the node title as a sub-header
+      if (!isSingleParam) {
+        const header = document.createElement('div');
+        header.className = 'node-header';
+        header.textContent = node.title;
+        groupEl.appendChild(header);
+      }
+
       for (const param of node.params) {
+        // Single-param: use node title as label (e.g., "Clarity" not "Amount")
+        // Multi-param: use param label (e.g., "Highlights", "Shadows")
+        const displayLabel = isSingleParam ? node.title : param.label;
+
         const row = document.createElement('div');
         row.className = 'slider-row';
         row.innerHTML = `
-          <label title="${node.title}: ${param.paramName}">${param.label}</label>
+          <div class="slider-label-line">
+            <label title="${node.title}: ${param.paramName}">${displayLabel}</label>
+            <span class="val-reset">
+              <span class="val">${formatVal(param.identity)}</span>
+              <button class="slider-reset" title="Reset to default">&#x21BA;</button>
+            </span>
+          </div>
           <input type="range" min="${param.min}" max="${param.max}"
                  step="${param.step}" value="${param.identity}"
                  data-key="${param.adjustKey}" data-identity="${param.identity}">
-          <span class="val">${formatVal(param.identity)}</span>
-          <button class="slider-reset" title="Reset to default">&#x21BA;</button>
         `;
-        const slider = row.querySelector('input');
+        const slider = row.querySelector('input[type="range"]');
         const display = row.querySelector('.val');
         const resetBtn = row.querySelector('.slider-reset');
 

@@ -6,7 +6,7 @@ import { $, state } from './state.js';
 import { scheduleDetailOnly } from './render.js';
 
 export function updateRegionSelector() {
-  // Region selector is hidden, but keep the position math for overview click
+  // Update position (works whether visible or hidden)
   const canvas = $('overview-canvas');
   const rect = canvas.getBoundingClientRect();
   const wrap = $('overview-wrap').getBoundingClientRect();
@@ -93,6 +93,37 @@ export function initRegionDrag() {
     state.region.x = Math.max(0, Math.min(1 - state.region.w, nx - state.region.w / 2));
     state.region.y = Math.max(0, Math.min(1 - state.region.h, ny - state.region.h / 2));
     updateRegionSelector();
+    scheduleDetailOnly();
+  });
+
+  // Region selector drag on overview
+  const sel = $('region-selector');
+  let selDragging = false, selStartX, selStartY, selStartRX, selStartRY;
+
+  sel.addEventListener('pointerdown', e => {
+    if (sel.classList.contains('hidden')) return;
+    selDragging = true;
+    selStartX = e.clientX; selStartY = e.clientY;
+    selStartRX = state.region.x; selStartRY = state.region.y;
+    sel.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation(); // don't trigger overview click
+  });
+
+  window.addEventListener('pointermove', e => {
+    if (!selDragging) return;
+    const rect = $('overview-canvas').getBoundingClientRect();
+    const dx = (e.clientX - selStartX) / rect.width;
+    const dy = (e.clientY - selStartY) / rect.height;
+    state.region.x = Math.max(0, Math.min(1 - state.region.w, selStartRX + dx));
+    state.region.y = Math.max(0, Math.min(1 - state.region.h, selStartRY + dy));
+    updateRegionSelector();
+    showUpscaledPreview();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!selDragging) return;
+    selDragging = false;
     scheduleDetailOnly();
   });
 
