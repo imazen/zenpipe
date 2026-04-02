@@ -6,16 +6,10 @@
   "installCommand": "",
   "headers": [
     {
-      "source": "/pkg/(.*)\\.wasm",
+      "source": "/(.*)",
       "headers": [
-        { "key": "Content-Type", "value": "application/wasm" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/pkg/(.*)\\.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600" }
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
       ]
     }
   ]
