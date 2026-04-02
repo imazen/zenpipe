@@ -537,8 +537,8 @@ fn append_filter_nodes(
     let registry = zenpipe::full_registry();
 
     for (node_id, params_json) in adjustments {
-        // Skip non-zenfilters keys and film_look keys.
-        if !node_id.starts_with("zenfilters.") {
+        // Skip non-zenfilters keys and film_look (handled by append_film_look).
+        if !node_id.starts_with("zenfilters.") || node_id == "zenfilters.film_look" {
             continue;
         }
 
