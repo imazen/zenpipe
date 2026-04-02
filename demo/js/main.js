@@ -11,6 +11,7 @@ import { scheduleRender, scheduleDetailOnly } from './render.js';
 import { buildPresetStrip, setActivePreset } from './presets.js';
 import { initExportModal } from './export-modal.js';
 import { initHistory, pushState } from './history.js';
+import { initCompare, invalidateOriginal } from './compare.js';
 
 // File input and open button
 $('file-input').addEventListener('change', e => {
@@ -115,8 +116,10 @@ $('crop-toggle').addEventListener('click', () => {
   buildPhotoPicker();
   buildPresetStrip();
   await loadSchemaAndBuildUI();
+  initCompare();
   initHistory(() => {
     // On undo/redo: sync slider DOM, update preset chip, re-render
+    invalidateOriginal();
     syncDOMToState();
     setActivePreset(state.filmPreset);
     $('preset-intensity').value = state.filmPresetIntensity;
