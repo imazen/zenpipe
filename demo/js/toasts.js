@@ -24,7 +24,14 @@ export function showError(msg) {
 
   const el = document.createElement('div');
   el.className = 'error-toast';
-  el.innerHTML = `<div class="error-toast-msg">${msg}</div><div class="error-toast-hint">Tap to reset</div>`;
+  // Escape HTML in the message
+  const escaped = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  el.innerHTML = `
+    <div class="error-toast-msg">${escaped}</div>
+    <div class="error-toast-actions">
+      <span class="error-toast-copy" title="Copy error to clipboard">&#x1F4CB;</span>
+      <span class="error-toast-hint">Tap to reset</span>
+    </div>`;
 
   function dismiss() {
     el.classList.add('fade-out');
@@ -32,6 +39,12 @@ export function showError(msg) {
     errorToastTimer = null;
     if (resetToLastSafeCallback) resetToLastSafeCallback();
   }
+
+  // Copy button
+  el.querySelector('.error-toast-copy').addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(msg).catch(() => {});
+  });
 
   el.addEventListener('click', dismiss);
   wrap.appendChild(el);

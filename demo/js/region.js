@@ -57,14 +57,14 @@ export function initRegionDrag() {
 
   detailCanvas.addEventListener('pointermove', e => {
     if (!dragging) return;
-    const wrap = $('detail-wrap');
-    const wrapRect = wrap.getBoundingClientRect();
-    // Compute delta in normalized region coords
-    // Moving mouse right should move the region left (pan left)
-    const deltaX = -(e.clientX - startX) / wrapRect.width * state.region.w;
-    const deltaY = -(e.clientY - startY) / wrapRect.height * state.region.h;
-    state.region.x = Math.max(0, Math.min(1 - state.region.w, startRX + deltaX));
-    state.region.y = Math.max(0, Math.min(1 - state.region.h, startRY + deltaY));
+    // Map mouse delta to normalized source image coordinates.
+    // The detail canvas shows region.w × region.h of the source.
+    // One CSS pixel of mouse movement = region.w/canvasDisplayW of source.
+    const canvasRect = detailCanvas.getBoundingClientRect();
+    const dxNorm = -(e.clientX - startX) / canvasRect.width * state.region.w;
+    const dyNorm = -(e.clientY - startY) / canvasRect.height * state.region.h;
+    state.region.x = Math.max(0, Math.min(1 - state.region.w, startRX + dxNorm));
+    state.region.y = Math.max(0, Math.min(1 - state.region.h, startRY + dyNorm));
     updateRegionSelector();
     showUpscaledPreview();
   });
@@ -105,7 +105,12 @@ export function initScrollZoom() {
     if (!state.sourceImage) return;
     e.preventDefault();
 
-    const scaleFactor = Math.pow(0.9, Math.sign(e.deltaY));
+    // Use proportional zoom: smooth trackpads send small deltaY,
+    // mouse wheels send larger values. Clamp to ±5% per event for
+    // smooth scrolling, up to ±20% for discrete wheel clicks.
+    const rawDelta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines → pixels
+    const zoomPct = Math.max(-0.20, Math.min(0.20, rawDelta * 0.002));
+    const scaleFactor = 1 + zoomPct;
 
     // Map mouse position in detail-wrap to normalized image coordinates
     const detailWrap = $('detail-wrap');
