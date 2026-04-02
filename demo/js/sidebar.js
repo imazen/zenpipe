@@ -7,14 +7,29 @@ import { scheduleRender } from './render.js';
 
 /** Group display order and labels. */
 const GROUP_ORDER = [
-  'tone', 'tone_range', 'tone_map', 'color', 'detail', 'effects',
+  'favorites', 'tone', 'tone_range', 'tone_map', 'color', 'detail', 'effects',
   'local', 'creative', 'lens', 'auto',
 ];
 const GROUP_LABELS = {
-  tone: 'Tone', tone_range: 'Tone Range', tone_map: 'Tone Map',
+  favorites: 'Favorites', tone: 'Tone', tone_range: 'Tone Range', tone_map: 'Tone Map',
   color: 'Color', detail: 'Detail', effects: 'Effects',
   local: 'Local', creative: 'Creative', lens: 'Lens', auto: 'Auto',
 };
+
+/** Favorite filter nodes — shown in a pinned expanded group at the top. */
+const FAVORITE_NODE_IDS = new Set([
+  'zenfilters.exposure',
+  'zenfilters.contrast',
+  'zenfilters.highlights_shadows',
+  'zenfilters.clarity',
+  'zenfilters.brilliance',
+  'zenfilters.saturation',
+  'zenfilters.vibrance',
+  'zenfilters.sharpen',
+  'zenfilters.temperature',
+  'zenfilters.dehaze',
+  'zenfilters.vignette',
+]);
 
 export function formatVal(v) {
   return Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(2);
@@ -44,7 +59,9 @@ export async function loadSchemaAndBuildUI() {
     if (!nodeId.startsWith('zenfilters.')) continue;
     if (def['x-zennode-role'] !== 'filter') continue;
 
-    const group = def['x-zennode-group'] || 'other';
+    // Favorites go to the pinned group; others go to their schema group.
+    const isFavorite = FAVORITE_NODE_IDS.has(nodeId);
+    const group = isFavorite ? 'favorites' : (def['x-zennode-group'] || 'other');
     if (!groups.has(group)) groups.set(group, []);
 
     const params = [];
@@ -72,9 +89,15 @@ export async function loadSchemaAndBuildUI() {
     }
   }
 
-  // Sort nodes within each group alphabetically by title
-  for (const nodes of groups.values()) {
-    nodes.sort((a, b) => a.title.localeCompare(b.title));
+  // Sort nodes within each group
+  const FAVORITE_ORDER = [...FAVORITE_NODE_IDS];
+  for (const [groupKey, nodes] of groups.entries()) {
+    if (groupKey === 'favorites') {
+      // Preserve the curated order from FAVORITE_NODE_IDS
+      nodes.sort((a, b) => FAVORITE_ORDER.indexOf(a.id) - FAVORITE_ORDER.indexOf(b.id));
+    } else {
+      nodes.sort((a, b) => a.title.localeCompare(b.title));
+    }
   }
 
   // Render groups in order
@@ -83,7 +106,7 @@ export async function loadSchemaAndBuildUI() {
     if (!nodes || nodes.length === 0) continue;
 
     const groupEl = document.createElement('div');
-    const isCollapsed = groupKey !== 'tone';
+    const isCollapsed = groupKey !== 'favorites';
     groupEl.className = 'slider-group' + (isCollapsed ? ' collapsed' : '');
     groupEl.innerHTML = `<h3><span class="collapse-icon">&#x25B8;</span>${GROUP_LABELS[groupKey] || groupKey}</h3>`;
 
