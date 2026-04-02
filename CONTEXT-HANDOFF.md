@@ -60,6 +60,16 @@ All encode nodes are in zencodecs/src/zennode_defs.rs:
 - AVIF: quality [1-100], effort [0-10], bit_depth, alpha_quality
 - GIF: quality [1-100], dithering [0-1]
 
+### Export system redesign (see demo/EXPORT-DESIGN.md)
+- Two-panel export: quick export + advanced preservation
+- Inline preview pane with bpp/filesize overlay
+- Export history (collapsible, in-memory)
+- Metadata/HDR/gain map preservation controls
+- End-to-end pipeline for high-quality export (not just pack_rgba → encode)
+- WASM codecs: JPEG (zenjpeg), WebP (zenwebp), PNG (zenpng), GIF (zengif), JXL (jxl-encoder) — all pure Rust
+- AVIF: needs zenrav1e WASM compat verification (has build.rs)
+- Browser fallback for unsupported formats with clear indicator
+
 ### UX polish remaining
 - WASM-AUDIT.md is stale (zenfilters WASM support already done)
 - dt_sigmoid needs Filter impl in zenfilters
