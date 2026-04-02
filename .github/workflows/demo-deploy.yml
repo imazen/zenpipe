@@ -1,4 +1,4 @@
-name: Deploy Demo
+name: Deploy Demo to GitHub Pages
 
 on:
   push:
@@ -9,10 +9,21 @@ on:
       - '.github/workflows/demo-deploy.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "demo-pages"
+  cancel-in-progress: true
+
 jobs:
-  deploy:
-    name: Build WASM & Deploy
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,17 +44,15 @@ jobs:
           for repo in zennode zenfilters zencodec zenpixels zenresize zenlayout \
                       zenblend linear-srgb zencodecs zenjpeg zenpng zenwebp \
                       zengif zenjxl zenavif ravif zenrav1e zenflate zenquant \
-                      zenbitmaps enough whereat; do
+                      zenbitmaps enough whereat archmage magetypes garb \
+                      ultrahdr safe_unaligned_simd; do
             if [ ! -d "$repo" ]; then
               git clone --depth 1 "https://github.com/imazen/$repo.git" "$repo" 2>/dev/null || true
             fi
           done
-          # ravif contains zenravif
-          # zennode contains zennode-derive
 
       - name: Patch zenpipe Cargo.toml for CI
         run: |
-          cd zenpipe
           sed -i \
             -e '/imageflow_types/d' \
             -e '/imageflow_riapi/d' \
@@ -58,17 +67,39 @@ jobs:
           RUSTFLAGS="-C target-feature=+simd128" wasm-pack build \
             --target web --out-dir ../pkg --release
 
-      - name: Install Vercel CLI
-        run: npm i -g vercel
-
-      - name: Deploy to Vercel
+      - name: Prepare Pages artifact
         run: |
-          cd demo
-          # Remove vercel.json buildCommand (we already built)
-          echo '{"outputDirectory":".","framework":null}' > vercel.json
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            --scope=${{ secrets.VERCEL_SCOPE }} \
-            --yes
+          mkdir -p _site
+          cp demo/index.html _site/
+          cp demo/schema.json _site/
+          cp demo/worker.js _site/
+          cp demo/serve.py _site/
+          cp -r demo/js _site/js
+          cp -r demo/pkg _site/pkg
+          # Add coi-serviceworker for SharedArrayBuffer support on Pages
+          curl -sL https://raw.githubusercontent.com/nicknisi/nicknisi.github.io/main/coi-serviceworker.js \
+            -o _site/coi-serviceworker.js || true
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # Also deploy to Vercel (with COOP/COEP headers for SharedArrayBuffer)
+      - name: Deploy to Vercel
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          npm i -g vercel
+          cd _site
+          cp ../demo/vercel.json .
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
