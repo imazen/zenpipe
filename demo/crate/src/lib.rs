@@ -9,9 +9,11 @@
 //! separately, filter suffix re-runs from cache on parameter changes.
 
 mod editor;
+pub mod encode;
 mod schema;
 
 pub use editor::{Editor, Region, RenderOutput};
+pub use encode::{EncodedImage, encode};
 pub use schema::export_filter_schema;
 
 #[cfg(feature = "wasm")]

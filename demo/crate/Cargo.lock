@@ -80,6 +80,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +144,15 @@ dependencies = [
  "archmage",
  "bytemuck",
  "paste",
+]
+
+[[package]]
+name = "gif"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5df2ba84018d80c213569363bdcd0c64e6933c67fe4c1d60ecf822971a3c35e"
+dependencies = [
+ "weezl",
 ]
 
 [[package]]
@@ -275,6 +290,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a041e753da8b807c9255f28de81879c78c876392ff2469cde94799b2896b9d"
 
 [[package]]
+name = "quantizr"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b28ab4659f6754222a9e96c7a48f68dba03a620f23803c67ccd4ca7c35d55f5f"
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -312,6 +333,12 @@ name = "safe_unaligned_simd"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9c874fb993656d484725d58fbfddb39dfcf98ebcadc1a1d09568aa6b39bafba"
+
+[[package]]
+name = "self_cell"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b12e76d157a900eb52e81bc6e9f3069344290341720e9178cde2407113ac8d89"
 
 [[package]]
 name = "serde"
@@ -477,6 +504,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "weezl"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+
+[[package]]
 name = "whereat"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -532,18 +565,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zencodec"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44b6c541d0acd8e6b58f0650c6005daab795140a4d022fa425de4052f85a9372"
-dependencies = [
- "almost-enough",
- "enough",
- "whereat",
- "zenpixels",
-]
-
-[[package]]
 name = "zencodecs"
 version = "0.1.0"
 dependencies = [
@@ -554,7 +575,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zencodec 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zennode",
  "zenpixels",
  "zenpixels-convert",
@@ -572,6 +593,33 @@ dependencies = [
  "zennode",
  "zenpixels",
  "zenpixels-convert",
+]
+
+[[package]]
+name = "zenflate"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab0a8ba1d69f2af0676750013d4c7a26a246682d6129a0be478da9f0cf1183a7"
+dependencies = [
+ "archmage",
+ "enough",
+ "libm",
+]
+
+[[package]]
+name = "zengif"
+version = "0.7.1"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "gif",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quantizr",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenpixels",
 ]
 
 [[package]]
@@ -593,7 +641,7 @@ dependencies = [
  "whereat",
  "wide",
  "yuv",
- "zencodec 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zenpixels",
 ]
 
@@ -625,8 +673,6 @@ dependencies = [
 [[package]]
 name = "zennode-derive"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03368510f85d61fc1a43e158c04137b7156e65a54bde8db9bf5b3b2e87241341"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -645,7 +691,7 @@ dependencies = [
  "serde_json",
  "whereat",
  "zenblend 0.1.2",
- "zencodec 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zencodec",
  "zencodecs",
  "zenfilters",
  "zenjpeg",
@@ -665,18 +711,20 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "web-sys",
- "zencodec 0.1.12",
+ "zencodec",
  "zenfilters",
+ "zengif",
  "zenjpeg",
  "zennode",
  "zenpipe",
+ "zenpixels",
+ "zenpng",
+ "zenwebp",
 ]
 
 [[package]]
 name = "zenpixels"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6671ce2ea4d3110e2aef9514cc48267291f50fab7b7eead43b36e7c887fb740"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -701,6 +749,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenpng"
+version = "0.1.2"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenflate",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "zenresize"
 version = "0.2.0"
 dependencies = [
@@ -714,6 +782,26 @@ dependencies = [
  "whereat",
  "zenblend 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenlayout 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenpixels",
+]
+
+[[package]]
+name = "zenwebp"
+version = "0.4.2"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "byteorder-lite",
+ "enough",
+ "garb",
+ "hashbrown",
+ "libm",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "magetypes",
+ "self_cell",
+ "thiserror",
+ "whereat",
+ "zencodec",
  "zenpixels",
 ]
 

@@ -209,10 +209,44 @@ self.addEventListener('message', async (e) => {
       case 'export': {
         if (!editor) throw new Error('Editor not initialized');
 
-        // Render at requested dimensions (default: source size).
-        const exportMaxDim = msg.width
-          ? Math.max(msg.width, msg.height || msg.width)
-          : Math.max(editor.width, editor.height);
+        const format = msg.format || 'jpeg';
+        const exportWidth = msg.width || editor.width;
+        const exportHeight = msg.height || editor.height;
+
+        // WASM-native codec encoding for supported formats.
+        const WASM_FORMATS = new Set(['jpeg', 'webp', 'png', 'gif']);
+        if (backend === 'wasm' && WASM_FORMATS.has(format)) {
+          const adjustmentsJson = JSON.stringify(msg.adjustments || {});
+          const optionsJson = JSON.stringify(msg.options || {});
+          const filmPreset = msg.film_preset || undefined;
+
+          const encResult = editor.inner.encode_image(
+            adjustmentsJson,
+            exportWidth,
+            exportHeight,
+            format,
+            optionsJson,
+            filmPreset,
+          );
+
+          const data = new Uint8Array(encResult.data.slice().buffer);
+          const resultFormat = encResult.format;
+          const resultMime = encResult.mime;
+          const resultWidth = encResult.width;
+          const resultHeight = encResult.height;
+          const resultSize = encResult.size;
+          encResult.free();
+
+          self.postMessage(
+            { id, type: 'result', data, format: resultFormat, mime: resultMime,
+              size: resultSize, width: resultWidth, height: resultHeight, backend },
+            { transfer: [data.buffer] },
+          );
+          break;
+        }
+
+        // Fallback: browser-native encoding (mock backend, or AVIF/JXL).
+        const exportMaxDim = Math.max(exportWidth, exportHeight);
 
         const result = editor.renderOverview(
           msg.adjustments || {},
@@ -224,13 +258,10 @@ self.addEventListener('message', async (e) => {
         const ctx = canvas.getContext('2d');
         ctx.putImageData(result, 0, 0);
 
-        // Browser-native encoding. WebP/JPEG/PNG are widely supported.
-        // AVIF/JXL/GIF would need WASM codecs (not yet integrated).
         const MIME_MAP = {
           jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
           avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
         };
-        const format = msg.format || 'jpeg';
         const mime = MIME_MAP[format] || 'image/jpeg';
         const quality = (format === 'png') ? undefined : (msg.quality || 85) / 100;
 

@@ -476,9 +476,9 @@ dependencies = [
 
 [[package]]
 name = "zenflate"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3ab3b331bb33391f2ac0a0716b5a5a06c634c3726f7a69b68d3052dbd2602f8"
+checksum = "ab0a8ba1d69f2af0676750013d4c7a26a246682d6129a0be478da9f0cf1183a7"
 dependencies = [
  "archmage",
  "enough",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "zenwebp"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "archmage",
  "bytemuck",

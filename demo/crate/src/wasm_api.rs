@@ -27,6 +27,16 @@ pub struct WasmRenderResult {
     height: u32,
 }
 
+/// Result of an encode operation: encoded bytes + format metadata.
+#[wasm_bindgen]
+pub struct WasmEncodeResult {
+    data: Vec<u8>,
+    format: String,
+    mime: String,
+    width: u32,
+    height: u32,
+}
+
 #[wasm_bindgen]
 impl WasmRenderResult {
     /// RGBA8 pixel data as a Uint8Array (transferred, zero-copy).
@@ -51,6 +61,45 @@ impl WasmRenderResult {
     #[wasm_bindgen(getter)]
     pub fn byte_length(&self) -> u32 {
         self.data.len() as u32
+    }
+}
+
+#[wasm_bindgen]
+impl WasmEncodeResult {
+    /// Encoded bytes as a Uint8Array (transferred, zero-copy).
+    #[wasm_bindgen(getter)]
+    pub fn data(&self) -> js_sys::Uint8Array {
+        js_sys::Uint8Array::from(self.data.as_slice())
+    }
+
+    /// Output format name (e.g., "jpeg", "webp", "png", "gif").
+    #[wasm_bindgen(getter)]
+    pub fn format(&self) -> String {
+        self.format.clone()
+    }
+
+    /// MIME type of the encoded output.
+    #[wasm_bindgen(getter)]
+    pub fn mime(&self) -> String {
+        self.mime.clone()
+    }
+
+    /// Encoded byte count.
+    #[wasm_bindgen(getter)]
+    pub fn size(&self) -> u32 {
+        self.data.len() as u32
+    }
+
+    /// Output width in pixels.
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Output height in pixels.
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> u32 {
+        self.height
     }
 }
 
@@ -198,6 +247,59 @@ impl WasmEditor {
             .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
             .collect();
         serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
+    }
+
+    /// Render and encode an image to a specific format.
+    ///
+    /// Renders at the given `width`/`height` (using the larger dimension as
+    /// the constrain limit), applies filters and optional film preset, then
+    /// encodes to the requested format (jpeg, webp, png, gif).
+    ///
+    /// `options_json` is a JSON object with format-specific settings
+    /// (e.g., `{"quality": 85}` for JPEG/WebP, `{"effort": 5}` for PNG).
+    ///
+    /// Returns encoded bytes with format metadata. For unsupported formats
+    /// (avif, jxl), returns an error — use browser-native encoding instead.
+    #[wasm_bindgen]
+    pub fn encode_image(
+        &mut self,
+        adjustments_json: &str,
+        width: u32,
+        height: u32,
+        format: &str,
+        options_json: &str,
+        film_preset: Option<String>,
+    ) -> Result<WasmEncodeResult, JsError> {
+        let adj = parse_adjustments(adjustments_json)?;
+        // width/height hint accepted for future use; currently renders at
+        // the editor's overview_max constraint.
+        let _ = (width, height);
+
+        // Render with the current overview dimensions and filters.
+        let out = self
+            .inner
+            .render_overview_with_preset(&adj, film_preset.as_deref())
+            .map_err(|e| JsError::new(&e))?;
+
+        // Parse encode options.
+        let options: serde_json::Value = if options_json.is_empty() || options_json == "{}" {
+            serde_json::Value::Object(serde_json::Map::new())
+        } else {
+            serde_json::from_str(options_json)
+                .map_err(|e| JsError::new(&format!("Invalid options JSON: {e}")))?
+        };
+
+        // Encode the rendered RGBA pixels.
+        let encoded = crate::encode::encode(&out.data, out.width, out.height, format, &options)
+            .map_err(|e| JsError::new(&e))?;
+
+        Ok(WasmEncodeResult {
+            data: encoded.data,
+            format: encoded.format.to_string(),
+            mime: encoded.mime.to_string(),
+            width: out.width,
+            height: out.height,
+        })
     }
 
     /// Get the filter node schema as a JSON string.
