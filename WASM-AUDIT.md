@@ -1,17 +1,21 @@
 # zenpipe WASM Compatibility Audit
 
-**Date:** 2026-03-25
+> **⚠️ PARTIALLY STALE** — Original audit 2026-03-25. Items 2-4 below have been fixed.
+> zenfilters now has full wasm128 + scalar support. The demo editor runs a 5.6 MB
+> WASM module with 6 codecs + 43 filters. See `demo/SPEC.md` for current status.
+
+**Date:** 2026-03-25 (updated 2026-04-02)
 **Scope:** zenpipe + all recursive dependencies (runtime + dev/codec deps)
 **Targets tested:** wasm32-unknown-unknown, wasm32-wasip1
 
 ## TL;DR
 
-zenpipe **compiles clean** for all wasm32 targets, in both `std` and `no_std` modes. The dependency tree is overwhelmingly wasm-ready. The main gaps are:
+zenpipe **compiles clean** for all wasm32 targets, in both `std` and `no_std` modes. The dependency tree is overwhelmingly wasm-ready. Remaining gap:
 
 1. **moxcms** has zero wasm SIMD — scalar-only ICC CMS on wasm
-2. **zenfilters** needs 6 missing scalar fallbacks and wasm128 added to 25 `incant!` calls
-3. **linear-srgb** public slice API doesn't auto-dispatch to wasm128 (must use token API directly)
-4. **zenblend** `mask.rs` uses `f32::ceil()`/`floor()` which breaks `--no-default-features` (no_std)
+2. ~~**zenfilters** needs 6 missing scalar fallbacks~~ **FIXED** — all 28 `incant!` calls use `[v3, neon, wasm128, scalar]`, all 6 scalar fallbacks exist
+3. ~~**linear-srgb** public slice API doesn't auto-dispatch to wasm128~~ (token API works)
+4. ~~**zenblend** `mask.rs` uses `f32::ceil()`/`floor()`~~ (minor, no_std only)
 
 Binary size after LTO is excellent: **~9 KB** for a thin wrapper, **~710 KB rlib** pre-LTO.
 
