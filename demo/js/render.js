@@ -7,7 +7,7 @@ import { sendToWorker } from './worker-client.js';
 import { showError, setResetToLastSafeCallback } from './toasts.js';
 import { applyCssPreview, clearCssPreview } from './css-preview.js';
 import { updateRegionSelector } from './region.js';
-import { formatVal } from './sidebar.js';
+import { syncDOMToState } from './sidebar.js';
 
 let renderDebounceId = null;
 
@@ -61,15 +61,10 @@ export async function renderDetail() {
   $('detail-spinner').classList.add('active');
 
   try {
-    // Render at device pixel resolution for sharp display on HiDPI screens.
-    // The viewport is cssW × cssH CSS pixels = (cssW*dpr) × (cssH*dpr) device pixels.
-    const dpr = window.devicePixelRatio || 1;
-    const wrap = $('detail-wrap');
-    const detailMaxDim = Math.round(Math.max(wrap.clientWidth, wrap.clientHeight) * dpr);
     const result = await sendToWorker('region', {
       adjustments: getFilterAdjustments(),
       rect: state.region,
-      maxDim: Math.min(detailMaxDim, DETAIL_MAX * dpr),
+      maxDim: DETAIL_MAX,
       film_preset: state.filmPreset,
       film_preset_intensity: state.filmPresetIntensity,
     });
@@ -113,12 +108,13 @@ export function updatePixelRatioBadge() {
   // Source pixels covered by the region
   const srcPixelsW = Math.round(state.region.w * state.sourceWidth);
   const srcPixelsH = Math.round(state.region.h * state.sourceHeight);
-  // "1:1" means 1 source pixel = 1 device pixel.
-  // Device pixels = CSS pixels × devicePixelRatio.
+  // Device pixel display size: CSS pixels × devicePixelRatio
+  // "1:1" means 1 source pixel = 1 physical device pixel
   const dpr = window.devicePixelRatio || 1;
   const canvasRect = canvas.getBoundingClientRect();
-  const devicePixelsW = (canvasRect.width || wrap.clientWidth) * dpr;
-  const ratio = srcPixelsW / devicePixelsW;
+  const deviceDisplayW = (canvasRect.width || wrap.clientWidth) * dpr;
+  // Ratio: source pixels per device pixel
+  const ratio = srcPixelsW / deviceDisplayW;
 
   const info = $('pixel-info');
   if (!info) return;
@@ -146,9 +142,8 @@ export function updatePixelRatioBadge() {
 
   const renderedW = canvas.width;
   const renderedH = canvas.height;
-  const dprNote = dpr > 1.05 ? ` @${dpr.toFixed(1)}x` : '';
   info.innerHTML = `<span class="ratio-text ${ratioClass}">${ratioText}</span> `
-    + `<span class="ratio-dims">${srcPixelsW}\u00d7${srcPixelsH} of ${state.sourceWidth}\u00d7${state.sourceHeight}${dprNote}</span>`;
+    + `<span class="ratio-dims">${srcPixelsW}\u00d7${srcPixelsH} of ${state.sourceWidth}\u00d7${state.sourceHeight}</span>`;
   info.style.display = 'flex';
 }
 
@@ -188,33 +183,23 @@ export function resetToLastSafe() {
   for (const node of state.sliderNodes) {
     for (const p of node.params) {
       const safeNode = safe[node.id];
-      if (safeNode && safeNode[p.paramName] !== undefined) {
-        state.adjustments[p.adjustKey] = safeNode[p.paramName];
+      if (safeNode) {
+        if (p.kind === 'array_element') {
+          const arr = safeNode[p.arrayParam];
+          state.adjustments[p.adjustKey] = Array.isArray(arr) ? arr[p.arrayIndex] : p.identity;
+        } else if (safeNode[p.paramName] !== undefined) {
+          state.adjustments[p.adjustKey] = safeNode[p.paramName];
+        } else {
+          state.adjustments[p.adjustKey] = p.identity;
+        }
       } else {
-        // Node wasn't in safe adjustments = all params at identity
         state.adjustments[p.adjustKey] = p.identity;
       }
     }
   }
 
   // Update all slider DOM elements to match
-  for (const row of document.querySelectorAll('.slider-row')) {
-    const slider = row.querySelector('input[type="range"]');
-    const display = row.querySelector('.val');
-    const resetBtn = row.querySelector('.slider-reset');
-    if (!slider) continue;
-    const key = slider.dataset.key;
-    const val = state.adjustments[key];
-    if (val !== undefined) {
-      slider.value = val;
-      if (display) display.textContent = formatVal(val);
-      const identity = parseFloat(slider.dataset.identity);
-      if (resetBtn) {
-        resetBtn.classList.toggle('visible', state.touchedSliders.has(key) && val !== identity);
-      }
-    }
-    row.classList.remove('slider-disabled');
-  }
+  syncDOMToState();
 
   state.lastChangedSliderKey = null;
   scheduleRender();

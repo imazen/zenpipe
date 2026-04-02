@@ -177,7 +177,39 @@ aside {
 .slider-group.collapsed h3 .collapse-icon { transform: rotate(0deg); }
 .slider-group:not(.collapsed) h3 .collapse-icon { transform: rotate(90deg); }
 .slider-group.collapsed .slider-row,
-.slider-group.collapsed .node-header { display: none; }
+.slider-group.collapsed .checkbox-row,
+.slider-group.collapsed .node-header,
+.slider-group.collapsed .param-section { display: none; }
+
+/* Collapsible param sections within a node (e.g., "Advanced") */
+.param-section { padding: 0; }
+.section-toggle {
+  font-size: 10px; color: var(--text-dim); cursor: pointer;
+  user-select: none; display: flex; align-items: center; gap: 3px;
+  padding: 3px 0 1px; opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.section-toggle:hover { opacity: 1; color: var(--text); }
+.section-icon {
+  font-size: 8px; display: inline-block; transition: transform 0.15s;
+  width: 8px; text-align: center;
+}
+.param-section:not(.section-collapsed) .section-icon { transform: rotate(90deg); }
+.param-section.section-collapsed .slider-row,
+.param-section.section-collapsed .checkbox-row { display: none; }
+
+/* Checkbox param row */
+.checkbox-row {
+  padding: 2px 0;
+}
+.checkbox-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-dim); cursor: pointer;
+}
+.checkbox-label:hover { color: var(--text); }
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0;
+}
 
 /* Node sub-header within a group (e.g., "Clarity", "Vignette") */
 .node-header {

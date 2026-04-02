@@ -4,7 +4,7 @@
 
 import { $, state } from './state.js';
 import { initWorker } from './worker-client.js';
-import { loadSchemaAndBuildUI, formatVal } from './sidebar.js';
+import { loadSchemaAndBuildUI, syncDOMToState } from './sidebar.js';
 import { loadImage, buildPhotoPicker } from './file-load.js';
 import { initRegionDrag, initPinchZoom, initScrollZoom, updateRegionSelector } from './region.js';
 import { scheduleRender, scheduleDetailOnly } from './render.js';
@@ -53,17 +53,14 @@ document.addEventListener('drop', e => {
 function resetAllSliders() {
   state.touchedSliders.clear();
   state.lastChangedSliderKey = null;
-  for (const row of document.querySelectorAll('.slider-row')) {
-    const slider = row.querySelector('input[type="range"]');
-    const display = row.querySelector('.val');
-    const resetBtn = row.querySelector('.slider-reset');
-    const identity = parseFloat(slider.dataset.identity);
-    slider.value = identity;
-    state.adjustments[slider.dataset.key] = identity;
-    display.textContent = formatVal(identity);
-    if (resetBtn) resetBtn.classList.remove('visible');
-    row.classList.remove('slider-disabled');
+  // Reset all params to identity
+  for (const node of state.sliderNodes) {
+    for (const p of node.params) {
+      state.adjustments[p.adjustKey] = p.identity;
+    }
   }
+  // Sync DOM to match
+  syncDOMToState();
   setActivePreset(null);
   // Reset intensity
   state.filmPresetIntensity = 1.0;
@@ -88,12 +85,10 @@ $('pixel-info').addEventListener('click', () => {
   const detailWrap = $('detail-wrap');
   const vpW = detailWrap.clientWidth || 800;
   const vpH = detailWrap.clientHeight || 600;
-  // Set region so 1 source pixel = 1 device pixel
+  // Set region so 1 source pixel = 1 device pixel (accounts for DPR)
   const dpr = window.devicePixelRatio || 1;
-  const deviceW = vpW * dpr;
-  const deviceH = vpH * dpr;
-  const regionW = Math.min(1, deviceW / state.sourceWidth);
-  const regionH = Math.min(1, deviceH / state.sourceHeight);
+  const regionW = Math.min(1, (vpW * dpr) / state.sourceWidth);
+  const regionH = Math.min(1, (vpH * dpr) / state.sourceHeight);
   // Recenter around current region center
   const cx = state.region.x + state.region.w / 2;
   const cy = state.region.y + state.region.h / 2;
@@ -103,13 +98,6 @@ $('pixel-info').addEventListener('click', () => {
   state.region.y = Math.max(0, Math.min(1 - regionH, cy - regionH / 2));
   updateRegionSelector();
   scheduleDetailOnly();
-});
-
-// Minimap (overview panel) toggle
-$('minimap-toggle').addEventListener('click', () => {
-  const wrap = $('overview-wrap');
-  wrap.classList.toggle('collapsed');
-  $('minimap-toggle').textContent = wrap.classList.contains('collapsed') ? 'minimap' : 'minimap ✓';
 });
 
 // Crop region toggle
