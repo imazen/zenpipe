@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="coi-serviceworker.js"></script>
+<!-- coi-serviceworker.js: enable when SharedArrayBuffer is needed (wasm-bindgen-rayon) -->
+<!-- Disabled: COEP blocks cross-origin resources (picsum, etc.) -->
+<!-- <script src="coi-serviceworker.js"></script> -->
 <title>zenpipe Editor</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

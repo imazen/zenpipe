@@ -8,6 +8,7 @@
 //! Session caches — geometry prefix (decode + resize/crop) is cached
 //! separately, filter suffix re-runs from cache on parameter changes.
 
+pub mod decode;
 mod editor;
 pub mod encode;
 mod schema;

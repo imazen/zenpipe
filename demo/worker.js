@@ -138,13 +138,47 @@ function toCssFilter(adj) {
  * imageData has the RGBA pixels for WASM; bitmap is kept for mock canvas drawing.
  */
 async function decodeImage(buffer) {
-  const blob = new Blob([buffer]);
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
-  const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-  return { imageData, bitmap };
+  const bytes = new Uint8Array(buffer);
+
+  // Try WASM decode first for formats browsers may not support (JXL, AVIF)
+  if (backend === 'wasm' && wasmModule?.wasm_can_decode(bytes)) {
+    const result = wasmModule.wasm_decode_image(bytes);
+    if (result) {
+      const w = result.width;
+      const h = result.height;
+      const rgba = new Uint8ClampedArray(result.data.slice().buffer);
+      result.free();
+      const imageData = new ImageData(rgba, w, h);
+      const bitmap = await createImageBitmap(imageData);
+      return { imageData, bitmap, decoder: 'wasm' };
+    }
+  }
+
+  // Browser-native decode (JPEG, PNG, WebP, GIF, and browser-supported AVIF)
+  try {
+    const blob = new Blob([buffer]);
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    return { imageData, bitmap, decoder: 'browser' };
+  } catch (browserErr) {
+    // Browser can't decode — try WASM for any format as last resort
+    if (backend === 'wasm') {
+      const result = wasmModule.wasm_decode_image(bytes);
+      if (result) {
+        const w = result.width;
+        const h = result.height;
+        const rgba = new Uint8ClampedArray(result.data.slice().buffer);
+        result.free();
+        const imageData = new ImageData(rgba, w, h);
+        const bitmap = await createImageBitmap(imageData);
+        return { imageData, bitmap, decoder: 'wasm-fallback' };
+      }
+    }
+    throw new Error(`Cannot decode image: ${browserErr.message}`);
+  }
 }
 
 // ─── Message handler ───
@@ -159,7 +193,7 @@ self.addEventListener('message', async (e) => {
   try {
     switch (msg.type) {
       case 'init': {
-        const { imageData, bitmap } = await decodeImage(msg.data);
+        const { imageData, bitmap, decoder } = await decodeImage(msg.data);
         editor = backend === 'wasm'
           ? new WasmEditorWrapper(imageData)
           : new MockEditor(imageData, bitmap);
@@ -169,6 +203,7 @@ self.addEventListener('message', async (e) => {
           width: editor.width,
           height: editor.height,
           backend,
+          decoder,
         });
         break;
       }

@@ -95,8 +95,10 @@ export function updatePixelRatioBadge() {
   // Source pixels covered by the region
   const srcPixelsW = Math.round(state.region.w * state.sourceWidth);
   const srcPixelsH = Math.round(state.region.h * state.sourceHeight);
-  // CSS display size (how many screen pixels the canvas occupies)
-  const cssDisplayW = Math.min(wrap.clientWidth, canvas.width);
+  // CSS display size: use getBoundingClientRect for the actual rendered size
+  // (accounts for max-width, object-fit, etc.)
+  const canvasRect = canvas.getBoundingClientRect();
+  const cssDisplayW = canvasRect.width || wrap.clientWidth;
   // Ratio: source pixels per CSS pixel
   const ratio = srcPixelsW / cssDisplayW;
 
