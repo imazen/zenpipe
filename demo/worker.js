@@ -214,7 +214,7 @@ self.addEventListener('message', async (e) => {
         const exportHeight = msg.height || editor.height;
 
         // WASM-native codec encoding for supported formats.
-        const WASM_FORMATS = new Set(['jpeg', 'webp', 'png', 'gif', 'jxl']);
+        const WASM_FORMATS = new Set(['jpeg', 'webp', 'png', 'gif', 'jxl', 'avif']);
         if (backend === 'wasm' && WASM_FORMATS.has(format)) {
           const adjustmentsJson = JSON.stringify(msg.adjustments || {});
           const optionsJson = JSON.stringify(msg.options || {});

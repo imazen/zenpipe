@@ -46,6 +46,7 @@ pub fn encode(
         "png" => encode_png(pixels, options),
         "gif" => encode_gif(pixels, options),
         "jxl" => encode_jxl(pixels, options),
+        "avif" => encode_avif(pixels, options),
         _ => Err(format!("Unsupported format: {format}")),
     }
 }
@@ -128,6 +129,29 @@ fn encode_jxl(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<Encode
         .encode(pixels)
         .map_err(|e| format!("JXL encode: {e}"))?;
     Ok(into_encoded(output, "jxl", "image/jxl"))
+}
+
+fn encode_avif(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<EncodedImage, String> {
+    let quality = opts.get("quality").and_then(|v| v.as_f64()).unwrap_or(75.0) as f32;
+    let effort = opts.get("effort").and_then(|v| v.as_i64()).unwrap_or(6) as i32;
+    let lossless = opts
+        .get("lossless")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let mut config = zenavif::AvifEncoderConfig::new().with_quality(quality);
+    config = config.with_generic_effort(effort);
+    if lossless {
+        config = config.with_lossless(true);
+    }
+
+    let output = config
+        .job()
+        .encoder()
+        .map_err(|e| format!("AVIF encoder init: {e}"))?
+        .encode(pixels)
+        .map_err(|e| format!("AVIF encode: {e}"))?;
+    Ok(into_encoded(output, "avif", "image/avif"))
 }
 
 fn encode_gif(pixels: PixelSlice<'_>, opts: &serde_json::Value) -> Result<EncodedImage, String> {
@@ -234,6 +258,16 @@ mod tests {
         let result = encode(&data, 32, 32, "jxl", &opts).unwrap();
         assert_eq!(result.format, "jxl");
         assert!(result.data.len() > 10);
+    }
+
+    #[test]
+    fn encode_avif_default() {
+        let data = solid_rgba(64, 48, 128, 64, 200);
+        let opts = serde_json::json!({});
+        let result = encode(&data, 64, 48, "avif", &opts).unwrap();
+        assert_eq!(result.format, "avif");
+        assert_eq!(result.mime, "image/avif");
+        assert!(result.data.len() > 10, "AVIF output too small");
     }
 
     #[test]

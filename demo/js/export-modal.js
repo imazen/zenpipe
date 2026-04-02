@@ -11,7 +11,7 @@ const EXPORT_FORMATS = [
   { id: 'png',  label: 'PNG',  ext: 'png',  mime: 'image/png',  color: '#6366f1', engine: 'zen' },
   { id: 'jxl',  label: 'JXL',  ext: 'jxl',  mime: 'image/jxl',  color: '#8b5cf6', engine: 'zen' },
   { id: 'gif',  label: 'GIF',  ext: 'gif',  mime: 'image/gif',  color: '#ec4899', engine: 'zen' },
-  { id: 'avif', label: 'AVIF', ext: 'avif', mime: 'image/avif', color: '#ef4444', engine: 'browser' },
+  { id: 'avif', label: 'AVIF', ext: 'avif', mime: 'image/avif', color: '#ef4444', engine: 'zen' },
 ];
 
 // Format controls from zencodecs audit (zencodecs/src/zennode_defs.rs)
