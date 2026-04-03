@@ -1228,3 +1228,241 @@ For the first touch-native release, implement in this order:
 7. **Bottom sheet** for additional options
 
 This gives us an Apple Photos–quality editing experience with our superior codec, format, and pipeline capabilities underneath.
+
+---
+
+## 21. Code Architecture for Multi-Layout Support
+
+### 21.1 Current Problem
+Every JS module directly manipulates DOM elements by ID (`$('detail-canvas')`, `$('overview-canvas')`, etc.). This makes the code:
+- **Tightly coupled to one HTML layout** — can't swap desktop sidebar for mobile bottom sheet
+- **Untestable without a browser** — logic and DOM are interleaved
+- **Hard to adapt** — adding tablet layout means touching 15 files
+
+### 21.2 Target Architecture: Model → Controller → View
+
+```
+┌─────────────────────────────────────────────────┐
+│  MODEL (no DOM, no HTML, testable standalone)    │
+│                                                  │
+│  EditorModel        — source, region, zoom       │
+│  AdjustmentModel    — filter values, presets     │
+│  ExportModel        — format, quality, dims      │
+│  HistoryModel       — undo stack, auto-naming    │
+│  RecipeModel        — serialization, persistence │
+│  CropSetModel       — named aspect ratio crops   │
+│                                                  │
+│  All state, all logic, zero DOM references.      │
+│  Emits events: 'change', 'render-needed', etc.   │
+└────────────────────┬────────────────────────────┘
+                     │ events
+┌────────────────────▼────────────────────────────┐
+│  CONTROLLER (bridges model ↔ view ↔ worker)      │
+│                                                  │
+│  RenderController   — debounce, send to worker   │
+│  GestureController  — drag, pinch, scroll → model│
+│  ExportController   — preview, encode, download  │
+│                                                  │
+│  Knows about the model and the worker.           │
+│  Does NOT know about specific DOM elements.      │
+│  Receives abstract events from the view.         │
+└────────────────────┬────────────────────────────┘
+                     │ abstract commands
+┌────────────────────▼────────────────────────────┐
+│  VIEW (renders model state to DOM)               │
+│                                                  │
+│  DesktopView        — sidebar + main viewport    │
+│  MobileView         — bottom sheet + filmstrip   │
+│  TabletView         — hybrid (or reuse desktop)  │
+│                                                  │
+│  Each view:                                      │
+│  - Creates its own DOM elements                  │
+│  - Listens to model events, updates DOM          │
+│  - Translates DOM events to controller commands  │
+│  - No business logic                             │
+└─────────────────────────────────────────────────┘
+```
+
+### 21.3 Model Layer (Pure Logic, No DOM)
+
+```javascript
+// model/editor.js
+export class EditorModel extends EventTarget {
+  source = null;       // { width, height, name, hash, backend }
+  region = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+  zoom = 1.0;
+
+  setRegion(r) {
+    this.region = { ...r };
+    this.dispatchEvent(new Event('region-change'));
+  }
+
+  setSource(info) {
+    this.source = info;
+    this.dispatchEvent(new Event('source-change'));
+  }
+}
+
+// model/adjustments.js
+export class AdjustmentModel extends EventTarget {
+  values = {};          // adjustKey → value
+  touched = new Set();
+  filmPreset = null;
+  filmIntensity = 1.0;
+  sliderNodes = [];     // from schema
+  lastSafe = {};
+
+  set(key, value) {
+    this.values[key] = value;
+    this.touched.add(key);
+    this.dispatchEvent(new CustomEvent('adjust', { detail: { key, value } }));
+  }
+
+  reset(key) {
+    const node = this.nodeForKey(key);
+    if (node) { this.values[key] = node.identity; this.touched.delete(key); }
+    this.dispatchEvent(new CustomEvent('adjust', { detail: { key } }));
+  }
+
+  resetAll() { /* ... */ }
+
+  // Pure logic: build the adjustments object for the worker
+  getFilterAdjustments() {
+    const adj = {};
+    for (const node of this.sliderNodes) {
+      const params = {};
+      let changed = false;
+      for (const p of node.params) {
+        params[p.paramName] = this.values[p.adjustKey];
+        if (this.values[p.adjustKey] !== p.identity) changed = true;
+      }
+      if (changed) adj[node.id] = params;
+    }
+    return adj;
+  }
+
+  snapshotSafe() { this.lastSafe = structuredClone(this.getFilterAdjustments()); }
+  restoreSafe() { /* ... apply lastSafe back to values ... */ }
+}
+
+// model/recipe.js
+export class RecipeModel {
+  toJSON() { /* serialize adjustments + geometry + presets + crop sets */ }
+  fromJSON(json) { /* restore */ }
+  toQuerystring() { /* RIAPI-compatible */ }
+}
+
+// model/history.js
+export class HistoryModel extends EventTarget {
+  stack = [];
+  index = -1;
+  push(snapshot) { /* ... */ }
+  undo() { /* ... */ }
+  redo() { /* ... */ }
+  // Auto-naming: "amber-fox 14:05"
+}
+```
+
+**Key property**: all models are testable with plain Node.js — no browser, no DOM, no canvas.
+
+### 21.4 Controller Layer (Model ↔ Worker ↔ View)
+
+```javascript
+// controller/render.js
+export class RenderController {
+  constructor(model, adjustments, workerClient) { /* ... */ }
+
+  scheduleRender() {
+    // Debounce, build adjustments, send to worker
+    // On result: emit 'overview-rendered', 'detail-rendered' events
+  }
+
+  scheduleDetailOnly() { /* ... */ }
+}
+
+// controller/gestures.js
+export class GestureController {
+  constructor(model) { /* ... */ }
+
+  // Called by the view with abstract events, not DOM events
+  onDragStart(x, y) { /* ... */ }
+  onDragMove(dx, dy) { /* update model.region */ }
+  onDragEnd() { /* trigger render */ }
+  onZoom(factor, centerX, centerY) { /* update model.region */ }
+  onPinch(scale, centerX, centerY) { /* ... */ }
+}
+```
+
+### 21.5 View Layer (DOM, Swappable)
+
+```javascript
+// view/desktop.js — current sidebar layout
+export class DesktopView {
+  constructor(container, model, adjustments, controller) {
+    this.buildSidebar();
+    this.buildViewport();
+    model.addEventListener('region-change', () => this.updateRegionSelector());
+    adjustments.addEventListener('adjust', (e) => this.updateSlider(e.detail.key));
+  }
+
+  buildSidebar() { /* create slider groups from adjustments.sliderNodes */ }
+  updateSlider(key) { /* update one slider's DOM to match model */ }
+  updateRegionSelector() { /* position the crop overlay */ }
+}
+
+// view/mobile.js — bottom sheet + filmstrip
+export class MobileView {
+  constructor(container, model, adjustments, controller) {
+    this.buildBottomSheet();
+    this.buildFilmstrip();
+    // Same model events, completely different DOM
+  }
+
+  buildFilmstrip() { /* horizontal icon strip */ }
+  buildDial(param) { /* vertical adjustment dial */ }
+}
+
+// view/shared.js — common to both (canvas rendering, worker display)
+export class ViewportRenderer {
+  constructor(overviewCanvas, detailCanvas, model) { /* ... */ }
+  displayOverview(imageData) { /* putImageData */ }
+  displayDetail(imageData) { /* putImageData */ }
+  showUpscaledPreview() { /* draw overview into detail */ }
+}
+```
+
+### 21.6 Migration Path (Incremental, Not Big-Bang)
+
+Phase 1 — **Extract models** (no visual changes):
+- Move `state.js` fields into `EditorModel` + `AdjustmentModel`
+- Keep existing modules working by importing from models
+- Models emit events, existing modules listen
+
+Phase 2 — **Extract controllers** (no visual changes):
+- Move `render.js` logic to `RenderController`
+- Move gesture logic from `region.js` to `GestureController`
+- Existing view code calls controllers instead of doing logic
+
+Phase 3 — **Desktop view** (refactor existing):
+- Move DOM creation from `sidebar.js` into `DesktopView`
+- `main.js` becomes: `new DesktopView(container, model, adjustments, controller)`
+
+Phase 4 — **Mobile view** (new):
+- `MobileView` creates bottom sheet + filmstrip
+- Same models, same controllers, different DOM
+- Layout selected by viewport width or user preference
+
+Phase 5 — **Auto-detect**:
+```javascript
+const View = window.innerWidth < 768 ? MobileView
+           : window.innerWidth < 1200 ? TabletView
+           : DesktopView;
+const view = new View(document.body, model, adjustments, controller);
+```
+
+### 21.7 What This Enables
+- **Test models in Node.js** without a browser
+- **Swap layouts at runtime** (rotate tablet → switch view)
+- **Build alternative UIs**: CLI, native app (via wasm), headless batch
+- **Keep the worker/WASM layer unchanged** — views never talk to the worker directly
+- **Framework migration**: if we ever adopt React/Preact/Svelte, only the view layer changes
