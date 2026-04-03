@@ -407,17 +407,50 @@ fn denoise_plane(
     ctx.return_f32(smooth);
 }
 
-/// Estimate noise sigma from the MAD of detail coefficients (a - b).
-/// Uses the MAD/0.6745 robust estimator (standard for wavelet denoising).
+/// Estimate noise sigma from detail coefficients (a - b).
+///
+/// Uses a histogram-based approximation of the median absolute deviation
+/// (MAD), which is robust to signal content. The mean absolute deviation
+/// used previously overestimated noise on textured images because real
+/// texture has large |detail| values that inflate the mean.
+///
+/// MAD / 0.6745 is the standard noise sigma estimator for Gaussian noise
+/// in wavelet denoising (Donoho & Johnstone, 1994).
 fn estimate_noise_sigma_from_diff(a: &[f32], b: &[f32], n: usize) -> f32 {
-    let mean_abs = a[..n]
-        .iter()
-        .zip(b[..n].iter())
-        .map(|(x, y)| (x - y).abs())
-        .sum::<f32>()
-        / n as f32;
-    // MAD-based sigma estimate: MAD / 0.6745 for Gaussian noise
-    mean_abs / 0.6745
+    // Histogram of |detail| values, 256 bins over [0, max_abs]
+    const BINS: usize = 256;
+    let mut max_abs = 0.0f32;
+    for i in 0..n {
+        let d = (a[i] - b[i]).abs();
+        if d > max_abs {
+            max_abs = d;
+        }
+    }
+    if max_abs < 1e-10 {
+        return 0.0;
+    }
+
+    let mut hist = [0u32; BINS];
+    let scale = (BINS - 1) as f32 / max_abs;
+    for i in 0..n {
+        let d = (a[i] - b[i]).abs();
+        let bin = (d * scale) as usize;
+        hist[bin.min(BINS - 1)] += 1;
+    }
+
+    // Find median (50th percentile)
+    let target = n as u64 / 2;
+    let mut cumsum = 0u64;
+    let mut median_bin = 0;
+    for (bin, &count) in hist.iter().enumerate() {
+        cumsum += count as u64;
+        if cumsum >= target {
+            median_bin = bin;
+            break;
+        }
+    }
+    let mad = (median_bin as f32 + 0.5) / scale;
+    mad / 0.6745
 }
 
 /// Variance of detail coefficients (a - b).

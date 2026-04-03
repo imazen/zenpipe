@@ -445,9 +445,9 @@ fn gamut_expand_calibration() {
 #[test]
 fn chromatic_aberration_calibration() {
     if !corpus_available() { eprintln!("SKIP: corpus not found"); return; }
-    // Schema range: -0.1 to +0.1. Test at 25% and 75% of positive range.
-    let s25 = median_score(|| Box::new(mk!(ChromaticAberration, shift_a = 0.025, shift_b = -0.025)));
-    let s75 = median_score(|| Box::new(mk!(ChromaticAberration, shift_a = 0.075, shift_b = -0.075)));
+    // Schema range: -0.03 to +0.03. Test at 25% and 75% of positive range.
+    let s25 = median_score(|| Box::new(mk!(ChromaticAberration, shift_a = 0.0075, shift_b = -0.0075)));
+    let s75 = median_score(|| Box::new(mk!(ChromaticAberration, shift_a = 0.0225, shift_b = -0.0225)));
     check_25("ChromaticAberration@25%", s25);
     check_75("ChromaticAberration@75%", s75);
 }

@@ -13,8 +13,8 @@ use crate::planes::OklabPlanes;
 ///
 /// Positive values shift the plane outward, negative shifts inward.
 /// The shift is fractional relative to the image diagonal:
-/// a shift of 0.05 moves edge pixels by ~2.5% of the diagonal.
-/// Typical corrections: ±0.01 to ±0.05. Creative effects: up to ±0.1.
+/// a shift of 0.01 moves edge pixels by ~0.5% of the diagonal (~3px at 512px).
+/// Typical corrections: ±0.002 to ±0.01. Creative fringing: up to ±0.03.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -53,11 +53,11 @@ static CHROMATIC_ABERRATION_SCHEMA: FilterSchema = FilterSchema {
             label: "Green-Red Shift",
             description: "Radial shift for the a (green-red) channel",
             kind: ParamKind::Float {
-                min: -0.1,
-                max: 0.1,
+                min: -0.03,
+                max: 0.03,
                 default: 0.0,
                 identity: 0.0,
-                step: 0.005,
+                step: 0.001,
             },
             unit: "",
             section: "Main",
@@ -68,11 +68,11 @@ static CHROMATIC_ABERRATION_SCHEMA: FilterSchema = FilterSchema {
             label: "Blue-Yellow Shift",
             description: "Radial shift for the b (blue-yellow) channel",
             kind: ParamKind::Float {
-                min: -0.1,
-                max: 0.1,
+                min: -0.03,
+                max: 0.03,
                 default: 0.0,
                 identity: 0.0,
-                step: 0.005,
+                step: 0.001,
             },
             unit: "",
             section: "Main",
