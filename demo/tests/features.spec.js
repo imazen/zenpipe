@@ -273,15 +273,104 @@ test.describe('film presets', () => {
   test('selecting a film preset triggers re-render', async ({ page }) => {
     await page.goto('/');
     await loadTestImage(page);
-    // Get initial status
-    const initialStatus = await page.locator('#status').textContent();
-    // Click a film preset chip (not "None")
     const chips = page.locator('.preset-chip:not(.active)');
     await chips.first().click();
-    // Wait for render
     await page.waitForTimeout(500);
-    // The preset chip should now be active
     const activeChip = page.locator('.preset-chip.active');
     await expect(activeChip).toBeVisible();
+  });
+});
+
+test.describe('scroll zoom', () => {
+  test('scroll-to-zoom changes pixel ratio text', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    const info = page.locator('#pixel-info');
+    const before = await info.textContent();
+    // Scroll down on detail canvas to zoom in
+    const canvas = page.locator('#detail-canvas');
+    await canvas.scrollIntoViewIfNeeded();
+    await canvas.dispatchEvent('wheel', { deltaY: -300 });
+    await page.waitForTimeout(1000);
+    const after = await info.textContent();
+    // Pixel ratio text should change after zooming
+    expect(after).not.toBe(before);
+  });
+});
+
+test.describe('export formats extended', () => {
+  test('export GIF produces .gif download', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.locator('#export-btn').click();
+    await page.locator('.export-format-tab', { hasText: 'GIF' }).click();
+    await expect(page.locator('#export-confirm')).toContainText('GIF');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      page.locator('#export-confirm').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.gif$/);
+  });
+
+  test('export JXL produces .jxl download', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.locator('#export-btn').click();
+    await page.locator('.export-format-tab', { hasText: 'JXL' }).click();
+    await expect(page.locator('#export-confirm')).toContainText('JXL');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20000 }),
+      page.locator('#export-confirm').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.jxl$/);
+  });
+
+  test('export AVIF produces .avif download', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.locator('#export-btn').click();
+    await page.locator('.export-format-tab', { hasText: 'AVIF' }).click();
+    await expect(page.locator('#export-confirm')).toContainText('AVIF');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30000 }),
+      page.locator('#export-confirm').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.avif$/);
+  });
+});
+
+test.describe('undo depth', () => {
+  test('multiple slider changes create multiple undo steps', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    const slider = page.locator('input[type="range"][data-key*="exposure"]').first();
+    // Make 3 distinct changes with pauses
+    await setSlider(slider, 1);
+    await page.waitForTimeout(500);
+    await setSlider(slider, 2);
+    await page.waitForTimeout(500);
+    await setSlider(slider, 3);
+    await page.waitForTimeout(500);
+    // Undo twice should get back to ~1
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+    await expectSliderApprox(slider, 1);
+  });
+});
+
+test.describe('responsive', () => {
+  test('narrow portrait viewport forces bottom dock layout', async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 700 });
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('zenpipe-dock'));
+    await page.goto('/');
+    await page.waitForTimeout(500);
+    // Sidebar should be below main (bottom dock via CSS aspect-ratio)
+    const body = page.locator('body');
+    // Check that dock-bottom is set or the CSS forces bottom layout
+    const dockBtn = await page.locator('#dock-toggle').textContent();
+    expect(dockBtn).toBe('B');
   });
 });

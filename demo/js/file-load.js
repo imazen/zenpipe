@@ -101,7 +101,11 @@ async function triggerNativeUpgrade(label, backendLabel) {
 // Picsum Photo Picker
 // =====================================================================
 
-const PICSUM_IDS = [10, 11, 15, 17, 24, 28, 29, 36, 37, 39, 40, 42];
+// Curated Picsum photos — chosen for color range, detail, and filter testing:
+// 1015: river canyon, 1018: mountain lake, 1019: waterfall, 1039: autumn road,
+// 1043: night city, 1047: flower macro, 1059: desert dunes, 1069: ocean sunset,
+// 1074: portrait, 1080: city skyline, 164: forest canopy, 306: beach pier
+const PICSUM_IDS = [1015, 1018, 1019, 1039, 1043, 1047, 1059, 1069, 1074, 1080, 164, 306];
 
 export function buildPhotoPicker() {
   const container = $('sample-photos');
@@ -109,7 +113,7 @@ export function buildPhotoPicker() {
   for (const pid of PICSUM_IDS) {
     const img = document.createElement('img');
     img.className = 'photo-thumb';
-    img.src = `https://picsum.photos/id/${pid}/200/150`;
+    img.src = `https://picsum.photos/id/${pid}/250/188`;
     img.alt = `Sample photo ${pid}`;
     img.dataset.picsumId = pid;
     img.addEventListener('load', () => img.classList.add('loaded'));
@@ -147,7 +151,7 @@ export async function loadPicsumPhoto(pid, thumbEl) {
   $('loading-message').classList.add('active');
 
   try {
-    const resp = await fetch(`https://picsum.photos/id/${pid}/4000/3000`);
+    const resp = await fetch(`https://picsum.photos/id/${pid}/2500/1875`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const buffer = await resp.arrayBuffer();
 
