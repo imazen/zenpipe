@@ -537,27 +537,63 @@ User wants to save a reusable preset
 
 ---
 
-## 13. Zen Crate Extensions Needed
+## 13. Existing Geometry Capabilities (Inventory)
 
-### 13.1 zenlayout ⬜
-- Arbitrary rotation (not just 90° increments) — currently only supports orient/transpose
-- Perspective transform (4-point warp) for document correction
-- Need to evaluate if this belongs in zenlayout or a new `zenwarp` crate
+Almost everything needed already exists — it just needs to be exposed in the demo UI.
 
-### 13.2 zenfilters ⬜
-- Auto-straighten (edge detection → rotation angle)
-- Document-mode filters: binarize, shadow removal
-- Already has: auto_levels, auto_exposure, bilateral (shadow removal candidate)
+### 13.1 zenfilters — Warp & Transform (FULLY IMPLEMENTED)
+`src/filters/warp.rs` (1566 lines) + `warp_simd.rs` (2019 lines):
 
-### 13.3 zenresize ⬜
-- Content-aware resize (seam carving) — stretch-free aspect ratio changes
-- Already has: all standard resize filters, layout planning
+| Feature | API | SIMD | WASM | Notes |
+|---------|-----|------|------|-------|
+| Arbitrary rotation | `Rotate` struct | AVX2, NEON, scalar | ✓ scalar | 4 border modes: Crop, Deskew, FillClamp, Fill |
+| Affine transform | `Warp::affine()` | AVX2, NEON, scalar | ✓ scalar | 2×3 matrix (rotate+scale+shear+translate) |
+| Perspective/homography | `Warp::projective()` | scalar only | ✓ scalar | 3×3 projective matrix |
+| Cardinal rotation | `Warp::rotate_90/180/270()` | pixel-perfect copy | ✓ | No interpolation |
+| Deskew | `Warp::deskew()` | via rotate | ✓ | White bg + Lanczos3 |
 
-### 13.4 zenblend ⬜
-- Gradient mask for split-toning and graduated filters
-- Already has: Porter-Duff modes, artistic blends
+**Zennode defs** (behind `experimental` feature flag):
+- `zenfilters.rotate`: angle (-360..360°), mode (crop/deskew/fillclamp/fillblack)
+- `zenfilters.warp`: 3×3 matrix, background, interpolation (bilinear/bicubic/robidoux/lanczos3)
 
-### 13.5 zenpipe ⬜
-- `crop_whitespace` node exists — needs exposure to the demo UI
-- Affine transform node (combines rotate + scale + translate)
-- Pipeline stage ordering enforcement (geometry before filters)
+### 13.2 zenfilters — Document Module (IMPLEMENTED)
+`src/document/` directory:
+
+| Feature | File | Function | Status |
+|---------|------|----------|--------|
+| Skew detection | `deskew.rs` | `detect_skew_angle()` | ✅ ~0.05° accuracy |
+| Homography computation | `homography.rs` | `compute_homography()` | ✅ DLT 4-point |
+| Document rectification | `homography.rs` | `rectify_quad()` | ✅ corners → rectangle |
+| Quad/boundary detection | `quad.rs` | LSD + polygon fitting | ✅ |
+| Line segment detection | `lsd.rs` | LSD algorithm | ✅ |
+| Binarization | `otsu.rs` | `otsu_threshold()`, `binarize()` | ✅ |
+
+### 13.3 zenlayout — Orientation & Layout (IMPLEMENTED)
+- 8 EXIF orientations with D4 group algebra (`Orientation::then()`)
+- `LayoutPlan` fuses crop + orient + resize + pad into streaming execution
+- Quarter turns only — sub-90° rotation handled by zenfilters warp
+
+### 13.4 zenresize — Execution (IMPLEMENTED)
+- `orient_image()`: materializes all 8 orientations via pixel-perfect copy
+- `streaming_from_plan_batched()`: fused streaming layout execution
+- Delegates sub-90° transforms to zenfilters
+
+### 13.5 zenpipe — Graph Nodes (IMPLEMENTED)
+- `NodeOp::Orient`, `NodeOp::AutoOrient` — EXIF orientation
+- `NodeOp::Crop` — streaming crop
+- `NodeOp::Resize` — streaming resize
+- `NodeOp::Layout` / `NodeOp::LayoutComposite` — full LayoutPlan
+- `NodeOp::Filter(Pipeline)` — wraps zenfilters (Warp/Rotate go through this)
+- `NodeOp::CropWhitespace` — auto content-bounds detection
+
+### 13.6 What's Needed for the Demo ⬜
+- **Enable `experimental` feature** on zenfilters to expose rotate/warp nodes
+- **Wire document module** to UI buttons (auto-deskew, auto-crop, perspective)
+- **Add rotate/warp to the demo crate's FiltersConverter** (already works via Pipeline)
+- **Geometry stage UI**: crop handles, rotation slider, flip buttons, deskew button
+- **Document mode UI**: quad detect → rectify → crop → enhance pipeline
+- **Expose `crop_whitespace`** node to the demo sidebar
+
+### 13.7 zenblend ✅ (no changes needed)
+- Porter-Duff modes, artistic blends — sufficient for current needs
+- Gradient masks for graduated filters would be a future enhancement
