@@ -597,3 +597,147 @@ Almost everything needed already exists — it just needs to be exposed in the d
 ### 13.7 zenblend ✅ (no changes needed)
 - Porter-Duff modes, artistic blends — sufficient for current needs
 - Gradient masks for graduated filters would be a future enhancement
+
+---
+
+## 14. Editor Modes
+
+The editor serves different use cases. The UI adapts based on the selected mode, surfacing relevant tools and hiding complexity that doesn't apply.
+
+### 14.1 Mode Selection ⬜
+A mode selector (tabs or dropdown) at the top of the sidebar:
+
+| Mode | Primary Use | Key Features |
+|------|------------|--------------|
+| **Edit** | Individual image tuning | All filters, film presets, manual crop, manual adjustments |
+| **Document** | Document/whiteboard cleanup | Auto-deskew, perspective, whitespace crop, binarize, enhance |
+| **Workflow** | Batch-applicable recipes | Auto-mode filters highlighted, export sets, recipe building |
+| **CMS** | Aspect ratio crop sets for content management | Named crop definitions, preview at multiple ratios, JSON export |
+
+### 14.2 Edit Mode (Default) ⬜
+Full manual control. All filter groups visible. The current UI is essentially this mode.
+- Stage tabs: Geometry → Filters → Export
+- All sliders, all presets, full crop/rotate/flip
+
+### 14.3 Document Mode ⬜
+Optimized for scanning, whiteboard capture, document photos:
+- **Auto pipeline**: detect quad → perspective rectify → deskew → whitespace crop → enhance
+- **One-click "Clean Up"** button that runs the full auto pipeline
+- **Manual overrides**: adjust each step individually
+- **Key filters surfaced**: auto_levels, bilateral (shadow removal), binarize (via otsu), sharpen
+- **Hidden**: film presets, creative effects, color grading (not relevant)
+- **Export defaults**: PNG lossless for documents, high-quality JPEG for photos
+
+### 14.4 Workflow Mode ⬜
+For building reusable recipes applied to many images:
+- **Auto-mode filters highlighted**: auto_levels, auto_exposure, auto white balance
+- **Toggle: "Auto" vs "Manual"** per filter — auto mode uses scene analysis, manual uses fixed values
+- **Broadly-applicable adjustments surfaced**:
+  - Sharpness / clarity / brilliance (content-adaptive)
+  - Contrast / exposure normalization
+  - White balance correction
+  - Gamut expansion (for sRGB → P3 workflows)
+  - JPEG deblocking (for re-encoding workflows)
+  - Noise reduction (content-adaptive)
+- **Export sets**: define multiple output formats/sizes
+  - e.g., "web" (WebP 80, 1600px), "print" (JXL lossless, full-res), "thumb" (JPEG 70, 200px)
+- **Recipe preview**: small strip showing before/after on a sample from the batch
+- **Batch apply**: drag folder or select multiple files, apply recipe to all
+
+### 14.5 CMS Mode ⬜
+For defining aspect ratio crop sets that a CMS/CDN will use at serve time:
+- **Named crop definitions**: "hero" (16:9), "card" (4:3), "avatar" (1:1), "story" (9:16)
+- **Live preview**: see all crops simultaneously on the source image
+- **Anchor selection**: center, face-detect, rule-of-thirds, manual point
+- **Smart crop**: saliency-based anchor when face detection unavailable
+  - Uses zensally (zentract plugin) when available, browser AI fallback
+- **JSON output**: `{ "crops": { "hero": { "aspect": "16:9", "anchor": [0.5, 0.4] } } }`
+- **Compatible with imageflow/zenpipe server** crop API (RIAPI querystring)
+- **No filter adjustments** in this mode — crops only (filters are separate concerns)
+
+---
+
+## 15. AI / ML Integration
+
+### 15.1 Architecture ⬜
+Two paths for ML-powered features:
+
+**Server-side (zentract)**:
+- ONNX inference via zentract plugin system (zentract-abi, zentract-api)
+- Face detection and saliency maps (zensally)
+- Runs server-side for imageflow/zenpipe server deployments
+- Not available in browser (ONNX runtime is native)
+
+**Browser-side (Web AI)**:
+- **WebNN API** (Chrome 128+, Edge): hardware-accelerated inference
+- **Transformers.js** (Hugging Face): ONNX models in WASM/WebGPU
+- **MediaPipe** (Google): face detection, face mesh, selfie segmentation
+- **TensorFlow.js**: broad model support, WebGL/WebGPU backends
+
+### 15.2 ML-Powered Features ⬜
+
+| Feature | Use Case | Server (zentract) | Browser (Web AI) |
+|---------|----------|-------------------|------------------|
+| **Face detection** | Smart crop anchor, portrait mode | zensally | MediaPipe Face Detection |
+| **Saliency map** | Smart crop, content-aware | zensally | Transformers.js (DINO/SAM) |
+| **Auto white balance** | Workflow mode | custom ONNX | Transformers.js or heuristic |
+| **Auto exposure** | Workflow mode | zenfilters auto_exposure | zenfilters (already works) |
+| **Auto levels** | Workflow mode | zenfilters auto_levels | zenfilters (already works) |
+| **Subject segmentation** | Background blur, selective edit | — | MediaPipe Selfie Segmentation |
+| **Super-resolution** | Upscale beyond source pixels | — | Transformers.js (Real-ESRGAN) |
+| **JPEG artifact removal** | Deblock/dering | zenfilters bilateral | Transformers.js or zenfilters |
+| **Style transfer** | Creative presets beyond LUTs | — | Transformers.js |
+| **Scene classification** | Auto-select film preset | — | Transformers.js (CLIP) |
+
+### 15.3 Progressive Enhancement ⬜
+- ML features are **optional enhancements**, never required
+- Editor works fully without any AI
+- When available, ML features appear as "magic wand" buttons alongside manual controls
+- **Fallback chain**: WebNN → WebGPU → WASM → manual-only
+- Model downloads are lazy (on first use), cached in browser storage
+- Show download progress and model size before user commits
+
+### 15.4 Integration Pattern ⬜
+```
+User clicks "Smart Crop" or "Auto White Balance"
+  → Check: zentract available? (server mode)
+    → Yes: RPC to server inference
+    → No: Check browser AI support
+      → WebNN available? Use it
+      → WebGPU available? Use Transformers.js
+      → Neither: fall back to heuristic (histogram-based, etc.)
+  → Result: { anchor: [0.5, 0.4], confidence: 0.92 }
+  → Apply to crop/filter as a suggestion (user can override)
+```
+
+---
+
+## 16. UX Design Principles
+
+### 16.1 Simplicity Despite Complexity ⬜
+The system has 4 modes, 50+ filters, 6 codecs, geometry tools, ML features, batch processing, crop sets, and a procedural recipe system. It must feel simple:
+
+1. **Progressive disclosure**: start with Favorites + one-click presets. Advanced tools are collapsed or in secondary tabs.
+2. **Mode-appropriate defaults**: Document mode hides creative filters. Workflow mode highlights auto features. CMS mode shows only crops.
+3. **One-click workflows**: "Clean Up Document", "Auto Enhance", "Smart Crop" — single button that chains multiple operations.
+4. **Undo is always available**: Ctrl+Z / two-finger-back, or tap the history panel.
+5. **No modal dialogs for editing**: everything is inline, non-blocking.
+6. **Show results, not controls**: the image is always the largest element. Controls are compact.
+
+### 16.2 Intuitive Editing Flow ⬜
+```
+Open image → Auto-enhance suggestion (subtle, dismissible)
+  → Quick adjustments via Favorites sliders
+  → Try film presets (one-tap, see result immediately)
+  → Crop/rotate if needed (geometry tab)
+  → Export (format comparison, one-click download)
+
+The whole flow should take < 30 seconds for a casual edit.
+Advanced users can dive into any subsystem without the simple flow getting in the way.
+```
+
+### 16.3 Mobile-First, Desktop-Enhanced
+- Touch targets ≥ 44px
+- Swipe gestures for undo, mode switching
+- Bottom sheet for controls on mobile (thumb-reachable)
+- Desktop gets keyboard shortcuts, wider sidebar, split-screen compare
