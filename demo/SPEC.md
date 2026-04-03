@@ -835,3 +835,135 @@ Extend the Advanced Preservation Panel (§3.5):
 - **Metadata checkboxes**: ICC ☑ / EXIF ☑ / XMP ☑ / CICP ☑ (all on by default)
 - **Gain map**: Preserve ☑ / Discard / Reconstruct HDR (when source has gain map)
 - **Gamut handling**: Perceptual / Relative Colorimetric / Absolute Colorimetric
+
+---
+
+## 18. Mobile UX Architecture
+
+### 18.1 Core Insight
+Users don't think in features — they think in *intents*:
+- "Make this look better"
+- "Fix this document"
+- "Get the right crop for Instagram"
+- "Apply my usual look to these 20 photos"
+
+The mobile UX should surface **actions and results**, not control panels. Controls appear only when the user drills in.
+
+### 18.2 Home Screen: Intent Selection
+On image load, show the image full-bleed with a bottom sheet containing 4-5 large tap targets:
+
+```
+┌────────────────────────┐
+│                        │
+│    [image full-bleed]  │
+│                        │
+│                        │
+├────────────────────────┤
+│  ✨ Enhance   📐 Crop  │
+│  🎨 Style    📄 Doc   │
+│  💾 Export             │
+└────────────────────────┘
+```
+
+Each button leads to a **focused sub-screen**, not a settings dump.
+
+### 18.3 Enhance (Primary Flow)
+Tap "Enhance" → **auto-enhance applied immediately** (auto_levels + auto_exposure + clarity + vibrance at mild settings). User sees the result.
+
+- **Undo banner**: "Auto-enhanced. [Undo]" — fades after 3s
+- **Adjust**: swipe up on bottom sheet to reveal the Favorites sliders
+  - Only 5-6 sliders visible: Exposure, Contrast, Saturation, Warmth, Clarity, Vibrance
+  - Each slider shows before/after split when being dragged
+- **More filters**: "More..." link at the bottom of favorites → opens full filter list
+  - Full list is grouped but starts scrolled to the most relevant group
+- **Film looks**: horizontal scrollable strip of preset thumbnails above the sliders
+  - Tap to apply, tap again to remove
+  - Current preset highlighted
+- **Done**: tap checkmark → returns to home screen with edits applied
+
+### 18.4 Crop (Gesture-First)
+Tap "Crop" → image enters crop mode:
+
+- **Pinch to resize** the crop (not the zoom — the actual crop boundaries)
+- **Drag to reposition** the crop window
+- **Aspect ratio pills**: row of tappable aspect ratios at the bottom
+  - Free | 1:1 | 4:3 | 3:2 | 16:9 | 9:16 | Custom
+- **Rotate**: rotation wheel at the bottom (like iOS Photos)
+  - Fine-grained (-45° to +45°) with haptic snap at 0°
+  - "Auto" button that runs `detect_skew_angle()` and corrects
+- **Flip**: H/V flip buttons in the toolbar
+- **Reset**: undo crop changes without leaving crop mode
+- **Done/Cancel**: checkmark or X
+
+### 18.5 Style (Presets + Creative)
+Tap "Style" → horizontal scrollable grid of preset thumbnails (3×N):
+- Each thumbnail is the current image with that preset applied (pre-rendered at 48px)
+- Tap to apply, shows intensity slider
+- Categories: tabs at top (Film, Creative, B&W, Cinematic)
+- "Custom" opens the full filter panel
+
+### 18.6 Document Mode
+Tap "Doc" → auto-pipeline runs immediately:
+1. Detect document quad (LSD + polygon)
+2. Show detected corners as draggable points on the image
+3. User adjusts corners if needed
+4. "Apply" → perspective rectify + deskew + whitespace crop + auto-levels
+5. Result shown — user can tweak contrast/sharpness
+6. Export as PDF (future) or high-quality image
+
+### 18.7 Export (Bottom Sheet)
+Tap "Export" → bottom sheet with:
+- Format pills: JPEG | WebP | PNG | JXL (most relevant first)
+- Quality slider (single slider, format-specific range)
+- Size display: "1.2 MB · 4000×3000" with the encoded preview visible behind the sheet
+- "Download" button (large, thumb-friendly)
+- "More options" → full export modal (aspect lock, metadata, advanced)
+
+### 18.8 Navigation Patterns
+- **Bottom sheet**: all controls live in a draggable bottom sheet (like Google Maps, Apple Photos)
+  - Collapsed: 2-3 lines visible (action buttons)
+  - Half-open: primary controls (sliders, presets)
+  - Full: all options
+- **Swipe back**: swipe right to go back one level (standard iOS/Android gesture)
+- **Undo trail**: swipe left edge to undo, persistent across sub-screens
+- **The image is always visible**: controls overlay on a semi-transparent sheet, never replace the image
+- **No tabs switching between unrelated things**: each intent is a focused linear flow
+
+### 18.9 Touch Targets & Gestures
+| Gesture | Action |
+|---------|--------|
+| Single tap | Select/toggle (preset, aspect ratio, button) |
+| Tap-hold on image | Show original (release = back to edited) |
+| Drag on image | Pan (in crop mode: move crop) |
+| Pinch on image | Zoom (in crop mode: resize crop) |
+| Swipe up on sheet | Expand controls |
+| Swipe down on sheet | Collapse controls |
+| Swipe right | Back / undo |
+| Double-tap on image | Fit to screen / toggle 1:1 |
+
+Minimum touch target: 44×44pt. Slider tracks: 48pt tall (for thumb accuracy). Spacing between interactive elements: ≥8pt.
+
+### 18.10 Workflow Mode on Mobile
+Workflow mode adapts for mobile by becoming a **recipe builder wizard**:
+
+1. "What kind of images?" → Photo / Document / Product / Social
+2. "What adjustments?" → toggle switches for each auto-feature
+   - Auto exposure ☑, Auto levels ☑, Sharpen ☑, Denoise ☐
+3. "What crops?" → select aspect ratios needed
+4. "What formats?" → select export formats + quality
+5. "Preview" → shows recipe applied to current image
+6. "Apply to batch" → file picker for multiple images, progress indicator
+7. "Save recipe" → names it automatically ("amber-fox"), stores for reuse
+
+### 18.11 Desktop vs Mobile Differences
+| Feature | Mobile | Desktop |
+|---------|--------|---------|
+| Controls | Bottom sheet | Side panel |
+| Crop handles | Drag corners + pinch | Drag corners + mouse |
+| Rotation | Wheel gesture | Slider |
+| Filter list | Scrollable list | Collapsible groups |
+| Presets | Horizontal scroll strip | Grid |
+| Export | Bottom sheet + preview | Modal + preview pane |
+| Undo | Swipe gesture | Ctrl+Z |
+| Compare | Tap-hold | Backslash key or tap-hold |
+| Batch | Wizard flow | Drag-and-drop + sidebar recipe |
