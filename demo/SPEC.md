@@ -384,3 +384,180 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Error toast display and auto-reset
 - Responsive layout (narrow viewport)
 - Export with each format (JPEG, WebP, PNG, JXL, AVIF, GIF)
+
+---
+
+## 11. Geometry & Document Tools
+
+### 11.1 Step Groups / Pipeline Stages ⬜
+The editor should organize operations into distinct pipeline stages, each with its own UI section:
+
+1. **Geometry** — crop, rotate, flip, resize, deskew, perspective
+2. **Document** — whitespace crop, deskew, perspective correction, margins
+3. **Raw Development** — white balance, exposure recovery, noise reduction, lens correction
+4. **Filters** — the current filter panel (tone, color, detail, effects)
+5. **Export** — format, quality, metadata
+
+Each stage applies in order. The Session Merkle cache means changing a filter doesn't re-run geometry. Changing geometry invalidates everything downstream.
+
+### 11.2 Crop Interface ⬜
+- **Freeform crop**: drag handles on corners/edges
+- **Aspect ratio presets**: 1:1, 4:3, 3:2, 16:9, 5:4, custom
+- **CMS crop sets**: define multiple named aspect ratio crops per image
+  - e.g., "hero" (16:9), "thumbnail" (1:1), "social" (4:5)
+  - Saved as JSON — not editing the image, just defining crop regions
+  - Each crop set can be exported independently
+  - Compatible with imageflow/zenpipe server crop API
+- **Rule of thirds overlay** (toggle)
+- **Crop to content**: auto whitespace detection via `zenpipe.crop_whitespace` node
+
+### 11.3 Rotate & Flip ⬜
+- **90° rotate** left/right buttons
+- **Flip** horizontal/vertical buttons
+- **Arbitrary rotation**: slider or text input (0-360°)
+  - Needs new `zenlayout` node or zenfilters warp
+  - Preview shows rotated image with transparent/fill corners
+- **Auto-straighten**: detect horizon line and auto-rotate to level
+  - Uses edge detection heuristics
+
+### 11.4 Affine Transform / Deskew ⬜
+- **Perspective correction**: 4-corner drag to correct keystoning
+  - Useful for documents, architecture, whiteboards
+- **Auto-deskew**: detect dominant lines and correct rotation
+  - Common for scanned documents
+- **Warp/distortion correction**: lens distortion, barrel/pincushion
+  - Needs new zenfilters or zenlayout node
+
+### 11.5 Document Mode ⬜
+Specialized tools for document/whiteboard photos:
+- **Auto whitespace crop** — detect content bounds, trim margins
+- **Auto deskew** — straighten rotated scans
+- **Auto contrast/levels** — normalize text contrast
+- **Binarize** — threshold for B&W documents
+- **Shadow removal** — flatten lighting for whiteboard captures
+- **Perspective to rectangle** — 4-point transform for tilted documents
+
+---
+
+## 12. Procedural Edit System
+
+### 12.1 Core Concept ⬜
+Edits are a **procedural recipe** — a JSON document describing a sequence of operations that can be applied to any image. The recipe is independent of the source image.
+
+```json
+{
+  "name": "golden sunset edit",
+  "version": 1,
+  "created": "2026-04-03T01:23:45Z",
+  "stages": {
+    "geometry": {
+      "crop": { "x": 0.1, "y": 0.05, "w": 0.8, "h": 0.9 },
+      "rotate": 2.5,
+      "flip_h": false
+    },
+    "filters": {
+      "zenfilters.exposure": { "stops": 0.5 },
+      "zenfilters.contrast": { "amount": 0.3 },
+      "zenfilters.temperature": { "shift": 0.15 }
+    },
+    "film_preset": "golden_hour",
+    "film_preset_intensity": 0.7
+  },
+  "crop_sets": {
+    "hero": { "aspect": "16:9", "anchor": "center" },
+    "thumb": { "aspect": "1:1", "anchor": "face" },
+    "social": { "aspect": "4:5", "anchor": "center" }
+  }
+}
+```
+
+### 12.2 Reusable Across Files ⬜
+- User can **switch source images** while keeping all edits intact
+- Edits auto-reapply to the new source (Session cache invalidates on source change)
+- Crop regions use normalized coordinates (0..1) so they work at any resolution
+- "Apply to batch" — select multiple files, apply the same recipe
+
+### 12.3 Edit History & Naming ⬜
+- **Auto-named edit sets**: two-word combo + datetime
+  - e.g., "amber-fox 2026-04-03 01:23", "coral-wave 2026-04-03 14:05"
+  - Word pairs from curated lists (adjective + noun, ~200 combos)
+- **Auto-save**: every significant edit (slider release, preset change) snapshots the recipe
+- **History list**: collapsible panel showing recent auto-named edits
+  - Click to restore that edit state
+  - Shows thumbnail + name + timestamp
+  - Can rename, pin, or delete entries
+
+### 12.4 Per-Image Edit Persistence ⬜
+- **Per-image edits**: when a file is loaded, check if we have saved edits for it
+  - Key by content hash (first 4KB + file size + last-modified)
+  - Restore last edit state automatically
+  - "Start fresh" button to discard saved edits
+- **Cross-session**: edits survive page refresh and browser restart
+
+### 12.5 Storage Architecture ⬜
+```
+localStorage:
+  zenpipe-recent-edits: [{name, recipe_json, timestamp}, ...]  (last 50)
+  zenpipe-user-presets: [{name, recipe_json}, ...]             (explicit saves)
+
+IndexedDB (zenpipe-edits):
+  image-edits: { content_hash → recipe_json }                 (per-image)
+  edit-history: { id → {name, recipe_json, timestamp, thumb} } (full history)
+
+Remote API (optional, future):
+  GET  /api/edits/:hash    → recipe_json
+  POST /api/edits/:hash    → save recipe
+  GET  /api/presets         → user preset list
+  POST /api/presets         → save preset
+```
+
+### 12.6 UX Flow ⬜
+```
+User opens image
+  → Check IndexedDB for content_hash
+  → Found: "Restore 'amber-fox' edit from 2h ago?" [Restore] [Start Fresh]
+  → Not found: start with identity adjustments
+
+User edits image
+  → Every slider release / preset change: auto-snapshot to history
+  → History sidebar shows: "coral-wave 01:23" "amber-fox 01:20" ...
+  → User can click any history entry to restore
+
+User wants to apply same edit to another image
+  → Click "Switch Image" (or drop new file)
+  → Edits stay intact, source changes
+  → Pipeline re-renders with new source + same recipe
+  → Session cache: geometry prefix invalidates (new source), filter suffix may hit cache
+
+User wants to save a reusable preset
+  → Click "Save as Preset" → name it → stored in localStorage + IndexedDB
+  → Available in "My Presets" section alongside film presets
+  → Can export as JSON file for sharing
+```
+
+---
+
+## 13. Zen Crate Extensions Needed
+
+### 13.1 zenlayout ⬜
+- Arbitrary rotation (not just 90° increments) — currently only supports orient/transpose
+- Perspective transform (4-point warp) for document correction
+- Need to evaluate if this belongs in zenlayout or a new `zenwarp` crate
+
+### 13.2 zenfilters ⬜
+- Auto-straighten (edge detection → rotation angle)
+- Document-mode filters: binarize, shadow removal
+- Already has: auto_levels, auto_exposure, bilateral (shadow removal candidate)
+
+### 13.3 zenresize ⬜
+- Content-aware resize (seam carving) — stretch-free aspect ratio changes
+- Already has: all standard resize filters, layout planning
+
+### 13.4 zenblend ⬜
+- Gradient mask for split-toning and graduated filters
+- Already has: Porter-Duff modes, artistic blends
+
+### 13.5 zenpipe ⬜
+- `crop_whitespace` node exists — needs exposure to the demo UI
+- Affine transform node (combines rotate + scale + translate)
+- Pipeline stage ordering enforcement (geometry before filters)
