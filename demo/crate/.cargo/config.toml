@@ -1,0 +1,21 @@
+# Multithreaded WASM build configuration.
+#
+# Requires nightly: rustup toolchain install nightly
+# Requires rust-src: rustup component add rust-src --toolchain nightly
+# Requires wasm target: rustup target add wasm32-unknown-unknown --toolchain nightly
+#
+# Build command:
+#   CARGO_TARGET_DIR=target-threaded cargo +nightly build \
+#     --target wasm32-unknown-unknown --release \
+#     --features "wasm,parallel" -Z build-std=panic_abort,std
+#   wasm-bindgen --target web --out-dir ../pkg \
+#     target-threaded/wasm32-unknown-unknown/release/zenpipe_demo.wasm
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128",
+    "-C", "link-args=--shared-memory --import-memory --max-memory=1073741824 --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base",
+]
+
+[unstable]
+build-std = ["panic_abort", "std"]

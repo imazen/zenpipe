@@ -19,10 +19,25 @@ let originalBytes = null; // Original file bytes for native decode upgrade
 
 let wasmModule = null;
 
+let threadsAvailable = false;
+
 async function tryLoadWasm() {
   try {
     const mod = await import('./pkg/zenpipe_demo.js');
     await mod.default(); // init WASM
+
+    // Initialize rayon thread pool if available (requires SharedArrayBuffer + COOP/COEP)
+    if (typeof mod.initThreadPool === 'function' && typeof SharedArrayBuffer !== 'undefined') {
+      try {
+        const cores = navigator.hardwareConcurrency || 4;
+        await mod.initThreadPool(Math.min(cores, 8));
+        threadsAvailable = true;
+        console.log(`WASM thread pool: ${Math.min(cores, 8)} threads`);
+      } catch (e) {
+        console.warn('Thread pool init failed (single-threaded mode):', e.message || e);
+      }
+    }
+
     wasmModule = mod;
     backend = 'wasm';
     return true;
@@ -223,6 +238,7 @@ async function handleMessage(msg) {
           height: editor.height,
           backend,
           decoder,
+          threads: threadsAvailable,
         });
         break;
       }

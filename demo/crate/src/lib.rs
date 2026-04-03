@@ -15,5 +15,11 @@ mod schema;
 pub use editor::{Editor, EncodeResult, Region, RenderOutput};
 pub use schema::export_filter_schema;
 
+// Re-export init_thread_pool for multithreaded WASM.
+// JS calls `await wasm.initThreadPool(navigator.hardwareConcurrency)`
+// before any rayon parallel operations.
+#[cfg(feature = "parallel")]
+pub use wasm_bindgen_rayon::init_thread_pool;
+
 #[cfg(feature = "wasm")]
 mod wasm_api;
