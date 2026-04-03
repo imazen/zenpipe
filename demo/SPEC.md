@@ -741,3 +741,97 @@ Advanced users can dive into any subsystem without the simple flow getting in th
 - Swipe gestures for undo, mode switching
 - Bottom sheet for controls on mobile (thumb-reachable)
 - Desktop gets keyboard shortcuts, wider sidebar, split-screen compare
+
+---
+
+## 17. Color Pipeline & HDR
+
+### 17.1 Working Color Space ⬜
+The pipeline should support multiple working color spaces, selected automatically or by user:
+
+| Stage | Default Space | Why |
+|-------|--------------|-----|
+| Decode | Source native (sRGB, P3, Rec.2020, etc.) | Preserve original gamut |
+| Geometry | Pass-through (no conversion) | Crop/resize are color-agnostic |
+| Filters | Oklab f32 linear (zenfilters native) | Perceptually uniform for adjustments |
+| Encode | Target space (user-selected or auto) | Match output requirements |
+
+### 17.2 Target Color Space ⬜
+User or workflow selects the output color space:
+
+| Target | CICP | Use Case | Codecs |
+|--------|------|----------|--------|
+| sRGB | 1/13/0 | Web default, widest compatibility | All |
+| Display P3 | 12/16/0 | Apple ecosystem, wide gamut SDR | JPEG, PNG, JXL, AVIF, WebP |
+| Rec.2020 | 9/16/0 | HDR workflows, broadcast | JXL, AVIF |
+| Rec.2020 PQ | 9/16/0 + TF=16 | HDR10 | JXL, AVIF |
+| Rec.2020 HLG | 9/16/0 + TF=18 | HLG broadcast | JXL, AVIF |
+
+- **Auto mode**: match source color space (no unnecessary conversion)
+- **CICP signaling**: embed correct CICP values in output (already in zencodec Metadata)
+- **ICC fallback**: embed ICC profile when CICP isn't available (JPEG, PNG)
+- **Gamut mapping**: use zenpixels-convert for out-of-gamut handling (perceptual, relative colorimetric)
+
+### 17.3 HDR Pipeline ⬜
+For HDR sources (PQ/HLG transfer function, wide gamut):
+
+| Feature | Status | Location |
+|---------|--------|----------|
+| PQ/HLG decode | ✅ | zencodec, zenjxl, zenavif |
+| HDR metadata preservation | ⬜ | zencodec::Metadata (CICP, mastering display) |
+| Tone mapping (HDR → SDR) | 🔧 | zenfilters (basecurve_tonemap, dt_sigmoid, levels) |
+| Inverse tone mapping (SDR → HDR) | ⬜ | Needs gain map or ML approach |
+| HDR display | ⬜ | `<canvas>` with HDR color space + HDR CSS media query |
+
+### 17.4 Gain Map Support ⬜
+Gain maps enable adaptive SDR/HDR display from a single file:
+
+| Feature | Status | Location |
+|---------|--------|----------|
+| Gain map detection (probe) | ✅ | zenjpeg (UltraHDR MPF), zenjxl (jhgm box), zenavif (tmap) |
+| Gain map metadata extraction | ✅ | zencodec::GainMapParams, zencodec::GainMapPresence |
+| Gain map pixel decode | 🔧 | Per-codec (JPEG MPF second image, JXL frame, AVIF tmap item) |
+| Gain map application (tone mapping) | ✅ | ultrahdr crate (ISO 21496-1 math) |
+| Gain map sidecar through pipeline | ✅ | zenpipe sidecar.rs (SidecarPlan, ProcessedSidecar) |
+| Gain map proportional transforms | ✅ | zenlayout IdealLayout::derive_secondary() |
+| Gain map re-embedding on encode | 🔧 | zenjpeg (UltraHDR), zenjxl (jhgm), zenavif (tmap) |
+| Gain map preview in browser | ⬜ | Needs HDR canvas or gain map JS application |
+
+### 17.5 Bit Depth ⬜
+Pipeline should preserve bit depth when possible:
+
+| Depth | Internal Repr | Codecs | Notes |
+|-------|--------------|--------|-------|
+| 8-bit | u8 (RGBA8) | All | Default, fastest |
+| 16-bit | u16 (RGBA16) | PNG, JXL, AVIF, TIFF | Scientific, medical, print |
+| Float | f32 (RGBAF32) | JXL, EXR | HDR, compositing, VFX |
+
+- **Current**: pipeline materializes to RGBA8 for display (via pack_rgba/RowConverter)
+- **Needed**: encode directly from f32 pipeline output without quantizing to u8
+- **Session cache**: can cache at native bit depth (f32 from zenfilters), encode from cache
+- **Display**: always convert to 8-bit for canvas (browser limitation for SDR)
+- **Export**: user selects target bit depth, encoder handles conversion
+
+### 17.6 Metadata Preservation Goals ⬜
+**Decode → preserve → passthrough → encode** for all metadata types:
+
+| Metadata | Decode | Pipeline | Encode | Status |
+|----------|--------|----------|--------|--------|
+| ICC profile | ✅ all codecs | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
+| EXIF | ✅ JPEG/AVIF/JXL | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
+| XMP | ✅ JPEG/JXL | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
+| CICP | ✅ AVIF/JXL/HEIC | ⬜ on Editor struct | ⬜ per-codec signaling | Needs wiring |
+| Gain map params | ✅ all gainmap codecs | ⬜ sidecar tracking | ⬜ re-embedding | Needs wiring |
+| Mastering display info | ✅ JXL/AVIF | ⬜ passthrough | ⬜ re-embedding | Needs wiring |
+| Orientation (EXIF tag) | ✅ | ✅ applied in pipeline | ✅ cleared on encode | Working |
+
+The E2E pipeline (§1.3) is the prerequisite — `Editor::from_bytes()` must preserve metadata from decode, and `encode_with_metadata()` must pass it through to each codec's encoder.
+
+### 17.7 User Controls (Export Panel) ⬜
+Extend the Advanced Preservation Panel (§3.5):
+- **Color space dropdown**: Auto / sRGB / Display P3 / Rec.2020
+- **Transfer function**: Auto / sRGB gamma / PQ / HLG (when Rec.2020 selected)
+- **Bit depth**: Auto / 8 / 16 / Float (grayed out when format doesn't support)
+- **Metadata checkboxes**: ICC ☑ / EXIF ☑ / XMP ☑ / CICP ☑ (all on by default)
+- **Gain map**: Preserve ☑ / Discard / Reconstruct HDR (when source has gain map)
+- **Gamut handling**: Perceptual / Relative Colorimetric / Absolute Colorimetric
