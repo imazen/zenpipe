@@ -19,7 +19,7 @@ import base64
 from pathlib import Path
 from openai import OpenAI
 
-MODEL = "gpt-4.1-nano"
+MODEL = "gpt-4.1-mini"
 AUDIT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/mnt/v/output/zenfilters/audit")
 RESULTS_FILE = AUDIT_DIR / "audit_results.json"
 REPORT_FILE = AUDIT_DIR / "audit_report.md"
