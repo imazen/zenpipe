@@ -1074,3 +1074,157 @@ Implementation: CSS `touch-action: none` on the sheet handle, JS `pointermove` t
 - **Reduced motion**: respect `prefers-reduced-motion` — disable spring physics, use instant transitions
 - **High contrast mode**: boost slider fill contrast, thicker borders
 - **Rotor actions** (iOS VoiceOver): increment/decrement sliders via swipe up/down
+
+---
+
+## 20. Apple Photos–Style UX Reference
+
+Apple Photos (iOS/macOS) is the gold standard for touch-native image editing. Key patterns to adopt:
+
+### 20.1 The Filmstrip Scrubber
+The most distinctive Apple Photos pattern — **horizontal scrolling filmstrip of adjustments**:
+
+```
+   ◄ [Exposure] [Brilliance] [Highlights] [Shadows] [Contrast] [Brightness] ►
+        ┌──┐
+        │  │  ← vertical dial/scrubber for selected adjustment
+        │  │     drag up = increase, down = decrease
+        │  │     shows numeric value at top
+        └──┘
+```
+
+- Adjustments are **icons with labels** in a horizontal scroll strip at the bottom
+- Tap one to select it → a **vertical circular dial** appears
+- Drag the dial up/down to adjust (not a horizontal slider!)
+- The image updates live
+- The icon badge shows a yellow dot when non-default
+- Swipe the strip to find more adjustments
+
+**Why this works on mobile:**
+- Horizontal scroll is natural (thumb sweeps left/right)
+- Vertical adjustment avoids conflicting with horizontal scroll
+- Large circular dial is easy to grab
+- Icons are glanceable — you see what's available without reading
+- One-handed operation: thumb reaches the bottom strip
+
+### 20.2 Auto Button
+Top of the adjust panel: **"AUTO"** button
+- Tap → applies auto_exposure + auto_levels + auto white balance simultaneously
+- The adjustments appear on their individual dials (not a black box)
+- User can then tweak any individual value
+- Tap AUTO again to toggle off (undo auto)
+
+### 20.3 Adjustment Categories (Tabs)
+Three tabs at the bottom of the edit screen:
+- **Adjust** (slider icon): exposure, brilliance, highlights, shadows, contrast, brightness, black point, saturation, vibrance, warmth, tint, sharpness, definition, noise reduction, vignette
+- **Filters** (three-circle icon): preset looks in a horizontal scroll
+- **Crop** (crop icon): aspect ratio, straighten, flip, perspective
+
+Each tab replaces the bottom control area. The image stays full-screen above.
+
+### 20.4 The Adjustment Dial
+Apple's vertical dial is more than a slider:
+- **Circular motion**: feels like turning a physical knob
+- **Inertia**: flick and it keeps spinning briefly
+- **Tick marks**: visual ruler alongside the dial
+- **Snap to zero**: slight resistance at the identity value
+- **Range indication**: marks at min and max, current position highlighted
+- **Value display**: number appears above the image during drag, fades after
+
+For our implementation:
+```
+        +2.0
+         ↑
+    ┌─────────┐
+    │  │││││  │  ← tick marks like a ruler
+    │  │││││  │
+    │  ││●││  │  ← current position dot
+    │  │││││  │
+    │  │││││  │
+    └─────────┘
+         ↓
+        -2.0
+```
+
+### 20.5 Crop Interface (Apple-Style)
+- Image floats in the center with crop handles at corners/edges
+- **Grid overlay**: rule of thirds lines inside the crop
+- **Drag edges/corners** to resize crop
+- **Drag inside** to reposition (moves image under the crop frame)
+- **Pinch to zoom** within the crop
+- **Straighten dial**: horizontal rotation wheel below the image
+  - Range: -45° to +45°
+  - Tick marks every 1°
+  - Snap at 0° with haptic
+  - "Auto" button that runs deskew detection
+- **Aspect ratio buttons**: row of pills (Original, Square, 4:3, 16:9, etc.)
+- **Flip buttons**: horizontal/vertical in the toolbar
+- **Perspective correction**: 
+  - Vertical slider to correct vertical keystoning
+  - Horizontal slider to correct horizontal keystoning
+  - Or "Auto" for full perspective correction
+
+### 20.6 Filter Browsing
+- Filters shown as **small previews** of the current image (not just names)
+- Horizontal scrollable row
+- Each preview is ~60×60pt, showing the image with that filter applied
+- Tap to apply → image updates live
+- Selected filter gets a border highlight
+- Intensity slider appears below the selected filter (0-100)
+- "Original" is the first option (always visible, deselects all filters)
+
+### 20.7 Mapping to Our System
+
+| Apple Photos | Our Equivalent | Notes |
+|-------------|---------------|-------|
+| Auto button | `auto_levels` + `auto_exposure` | Run both, show results on individual dials |
+| Exposure | `zenfilters.exposure` (stops) | |
+| Brilliance | `zenfilters.brilliance` | |
+| Highlights | `zenfilters.highlights_shadows` (highlights param) | |
+| Shadows | `zenfilters.highlights_shadows` (shadows param) | |
+| Contrast | `zenfilters.contrast` | |
+| Brightness | Mapped to exposure with smaller range | Or a separate linear brightness |
+| Black Point | `zenfilters.black_point` | |
+| Saturation | `zenfilters.saturation` | |
+| Vibrance | `zenfilters.vibrance` | |
+| Warmth | `zenfilters.temperature` | |
+| Tint | `zenfilters.tint` | |
+| Sharpness | `zenfilters.sharpen` | |
+| Definition | `zenfilters.clarity` | Apple's "Definition" ≈ local contrast |
+| Noise Reduction | `zenfilters.noise_reduction` | |
+| Vignette | `zenfilters.vignette` | |
+| Crop/Straighten | `zenfilters.rotate` + crop | |
+| Perspective V/H | `zenfilters.warp` (perspective) | |
+| Filters | Film presets | Our preset thumbnails |
+
+### 20.8 What Apple Does That We Should Copy
+1. **Image is always the hero** — controls are minimal, at the bottom, semi-transparent
+2. **One adjustment active at a time** — no overwhelming grid of sliders
+3. **Vertical dial, not horizontal slider** — avoids conflict with scrolling
+4. **Live preview during drag** — no "apply" button, changes are immediate
+5. **Auto as a starting point** — not a replacement for manual control
+6. **Non-destructive**: original always preserved, edits stored as a recipe
+7. **"Revert to Original"** always available (our tap-hold compare)
+8. **Copy/paste edits** between photos (our recipe system)
+
+### 20.9 What We Can Do Better Than Apple
+1. **Format comparison** — Apple exports one format; we show JPEG vs WebP vs JXL side by side
+2. **CMS crop sets** — Apple has one crop; we define multiple named crops
+3. **Film presets with intensity** — Apple's filters are binary; ours have a strength slider
+4. **Gain map / HDR pipeline** — Apple handles this silently; we give users control
+5. **Open recipe format** — Apple's edits are proprietary; ours are JSON/querystring
+6. **Cross-platform** — Apple is Apple-only; we run in any browser
+7. **Workflow/batch** — Apple edits one photo; we can build recipes for thousands
+8. **Document mode** — Apple has no document scanner UX in the editor
+
+### 20.10 Implementation Priority
+For the first touch-native release, implement in this order:
+1. **Bottom strip with adjustment icons** (horizontal scroll)
+2. **Vertical dial** for the selected adjustment
+3. **Auto button** that applies auto_levels + auto_exposure
+4. **Film preset thumbnails** (horizontal scroll with previews)
+5. **Apple-style crop** with straighten wheel and aspect pills
+6. **Compare** via tap-hold (already specced)
+7. **Bottom sheet** for additional options
+
+This gives us an Apple Photos–quality editing experience with our superior codec, format, and pipeline capabilities underneath.
