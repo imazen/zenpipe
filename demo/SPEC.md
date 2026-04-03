@@ -1466,3 +1466,188 @@ const view = new View(document.body, model, adjustments, controller);
 - **Build alternative UIs**: CLI, native app (via wasm), headless batch
 - **Keep the worker/WASM layer unchanged** — views never talk to the worker directly
 - **Framework migration**: if we ever adopt React/Preact/Svelte, only the view layer changes
+
+---
+
+## 22. Library Evaluation
+
+### 22.1 Constraints
+- No build step required (or minimal — current setup is just static files + wasm-pack)
+- Must work with Web Workers (our WASM pipeline runs off-thread)
+- Bundle size matters — the WASM module is already 5.6 MB
+- Progressive enhancement — must work without JS framework for the core pipeline
+- Touch-native gestures are a hard requirement
+
+### 22.2 UI Framework
+
+| Library | Size | Build Step | Touch | Fit |
+|---------|------|-----------|-------|-----|
+| **Preact** | 4 KB | Optional (HTM for no-build) | Manual | ✅ Best fit — tiny, reactive, no build with HTM |
+| **Lit** | 7 KB | None (native web components) | Manual | ✅ Good fit — standards-based, no build |
+| **Svelte** | 2 KB runtime | Required (compiler) | Manual | ⚠️ Great DX but needs build step |
+| **React** | 40 KB | Required | Manual | ❌ Too large, requires build |
+| **Vue** | 33 KB | Optional | Manual | ⚠️ Viable but large |
+| **Solid** | 7 KB | Required (compiler) | Manual | ⚠️ Great perf but needs build |
+| **Vanilla** | 0 KB | None | Manual | ✅ Current approach — works but scaling pain |
+
+**Recommendation: Preact + HTM** (no build step)
+```javascript
+import { h, render } from 'https://esm.sh/preact';
+import { useState, useEffect } from 'https://esm.sh/preact/hooks';
+import htm from 'https://esm.sh/htm';
+const html = htm.bind(h);
+
+function Slider({ label, value, min, max, step, onChange }) {
+  return html`
+    <div class="slider-row">
+      <div class="slider-label-line">
+        <label>${label}</label>
+        <span class="val">${value.toFixed(2)}</span>
+      </div>
+      <input type="range" min=${min} max=${max} step=${step}
+             value=${value} onInput=${e => onChange(+e.target.value)} />
+    </div>`;
+}
+```
+- 4 KB gzipped, CDN-loaded, zero build config
+- Components for each view (DesktopSidebar, MobileSheet, etc.)
+- Hooks for model subscription (`useModel`, `useAdjustment`)
+- HTM = tagged template literals, no JSX compiler needed
+
+**Alternative: Lit** (web components, also no build)
+```javascript
+import { LitElement, html, css } from 'https://esm.sh/lit';
+
+class ZenSlider extends LitElement {
+  static properties = { label: {}, value: { type: Number }, min: {}, max: {}, step: {} };
+  render() {
+    return html`<div class="slider-row">...</div>`;
+  }
+}
+customElements.define('zen-slider', ZenSlider);
+```
+- Native web components — work in any framework or none
+- Shadow DOM isolates styles (good for embedding, bad for theming)
+- Slightly more boilerplate than Preact
+
+### 22.3 Gesture Libraries
+
+| Library | Size | Touch | Inertia | Pinch | Fit |
+|---------|------|-------|---------|-------|-----|
+| **@use-gesture** | 10 KB | ✅ | ✅ | ✅ | ✅ Best — unified gesture system |
+| **Hammer.js** | 7 KB | ✅ | ❌ | ✅ | ⚠️ Unmaintained since 2016 |
+| **interact.js** | 30 KB | ✅ | ✅ | ❌ | ❌ Too large, drag-focused |
+| **any-touch** | 4 KB | ✅ | ❌ | ✅ | ✅ Lightweight alternative |
+| **Vanilla PointerEvents** | 0 KB | ✅ | Manual | Manual | ✅ Current approach |
+
+**Recommendation: `@use-gesture/vanilla`** (framework-agnostic)
+```javascript
+import { DragGesture, PinchGesture, WheelGesture } from 'https://esm.sh/@use-gesture/vanilla';
+
+new DragGesture(detailCanvas, ({ delta: [dx, dy], velocity, direction }) => {
+  controller.onDragMove(dx, dy, velocity);
+});
+
+new PinchGesture(detailCanvas, ({ offset: [scale], origin }) => {
+  controller.onPinch(scale, origin[0], origin[1]);
+});
+
+new WheelGesture(detailCanvas, ({ delta: [, dy] }) => {
+  controller.onZoom(dy);
+});
+```
+- Handles pointer, touch, mouse, wheel uniformly
+- Built-in velocity, inertia, and bounds
+- Framework-agnostic version (not just React)
+- Pinch-to-zoom handled correctly (two-finger distance tracking)
+
+### 22.4 Animation / Physics
+
+| Library | Size | Spring | Inertia | Fit |
+|---------|------|--------|---------|-----|
+| **popmotion** | 5 KB (standalone) | ✅ | ✅ | ✅ Spring physics for bottom sheet |
+| **motion** (framer) | 18 KB | ✅ | ✅ | ⚠️ React-focused |
+| **anime.js** | 7 KB | ❌ | ❌ | ❌ Keyframe-based, not physics |
+| **CSS spring()** | 0 KB | Upcoming | ❌ | ⬜ Not yet in browsers |
+| **Manual spring** | 0 KB | ~20 lines | Manual | ✅ Simple damped spring |
+
+**Recommendation: Manual spring** (it's ~20 lines):
+```javascript
+function springTo(current, target, velocity, stiffness = 0.15, damping = 0.8) {
+  const force = (target - current) * stiffness;
+  velocity = (velocity + force) * damping;
+  return { value: current + velocity, velocity };
+}
+```
+Only the bottom sheet needs spring physics. Not worth a dependency.
+
+### 22.5 Bottom Sheet
+
+| Library | Size | Physics | Detents | Fit |
+|---------|------|---------|---------|-----|
+| **bottom-sheet** (npm) | 8 KB | ✅ | ✅ | ⚠️ React-only |
+| **@apresentador/bottom-sheet** | 5 KB | ✅ | ✅ | ⚠️ Web component, limited |
+| **Custom** | ~150 lines | Manual | Manual | ✅ Full control |
+
+**Recommendation: Custom** — bottom sheets are surprisingly simple:
+```javascript
+class BottomSheet {
+  detents = [80, window.innerHeight * 0.4, window.innerHeight * 0.85];
+  // Touch handler + spring snap to nearest detent
+}
+```
+No library handles our specific detent positions + image interaction correctly.
+
+### 22.6 Slider / Dial
+
+| Library | Size | Touch | Dial | Custom Track | Fit |
+|---------|------|-------|------|-------------|-----|
+| **noUiSlider** | 10 KB | ✅ | ❌ | ✅ | ⚠️ Good slider but no dial |
+| **roundSlider** | 15 KB | ✅ | ✅ | ❌ | ⚠️ jQuery dependency |
+| **Custom** | ~100 lines per | ✅ | ✅ | ✅ | ✅ Full control |
+
+**Recommendation: Custom** — our sliders need:
+- Scrub-anywhere (full row is touch target)
+- Fill from identity (bidirectional)
+- Haptic feedback at identity
+- Velocity sensitivity
+- The vertical dial (Apple Photos) is unique enough to need custom code
+
+### 22.7 Recommended Stack
+
+```
+Core:        Preact + HTM (4 KB, no build, reactive components)
+Gestures:    @use-gesture/vanilla (10 KB, unified touch/mouse/wheel)
+Animation:   Manual spring (~20 lines)
+Bottom sheet: Custom (~150 lines)
+Sliders:     Custom (~100 lines)
+State:       Model classes with EventTarget (built-in, 0 KB)
+
+Total added JS: ~15 KB (vs current 0 KB for vanilla)
+Total with WASM: 5.6 MB + 15 KB ≈ 5.6 MB (negligible overhead)
+```
+
+### 22.8 No-Build Development Flow
+```html
+<script type="module">
+  import { h, render } from 'https://esm.sh/preact@10';
+  import { useState } from 'https://esm.sh/preact@10/hooks';
+  import htm from 'https://esm.sh/htm@3';
+  import { DragGesture } from 'https://esm.sh/@use-gesture/vanilla@10';
+
+  const html = htm.bind(h);
+  // ... app code using ESM imports from CDN
+</script>
+```
+- No npm install, no webpack, no vite
+- Works with `python3 serve.py`
+- CDN modules cached by browser after first load
+- Can add a build step later for production (tree-shaking, bundling)
+
+### 22.9 Migration from Vanilla
+1. Add Preact + HTM imports (CDN, no install)
+2. Convert `sidebar.js` slider generation to Preact components first (biggest win)
+3. Convert `export-modal.js` to Preact (complex DOM generation)
+4. Keep `worker-client.js`, `state.js` (model), `render.js` (controller) as-is
+5. Build `MobileView` as new Preact components from scratch
+6. Add `@use-gesture` for unified gesture handling
