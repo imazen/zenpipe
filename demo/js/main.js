@@ -104,25 +104,34 @@ $('pixel-info').addEventListener('click', () => {
   scheduleDetailOnly();
 });
 
-// Dock position toggle: right → left → bottom → right
+// Dock position: default based on viewport aspect ratio, user can override
 const DOCK_POSITIONS = ['right', 'left', 'bottom'];
 const DOCK_LABELS = { right: 'R', left: 'L', bottom: 'B' };
-let dockIndex = 0;
-// Restore from localStorage
-try {
-  const saved = localStorage.getItem('zenpipe-dock');
-  if (saved && DOCK_POSITIONS.includes(saved)) {
-    dockIndex = DOCK_POSITIONS.indexOf(saved);
-    if (dockIndex > 0) document.body.classList.add('dock-' + DOCK_POSITIONS[dockIndex]);
-    $('dock-toggle').textContent = DOCK_LABELS[DOCK_POSITIONS[dockIndex]];
-  }
-} catch {}
-$('dock-toggle').addEventListener('click', () => {
-  document.body.classList.remove('dock-' + DOCK_POSITIONS[dockIndex]);
-  dockIndex = (dockIndex + 1) % DOCK_POSITIONS.length;
-  const pos = DOCK_POSITIONS[dockIndex];
+
+function defaultDockForAspect() {
+  const aspect = window.innerWidth / window.innerHeight;
+  return aspect < 1.2 ? 'bottom' : 'right'; // portrait/square → bottom
+}
+
+function applyDock(pos) {
+  for (const p of DOCK_POSITIONS) document.body.classList.remove('dock-' + p);
   if (pos !== 'right') document.body.classList.add('dock-' + pos);
   $('dock-toggle').textContent = DOCK_LABELS[pos];
+}
+
+let dockIndex;
+try {
+  const saved = localStorage.getItem('zenpipe-dock');
+  dockIndex = saved && DOCK_POSITIONS.includes(saved)
+    ? DOCK_POSITIONS.indexOf(saved)
+    : DOCK_POSITIONS.indexOf(defaultDockForAspect());
+} catch { dockIndex = DOCK_POSITIONS.indexOf(defaultDockForAspect()); }
+applyDock(DOCK_POSITIONS[dockIndex]);
+
+$('dock-toggle').addEventListener('click', () => {
+  dockIndex = (dockIndex + 1) % DOCK_POSITIONS.length;
+  const pos = DOCK_POSITIONS[dockIndex];
+  applyDock(pos);
   try { localStorage.setItem('zenpipe-dock', pos); } catch {}
 });
 

@@ -4,6 +4,7 @@
 
 import { $, state } from './state.js';
 import { scheduleDetailOnly } from './render.js';
+import { invalidateOriginal } from './compare.js';
 
 export function updateRegionSelector() {
   // Update position (works whether visible or hidden)
@@ -73,6 +74,7 @@ export function initRegionDrag() {
     if (!dragging) return;
     dragging = false;
     detailCanvas.style.cursor = 'grab';
+    invalidateOriginal();
     scheduleDetailOnly();
   });
 
@@ -93,6 +95,7 @@ export function initRegionDrag() {
     state.region.x = Math.max(0, Math.min(1 - state.region.w, nx - state.region.w / 2));
     state.region.y = Math.max(0, Math.min(1 - state.region.h, ny - state.region.h / 2));
     updateRegionSelector();
+    invalidateOriginal();
     scheduleDetailOnly();
   });
 
@@ -124,6 +127,7 @@ export function initRegionDrag() {
   window.addEventListener('pointerup', () => {
     if (!selDragging) return;
     selDragging = false;
+    invalidateOriginal();
     scheduleDetailOnly();
   });
 
@@ -164,6 +168,7 @@ export function initScrollZoom() {
 
     updateRegionSelector();
     showUpscaledPreview();
+    invalidateOriginal();
     scheduleDetailOnly();
   }, { passive: false });
 }
@@ -222,7 +227,8 @@ export function initPinchZoom() {
   wrap.addEventListener('touchend', e => {
     if (e.touches.length < 2 && initialDist > 0) {
       initialDist = 0;
-      scheduleDetailOnly();
+      invalidateOriginal();
+    scheduleDetailOnly();
     }
   });
 }

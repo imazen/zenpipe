@@ -687,8 +687,8 @@ body.dock-bottom aside {
 }
 #dock-toggle:hover { color: var(--text); border-color: var(--accent); }
 
-/* --- Responsive layout --- */
-@media (max-width: 840px) {
+/* --- Responsive: portrait/square viewports force bottom dock --- */
+@media (max-aspect-ratio: 6/5) {
   body, body.dock-left, body.dock-right {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
@@ -739,7 +739,7 @@ body.dock-bottom aside {
       <div class="loading-message" id="loading-message">Loading...</div>
       <div class="spinner-overlay" id="detail-spinner"><div class="spinner"></div></div>
       <button id="minimap-toggle" title="Toggle minimap">minimap</button>
-      <div id="overview-wrap">
+      <div id="overview-wrap" class="collapsed">
         <canvas id="overview-canvas"></canvas>
         <div id="region-selector"></div>
         <button id="crop-toggle" title="Toggle crop region">crop</button>

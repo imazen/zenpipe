@@ -192,7 +192,12 @@ let messageQueue = Promise.resolve();
 
 self.addEventListener('message', (e) => {
   const msg = e.data;
-  messageQueue = messageQueue.then(() => handleMessage(msg)).catch(() => {});
+  // Chain sequentially; always resolve so the chain never breaks.
+  // handleMessage has its own try/catch that sends error responses.
+  messageQueue = messageQueue.then(
+    () => handleMessage(msg),
+    () => handleMessage(msg),  // If prior handler rejected, still run next
+  );
 });
 
 async function handleMessage(msg) {

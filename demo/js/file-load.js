@@ -8,6 +8,33 @@ import { renderOverview, renderDetail } from './render.js';
 import { showError } from './toasts.js';
 import { resetHistory } from './history.js';
 
+/**
+ * Compute initial detail region based on viewport size, DPR, and image dimensions.
+ * Centers the region with aspect ratio matching the viewport, clamped 4:3/3:4.
+ */
+function initRegion() {
+  const detailWrap = $('detail-wrap');
+  const vpW = detailWrap.clientWidth || 800;
+  const vpH = detailWrap.clientHeight || 600;
+  const vpAspect = vpW / vpH;
+  const clampedAspect = Math.max(3 / 4, Math.min(4 / 3, vpAspect));
+  const dpr = window.devicePixelRatio || 1;
+  let regionW = Math.min(1, (vpW * dpr) / state.sourceWidth);
+  let regionH = Math.min(1, ((vpW * dpr) / clampedAspect) / state.sourceHeight);
+  // Clamp to avoid excessive render cost
+  const maxPixels = 1920 * 1080;
+  const regionPixels = (regionW * state.sourceWidth) * (regionH * state.sourceHeight);
+  if (regionPixels > maxPixels) {
+    const scale = Math.sqrt(maxPixels / regionPixels);
+    regionW *= scale;
+    regionH *= scale;
+  }
+  // Cap at 80% so region selector is always draggable
+  regionW = Math.min(0.8, regionW);
+  regionH = Math.min(0.8, regionH);
+  state.region = { x: (1 - regionW) / 2, y: (1 - regionH) / 2, w: regionW, h: regionH };
+}
+
 export async function loadImage(file) {
   $('status').textContent = 'Loading...';
   // Show large loading message in the viewport
@@ -31,30 +58,8 @@ export async function loadImage(file) {
   state.sourceHeight = result.height;
   state.sourceImage = true;
   resetHistory();
+  initRegion();
   const be = result.backend === 'wasm' ? 'WASM' : 'mock';
-
-  // Smart region initialization: match detail viewport aspect ratio, clamped to 4:3/3:4
-  const detailWrap = $('detail-wrap');
-  const vpW = detailWrap.clientWidth || 800;
-  const vpH = detailWrap.clientHeight || 600;
-  const vpAspect = vpW / vpH;
-  const clampedAspect = Math.max(3/4, Math.min(4/3, vpAspect));
-  // Calculate region size for ~1:1 device pixels = image pixels
-  const dpr = window.devicePixelRatio || 1;
-  let regionW = Math.min(1, (vpW * dpr) / state.sourceWidth);
-  let regionH = Math.min(1, ((vpW * dpr) / clampedAspect) / state.sourceHeight);
-  // Clamp if region would exceed max real-time rendering (1920*1080 pixels)
-  const maxPixels = 1920 * 1080;
-  const regionPixels = (regionW * state.sourceWidth) * (regionH * state.sourceHeight);
-  let scale = 1;
-  if (regionPixels > maxPixels) {
-    scale = Math.sqrt(maxPixels / regionPixels);
-  }
-  // Also cap at 80% of image so the region selector is always draggable
-  const maxFraction = 0.8;
-  regionW = Math.min(maxFraction, regionW * scale);
-  regionH = Math.min(maxFraction, regionH * scale);
-  state.region = { x: (1 - regionW) / 2, y: (1 - regionH) / 2, w: regionW, h: regionH };
 
   $('loading-message').classList.remove('active');
   $('status').textContent = `${state.sourceWidth}\u00d7${state.sourceHeight} \u2014 ${file.name} [${be}]`;
@@ -152,27 +157,9 @@ export async function loadPicsumPhoto(pid, thumbEl) {
     state.sourceWidth = result.width;
     state.sourceHeight = result.height;
     state.sourceImage = true;
-  resetHistory();
+    resetHistory();
+    initRegion();
     const be = result.backend === 'wasm' ? 'WASM' : 'mock';
-
-    // Smart region initialization
-    const detailWrap = $('detail-wrap');
-    const vpW = detailWrap.clientWidth || 800;
-    const vpH = detailWrap.clientHeight || 600;
-    const vpAspect = vpW / vpH;
-    const clampedAspect = Math.max(3/4, Math.min(4/3, vpAspect));
-    let regionW = Math.min(1, vpW / state.sourceWidth);
-    let regionH = Math.min(1, (vpW / clampedAspect) / state.sourceHeight);
-    const maxPixels = 1920 * 1080;
-    const regionPixels = (regionW * state.sourceWidth) * (regionH * state.sourceHeight);
-    let scale = 1;
-    if (regionPixels > maxPixels) {
-      scale = Math.sqrt(maxPixels / regionPixels);
-    }
-    const maxFraction = 0.8;
-    regionW = Math.min(maxFraction, regionW * scale);
-    regionH = Math.min(maxFraction, regionH * scale);
-    state.region = { x: (1 - regionW) / 2, y: (1 - regionH) / 2, w: regionW, h: regionH };
 
     $('loading-message').classList.remove('active');
     $('status').textContent = `${state.sourceWidth}\u00d7${state.sourceHeight} \u2014 picsum/${pid} [${be}]`;

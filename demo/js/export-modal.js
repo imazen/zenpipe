@@ -153,6 +153,8 @@ function scheduleEncodePreview() {
 async function runEncodePreview() {
   previewDebounceId = null;
   if (!state.sourceImage) return;
+  // Skip if modal was closed (e.g., user clicked Export while preview was debounced)
+  if (!$('export-modal-backdrop').classList.contains('open')) return;
 
   const wrap = $('export-preview-wrap');
   wrap.classList.add('loading');
@@ -338,6 +340,10 @@ export function initExportModal() {
       const fallback = result.format !== exportFormat ? ` (${actualFmt.label} fallback)` : '';
       $('status').textContent = `Exported ${dims}${actualFmt.label} ${sizeKB} KB${fallback}`;
     } catch (e) {
+      // Show error in the export modal (re-open it) with retry
+      openExportModal();
+      const previewStats = $('export-preview-stats');
+      if (previewStats) previewStats.textContent = `Error: ${e.message}`;
       $('status').textContent = `Export error: ${e.message}`;
     }
   });

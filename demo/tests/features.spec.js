@@ -168,9 +168,120 @@ test.describe('metadata', () => {
     await page.goto('/');
     await loadTestImage(page);
     // After native decode upgrade, status should contain format info
-    // PNG test image may or may not have metadata, but upgrade should complete
     await page.waitForTimeout(3000);
     // Status should still show dimensions (upgrade doesn't break display)
     await expect(page.locator('#status')).toContainText('200');
+  });
+});
+
+test.describe('dock position', () => {
+  test('dock toggle cycles R → L → B → R', async ({ page }) => {
+    await page.goto('/');
+    const btn = page.locator('#dock-toggle');
+    const initial = await btn.textContent();
+    // Click to advance
+    await btn.click();
+    const second = await btn.textContent();
+    expect(second).not.toBe(initial);
+    await btn.click();
+    const third = await btn.textContent();
+    expect(third).not.toBe(second);
+    await btn.click();
+    // Full cycle back to initial
+    expect(await btn.textContent()).toBe(initial);
+  });
+
+  test('portrait viewport defaults to bottom dock', async ({ page }) => {
+    // Emulate portrait viewport (600×900)
+    await page.setViewportSize({ width: 600, height: 900 });
+    // Clear saved dock preference
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('zenpipe-dock'));
+    await page.goto('/');
+    await page.waitForTimeout(500);
+    expect(await page.locator('#dock-toggle').textContent()).toBe('B');
+  });
+
+  test('landscape viewport defaults to right dock', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('zenpipe-dock'));
+    await page.goto('/');
+    await page.waitForTimeout(500);
+    expect(await page.locator('#dock-toggle').textContent()).toBe('R');
+  });
+});
+
+test.describe('export formats', () => {
+  test('export WebP produces .webp download', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.locator('#export-btn').click();
+    await page.locator('.export-format-tab', { hasText: 'WebP' }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#export-confirm').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.webp$/);
+  });
+
+  // PNG encode hits "unreachable" in WASM (works native) — zenpng WASM bug
+  test.skip('export PNG produces .png download', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await page.locator('#export-btn').click();
+    await page.locator('.export-format-tab', { hasText: 'PNG' }).click();
+    // Confirm button should say "Export PNG"
+    await expect(page.locator('#export-confirm')).toContainText('PNG');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      page.locator('#export-confirm').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.png$/);
+  });
+});
+
+test.describe('zoom and pixel rendering', () => {
+  test('pixel info shows ratio after image load', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    await expect(page.locator('#pixel-info')).toBeVisible();
+    const text = await page.locator('#pixel-info').textContent();
+    // Should contain a ratio like "1:X" or "X:1"
+    expect(text).toMatch(/\d/);
+  });
+});
+
+test.describe('minimap', () => {
+  test('minimap toggle shows and hides overview', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    const btn = page.locator('#minimap-toggle');
+    const overview = page.locator('#overview-wrap');
+    // Initially collapsed
+    await expect(overview).toHaveClass(/collapsed/);
+    // Click to show
+    await btn.click();
+    await expect(overview).not.toHaveClass(/collapsed/);
+    // Click to hide
+    await btn.click();
+    await expect(overview).toHaveClass(/collapsed/);
+  });
+});
+
+test.describe('film presets', () => {
+  test('selecting a film preset triggers re-render', async ({ page }) => {
+    await page.goto('/');
+    await loadTestImage(page);
+    // Get initial status
+    const initialStatus = await page.locator('#status').textContent();
+    // Click a film preset chip (not "None")
+    const chips = page.locator('.preset-chip:not(.active)');
+    await chips.first().click();
+    // Wait for render
+    await page.waitForTimeout(500);
+    // The preset chip should now be active
+    const activeChip = page.locator('.preset-chip.active');
+    await expect(activeChip).toBeVisible();
   });
 });
