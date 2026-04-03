@@ -967,3 +967,110 @@ Workflow mode adapts for mobile by becoming a **recipe builder wizard**:
 | Undo | Swipe gesture | Ctrl+Z |
 | Compare | Tap-hold | Backslash key or tap-hold |
 | Batch | Wizard flow | Drag-and-drop + sidebar recipe |
+
+---
+
+## 19. Touch-Native Design
+
+### 19.1 The Problem with Porting Desktop to Touch
+Range `<input>` sliders are terrible on touch:
+- Thumb covers the value you're trying to see
+- No momentum/physics — feels dead
+- 4px track height is impossible to hit accurately
+- Browser implementations vary wildly (Chrome vs Safari vs Firefox)
+- No haptic feedback at identity/zero/min/max
+
+### 19.2 Custom Slider: Scrub Anywhere
+Replace HTML range inputs with a custom touch-native slider:
+
+```
+┌──────────────────────────────────┐
+│ Exposure                   +1.2 ↺│  ← label line (tap ↺ to reset)
+│ ████████████████░░░░░░░░░░░░░░░░│  ← filled track (touch anywhere to scrub)
+└──────────────────────────────────┘
+```
+
+- **Full-width touch target**: the entire row is draggable, not just a 4px track
+- **Scrub from anywhere**: touch down on the row, drag left/right to adjust
+  - No need to find and grab a tiny thumb
+  - Value changes proportionally to horizontal drag distance
+- **Velocity sensitivity**: slow drag = fine adjustment, fast drag = coarse
+- **Haptic feedback** (via `navigator.vibrate`):
+  - Tick at identity value (the "zero" point)
+  - Tick at 0, min, max boundaries
+  - Subtle tick at step increments for integer params
+- **Visual fill**: colored bar fills from identity outward (like Lightroom mobile)
+  - Identity in center for bipolar params (exposure: left=dark, right=bright)
+  - Identity at left for unipolar params (clarity: left=0, right=max)
+- **Value preview while dragging**: large overlay number above thumb position
+  - Prevents thumb from covering the value
+  - Fades 0.5s after release
+- **Two-finger precision**: pinch horizontally on the slider for 10x finer control
+  - Like zooming into the slider's range
+
+### 19.3 Gesture-Driven Filter Adjustment
+Beyond sliders — direct manipulation on the image:
+
+- **Swipe up/down on image** in a filter's "direct mode":
+  - Select "Exposure" → swipe up on image to brighten, down to darken
+  - The entire image surface is the control — much more natural than a slider
+  - Shows overlay: "Exposure +0.8" with a vertical bar indicator
+  - Release → value commits
+  - This is how Snapseed works — proven on billions of installs
+
+- **Direct mode toggle**: tap a filter name (not the slider) to enter direct mode
+  - Image gets a subtle overlay indicating direct mode is active
+  - Vertical drag = adjust that filter
+  - Horizontal drag = pan (still works)
+  - Tap elsewhere to exit direct mode
+
+### 19.4 Bottom Sheet Physics
+The control sheet should feel physical:
+
+- **Spring animation**: sheet snaps to detents (collapsed, half, full) with spring physics
+- **Velocity-based**: fast swipe up → overshoots then settles (momentum)
+- **Rubber-band at extremes**: pulling past full-open stretches then bounces back
+- **Background dim**: image dims progressively as sheet expands (0% → 30% at full)
+- **Detent positions**:
+  - Collapsed (80px): just the action buttons row
+  - Half (~40vh): primary controls visible, image still mostly visible
+  - Full (~85vh): all controls, image peeks above
+
+Implementation: CSS `touch-action: none` on the sheet handle, JS `pointermove` tracking with spring physics on release (simple damped spring: `x += (target - x) * 0.15` per frame).
+
+### 19.5 Swipe Actions
+| Gesture | Where | Action |
+|---------|-------|--------|
+| Swipe right from left edge | Anywhere | Undo last edit |
+| Swipe left from right edge | Anywhere | Redo |
+| Swipe down on image | Top of image | Dismiss / go back |
+| Long-press + drag on filter list | Sidebar | Reorder favorites |
+| Two-finger rotate on image | Crop mode | Rotate image (maps to rotation angle) |
+| Three-finger pinch | Image | Zoom overview (show whole image briefly) |
+
+### 19.6 Eliminating Tap-Target Problems
+- **No buttons smaller than 44×44pt** — audit all UI elements
+- **Slider rows: 56pt tall** (label + track + padding)
+- **Group headers: 48pt** (easy to tap to collapse/expand)
+- **Preset chips: 44pt tall**, spaced 8pt apart
+- **Reset icon: 44×44pt touch target** (even if visually 16px, the tap area is larger)
+- **Export format tabs: 48pt** with generous padding
+
+### 19.7 Feedback & Responsiveness
+- **Instant visual response** to every touch (<16ms):
+  - CSS filter preview on slider drag (already implemented)
+  - Slider fill color updates in same frame as touch
+  - No waiting for worker — visual feedback is synchronous
+- **Loading states use skeleton screens**, not spinners where possible
+- **Haptic patterns**:
+  - Light tap: slider crosses identity
+  - Medium tap: mode change, preset selected
+  - Heavy tap: export complete, error
+- **Audio feedback**: optional subtle click sounds (off by default, in settings)
+
+### 19.8 Accessibility
+- **VoiceOver / TalkBack**: all interactive elements have `aria-label`
+- **Slider values announced**: "Exposure: plus 1.2 stops"
+- **Reduced motion**: respect `prefers-reduced-motion` — disable spring physics, use instant transitions
+- **High contrast mode**: boost slider fill contrast, thicker borders
+- **Rotor actions** (iOS VoiceOver): increment/decrement sliders via swipe up/down
