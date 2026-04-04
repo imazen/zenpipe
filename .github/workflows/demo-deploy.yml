@@ -27,16 +27,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: wasm32-unknown-unknown
+          components: rust-src
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: demo/crate
 
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.117
 
       - name: Clone unpublished sibling repos
         run: |
@@ -77,11 +78,14 @@ jobs:
           printf '\n[patch.crates-io]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\nzennode = { git = "https://github.com/imazen/zennode" }\n' >> Cargo.toml
           rm -f Cargo.lock
 
-      - name: Build WASM
+      - name: Build WASM (threaded, nightly)
         run: |
           cd demo/crate
-          RUSTFLAGS="-C target-feature=+simd128" wasm-pack build \
-            --target web --out-dir ../pkg --release
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-args=--shared-memory --import-memory --max-memory=1073741824 --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base" \
+            cargo +nightly build --target wasm32-unknown-unknown --release \
+            --features "wasm,parallel" -Z build-std=panic_abort,std
+          wasm-bindgen --target web --out-dir ../pkg \
+            target/wasm32-unknown-unknown/release/zenpipe_demo.wasm
 
       - name: Prepare Pages artifact
         run: |
@@ -90,11 +94,9 @@ jobs:
           cp demo/schema.json _site/
           cp demo/worker.js _site/
           cp demo/serve.py _site/
+          cp demo/coi-serviceworker.js _site/
           cp -r demo/js _site/js
           cp -r demo/pkg _site/pkg
-          # Add coi-serviceworker for SharedArrayBuffer support on Pages
-          curl -sL https://raw.githubusercontent.com/nicknisi/nicknisi.github.io/main/coi-serviceworker.js \
-            -o _site/coi-serviceworker.js || true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
