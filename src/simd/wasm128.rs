@@ -10,17 +10,17 @@ use crate::blur::GaussianKernel;
 use crate::context::FilterContext;
 use zenpixels_convert::gamut::GamutMatrix;
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn scale_plane_impl_wasm128(token: Wasm128Token, plane: &mut [f32], factor: f32) {
     super::wide_simd::scale_plane_simd_wasm128(token, plane, factor);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn offset_plane_impl_wasm128(token: Wasm128Token, plane: &mut [f32], offset: f32) {
     super::wide_simd::offset_plane_simd_wasm128(token, plane, offset);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn power_contrast_plane_impl_wasm128(
     token: Wasm128Token,
     plane: &mut [f32],
@@ -30,7 +30,7 @@ pub(super) fn power_contrast_plane_impl_wasm128(
     super::wide_simd::power_contrast_plane_simd_wasm128(token, plane, exp, scale);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn sigmoid_tone_map_plane_impl_wasm128(
     token: Wasm128Token,
     plane: &mut [f32],
@@ -40,7 +40,7 @@ pub(super) fn sigmoid_tone_map_plane_impl_wasm128(
     super::wide_simd::sigmoid_tone_map_plane_simd_wasm128(token, plane, contrast, bias_a);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn unsharp_fuse_impl_wasm128(
     token: Wasm128Token,
     src: &[f32],
@@ -51,7 +51,7 @@ pub(super) fn unsharp_fuse_impl_wasm128(
     super::wide_simd::unsharp_fuse_simd_wasm128(token, src, blurred, dst, amount);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn gaussian_blur_plane_impl_wasm128(
     token: Wasm128Token,
     src: &[f32],
@@ -66,7 +66,7 @@ pub(super) fn gaussian_blur_plane_impl_wasm128(
     );
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn brilliance_apply_impl_wasm128(
     token: Wasm128Token,
     src_l: &[f32],
@@ -87,7 +87,7 @@ pub(super) fn brilliance_apply_impl_wasm128(
     );
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn scatter_oklab_impl_wasm128(
     token: Wasm128Token,
     src: &[f32],
@@ -101,7 +101,7 @@ pub(super) fn scatter_oklab_impl_wasm128(
     super::wide_simd::scatter_oklab_simd_wasm128(token, src, l, a, b, channels, m1, inv_white);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn gather_oklab_impl_wasm128(
     token: Wasm128Token,
     l: &[f32],
@@ -124,7 +124,7 @@ pub(super) fn gather_oklab_impl_wasm128(
     );
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn scatter_srgb_u8_to_oklab_impl_wasm128(
     token: Wasm128Token,
     src: &[u8],
@@ -137,7 +137,7 @@ pub(super) fn scatter_srgb_u8_to_oklab_impl_wasm128(
     super::wide_simd::scatter_srgb_u8_to_oklab_simd_wasm128(token, src, l, a, b, channels, m1);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn gather_oklab_to_srgb_u8_impl_wasm128(
     token: Wasm128Token,
     l: &[f32],
@@ -150,7 +150,7 @@ pub(super) fn gather_oklab_to_srgb_u8_impl_wasm128(
     super::wide_simd::gather_oklab_to_srgb_u8_simd_wasm128(token, l, a, b, dst, channels, m1_inv);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn black_point_plane_impl_wasm128(
     token: Wasm128Token,
     plane: &mut [f32],
@@ -160,7 +160,7 @@ pub(super) fn black_point_plane_impl_wasm128(
     super::wide_simd::black_point_plane_simd_wasm128(token, plane, bp, inv_range);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn hue_rotate_impl_wasm128(
     token: Wasm128Token,
     a: &mut [f32],
@@ -171,7 +171,7 @@ pub(super) fn hue_rotate_impl_wasm128(
     super::wide_simd::hue_rotate_simd_wasm128(token, a, b, cos_r, sin_r);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn highlights_shadows_impl_wasm128(
     token: Wasm128Token,
     plane: &mut [f32],
@@ -181,7 +181,7 @@ pub(super) fn highlights_shadows_impl_wasm128(
     super::wide_simd::highlights_shadows_simd_wasm128(token, plane, shadows, highlights);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn vibrance_impl_wasm128(
     token: Wasm128Token,
     a: &mut [f32],
@@ -192,7 +192,7 @@ pub(super) fn vibrance_impl_wasm128(
     super::wide_simd::vibrance_simd_wasm128(token, a, b, amount, protection);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn subtract_planes_impl_wasm128(
     token: Wasm128Token,
     a: &[f32],
@@ -202,12 +202,12 @@ pub(super) fn subtract_planes_impl_wasm128(
     super::wide_simd::subtract_planes_simd_wasm128(token, a, b, dst);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn square_plane_impl_wasm128(token: Wasm128Token, src: &[f32], dst: &mut [f32]) {
     super::wide_simd::square_plane_simd_wasm128(token, src, dst);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn wavelet_threshold_accumulate_impl_wasm128(
     token: Wasm128Token,
     current: &[f32],
@@ -220,12 +220,12 @@ pub(super) fn wavelet_threshold_accumulate_impl_wasm128(
     );
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn add_clamped_impl_wasm128(token: Wasm128Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     super::wide_simd::add_clamped_simd_wasm128(token, a, b, dst);
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn adaptive_sharpen_apply_impl_wasm128(
     token: Wasm128Token,
     l: &[f32],
@@ -248,7 +248,7 @@ pub(super) fn adaptive_sharpen_apply_impl_wasm128(
     );
 }
 
-#[archmage::arcane]
+#[arcane]
 pub(super) fn fused_adjust_impl_wasm128(
     token: Wasm128Token,
     l: &mut [f32],
@@ -294,7 +294,7 @@ pub(super) fn fused_adjust_impl_wasm128(
 }
 
 #[allow(dead_code)]
-#[archmage::arcane]
+#[arcane]
 pub(super) fn fused_interleaved_adjust_impl_wasm128(
     token: Wasm128Token,
     src: &[f32],
