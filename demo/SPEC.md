@@ -2085,3 +2085,190 @@ self.onmessage = (e) => {
 4. **Build a thin JS adapter** that converts current module calls into `dispatch()` calls
 5. **Gradually move logic from JS modules into Rust** — each module shrinks as its logic moves
 6. **Eventually**: JS is only DOM events → `dispatch()` → apply `ViewUpdate` to DOM
+
+---
+
+## 25. Responsiveness Architecture
+
+### 25.1 The Problem
+`dispatch(SetParam)` must return in <1ms so the slider tracks the finger. But rendering takes 3-90ms (cache hit vs miss). If `dispatch()` blocks on render, the UI stutters.
+
+### 25.2 Split: Sync State + Async Render
+
+```rust
+impl EditorState {
+    /// Synchronous — updates state, returns immediate view updates.
+    /// NEVER renders pixels. Returns in <0.1ms.
+    pub fn dispatch(&mut self, cmd: Command) -> Vec<ViewUpdate> {
+        match cmd {
+            Command::SetParam { key, value } => {
+                self.adjustments.set(&key, value);
+                self.render_needed = true;
+                // Return the state change — view updates the slider immediately
+                vec![ViewUpdate::ParamChanged { key, value }]
+            }
+            Command::DragMove { dx, dy } => {
+                self.region.pan(dx, dy);
+                // Return new region — view repositions immediately
+                vec![ViewUpdate::RegionChanged { ... }]
+            }
+            Command::Undo => {
+                self.history.undo(&mut self.adjustments);
+                vec![ViewUpdate::AllParamsChanged { ... },
+                     ViewUpdate::HistoryChanged { ... }]
+            }
+            _ => { ... }
+        }
+    }
+
+    /// Asynchronous — runs the pipeline, returns pixel data.
+    /// Called by the worker loop, NOT by dispatch().
+    /// Checks render_needed flag, returns None if nothing to do.
+    pub fn render_if_needed(&mut self) -> Option<Vec<ViewUpdate>> {
+        if !self.render_needed { return None; }
+        self.render_needed = false;
+
+        let mut updates = vec![ViewUpdate::RenderStarted];
+
+        // Overview render (~3ms from cache, ~90ms cold)
+        match self.render_overview() {
+            Ok(out) => updates.push(ViewUpdate::OverviewPixels { ... }),
+            Err(e) => updates.push(ViewUpdate::Error { ... }),
+        }
+        // Detail render
+        match self.render_detail() {
+            Ok(out) => updates.push(ViewUpdate::DetailPixels { ... }),
+            Err(e) => updates.push(ViewUpdate::Error { ... }),
+        }
+
+        updates.push(ViewUpdate::RenderComplete { elapsed_ms });
+        self.adjustments.snapshot_safe();
+        Some(updates)
+    }
+}
+```
+
+### 25.3 Worker Loop
+
+```javascript
+// worker.js
+const editor = new EditorState();
+const RENDER_DEBOUNCE_MS = 16; // one frame
+let renderTimer = null;
+
+self.onmessage = ({ data: cmd }) => {
+  // Dispatch is synchronous — always returns instantly
+  const updates = editor.dispatch(cmd);
+  if (updates.length > 0) {
+    self.postMessage({ type: 'updates', updates });
+  }
+
+  // Schedule async render (debounced)
+  if (editor.render_needed) {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      const renderUpdates = editor.render_if_needed();
+      if (renderUpdates) {
+        const transfers = collectTransfers(renderUpdates);
+        self.postMessage({ type: 'updates', updates: renderUpdates }, transfers);
+      }
+    }, RENDER_DEBOUNCE_MS);
+  }
+};
+```
+
+### 25.4 Main Thread Timeline
+
+```
+User drags slider
+  │
+  ├─ [0ms]   pointermove fires
+  ├─ [0ms]   postMessage({ SetParam, key, value })
+  │           (non-blocking — returns immediately)
+  │
+  ├─ [0ms]   CSS filter preview applied (from last known CSS approximation)
+  │           Slider thumb position already updated by browser
+  │
+  ├─ [<1ms]  Worker: dispatch(SetParam) → [ParamChanged]
+  │           Worker posts [ParamChanged] back
+  │           Main thread: noop (slider already at correct position)
+  │
+  ├─ [16ms]  Worker: render debounce fires
+  │           render_if_needed() → renders overview + detail
+  │
+  ├─ [19ms]  Worker posts [OverviewPixels, DetailPixels, RenderComplete]
+  │           Main thread: putImageData, clear CSS filter preview
+  │
+  └─ [19ms]  User sees sharp rendered result
+             Total perceived lag: 0ms (CSS preview was instant)
+```
+
+### 25.5 What About Long Renders?
+
+Cold renders (cache miss, full decode + resize + filter) can take 50-200ms. During this time:
+
+1. **CSS preview stays visible** — user sees approximate result immediately
+2. **New slider events keep arriving** — `dispatch()` updates state instantly
+3. **The in-progress render is cancelled** via `enough::Stop` (AtomicBool)
+4. **A new render starts** with the latest state after debounce
+5. **Only the final state renders** — intermediate positions are skipped
+
+```
+Slider drag: 0ms   10ms   20ms   30ms   40ms   50ms   60ms
+State:       v=0.1  v=0.3  v=0.5  v=0.7  v=0.9  v=1.0  (stopped)
+CSS preview: ✓      ✓      ✓      ✓      ✓      ✓
+Render:      start→──────cancelled──────┘      start→──────done(v=1.0)
+```
+
+The user sees smooth CSS preview throughout. Only the final value renders through the pipeline.
+
+### 25.6 Direct Mode (Snapseed-Style) on Image
+
+When the user drags on the image to adjust a filter (§19.3), the same split applies:
+
+```
+User swipe up on image (Exposure mode)
+  │
+  ├─ [0ms]   pointermove: dy = -30px
+  │           Map to exposure delta: +0.3 stops
+  │           dispatch(SetParam { "exposure.stops", 0.3 })
+  │
+  ├─ [0ms]   CSS: canvas.style.filter = 'brightness(1.23)'
+  │           Overlay: "Exposure +0.3" label appears
+  │
+  ├─ [<1ms]  Worker: state updated, render scheduled
+  │
+  ├─ [~16ms] Worker: render from cache → pixels back
+  │           CSS filter removed, sharp pixels shown
+  │
+  └─ User perceives zero lag — CSS brightness is a perfect
+     approximation for exposure in the ±2 stop range
+```
+
+### 25.7 Approximation Quality
+
+Not all filters have good CSS approximations. When they don't, the user sees a brief delay:
+
+| Filter | CSS Approximation | Quality | Lag Perceived |
+|--------|-------------------|---------|--------------|
+| Exposure | `brightness(pow(2, v))` | Excellent | None |
+| Contrast | `contrast(1 + v)` | Good | None |
+| Saturation | `saturate(factor)` | Good | None |
+| Temperature | — | None | ~16ms (from cache) |
+| Clarity | — | None | ~16ms (from cache) |
+| Vignette | — | None | ~16ms (from cache) |
+| Film preset | — | None | ~16ms (from cache) |
+
+For filters without CSS approximation, 16ms (one frame from cache) is still imperceptible. The upscaled overview preview (§5.1) also provides instant visual feedback during any interaction.
+
+### 25.8 Summary: Where Time Goes
+
+| Operation | Time | Blocks UI? | Solution |
+|-----------|------|-----------|----------|
+| `dispatch()` (state change) | <0.1ms | No | Synchronous, no render |
+| CSS filter preview | <0.1ms | No | Applied in same frame as input |
+| Upscaled overview preview | <1ms | No | Canvas drawImage (browser) |
+| Render from cache (filter suffix) | 2-5ms | No (worker) | Async in worker |
+| Render cold (full pipeline) | 50-200ms | No (worker) | Async, cancellable, CSS preview covers |
+| Encode preview (overview size) | 5-50ms | No (worker) | Async, debounced 200ms |
+| Encode full-res export | 100ms-10s | No (worker) | Async, progress bar, cancellable |
