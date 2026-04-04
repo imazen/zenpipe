@@ -215,6 +215,9 @@ pub use zenbitmaps::{BmpDecodeJob, BmpDecoderConfig, BmpEncodeJob, BmpEncoderCon
 #[cfg(feature = "raw-decode")]
 pub use zenraw::{RawDecodeConfig, RawDecoderConfig};
 
+#[cfg(feature = "svg")]
+pub use zensvg::{SvgDecodeJob, SvgDecoderConfig};
+
 // ═══════════════════════════════════════════════════════════════════════
 // Top-level convenience functions (streaming-first API)
 // ═══════════════════════════════════════════════════════════════════════

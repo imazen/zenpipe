@@ -134,6 +134,18 @@ fn build_dyn_decoder_config(
             Ok(Box::new(build_raw_decoder(codec_config)))
         }
 
+        // JPEG 2000: Custom format from zenjp2
+        #[cfg(feature = "jp2-decode")]
+        ImageFormat::Jp2 => {
+            Ok(Box::new(zenjp2::Jp2DecoderConfig::new()))
+        }
+
+        // SVG/SVGZ: Custom format from zensvg
+        #[cfg(feature = "svg")]
+        ImageFormat::Custom(def) if def.name == "svg" => {
+            Ok(Box::new(zensvg::SvgDecoderConfig::new()))
+        }
+
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
 }
@@ -268,6 +280,18 @@ pub(crate) fn dyn_push_decode(
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
             push_dec!(build_raw_decoder(params.codec_config))
+        }
+
+        // JPEG 2000: Custom format from zenjp2
+        #[cfg(feature = "jp2-decode")]
+        ImageFormat::Jp2 => {
+            push_dec_at!(zenjp2::Jp2DecoderConfig::new())
+        }
+
+        // SVG/SVGZ: Custom format from zensvg
+        #[cfg(feature = "svg")]
+        ImageFormat::Custom(def) if def.name == "svg" => {
+            push_dec!(zensvg::SvgDecoderConfig::new())
         }
 
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
@@ -593,6 +617,8 @@ pub(crate) fn decoder_id_for_format(format: ImageFormat) -> CodecId {
         ImageFormat::Tiff => CodecId::TiffDecode,
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => CodecId::ZenrawDecode,
+        #[cfg(feature = "svg")]
+        ImageFormat::Custom(def) if def.name == "svg" => CodecId::ZensvgDecode,
         _ => CodecId::Custom("unknown"),
     }
 }

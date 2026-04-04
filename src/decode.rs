@@ -562,6 +562,18 @@ impl<'a> DecodeRequest<'a> {
                 crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.stop)
             }
 
+            // JPEG 2000
+            #[cfg(feature = "jp2-decode")]
+            ImageFormat::Jp2 => {
+                crate::codecs::jp2::decode(self.data, self.limits, self.stop, dp)
+            }
+
+            // SVG/SVGZ
+            #[cfg(feature = "svg")]
+            ImageFormat::Custom(def) if def.name == "svg" => {
+                crate::codecs::svg::decode(self.data, self.limits, self.stop, dp)
+            }
+
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }
     }

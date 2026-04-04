@@ -18,9 +18,15 @@ pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
     if let Some(fmt) = crate::codecs::raw::detect_raw_format(data) {
         return Some(fmt);
     }
-    // Try common formats (JPEG, PNG, GIF, WebP, TIFF, etc.)
+    // Try common formats (JPEG, PNG, GIF, WebP, TIFF, JP2, etc.)
     if let Some(fmt) = zencodec::ImageFormatRegistry::common().detect(data) {
         return Some(fmt);
+    }
+    // SVG detection is last — it scans for `<svg` in up to 1024 bytes,
+    // and SVGZ shares gzip magic with non-image gzip files.
+    #[cfg(feature = "svg")]
+    if crate::codecs::svg::detect_svg(data) {
+        return Some(zensvg::svg_format());
     }
     None
 }
@@ -173,6 +179,11 @@ fn finalize_gain_map_presence(info: &mut ImageInfo) {
             info.gain_map = zencodec::gainmap::GainMapPresence::Absent;
             info.supplements.gain_map = false;
         }
+        // JPEG 2000 never contains gain maps
+        ImageFormat::Jp2 => {
+            info.gain_map = zencodec::gainmap::GainMapPresence::Absent;
+            info.supplements.gain_map = false;
+        }
         // Formats that CAN contain gain maps — leave Unknown until decode
         // (JPEG, AVIF, JXL, HEIC, RAW need full decode or deeper parsing)
         _ => {}
@@ -256,6 +267,18 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
             crate::codecs::raw::probe(data)?
+        }
+
+        // JPEG 2000: Custom format from zenjp2
+        #[cfg(feature = "jp2-decode")]
+        ImageFormat::Jp2 => {
+            crate::codecs::jp2::probe(data)?
+        }
+
+        // SVG/SVGZ: Custom format from zensvg
+        #[cfg(feature = "svg")]
+        ImageFormat::Custom(def) if def.name == "svg" => {
+            crate::codecs::svg::probe(data)?
         }
 
         _ => return Err(at!(CodecError::UnsupportedFormat(format))),

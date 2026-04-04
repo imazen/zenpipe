@@ -53,3 +53,9 @@ pub(crate) mod tiff;
 
 #[cfg(feature = "raw-decode")]
 pub(crate) mod raw;
+
+#[cfg(feature = "jp2-decode")]
+pub(crate) mod jp2;
+
+#[cfg(feature = "svg")]
+pub(crate) mod svg;

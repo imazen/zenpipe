@@ -34,6 +34,8 @@ heic = { version = "0.1.1", optional = true, default-features = false, features 
 zenbitmaps = { version = "0.1.3", optional = true, features = ["zencodec"] }
 zentiff = { version = "0.1.0", optional = true, features = ["zencodec"] }
 zenraw = { version = "0.1.1", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
+zenjp2 = { path = "../zenjp2", optional = true, features = ["zencodec"] }
+zensvg = { path = "../zensvg", optional = true }
 
 # Node definitions (optional)
 zennode = { version = "0.1.1", default-features = false, features = ["derive"], optional = true }
@@ -78,6 +80,8 @@ bitmaps-tga = ["bitmaps", "zenbitmaps/tga"]
 bitmaps-hdr = ["bitmaps", "zenbitmaps/hdr"]
 tiff = ["dep:zentiff"]
 raw-decode = ["dep:zenraw"]
+jp2-decode = ["dep:zenjp2"]
+svg = ["dep:zensvg"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
 raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
@@ -92,7 +96,7 @@ zennode = ["dep:zennode"]
 cms = ["dep:moxcms"]
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr", "tiff", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr", "tiff", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap", "jp2-decode", "svg"]
 
 # Calibration harness (all lossy encoders)
 calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std", "dep:turbojpeg"]
@@ -128,6 +132,9 @@ required-features = ["std"]
 [[example]]
 name = "quality_calibrate"
 required-features = ["calibrate"]
+
+[patch.crates-io]
+zencodec = { path = "../zencodec" }
 
 [package.metadata.superwork.ci]
 strategy = "strip_path"

@@ -58,6 +58,14 @@ pub enum CodecId {
     /// zenraw decoder (RAW/DNG)
     ZenrawDecode,
 
+    // JPEG 2000
+    /// zenjp2 decoder (JPEG 2000)
+    Jp2Decode,
+
+    // SVG
+    /// zensvg decoder (SVG/SVGZ rendering)
+    ZensvgDecode,
+
     // Bitmaps
     /// zenbitmaps PNM decoder
     PnmDecode,
@@ -96,6 +104,9 @@ impl CodecId {
             // ZenrawDecode uses Custom format; return Unknown since there's no
             // built-in RAW variant — callers should use CodecId-level matching instead.
             Self::ZenrawDecode => ImageFormat::Unknown,
+            // ZensvgDecode uses Custom format — same as RAW.
+            Self::ZensvgDecode => ImageFormat::Unknown,
+            Self::Jp2Decode => ImageFormat::Jp2,
             Self::PnmDecode | Self::PnmEncode => ImageFormat::Pnm,
             Self::BmpDecode | Self::BmpEncode => ImageFormat::Bmp,
             Self::FarbfeldDecode | Self::FarbfeldEncode => ImageFormat::Farbfeld,
@@ -118,6 +129,8 @@ impl CodecId {
                 | Self::ZenjxlDecode
                 | Self::HeicDecode
                 | Self::ZenrawDecode
+                | Self::Jp2Decode
+                | Self::ZensvgDecode
                 | Self::PnmDecode
                 | Self::BmpDecode
                 | Self::FarbfeldDecode
@@ -159,6 +172,8 @@ impl CodecId {
             Self::JxlEncoderEncode => "jxl-encoder (encode)",
             Self::HeicDecode => "heic (decode)",
             Self::ZenrawDecode => "zenraw (decode)",
+            Self::Jp2Decode => "zenjp2 (decode)",
+            Self::ZensvgDecode => "zensvg (decode)",
             Self::PnmDecode => "zenbitmaps-pnm (decode)",
             Self::PnmEncode => "zenbitmaps-pnm (encode)",
             Self::BmpDecode => "zenbitmaps-bmp (decode)",
