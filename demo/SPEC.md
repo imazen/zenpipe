@@ -2272,3 +2272,111 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | Render cold (full pipeline) | 50-200ms | No (worker) | Async, cancellable, CSS preview covers |
 | Encode preview (overview size) | 5-50ms | No (worker) | Async, debounced 200ms |
 | Encode full-res export | 100ms-10s | No (worker) | Async, progress bar, cancellable |
+
+---
+
+## 26. Zen Crate Index (Relevant to Editor)
+
+### 26.1 Pipeline Core
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zenpipe** | ❌ (this repo) | Streaming pixel pipeline, graph execution, Session caching | ✅ Core engine |
+| **zencodec** | ✅ 0.1.12 | Shared encode/decode traits, Metadata, GainMapParams | ✅ Trait layer |
+| **zencodecs** | ❌ | Unified format detection, codec dispatch, zennode defs for all codecs | ✅ Encode/decode dispatch |
+| **zennode** | ❌ | Self-documenting node definitions, NodeRegistry, JSON schema export | ✅ Schema-driven UI |
+| **zennode-derive** | ❌ | `#[derive(Node)]` proc macro | ✅ (transitive) |
+
+### 26.2 Pixel Types & Color
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zenpixels** | ✅ 0.2.2 | PixelDescriptor, PixelSlice, ColorContext, CICP | ✅ Format types |
+| **zenpixels-convert** | ✅ 0.2.3 | RowConverter, transfer functions, gamut mapping, CMS dispatch | ✅ pack_rgba output conversion |
+| **linear-srgb** | ✅ | Linear↔sRGB via rational polynomials + LUTs, SIMD batch | ✅ (transitive) |
+| **garb** | ✅ | Pixel format swizzle, depth scaling, SIMD | ✅ (transitive) |
+| **moxcms** | ✅ | ICC color management (pure Rust, SIMD) | ⬜ Future (std only) |
+
+### 26.3 Image Processing
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zenresize** | ✅ | Streaming resize, 31 filter kernels, SIMD u8/i16/f32 | ✅ Overview + detail resize |
+| **zenlayout** | ✅ | Image geometry, constraint modes, EXIF orientation | ✅ Crop + orient |
+| **zenblend** | ✅ | Porter-Duff + artistic blend modes, premultiplied f32 RGBA | ✅ (transitive, compositing) |
+| **zenfilters** | ❌ | 50+ photo filters in Oklab f32, SIMD, warp/rotate/document | ✅ All filter adjustments |
+| **zenquant** | ✅ | Palette quantizer (OKLab, perceptual masking, Viterbi) | ⬜ Future (GIF quality) |
+
+### 26.4 Image Codecs
+
+| Crate | Published | Decode | Encode | Used By Editor |
+|-------|-----------|--------|--------|----------------|
+| **zenjpeg** | ✅ 0.8.1 | ✅ Streaming | ✅ Trellis/AQ | ✅ JPEG encode |
+| **zenpng** | ✅ 0.1.2 | ✅ | ✅ zenflate | ✅ PNG encode |
+| **zenwebp** | ✅ 0.4.2 | ✅ | ✅ Lossy+lossless | ✅ WebP encode |
+| **zengif** | ✅ 0.7.1 | ✅ Animation | ✅ quantizr | ✅ GIF encode |
+| **zenjxl** | ✅ 0.1.1 | ✅ zenjxl-decoder | ✅ jxl-encoder | ✅ JXL encode + decode |
+| **zenavif** | ✅ 0.1.3 | ✅ rav1d-safe | ✅ zenrav1e | ✅ AVIF encode + decode |
+| **heic** | ✅ | ✅ SIMD | ❌ | ⬜ Future HEIC decode |
+| **zentiff** | ✅ | ✅ | ✅ | ⬜ Future TIFF support |
+| **zenbitmaps** | ✅ 0.1.3 | ✅ All | ✅ All | ⬜ BMP/QOI/TGA/PNM/HDR |
+
+### 26.5 Codec Support Crates
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zenjxl-decoder** | ✅ | Pure Rust JXL decoder with SIMD | ✅ (via zenjxl) |
+| **jxl-encoder** | ✅ | Pure Rust JXL encoder, lossy + lossless | ✅ (via zenjxl) |
+| **zenrav1e** | ✅ | AV1 encoder (rav1e fork) with QM, lossless, WASM | ✅ (via zenavif) |
+| **rav1d-safe** | ✅ | Safe AV1 decoder (rav1d fork, no C FFI) | ✅ (via zenavif) |
+| **zenavif-parse** | ✅ | Zero-copy AVIF/ISOBMFF parser | ✅ (via zenavif) |
+| **zenavif-serialize** | ✅ | AVIF container muxer | ✅ (via zenavif) |
+| **zenflate** | ✅ | DEFLATE/zlib/gzip, streaming, parallel gzip | ✅ (via zenpng) |
+| **ultrahdr** | ✅ | Gain map math, tone mapping, ISO 21496-1 | ⬜ Future HDR |
+
+### 26.6 Infrastructure
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **archmage** | ✅ | Safe SIMD dispatch via CPU tokens, `#[arcane]` macro | ✅ (transitive, all SIMD) |
+| **magetypes** | ✅ | Shared SIMD primitive types for archmage | ✅ (transitive) |
+| **enough** | ✅ 0.4.3 | Cooperative cancellation tokens (`Stop` trait) | ✅ Render cancellation |
+| **whereat** | ✅ | Lightweight error location tracking | ✅ (transitive) |
+
+### 26.7 ML / Saliency
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zensally** | ❌ | Face detection + saliency maps for smart crop | ⬜ Future (zentract) |
+| **zentract** | ❌ | ONNX inference plugin system (dlopen) | ⬜ Future server-side ML |
+| **zentract-types** | ❌ | Shared types for zentract ABI | ⬜ Future |
+| **zentract-abi** | ❌ | C ABI for zentract plugins | ⬜ Future |
+| **zentract-api** | ❌ | Host-side loader for zentract | ⬜ Future |
+
+### 26.8 Metrics / Quality
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zensim** | ✅ | Multi-scale perceptual similarity (XYB, SIMD) | ⬜ Future quality comparison |
+| **fast-ssim2** | ✅ | Fast SSIMULACRA2 perceptual metric | ⬜ Future quality comparison |
+| **butteraugli** | ✅ | Butteraugli perceptual difference | ⬜ Future quality comparison |
+| **codec-eval** | ✅ | Codec evaluation framework | ⬜ Future benchmarking |
+
+### 26.9 Tools
+
+| Crate | Published | Description | Used By Editor |
+|-------|-----------|-------------|----------------|
+| **zenbench** | ✅ 0.1.3 | Interleaved microbenchmarking | ✅ Session cache benchmark |
+| **cargo-read** | ✅ | Download crate source for research | Dev tool |
+| **cargo-copter** | ✅ | Test reverse deps against WIP | Dev tool |
+
+### 26.10 Products (Reference, Not Dependencies)
+
+| Crate | Description | Relationship |
+|-------|-------------|-------------|
+| **imageflow** | Imageflow v3: imageflow_abi + imageflow_core (zenpipe backend) | Consumer of zenpipe |
+| **imageflow-dotnet** | .NET bindings (9M+ NuGet downloads) | Consumer |
+| **imageflow-node** | Node.js bindings | Consumer |
+| **imageflow-go** | Go bindings | Consumer |
+| **zensquoosh** | TypeScript/Preact codec frontend | Reference UI |
+| **zenimage-web** | Retired browser editor (reference for UX patterns) | Reference |
