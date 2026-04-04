@@ -1,20 +1,15 @@
 //! wasm-bindgen API for the demo editor.
 //!
-//! Exposes [`Editor`] to JavaScript as `WasmEditor` with methods that
-//! accept/return JS-friendly types (Uint8Array, JSON strings, numbers).
+//! Thin wrapper over `zeneditor::EditorState` that exposes methods to
+//! JavaScript with JS-friendly types (Uint8Array, JSON strings, numbers).
 
-use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
+use zeneditor::EditorState;
 
-use crate::editor::{Editor, Region};
-
-/// WASM-exposed image editor backed by zenpipe Session caching.
-///
-/// Created from raw RGBA8 pixel bytes. Holds two Session caches
-/// (overview + detail) that persist across render calls.
+/// WASM-exposed image editor backed by zeneditor.
 #[wasm_bindgen]
 pub struct WasmEditor {
-    inner: Editor,
+    inner: EditorState,
     /// Cached preset thumbnail pixel data from the last render_preset_thumbnails call.
     preset_thumbnails: Vec<(String, Vec<u8>)>,
 }
@@ -39,25 +34,21 @@ pub struct WasmEncodeResult {
 
 #[wasm_bindgen]
 impl WasmRenderResult {
-    /// RGBA8 pixel data as a Uint8Array (transferred, zero-copy).
     #[wasm_bindgen(getter)]
     pub fn data(&self) -> js_sys::Uint8Array {
         js_sys::Uint8Array::from(self.data.as_slice())
     }
 
-    /// Width in pixels.
     #[wasm_bindgen(getter)]
     pub fn width(&self) -> u32 {
         self.width
     }
 
-    /// Height in pixels.
     #[wasm_bindgen(getter)]
     pub fn height(&self) -> u32 {
         self.height
     }
 
-    /// Total byte length (width * height * 4).
     #[wasm_bindgen(getter)]
     pub fn byte_length(&self) -> u32 {
         self.data.len() as u32
@@ -66,37 +57,31 @@ impl WasmRenderResult {
 
 #[wasm_bindgen]
 impl WasmEncodeResult {
-    /// Encoded bytes as a Uint8Array (transferred, zero-copy).
     #[wasm_bindgen(getter)]
     pub fn data(&self) -> js_sys::Uint8Array {
         js_sys::Uint8Array::from(self.data.as_slice())
     }
 
-    /// Output format name (e.g., "jpeg", "webp", "png", "gif").
     #[wasm_bindgen(getter)]
     pub fn format(&self) -> String {
         self.format.clone()
     }
 
-    /// MIME type of the encoded output.
     #[wasm_bindgen(getter)]
     pub fn mime(&self) -> String {
         self.mime.clone()
     }
 
-    /// Encoded byte count.
     #[wasm_bindgen(getter)]
     pub fn size(&self) -> u32 {
         self.data.len() as u32
     }
 
-    /// Output width in pixels.
     #[wasm_bindgen(getter)]
     pub fn width(&self) -> u32 {
         self.width
     }
 
-    /// Output height in pixels.
     #[wasm_bindgen(getter)]
     pub fn height(&self) -> u32 {
         self.height
@@ -150,10 +135,6 @@ impl WasmUpgradeResult {
 #[wasm_bindgen]
 impl WasmEditor {
     /// Create an editor from RGBA8 pixel data.
-    ///
-    /// `rgba_data` must be exactly `width * height * 4` bytes.
-    /// `overview_max` and `detail_max` control the output dimensions
-    /// of the overview and detail views.
     #[wasm_bindgen(constructor)]
     pub fn new(
         rgba_data: &[u8],
@@ -169,24 +150,19 @@ impl WasmEditor {
                 rgba_data.len()
             )));
         }
+        let mut inner = EditorState::new(overview_max, detail_max);
+        inner.init_from_rgba(rgba_data.to_vec(), width, height);
         Ok(WasmEditor {
-            inner: Editor::from_rgba(rgba_data.to_vec(), width, height, overview_max, detail_max),
+            inner,
             preset_thumbnails: Vec::new(),
         })
     }
 
     /// Upgrade the editor's source by decoding original image bytes natively.
-    ///
-    /// Replaces browser-decoded pixels with zencodecs-decoded pixels and
-    /// preserves metadata (ICC, EXIF, XMP, CICP). Session caches invalidate
-    /// automatically — the next render will use the new source.
-    ///
-    /// Call this in the background after showing the initial browser-decoded
-    /// preview. The UI re-renders when this completes.
     #[wasm_bindgen]
     pub fn upgrade_from_bytes(&mut self, bytes: &[u8]) -> Result<WasmUpgradeResult, JsError> {
-        let decoded = crate::decode::decode_native(bytes)
-            .map_err(|e| JsError::new(&e))?;
+        let decoded =
+            crate::decode::decode_native(bytes).map_err(|e| JsError::new(&e))?;
 
         let has_icc = decoded.metadata.icc_profile.is_some();
         let has_exif = decoded.metadata.exif.is_some();
@@ -221,10 +197,12 @@ impl WasmEditor {
         self.inner.metadata().is_some()
     }
 
-    /// Source format detected by native decode (e.g., "jpeg", "png").
+    /// Source format detected by native decode.
     #[wasm_bindgen(getter)]
     pub fn source_format(&self) -> Option<String> {
-        self.inner.source_format().map(|f| f.extension().to_string())
+        self.inner
+            .source_format()
+            .map(|f| f.extension().to_string())
     }
 
     /// Source image width.
@@ -240,20 +218,16 @@ impl WasmEditor {
     }
 
     /// Render the overview (small resized image).
-    ///
-    /// `adjustments_json` is a JSON object mapping adjustment keys to values,
-    /// e.g., `{"exposure": 0.5, "contrast": 0.3}`.
-    /// `film_preset` is an optional film look preset ID (e.g., "portra", "velvia").
     #[wasm_bindgen]
     pub fn render_overview(
         &mut self,
         adjustments_json: &str,
         film_preset: Option<String>,
     ) -> Result<WasmRenderResult, JsError> {
-        let adj = parse_adjustments(adjustments_json)?;
+        apply_adjustments_json(&mut self.inner, adjustments_json, film_preset.as_deref())?;
         let out = self
             .inner
-            .render_overview_with_preset(&adj, film_preset.as_deref())
+            .render_overview()
             .map_err(|e| JsError::new(&e))?;
         Ok(WasmRenderResult {
             data: out.data,
@@ -263,8 +237,6 @@ impl WasmEditor {
     }
 
     /// Render a detail region at higher resolution.
-    ///
-    /// Region coordinates are normalized (0..1) relative to the source image.
     #[wasm_bindgen]
     pub fn render_region(
         &mut self,
@@ -275,11 +247,11 @@ impl WasmEditor {
         h: f32,
         film_preset: Option<String>,
     ) -> Result<WasmRenderResult, JsError> {
-        let adj = parse_adjustments(adjustments_json)?;
-        let region = Region { x, y, w, h };
+        apply_adjustments_json(&mut self.inner, adjustments_json, film_preset.as_deref())?;
+        self.inner.region.set(x, y, w, h);
         let out = self
             .inner
-            .render_region_with_preset(&adj, &region, film_preset.as_deref())
+            .render_detail()
             .map_err(|e| JsError::new(&e))?;
         Ok(WasmRenderResult {
             data: out.data,
@@ -289,9 +261,6 @@ impl WasmEditor {
     }
 
     /// Render all film preset thumbnails as a batch.
-    ///
-    /// Returns a JSON string: `[{"id": "portra", "name": "Portra", "width": 48, "height": 36}, ...]`
-    /// The RGBA pixel data for each is returned separately via `get_preset_thumbnail_data`.
     #[wasm_bindgen]
     pub fn render_preset_thumbnails(&mut self, thumb_size: u32) -> Result<String, JsError> {
         let results = self.inner.render_preset_thumbnails(thumb_size);
@@ -323,8 +292,6 @@ impl WasmEditor {
     }
 
     /// Get the RGBA pixel data for a specific preset thumbnail by index.
-    ///
-    /// Call after `render_preset_thumbnails`. Index matches the JSON array order.
     #[wasm_bindgen]
     pub fn get_preset_thumbnail_data(&self, index: usize) -> Option<js_sys::Uint8Array> {
         self.preset_thumbnails
@@ -333,11 +300,9 @@ impl WasmEditor {
     }
 
     /// List all available film preset IDs and names as JSON.
-    ///
-    /// Returns `[{"id": "portra", "name": "Portra"}, ...]`
     #[wasm_bindgen]
     pub fn list_presets() -> String {
-        let presets = crate::editor::Editor::list_presets();
+        let presets = EditorState::list_presets();
         let entries: Vec<serde_json::Value> = presets
             .into_iter()
             .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
@@ -346,12 +311,6 @@ impl WasmEditor {
     }
 
     /// Encode at overview size for inline preview in the export modal.
-    ///
-    /// Reuses the overview session cache — geometry prefix is a cache hit,
-    /// only filters re-run (~3ms), then encoding adds codec-specific time.
-    /// Near-instant for live quality slider feedback.
-    ///
-    /// `options_json`: `{"quality": 85}`, `{"effort": 5}`, `{"lossless": true}`, etc.
     #[wasm_bindgen]
     pub fn encode_preview(
         &mut self,
@@ -360,12 +319,12 @@ impl WasmEditor {
         options_json: &str,
         film_preset: Option<String>,
     ) -> Result<WasmEncodeResult, JsError> {
-        let adj = parse_adjustments(adjustments_json)?;
+        apply_adjustments_json(&mut self.inner, adjustments_json, film_preset.as_deref())?;
         let options = parse_options(options_json)?;
 
         let result = self
             .inner
-            .encode_at_overview_size(&adj, format, &options, film_preset.as_deref())
+            .encode_at_overview_size(format, &options)
             .map_err(|e| JsError::new(&e))?;
 
         Ok(WasmEncodeResult {
@@ -378,11 +337,6 @@ impl WasmEditor {
     }
 
     /// Encode at full resolution for export/download.
-    ///
-    /// Renders at the given dimensions (larger dimension as constrain limit),
-    /// applies filters and optional film preset, then encodes via zencodecs.
-    ///
-    /// `options_json`: `{"quality": 85}`, `{"effort": 5}`, `{"lossless": true}`, etc.
     #[wasm_bindgen]
     pub fn encode_full(
         &mut self,
@@ -393,13 +347,13 @@ impl WasmEditor {
         options_json: &str,
         film_preset: Option<String>,
     ) -> Result<WasmEncodeResult, JsError> {
-        let adj = parse_adjustments(adjustments_json)?;
+        apply_adjustments_json(&mut self.inner, adjustments_json, film_preset.as_deref())?;
         let options = parse_options(options_json)?;
 
         let max_dim = if width > 0 { width.max(height) } else { 0 };
         let result = self
             .inner
-            .encode_at_size(&adj, max_dim, format, &options, film_preset.as_deref())
+            .encode_at_size(max_dim, format, &options)
             .map_err(|e| JsError::new(&e))?;
 
         Ok(WasmEncodeResult {
@@ -412,10 +366,6 @@ impl WasmEditor {
     }
 
     /// Get the filter node schema as a JSON string.
-    ///
-    /// Returns JSON Schema with `$defs` for all zenfilters nodes,
-    /// including slider metadata (min, max, step, default, identity,
-    /// section, group, unit).
     #[wasm_bindgen]
     pub fn get_filter_schema() -> String {
         crate::export_filter_schema()
@@ -424,26 +374,86 @@ impl WasmEditor {
     /// Number of entries in the overview Session cache.
     #[wasm_bindgen(getter)]
     pub fn overview_cache_len(&self) -> usize {
-        self.inner.overview_session.cache_len()
+        self.inner.overview_cache_len()
     }
 
     /// Number of entries in the detail Session cache.
     #[wasm_bindgen(getter)]
     pub fn detail_cache_len(&self) -> usize {
-        self.inner.detail_session.cache_len()
+        self.inner.detail_cache_len()
     }
 }
 
-fn parse_adjustments(json: &str) -> Result<BTreeMap<String, serde_json::Value>, JsError> {
-    if json.is_empty() || json == "{}" {
-        return Ok(BTreeMap::new());
+/// Apply a JSON adjustments string and optional film preset to the editor state.
+///
+/// Parses the JSON and updates the EditorState's AdjustmentModel to match.
+/// This bridges the existing JS protocol (JSON strings) to zeneditor's typed API.
+fn apply_adjustments_json(
+    state: &mut EditorState,
+    json: &str,
+    film_preset: Option<&str>,
+) -> Result<(), JsError> {
+    // Parse the nested JSON format: {"zenfilters.exposure": {"stops": 1.5}, ...}
+    let adj: std::collections::BTreeMap<String, serde_json::Value> = if json.is_empty() || json == "{}" {
+        std::collections::BTreeMap::new()
+    } else {
+        let value: serde_json::Value = serde_json::from_str(json)
+            .map_err(|e| JsError::new(&format!("Invalid JSON: {e}")))?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| JsError::new("Adjustments must be a JSON object"))?;
+        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
+
+    // Flatten into the EditorState's AdjustmentModel.
+    // For each node, set each param's adjust_key.
+    for node in &state.schema.nodes {
+        for p in &node.params {
+            if let Some(node_params) = adj.get(&node.id) {
+                if let Some(val) = node_params.get(&p.param_name) {
+                    match p.kind {
+                        zeneditor::model::schema::ParamKind::Number => {
+                            if let Some(n) = val.as_f64() {
+                                state.adjustments.set(&p.adjust_key, n);
+                            }
+                        }
+                        zeneditor::model::schema::ParamKind::Boolean => {
+                            if let Some(b) = val.as_bool() {
+                                state.adjustments.set_bool(&p.adjust_key, b);
+                            }
+                        }
+                        zeneditor::model::schema::ParamKind::ArrayElement => {
+                            // Array elements: the JSON has the full array on the param_name
+                            // but the adjust_key has the index
+                            if let (Some(arr), Some(idx)) = (val.as_array(), p.array_index) {
+                                if let Some(elem) = arr.get(idx).and_then(|v| v.as_f64()) {
+                                    state.adjustments.set(&p.adjust_key, elem);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Param not in JSON — reset to identity
+                    state.adjustments.set(&p.adjust_key, p.identity);
+                }
+            } else {
+                // Node not in JSON — reset param to identity
+                state.adjustments.set(&p.adjust_key, p.identity);
+            }
+        }
     }
-    let value: serde_json::Value =
-        serde_json::from_str(json).map_err(|e| JsError::new(&format!("Invalid JSON: {e}")))?;
-    let obj = value
-        .as_object()
-        .ok_or_else(|| JsError::new("Adjustments must be a JSON object"))?;
-    Ok(obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+
+    // Film preset
+    state.adjustments.film_preset = film_preset.map(|s| s.to_string());
+    // Extract intensity from adjustments if present
+    if let Some(intensity) = adj
+        .get("film_look_strength")
+        .and_then(|v| v.as_f64())
+    {
+        state.adjustments.film_preset_intensity = intensity as f32;
+    }
+
+    Ok(())
 }
 
 fn parse_options(json: &str) -> Result<serde_json::Value, JsError> {
@@ -456,10 +466,6 @@ fn parse_options(json: &str) -> Result<serde_json::Value, JsError> {
 }
 
 /// Try to decode image bytes using WASM codecs.
-///
-/// Returns null if the format is not recognized or not supported.
-/// For JPEG/PNG/WebP/GIF, the browser's native decoder is usually faster,
-/// but WASM handles JXL, AVIF, HEIC, BMP, QOI, TGA, HDR natively.
 #[wasm_bindgen]
 pub fn wasm_decode_image(bytes: &[u8]) -> Option<WasmRenderResult> {
     let decoded = crate::decode::try_decode(bytes)?;
@@ -471,9 +477,6 @@ pub fn wasm_decode_image(bytes: &[u8]) -> Option<WasmRenderResult> {
 }
 
 /// Check if WASM can decode a format that the browser might not support.
-///
-/// Uses zencodec's format registry for detection. Returns true for any
-/// format except JPEG/PNG/WebP/GIF (which browsers handle natively).
 #[wasm_bindgen]
 pub fn wasm_can_decode(bytes: &[u8]) -> bool {
     crate::decode::try_decode_check(bytes)

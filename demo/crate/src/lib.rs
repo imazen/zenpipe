@@ -1,23 +1,24 @@
-//! zenpipe interactive editor — WASM worker backend.
+//! zenpipe WASM demo — thin platform layer over zeneditor.
 //!
-//! Wraps zenpipe Session for dual-view rendering:
-//! - Overview: small resized version of the full image
-//! - Detail: cropped region at higher resolution
+//! This crate provides:
+//! - WASM API (`WasmEditor`) — wasm-bindgen bindings for the web worker
+//! - Image decoding — browser fallback and native zencodecs decode
 //!
-//! Both views share the same filter adjustments but have independent
-//! Session caches — geometry prefix (decode + resize/crop) is cached
-//! separately, filter suffix re-runs from cache on parameter changes.
+//! All editor logic (adjustments, rendering, encoding, undo/redo, schema)
+//! lives in the `zeneditor` crate.
 
 pub mod decode;
-mod editor;
-mod schema;
 
-pub use editor::{Editor, EncodeResult, Region, RenderOutput};
-pub use schema::export_filter_schema;
+// Re-export zeneditor types for convenience
+pub use zeneditor::{EditorState, RenderOutput};
+
+/// Export the filter node schema as JSON (delegates to zeneditor).
+pub fn export_filter_schema() -> String {
+    let schema = zeneditor::SchemaModel::from_registry();
+    schema.schema_json().to_string()
+}
 
 // Re-export init_thread_pool for multithreaded WASM.
-// JS calls `await wasm.initThreadPool(navigator.hardwareConcurrency)`
-// before any rayon parallel operations.
 #[cfg(feature = "parallel")]
 pub use wasm_bindgen_rayon::init_thread_pool;
 
