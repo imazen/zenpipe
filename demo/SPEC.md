@@ -1651,3 +1651,185 @@ Total with WASM: 5.6 MB + 15 KB ≈ 5.6 MB (negligible overhead)
 4. Keep `worker-client.js`, `state.js` (model), `render.js` (controller) as-is
 5. Build `MobileView` as new Preact components from scratch
 6. Add `@use-gesture` for unified gesture handling
+
+---
+
+## 23. Multi-Platform Strategy
+
+### 23.1 Platform Targets
+
+| Platform | Distribution | GPU Access | Offline | Native Feel |
+|----------|-------------|-----------|---------|-------------|
+| Web (browser) | URL, no install | WebGPU/WebGL | Service worker | Good with effort |
+| PWA (installed web) | Add to homescreen | WebGPU/WebGL | Full offline | Near-native |
+| iOS app | App Store | Metal | Yes | Native |
+| Android app | Play Store | Vulkan/GL | Yes | Native |
+| macOS app | App Store / DMG | Metal | Yes | Native |
+| Windows app | Store / MSI | D3D12/Vulkan | Yes | Native |
+| Linux app | Flatpak / AppImage | Vulkan/GL | Yes | Native |
+| CLI tool | Cargo install / binary | CPU+SIMD | Yes | N/A |
+
+### 23.2 What's Shared vs Platform-Specific
+
+```
+┌─────────────────────────────────────────────────┐
+│                SHARED (Rust)                     │
+│                                                  │
+│  zenpipe pipeline     — decode, filter, encode   │
+│  Session caching      — Merkle DAG, LRU          │
+│  All zen* codecs      — JPEG, WebP, PNG, JXL...  │
+│  zenfilters           — 43 filters + warp        │
+│  Editor model logic   — adjustments, recipes     │
+│  Encode/decode        — all format support        │
+│                                                  │
+│  ~95% of the compute, 100% portable Rust         │
+└─────────────────────┬───────────────────────────┘
+                      │ FFI boundary
+┌─────────────────────▼───────────────────────────┐
+│           PLATFORM ADAPTATION LAYER              │
+│                                                  │
+│  WASM + wasm-bindgen    — browser/PWA            │
+│  C FFI (imageflow_abi)  — native apps via cdylib │
+│  Direct Rust API        — CLI, server, tests     │
+│                                                  │
+└─────────────────────┬───────────────────────────┘
+                      │ UI binding
+┌─────────────────────▼───────────────────────────┐
+│              UI LAYER (per-platform)             │
+│                                                  │
+│  Web:     Preact/HTM + @use-gesture              │
+│  iOS:     SwiftUI + UIKit gestures               │
+│  Android: Jetpack Compose + gesture API          │
+│  Desktop: Tauri (web view) or native toolkit     │
+│  CLI:     clap + stdin/stdout                    │
+│                                                  │
+└─────────────────────────────────────────────────┘
+```
+
+### 23.3 Option A: Web-First PWA (Recommended Start)
+
+Ship as a PWA with native app wrappers added later:
+
+| Layer | Tech | Notes |
+|-------|------|-------|
+| Core | Rust → WASM (5.6 MB) | All pipeline logic |
+| UI | Preact + HTM | Responsive web components |
+| Offline | Service worker | Cache WASM + assets |
+| Install | `manifest.json` | Add to homescreen |
+| Native wrap | **Capacitor** or **TWA** | Thin native shell around the web app |
+
+**Capacitor** (by Ionic): wraps the web app in a native WebView on iOS/Android/Electron.
+- Access to camera, file system, share sheet via plugins
+- Same web code, native app distribution
+- 95% web, 5% native bridge code
+- App Store / Play Store distribution
+
+**Pros**: ship one codebase to all platforms immediately.
+**Cons**: WebView performance ceiling (no Metal/Vulkan direct), 60fps limit, no background processing.
+
+### 23.4 Option B: Tauri (Desktop Native + Web)
+
+**Tauri**: Rust backend + system WebView frontend. Much lighter than Electron.
+
+| Layer | Tech | Notes |
+|-------|------|-------|
+| Core | Rust (direct, no WASM) | Full native SIMD — AVX2, NEON |
+| UI | Same Preact web app | Rendered in system WebView |
+| IPC | Tauri commands | Rust ↔ JS via typed messages |
+| Desktop | macOS/Windows/Linux | Single binary, ~10 MB |
+| Mobile | Tauri Mobile (beta) | iOS/Android via native WebView |
+
+```rust
+// Tauri command — called from JS
+#[tauri::command]
+fn render_overview(adjustments: &str) -> Result<Vec<u8>, String> {
+    let editor = get_editor()?;
+    let adj = parse_adjustments(adjustments)?;
+    let out = editor.render_overview(&adj)?;
+    Ok(out.data)
+}
+```
+
+**Pros**: native Rust performance (no WASM overhead), direct SIMD, smaller binary, system integration.
+**Cons**: two deployment paths (web + Tauri), slightly different IPC from web worker postMessage.
+
+### 23.5 Option C: Shared Rust Core + Native UI Per Platform
+
+For maximum native feel:
+
+| Platform | UI Framework | Rust Binding |
+|----------|-------------|-------------|
+| iOS | SwiftUI | `imageflow_abi` (C FFI) or UniFFI |
+| Android | Jetpack Compose | JNI via `imageflow_abi` or UniFFI |
+| macOS | SwiftUI / AppKit | Same as iOS |
+| Windows | WinUI 3 | C FFI |
+| Web | Preact | wasm-bindgen |
+
+**UniFFI** (Mozilla): generates Swift/Kotlin bindings from Rust automatically.
+```rust
+#[uniffi::export]
+fn render_overview(adjustments: &str) -> Result<Vec<u8>, EditorError> { ... }
+```
+Generates: `EditorBinding.swift` + `EditorBinding.kt` — type-safe, no manual FFI.
+
+**Pros**: truly native UI per platform, best performance, best UX.
+**Cons**: N separate UI codebases (expensive to maintain).
+
+### 23.6 Option D: Kotlin Multiplatform + Rust Core
+
+Compose Multiplatform (JetBrains) for shared UI across Android/iOS/Desktop:
+
+| Layer | Tech |
+|-------|------|
+| Core | Rust via C FFI (all platforms) |
+| UI | Compose Multiplatform |
+| iOS bridge | Kotlin/Native + Rust FFI |
+| Desktop | JVM + Rust FFI |
+
+**Pros**: single UI codebase for mobile + desktop (not web).
+**Cons**: doesn't help with web, adds JVM dependency.
+
+### 23.7 Recommended Strategy
+
+**Phase 1 — Web PWA** (now):
+- Current Preact web app + WASM
+- Add `manifest.json` + service worker for installability
+- Works on all platforms immediately via browser
+
+**Phase 2 — Tauri Desktop** (when desktop users need native performance):
+- Same web UI in Tauri shell
+- Rust pipeline runs natively (AVX2/NEON, not WASM)
+- macOS + Windows + Linux from same codebase
+- IPC adaptor: `tauri::command` wrapping the same `Editor` API
+
+**Phase 3 — Capacitor Mobile** (when app store distribution needed):
+- Same web app wrapped for iOS/Android
+- Camera and share sheet integration via Capacitor plugins
+- Or evaluate Tauri Mobile when it stabilizes
+
+**Phase 4 — Native UI** (only if justified by user base):
+- SwiftUI for iOS/macOS via UniFFI
+- Compose for Android via UniFFI or JNI
+- Consider only if PWA/Capacitor UX is insufficient
+
+### 23.8 Architecture Implications
+
+The MVC architecture from §21 maps directly:
+
+| Layer | Web (WASM) | Tauri (native Rust) | Capacitor | Native |
+|-------|-----------|-------------------|-----------|--------|
+| Model | JS classes | Rust structs (same code) | JS classes (same) | Swift/Kotlin via UniFFI |
+| Controller | JS → worker postMessage | JS → tauri::command | JS → worker postMessage | Native → Rust FFI |
+| View | Preact components | Preact in WebView | Preact in WebView | SwiftUI / Compose |
+| Pipeline | WASM (simd128) | Native (AVX2/NEON) | WASM (simd128) | Native (AVX2/NEON) |
+
+The key: **the Rust `Editor` API is the same everywhere**. Only the FFI boundary and UI rendering change.
+
+### 23.9 What We Build Now to Enable All Options
+
+1. **Keep the `Editor` Rust API clean and FFI-friendly** — it already is
+2. **Don't bake DOM assumptions into model/controller** — the MVC refactor handles this
+3. **Use `imageflow_abi` patterns for C FFI** — already exists in the imageflow codebase
+4. **Keep WASM and native builds working** — demo crate already builds both
+5. **Service worker for PWA** — add `manifest.json` + offline caching
+6. **Don't adopt heavy web frameworks** — Preact + HTM stays lightweight enough for WebView embedding
