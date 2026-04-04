@@ -13,22 +13,13 @@ wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
 parallel = ["dep:rayon", "dep:wasm-bindgen-rayon"]
 
 [dependencies]
-# Platform-agnostic editor model + controller
+# Platform-agnostic editor model + controller (handles decode, encode, rendering)
 zeneditor = { path = "../../../zeneditor" }
 
-# Codec infrastructure — for decode (encode is via zeneditor)
+# Codec types for format detection in WASM glue
 zencodec = { version = "0.1.12", default-features = false }
-zenpixels = { version = "0.2.2", default-features = false }
+
 serde_json = "1"
-
-# Unified codec library — decode-only features (encoding goes through zeneditor)
-zencodecs = { path = "../../../zencodecs", default-features = false, features = [
-    "jxl-decode", "avif-decode", "heic-decode",
-    "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
-] }
-
-# Pipeline for RowConverter in decode.rs
-zenpipe = { path = "../..", default-features = false, features = ["std"] }
 
 # Multithreaded WASM via rayon (optional — requires SharedArrayBuffer + COOP/COEP)
 rayon = { version = "1.10", optional = true }

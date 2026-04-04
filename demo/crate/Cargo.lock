@@ -1618,10 +1618,7 @@ dependencies = [
  "wasm-bindgen-rayon",
  "web-sys",
  "zencodec",
- "zencodecs",
  "zeneditor",
- "zenpipe",
- "zenpixels",
 ]
 
 [[package]]

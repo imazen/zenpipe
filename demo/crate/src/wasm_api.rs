@@ -158,36 +158,25 @@ impl WasmEditor {
         })
     }
 
-    /// Upgrade the editor's source by decoding original image bytes natively.
+    /// Decode original image bytes natively and upgrade the editor's source.
+    ///
+    /// The authoritative decode — produces high-quality pixels with full
+    /// metadata. Call after showing the browser-decoded preview.
     #[wasm_bindgen]
     pub fn upgrade_from_bytes(&mut self, bytes: &[u8]) -> Result<WasmUpgradeResult, JsError> {
-        let decoded =
-            crate::decode::decode_native(bytes).map_err(|e| JsError::new(&e))?;
-
-        let has_icc = decoded.metadata.icc_profile.is_some();
-        let has_exif = decoded.metadata.exif.is_some();
-        let has_xmp = decoded.metadata.xmp.is_some();
-        let has_gain_map = decoded.has_gain_map;
-        let format_str = decoded.format.extension().to_string();
-        let width = decoded.width;
-        let height = decoded.height;
-
-        self.inner.upgrade_source(
-            decoded.data,
-            decoded.width,
-            decoded.height,
-            decoded.metadata,
-            decoded.format,
-        );
+        let info = self
+            .inner
+            .init_from_bytes(bytes)
+            .map_err(|e| JsError::new(&e))?;
 
         Ok(WasmUpgradeResult {
-            format: format_str,
-            width,
-            height,
-            has_icc,
-            has_exif,
-            has_xmp,
-            has_gain_map,
+            format: info.format.extension().to_string(),
+            width: info.width,
+            height: info.height,
+            has_icc: info.metadata.icc_profile.is_some(),
+            has_exif: info.metadata.exif.is_some(),
+            has_xmp: info.metadata.xmp.is_some(),
+            has_gain_map: info.has_gain_map,
         })
     }
 
