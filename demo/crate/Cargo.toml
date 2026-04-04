@@ -14,7 +14,7 @@ parallel = ["dep:rayon", "dep:wasm-bindgen-rayon"]
 
 [dependencies]
 # Platform-agnostic editor model + controller (handles decode, encode, rendering)
-zeneditor = { path = "../../../zeneditor" }
+zeneditor = { path = "../../zeneditor" }
 
 # Codec types for format detection in WASM glue
 zencodec = { version = "0.1.12", default-features = false }
@@ -33,6 +33,7 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 [patch.crates-io]
 zennode = { path = "../../../zennode/zennode" }
 zennode-derive = { path = "../../../zennode/zennode-derive" }
+zencodec = { path = "../../../zencodec" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

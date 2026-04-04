@@ -1,0 +1,74 @@
+[package]
+name = "zeneditor"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Platform-agnostic image editor model and controller — Command/ViewUpdate protocol over zenpipe"
+repository = "https://github.com/imazen/zenpipe"
+keywords = ["image", "editor", "pipeline"]
+categories = ["graphics", "multimedia::images"]
+publish = false
+
+[features]
+default = ["std", "encode", "decode"]
+std = [
+    "zenpipe/std",
+    "zenpipe/zennode",
+    "zenpipe/nodes-filters",
+    "zenpipe/json-schema",
+    "dep:zenfilters",
+]
+# Encoding via zencodecs (JPEG, WebP, PNG, GIF, JXL, AVIF).
+encode = [
+    "dep:zencodecs",
+    "zencodecs/jpeg", "zencodecs/png", "zencodecs/webp",
+    "zencodecs/gif", "zencodecs/gif-quantizr",
+    "zencodecs/jxl-encode", "zencodecs/avif-encode",
+]
+# Native decoding via zencodecs (JXL, AVIF, HEIC, BMP, QOI, TGA, HDR + browser-native formats).
+decode = [
+    "dep:zencodecs",
+    "zencodecs/jpeg", "zencodecs/png", "zencodecs/webp", "zencodecs/gif",
+    "zencodecs/jxl-decode", "zencodecs/avif-decode", "zencodecs/heic-decode",
+    "zencodecs/bitmaps", "zencodecs/bitmaps-bmp",
+    "zencodecs/bitmaps-qoi", "zencodecs/bitmaps-tga", "zencodecs/bitmaps-hdr",
+]
+
+[dependencies]
+# Core pipeline (parent directory)
+zenpipe = { path = "..", default-features = false, features = ["zennode"] }
+zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"] }
+
+# Photo filters (requires std)
+zenfilters = { path = "../../zenfilters", features = ["zennode"], optional = true }
+
+# Codec traits and types (Metadata, ImageFormat)
+zencodec = { version = "0.1.12", default-features = false }
+
+# Pixel format descriptors
+zenpixels = { version = "0.2.2", default-features = false }
+
+# Cooperative cancellation
+enough = { version = "0.4", default-features = false }
+
+# Serialization for Command/ViewUpdate protocol and adjustment maps
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Unified codec dispatch for encoding and decoding.
+zencodecs = { path = "../../zencodecs", default-features = false, optional = true }
+
+[dev-dependencies]
+zenfilters = { path = "../../zenfilters", features = ["zennode"] }
+zencodecs = { path = "../../zencodecs", default-features = false, features = [
+    "jpeg", "png", "webp", "gif", "gif-quantizr",
+    "jxl-encode", "avif-encode",
+    "jxl-decode", "avif-decode", "heic-decode",
+    "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
+] }
+
+[patch.crates-io]
+zennode = { path = "../../zennode/zennode" }
+zennode-derive = { path = "../../zennode/zennode-derive" }
+zencodec = { path = "../../zencodec" }
