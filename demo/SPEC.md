@@ -1833,3 +1833,255 @@ The key: **the Rust `Editor` API is the same everywhere**. Only the FFI boundary
 4. **Keep WASM and native builds working** — demo crate already builds both
 5. **Service worker for PWA** — add `manifest.json` + offline caching
 6. **Don't adopt heavy web frameworks** — Preact + HTM stays lightweight enough for WebView embedding
+
+---
+
+## 24. Rust-Side Model & Controller
+
+### 24.1 What Can Live in Rust
+
+```
+Currently in JS (~3700 lines)          →  Could be Rust
+─────────────────────────────────────────────────────────
+state.js (adjustments, region, zoom)   →  EditorModel (Rust struct)
+sidebar.js (schema parsing, param     →  SchemaModel (parse once in Rust,
+  normalization, slider types)             emit typed param descriptors)
+render.js (debounce, scheduling,       →  RenderController (Rust, drives
+  pixel ratio calc, safe snapshot)         Session directly, no IPC hop)
+region.js (drag math, zoom math,       →  RegionController (Rust, pure math —
+  clamp, pinch scale computation)          only gesture → delta → new region)
+history.js (undo stack, snapshot)      →  HistoryModel (Rust, serde)
+compare.js (original render cache)     →  CompareController (Rust, second
+                                           Session with empty adjustments)
+export-modal.js (format controls,      →  ExportModel (Rust, format metadata
+  estimates, preview encode)               from zencodecs, preview encode)
+presets.js (film preset list)          →  PresetModel (Rust, from zenfilters)
+user-presets.js (save/load/serialize)  →  RecipeModel (Rust, JSON/QS serde)
+css-preview.js (CSS filter approx)     →  stays JS (CSS is browser-only)
+toasts.js (error display)             →  stays JS (DOM rendering)
+file-load.js (file reading, picsum)    →  stays JS (fetch, File API)
+worker-client.js (postMessage)         →  stays JS (or disappears if Rust
+                                           drives rendering directly)
+```
+
+### 24.2 The Rust Editor as a Full State Machine
+
+```rust
+/// The complete editor state — owns all models and controllers.
+/// One instance per editing session. Serializable for persistence.
+pub struct EditorState {
+    // ─── Source ───
+    source: Option<SourceImage>,
+    source_hash: u64,
+
+    // ─── Models ───
+    adjustments: AdjustmentModel,  // all filter values, film preset
+    region: RegionModel,           // crop region, zoom level
+    history: HistoryModel,         // undo/redo stack with auto-naming
+    recipe: RecipeModel,           // serializable edit recipe
+    crop_sets: CropSetModel,       // named aspect ratio definitions
+    export: ExportModel,           // format, quality, dimensions
+
+    // ─── Pipeline ───
+    overview_session: Session,     // cached overview renders
+    detail_session: Session,       // cached detail renders
+    compare_session: Session,      // cached original (no filters) renders
+
+    // ─── Schema ───
+    schema: SchemaModel,           // parsed node registry, param descriptors
+}
+
+impl EditorState {
+    /// Process a UI command and return what changed.
+    /// The view layer only needs to handle the returned
+    /// ViewUpdate — it never reads internal state directly.
+    pub fn dispatch(&mut self, cmd: Command) -> Vec<ViewUpdate> { ... }
+}
+```
+
+### 24.3 Command / Update Protocol
+
+Instead of the view calling 15 different Rust functions, there's one `dispatch()` method that takes a `Command` enum and returns a list of `ViewUpdate`s telling the view what to redraw:
+
+```rust
+/// Commands from the UI to the editor.
+#[derive(Serialize, Deserialize)]
+pub enum Command {
+    // Source
+    InitFromRgba { width: u32, height: u32, data: Vec<u8> },
+    InitFromBytes { data: Vec<u8> },
+
+    // Adjustments
+    SetParam { key: String, value: f64 },
+    SetParamBool { key: String, value: bool },
+    SetFilmPreset { id: Option<String>, intensity: f32 },
+    ResetParam { key: String },
+    ResetAll,
+
+    // Region / navigation
+    SetRegion { x: f32, y: f32, w: f32, h: f32 },
+    DragStart,
+    DragMove { dx_norm: f32, dy_norm: f32 },
+    DragEnd,
+    Zoom { factor: f32, center_x: f32, center_y: f32 },
+    ResetTo1to1 { viewport_w: f32, viewport_h: f32, dpr: f32 },
+
+    // History
+    Undo,
+    Redo,
+
+    // Compare
+    ShowOriginal,
+    ShowEdited,
+
+    // Export
+    SetExportFormat { format: String },
+    SetExportDims { width: u32, height: u32 },
+    SetExportOption { key: String, value: serde_json::Value },
+    EncodePreview,
+    EncodeFull,
+
+    // Recipes
+    SaveRecipe { name: String },
+    LoadRecipe { json: String },
+    ApplyRecipe,
+
+    // Crop sets
+    AddCropSet { name: String, aspect: String, anchor: String },
+    RemoveCropSet { name: String },
+
+    // Schema
+    GetSchema,
+    GetPresetList,
+}
+
+/// Updates from the editor to the view.
+/// The view applies these to the DOM — no business logic.
+#[derive(Serialize, Deserialize)]
+pub enum ViewUpdate {
+    // Pixel data for canvases
+    OverviewPixels { data: Vec<u8>, width: u32, height: u32 },
+    DetailPixels { data: Vec<u8>, width: u32, height: u32 },
+    OriginalPixels { data: Vec<u8>, width: u32, height: u32 },
+
+    // State changes (view updates DOM to match)
+    RegionChanged { x: f32, y: f32, w: f32, h: f32 },
+    ParamChanged { key: String, value: f64 },
+    AllParamsReset,
+    FilmPresetChanged { id: Option<String>, intensity: f32 },
+    HistoryChanged { can_undo: bool, can_redo: bool, name: String },
+    PixelRatio { ratio: f32, src_w: u32, src_h: u32, display_w: f32, dpr: f32 },
+
+    // Source info
+    SourceLoaded { width: u32, height: u32, format: String, backend: String },
+    MetadataUpgraded { format: String, has_icc: bool, has_exif: bool, has_xmp: bool, has_gain_map: bool },
+
+    // Export results
+    EncodePreviewResult { data: Vec<u8>, format: String, size: usize, width: u32, height: u32 },
+    EncodeFullResult { data: Vec<u8>, format: String, size: usize, width: u32, height: u32 },
+
+    // Schema / presets (sent once at init)
+    Schema { json: String },
+    PresetList { json: String },
+
+    // Errors
+    Error { message: String, recoverable: bool },
+
+    // Status
+    RenderStarted,
+    RenderComplete { elapsed_ms: f64 },
+}
+```
+
+### 24.4 View Layer Becomes Trivially Simple
+
+The JS view layer is now just:
+
+```javascript
+// The entire view layer
+editor.onUpdate((updates) => {
+  for (const u of updates) {
+    switch (u.type) {
+      case 'DetailPixels':
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(u.data), u.width, u.height), 0, 0);
+        break;
+      case 'ParamChanged':
+        slider.value = u.value;
+        display.textContent = formatVal(u.value);
+        break;
+      case 'RegionChanged':
+        updateCropOverlay(u.x, u.y, u.w, u.h);
+        break;
+      case 'Error':
+        showToast(u.message);
+        break;
+      // ... ~20 simple cases, each ~3 lines
+    }
+  }
+});
+
+// Gesture handling — translates DOM events to commands
+canvas.addEventListener('pointermove', (e) => {
+  editor.dispatch({ type: 'DragMove', dx_norm: dx / canvasW, dy_norm: dy / canvasH });
+});
+```
+
+### 24.5 Platform Mapping
+
+| Platform | How `dispatch()` is called | How `ViewUpdate` is received |
+|----------|---------------------------|------------------------------|
+| **Web (worker)** | `postMessage({cmd})` → worker calls `editor.dispatch()` | worker `postMessage({updates})` → main thread applies |
+| **Web (main thread)** | Direct `editor.dispatch()` call via wasm-bindgen | Callback, synchronous |
+| **Tauri** | `invoke('dispatch', {cmd})` → Rust handler | Event emit or return value |
+| **iOS (UniFFI)** | `editor.dispatch(cmd)` in Swift | Callback or async/await |
+| **Android (UniFFI)** | `editor.dispatch(cmd)` in Kotlin | Callback or coroutine |
+| **CLI** | `editor.dispatch(cmd)` in Rust directly | Print or write to file |
+
+### 24.6 What Stays in JS / Platform Code
+
+Only things that are inherently platform-specific:
+
+| Responsibility | Why Platform-Specific |
+|---------------|----------------------|
+| DOM rendering | Canvas, putImageData, CSS |
+| File I/O | File API, drag-drop, fetch |
+| Touch/pointer events | DOM event → abstract Command |
+| CSS filter preview | Browser CSS engine |
+| Toast/error display | DOM elements |
+| Bottom sheet physics | CSS transforms + spring animation |
+| Haptic feedback | `navigator.vibrate()` |
+| Local storage | `localStorage`, IndexedDB |
+| Service worker | PWA offline caching |
+| Clipboard | `navigator.clipboard` |
+
+Estimated: **~500 lines of JS** for the full view layer per platform layout (desktop, mobile).
+All business logic, state management, undo/redo, recipe serialization, render scheduling, pixel ratio math, debouncing, schema parsing — **all in Rust**.
+
+### 24.7 What This Means for the Worker
+
+The current worker architecture (`postMessage` → worker → WASM → `postMessage` back) maps directly to the Command/Update protocol. The worker becomes a thin dispatcher:
+
+```javascript
+// worker.js — entire file
+import init, { EditorState } from './pkg/zenpipe_demo.js';
+await init();
+const editor = new EditorState();
+
+self.onmessage = (e) => {
+  const updates = editor.dispatch(e.data);
+  // Transfer pixel data buffers for zero-copy
+  const transfers = updates
+    .filter(u => u.data instanceof Uint8Array)
+    .map(u => u.data.buffer);
+  self.postMessage(updates, transfers);
+};
+```
+
+### 24.8 Migration Path
+
+1. **Define `Command` and `ViewUpdate` enums** in Rust (the contract)
+2. **Implement `EditorState::dispatch()`** — starts by wrapping the existing `Editor` methods
+3. **Add `#[wasm_bindgen]` for `dispatch()`** — takes JSON string, returns JSON string (simple)
+4. **Build a thin JS adapter** that converts current module calls into `dispatch()` calls
+5. **Gradually move logic from JS modules into Rust** — each module shrinks as its logic moves
+6. **Eventually**: JS is only DOM events → `dispatch()` → apply `ViewUpdate` to DOM
