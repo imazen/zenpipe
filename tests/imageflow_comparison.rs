@@ -446,12 +446,15 @@ fn compare_zenfilters_vs_imagemagick() {
         "Need at least 3 test images, got {images_tested}"
     );
 
-    // Every filter should produce non-garbage output
-    for r in &all_results {
+    // Spatial filters in sRGB mode should closely match ImageMagick
+    for r in all_results
+        .iter()
+        .filter(|r| r.filter_name.contains("blur") || r.filter_name.contains("dilate") || r.filter_name.contains("erode"))
+    {
         assert!(
-            r.zen_vs_src > 15.0,
-            "{}/{}: zen score {:.1} is too low",
-            r.image_name, r.filter_name, r.zen_vs_src
+            r.zen_vs_im > 80.0,
+            "{}/{}: srgb_vs_im={:.1} should be >80 for spatial filters",
+            r.image_name, r.filter_name, r.zen_vs_im
         );
     }
 }
