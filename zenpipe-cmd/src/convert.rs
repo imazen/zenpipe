@@ -1,13 +1,11 @@
-//! Convert CLI arguments into zennode NodeInstance list and CodecIntent.
+//! Convert CLI arguments into zennode NodeInstance list and ImageJob configuration.
 //!
 //! Strategy: build an RIAPI querystring from CLI flags and let
-//! `full_registry().from_querystring()` parse it into nodes. This avoids
-//! duplicating parameter mapping logic. For flags without RIAPI equivalents,
-//! create nodes directly via NodeDef::create().
+//! `full_registry().from_querystring()` parse it into nodes. For flags
+//! without RIAPI equivalents, create nodes directly via NodeDef::create().
 
 use crate::args::{Operations, OutputOptions};
 use crate::error::CliError;
-use zencodecs::{CodecIntent, FormatChoice};
 use zennode::NodeInstance;
 
 /// Build pipeline nodes from CLI operations.
@@ -38,12 +36,7 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
             "90" => qs_parts.push("srotate=90".into()),
             "180" => qs_parts.push("srotate=180".into()),
             "270" => qs_parts.push("srotate=270".into()),
-            "auto" => {
-                // Auto-deskew: not yet mapped to RIAPI; skip for now.
-            }
-            _ => {
-                // Arbitrary rotation not yet in RIAPI; skip for now.
-            }
+            _ => {} // auto-deskew and arbitrary rotation not yet in RIAPI
         }
     }
 
@@ -52,7 +45,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
         if crop == "auto" {
             qs_parts.push("trim.threshold=80".into());
         } else if crop.contains('%') {
-            // Percentage crop: parse x%,y%,w%,h%
             let values: Vec<&str> = crop.split(',').collect();
             if values.len() == 4 {
                 qs_parts.push(format!(
@@ -68,7 +60,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
                 )));
             }
         } else {
-            // Pixel crop: x,y,w,h
             qs_parts.push(format!("crop={crop}"));
         }
     }
@@ -86,7 +77,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
 
     // ── Padding ──
     if let Some(ref pad) = ops.pad {
-        // Pad values: single or top,right,bottom,left
         let parts: Vec<&str> = pad.split(',').collect();
         match parts.len() {
             1 => {
@@ -115,7 +105,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
     }
 
     // ── Filters with RIAPI keys ──
-    // Exposure maps to s.brightness (the RIAPI key for zenfilters.exposure)
     if let Some(v) = ops.exposure {
         qs_parts.push(format!("s.brightness={v}"));
     }
@@ -148,20 +137,14 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
         registry.from_querystring(&qs)
     };
 
-    // Report querystring parsing warnings as stderr hints.
     for w in &result.warnings {
         eprintln!("warning: querystring: {}", w.message);
     }
 
     let mut nodes = result.instances;
 
-    // ── Filters created directly as node instances ──
-    // These don't have RIAPI keys, so we create them via ParamMap.
-    let registry = zenpipe::full_registry();
-
+    // ── Filters without RIAPI keys — created directly via NodeDef::create() ──
     if let Some(v) = ops.brightness {
-        // brightness is a CSS-like -100..100 linear offset.
-        // Map it to exposure stops: brightness/50 gives a rough mapping.
         nodes.push(create_filter_node(
             &registry,
             "zenfilters.exposure",
@@ -222,7 +205,7 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
             &registry,
             "zenfilters.highlight_recovery",
             "strength",
-            v.abs(), // highlight_recovery takes 0..1 strength
+            v.abs(),
         )?);
     }
     if let Some(v) = ops.shadows {
@@ -230,7 +213,7 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
             &registry,
             "zenfilters.shadow_lift",
             "strength",
-            v.abs(), // shadow_lift takes 0..1 strength
+            v.abs(),
         )?);
     }
     if let Some(v) = ops.black_point {
@@ -299,7 +282,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
             "zenfilters.auto_levels",
         )?);
     }
-    // Auto enhance = auto_exposure + auto_levels + clarity + vibrance
     if ops.auto_enhance {
         if ops.exposure.is_none() && !ops.auto_exposure {
             nodes.push(create_bool_filter_node(
@@ -334,7 +316,6 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
     Ok(nodes)
 }
 
-/// Create a filter node with a single f32 parameter.
 fn create_filter_node(
     registry: &zennode::NodeRegistry,
     node_id: &str,
@@ -350,7 +331,6 @@ fn create_filter_node(
         .map_err(|e| CliError::Operation(format!("filter '{node_id}': {e}")))
 }
 
-/// Create a filter node with default parameters (for boolean-style filters like auto_exposure).
 fn create_bool_filter_node(
     registry: &zennode::NodeRegistry,
     node_id: &str,
@@ -364,18 +344,14 @@ fn create_bool_filter_node(
 
 /// Parse --resize value into RIAPI querystring parts.
 fn parse_resize(value: &str, qs: &mut Vec<String>) -> Result<(), CliError> {
-    // Percentage: "50%"
     if let Some(pct) = value.strip_suffix('%') {
         let _: f32 = pct
             .parse()
             .map_err(|_| CliError::Operation(format!("resize: invalid percentage '{value}'")))?;
-        // RIAPI doesn't have a direct percentage mode; compute later.
-        // For now, use zoom.
         qs.push(format!("zoom={}", pct.parse::<f32>().unwrap() / 100.0));
         return Ok(());
     }
 
-    // Suffixed modes: WxH!, WxH^, WxH#
     let (dims, mode) = if let Some(d) = value.strip_suffix('!') {
         (d, Some("distort"))
     } else if let Some(d) = value.strip_suffix('^') {
@@ -410,82 +386,50 @@ fn parse_resize(value: &str, qs: &mut Vec<String>) -> Result<(), CliError> {
     Ok(())
 }
 
-/// Build a CodecIntent from output options and the output file extension.
-pub fn build_intent(
+/// Configure an ImageJob's output settings from CLI output options.
+pub fn apply_output_opts<'a>(
+    job: zenpipe::job::ImageJob<'a>,
     output_ext: &str,
-    output_opts: &OutputOptions,
-) -> Result<CodecIntent, CliError> {
-    let format_registry = zencodec::ImageFormatRegistry::common();
+    opts: &OutputOptions,
+) -> zenpipe::job::ImageJob<'a> {
+    let mut job = job.with_output_extension(output_ext);
 
-    let format = if output_ext == "-" {
-        // stdout: caller must specify format or we default to JPEG.
-        None
-    } else {
-        let fmt = format_registry.from_extension(output_ext).ok_or_else(|| {
-            CliError::Input(format!(
-                "unknown output format for extension '.{output_ext}'"
-            ))
-        })?;
-        Some(FormatChoice::Specific(fmt))
-    };
-
-    let mut intent = CodecIntent {
-        format,
-        quality_fallback: output_opts.quality,
-        lossless: if output_opts.lossless {
-            Some(zencodecs::BoolKeep::True)
-        } else {
-            None
-        },
-        ..CodecIntent::default()
-    };
-
-    // Codec-specific hints via per-format BTreeMaps.
-    if let Some(ref sub) = output_opts.jpeg_subsampling {
-        intent.hints.jpeg.insert("subsampling".into(), sub.clone());
+    if let Some(q) = opts.quality {
+        job = job.with_quality(q);
     }
-    if output_opts.jpeg_progressive {
-        intent
-            .hints
-            .jpeg
-            .insert("progressive".into(), "true".into());
+    if opts.lossless {
+        job = job.with_lossless(true);
     }
-    if let Some(dist) = output_opts.jxl_distance {
-        intent.hints.jxl.insert("distance".into(), dist.to_string());
-    }
-    if let Some(speed) = output_opts.avif_speed {
-        intent.hints.avif.insert("speed".into(), speed.to_string());
-    }
-    if let Some(effort) = output_opts.effort {
-        // Push effort to all codec hint maps.
-        let effort_str = effort.to_string();
-        intent
-            .hints
-            .jpeg
-            .insert("effort".into(), effort_str.clone());
-        intent.hints.png.insert("effort".into(), effort_str.clone());
-        intent
-            .hints
-            .webp
-            .insert("effort".into(), effort_str.clone());
-        intent
-            .hints
-            .avif
-            .insert("effort".into(), effort_str.clone());
-        intent.hints.jxl.insert("effort".into(), effort_str.clone());
-        intent.hints.gif.insert("effort".into(), effort_str);
+    if let Some(effort) = opts.effort {
+        job = job.with_codec_hint("effort", &effort.to_string());
     }
 
-    Ok(intent)
+    // Codec-specific hints.
+    if let Some(ref sub) = opts.jpeg_subsampling {
+        job = job.with_codec_hint_for("jpeg", "subsampling", sub);
+    }
+    if opts.jpeg_progressive {
+        job = job.with_codec_hint_for("jpeg", "progressive", "true");
+    }
+    if let Some(dist) = opts.jxl_distance {
+        job = job.with_codec_hint_for("jxl", "distance", &dist.to_string());
+    }
+    if let Some(speed) = opts.avif_speed {
+        job = job.with_codec_hint_for("avif", "speed", &speed.to_string());
+    }
+
+    // Metadata policy.
+    job = job.with_metadata_policy(metadata_policy(opts));
+    job = job.with_gain_map_mode(gain_map_mode(opts));
+
+    job
 }
 
-/// Build metadata policy from output options.
-pub fn metadata_policy(output_opts: &OutputOptions) -> zenpipe::job::MetadataPolicy {
-    if output_opts.preserve {
+fn metadata_policy(opts: &OutputOptions) -> zenpipe::job::MetadataPolicy {
+    if opts.preserve {
         return zenpipe::job::MetadataPolicy::PreserveAll;
     }
-    // --strip with no argument or --strip all → StripAll
-    if let Some(ref what) = output_opts.strip {
+    if let Some(ref what) = opts.strip {
         match what.as_deref() {
             None | Some("all") => return zenpipe::job::MetadataPolicy::StripAll,
             Some("exif") => return zenpipe::job::MetadataPolicy::WebDefault,
@@ -493,91 +437,12 @@ pub fn metadata_policy(output_opts: &OutputOptions) -> zenpipe::job::MetadataPol
             _ => {}
         }
     }
-    // --keep implies preserve what's listed, strip the rest.
-    if output_opts.keep.is_some() {
-        return zenpipe::job::MetadataPolicy::WebDefault;
-    }
     zenpipe::job::MetadataPolicy::WebDefault
 }
 
-/// Build gain map mode from output options.
-pub fn gain_map_mode(output_opts: &OutputOptions) -> zenpipe::job::GainMapMode {
-    match output_opts.hdr.as_deref() {
+fn gain_map_mode(opts: &OutputOptions) -> zenpipe::job::GainMapMode {
+    match opts.hdr.as_deref() {
         Some("strip") => zenpipe::job::GainMapMode::Discard,
-        Some("preserve") | None => zenpipe::job::GainMapMode::Preserve,
-        Some("tonemap") => zenpipe::job::GainMapMode::Preserve, // TODO: actual tonemap mode
-        Some("reconstruct") => zenpipe::job::GainMapMode::Preserve, // TODO: reconstruct mode
         _ => zenpipe::job::GainMapMode::Preserve,
-    }
-}
-
-/// Build the ZenFiltersConverter for the pipeline bridge.
-pub struct ZenFiltersConverter;
-
-impl zenpipe::bridge::NodeConverter for ZenFiltersConverter {
-    fn can_convert(&self, schema_id: &str) -> bool {
-        zenfilters::zennode_defs::is_zenfilters_node(schema_id)
-    }
-
-    fn convert(&self, node: &dyn NodeInstance) -> zenpipe::PipeResult<zenpipe::graph::NodeOp> {
-        let filter = zenfilters::zennode_defs::node_to_filter(node).ok_or_else(|| {
-            zenpipe::PipeError::Op(format!(
-                "zenfilters converter: unrecognized node '{}'",
-                node.schema().id
-            ))
-        })?;
-
-        let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| {
-                zenpipe::PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))
-            })?;
-        pipeline.push(filter);
-        Ok(zenpipe::graph::NodeOp::Filter(pipeline))
-    }
-
-    fn convert_group(
-        &self,
-        nodes: &[&dyn NodeInstance],
-    ) -> zenpipe::PipeResult<zenpipe::graph::NodeOp> {
-        let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| {
-                zenpipe::PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))
-            })?;
-
-        for node in nodes {
-            let filter = zenfilters::zennode_defs::node_to_filter(*node).ok_or_else(|| {
-                zenpipe::PipeError::Op(format!(
-                    "zenfilters converter: unrecognized node '{}'",
-                    node.schema().id
-                ))
-            })?;
-            pipeline.push(filter);
-        }
-
-        Ok(zenpipe::graph::NodeOp::Filter(pipeline))
-    }
-
-    fn fuse_group(
-        &self,
-        nodes: &[&dyn NodeInstance],
-    ) -> zenpipe::PipeResult<Option<zenpipe::graph::NodeOp>> {
-        if nodes.len() < 2 {
-            return Ok(None);
-        }
-
-        let mut pipeline = zenfilters::Pipeline::new(zenfilters::PipelineConfig::default())
-            .map_err(|e| {
-                zenpipe::PipeError::Op(format!("zenfilters pipeline creation failed: {e:?}"))
-            })?;
-
-        for node in nodes {
-            if let Some(filter) = zenfilters::zennode_defs::node_to_filter(*node) {
-                pipeline.push(filter);
-            } else {
-                return Ok(None);
-            }
-        }
-
-        Ok(Some(zenpipe::graph::NodeOp::Filter(pipeline)))
     }
 }

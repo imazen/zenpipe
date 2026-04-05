@@ -17,20 +17,12 @@ path = "src/main.rs"
 zenpipe = { path = "..", features = [
     "job",
     "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif",
-    "nodes-avif", "nodes-jxl", "nodes-bmp",
+    "nodes-jxl", "nodes-bmp",
     "nodes-resize", "nodes-layout", "nodes-quant",
     "nodes-filters",
     "std", "lossless-jpeg",
 ] }
-zencodec = { version = "0.1.12", default-features = false }
-zencodecs = { path = "../../zencodecs", default-features = false, features = [
-    "jpeg", "png", "webp", "gif", "avif-decode", "jxl-decode",
-    "bitmaps-bmp",
-    "zennode", "cms", "jpeg-ultrahdr",
-] }
 zennode = { path = "../../zennode/zennode", features = ["derive", "serde"] }
-zenfilters = { path = "../../zenfilters", features = ["zennode"] }
-zenpixels = { version = "0.2.2" }
 
 clap = { version = "4.6.0", features = ["derive"] }
 glob = "0.3.2"
@@ -42,8 +34,6 @@ serde_json = "1"
 [patch.crates-io]
 zennode = { path = "../../zennode/zennode" }
 zencodec = { path = "../../zencodec" }
-zenpixels = { path = "../../zenpixels/zenpixels" }
-zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
 
 [package.metadata.superwork.ci]
 strategy = "git_url"

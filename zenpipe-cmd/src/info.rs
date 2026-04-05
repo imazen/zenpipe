@@ -1,4 +1,7 @@
 //! `zenpipe info` and `zenpipe compare` subcommand implementations.
+//!
+//! All image operations go through zenpipe::job. The CLI only does file I/O
+//! and output formatting.
 
 use std::process::ExitCode;
 
@@ -44,52 +47,36 @@ pub fn run_info(args: InfoArgs) -> ExitCode {
             }
         };
 
-        match zencodecs::from_bytes(&data) {
+        // Probe via ImageJob.
+        let probe = zenpipe::job::ImageJob::new()
+            .add_input(0, data.clone())
+            .probe();
+
+        match probe {
             Ok(info) => {
+                let bpp = info.bits_per_pixel(data.len());
+
                 if args.json {
-                    let obj = serde_json::json!({
+                    json_results.push(serde_json::json!({
                         "file": path_str,
-                        "format": format!("{:?}", info.format),
+                        "format": info.format_name(),
                         "width": info.width,
                         "height": info.height,
                         "has_alpha": info.has_alpha,
-                        "mime_type": info.format.mime_type(),
+                        "mime_type": info.mime_type,
                         "size_bytes": data.len(),
-                        "bits_per_pixel": if info.width > 0 && info.height > 0 {
-                            (data.len() as f64 * 8.0) / (info.width as f64 * info.height as f64)
-                        } else { 0.0 },
-                    });
-                    json_results.push(obj);
+                        "bits_per_pixel": bpp,
+                    }));
                 } else {
-                    let bpp = if info.width > 0 && info.height > 0 {
-                        (data.len() as f64 * 8.0) / (info.width as f64 * info.height as f64)
-                    } else {
-                        0.0
-                    };
                     println!(
                         "{}: {} {}x{}, {}",
                         path_str,
-                        format_name(info.format),
+                        info.format_name(),
                         info.width,
                         info.height,
                         if info.has_alpha { "alpha" } else { "opaque" },
                     );
-                    println!("  Size: {} ({:.2} bpp)", format_size(data.len()), bpp,);
-                    let exif_val = info.orientation.to_exif();
-                    if exif_val != 1 {
-                        println!("  EXIF orientation: {exif_val}");
-                    }
-                    // Show gain map presence.
-                    let gm = &info.gain_map;
-                    println!(
-                        "  Gain map: {}",
-                        match gm {
-                            zencodec::gainmap::GainMapPresence::Absent => "none",
-                            zencodec::gainmap::GainMapPresence::Unknown => "unknown",
-                            zencodec::gainmap::GainMapPresence::Available(_) => "present",
-                            _ => "unknown",
-                        }
-                    );
+                    println!("  Size: {} ({:.2} bpp)", format_size(data.len()), bpp);
                 }
             }
             Err(e) => {
@@ -117,7 +104,7 @@ pub fn run_info(args: InfoArgs) -> ExitCode {
     }
 }
 
-/// Run the `compare` subcommand.
+/// Run the `compare` subcommand via zenpipe::job::compare().
 pub fn run_compare(args: CompareArgs) -> ExitCode {
     let data_a = match std::fs::read(&args.a) {
         Ok(d) => d,
@@ -134,76 +121,26 @@ pub fn run_compare(args: CompareArgs) -> ExitCode {
         }
     };
 
-    // Decode both images to RGBA8 via zencodecs.
-    let decoded_a = match zencodecs::DecodeRequest::new(&data_a).decode_full_frame() {
-        Ok(d) => d,
+    match zenpipe::job::compare(&data_a, &data_b) {
+        Ok(result) => {
+            println!("A: {}x{}", result.width_a, result.height_a);
+            println!("B: {}x{}", result.width_b, result.height_b);
+            if result.dimensions_differ {
+                eprintln!(
+                    "warning: images have different dimensions — metrics may not be meaningful"
+                );
+            }
+            if result.psnr.is_infinite() {
+                println!("PSNR: inf (identical)");
+            } else {
+                println!("PSNR: {:.1} dB", result.psnr);
+            }
+            ExitCode::from(EXIT_SUCCESS)
+        }
         Err(e) => {
-            eprintln!("error: {}: decode failed: {e}", args.a);
-            return ExitCode::from(EXIT_INPUT_ERROR);
+            eprintln!("error: compare failed: {e}");
+            ExitCode::from(EXIT_INPUT_ERROR)
         }
-    };
-    let decoded_b = match zencodecs::DecodeRequest::new(&data_b).decode_full_frame() {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("error: {}: decode failed: {e}", args.b);
-            return ExitCode::from(EXIT_INPUT_ERROR);
-        }
-    };
-
-    let (wa, ha) = (decoded_a.width(), decoded_a.height());
-    let (wb, hb) = (decoded_b.width(), decoded_b.height());
-
-    println!("A: {}x{}", wa, ha);
-    println!("B: {}x{}", wb, hb);
-
-    if wa != wb || ha != hb {
-        eprintln!("warning: images have different dimensions — metrics may not be meaningful");
-    }
-
-    // Compute PSNR (simple, always available).
-    let pixels_a = decoded_a.pixels().as_strided_bytes();
-    let pixels_b = decoded_b.pixels().as_strided_bytes();
-
-    let min_len = pixels_a.len().min(pixels_b.len());
-    if min_len > 0 {
-        let mse: f64 = pixels_a[..min_len]
-            .iter()
-            .zip(&pixels_b[..min_len])
-            .map(|(&a, &b)| {
-                let diff = a as f64 - b as f64;
-                diff * diff
-            })
-            .sum::<f64>()
-            / min_len as f64;
-
-        if mse == 0.0 {
-            println!("PSNR: inf (identical)");
-        } else {
-            let psnr = 10.0 * (255.0_f64 * 255.0 / mse).log10();
-            println!("PSNR: {psnr:.1} dB");
-        }
-    }
-
-    // Note: SSIMULACRA2 and Butteraugli require the fast-ssim2 and butteraugli
-    // crates respectively. We compute PSNR as a baseline metric that's always
-    // available. Full perceptual metrics can be added when those deps are wired.
-    eprintln!("note: SSIMULACRA2 and Butteraugli metrics require additional dependencies");
-
-    ExitCode::from(EXIT_SUCCESS)
-}
-
-fn format_name(fmt: zencodecs::ImageFormat) -> &'static str {
-    match fmt {
-        zencodecs::ImageFormat::Jpeg => "JPEG",
-        zencodecs::ImageFormat::Png => "PNG",
-        zencodecs::ImageFormat::WebP => "WebP",
-        zencodecs::ImageFormat::Gif => "GIF",
-        zencodecs::ImageFormat::Avif => "AVIF",
-        zencodecs::ImageFormat::Jxl => "JPEG XL",
-        zencodecs::ImageFormat::Heic => "HEIC",
-        zencodecs::ImageFormat::Bmp => "BMP",
-        zencodecs::ImageFormat::Tiff => "TIFF",
-        _ => "Unknown",
     }
 }
 
