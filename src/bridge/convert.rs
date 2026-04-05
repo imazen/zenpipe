@@ -15,8 +15,8 @@ use crate::graph::{EdgeKind, NodeId, NodeOp, PipelineGraph};
 
 use super::geometry::{compile_geometry_run, is_geometry_node};
 use super::parse::{
-    param_f32_opt, param_i32, param_str, param_u32, parse_canvas_color, parse_constraint_mode,
-    parse_filter_opt, parse_gravity_anchor,
+    param_f32_opt, param_i32, param_str, param_u32, param_u32_opt, parse_canvas_color,
+    parse_constraint_mode, parse_filter_opt, parse_gravity_anchor,
 };
 use super::{NodeConverter, PipelineStep};
 
@@ -262,8 +262,8 @@ pub(crate) fn convert_orient(node: &dyn NodeInstance) -> crate::PipeResult<NodeO
 
 /// Convert a `zenresize.constrain` node to `NodeOp::Constrain`.
 pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
-    let w = param_u32(node, "w")?;
-    let h = param_u32(node, "h")?;
+    let w = param_u32_opt(node, "w").filter(|&v| v > 0);
+    let h = param_u32_opt(node, "h").filter(|&v| v > 0);
     let mode_str = param_str(node, "mode")?;
     // down_filter is Option<String> — absent means auto (Robidoux).
     let filter = node
@@ -338,8 +338,8 @@ pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> crate::Pip
 
 /// Convert a `zenlayout.constrain` node to `NodeOp::Constrain`.
 pub(crate) fn convert_zenlayout_constrain(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
-    let w = param_u32(node, "w")?;
-    let h = param_u32(node, "h")?;
+    let w = param_u32_opt(node, "w").filter(|&v| v > 0);
+    let h = param_u32_opt(node, "h").filter(|&v| v > 0);
     let mode_str = param_str(node, "mode")?;
 
     let gravity_x = param_f32_opt(node, "gravity_x");

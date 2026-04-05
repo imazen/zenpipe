@@ -21,6 +21,10 @@ pub(crate) fn param_u32(node: &dyn NodeInstance, name: &str) -> crate::PipeResul
         })
 }
 
+pub(crate) fn param_u32_opt(node: &dyn NodeInstance, name: &str) -> Option<u32> {
+    node.get_param(name).and_then(|v| v.as_u32())
+}
+
 pub(crate) fn param_i32(node: &dyn NodeInstance, name: &str) -> crate::PipeResult<i32> {
     node.get_param(name)
         .and_then(|v| v.as_i32())

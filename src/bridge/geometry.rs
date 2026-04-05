@@ -9,7 +9,9 @@ use whereat::at;
 use crate::error::PipeError;
 use crate::graph::NodeOp;
 
-use super::parse::{param_i32, param_str, param_u32, parse_constraint_mode, parse_filter_opt};
+use super::parse::{
+    param_i32, param_str, param_u32, param_u32_opt, parse_constraint_mode, parse_filter_opt,
+};
 
 /// Schema IDs that are geometry operations eligible for layout fusion.
 pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
@@ -90,11 +92,17 @@ pub(crate) fn compile_geometry_run(
                 pipeline = pipeline.rotate_270();
             }
             "zenresize.constrain" => {
-                let w = param_u32(node, "w")?;
-                let h = param_u32(node, "h")?;
+                let w = param_u32_opt(node, "w").filter(|&v| v > 0);
+                let h = param_u32_opt(node, "h").filter(|&v| v > 0);
                 let mode_str = param_str(node, "mode")?;
                 let mode = parse_constraint_mode(&mode_str)?;
-                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+                let constraint = match (w, h) {
+                    (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
+                    (Some(w), None) => zenresize::Constraint::width_only(mode, w),
+                    (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
+                    (None, None) => zenresize::Constraint::new(mode, 0, 0),
+                };
+                pipeline = pipeline.constrain(constraint);
                 // down_filter is optional — absent means auto (Robidoux).
                 if let Some(f) = node
                     .get_param("down_filter")
@@ -105,11 +113,17 @@ pub(crate) fn compile_geometry_run(
                 }
             }
             "zenlayout.constrain" => {
-                let w = param_u32(node, "w")?;
-                let h = param_u32(node, "h")?;
+                let w = param_u32_opt(node, "w").filter(|&v| v > 0);
+                let h = param_u32_opt(node, "h").filter(|&v| v > 0);
                 let mode_str = param_str(node, "mode")?;
                 let mode = parse_constraint_mode(&mode_str)?;
-                pipeline = pipeline.constrain(zenresize::Constraint::new(mode, w, h));
+                let constraint = match (w, h) {
+                    (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
+                    (Some(w), None) => zenresize::Constraint::width_only(mode, w),
+                    (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
+                    (None, None) => zenresize::Constraint::new(mode, 0, 0),
+                };
+                pipeline = pipeline.constrain(constraint);
             }
             "zenlayout.crop_percent" => {
                 // Percentage-based crop: x1/y1/x2/y2 are fractions of source size.

@@ -1557,7 +1557,9 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
             let s = unsharp_percent
                 .map(|p| format!(" unsharp={p:.0}%"))
                 .unwrap_or_default();
-            format!("{mode:?} {w}x{h} {f}{orient}{s}")
+            let ww = w.map(|v| v.to_string()).unwrap_or_else(|| "?".into());
+            let hh = h.map(|v| v.to_string()).unwrap_or_else(|| "?".into());
+            format!("{mode:?} {ww}x{hh} {f}{orient}{s}")
         }
         NodeOp::ResizeAdvanced(config) => {
             format!("-> {}x{}", config.out_width, config.out_height)
