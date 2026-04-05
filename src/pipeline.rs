@@ -29,6 +29,37 @@ pub(crate) fn strip_height(width: u32, has_alpha: bool, halo: usize) -> usize {
     max_total_rows.saturating_sub(2 * halo).max(8)
 }
 
+/// Working color space for the filter pipeline.
+///
+/// Determines how input RGB values are mapped to planar data before
+/// filters are applied, and how they're mapped back afterward.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum WorkingSpace {
+    /// Perceptual Oklab color space (default).
+    ///
+    /// L = perceptual lightness, a/b = chroma axes. Produces the
+    /// highest-quality photo adjustments because equal parameter
+    /// changes produce equal perceived changes. Used by Lightroom,
+    /// darktable, and modern photo editors.
+    #[default]
+    Oklab,
+    /// sRGB gamma space — matches ImageMagick's default behavior.
+    ///
+    /// L/a/b planes contain sRGB R/G/B values directly (normalized to
+    /// [0, 1]). All filters operate in gamma-encoded sRGB, producing
+    /// output identical to ImageMagick for operations like blur,
+    /// sharpen, convolution, morphology, emboss, posterize, solarize.
+    ///
+    /// Per-pixel adjustments (contrast, saturation, exposure) will use
+    /// the same sRGB formulas as ImageMagick's `-brightness-contrast`,
+    /// `-modulate`, etc.
+    ///
+    /// Known artifacts (same as ImageMagick): gamma-space blur darkens
+    /// color boundaries, saturation shifts hue, contrast is non-perceptual.
+    Srgb,
+}
+
 /// Configuration for the filter pipeline.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -40,6 +71,8 @@ pub struct PipelineConfig {
     pub reference_white: f32,
     /// Gamut mapping strategy applied after filters, before gather.
     pub gamut_mapping: GamutMapping,
+    /// Working color space for filter processing.
+    pub working_space: WorkingSpace,
     /// Reference width for resolution-independent parameters.
     ///
     /// When set, pixel-space sigma values in neighborhood filters are
@@ -52,12 +85,24 @@ pub struct PipelineConfig {
     pub reference_width: Option<u32>,
 }
 
+impl PipelineConfig {
+    /// ImageMagick-compatible configuration: sRGB working space, no gamut mapping.
+    pub fn magick_compat() -> Self {
+        Self {
+            working_space: WorkingSpace::Srgb,
+            gamut_mapping: GamutMapping::Bypass,
+            ..Default::default()
+        }
+    }
+}
+
 impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
             primaries: ColorPrimaries::Bt709,
             reference_white: 1.0,
             gamut_mapping: GamutMapping::Clip,
+            working_space: WorkingSpace::Oklab,
             reference_width: None,
         }
     }
@@ -122,6 +167,11 @@ impl Pipeline {
             m1_inv,
             gamut_lut,
         })
+    }
+
+    /// Access the pipeline configuration.
+    pub fn config(&self) -> &PipelineConfig {
+        &self.config
     }
 
     /// Add a filter to the pipeline.
@@ -357,6 +407,8 @@ impl Pipeline {
             OklabPlanes::from_ctx(ctx, width, height)
         };
 
+        let is_srgb = self.config.working_space == WorkingSpace::Srgb;
+
         // Scatter in strips for cache locality
         let scatter_strip = strip_height(width, ch == 4, 0);
         for y in (0..height as usize).step_by(scatter_strip) {
@@ -366,16 +418,24 @@ impl Pipeline {
             let plane_off = y * w;
             let plane_len = rows * w;
 
-            // Scatter this strip's worth of rows into the full-frame planes
-            crate::simd::scatter_oklab(
-                &src[src_off..src_off + src_len],
-                &mut planes.l[plane_off..plane_off + plane_len],
-                &mut planes.a[plane_off..plane_off + plane_len],
-                &mut planes.b[plane_off..plane_off + plane_len],
-                channels,
-                &self.m1,
-                self.config.reference_white,
-            );
+            if is_srgb {
+                // sRGB passthrough: deinterleave R→L, G→a, B→b
+                for i in 0..plane_len {
+                    planes.l[plane_off + i] = src[src_off + i * ch];
+                    planes.a[plane_off + i] = src[src_off + i * ch + 1];
+                    planes.b[plane_off + i] = src[src_off + i * ch + 2];
+                }
+            } else {
+                crate::simd::scatter_oklab(
+                    &src[src_off..src_off + src_len],
+                    &mut planes.l[plane_off..plane_off + plane_len],
+                    &mut planes.a[plane_off..plane_off + plane_len],
+                    &mut planes.b[plane_off..plane_off + plane_len],
+                    channels,
+                    &self.m1,
+                    self.config.reference_white,
+                );
+            }
             if ch == 4
                 && let Some(ref mut alpha) = planes.alpha
             {
@@ -396,15 +456,24 @@ impl Pipeline {
             let plane_off = y * w;
             let plane_len = rows * w;
 
-            crate::simd::gather_oklab(
-                &planes.l[plane_off..plane_off + plane_len],
-                &planes.a[plane_off..plane_off + plane_len],
-                &planes.b[plane_off..plane_off + plane_len],
-                &mut dst[dst_off..dst_off + dst_len],
-                channels,
-                &self.m1_inv,
-                self.config.reference_white,
-            );
+            if is_srgb {
+                // sRGB passthrough: interleave L→R, a→G, b→B
+                for i in 0..plane_len {
+                    dst[dst_off + i * ch] = planes.l[plane_off + i];
+                    dst[dst_off + i * ch + 1] = planes.a[plane_off + i];
+                    dst[dst_off + i * ch + 2] = planes.b[plane_off + i];
+                }
+            } else {
+                crate::simd::gather_oklab(
+                    &planes.l[plane_off..plane_off + plane_len],
+                    &planes.a[plane_off..plane_off + plane_len],
+                    &planes.b[plane_off..plane_off + plane_len],
+                    &mut dst[dst_off..dst_off + dst_len],
+                    channels,
+                    &self.m1_inv,
+                    self.config.reference_white,
+                );
+            }
             if ch == 4
                 && let Some(ref alpha) = planes.alpha
             {
@@ -457,13 +526,21 @@ impl Pipeline {
                 OklabPlanes::from_ctx(ctx, width, ext_rows as u32)
             };
 
-            scatter_to_oklab(
-                &src[ext_src_offset..ext_src_offset + ext_src_len],
-                &mut planes,
-                channels,
-                &self.m1,
-                self.config.reference_white,
-            );
+            if self.config.working_space == WorkingSpace::Srgb {
+                crate::scatter_gather::scatter_srgb_passthrough(
+                    &src[ext_src_offset..ext_src_offset + ext_src_len],
+                    &mut planes,
+                    channels,
+                );
+            } else {
+                scatter_to_oklab(
+                    &src[ext_src_offset..ext_src_offset + ext_src_len],
+                    &mut planes,
+                    channels,
+                    &self.m1,
+                    self.config.reference_white,
+                );
+            }
             self.apply_planar(&mut planes, ctx);
 
             // Gather only the core rows from the filtered extended strip
@@ -472,15 +549,24 @@ impl Pipeline {
             let plane_start = core_offset * w;
             let plane_end = plane_start + core_rows * w;
 
-            crate::simd::gather_oklab(
-                &planes.l[plane_start..plane_end],
-                &planes.a[plane_start..plane_end],
-                &planes.b[plane_start..plane_end],
-                &mut dst[dst_offset..dst_offset + dst_len],
-                channels,
-                &self.m1_inv,
-                self.config.reference_white,
-            );
+            if self.config.working_space == WorkingSpace::Srgb {
+                let n = core_rows * w;
+                for i in 0..n {
+                    dst[dst_offset + i * ch] = planes.l[plane_start + i];
+                    dst[dst_offset + i * ch + 1] = planes.a[plane_start + i];
+                    dst[dst_offset + i * ch + 2] = planes.b[plane_start + i];
+                }
+            } else {
+                crate::simd::gather_oklab(
+                    &planes.l[plane_start..plane_end],
+                    &planes.a[plane_start..plane_end],
+                    &planes.b[plane_start..plane_end],
+                    &mut dst[dst_offset..dst_offset + dst_len],
+                    channels,
+                    &self.m1_inv,
+                    self.config.reference_white,
+                );
+            }
 
             // Alpha: copy core rows
             if ch == 4 {

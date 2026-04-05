@@ -121,12 +121,24 @@ fn imagemagick_op(source_path: &str, args: &[&str], output_path: &Path) -> Optio
 // ─── Zenfilters application ────────────────────────────────────────
 
 fn apply_zenfilter(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
+    apply_zenfilter_with_config(img, filter, PipelineConfig::default())
+}
+
+fn apply_zenfilter_srgb(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
+    apply_zenfilter_with_config(img, filter, PipelineConfig::magick_compat())
+}
+
+fn apply_zenfilter_with_config(
+    img: &RgbImage,
+    filter: Box<dyn Filter>,
+    config: PipelineConfig,
+) -> RgbImage {
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
     let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
     let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
 
-    let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+    let mut pipeline = Pipeline::new(config).unwrap();
     pipeline.push(filter);
 
     let mut ctx = FilterContext::new();
@@ -170,53 +182,49 @@ fn compare_op(
     source_path: &str,
     image_name: &str,
     filter_name: &str,
-    zen_filter: Box<dyn Filter>,
+    make_filter: impl Fn() -> Box<dyn Filter>,
     im_args: &[&str],
     output_dir: &Path,
 ) -> Option<ComparisonResult> {
-    let zen_result = apply_zenfilter(source, zen_filter);
+    // Apply in Oklab (default zenfilters)
+    let zen_oklab = apply_zenfilter(source, make_filter());
+    // Apply in sRGB (magick-compat mode)
+    let zen_srgb = apply_zenfilter_srgb(source, make_filter());
 
     let im_out_path = output_dir
         .join(image_name)
         .join(format!("{filter_name}_im.png"));
     let im_result = imagemagick_op(source_path, im_args, &im_out_path)?;
 
-    // Ensure same dimensions (IM might change them for some ops)
-    if zen_result.dimensions() != im_result.dimensions() {
+    if zen_srgb.dimensions() != im_result.dimensions() {
         eprintln!(
             "  {filter_name}: dimension mismatch zen={}x{} im={}x{}, skipping",
-            zen_result.width(),
-            zen_result.height(),
-            im_result.width(),
-            im_result.height()
+            zen_srgb.width(), zen_srgb.height(),
+            im_result.width(), im_result.height()
         );
         return None;
     }
 
-    let zen_vs_src = zensim_score(source, &zen_result);
+    let oklab_vs_src = zensim_score(source, &zen_oklab);
     let im_vs_src = zensim_score(source, &im_result);
-    let zen_vs_im = zensim_score(&zen_result, &im_result);
+    // Key metric: how close is sRGB-mode zenfilters to ImageMagick?
+    let srgb_vs_im = zensim_score(&zen_srgb, &im_result);
 
-    let zen_path = output_dir
-        .join(image_name)
-        .join(format!("{filter_name}_zen.png"));
-    save_image(&zen_result, &zen_path);
+    // Save outputs
+    let dir = output_dir.join(image_name);
+    save_image(&zen_oklab, &dir.join(format!("{filter_name}_oklab.png")));
+    save_image(&zen_srgb, &dir.join(format!("{filter_name}_srgb.png")));
 
-    let winner = if zen_vs_src >= im_vs_src {
-        "ZEN"
-    } else {
-        "IM"
-    };
     eprintln!(
-        "  {filter_name:25}  zen={zen_vs_src:6.1}  im={im_vs_src:6.1}  agreement={zen_vs_im:5.1}  {winner}"
+        "  {filter_name:25}  oklab={oklab_vs_src:6.1}  im={im_vs_src:6.1}  srgb_vs_im={srgb_vs_im:6.1}"
     );
 
     Some(ComparisonResult {
         image_name: image_name.to_string(),
         filter_name: filter_name.to_string(),
-        zen_vs_src,
+        zen_vs_src: oklab_vs_src,
         im_vs_src,
-        zen_vs_im,
+        zen_vs_im: srgb_vs_im,
     })
 }
 
@@ -238,206 +246,118 @@ fn run_suite(
         source.height()
     );
     eprintln!(
-        "  {:25}  {:>6}  {:>6}  {:>9}  {}",
-        "filter", "zen", "im", "agreement", "winner"
+        "  {:25}  {:>6}  {:>6}  {:>10}",
+        "filter", "oklab", "im", "srgb_vs_im"
     );
 
     // --- Contrast ---
     for &(amount, im_pct) in &[(0.3f32, "30"), (0.6, "60"), (-0.3, "-30")] {
         let label = format!("contrast_{amount:+.1}");
-        // IM: -brightness-contrast 0x{pct}
         if let Some(r) = compare_op(
-            source,
-            source_path,
-            image_name,
-            &label,
-            {
-                let mut c = Contrast::default();
-                c.amount = amount;
-                Box::new(c)
-            },
+            source, source_path, image_name, &label,
+            || { let mut c = Contrast::default(); c.amount = amount; Box::new(c) },
             &["-brightness-contrast", &format!("0x{im_pct}")],
             output_dir,
-        ) {
-            results.push(r);
-        }
+        ) { results.push(r); }
     }
 
     // --- Brightness (Exposure) ---
     for &(stops, im_pct) in &[(0.5f32, "15"), (1.0, "30"), (-0.5, "-15")] {
         let label = format!("exposure_{stops:+.1}EV");
         if let Some(r) = compare_op(
-            source,
-            source_path,
-            image_name,
-            &label,
-            {
-                let mut e = Exposure::default();
-                e.stops = stops;
-                Box::new(e)
-            },
+            source, source_path, image_name, &label,
+            || { let mut e = Exposure::default(); e.stops = stops; Box::new(e) },
             &["-brightness-contrast", &format!("{im_pct}x0")],
             output_dir,
-        ) {
-            results.push(r);
-        }
+        ) { results.push(r); }
     }
 
     // --- Saturation ---
     for &(factor, im_mod) in &[(1.5f32, "150"), (0.5, "50"), (0.0, "0")] {
         let label = format!("saturation_{factor:.1}");
         if let Some(r) = compare_op(
-            source,
-            source_path,
-            image_name,
-            &label,
-            {
-                let mut s = Saturation::default();
-                s.factor = factor;
-                Box::new(s)
-            },
+            source, source_path, image_name, &label,
+            || { let mut s = Saturation::default(); s.factor = factor; Box::new(s) },
             &["-modulate", &format!("100,{im_mod},100")],
             output_dir,
-        ) {
-            results.push(r);
-        }
+        ) { results.push(r); }
     }
 
     // --- Grayscale ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "grayscale",
-        Box::new(Grayscale::default()),
-        &["-colorspace", "Gray"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "grayscale",
+        || Box::new(Grayscale::default()),
+        &["-colorspace", "Gray"], output_dir,
+    ) { results.push(r); }
 
     // --- Sharpen ---
     for &(amount, im_sigma) in &[(0.5f32, "0x1"), (1.0, "0x2")] {
         let label = format!("sharpen_{amount:.1}");
         if let Some(r) = compare_op(
-            source,
-            source_path,
-            image_name,
-            &label,
-            make_sharpen(amount, 1.0),
-            &["-sharpen", im_sigma],
-            output_dir,
-        ) {
-            results.push(r);
-        }
+            source, source_path, image_name, &label,
+            || make_sharpen(amount, 1.0),
+            &["-sharpen", im_sigma], output_dir,
+        ) { results.push(r); }
     }
 
     // --- Blur ---
     for &(sigma, im_sigma) in &[(2.0f32, "0x2"), (5.0, "0x5")] {
         let label = format!("blur_{sigma:.0}");
         if let Some(r) = compare_op(
-            source,
-            source_path,
-            image_name,
-            &label,
-            make_blur(sigma),
-            &["-blur", im_sigma],
-            output_dir,
-        ) {
-            results.push(r);
-        }
+            source, source_path, image_name, &label,
+            || make_blur(sigma),
+            &["-blur", im_sigma], output_dir,
+        ) { results.push(r); }
     }
 
     // --- Emboss (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "emboss",
-        Box::new(Convolve::new(ConvolutionKernel::emboss()).with_bias(0.5)),
-        &["-emboss", "1"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "emboss",
+        || Box::new(Convolve::new(ConvolutionKernel::emboss()).with_bias(0.5).with_target(ConvolveTarget::All)),
+        &["-emboss", "1"], output_dir,
+    ) { results.push(r); }
 
     // --- Edge detect ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "edge_detect",
-        make_edge_detect(EdgeMode::Sobel, 1.0),
-        &["-edge", "1"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "edge_detect",
+        || make_edge_detect(EdgeMode::Sobel, 1.0),
+        &["-edge", "1"], output_dir,
+    ) { results.push(r); }
 
     // --- Posterize (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "posterize_4",
-        make_posterize(4, false),
-        &["-posterize", "4"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "posterize_4",
+        || make_posterize(4, true),
+        &["-posterize", "4"], output_dir,
+    ) { results.push(r); }
 
     // --- Solarize (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "solarize_50",
-        make_solarize(0.5, false),
-        &["-solarize", "50%"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "solarize_50",
+        || make_solarize(0.5, true),
+        &["-solarize", "50%"], output_dir,
+    ) { results.push(r); }
 
     // --- Morphology: Dilate (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "dilate_1",
-        make_morphology(MorphOp::Dilate, 1, false),
-        &["-morphology", "Dilate", "Square:1"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "dilate_1",
+        || make_morphology(MorphOp::Dilate, 1, true),
+        &["-morphology", "Dilate", "Square:1"], output_dir,
+    ) { results.push(r); }
 
     // --- Morphology: Erode (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "erode_1",
-        make_morphology(MorphOp::Erode, 1, false),
-        &["-morphology", "Erode", "Square:1"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "erode_1",
+        || make_morphology(MorphOp::Erode, 1, true),
+        &["-morphology", "Erode", "Square:1"], output_dir,
+    ) { results.push(r); }
 
     // --- Motion blur (new filter) ---
     if let Some(r) = compare_op(
-        source,
-        source_path,
-        image_name,
-        "motion_blur_0_15",
-        make_motion_blur(0.0, 15.0),
-        &["-motion-blur", "0x15+0"],
-        output_dir,
-    ) {
-        results.push(r);
-    }
+        source, source_path, image_name, "motion_blur_0_15",
+        || make_motion_blur(0.0, 15.0),
+        &["-motion-blur", "0x15+0"], output_dir,
+    ) { results.push(r); }
 
     // --- Zenfilters-only effects (no IM equivalent needed) ---
     {

@@ -148,13 +148,24 @@ pub fn apply_to_buffer(
     let m1_inv = zenpixels_convert::oklab::lms_to_rgb_matrix(primaries)
         .ok_or_else(|| at!(ConvenienceError::UnsupportedPrimaries(primaries)))?;
 
+    let is_srgb_passthrough =
+        pipeline.config().working_space == crate::pipeline::WorkingSpace::Srgb;
+
     // Detect if we can use the fused sRGB u8 path (eliminates intermediate
     // linear f32 buffer — ~48MB savings at 2048² RGB).
-    let use_fused = desc.channel_type() == ChannelType::U8
+    let use_fused = !is_srgb_passthrough
+        && desc.channel_type() == ChannelType::U8
         && desc.transfer() == TransferFunction::Srgb
         && matches!(desc.layout(), ChannelLayout::Rgb | ChannelLayout::Rgba);
 
     let color_ctx = input.color_context().cloned();
+
+    // sRGB passthrough: normalize u8→f32, filter in sRGB, denormalize back.
+    // No linearization, no Oklab conversion — matches ImageMagick's behavior.
+    if is_srgb_passthrough && convert_back {
+        return apply_srgb_passthrough(pipeline, input, ctx, desc, width, height, channels, has_alpha, color_ctx.as_ref())
+            .map_err(|e| at!(e));
+    }
 
     // Fast path: fused sRGB u8 roundtrip with L3-friendly strip processing.
     // Scatter/filter/gather in horizontal strips so planar data stays in L3.
@@ -275,6 +286,53 @@ pub fn apply_to_buffer(
 }
 
 /// Fused sRGB u8 roundtrip with L3-friendly strip processing.
+/// sRGB passthrough: normalize u8→f32 [0,1], filter in sRGB, denormalize back.
+///
+/// This is the ImageMagick-compatible path. No linearization, no Oklab conversion.
+/// Input must be sRGB u8 RGB/RGBA.
+#[allow(clippy::too_many_arguments)]
+#[track_caller]
+fn apply_srgb_passthrough(
+    pipeline: &Pipeline,
+    input: &PixelBuffer,
+    ctx: &mut FilterContext,
+    desc: PixelDescriptor,
+    width: u32,
+    height: u32,
+    channels: u32,
+    has_alpha: bool,
+    color_ctx: Option<&alloc::sync::Arc<zenpixels::ColorContext>>,
+) -> Result<PixelBuffer, ConvenienceError> {
+    use crate::scatter_gather::{scatter_srgb_u8_passthrough, gather_srgb_u8_passthrough};
+
+    let input_bytes = copy_input_bytes_pooled(input, ctx);
+
+    let mut planes = if has_alpha {
+        OklabPlanes::from_ctx_with_alpha(ctx, width, height)
+    } else {
+        OklabPlanes::from_ctx(ctx, width, height)
+    };
+
+    scatter_srgb_u8_passthrough(&input_bytes, &mut planes, channels);
+    ctx.return_u8(input_bytes);
+
+    pipeline.apply_planar(&mut planes, ctx);
+
+    let total = (width as usize) * (height as usize) * (channels as usize);
+    let mut output_bytes = ctx.take_u8(total);
+    gather_srgb_u8_passthrough(&planes, &mut output_bytes, channels);
+    planes.return_to_ctx(ctx);
+
+    let mut output_buf =
+        PixelBuffer::from_vec(output_bytes, width, height, desc).map_err(|_| {
+            ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
+        })?;
+    if let Some(cc) = color_ctx {
+        output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
+    }
+    Ok(output_buf)
+}
+
 ///
 /// Processes the image in horizontal strips so that planar Oklab data
 /// (L + a + b + optional alpha) stays in L3 cache during scatter → filter → gather.

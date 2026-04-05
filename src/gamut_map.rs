@@ -15,6 +15,10 @@ pub enum GamutMapping {
         max_iterations: u32,
     },
 
+    /// No gamut mapping — pass values through unmodified.
+    /// Used with `WorkingSpace::Srgb` where values stay in [0, 1].
+    Bypass,
+
     /// Soft chroma compression using a precomputed gamut boundary LUT.
     /// Smoothly compresses chroma near the boundary using a rational
     /// knee function that preserves hue and lightness.

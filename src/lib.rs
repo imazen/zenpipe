@@ -135,7 +135,7 @@ pub use convenience::{ConvenienceError, PipelineBufferExt, apply_to_buffer};
 pub use filter::{Filter, ResizePhase};
 pub use fused_params::FusedAdjustParams;
 pub use gamut_map::GamutMapping;
-pub use pipeline::{Pipeline, PipelineConfig, PipelineError};
+pub use pipeline::{Pipeline, PipelineConfig, PipelineError, WorkingSpace};
 pub use planes::OklabPlanes;
 pub use scatter_gather::{
     gather_from_oklab, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab, scatter_to_oklab,
