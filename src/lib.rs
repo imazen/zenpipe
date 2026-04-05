@@ -80,6 +80,9 @@ pub use session::Session;
 #[cfg(feature = "zennode")]
 pub use zencodecs::quality::{QualityIntent, QualityProfile};
 
+// Re-export ImageFormat for callers that need to display/match format names.
+pub use zencodec::ImageFormat;
+
 pub mod animation;
 pub mod codec;
 #[cfg(feature = "json-schema")]
