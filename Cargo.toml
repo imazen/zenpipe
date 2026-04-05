@@ -37,8 +37,9 @@ zenpixels-convert = { version = "0.2.2" }
 imgref = "1.12"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
-zencodecs = { version = "0.1", default-features = false, features = ["jpeg", "png"] }
-zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
+# zencodecs and zenraw stripped for worktree (same as CI via superwork)
+# zencodecs = { version = "0.1", default-features = false, features = ["jpeg", "png"] }
+# zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
 enough = "0.4"
 zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 libblur = { version = "0.23", default-features = true }
@@ -93,6 +94,9 @@ name = "reference_validation"
 [[test]]
 name = "quality_validation"
 
+[[test]]
+name = "imageflow_comparison"
+
 [[bench]]
 name = "row_batch"
 harness = false
@@ -107,5 +111,5 @@ strategy = "strip_path"
 delete = ["zencodecs", "zenraw", "zenbench", "zennode"]
 delete_sections = ["patch.crates-io"]
 
-[patch.crates-io]
-zencodecs = { path = "../zencodecs" }
+# [patch.crates-io]
+# zencodecs = { path = "/home/lilith/work/zen/zencodecs" }
