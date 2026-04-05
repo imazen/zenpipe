@@ -13,7 +13,7 @@ zenpipe magic photo.jpg -resize 800x600 -quality 85 out.webp
 
 ## 1. Coverage Summary
 
-**78% of real-world ImageMagick usage is mappable today.** 18 of the top 20 most-used operations are fully supported. The only significant gap in common usage is text rendering.
+**~82% of real-world ImageMagick usage is mappable today.** 18 of the top 20 most-used operations are fully supported. Text rendering is available via SVG overlay (zensvg). SVG and JPEG 2000 format support added.
 
 | Category | Real-World Usage | Coverage | Gap |
 |----------|-----------------|----------|-----|
@@ -23,10 +23,10 @@ zenpipe magic photo.jpg -resize 800x600 -quality 85 out.webp
 | Compositing/overlay | 10% | 95% | — |
 | Format conversion | 5% | 95% | JPEG 2000, SVG, EPS |
 | Artistic effects | 5% | 30% | oil-paint, charcoal, sketch, swirl |
-| Drawing/text | 5% | 5% | text, vectors, fonts |
+| Drawing/text | 5% | 40% | SVG text via zensvg; no IM `-draw`/`-annotate` syntax |
 | Morphology/analysis | 2% | 0% | all 22 methods |
 | Animation | 2% | 70% | morph |
-| Distortion | 1% | 0% | 13 distortion types |
+| Distortion | 1% | 30% | affine + perspective via zenfilters warp; 11 other types missing |
 
 ---
 
@@ -201,17 +201,33 @@ Blend mode mapping:
 
 ### 4.6 Not Supported (Intentional)
 
-| IM Feature | Why Not |
-|-----------|---------|
-| `-fx` expression language | Security risk, full interpreter, rarely used |
-| `-draw` / `-annotate` / `-font` | Full vector/text renderer — different domain |
-| `-morphology` (22 methods) | Image analysis, not image processing |
-| `-distort` (13 types) | Niche; perspective/affine covered by zenfilters warp |
-| `-liquid-rescale` | Seam carving — very slow, rarely used |
-| `-convolve` (custom kernels) | Generic convolution engine — niche |
-| `-sketch` / `-charcoal` / `-paint` | Artistic effects — niche, better done in dedicated tools |
-| GUI tools | Not a CLI concern |
-| MSL scripting | Dead feature |
+| IM Feature | Status | Alternative |
+|-----------|--------|-------------|
+| `-fx` expression language | ❌ Won't support | Security risk, full interpreter |
+| `-draw` / `-annotate` | ⬜ Different syntax | Render text as SVG, composite via zensvg |
+| `-morphology` (22 methods) | ⬜ Not yet | Erode/dilate/open/close — image analysis domain |
+| `-distort` (11 of 13 types) | ⬜ Partial | Perspective + affine via zenfilters warp; arc/barrel/etc missing |
+| `-liquid-rescale` | ❌ Won't support | Seam carving — very slow, rarely needed |
+| `-convolve` (custom kernels) | ⬜ Not yet | Gaussian + edge detect exist; generic kernel API missing |
+| `-emboss` / `-shade` | ⬜ Not yet | Could build from convolution kernels |
+| `-sketch` / `-charcoal` / `-paint` | ⬜ Not yet | Multi-step filter chains; low priority |
+| `-swirl` / `-implode` / `-wave` | ⬜ Not yet | Polar warp variants; extend zenfilters warp |
+| `-motion-blur` / `-rotational-blur` | ⬜ Not yet | Directional/radial blur kernels |
+| GUI tools (display/animate/import) | ❌ Out of scope | Use native viewers |
+| MSL scripting (conjure) | ❌ Out of scope | Dead feature |
+
+**Text rendering strategy**: Instead of reimplementing IM's `-annotate`/`-draw text`, compose text as SVG and overlay:
+```bash
+# IM style (won't support):
+convert photo.jpg -annotate +10+20 "Hello" out.jpg
+
+# zenpipe style (supported):
+zenpipe photo.jpg --overlay '<svg><text x="10" y="20" fill="white">Hello</text></svg>' out.jpg
+
+# Or from SVG file:
+zenpipe photo.jpg --overlay text.svg out.jpg
+```
+This is more powerful (full SVG typography, CSS fonts, gradients, transforms) and avoids bundling a font rasterizer separately from the SVG renderer we already have.
 
 ---
 
@@ -302,13 +318,13 @@ pub fn apply_quirks(ops: &mut Vec<Operation>) {
 | HEIC/HEIF | ✅ (delegate) | ✅ heic | Decode only |
 | RAW/DNG | ✅ (delegate) | ✅ zenraw | Multiple backends |
 | PDF | ✅ (Ghostscript) | ✅ zenpdf | Via hayro renderer |
-| SVG | ✅ (librsvg) | ⬜ | Needs resvg integration |
-| JPEG 2000 | ✅ (delegate) | ❌ | No pure Rust codec |
+| SVG/SVGZ | ✅ (librsvg) | ✅ zensvg | resvg + usvg, text rendering, optimize |
+| JPEG 2000 | ✅ (delegate) | ✅ zenjp2 | hayro-jpeg2000 (pure Rust) |
 | EPS/PS | ✅ (Ghostscript) | ❌ | PostScript interpreter |
 | EXR | ✅ | ❌ | No pure Rust codec |
 | FLIF | ✅ | ❌ | Dead format |
 
-**Format coverage: 18/22 common formats supported.** Missing: SVG (planned via resvg), JPEG 2000, EPS, EXR.
+**Format coverage: 20/22 common formats supported.** Missing: EPS (PostScript interpreter), EXR (OpenEXR).
 
 ---
 

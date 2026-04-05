@@ -331,8 +331,12 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Output as zip or individual downloads
 - Generate `<img srcset>` HTML snippet
 
-### 9.4 SVG Rendering (issue #1) ⬜
-- resvg/usvg as image source via zenpipe
+### 9.4 SVG Rendering ✅
+- `zensvg` crate: resvg + usvg for SVG/SVGZ rendering
+- Full text rendering with system fonts and custom font files
+- SVG optimization feature
+- Registered in zencodecs as a decoder
+- Can be used as text overlay source (render SVG → composite)
 
 ### 9.5 HEIC Decode ⬜
 - Pure Rust `heic` crate (on crates.io)
@@ -2320,6 +2324,10 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | **heic** | ✅ | ✅ SIMD | ❌ | ⬜ Future HEIC decode |
 | **zentiff** | ✅ | ✅ | ✅ | ⬜ Future TIFF support |
 | **zenbitmaps** | ✅ 0.1.3 | ✅ All | ✅ All | ⬜ BMP/QOI/TGA/PNM/HDR |
+| **zensvg** | ✅ | ✅ resvg+usvg | ❌ | ⬜ SVG/SVGZ render + text |
+| **zenjp2** | ✅ | ✅ hayro-jpeg2000 | ❌ | ⬜ JPEG 2000 decode |
+| **zenraw** | ✅ | ✅ rawloader | ❌ | ⬜ Camera RAW/DNG |
+| **zenpdf** | ✅ | ✅ hayro | ❌ | ⬜ PDF page render |
 
 ### 26.5 Codec Support Crates
 
