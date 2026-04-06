@@ -437,3 +437,175 @@ Existing research documents in this workspace:
 | CODiff, PromptCIR | Controllable image restoration |
 
 These repos inform zenfilters' ML-adjacent features (noise reduction, deblocking, super-resolution).
+
+---
+
+## 10. Missing from Initial Spec (from ~/research/ docs)
+
+The following were documented in `~/research/imagemagick-cli-reference.md` but omitted from the initial spec. None require rolling back existing work — the operation mappings, geometry syntax, and kernel tables are correct. These are additions.
+
+### 10.1 Image Stack / Parentheses (CRITICAL)
+
+IM's processing model supports multi-image stacks with parenthesized contexts:
+
+```bash
+magick photo.jpg \( watermark.png -resize 200x -alpha set -channel A -evaluate set 50% \) \
+  -gravity southeast -composite result.jpg
+```
+
+Stack operators to support:
+| IM | Purpose | Parser Complexity |
+|----|---------|-------------------|
+| `\( ... \)` | Push/pop processing context | Medium — nested parsing |
+| `-clone N` | Duplicate image at index | Simple |
+| `-delete N` | Remove image at index | Simple |
+| `-swap N,M` | Swap image order | Simple |
+| `-reverse` | Reverse image list | Simple |
+| `-duplicate N` | Create N copies | Simple |
+
+**Implementation**: The parser emits a `Vec<StackOp>` where `StackOp` is `Push`, `Pop`, `Clone(usize)`, etc. The executor maintains a `Vec<ImageBuffer>` stack. Each `\( ... \)` scope creates a new pipeline context that merges back via `-composite` or `-flatten`.
+
+### 10.2 Gravity as Persistent State
+
+In IM, `-gravity` is a **setting**, not an operation. It persists and affects ALL subsequent operations until changed:
+
+```bash
+magick input.jpg -gravity center -crop 500x500+0+0 -gravity southeast -annotate +10+10 "©"
+```
+
+Must track: `current_gravity: Gravity` in the parser state. Affects: `-crop`, `-extent`, `-composite`, `-annotate`, `-draw`, overlay positioning.
+
+### 10.3 Plus-Form Settings
+
+IM uses `+` prefix to negate/disable a setting (vs `-` to enable):
+
+| Syntax | Meaning |
+|--------|---------|
+| `-strip` | Strip metadata |
+| `+strip` | Don't strip (noop, but valid syntax) |
+| `-repage` | Set virtual canvas geometry |
+| `+repage` | Reset virtual canvas offset (critical after crop) |
+| `-profile sRGB.icc` | Assign/convert ICC profile |
+| `+profile '*'` | Strip all profiles |
+| `-sigmoidal-contrast 3,50%` | Increase contrast |
+| `+sigmoidal-contrast 3,50%` | Decrease contrast |
+
+**Parser**: every `-flag` must check if the arg starts with `+` and handle the inverse semantics.
+
+### 10.4 Format Prefix Override
+
+```bash
+magick input.jpg png:output.raw    # Force PNG encoding regardless of extension
+magick input.jpg jpeg:-            # JPEG to stdout
+magick png:- output.jpg            # PNG from stdin
+```
+
+Parser must split `format:path` before path resolution. Special outputs: `null:` (discard), `info:` (identify), `histogram:path`.
+
+### 10.5 Frame/Page Selection
+
+```bash
+magick 'animation.gif[0]' first.png       # First frame
+magick 'animation.gif[0-3]' frames.png    # Range
+magick 'document.pdf[2]' page3.png        # PDF page
+magick 'photo.jpg[800x600+100+50]' crop.jpg  # Inline crop-on-read
+magick 'photo.jpg[200x200]' thumb.jpg     # Inline resize-on-read
+```
+
+Parser must extract `[...]` suffix from filenames. Maps to decoder options (frame index, crop region, resize hint).
+
+### 10.6 Built-In Image Generators
+
+```bash
+magick -size 800x600 xc:navy output.png           # Solid color
+magick -size 400x400 gradient:red-blue grad.png    # Linear gradient
+magick -size 640x480 plasma: plasma.png            # Fractal plasma
+magick -size 100x100 pattern:checkerboard pat.png  # Pattern
+```
+
+| Generator | Priority | Zenpipe Feasibility |
+|-----------|----------|-------------------|
+| `xc:color` / `canvas:color` | High | `NodeOp::FillRect` on new canvas |
+| `gradient:c1-c2` | Medium | New node (trivial — linear interpolation) |
+| `radial-gradient:` | Low | New node |
+| `pattern:name` | Low | Procedural patterns |
+| `plasma:` | Low | Fractal noise |
+| `label:text` / `caption:text` | Medium | Via zensvg text rendering |
+
+### 10.7 -fuzz (Color Tolerance)
+
+```bash
+magick input.jpg -fuzz 5% -trim +repage output.jpg
+magick input.jpg -fuzz 10% -transparent white output.png
+```
+
+`-fuzz` is a persistent setting (like gravity) that affects: `-trim`, `-transparent`, `-opaque`, `-fill` flood-fill, `-floodfill`, color matching in composite operations.
+
+Maps to: `CropWhitespace { fuzz_percent }` for trim. Needs parameter wiring for other operations.
+
+### 10.8 +repage (Virtual Canvas Reset)
+
+After `-crop`, IM preserves the original canvas dimensions and the crop's offset as "virtual canvas" metadata. `+repage` resets this so the cropped image stands alone.
+
+```bash
+magick input.jpg -crop 800x600+100+50 +repage output.jpg  # Correct
+magick input.jpg -crop 800x600+100+50 output.jpg          # Canvas metadata preserved (unexpected)
+```
+
+zenpipe's `Crop` doesn't have virtual canvas semantics — it always produces a standalone image. So `+repage` is a noop in our implementation, but the parser must accept it.
+
+### 10.9 -define (Format-Specific Hints)
+
+```bash
+magick input.jpg -define jpeg:sampling-factor=4:2:0 output.jpg
+magick input.png -define png:exclude-chunks=date output.png
+magick input.jpg -define webp:method=6 output.webp
+```
+
+Parser maps `-define format:key=value` to codec-specific encode options. Our `ExportModel` already supports per-format options — this is a syntax bridge.
+
+### 10.10 -list Introspection
+
+```bash
+magick -list format    # 277+ supported formats
+magick -list filter    # Available resize filters
+magick -list compose   # Composite operators
+magick -list color     # Named colors
+```
+
+**Implementation**: `imageflow-magic -list format` → enumerate zencodecs registered formats. `-list filter` → enumerate zenresize::Filter variants. `-list compose` → enumerate zenblend::BlendMode. Low priority but trivial to implement from existing Rust enums.
+
+### 10.11 identify Format Strings
+
+```bash
+magick identify -format "%w x %h (%m, %z-bit, %Q quality)" image.jpg
+```
+
+Key tokens: `%w` (width), `%h` (height), `%m` (format), `%z` (depth), `%Q` (quality), `%B` (file size bytes), `%b` (file size human), `%[EXIF:*]` (EXIF properties).
+
+Maps to: zencodec probe → `ImageInfo` fields. Format string parser is a simple `%`-token replacer.
+
+### 10.12 Resource Limits
+
+```bash
+magick -limit memory 2GiB -limit disk 10GiB -limit thread 4 ...
+```
+
+Maps to: `zenpipe::Limits` (already exists — `AllocationTracker`, `AllocationGuard`, `Deadline`).
+
+### 10.13 Compose Operators (60+ in IM, 26 in zenblend)
+
+IM has ~60 compose methods. Our spec maps 26. The additional IM-specific ones:
+
+| IM Compose | Category | Priority |
+|-----------|----------|----------|
+| CopyRed/Green/Blue/Alpha | Channel copy | Low (use `-channel -separate -combine`) |
+| Mathematics | 4-param blend formula | Low |
+| Displace/Distort | Displacement map | Low |
+| Blur (compose) | Blur through mask | Low |
+| Bumpmap | Normal map lighting | Low |
+| Dissolve | Weighted blend | Already mapped to `Overlay { opacity }` |
+| ChangeMask | Difference masking | Low |
+| Stereo | Anaglyph 3D | Very low |
+
+Most of these are niche. The 26 we already mapped cover >95% of real composite usage.
