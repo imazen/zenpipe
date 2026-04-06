@@ -54,8 +54,8 @@ fn make_motion_blur(angle: f32, length: f32) -> Box<dyn Filter> {
     Box::new(mb)
 }
 
-fn make_linear_contrast(amount: f32) -> Box<dyn Filter> {
-    let mut c = LinearContrast::default();
+fn make_sigmoidal_contrast(amount: f32) -> Box<dyn Filter> {
+    let mut c = SigmoidalContrast::default();
     c.amount = amount;
     Box::new(c)
 }
@@ -268,7 +268,7 @@ fn run_suite(
         if let Some(r) = compare_op(
             source, source_path, image_name, &label,
             Some(&|| { let mut c = Contrast::default(); c.amount = amount; Box::new(c) }),
-            &|| make_linear_contrast(amount),
+            &|| make_sigmoidal_contrast(amount),
             &["-brightness-contrast", &format!("0x{im_pct}")],
             output_dir,
         ) { results.push(r); }

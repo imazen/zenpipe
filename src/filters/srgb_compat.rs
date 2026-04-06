@@ -12,15 +12,112 @@ use crate::context::FilterContext;
 use crate::filter::{Filter, PlaneSemantics};
 use crate::planes::OklabPlanes;
 
-// ─── LinearContrast ────────────────────────────────────────────────
+// ─── SigmoidalContrast ─────────────────────────────────────────────
+
+/// Sigmoidal contrast adjustment on all planes.
+///
+/// Uses the same S-curve as ImageMagick's `-sigmoidal-contrast` and
+/// `-brightness-contrast 0xN`. The sigmoid maps [0,1] → [0,1] with
+/// steepening around the midpoint for positive contrast, and flattening
+/// for negative contrast.
+///
+/// Formula: `sig(x) = 1 / (1 + exp(β * (α - x)))`
+/// Normalized: `(sig(x) - sig(0)) / (sig(1) - sig(0))`
+///
+/// Unlike Oklab `Contrast` (power curve on perceptual lightness), this
+/// applies a sigmoid S-curve identically to all channels in sRGB space.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct SigmoidalContrast {
+    /// Contrast strength. 0.0 = no change.
+    /// Positive = increase contrast (steeper S-curve).
+    /// Negative = decrease contrast (flatter curve).
+    /// Range: roughly -1.0 to 1.0. Maps internally to sigmoid β of ±10.
+    pub amount: f32,
+    /// Midpoint of the S-curve. Default: 0.5.
+    pub midpoint: f32,
+}
+
+impl Default for SigmoidalContrast {
+    fn default() -> Self {
+        Self {
+            amount: 0.0,
+            midpoint: 0.5,
+        }
+    }
+}
+
+/// Evaluate the sigmoid at x with contrast β and midpoint α.
+#[inline]
+fn sigmoid(x: f32, beta: f32, alpha: f32) -> f32 {
+    1.0 / (1.0 + (beta * (alpha - x)).exp())
+}
+
+/// Normalized sigmoidal contrast: maps [0,1] → [0,1].
+#[inline]
+fn sigmoidal_contrast(x: f32, beta: f32, alpha: f32) -> f32 {
+    let sig_0 = sigmoid(0.0, beta, alpha);
+    let sig_1 = sigmoid(1.0, beta, alpha);
+    let denom = sig_1 - sig_0;
+    if denom.abs() < 1e-10 {
+        return x;
+    }
+    ((sigmoid(x, beta, alpha) - sig_0) / denom).clamp(0.0, 1.0)
+}
+
+/// Inverse sigmoidal contrast (for negative amount — reduces contrast).
+#[inline]
+fn inverse_sigmoidal_contrast(x: f32, beta: f32, alpha: f32) -> f32 {
+    let sig_0 = sigmoid(0.0, beta, alpha);
+    let sig_1 = sigmoid(1.0, beta, alpha);
+    let denom = sig_1 - sig_0;
+    if denom.abs() < 1e-10 {
+        return x;
+    }
+    // Map x back through the inverse sigmoid
+    let scaled = sig_0 + x * denom;
+    let clamped = scaled.clamp(1e-6, 1.0 - 1e-6);
+    (alpha - (1.0 / clamped - 1.0).ln() / beta).clamp(0.0, 1.0)
+}
+
+impl Filter for SigmoidalContrast {
+    fn channel_access(&self) -> ChannelAccess {
+        ChannelAccess::L_AND_CHROMA
+    }
+
+    fn plane_semantics(&self) -> PlaneSemantics {
+        PlaneSemantics::Rgb
+    }
+
+    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
+        if self.amount.abs() < 1e-6 {
+            return;
+        }
+        // Map amount to sigmoid β. IM uses β ≈ 10 for full contrast.
+        let beta = self.amount * 10.0;
+        let alpha = self.midpoint;
+
+        for plane in [&mut planes.l, &mut planes.a, &mut planes.b] {
+            if beta > 0.0 {
+                for v in plane.iter_mut() {
+                    *v = sigmoidal_contrast(*v, beta, alpha);
+                }
+            } else {
+                for v in plane.iter_mut() {
+                    *v = inverse_sigmoidal_contrast(*v, -beta, alpha);
+                }
+            }
+        }
+    }
+}
+
+// Keep LinearContrast as well — simpler, useful for non-IM use cases.
 
 /// Linear contrast adjustment on all planes.
 ///
 /// Formula: `v' = (v - 0.5) * (1 + amount) + 0.5`, clamped to [0, 1].
-/// Matches ImageMagick's `-brightness-contrast 0xN` in sRGB space.
-///
-/// Unlike Oklab `Contrast` (power curve on perceptual lightness), this
-/// is a simple linear scale around 0.5 applied identically to all channels.
+/// Simpler than `SigmoidalContrast` but doesn't match ImageMagick.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -302,6 +399,37 @@ impl Filter for ChannelSolarize {
 mod tests {
     use super::*;
     use crate::context::FilterContext;
+
+    #[test]
+    fn sigmoidal_contrast_zero_is_identity() {
+        let mut planes = OklabPlanes::new(8, 8);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = i as f32 / 64.0;
+        }
+        let orig = planes.l.clone();
+        SigmoidalContrast { amount: 0.0, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
+        assert_eq!(planes.l, orig);
+    }
+
+    #[test]
+    fn sigmoidal_contrast_increases_range() {
+        let mut planes = OklabPlanes::new(4, 4);
+        planes.l[0] = 0.3;
+        planes.l[1] = 0.7;
+        SigmoidalContrast { amount: 0.5, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
+        assert!(planes.l[0] < 0.3, "dark should get darker: {}", planes.l[0]);
+        assert!(planes.l[1] > 0.7, "bright should get brighter: {}", planes.l[1]);
+    }
+
+    #[test]
+    fn sigmoidal_contrast_negative_reduces_range() {
+        let mut planes = OklabPlanes::new(4, 4);
+        planes.l[0] = 0.1;
+        planes.l[1] = 0.9;
+        SigmoidalContrast { amount: -0.5, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
+        assert!(planes.l[0] > 0.1, "dark should get lighter: {}", planes.l[0]);
+        assert!(planes.l[1] < 0.9, "bright should get darker: {}", planes.l[1]);
+    }
 
     #[test]
     fn linear_contrast_zero_is_identity() {

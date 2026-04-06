@@ -127,7 +127,7 @@ pub use sigmoid::Sigmoid;
 pub use solarize::Solarize;
 pub use srgb_compat::{
     ChannelPosterize, ChannelSolarize, HslSaturate, LinearBrightness, LinearContrast,
-    LumaGrayscale,
+    LumaGrayscale, SigmoidalContrast,
 };
 pub use temperature::Temperature;
 pub use texture::Texture;
