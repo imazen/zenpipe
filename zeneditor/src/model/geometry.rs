@@ -4,7 +4,7 @@
 //! This model represents the user's intentional geometry edits that are part
 //! of the pipeline output.
 //!
-//! CLI spec §2.1, IM spec §4.1: crop modes, rotation types, orientation.
+//! SPEC.md §11 (geometry tools), §13 (existing capabilities), §18.4 (crop UX).
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 pub struct GeometryModel {
     /// Crop applied to the source image.
     pub crop: CropMode,
+    /// Locked aspect ratio for the crop (§11.2 presets).
+    pub aspect_ratio: Option<AspectRatio>,
     /// Rotation applied after crop.
     pub rotation: RotationMode,
     /// Horizontal flip.
@@ -21,13 +23,14 @@ pub struct GeometryModel {
     pub flip_v: bool,
     /// EXIF orientation handling.
     pub orientation: OrientMode,
-    /// Padding added to the canvas.
+    /// Padding added to the canvas (§11.5 margins).
     pub padding: Padding,
 }
 
 /// How to crop the image.
 ///
-/// CLI: `--crop 100,100,800,600` / `--crop 10%,10%,80%,80%` / `--crop auto`
+/// SPEC.md §11.2: freeform crop with handles, aspect ratio presets.
+/// Normalized coordinates for recipe portability (§12.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum CropMode {
@@ -37,13 +40,9 @@ pub enum CropMode {
     /// Absolute pixel coordinates.
     #[serde(rename = "pixels")]
     Pixels { x: u32, y: u32, w: u32, h: u32 },
-    /// Percentage of source dimensions (0.0..1.0).
+    /// Normalized coordinates (0.0..1.0) — portable across resolutions.
     #[serde(rename = "percent")]
     Percent { x: f32, y: f32, w: f32, h: f32 },
-    /// Auto whitespace crop (content detection).
-    /// CLI: `--crop auto`, IM: `-trim`
-    #[serde(rename = "auto")]
-    Auto,
 }
 
 impl Default for CropMode {
@@ -52,9 +51,52 @@ impl Default for CropMode {
     }
 }
 
+/// Aspect ratio constraint for cropping (§11.2).
+///
+/// Displayed as pills in the crop UI: Free | 1:1 | 4:3 | 3:2 | 16:9 | Custom
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mode")]
+pub enum AspectRatio {
+    /// Freeform — no constraint.
+    #[serde(rename = "free")]
+    Free,
+    /// Fixed ratio (width:height). Stored as a fraction for precision.
+    #[serde(rename = "fixed")]
+    Fixed { w: u32, h: u32 },
+}
+
+/// Named crop set definition for CMS mode (§14.5, §12.1).
+///
+/// Defines a named aspect ratio + anchor for serve-time cropping.
+/// Compatible with imageflow/zenpipe server crop API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropSetEntry {
+    /// Aspect ratio (e.g. w=16, h=9 for 16:9).
+    pub aspect_w: u32,
+    pub aspect_h: u32,
+    /// Anchor point for the crop (where to center when source doesn't match).
+    pub anchor: CropAnchor,
+}
+
+/// Where to anchor a crop when the source aspect doesn't match the target.
+///
+/// SPEC.md §14.5: center, face-detect, rule-of-thirds, manual point.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CropAnchor {
+    #[default]
+    Center,
+    /// Face-detect anchor (uses saliency if available).
+    Face,
+    /// Rule-of-thirds intersection (top-left power point).
+    ThirdsTopLeft,
+    /// Rule-of-thirds intersection (top-right power point).
+    ThirdsTopRight,
+}
+
 /// How to rotate the image.
 ///
-/// CLI: `--rotate 90` / `--rotate 2.5` / `--rotate auto`
+/// SPEC.md §11.3: 90° buttons, arbitrary slider, straighten wheel (§20.5).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum RotationMode {
@@ -62,16 +104,14 @@ pub enum RotationMode {
     #[serde(rename = "none")]
     None,
     /// Cardinal rotation (90, 180, 270). Pixel-perfect, no interpolation.
+    /// §13.1: `Warp::rotate_90/180/270()` — pixel-perfect copy.
     #[serde(rename = "cardinal")]
     Cardinal { degrees: u16 },
     /// Arbitrary angle rotation with interpolation.
-    /// `border` controls how edges are handled.
+    /// §13.1: `Rotate` struct with Lanczos3 interpolation.
+    /// `border` controls edge handling (crop or expand with white fill).
     #[serde(rename = "arbitrary")]
     Arbitrary { degrees: f32, border: RotationBorder },
-    /// Auto-deskew — detect skew angle and correct.
-    /// CLI: `--rotate auto` / `--deskew`
-    #[serde(rename = "auto_deskew")]
-    AutoDeskew,
 }
 
 impl Default for RotationMode {
@@ -81,42 +121,35 @@ impl Default for RotationMode {
 }
 
 /// How to handle edges during arbitrary rotation.
+///
+/// SPEC.md §11.3: "Preview shows rotated image with transparent/fill corners"
+/// §13.1: Rotate supports Crop and Deskew border modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RotationBorder {
-    /// Crop to the largest axis-aligned rectangle that fits inside the rotated image.
+    /// Crop to the largest axis-aligned rectangle inside the rotated image.
     #[default]
     Crop,
-    /// Expand canvas and fill with the deskew background (white).
-    Deskew,
-    /// Clamp edge pixels.
-    FillClamp,
-    /// Fill with black.
-    FillBlack,
+    /// Expand canvas and fill with white (deskew mode).
+    Expand,
 }
 
 /// EXIF orientation handling.
 ///
-/// CLI: `--orient auto` / `--orient 6`
+/// SPEC.md §13.3: 8 EXIF orientations, applied in pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(tag = "mode")]
+#[serde(rename_all = "snake_case")]
 pub enum OrientMode {
     /// No orientation change.
     #[default]
-    #[serde(rename = "none")]
     None,
     /// Apply EXIF orientation from source metadata and strip the tag.
-    /// CLI: `--orient auto`, IM: `-auto-orient`
-    #[serde(rename = "auto")]
     Auto,
-    /// Force a specific EXIF orientation value (1-8).
-    #[serde(rename = "explicit")]
-    Explicit { value: u8 },
 }
 
 /// Padding added around the image (canvas expansion).
 ///
-/// CLI: `--pad 20` / `--pad 10,20,10,20 --bg black`
+/// SPEC.md §11.5: margins for document mode.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Padding {
     pub top: u32,
@@ -161,6 +194,7 @@ impl GeometryModel {
     /// Whether any geometry edits are active.
     pub fn is_identity(&self) -> bool {
         self.crop == CropMode::None
+            && self.aspect_ratio.is_none()
             && self.rotation == RotationMode::None
             && !self.flip_h
             && !self.flip_v
@@ -221,5 +255,25 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let c2: CropMode = serde_json::from_str(&json).unwrap();
         assert_eq!(c, c2);
+    }
+
+    #[test]
+    fn aspect_ratio_serde() {
+        let a = AspectRatio::Fixed { w: 16, h: 9 };
+        let json = serde_json::to_string(&a).unwrap();
+        let a2: AspectRatio = serde_json::from_str(&json).unwrap();
+        assert_eq!(a, a2);
+    }
+
+    #[test]
+    fn crop_set_entry_serde() {
+        let e = CropSetEntry {
+            aspect_w: 16,
+            aspect_h: 9,
+            anchor: CropAnchor::Face,
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        let e2: CropSetEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(e, e2);
     }
 }

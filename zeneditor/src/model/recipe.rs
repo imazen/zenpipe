@@ -1,17 +1,16 @@
-//! Recipe model — serializable pipeline state for save/load/batch.
+//! Recipe model — serializable pipeline state for save/load.
 //!
 //! A recipe captures the complete edit: geometry + adjustments + film preset
-//! + export settings. It can be applied to any image.
+//! + crop sets + export settings. It can be applied to any image.
 //!
-//! CLI spec §6: `--save-recipe sunset.json`, `--recipe sunset.json`
-//! Demo SPEC §12: procedural edit system, per-image persistence.
+//! SPEC.md §12: procedural edit system, per-image persistence, reusable recipes.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::adjustment::ParamValue;
 use super::export::{ColorspaceTarget, ExportModel, HdrMode, MetadataPolicy};
-use super::geometry::GeometryModel;
+use super::geometry::{CropSetEntry, GeometryModel};
 
 /// A serializable edit recipe — all operations needed to reproduce an edit.
 ///
@@ -25,6 +24,9 @@ pub struct Recipe {
     /// Optional user-given name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// ISO 8601 creation timestamp (§12.1, §12.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<String>,
 
     // ─── Geometry ───
     /// Geometry edits (crop, rotate, flip, orient, pad).
@@ -43,6 +45,11 @@ pub struct Recipe {
     /// Film preset intensity (0.0..1.0).
     #[serde(default = "default_intensity")]
     pub film_preset_intensity: f32,
+
+    // ─── Crop sets (§12.1, §14.5 CMS mode) ───
+    /// Named crop definitions for CMS/CDN use.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub crop_sets: BTreeMap<String, CropSetEntry>,
 
     // ─── Export (optional — recipes can omit export to inherit from context) ───
     /// Output format (e.g. "jpeg", "webp"). None = inherit from context.
@@ -79,10 +86,12 @@ impl Default for Recipe {
         Self {
             version: 1,
             name: None,
+            created: None,
             geometry: GeometryModel::default(),
             adjustments: BTreeMap::new(),
             film_preset: None,
             film_preset_intensity: 1.0,
+            crop_sets: BTreeMap::new(),
             format: None,
             quality: None,
             hdr_mode: None,
@@ -150,15 +159,16 @@ pub fn snapshot_recipe(
     export: &ExportModel,
     name: Option<String>,
 ) -> Recipe {
-    // Snapshot the raw flat values (not the pipeline format).
     let raw_values = adjustments.raw_values().clone();
     Recipe {
         version: 1,
         name,
+        created: None, // caller should set timestamp if desired
         geometry: geometry.clone(),
         adjustments: raw_values,
         film_preset: adjustments.film_preset.clone(),
         film_preset_intensity: adjustments.film_preset_intensity,
+        crop_sets: BTreeMap::new(), // caller adds crop sets separately
         format: Some(export.format.clone()),
         quality: export.quality(),
         hdr_mode: Some(export.hdr_mode),

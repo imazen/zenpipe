@@ -148,12 +148,29 @@ pub enum Command {
     /// Set flip state.
     SetFlip { horizontal: bool, vertical: bool },
 
-    /// Set orientation handling.
-    SetOrientation {
-        mode: crate::model::geometry::OrientMode,
+    /// Set EXIF orientation handling (auto-apply or none).
+    SetOrientation { auto: bool },
+
+    /// Lock crop aspect ratio (§11.2: 1:1, 4:3, 16:9, free).
+    SetAspectRatio {
+        ratio: Option<crate::model::geometry::AspectRatio>,
     },
 
-    // ─── Recipe ───
+    // ─── Compare (§5.2.1) ───
+    /// Show original (unedited) image for comparison (tap-hold).
+    ShowOriginal,
+
+    /// Return to showing edited image.
+    ShowEdited,
+
+    // ─── Compound operations (§18.3, §18.6) ───
+    /// One-click auto enhance (auto_levels + auto_exposure + clarity + vibrance).
+    AutoEnhance,
+
+    /// Document cleanup pipeline (deskew + perspective + crop + auto-levels).
+    CleanDocument,
+
+    // ─── Recipe (§12) ───
     /// Save current state as a recipe. Returns ViewUpdate::RecipeSaved.
     SaveRecipe { name: Option<String> },
 

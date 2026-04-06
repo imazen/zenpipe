@@ -1,7 +1,6 @@
 //! Export model — format, quality, dimensions, HDR handling, metadata, color space.
 //!
-//! Structured types for everything that affects encoded output. The CLI spec
-//! maps `--hdr`, `--strip`/`--keep`, `--colorspace` directly to these enums.
+//! SPEC.md §3 (export system), §3.5 (advanced preservation panel), §17 (color pipeline).
 
 use serde::{Deserialize, Serialize};
 
@@ -14,21 +13,25 @@ pub struct ExportModel {
     pub width: u32,
     /// Export height (0 = source height).
     pub height: u32,
-    /// Format-specific options (quality, effort, lossless, near-lossless, etc.).
+    /// Format-specific options (quality, effort, lossless, near-lossless, subsampling, etc.).
     pub options: serde_json::Value,
-    /// HDR / gain map handling.
+    /// HDR / gain map handling (§3.5, §17.4).
     pub hdr_mode: HdrMode,
-    /// What metadata to preserve in output.
+    /// What metadata to preserve in output (§3.5, §17.6).
     pub metadata_policy: MetadataPolicy,
-    /// Output color space.
+    /// Output color space (§17.2, §17.7).
     pub colorspace: ColorspaceTarget,
-    /// Output bit depth (0 = auto / match source).
+    /// Transfer function — relevant when colorspace is Rec2020 (§17.2, §17.7).
+    pub transfer_function: TransferFunction,
+    /// Gamut handling for out-of-gamut colors (§17.7).
+    pub gamut_handling: GamutHandling,
+    /// Output bit depth (0 = auto / match source). §17.5.
     pub bit_depth: u8,
 }
 
 /// How to handle HDR content and gain maps.
 ///
-/// CLI: `--hdr preserve|strip|tonemap|reconstruct`
+/// SPEC.md §3.5: gain map options, §17.4: gain map pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HdrMode {
@@ -45,7 +48,7 @@ pub enum HdrMode {
 
 /// What metadata to preserve in the encoded output.
 ///
-/// CLI: `--strip`, `--strip exif`, `--keep exif,icc`, `--preserve`
+/// SPEC.md §3.5: per-metadata-type checkboxes, all on by default.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MetadataPolicy {
@@ -60,7 +63,9 @@ pub enum MetadataPolicy {
     Keep(Vec<MetadataKind>),
 }
 
-/// Individual metadata categories that can be selectively preserved or stripped.
+/// Individual metadata categories for selective preservation.
+///
+/// SPEC.md §3.5: EXIF, XMP, ICC, CICP checkboxes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MetadataKind {
@@ -73,19 +78,49 @@ pub enum MetadataKind {
 
 /// Output color space target.
 ///
-/// CLI: `--colorspace srgb|p3|rec2020`
+/// SPEC.md §17.2, §17.7: color space dropdown in export panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ColorspaceTarget {
     /// Match source color space (no unnecessary conversion).
     #[default]
     Auto,
-    /// sRGB — widest compatibility.
+    /// sRGB — widest compatibility, web default.
     Srgb,
     /// Display P3 — Apple ecosystem, wide gamut SDR.
     DisplayP3,
-    /// Rec. 2020 — HDR workflows.
+    /// Rec. 2020 — HDR workflows, broadcast. Requires TransferFunction selection.
     Rec2020,
+}
+
+/// Transfer function for HDR output (§17.2, §17.7).
+///
+/// Only meaningful when colorspace is Rec2020. Grayed out otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferFunction {
+    /// Match source transfer function.
+    #[default]
+    Auto,
+    /// sRGB gamma (~2.2). Standard for SDR.
+    Srgb,
+    /// Perceptual Quantizer (SMPTE ST 2084). HDR10.
+    Pq,
+    /// Hybrid Log-Gamma. HLG broadcast.
+    Hlg,
+}
+
+/// How to handle out-of-gamut colors during color space conversion (§17.7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GamutHandling {
+    /// Perceptual — compress entire gamut to fit, preserves relationships.
+    #[default]
+    Perceptual,
+    /// Relative colorimetric — clip out-of-gamut, preserve in-gamut accuracy.
+    RelativeColorimetric,
+    /// Absolute colorimetric — preserve exact colors, clip out-of-gamut.
+    AbsoluteColorimetric,
 }
 
 impl Default for ExportModel {
@@ -98,6 +133,8 @@ impl Default for ExportModel {
             hdr_mode: HdrMode::default(),
             metadata_policy: MetadataPolicy::default(),
             colorspace: ColorspaceTarget::default(),
+            transfer_function: TransferFunction::default(),
+            gamut_handling: GamutHandling::default(),
             bit_depth: 0,
         }
     }

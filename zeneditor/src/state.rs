@@ -559,11 +559,43 @@ impl EditorState {
                 vec![ViewUpdate::GeometryChanged, ViewUpdate::RenderNeeded]
             }
 
-            Command::SetOrientation { mode } => {
-                self.geometry.orientation = mode;
+            Command::SetOrientation { auto } => {
+                self.geometry.orientation = if auto {
+                    crate::model::geometry::OrientMode::Auto
+                } else {
+                    crate::model::geometry::OrientMode::None
+                };
                 self.render_needed = true;
                 self.detail_only = false;
                 vec![ViewUpdate::GeometryChanged, ViewUpdate::RenderNeeded]
+            }
+
+            Command::SetAspectRatio { ratio } => {
+                self.geometry.aspect_ratio = ratio;
+                vec![ViewUpdate::GeometryChanged]
+            }
+
+            Command::ShowOriginal => {
+                // The host should display the pre-rendered original.
+                // No render needed — the original is cached separately.
+                vec![]
+            }
+
+            Command::ShowEdited => {
+                // Return to showing edited image.
+                vec![]
+            }
+
+            Command::AutoEnhance => {
+                // TODO: apply auto_levels + auto_exposure + clarity + vibrance
+                // at mild settings (§18.3). Requires auto-analysis nodes.
+                vec![]
+            }
+
+            Command::CleanDocument => {
+                // TODO: run deskew + perspective + auto-crop + auto-levels (§18.6).
+                // Requires document analysis nodes from zenfilters.
+                vec![]
             }
 
             Command::SaveRecipe { name } => {
@@ -1375,7 +1407,7 @@ mod tests {
         state.init_from_rgba(solid_rgba(100, 100, 128, 128, 128), 100, 100);
 
         let updates = state.dispatch(Command::SetCrop {
-            crop: crate::model::geometry::CropMode::Auto,
+            crop: crate::model::geometry::CropMode::Percent { x: 0.1, y: 0.1, w: 0.8, h: 0.8 },
         });
         assert!(updates.iter().any(|u| matches!(u, ViewUpdate::GeometryChanged)));
         assert!(state.render_needed());
