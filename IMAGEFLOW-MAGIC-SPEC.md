@@ -378,3 +378,34 @@ imageflow-magic --check-compat your-script.sh
 # Step 3: For unsupported operations, use zenpipe native syntax
 # instead of IM compat mode (cleaner, more powerful)
 ```
+
+---
+
+## 9. Research Resources
+
+Existing research documents in this workspace:
+
+| File | Lines | Contents |
+|------|-------|----------|
+| `~/research/imagemagick-cli-reference.md` | 882 | Full IM CLI reference (IM6 + IM7), all tools, geometry syntax, all operators |
+| `~/research/imagemagick-ecosystem-survey.md` | 618 | All IM wrappers/bindings (MagickCore, MagickWand, Perl, Python, Ruby, PHP, .NET, etc.) |
+| `~/research/imagemagick-to-libvips-mapping.md` | 571 | IM ↔ libvips operation mapping, kernel mapping, architecture comparison |
+| `~/work/filter-research/research.md` | ~500 | Filter research linking darktable/GIMP/RawTherapee/ART source to docs |
+| `~/work/filter-research/repos/ImageMagick/` | Full | IM source code |
+| `~/work/filter-research/repos/graphicsmagick/` | Full | GraphicsMagick source |
+| `~/work/filter-research/repos/darktable/` | Full | darktable source (filter reference implementations) |
+| `~/work/filter-research/repos/gimp/` | Full | GIMP source |
+| `~/work/filter-research/repos/RawTherapee/` | Full | RawTherapee source |
+| `~/work/filter-research/repos/gegl/` | Full | GEGL source (GIMP's pipeline engine) |
+| `~/work/filter-research/docs/imagemagick/` | | IM-specific docs |
+| `~/work/thirdparty/ImageMagick/` | Full | IM source (alternate checkout) |
+
+### ML Restoration Research (filter-research/repos/)
+| Repo | Purpose |
+|------|---------|
+| DiffBIR, NAFNet, SwinIR, SCUNet | Image restoration / denoising |
+| FBCNN, ARCNN, DnCNN | JPEG artifact removal |
+| realcugan, waifu2x | Super-resolution upscaling |
+| CODiff, PromptCIR | Controllable image restoration |
+
+These repos inform zenfilters' ML-adjacent features (noise reduction, deblocking, super-resolution).
