@@ -127,8 +127,6 @@ fn source_path(name: &str) -> Option<String> {
 fn imagemagick_op(source_path: &str, args: &[&str], output_path: &Path) -> Option<RgbImage> {
     let mut cmd = Command::new("convert");
     cmd.arg(source_path);
-    // Strip alpha before processing to match our RGB-only pipeline
-    cmd.args(["-alpha", "remove", "-alpha", "off"]);
     for arg in args {
         cmd.arg(arg);
     }
@@ -352,7 +350,7 @@ fn run_suite(
     if let Some(r) = compare_op(
         source, source_path, image_name, "emboss",
         Some(&|| Box::new(Convolve::new(ConvolutionKernel::emboss()).with_bias(0.5).with_target(ConvolveTarget::All))),
-        &|| Box::new(DifferenceEmboss { sigma: 1.0 }),
+        &|| { let mut e = DifferenceEmboss::default(); e.sigma = 1.0; Box::new(e) },
         &["-emboss", "1"],
         output_dir,
     ) { results.push(r); }
@@ -424,11 +422,13 @@ fn run_suite(
 fn compare_zenfilters_vs_imagemagick() {
     let output_dir = Path::new("/mnt/v/output/zenfilters/comparison");
 
+    // Skip RGBA images (dice.png) — our pipeline is RGB-only, comparing
+    // against IM's RGBA processing gives misleading scores.
     let test_images = [
         ("frymire.png", "frymire"),
         ("waterhouse.jpg", "waterhouse"),
         ("red-night.png", "red_night"),
-        ("dice.png", "dice"),
+        ("wrenches.jpg", "wrenches"),
         ("gradients.png", "gradients"),
     ];
 
