@@ -41,6 +41,10 @@ impl Filter for ShadowLift {
         ChannelAccess::L_ONLY
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::ShadowLift
     }

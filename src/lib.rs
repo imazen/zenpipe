@@ -132,7 +132,7 @@ pub mod blur_internals {
 }
 pub use context::FilterContext;
 pub use convenience::{ConvenienceError, PipelineBufferExt, apply_to_buffer};
-pub use filter::{Filter, ResizePhase};
+pub use filter::{Filter, PlaneSemantics, ResizePhase};
 pub use fused_params::FusedAdjustParams;
 pub use gamut_map::GamutMapping;
 pub use pipeline::{Pipeline, PipelineConfig, PipelineError, WorkingSpace};

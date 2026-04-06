@@ -36,6 +36,10 @@ impl Filter for MotionBlur {
         ChannelAccess::ALL
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn is_neighborhood(&self) -> bool {
         true
     }
@@ -126,6 +130,10 @@ impl Default for ZoomBlur {
 impl Filter for ZoomBlur {
     fn channel_access(&self) -> ChannelAccess {
         ChannelAccess::ALL
+    }
+
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
     }
 
     fn is_neighborhood(&self) -> bool {

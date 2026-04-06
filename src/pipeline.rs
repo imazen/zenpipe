@@ -184,7 +184,27 @@ impl Pipeline {
     }
 
     /// Add a filter to the pipeline.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the filter's `plane_semantics()` is incompatible with the
+    /// pipeline's `working_space`. For example, pushing an Oklab-specific
+    /// filter (`Contrast`) into an sRGB pipeline panics.
     pub fn push(&mut self, filter: Box<dyn Filter>) {
+        use crate::filter::PlaneSemantics;
+        let semantics = filter.plane_semantics();
+        let space = self.config.working_space;
+        let compatible = match semantics {
+            PlaneSemantics::Any => true,
+            PlaneSemantics::Oklab => space == WorkingSpace::Oklab,
+            PlaneSemantics::Rgb => space == WorkingSpace::Srgb,
+        };
+        assert!(
+            compatible,
+            "Filter requires {:?} planes but pipeline uses {:?} working space. \
+             Use a compatible filter type or change PipelineConfig::working_space.",
+            semantics, space
+        );
         self.filters.push(filter);
     }
 

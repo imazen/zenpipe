@@ -40,6 +40,10 @@ impl Filter for Posterize {
         }
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         let levels = self.levels.max(2) as f32;
         let steps = levels - 1.0;

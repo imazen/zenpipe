@@ -38,6 +38,10 @@ impl Filter for Devignette {
         ChannelAccess::L_AND_CHROMA
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.strength.abs() < 1e-6 {
             return;

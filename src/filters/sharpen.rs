@@ -35,6 +35,10 @@ impl Filter for Sharpen {
         ChannelAccess::L_ONLY
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn is_neighborhood(&self) -> bool {
         true
     }
