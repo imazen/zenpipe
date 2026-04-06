@@ -2388,3 +2388,180 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | **imageflow-go** | Go bindings | Consumer |
 | **zensquoosh** | TypeScript/Preact codec frontend | Reference UI |
 | **zenimage-web** | Retired browser editor (reference for UX patterns) | Reference |
+
+---
+
+## 27. Instant Preview Architecture
+
+### 27.1 Core Principle
+Every visual change has TWO render paths:
+1. **Instant proxy** (<1ms): CSS transform or canvas drawImage from a cached low-res filtered image
+2. **Sharp render** (3-200ms): worker pipeline at target resolution
+
+The proxy is always visible during interaction. The sharp render replaces it when ready. The user never sees a blank, stale, or unfiltered frame.
+
+### 27.2 The Proxy Image
+A single **overview-sized** (512px max dim) fully-filtered image, kept up-to-date after every filter change. This is the source for ALL instant previews.
+
+```
+Filter slider changes → worker renders overview (512px) → proxy updates
+                                                          ↓
+Pan/zoom/rotate/flip/crop → CSS transform on proxy → instant
+                                                     ↓ (debounced)
+                                           worker renders detail → sharp replace
+```
+
+The proxy is the overview canvas content. It already has all current filters applied. Geometry operations (pan, zoom, rotate, flip, crop) can be approximated by CSS transforms on this proxy without any worker involvement.
+
+### 27.3 Per-Operation Proxy Strategy
+
+| Operation | Instant Proxy (<1ms) | Sharp Render (worker) |
+|-----------|---------------------|----------------------|
+| **Pan/drag** | `drawImage(overview, sx, sy, sw, sh, 0, 0, dw, dh)` | Crop + resize region at detail resolution |
+| **Scroll zoom** | CSS `transform: scale(N)` on detail canvas | Re-render at new region size |
+| **Pinch zoom** | CSS `transform: scale(N)` on detail canvas | Re-render at new region size |
+| **Rotate 90°** | CSS `transform: rotate(90deg)` on detail canvas | Pipeline re-render with orient node |
+| **Arbitrary rotate** | CSS `transform: rotate(Ndeg)` on proxy | Pipeline re-render with warp/rotate filter |
+| **Flip H** | CSS `transform: scaleX(-1)` on detail canvas | Pipeline re-render with orient node |
+| **Flip V** | CSS `transform: scaleY(-1)` on detail canvas | Pipeline re-render with orient node |
+| **Crop adjust** | `drawImage` cropping the proxy to new bounds | Pipeline re-render with new crop |
+| **Exposure** | CSS `filter: brightness(pow(2, v))` | Pipeline re-render |
+| **Contrast** | CSS `filter: contrast(1+v)` | Pipeline re-render |
+| **Saturation** | CSS `filter: saturate(f)` | Pipeline re-render |
+| **Other filters** | Show proxy at current filter state (no CSS approx) | Pipeline re-render |
+| **Film preset** | Show proxy (preset was applied to it) | Pipeline re-render |
+
+### 27.4 Implementation: ProxyRenderer
+
+```javascript
+class ProxyRenderer {
+  constructor(overviewCanvas, detailCanvas) {
+    this.overview = overviewCanvas;
+    this.detail = detailCanvas;
+    this.detailCtx = detailCanvas.getContext('2d');
+    this.pendingTransform = null;
+  }
+
+  /**
+   * Show the overview content cropped/transformed into the detail canvas.
+   * Called on every gesture frame — must be <1ms.
+   */
+  showProxy(region, transform = null) {
+    const oc = this.overview;
+    const dc = this.detail;
+    const ctx = this.detailCtx;
+
+    // Source rect on overview
+    const sx = region.x * oc.width;
+    const sy = region.y * oc.height;
+    const sw = region.w * oc.width;
+    const sh = region.h * oc.height;
+
+    // Reset any CSS transforms from previous proxy
+    dc.style.transform = '';
+
+    if (transform) {
+      // Apply CSS transform for geometry operations
+      // This is instant — no pixel work, just GPU compositing
+      dc.style.transformOrigin = 'center center';
+      dc.style.transform = transform; // e.g., 'rotate(90deg)', 'scaleX(-1)'
+    }
+
+    // Draw overview region upscaled into detail canvas
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(oc, sx, sy, sw, sh, 0, 0, dc.width, dc.height);
+  }
+
+  /**
+   * Replace proxy with sharp worker-rendered pixels.
+   * Clears any CSS transform.
+   */
+  showSharp(imageData) {
+    this.detail.style.transform = '';
+    this.detailCtx.putImageData(imageData, 0, 0);
+  }
+}
+```
+
+### 27.5 Gesture → Proxy → Worker Timeline
+
+```
+Rotate 90° button tap:
+  ├─ [0ms]   CSS: detailCanvas.style.transform = 'rotate(90deg)'
+  │          User sees the image rotated instantly (GPU compositing)
+  │
+  ├─ [0ms]   Update model: orientation = Rotate90
+  │          dispatch(Rotate90) → state change only, no render
+  │
+  ├─ [50ms]  Debounce fires → worker.postMessage({render})
+  │          Worker: Session re-renders with orient node
+  │
+  ├─ [55ms]  Worker returns sharp pixels
+  │          detailCanvas.style.transform = '' (clear CSS)
+  │          putImageData(sharp pixels)
+  │
+  └─ User perceived: instant rotation, slight quality jump at 55ms
+
+Crop handle drag:
+  ├─ [0ms]   pointermove: new crop bounds
+  │          drawImage(overview, new_sx, new_sy, new_sw, new_sh, ...)
+  │          User sees the cropped region from the low-res proxy
+  │
+  ├─ [16ms]  Next pointermove: updated crop bounds
+  │          drawImage again — tracking the drag smoothly
+  │
+  ├─ [pointerup + 50ms]  Debounce fires → worker renders detail
+  │
+  ├─ [~70ms] Worker returns sharp cropped image
+  │          putImageData replaces proxy
+  │
+  └─ User perceived: smooth drag with blurry proxy, sharp snap on release
+
+Arbitrary rotation slider:
+  ├─ [0ms]   input event: angle = 15°
+  │          CSS: detailCanvas.style.transform = 'rotate(15deg)'
+  │          This rotates the CURRENT detail canvas content (already filtered)
+  │
+  ├─ [16ms]  Next input: angle = 16°
+  │          CSS: detailCanvas.style.transform = 'rotate(16deg)'
+  │          Smooth — CSS transitions handle interpolation
+  │
+  ├─ [slider release + 50ms]  Worker renders with Rotate(16°)
+  │          Sharp rotated pixels replace CSS-rotated proxy
+  │
+  └─ User perceived: perfectly smooth rotation during drag
+```
+
+### 27.6 CSS Transform Stacking
+
+Multiple geometry operations can stack as CSS transforms during interaction:
+
+```javascript
+// User has flipped H, then is dragging rotation to 15°
+detailCanvas.style.transform = 'scaleX(-1) rotate(15deg)';
+
+// User is also zoomed 2x via pinch
+detailCanvas.style.transform = 'scaleX(-1) rotate(15deg) scale(2)';
+```
+
+When the worker catches up, ALL CSS transforms are cleared and the sharp result is a single correctly-rendered image.
+
+### 27.7 What Must NOT Use Proxy
+
+Some operations can't be approximated by CSS transforms on the proxy:
+- **Perspective correction** — needs 3D CSS perspective() which doesn't match the actual warp math
+- **Content-aware operations** — auto-crop, auto-deskew detection (need full pipeline)
+- **Filter changes without CSS equivalent** — clarity, film preset, grain, etc.
+
+For these, show a spinner or the overview proxy (blurry but filtered) while the worker renders.
+
+### 27.8 Keeping the Proxy Fresh
+
+The proxy (overview canvas) must reflect the current filter state:
+- After every filter change → re-render overview (Session cache hit on geometry, ~3ms)
+- After geometry change → re-render overview (Session cache miss, ~50ms)
+- During geometry interaction → proxy shows pre-geometry state (CSS transforms approximate the geometry)
+- After geometry committed → re-render overview at new geometry
+
+The overview Session cache makes proxy updates cheap (~3ms) for filter-only changes.
