@@ -90,6 +90,34 @@ bitflags! {
 pub fn parse_geometry(s: &str) -> Result<IMGeometry, ParseError> { ... }
 ```
 
+### 3.1 Resize Kernel Mapping
+
+Three-way mapping (from `~/research/imagemagick-to-libvips-mapping.md` + zenresize):
+
+| ImageMagick `-filter` | libvips | zenresize `Filter::` | Notes |
+|----------------------|---------|---------------------|-------|
+| Point / NearestNeighbor | NEAREST | `Box` | Fastest, blocky |
+| Triangle / Bilinear | LINEAR | `Triangle` / `Linear` | Linear interp |
+| Catrom (Catmull-Rom) | CUBIC | `CatmullRom` | Sharp cubic |
+| Mitchell | MITCHELL | `Mitchell` | Balanced B=1/3 C=1/3 |
+| CubicSpline | — | `CubicBSpline` | Smooth, B=1 C=0 |
+| Hermite | — | `Hermite` | Smooth, B=0 C=0 |
+| Lanczos (3-lobe) | LANCZOS3 | `Lanczos` | Default high-quality |
+| Lanczos2 | LANCZOS2 | `Lanczos2` | Less ringing |
+| Robidoux | — | `Robidoux` | **zenpipe default** — IM/libvips don't have it |
+| RobidouxSharp | — | `RobidouxSharp` | More detail |
+| Gaussian | custom | `Ginseng` (approx) | Gaussian windowed |
+| Sinc | — | `LanczosRaw` | Unwindowed — not recommended |
+| MagicKernelSharp | MKS2013 | — | Not in zenresize (yet) |
+
+zenresize extras not in IM: `RobidouxFast`, `GinsengSharp`, `LanczosSharp`, `Lanczos2Sharp`, `NCubic`, `NCubicSharp`, `FastMitchell` — 31 filters total.
+
+**Behavioral differences** (from research docs):
+- **Default**: IM varies by operation; libvips = Lanczos3; zenresize = Robidoux
+- **Colorspace**: IM resizes in source colorspace; zenpipe converts to linear for correctness
+- **Shrink-on-load**: zenpipe's zencodec decoders exploit JPEG 2x/4x/8x shrink like libvips
+- **Alpha**: zenpipe auto-premultiplies alpha before resize (like libvips, unlike IM)
+
 ---
 
 ## 4. Operation Mapping (Complete)
