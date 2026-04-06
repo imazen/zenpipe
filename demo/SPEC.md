@@ -2565,3 +2565,155 @@ The proxy (overview canvas) must reflect the current filter state:
 - After geometry committed → re-render overview at new geometry
 
 The overview Session cache makes proxy updates cheap (~3ms) for filter-only changes.
+
+---
+
+## 28. Rotation & Document Features — Complete Spec
+
+### 28.1 Rotation Modes (all in zenfilters `Rotate`)
+
+| Mode | Border Handling | Use Case | CSS Proxy |
+|------|----------------|----------|-----------|
+| **Crop** (default) | Largest inscribed rectangle, original aspect | Photo straightening — no borders visible | CSS `rotate()` on current pixels, worker sends cropped result |
+| **Deskew** | White fill for out-of-bounds | Scanned document straightening | CSS `rotate()` + white CSS background |
+| **FillClamp** | Clamp to nearest edge pixel | Seamless extension for small rotations | CSS `rotate()`, worker sends clamped result |
+| **Fill(Black)** | Black fill | Compositing workflows | CSS `rotate()` + black background |
+| **Fill(White)** | White fill | Document, print | CSS `rotate()` + white background |
+| **Fill(Transparent)** | Transparent fill | PNG/WebP alpha overlay | CSS `rotate()`, transparent canvas |
+| **Fill(Custom Color)** | Oklab L,a,b + alpha | Branded backgrounds | CSS `rotate()` + CSS `background-color` |
+
+### 28.2 Rotation UI
+
+**Coarse rotation** (buttons):
+```
+[ ↶ 90° ] [ ↷ 90° ] [ 180° ]
+```
+Instant: CSS `rotate(90deg)` on detail canvas. Worker: `Orientation::Rotate90` (pixel-perfect, no interpolation).
+
+**Fine rotation** (wheel/slider):
+```
+◄─────────────────────|────────────────────────►
+        -45°          0°         +45°
+```
+- Apple Photos–style dial at bottom of crop mode
+- Haptic snap at 0° (identity)
+- Tick marks every 1°
+- CSS `rotate(Ndeg)` as instant proxy during drag
+- On release: worker renders via `Rotate { angle, mode }`
+- "Auto" button: runs `detect_skew_angle()`, applies result
+
+**Mode selector** (when in crop mode):
+```
+[ Crop ] [ Pad: White ] [ Pad: Black ] [ Pad: Transparent ] [ Edge Clamp ]
+```
+Default: Crop (photo). Document mode defaults to Pad: White.
+
+### 28.3 Flip UI
+
+```
+[ Flip H ↔ ] [ Flip V ↕ ]
+```
+Instant: CSS `scaleX(-1)` / `scaleY(-1)`. Worker: `Orientation::FlipH` / `FlipV` (pixel-perfect).
+
+### 28.4 Perspective Correction UI
+
+**Manual mode** (4-corner drag):
+- Overlay 4 draggable corner handles on the image
+- Lines connect the corners showing the quad
+- As user drags corners, CSS `perspective()` + `transform3d()` approximates the warp
+- On release: `compute_homography(src_corners, dst_rect)` → `Warp::projective(matrix)`
+
+**Auto mode** (one-click):
+1. `find_document_quad(image)` → detected 4 corners
+2. Show corners as draggable handles (user can adjust)
+3. "Apply" → `rectify_quad(corners)` → `Warp::projective(matrix)`
+
+**CSS proxy for perspective**: 
+```css
+/* Approximate — won't match exact homography but gives visual feedback */
+detail-canvas {
+  transform: perspective(500px) rotateX(5deg) rotateY(-3deg);
+}
+```
+This won't be perfect but gives immediate feedback during corner-drag.
+
+### 28.5 Document Pipeline
+
+The document mode runs these steps, each independently adjustable:
+
+```
+┌───────────────────────────────────────────────────┐
+│ 1. Detect    find_document_quad()                 │ Auto
+│ 2. Rectify   Warp::projective(homography)         │ Auto (adjustable corners)
+│ 3. Deskew    detect_skew_angle() → Rotate(deskew) │ Auto (adjustable angle)
+│ 4. Crop      CropWhitespace { fuzz }              │ Auto (adjustable fuzz)
+│ 5. Enhance   AutoLevels + Bilateral + Sharpen     │ Auto (adjustable strength)
+│ 6. Binarize  otsu_threshold() → binarize()        │ Toggle (on/off + threshold)
+└───────────────────────────────────────────────────┘
+```
+
+**One-click "Clean Up Document"**: runs steps 1-5 with sensible defaults.
+
+**UI**: Each step shows a toggle (✓/✗) and an "adjust" chevron that expands step-specific controls:
+```
+✓ Detect quad        [adjust ▸] → corner drag handles
+✓ Rectify            [adjust ▸] → corner fine-tuning
+✓ Deskew             [adjust ▸] → angle slider + auto button
+✓ Crop whitespace    [adjust ▸] → fuzz % slider
+✓ Enhance            [adjust ▸] → contrast/sharpen sliders
+✗ Binarize           [adjust ▸] → threshold slider
+```
+
+### 28.6 Proxy Strategy for Document Pipeline
+
+| Step | Instant Proxy | Worker |
+|------|--------------|--------|
+| Quad detection | Show detected corners overlaid on image (SVG overlay) | Runs in worker, returns corner coordinates |
+| Rectify | CSS `perspective()` approximation | `Warp::projective()` full render |
+| Deskew | CSS `rotate()` | `Rotate(angle, Deskew mode)` |
+| Crop | `drawImage` with adjusted bounds | `CropWhitespace` or manual `Crop` |
+| Enhance | CSS `contrast()` + `brightness()` approximation | `AutoLevels` + `Bilateral` + `Sharpen` |
+| Binarize | CSS `filter: contrast(100)` (extreme contrast approximation) | `otsu_threshold()` + `binarize()` |
+
+### 28.7 Affine Transform UI (Advanced)
+
+For users who need arbitrary affine transforms (scale + rotate + shear + translate):
+
+**Not exposed in basic UI** — available in advanced/power-user mode:
+```
+Rotation:    [ slider -180° ... +180° ]
+Scale X:     [ slider 0.1 ... 3.0 ]
+Scale Y:     [ slider 0.1 ... 3.0 ]
+Shear X:     [ slider -1.0 ... 1.0 ]
+Shear Y:     [ slider -1.0 ... 1.0 ]
+Translate X: [ slider -50% ... +50% ]
+Translate Y: [ slider -50% ... +50% ]
+Background:  [ Clamp | Black | White | Transparent | Custom ]
+Interpolation: [ Bilinear | Bicubic | Robidoux | Lanczos3 ]
+```
+
+Each slider change → CSS `matrix()` transform as proxy → worker `Warp::affine()` on release.
+
+### 28.8 Pipeline Node Mapping
+
+| UI Action | zenpipe Node | zenfilters Function |
+|-----------|-------------|-------------------|
+| Rotate 90/180/270 | `NodeOp::Orient(Rotate90/180/270)` | Pixel-perfect copy |
+| Flip H/V | `NodeOp::Orient(FlipH/FlipV)` | Pixel-perfect copy |
+| Fine rotate (crop) | `NodeOp::Filter(Rotate { mode: Crop })` | `Rotate::new(angle)` |
+| Fine rotate (pad) | `NodeOp::Filter(Rotate { mode: Fill(bg) })` | `Rotate::new(angle).with_mode(Fill(bg))` |
+| Deskew | `NodeOp::Filter(Rotate { mode: Deskew })` | `Warp::deskew(angle, w, h)` |
+| Perspective | `NodeOp::Filter(Warp { projective })` | `Warp::projective(matrix)` |
+| Affine | `NodeOp::Filter(Warp { affine })` | `Warp::affine(a,b,tx,c,d,ty)` |
+| Auto whitespace crop | `NodeOp::CropWhitespace` | Built into zenpipe graph |
+| Auto deskew detect | — (returns angle, not a node) | `detect_skew_angle(image)` |
+| Quad detect | — (returns corners, not a node) | `find_document_quad(image)` |
+| Rectify quad | `NodeOp::Filter(Warp { projective })` | `rectify_quad(corners)` → `Warp::projective()` |
+| Binarize | `NodeOp::Filter(Binarize)` | `otsu_threshold()` + `binarize()` |
+
+### 28.9 Feature Flag
+
+zenfilters `Rotate` and `Warp` zennode defs are behind `experimental` feature. To expose in the demo:
+- Add `features = ["experimental"]` to zenfilters dep in demo crate
+- The nodes become available in the schema and via `node_to_filter()`
+- No code changes needed — just the feature flag
