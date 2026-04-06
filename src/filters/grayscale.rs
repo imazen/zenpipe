@@ -22,19 +22,7 @@ impl Filter for Grayscale {
         ChannelAccess::CHROMA_ONLY
     }
 
-    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
-        if ctx.working_space == crate::pipeline::WorkingSpace::Srgb {
-            // sRGB mode: Rec.709 luma conversion matching IM's `-colorspace Gray`.
-            let n = planes.l.len();
-            for i in 0..n {
-                let lum = 0.2126 * planes.l[i] + 0.7152 * planes.a[i] + 0.0722 * planes.b[i];
-                planes.l[i] = lum;
-                planes.a[i] = lum;
-                planes.b[i] = lum;
-            }
-            return;
-        }
-        // Oklab: zero chroma preserves perceptual lightness
+    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         planes.a.fill(0.0);
         planes.b.fill(0.0);
     }

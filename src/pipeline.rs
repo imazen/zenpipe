@@ -86,8 +86,17 @@ pub struct PipelineConfig {
 }
 
 impl PipelineConfig {
-    /// ImageMagick-compatible configuration: sRGB working space, no gamut mapping.
-    pub fn magick_compat() -> Self {
+    /// sRGB working space — matches ImageMagick's default behavior.
+    ///
+    /// Filters operate on gamma-encoded sRGB values directly. This is
+    /// suboptimal for photo adjustments (gamma-space blur darkens edges,
+    /// saturation shifts hue) but produces output identical to ImageMagick
+    /// for spatial operations.
+    ///
+    /// Use sRGB-compatible filter types (`LinearContrast`, `HslSaturate`,
+    /// `LumaGrayscale`) instead of Oklab-specific filters (`Contrast`,
+    /// `Saturation`, `Grayscale`). The pipeline validates at push time.
+    pub fn srgb_compat() -> Self {
         Self {
             working_space: WorkingSpace::Srgb,
             gamut_mapping: GamutMapping::Bypass,
@@ -588,7 +597,6 @@ impl Pipeline {
     /// Use this when you want to manage scatter/gather yourself,
     /// or when chaining multiple pipelines on the same planar data.
     pub fn apply_planar(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
-        ctx.working_space = self.config.working_space;
         for filter in &self.filters {
             filter.apply(planes, ctx);
         }

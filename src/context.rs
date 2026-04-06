@@ -30,13 +30,10 @@
 ///
 /// The context also provides [`take_u8`](FilterContext::take_u8) for
 /// byte buffers used in format conversion paths.
-use crate::pipeline::WorkingSpace;
 use crate::prelude::*;
 pub struct FilterContext {
     f32_pool: Vec<Vec<f32>>,
     u8_pool: Vec<Vec<u8>>,
-    /// Working color space — tells filters whether planes contain Oklab or sRGB data.
-    pub working_space: WorkingSpace,
 }
 
 impl FilterContext {
@@ -45,7 +42,6 @@ impl FilterContext {
         Self {
             f32_pool: Vec::new(),
             u8_pool: Vec::new(),
-            working_space: WorkingSpace::Oklab,
         }
     }
 

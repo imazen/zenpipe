@@ -52,29 +52,12 @@ impl Filter for Contrast {
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::Contrast
     }
-    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.amount.abs() < 1e-6 {
             return;
         }
-
-        if ctx.working_space == crate::pipeline::WorkingSpace::Srgb {
-            // sRGB mode: ImageMagick-compatible linear contrast.
-            // v' = (v - 0.5) * (1 + amount) + 0.5
-            let factor = 1.0 + self.amount;
-            let offset = 0.5 * (1.0 - factor);
-            for v in planes.l.iter_mut() {
-                *v = (*v * factor + offset).clamp(0.0, 1.0);
-            }
-            for v in planes.a.iter_mut() {
-                *v = (*v * factor + offset).clamp(0.0, 1.0);
-            }
-            for v in planes.b.iter_mut() {
-                *v = (*v * factor + offset).clamp(0.0, 1.0);
-            }
-            return;
-        }
-
-        // Oklab: Power curve: L' = L^exp * scale, pivot at CONTRAST_PIVOT ≈ 0.569
+        // Power curve: L' = L^exp * scale, pivot at CONTRAST_PIVOT ≈ 0.569
+        // exp = 1 + amount, scale = pivot^(-amount)
         let exp = (1.0 + self.amount).max(0.01);
         let scale = CONTRAST_PIVOT.powf(-self.amount);
         simd::power_contrast_plane(&mut planes.l, exp, scale);

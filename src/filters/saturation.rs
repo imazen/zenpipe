@@ -47,65 +47,10 @@ impl Filter for Saturation {
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::Saturation
     }
-    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if (self.factor - 1.0).abs() < 1e-6 {
             return;
         }
-
-        if ctx.working_space == crate::pipeline::WorkingSpace::Srgb {
-            // sRGB mode: ImageMagick-compatible saturation via HSL modulate.
-            // IM converts to HSL, scales S by factor, converts back.
-            // Equivalent matrix form using Rec.601 NTSC luma weights:
-            let s = self.factor;
-            let n = planes.l.len();
-            for i in 0..n {
-                let r = planes.l[i];
-                let g = planes.a[i];
-                let b = planes.b[i];
-                // Convert to HSL, scale S, convert back
-                let max = r.max(g).max(b);
-                let min = r.min(g).min(b);
-                let l = (max + min) * 0.5;
-                let delta = max - min;
-                if delta < 1e-6 {
-                    continue; // achromatic — no change
-                }
-                let sat = if l <= 0.5 {
-                    delta / (max + min)
-                } else {
-                    delta / (2.0 - max - min)
-                };
-                let new_sat = (sat * s).clamp(0.0, 1.0);
-
-                // Hue (in 0-6)
-                let hue = if (max - r).abs() < 1e-6 {
-                    (g - b) / delta + (if g < b { 6.0 } else { 0.0 })
-                } else if (max - g).abs() < 1e-6 {
-                    (b - r) / delta + 2.0
-                } else {
-                    (r - g) / delta + 4.0
-                };
-
-                // HSL to RGB
-                let c = (1.0 - (2.0 * l - 1.0).abs()) * new_sat;
-                let x = c * (1.0 - ((hue % 2.0) - 1.0).abs());
-                let m = l - c * 0.5;
-                let (r1, g1, b1) = match hue as u32 {
-                    0 => (c, x, 0.0),
-                    1 => (x, c, 0.0),
-                    2 => (0.0, c, x),
-                    3 => (0.0, x, c),
-                    4 => (x, 0.0, c),
-                    _ => (c, 0.0, x),
-                };
-                planes.l[i] = (r1 + m).clamp(0.0, 1.0);
-                planes.a[i] = (g1 + m).clamp(0.0, 1.0);
-                planes.b[i] = (b1 + m).clamp(0.0, 1.0);
-            }
-            return;
-        }
-
-        // Oklab: scale chroma directly
         simd::scale_plane(&mut planes.a, self.factor);
         simd::scale_plane(&mut planes.b, self.factor);
     }
