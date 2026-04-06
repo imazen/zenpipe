@@ -8,9 +8,20 @@ use crate::args::{Operations, OutputOptions};
 use crate::error::CliError;
 use zennode::NodeInstance;
 
+/// Result of converting CLI operations to pipeline nodes.
+pub struct ConvertedOps {
+    /// Pipeline nodes.
+    pub nodes: Vec<Box<dyn NodeInstance>>,
+    /// Secondary input files to add to ImageJob (io_id, file_path).
+    pub extra_inputs: Vec<(i32, String)>,
+}
+
 /// Build pipeline nodes from CLI operations.
-pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliError> {
+pub fn ops_to_nodes(ops: &Operations) -> Result<ConvertedOps, CliError> {
+    let mut extra_inputs: Vec<(i32, String)> = Vec::new();
     let mut qs_parts: Vec<String> = Vec::new();
+    let mut need_deskew = ops.deskew;
+    let mut arbitrary_rotate: Option<String> = None;
 
     // If --qs was provided, start with that.
     if let Some(ref qs) = ops.qs {
@@ -36,7 +47,11 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
             "90" => qs_parts.push("srotate=90".into()),
             "180" => qs_parts.push("srotate=180".into()),
             "270" => qs_parts.push("srotate=270".into()),
-            _ => {} // auto-deskew and arbitrary rotation not yet in RIAPI
+            "auto" => need_deskew = true,
+            _ => {
+                // Arbitrary angle — handled below as zenfilters.rotate node.
+                arbitrary_rotate = Some(rotate.clone());
+            }
         }
     }
 
@@ -313,7 +328,202 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<Vec<Box<dyn NodeInstance>>, CliE
         }
     }
 
-    Ok(nodes)
+    // ── Auto white balance ──
+    if ops.auto_wb {
+        nodes.push(create_filter_node(
+            &registry,
+            "zenfilters.auto_white_balance",
+            "strength",
+            1.0,
+        )?);
+    }
+
+    // ── Film look preset ──
+    if let Some(ref preset_arg) = ops.preset {
+        let (preset_name, strength) = if let Some((name, intensity)) = preset_arg.split_once(',') {
+            let s: f32 = intensity.parse().map_err(|_| {
+                CliError::Operation(format!("preset: invalid intensity '{intensity}'"))
+            })?;
+            (name, s)
+        } else {
+            (preset_arg.as_str(), 1.0)
+        };
+        let def = registry
+            .get("zenfilters.film_look")
+            .ok_or_else(|| CliError::Operation("film_look node not found in registry".into()))?;
+        let mut params = zennode::ParamMap::new();
+        params.insert(
+            "preset".into(),
+            zennode::ParamValue::Str(preset_name.into()),
+        );
+        params.insert("strength".into(), zennode::ParamValue::F32(strength));
+        nodes.push(
+            def.create(&params)
+                .map_err(|e| CliError::Operation(format!("preset '{preset_name}': {e}")))?,
+        );
+    }
+
+    // ── Colorspace (gamut expansion) ──
+    if let Some(ref cs) = ops.colorspace {
+        match cs.as_str() {
+            "srgb" => {} // no-op, pipeline is sRGB by default
+            "p3" => {
+                nodes.push(create_filter_node(
+                    &registry,
+                    "zenfilters.gamut_expand",
+                    "strength",
+                    1.0,
+                )?);
+            }
+            other => {
+                return Err(CliError::Operation(format!(
+                    "colorspace '{other}' not supported (use srgb or p3)"
+                )));
+            }
+        }
+    }
+
+    // ── Deskew (arbitrary rotation with deskew mode) ──
+    if need_deskew {
+        // Deskew with mode=1 (white fill). Angle 0 = auto-detect is not
+        // yet supported; this sets up the node for manual angle override.
+        let def = registry
+            .get("zenfilters.rotate")
+            .ok_or_else(|| CliError::Operation("rotate node not found in registry".into()))?;
+        let mut params = zennode::ParamMap::new();
+        params.insert("angle".into(), zennode::ParamValue::F32(0.0));
+        params.insert("mode".into(), zennode::ParamValue::I32(1)); // deskew mode
+        nodes.push(
+            def.create(&params)
+                .map_err(|e| CliError::Operation(format!("deskew: {e}")))?,
+        );
+    }
+
+    // ── Arbitrary rotation ──
+    if let Some(ref angle_str) = arbitrary_rotate {
+        let angle: f32 = angle_str
+            .parse()
+            .map_err(|_| CliError::Operation(format!("rotate: invalid angle '{angle_str}'")))?;
+        let def = registry
+            .get("zenfilters.rotate")
+            .ok_or_else(|| CliError::Operation("rotate node not found in registry".into()))?;
+        let mut params = zennode::ParamMap::new();
+        params.insert("angle".into(), zennode::ParamValue::F32(angle));
+        params.insert("mode".into(), zennode::ParamValue::I32(0)); // crop mode
+        nodes.push(
+            def.create(&params)
+                .map_err(|e| CliError::Operation(format!("rotate {angle}: {e}")))?,
+        );
+    }
+
+    // ── Clean-doc (composite pipeline: deskew + auto-crop + auto-levels) ──
+    if ops.clean_doc {
+        if !need_deskew {
+            // Add deskew if not already added
+            if let Some(def) = registry.get("zenfilters.rotate") {
+                let mut params = zennode::ParamMap::new();
+                params.insert("angle".into(), zennode::ParamValue::F32(0.0));
+                params.insert("mode".into(), zennode::ParamValue::I32(1));
+                if let Ok(node) = def.create(&params) {
+                    nodes.push(node);
+                }
+            }
+        }
+        // Auto whitespace crop
+        if ops.crop.is_none() {
+            if let Some(def) = registry.get("zenpipe.crop_whitespace") {
+                if let Ok(node) = def.create_default() {
+                    nodes.push(node);
+                }
+            }
+        }
+        // Auto levels
+        if !ops.auto_levels {
+            nodes.push(create_bool_filter_node(
+                &registry,
+                "zenfilters.auto_levels",
+            )?);
+        }
+    }
+
+    // ── Overlay (secondary input) ──
+    if let Some(ref overlay_arg) = ops.overlay {
+        let parts: Vec<&str> = overlay_arg.split(',').collect();
+        let path = parts
+            .first()
+            .ok_or_else(|| CliError::Operation("overlay: missing path".into()))?
+            .to_string();
+        let x: i32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let y: i32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let opacity: f32 = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(1.0);
+
+        // Use io_id 100 for the overlay input (arbitrary, avoids conflict with 0/1).
+        let overlay_io_id: i32 = 100;
+        extra_inputs.push((overlay_io_id, path));
+
+        let def = registry
+            .get("zenpipe.overlay")
+            .ok_or_else(|| CliError::Operation("overlay node not found in registry".into()))?;
+        let mut params = zennode::ParamMap::new();
+        params.insert("io_id".into(), zennode::ParamValue::I32(overlay_io_id));
+        params.insert("x".into(), zennode::ParamValue::I32(x));
+        params.insert("y".into(), zennode::ParamValue::I32(y));
+        params.insert("opacity".into(), zennode::ParamValue::F32(opacity));
+        nodes.push(
+            def.create(&params)
+                .map_err(|e| CliError::Operation(format!("overlay: {e}")))?,
+        );
+    }
+
+    // ── Fill (solid color) ──
+    if let Some(ref color) = ops.fill {
+        let (r, g, b) = parse_color_rgb(color)?;
+        let def = registry
+            .get("zenpipe.fill_rect")
+            .ok_or_else(|| CliError::Operation("fill_rect node not found in registry".into()))?;
+        let mut params = zennode::ParamMap::new();
+        params.insert("x1".into(), zennode::ParamValue::U32(0));
+        params.insert("y1".into(), zennode::ParamValue::U32(0));
+        params.insert("x2".into(), zennode::ParamValue::U32(65535));
+        params.insert("y2".into(), zennode::ParamValue::U32(65535));
+        params.insert("color_r".into(), zennode::ParamValue::U32(r as u32));
+        params.insert("color_g".into(), zennode::ParamValue::U32(g as u32));
+        params.insert("color_b".into(), zennode::ParamValue::U32(b as u32));
+        params.insert("color_a".into(), zennode::ParamValue::U32(255));
+        nodes.push(
+            def.create(&params)
+                .map_err(|e| CliError::Operation(format!("fill: {e}")))?,
+        );
+    }
+
+    Ok(ConvertedOps {
+        nodes,
+        extra_inputs,
+    })
+}
+
+/// Parse a color name or #RRGGBB hex to (r, g, b).
+fn parse_color_rgb(s: &str) -> Result<(u8, u8, u8), CliError> {
+    match s.to_lowercase().as_str() {
+        "white" => Ok((255, 255, 255)),
+        "black" => Ok((0, 0, 0)),
+        "red" => Ok((255, 0, 0)),
+        "green" => Ok((0, 128, 0)),
+        "blue" => Ok((0, 0, 255)),
+        "transparent" => Ok((0, 0, 0)),
+        hex if hex.starts_with('#') && hex.len() == 7 => {
+            let r = u8::from_str_radix(&hex[1..3], 16)
+                .map_err(|_| CliError::Operation(format!("invalid color '{s}'")))?;
+            let g = u8::from_str_radix(&hex[3..5], 16)
+                .map_err(|_| CliError::Operation(format!("invalid color '{s}'")))?;
+            let b = u8::from_str_radix(&hex[5..7], 16)
+                .map_err(|_| CliError::Operation(format!("invalid color '{s}'")))?;
+            Ok((r, g, b))
+        }
+        _ => Err(CliError::Operation(format!(
+            "unknown color '{s}' (use a name or #RRGGBB)"
+        ))),
+    }
 }
 
 fn create_filter_node(

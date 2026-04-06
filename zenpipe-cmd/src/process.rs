@@ -40,7 +40,7 @@ fn process_single(opts: &ProcessOptions) -> Result<(), CliError> {
     let start = Instant::now();
 
     let input_bytes = read_input(&opts.input)?;
-    let nodes = convert::ops_to_nodes(&opts.ops)?;
+    let converted = convert::ops_to_nodes(&opts.ops)?;
     let output_ext = output_extension(&opts.output)?;
 
     // Dry-run: show what would happen.
@@ -49,7 +49,7 @@ fn process_single(opts: &ProcessOptions) -> Result<(), CliError> {
             "dry-run: {} → {} ({} operations)",
             opts.input,
             opts.output,
-            nodes.len()
+            converted.nodes.len()
         );
         return Ok(());
     }
@@ -68,7 +68,7 @@ fn process_single(opts: &ProcessOptions) -> Result<(), CliError> {
             probe.height,
             if probe.has_alpha { "alpha" } else { "opaque" },
         );
-        for (i, node) in nodes.iter().enumerate() {
+        for (i, node) in converted.nodes.iter().enumerate() {
             let schema = node.schema();
             let params = node.to_params();
             let param_str: Vec<String> = params
@@ -88,9 +88,15 @@ fn process_single(opts: &ProcessOptions) -> Result<(), CliError> {
     let mut job = zenpipe::job::ImageJob::new()
         .add_input(0, input_bytes)
         .add_output(1)
-        .with_nodes(&nodes)
+        .with_nodes(&converted.nodes)
         .with_converters(converters)
         .with_defaults(zenpipe::job::DefaultsPreset::Web);
+
+    // Add secondary inputs (e.g., overlay images).
+    for (io_id, path) in &converted.extra_inputs {
+        let data = read_input(path)?;
+        job = job.add_input(*io_id, data);
+    }
 
     job = convert::apply_output_opts(job, &output_ext, &opts.output_opts);
 
@@ -270,8 +276,8 @@ fn run_srcset(opts: ProcessOptions) -> ExitCode {
                 let mut ops = ops.clone();
                 ops.resize = Some(width.to_string());
 
-                let nodes = match convert::ops_to_nodes(&ops) {
-                    Ok(n) => n,
+                let converted = match convert::ops_to_nodes(&ops) {
+                    Ok(c) => c,
                     Err(e) => {
                         eprintln!("error: srcset {width}w: {e}");
                         failed.fetch_add(1, Ordering::Relaxed);
@@ -285,7 +291,7 @@ fn run_srcset(opts: ProcessOptions) -> ExitCode {
                 let mut job = zenpipe::job::ImageJob::new()
                     .add_input_ref(0, input_bytes)
                     .add_output(1)
-                    .with_nodes(&nodes)
+                    .with_nodes(&converted.nodes)
                     .with_converters(converters)
                     .with_defaults(zenpipe::job::DefaultsPreset::Web);
 

@@ -239,14 +239,32 @@ pub struct Operations {
     #[arg(long)]
     pub invert: bool,
 
+    /// Film look preset: portra, velvia, kodachrome, noir, etc.
+    /// Optional intensity: --preset portra,0.7
+    #[arg(long)]
+    pub preset: Option<String>,
+
+    /// Color space target: srgb, p3 (simulated via gamut expansion).
+    #[arg(long)]
+    pub colorspace: Option<String>,
+
+    // ── Document ──
+    /// Auto-detect and correct rotation (deskew).
+    #[arg(long)]
+    pub deskew: bool,
+
+    /// Full document cleanup pipeline: deskew + crop auto + auto-levels.
+    #[arg(long)]
+    pub clean_doc: bool,
+
     // ── Compositing ──
-    /// Overlay image: path,x,y or path,anchor[,opacity].
+    /// Overlay image: path[,x,y[,opacity]]. Example: --overlay logo.png,10,10,0.7
     #[arg(long)]
     pub overlay: Option<String>,
 
-    /// Smart watermark: path (auto-position, auto-opacity).
+    /// Fill entire image with a solid color (for testing/canvas creation).
     #[arg(long)]
-    pub watermark: Option<String>,
+    pub fill: Option<String>,
 
     // ── Querystring ──
     /// Apply an RIAPI/imageflow querystring.
