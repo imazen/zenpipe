@@ -148,8 +148,10 @@ pub enum Command {
     /// Set flip state.
     SetFlip { horizontal: bool, vertical: bool },
 
-    /// Set EXIF orientation handling (auto-apply or none).
-    SetOrientation { auto: bool },
+    /// Set EXIF orientation handling.
+    SetOrientation {
+        mode: crate::model::geometry::OrientMode,
+    },
 
     /// Lock crop aspect ratio (§11.2: 1:1, 4:3, 16:9, free).
     SetAspectRatio {

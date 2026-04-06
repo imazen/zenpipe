@@ -43,6 +43,10 @@ pub enum CropMode {
     /// Normalized coordinates (0.0..1.0) — portable across resolutions.
     #[serde(rename = "percent")]
     Percent { x: f32, y: f32, w: f32, h: f32 },
+    /// Auto whitespace crop (content detection).
+    /// §11.2: "Crop to content: auto whitespace detection via zenpipe.crop_whitespace node"
+    #[serde(rename = "auto")]
+    Auto,
 }
 
 impl Default for CropMode {
@@ -109,9 +113,14 @@ pub enum RotationMode {
     Cardinal { degrees: u16 },
     /// Arbitrary angle rotation with interpolation.
     /// §13.1: `Rotate` struct with Lanczos3 interpolation.
-    /// `border` controls edge handling (crop or expand with white fill).
+    /// `border` controls edge handling.
     #[serde(rename = "arbitrary")]
     Arbitrary { degrees: f32, border: RotationBorder },
+    /// Auto-deskew — detect skew angle and correct.
+    /// §11.3: "Auto-straighten: detect horizon line and auto-rotate to level"
+    /// §13.1: zenfilters `Warp::deskew()` via rotate.
+    #[serde(rename = "auto_deskew")]
+    AutoDeskew,
 }
 
 impl Default for RotationMode {
@@ -130,8 +139,15 @@ pub enum RotationBorder {
     /// Crop to the largest axis-aligned rectangle inside the rotated image.
     #[default]
     Crop,
-    /// Expand canvas and fill with white (deskew mode).
-    Expand,
+    /// Expand canvas and fill with white (deskew background).
+    /// §13.1: `Rotate` with `BorderMode::Deskew` — white bg + Lanczos3.
+    Deskew,
+    /// Clamp edge pixels outward.
+    /// §13.1: `Rotate` with `BorderMode::FillClamp`.
+    FillClamp,
+    /// Fill exposed area with black.
+    /// §13.1: `Rotate` with `BorderMode::Fill`.
+    FillBlack,
 }
 
 /// EXIF orientation handling.
@@ -144,7 +160,12 @@ pub enum OrientMode {
     #[default]
     None,
     /// Apply EXIF orientation from source metadata and strip the tag.
+    /// §13.3: zenlayout D4 group algebra, 8 EXIF orientations.
     Auto,
+    /// Force a specific EXIF orientation value (1-8).
+    /// Used by the pipeline when orientation is known from external context
+    /// (e.g. server-side processing, batch apply with known camera rotation).
+    Explicit { value: u8 },
 }
 
 /// Padding added around the image (canvas expansion).

@@ -559,12 +559,8 @@ impl EditorState {
                 vec![ViewUpdate::GeometryChanged, ViewUpdate::RenderNeeded]
             }
 
-            Command::SetOrientation { auto } => {
-                self.geometry.orientation = if auto {
-                    crate::model::geometry::OrientMode::Auto
-                } else {
-                    crate::model::geometry::OrientMode::None
-                };
+            Command::SetOrientation { mode } => {
+                self.geometry.orientation = mode;
                 self.render_needed = true;
                 self.detail_only = false;
                 vec![ViewUpdate::GeometryChanged, ViewUpdate::RenderNeeded]
