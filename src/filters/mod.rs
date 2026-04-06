@@ -54,6 +54,7 @@ mod shadow_lift;
 mod sharpen;
 mod sigmoid;
 mod solarize;
+pub mod srgb_compat;
 mod temperature;
 mod texture;
 mod tint;
@@ -124,6 +125,10 @@ pub use shadow_lift::ShadowLift;
 pub use sharpen::Sharpen;
 pub use sigmoid::Sigmoid;
 pub use solarize::Solarize;
+pub use srgb_compat::{
+    ChannelPosterize, ChannelSolarize, HslSaturate, LinearBrightness, LinearContrast,
+    LumaGrayscale,
+};
 pub use temperature::Temperature;
 pub use texture::Texture;
 pub use tint::Tint;
