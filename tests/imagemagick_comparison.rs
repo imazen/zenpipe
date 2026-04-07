@@ -8,7 +8,7 @@
 //! Measures zensim agreement between sRGB and IM to validate IM compatibility.
 //! Also shows Oklab vs source to demonstrate perceptual quality.
 //!
-//! Run: cargo test --test imageflow_comparison -- --nocapture
+//! Run: cargo test --test imagemagick_comparison --features srgb-compat -- --nocapture
 
 use image::{ImageBuffer, RgbImage};
 use std::path::Path;

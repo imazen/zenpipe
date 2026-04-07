@@ -96,7 +96,7 @@ name = "reference_validation"
 name = "quality_validation"
 
 [[test]]
-name = "imageflow_comparison"
+name = "imagemagick_comparison"
 required-features = ["srgb-compat"]
 
 [[bench]]
