@@ -187,10 +187,10 @@ mod tests {
         planes.l[0] = 0.3; // below threshold → unchanged
         planes.l[1] = 0.7; // above threshold → inverted to 0.3
         sol.apply(&mut planes, &mut FilterContext::new());
-        assert!((planes.l[0] - 0.3).abs() < 1e-6, "below threshold unchanged");
         assert!(
-            (planes.l[1] - 0.3).abs() < 1e-6,
-            "above threshold inverted"
+            (planes.l[0] - 0.3).abs() < 1e-6,
+            "below threshold unchanged"
         );
+        assert!((planes.l[1] - 0.3).abs() < 1e-6, "above threshold inverted");
     }
 }

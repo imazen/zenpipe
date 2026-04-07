@@ -160,11 +160,7 @@ pub fn gather_oklab_to_srgb_u8(
 ///
 /// Maps R→L, G→a, B→b planes. Used for `WorkingSpace::Srgb` where filters
 /// operate in the same color space as ImageMagick.
-pub fn scatter_srgb_passthrough(
-    src: &[f32],
-    planes: &mut OklabPlanes,
-    channels: u32,
-) {
+pub fn scatter_srgb_passthrough(src: &[f32], planes: &mut OklabPlanes, channels: u32) {
     let n = planes.pixel_count();
     let ch = channels as usize;
     debug_assert!(ch == 3 || ch == 4);
@@ -188,11 +184,7 @@ pub fn scatter_srgb_passthrough(
 /// Scatter interleaved sRGB u8 directly to f32 planes (no Oklab conversion).
 ///
 /// Normalizes u8 [0-255] to f32 [0.0-1.0]. Maps R→L, G→a, B→b.
-pub fn scatter_srgb_u8_passthrough(
-    src: &[u8],
-    planes: &mut OklabPlanes,
-    channels: u32,
-) {
+pub fn scatter_srgb_u8_passthrough(src: &[u8], planes: &mut OklabPlanes, channels: u32) {
     let n = planes.pixel_count();
     let ch = channels as usize;
     debug_assert!(ch == 3 || ch == 4);
@@ -215,11 +207,7 @@ pub fn scatter_srgb_u8_passthrough(
 }
 
 /// Gather f32 planes back to interleaved sRGB u8 (no Oklab conversion).
-pub fn gather_srgb_u8_passthrough(
-    planes: &OklabPlanes,
-    dst: &mut [u8],
-    channels: u32,
-) {
+pub fn gather_srgb_u8_passthrough(planes: &OklabPlanes, dst: &mut [u8], channels: u32) {
     let n = planes.pixel_count();
     let ch = channels as usize;
     debug_assert!(ch == 3 || ch == 4);

@@ -136,9 +136,9 @@ pub use sigmoid::Sigmoid;
 pub use solarize::Solarize;
 #[cfg(feature = "srgb-compat")]
 pub use srgb_compat::{
-    ChannelPosterize, ChannelSharpen, ChannelSolarize, Clahe, DifferenceEmboss,
-    GaussianMotionBlur, HslSaturate, LaplacianEdge, LinearBrightness, LinearContrast,
-    LumaGrayscale, Normalize, SigmoidalContrast,
+    ChannelPosterize, ChannelSharpen, ChannelSolarize, Clahe, DifferenceEmboss, GaussianMotionBlur,
+    HslSaturate, LaplacianEdge, LinearBrightness, LinearContrast, LumaGrayscale, Normalize,
+    SigmoidalContrast,
 };
 pub use temperature::Temperature;
 pub use texture::Texture;

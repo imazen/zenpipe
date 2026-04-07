@@ -588,7 +588,10 @@ impl Pipeline {
                 OklabPlanes::from_ctx(ctx, width, ext_rows as u32)
             };
 
-            if matches!(self.config.working_space, WorkingSpace::Srgb | WorkingSpace::LinearRgb) {
+            if matches!(
+                self.config.working_space,
+                WorkingSpace::Srgb | WorkingSpace::LinearRgb
+            ) {
                 crate::scatter_gather::scatter_srgb_passthrough(
                     &src[ext_src_offset..ext_src_offset + ext_src_len],
                     &mut planes,
@@ -611,7 +614,10 @@ impl Pipeline {
             let plane_start = core_offset * w;
             let plane_end = plane_start + core_rows * w;
 
-            if matches!(self.config.working_space, WorkingSpace::Srgb | WorkingSpace::LinearRgb) {
+            if matches!(
+                self.config.working_space,
+                WorkingSpace::Srgb | WorkingSpace::LinearRgb
+            ) {
                 let n = core_rows * w;
                 for i in 0..n {
                     dst[dst_offset + i * ch] = planes.l[plane_start + i];

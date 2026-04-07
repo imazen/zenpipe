@@ -397,12 +397,12 @@ impl Convolve {
                     let mut sum = 0.0f32;
                     for ky in 0..kh {
                         for kx in 0..kw {
-                            let sy =
-                                (y as isize + ky as isize - ry as isize).clamp(0, h as isize - 1)
-                                    as usize;
-                            let sx =
-                                (x as isize + kx as isize - rx as isize).clamp(0, w as isize - 1)
-                                    as usize;
+                            let sy = (y as isize + ky as isize - ry as isize)
+                                .clamp(0, h as isize - 1)
+                                as usize;
+                            let sx = (x as isize + kx as isize - rx as isize)
+                                .clamp(0, w as isize - 1)
+                                as usize;
                             sum += src[sy * w + sx] * coeffs[ky * kw + kx];
                         }
                     }
@@ -638,8 +638,7 @@ mod tests {
 
     #[test]
     fn all_channels_mode_convolves_chroma() {
-        let conv =
-            Convolve::new(ConvolutionKernel::box_blur(1)).with_target(ConvolveTarget::All);
+        let conv = Convolve::new(ConvolutionKernel::box_blur(1)).with_target(ConvolveTarget::All);
         let mut planes = OklabPlanes::new(16, 16);
         // Sharp chroma step
         for y in 0..16u32 {

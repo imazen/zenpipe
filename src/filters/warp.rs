@@ -1845,10 +1845,7 @@ mod tests {
                 diff += (planes.l[i] - original[i]).abs();
             }
         }
-        assert!(
-            diff > 5.0,
-            "swirl should distort center: diff={diff}"
-        );
+        assert!(diff > 5.0, "swirl should distort center: diff={diff}");
     }
 
     #[test]

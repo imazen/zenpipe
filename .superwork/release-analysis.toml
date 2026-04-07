@@ -1,0 +1,43 @@
+schema_version = 1
+superworkspace = "zen"
+generated_at = "1775432435"
+
+[crates.zenfilters]
+head = "35f3f53"
+tag = "v0.1.0"
+tag_found = true
+version = "0.1.0"
+class = "library"
+tier = 5
+dependents = 2
+files_changed = 34
+lines_added = 3945
+lines_removed = 148
+src_files_changed = 26
+commit_count = 18
+commit_subjects = [
+    "fix: use #[arcane] shorthand instead of #[archmage::arcane]",
+    "feat: add zennode definitions for new auto filters",
+    "fix: narrow ChromaticAberration to ±0.02, validate on new image set",
+    "fix: ChromaticAberration range and NoiseReduction noise estimator",
+    "feat: add new auto filters to audit example",
+    "feat: add smart modes for Clarity, Bloom, NR, Bilateral",
+    "feat: add AutoVibrance + smart modes for WhitesBlacks and Dehaze",
+    "feat: add ImageAnalysis cache + AutoTone, AutoWhiteBalance, AutoContrast",
+    "docs: add AutoModes.md — automatic mode opportunities analysis",
+    "build: gate native-only dev-deps behind cfg(not(wasm32))",
+    "fix: calibrate parameter curves for 9 filters",
+    "test: rewrite parameter_calibration with zensim on real CID22 photos",
+    "test: add parameter_calibration tests for 25%/75% slider response",
+    "feat: add filter_audit example and OpenAI Vision evaluation script",
+    "fix: improve UX metadata for Color Grading and DtSigmoid",
+    "feat: add film_look to node_to_filter bridge",
+    "fix: restore [patch.crates-io] for local development",
+    "feat: add 15 missing node_to_filter bridge arms",
+]
+category = ""
+bump = ""
+reason = ""
+needs_review = false
+semver_check = ""
+copter = ""

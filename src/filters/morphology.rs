@@ -167,7 +167,11 @@ fn morph_plane(
 
     for y in 0..h {
         for x in 0..w {
-            let mut val = if is_max { f32::NEG_INFINITY } else { f32::INFINITY };
+            let mut val = if is_max {
+                f32::NEG_INFINITY
+            } else {
+                f32::INFINITY
+            };
 
             for ky in 0..2 * radius + 1 {
                 for kx in 0..2 * radius + 1 {

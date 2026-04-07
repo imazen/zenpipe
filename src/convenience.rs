@@ -170,8 +170,18 @@ pub fn apply_to_buffer(
     // No linearization, no Oklab conversion — matches ImageMagick's behavior.
     #[cfg(feature = "srgb-compat")]
     if is_srgb_passthrough && convert_back {
-        return apply_srgb_passthrough(pipeline, input, ctx, desc, width, height, channels, has_alpha, color_ctx.as_ref())
-            .map_err(|e| at!(e));
+        return apply_srgb_passthrough(
+            pipeline,
+            input,
+            ctx,
+            desc,
+            width,
+            height,
+            channels,
+            has_alpha,
+            color_ctx.as_ref(),
+        )
+        .map_err(|e| at!(e));
     }
 
     // Fast path: fused sRGB u8 roundtrip with L3-friendly strip processing.
@@ -311,7 +321,7 @@ fn apply_srgb_passthrough(
     has_alpha: bool,
     color_ctx: Option<&alloc::sync::Arc<zenpixels::ColorContext>>,
 ) -> Result<PixelBuffer, ConvenienceError> {
-    use crate::scatter_gather::{scatter_srgb_u8_passthrough, gather_srgb_u8_passthrough};
+    use crate::scatter_gather::{gather_srgb_u8_passthrough, scatter_srgb_u8_passthrough};
 
     let input_bytes = copy_input_bytes_pooled(input, ctx);
 

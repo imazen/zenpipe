@@ -623,11 +623,7 @@ impl Filter for DifferenceEmboss {
         let kh = 3usize;
         let rx = kw / 2;
         let ry = kh / 2;
-        let coeffs = [
-            0.0, 0.0, -corner,
-            0.0, center, 0.0,
-            -corner, 0.0, 0.0,
-        ];
+        let coeffs = [0.0, 0.0, -corner, 0.0, center, 0.0, -corner, 0.0, 0.0];
 
         let w = planes.width as usize;
         let h = planes.height as usize;
@@ -641,9 +637,11 @@ impl Filter for DifferenceEmboss {
                     for ky in 0..kh {
                         for kx in 0..kw {
                             let sy = (y as isize + ky as isize - ry as isize)
-                                .clamp(0, h as isize - 1) as usize;
+                                .clamp(0, h as isize - 1)
+                                as usize;
                             let sx = (x as isize + kx as isize - rx as isize)
-                                .clamp(0, w as isize - 1) as usize;
+                                .clamp(0, w as isize - 1)
+                                as usize;
                             sum += plane[sy * w + sx] * coeffs[ky * kw + kx];
                         }
                     }
@@ -990,9 +988,11 @@ impl Filter for LaplacianEdge {
                                 continue; // skip center
                             }
                             let sy = (y as isize + ky as isize - r as isize)
-                                .clamp(0, h as isize - 1) as usize;
+                                .clamp(0, h as isize - 1)
+                                as usize;
                             let sx = (x as isize + kx as isize - r as isize)
-                                .clamp(0, w as isize - 1) as usize;
+                                .clamp(0, w as isize - 1)
+                                as usize;
                             sum -= plane[sy * w + sx];
                         }
                     }
@@ -1019,7 +1019,11 @@ mod tests {
             *v = i as f32 / 64.0;
         }
         let orig = planes.l.clone();
-        SigmoidalContrast { amount: 0.0, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
+        SigmoidalContrast {
+            amount: 0.0,
+            midpoint: 0.5,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, orig);
     }
 
@@ -1028,9 +1032,17 @@ mod tests {
         let mut planes = OklabPlanes::new(4, 4);
         planes.l[0] = 0.3;
         planes.l[1] = 0.7;
-        SigmoidalContrast { amount: 0.5, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
+        SigmoidalContrast {
+            amount: 0.5,
+            midpoint: 0.5,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         assert!(planes.l[0] < 0.3, "dark should get darker: {}", planes.l[0]);
-        assert!(planes.l[1] > 0.7, "bright should get brighter: {}", planes.l[1]);
+        assert!(
+            planes.l[1] > 0.7,
+            "bright should get brighter: {}",
+            planes.l[1]
+        );
     }
 
     #[test]
@@ -1038,9 +1050,21 @@ mod tests {
         let mut planes = OklabPlanes::new(4, 4);
         planes.l[0] = 0.1;
         planes.l[1] = 0.9;
-        SigmoidalContrast { amount: -0.5, midpoint: 0.5 }.apply(&mut planes, &mut FilterContext::new());
-        assert!(planes.l[0] > 0.1, "dark should get lighter: {}", planes.l[0]);
-        assert!(planes.l[1] < 0.9, "bright should get darker: {}", planes.l[1]);
+        SigmoidalContrast {
+            amount: -0.5,
+            midpoint: 0.5,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
+        assert!(
+            planes.l[0] > 0.1,
+            "dark should get lighter: {}",
+            planes.l[0]
+        );
+        assert!(
+            planes.l[1] < 0.9,
+            "bright should get darker: {}",
+            planes.l[1]
+        );
     }
 
     #[test]
@@ -1122,7 +1146,11 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = 0.3 + 0.4 * (i as f32 / 15.0);
         }
-        Normalize { lower: 0.0, upper: 0.0 }.apply(&mut planes, &mut FilterContext::new());
+        Normalize {
+            lower: 0.0,
+            upper: 0.0,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         let min_v = planes.l.iter().cloned().fold(f32::INFINITY, f32::min);
         let max_v = planes.l.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         assert!(min_v < 0.05, "min should be near 0, got {min_v}");
@@ -1136,7 +1164,12 @@ mod tests {
         let orig = planes.l.clone();
         Normalize::default().apply(&mut planes, &mut FilterContext::new());
         // Constant plane can't be stretched — should stay the same or go to 0
-        assert!(planes.l.iter().all(|&v| v == orig[0] || v == 0.0 || v == 1.0));
+        assert!(
+            planes
+                .l
+                .iter()
+                .all(|&v| v == orig[0] || v == 0.0 || v == 1.0)
+        );
     }
 
     // ─── CLAHE tests ──────────────────────────────────────────────

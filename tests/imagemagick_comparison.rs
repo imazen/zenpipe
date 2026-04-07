@@ -133,7 +133,10 @@ fn imagemagick_op(source_path: &str, args: &[&str], output_path: &Path) -> Optio
     cmd.arg(output_path.to_str().unwrap());
     let status = cmd.status().ok()?;
     if !status.success() {
-        eprintln!("  ImageMagick failed: convert {source_path} {}", args.join(" "));
+        eprintln!(
+            "  ImageMagick failed: convert {source_path} {}",
+            args.join(" ")
+        );
         return None;
     }
     image::open(output_path).ok().map(|img| img.to_rgb8())
@@ -208,7 +211,9 @@ fn compare_op(
     output_dir: &Path,
 ) -> Option<ComparisonResult> {
     // IM reference
-    let im_out = output_dir.join(image_name).join(format!("{filter_name}_im.png"));
+    let im_out = output_dir
+        .join(image_name)
+        .join(format!("{filter_name}_im.png"));
     let im_result = imagemagick_op(source_path, im_args, &im_out)?;
 
     // sRGB zenfilters
@@ -265,19 +270,35 @@ fn run_suite(
     let mut results = Vec::new();
     save_image(source, &output_dir.join(image_name).join("source.png"));
 
-    eprintln!("\n=== {image_name} ({}x{}) ===", source.width(), source.height());
-    eprintln!("  {:25}  {:>6}  {:>6}  {:>10}", "filter", "oklab", "im", "srgb_vs_im");
+    eprintln!(
+        "\n=== {image_name} ({}x{}) ===",
+        source.width(),
+        source.height()
+    );
+    eprintln!(
+        "  {:25}  {:>6}  {:>6}  {:>10}",
+        "filter", "oklab", "im", "srgb_vs_im"
+    );
 
     // ─── Contrast: Oklab power curve vs sRGB linear (IM tan-slope) ──
     for &(im_pct_f, im_pct) in &[(30.0f32, "30"), (60.0, "60"), (-30.0, "-30")] {
         let label = format!("contrast_{im_pct}");
         if let Some(r) = compare_op(
-            source, source_path, image_name, &label,
-            Some(&|| { let mut c = Contrast::default(); c.amount = im_pct_f / 100.0; Box::new(c) }),
+            source,
+            source_path,
+            image_name,
+            &label,
+            Some(&|| {
+                let mut c = Contrast::default();
+                c.amount = im_pct_f / 100.0;
+                Box::new(c)
+            }),
             &|| make_im_contrast(im_pct_f),
             &["-brightness-contrast", &format!("0x{im_pct}")],
             output_dir,
-        ) { results.push(r); }
+        ) {
+            results.push(r);
+        }
     }
 
     // ─── Brightness: Oklab exposure vs sRGB additive ───────────
@@ -285,34 +306,57 @@ fn run_suite(
     for &(im_pct_f, im_pct) in &[(15.0f32, "15"), (30.0, "30"), (-15.0, "-15")] {
         let label = format!("brightness_{im_pct}");
         if let Some(r) = compare_op(
-            source, source_path, image_name, &label,
-            Some(&|| { let mut e = Exposure::default(); e.stops = im_pct_f / 30.0; Box::new(e) }),
+            source,
+            source_path,
+            image_name,
+            &label,
+            Some(&|| {
+                let mut e = Exposure::default();
+                e.stops = im_pct_f / 30.0;
+                Box::new(e)
+            }),
             &|| make_linear_brightness(im_pct_f / 100.0),
             &["-brightness-contrast", &format!("{im_pct}x0")],
             output_dir,
-        ) { results.push(r); }
+        ) {
+            results.push(r);
+        }
     }
 
     // ─── Saturation: Oklab chroma vs sRGB HSL ──────────────────
     for &(factor, im_mod) in &[(1.5f32, "150"), (0.5, "50"), (0.0, "0")] {
         let label = format!("saturation_{factor:.1}");
         if let Some(r) = compare_op(
-            source, source_path, image_name, &label,
-            Some(&|| { let mut s = Saturation::default(); s.factor = factor; Box::new(s) }),
+            source,
+            source_path,
+            image_name,
+            &label,
+            Some(&|| {
+                let mut s = Saturation::default();
+                s.factor = factor;
+                Box::new(s)
+            }),
             &|| make_hsl_saturate(factor),
             &["-modulate", &format!("100,{im_mod},100")],
             output_dir,
-        ) { results.push(r); }
+        ) {
+            results.push(r);
+        }
     }
 
     // ─── Grayscale: Oklab zero-chroma vs sRGB Rec.709 luma ────
     if let Some(r) = compare_op(
-        source, source_path, image_name, "grayscale",
+        source,
+        source_path,
+        image_name,
+        "grayscale",
         Some(&|| Box::new(Grayscale::default())),
         &|| Box::new(LumaGrayscale::default()),
         &["-colorspace", "Gray"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // ─── Generic filters (same filter for both paths) ──────────
 
@@ -321,7 +365,10 @@ fn run_suite(
     for &(sigma, im_sigma) in &[(1.0f32, "0x1"), (2.0, "0x2")] {
         let label = format!("sharpen_s{sigma:.0}");
         if let Some(r) = compare_op(
-            source, source_path, image_name, &label,
+            source,
+            source_path,
+            image_name,
+            &label,
             Some(&|| make_sharpen(1.0, sigma)),
             &|| {
                 let mut s = ChannelSharpen::default();
@@ -331,77 +378,131 @@ fn run_suite(
             },
             &["-sharpen", im_sigma],
             output_dir,
-        ) { results.push(r); }
+        ) {
+            results.push(r);
+        }
     }
 
     // Blur (generic)
     for &(sigma, im_sigma) in &[(2.0f32, "0x2"), (5.0, "0x5")] {
         let label = format!("blur_{sigma:.0}");
         if let Some(r) = compare_op(
-            source, source_path, image_name, &label,
+            source,
+            source_path,
+            image_name,
+            &label,
             Some(&|| make_blur(sigma)),
             &|| make_blur(sigma),
             &["-blur", im_sigma],
             output_dir,
-        ) { results.push(r); }
+        ) {
+            results.push(r);
+        }
     }
 
     // Emboss (generic convolution on all planes)
     if let Some(r) = compare_op(
-        source, source_path, image_name, "emboss",
-        Some(&|| Box::new(Convolve::new(ConvolutionKernel::emboss()).with_bias(0.5).with_target(ConvolveTarget::All))),
-        &|| { let mut e = DifferenceEmboss::default(); e.sigma = 1.0; Box::new(e) },
+        source,
+        source_path,
+        image_name,
+        "emboss",
+        Some(&|| {
+            Box::new(
+                Convolve::new(ConvolutionKernel::emboss())
+                    .with_bias(0.5)
+                    .with_target(ConvolveTarget::All),
+            )
+        }),
+        &|| {
+            let mut e = DifferenceEmboss::default();
+            e.sigma = 1.0;
+            Box::new(e)
+        },
         &["-emboss", "1"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Edge detect: Oklab Sobel vs sRGB Laplacian (IM compat)
     if let Some(r) = compare_op(
-        source, source_path, image_name, "edge_detect",
+        source,
+        source_path,
+        image_name,
+        "edge_detect",
         Some(&|| make_edge_detect(EdgeMode::Sobel, 1.0)),
-        &|| { let mut e = LaplacianEdge::default(); e.radius = 1; Box::new(e) },
+        &|| {
+            let mut e = LaplacianEdge::default();
+            e.radius = 1;
+            Box::new(e)
+        },
         &["-edge", "1"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Posterize: Oklab L-only vs sRGB all-channel
     if let Some(r) = compare_op(
-        source, source_path, image_name, "posterize_4",
+        source,
+        source_path,
+        image_name,
+        "posterize_4",
         None, // no Oklab equivalent that matches IM
         &|| make_channel_posterize(4),
         &["-posterize", "4"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Solarize: Oklab L-only vs sRGB all-channel
     if let Some(r) = compare_op(
-        source, source_path, image_name, "solarize_50",
+        source,
+        source_path,
+        image_name,
+        "solarize_50",
         None,
         &|| make_channel_solarize(0.5),
         &["-solarize", "50%"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Morphology (generic — dilate on all planes)
     if let Some(r) = compare_op(
-        source, source_path, image_name, "dilate_1",
+        source,
+        source_path,
+        image_name,
+        "dilate_1",
         Some(&|| make_morphology(MorphOp::Dilate, 1, true)),
         &|| make_morphology(MorphOp::Dilate, 1, true),
         &["-morphology", "Dilate", "Square:1"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     if let Some(r) = compare_op(
-        source, source_path, image_name, "erode_1",
+        source,
+        source_path,
+        image_name,
+        "erode_1",
         Some(&|| make_morphology(MorphOp::Erode, 1, true)),
         &|| make_morphology(MorphOp::Erode, 1, true),
         &["-morphology", "Erode", "Square:1"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Motion blur: Oklab uniform vs sRGB Gaussian (IM compat)
     if let Some(r) = compare_op(
-        source, source_path, image_name, "motion_blur_s15",
+        source,
+        source_path,
+        image_name,
+        "motion_blur_s15",
         Some(&|| make_motion_blur(0.0, 15.0)),
         &|| {
             let mut mb = GaussianMotionBlur::default();
@@ -411,16 +512,23 @@ fn run_suite(
         },
         &["-motion-blur", "0x15+0"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // Normalize: per-channel stretch vs IM's -normalize
     if let Some(r) = compare_op(
-        source, source_path, image_name, "normalize",
+        source,
+        source_path,
+        image_name,
+        "normalize",
         None,
         &|| Box::new(Normalize::default()),
         &["-normalize"],
         output_dir,
-    ) { results.push(r); }
+    ) {
+        results.push(r);
+    }
 
     // CLAHE (zen only — IM 6 doesn't have -clahe)
     {
@@ -433,7 +541,10 @@ fn run_suite(
         let path = output_dir.join(image_name).join("clahe_zen.png");
         save_image(&zen_result, &path);
         let score = zensim_score(source, &zen_result);
-        eprintln!("  {:25}  zen={score:6.1}  (zen only, no IM 6 equiv)", "clahe_8x8");
+        eprintln!(
+            "  {:25}  zen={score:6.1}  (zen only, no IM 6 equiv)",
+            "clahe_8x8"
+        );
     }
 
     results
@@ -461,7 +572,10 @@ fn compare_zenfilters_vs_imagemagick() {
     for (filename, label) in &test_images {
         let src_path = match source_path(filename) {
             Some(p) => p,
-            None => { eprintln!("SKIP: {filename} not found"); continue; }
+            None => {
+                eprintln!("SKIP: {filename} not found");
+                continue;
+            }
         };
         let img = match load_test_image(filename) {
             Some(i) => i,
@@ -479,64 +593,105 @@ fn compare_zenfilters_vs_imagemagick() {
     filter_names.sort();
     filter_names.dedup();
 
-    eprintln!("  {:25}  {:>8}  {:>8}  {:>10}", "filter", "avg_oklab", "avg_im", "avg_srgb_im");
+    eprintln!(
+        "  {:25}  {:>8}  {:>8}  {:>10}",
+        "filter", "avg_oklab", "avg_im", "avg_srgb_im"
+    );
     for fname in &filter_names {
-        let m: Vec<_> = all_results.iter().filter(|r| &r.filter_name == fname).collect();
+        let m: Vec<_> = all_results
+            .iter()
+            .filter(|r| &r.filter_name == fname)
+            .collect();
         let n = m.len() as f64;
-        let avg_oklab: f64 = m.iter().map(|r| if r.oklab_vs_src.is_nan() { 0.0 } else { r.oklab_vs_src }).sum::<f64>() / n;
+        let avg_oklab: f64 = m
+            .iter()
+            .map(|r| {
+                if r.oklab_vs_src.is_nan() {
+                    0.0
+                } else {
+                    r.oklab_vs_src
+                }
+            })
+            .sum::<f64>()
+            / n;
         let avg_im: f64 = m.iter().map(|r| r.im_vs_src).sum::<f64>() / n;
         let avg_agree: f64 = m.iter().map(|r| r.srgb_vs_im).sum::<f64>() / n;
         eprintln!("  {fname:25}  {avg_oklab:8.1}  {avg_im:8.1}  {avg_agree:10.1}");
     }
 
-    assert!(images_tested >= 3, "Need at least 3 test images, got {images_tested}");
+    assert!(
+        images_tested >= 3,
+        "Need at least 3 test images, got {images_tested}"
+    );
 
     // Morphology in sRGB mode should be pixel-perfect with ImageMagick
-    for r in all_results.iter().filter(|r| {
-        r.filter_name.starts_with("dilate") || r.filter_name.starts_with("erode")
-    }) {
+    for r in all_results
+        .iter()
+        .filter(|r| r.filter_name.starts_with("dilate") || r.filter_name.starts_with("erode"))
+    {
         assert!(
             r.srgb_vs_im > 90.0,
             "{}/{}: srgb_vs_im={:.1} should be >90 for morphology",
-            r.image_name, r.filter_name, r.srgb_vs_im
+            r.image_name,
+            r.filter_name,
+            r.srgb_vs_im
         );
     }
 
     // Desaturation and grayscale should closely match IM
     for r in all_results.iter().filter(|r| {
-        r.filter_name == "grayscale" || r.filter_name == "saturation_0.0" || r.filter_name == "saturation_0.5"
+        r.filter_name == "grayscale"
+            || r.filter_name == "saturation_0.0"
+            || r.filter_name == "saturation_0.5"
     }) {
         assert!(
             r.srgb_vs_im > 85.0,
             "{}/{}: srgb_vs_im={:.1} should be >85 for desaturation/grayscale",
-            r.image_name, r.filter_name, r.srgb_vs_im
+            r.image_name,
+            r.filter_name,
+            r.srgb_vs_im
         );
     }
 
     // Solarize should be near-perfect (same formula, same space)
-    for r in all_results.iter().filter(|r| r.filter_name.starts_with("solarize")) {
+    for r in all_results
+        .iter()
+        .filter(|r| r.filter_name.starts_with("solarize"))
+    {
         assert!(
             r.srgb_vs_im > 90.0,
             "{}/{}: srgb_vs_im={:.1} should be >90 for solarize",
-            r.image_name, r.filter_name, r.srgb_vs_im
+            r.image_name,
+            r.filter_name,
+            r.srgb_vs_im
         );
     }
 
     // Contrast should closely match IM (tan-slope formula)
-    for r in all_results.iter().filter(|r| r.filter_name.starts_with("contrast")) {
+    for r in all_results
+        .iter()
+        .filter(|r| r.filter_name.starts_with("contrast"))
+    {
         assert!(
             r.srgb_vs_im > 85.0,
             "{}/{}: srgb_vs_im={:.1} should be >85 for contrast",
-            r.image_name, r.filter_name, r.srgb_vs_im
+            r.image_name,
+            r.filter_name,
+            r.srgb_vs_im
         );
     }
 
     // Brightness should closely match IM (additive offset)
-    for r in all_results.iter().filter(|r| r.filter_name.starts_with("brightness")) {
+    for r in all_results
+        .iter()
+        .filter(|r| r.filter_name.starts_with("brightness"))
+    {
         assert!(
             r.srgb_vs_im > 85.0,
             "{}/{}: srgb_vs_im={:.1} should be >85 for brightness",
-            r.image_name, r.filter_name, r.srgb_vs_im
+            r.image_name,
+            r.filter_name,
+            r.srgb_vs_im
         );
     }
 }
