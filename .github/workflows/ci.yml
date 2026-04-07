@@ -43,7 +43,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-superwork
-        run: cargo install cargo-superwork
+        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
       - name: Transform deps for CI
         run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - run: cargo clippy --all-targets -- -D warnings
@@ -71,7 +71,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-superwork
-        run: cargo install cargo-superwork
+        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
       - name: Transform deps for CI
         run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - run: cargo test --all-targets
@@ -92,7 +92,7 @@ jobs:
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-superwork
-        run: cargo install cargo-superwork
+        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
       - name: Transform deps for CI
         run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - name: Check MSRV
