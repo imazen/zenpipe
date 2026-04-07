@@ -657,6 +657,273 @@ impl Filter for DifferenceEmboss {
     }
 }
 
+// ─── Normalize (per-channel histogram stretch) ────────────────────
+
+/// Per-channel histogram stretch matching libvips `normalise()` / sharp `normalise()`.
+///
+/// Finds the Nth percentile dark and light points per channel, then linearly
+/// stretches each channel so those points map to 0.0 and 1.0. This is the
+/// sRGB-space equivalent of Oklab `AutoLevels`.
+///
+/// Matches ImageMagick's `-normalize` (0.1% clip) and `-auto-level` (0% clip).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct Normalize {
+    /// Fraction of pixels to clip at the dark end per channel.
+    /// Default: 0.001 (0.1%, matches IM's -normalize).
+    pub lower: f32,
+    /// Fraction of pixels to clip at the bright end per channel.
+    /// Default: 0.001 (0.1%).
+    pub upper: f32,
+}
+
+impl Default for Normalize {
+    fn default() -> Self {
+        Self {
+            lower: 0.001,
+            upper: 0.001,
+        }
+    }
+}
+
+impl Normalize {
+    /// IM's `-auto-level` equivalent (no clipping).
+    pub fn auto_level() -> Self {
+        Self {
+            lower: 0.0,
+            upper: 0.0,
+        }
+    }
+}
+
+impl Filter for Normalize {
+    fn channel_access(&self) -> ChannelAccess {
+        ChannelAccess::L_AND_CHROMA
+    }
+
+    fn plane_semantics(&self) -> PlaneSemantics {
+        PlaneSemantics::Rgb
+    }
+
+    fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
+        let n = planes.l.len();
+        if n == 0 {
+            return;
+        }
+
+        for plane in [&mut planes.l, &mut planes.a, &mut planes.b] {
+            // Build histogram (256 bins for [0, 1])
+            let mut hist = [0u32; 256];
+            for &v in plane.iter() {
+                let bin = (v * 255.0).clamp(0.0, 255.0) as usize;
+                hist[bin] += 1;
+            }
+
+            // Find lower percentile
+            let lower_count = (n as f32 * self.lower) as u32;
+            let mut cumulative = 0u32;
+            let mut low_bin = 0usize;
+            for (i, &count) in hist.iter().enumerate() {
+                cumulative += count;
+                if cumulative > lower_count {
+                    low_bin = i;
+                    break;
+                }
+            }
+
+            // Find upper percentile
+            let upper_count = (n as f32 * self.upper) as u32;
+            cumulative = 0;
+            let mut high_bin = 255usize;
+            for i in (0..256).rev() {
+                cumulative += hist[i];
+                if cumulative > upper_count {
+                    high_bin = i;
+                    break;
+                }
+            }
+
+            if high_bin <= low_bin {
+                continue; // flat channel, nothing to stretch
+            }
+
+            let low_val = low_bin as f32 / 255.0;
+            let high_val = high_bin as f32 / 255.0;
+            let range = high_val - low_val;
+            let inv_range = 1.0 / range;
+
+            for v in plane.iter_mut() {
+                *v = ((*v - low_val) * inv_range).clamp(0.0, 1.0);
+            }
+        }
+    }
+}
+
+// ─── CLAHE (Contrast Limited Adaptive Histogram Equalization) ──────
+
+/// CLAHE — Contrast Limited Adaptive Histogram Equalization.
+///
+/// Splits the image into tiles, equalizes histograms per-tile with a
+/// clip limit, then bilinear-interpolates between tiles. Produces
+/// locally-adaptive contrast enhancement without the artifacts of
+/// global histogram equalization.
+///
+/// Matches ImageMagick's `-clahe WxH+bins+slope` and sharp's
+/// `clahe({width, height, maxSlope})`.
+///
+/// Operates on the first plane (L in Oklab, R in sRGB) by default.
+/// In sRGB mode, apply to each channel separately or convert to a
+/// luminance-based space first.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct Clahe {
+    /// Tile width in pixels. Default: 8.
+    pub tile_width: u32,
+    /// Tile height in pixels. Default: 8.
+    pub tile_height: u32,
+    /// Number of histogram bins. Default: 256.
+    pub bins: u32,
+    /// Clip limit (max slope). 1.0 = no clipping (standard HE),
+    /// 3.0 = moderate CLAHE. Default: 3.0.
+    pub clip_limit: f32,
+}
+
+impl Default for Clahe {
+    fn default() -> Self {
+        Self {
+            tile_width: 8,
+            tile_height: 8,
+            bins: 256,
+            clip_limit: 3.0,
+        }
+    }
+}
+
+impl Filter for Clahe {
+    fn channel_access(&self) -> ChannelAccess {
+        ChannelAccess::L_ONLY
+    }
+
+    fn plane_semantics(&self) -> PlaneSemantics {
+        PlaneSemantics::Any
+    }
+
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
+    fn neighborhood_radius(&self, _width: u32, _height: u32) -> u32 {
+        self.tile_width.max(self.tile_height)
+    }
+
+    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+        let w = planes.width as usize;
+        let h = planes.height as usize;
+        let tw = self.tile_width as usize;
+        let th = self.tile_height as usize;
+        let bins = self.bins as usize;
+        let n = w * h;
+
+        if tw == 0 || th == 0 || bins == 0 {
+            return;
+        }
+
+        // Number of tiles (round up)
+        let nx = (w + tw - 1) / tw;
+        let ny = (h + th - 1) / th;
+
+        // Compute CDF for each tile
+        // cdfs[ty][tx][bin] = cumulative fraction
+        let mut cdfs = ctx.take_f32(nx * ny * bins);
+
+        for ty in 0..ny {
+            for tx in 0..nx {
+                let x0 = tx * tw;
+                let y0 = ty * th;
+                let x1 = (x0 + tw).min(w);
+                let y1 = (y0 + th).min(h);
+                let tile_pixels = (x1 - x0) * (y1 - y0);
+
+                // Build histogram
+                let cdf_offset = (ty * nx + tx) * bins;
+                let cdf = &mut cdfs[cdf_offset..cdf_offset + bins];
+                cdf.fill(0.0);
+
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        let v = planes.l[y * w + x];
+                        let bin = ((v * (bins - 1) as f32) as usize).min(bins - 1);
+                        cdf[bin] += 1.0;
+                    }
+                }
+
+                // Apply clip limit
+                if self.clip_limit > 1.0 {
+                    let limit = (self.clip_limit * tile_pixels as f32 / bins as f32).max(1.0);
+                    let mut excess = 0.0f32;
+                    for c in cdf.iter_mut() {
+                        if *c > limit {
+                            excess += *c - limit;
+                            *c = limit;
+                        }
+                    }
+                    // Redistribute excess evenly
+                    let redistrib = excess / bins as f32;
+                    for c in cdf.iter_mut() {
+                        *c += redistrib;
+                    }
+                }
+
+                // Convert histogram to CDF
+                let mut cumulative = 0.0f32;
+                let inv_pixels = 1.0 / tile_pixels as f32;
+                for c in cdf.iter_mut() {
+                    cumulative += *c;
+                    *c = cumulative * inv_pixels;
+                }
+            }
+        }
+
+        // Apply CLAHE with bilinear interpolation between tiles
+        let mut dst = ctx.take_f32(n);
+
+        for y in 0..h {
+            for x in 0..w {
+                let v = planes.l[y * w + x];
+                let bin = ((v * (bins - 1) as f32) as usize).min(bins - 1);
+
+                // Tile coordinates (center of tile)
+                let ftx = (x as f32 + 0.5) / tw as f32 - 0.5;
+                let fty = (y as f32 + 0.5) / th as f32 - 0.5;
+
+                let tx0 = (ftx.floor() as isize).clamp(0, nx as isize - 1) as usize;
+                let ty0 = (fty.floor() as isize).clamp(0, ny as isize - 1) as usize;
+                let tx1 = (tx0 + 1).min(nx - 1);
+                let ty1 = (ty0 + 1).min(ny - 1);
+
+                let fx = (ftx - tx0 as f32).clamp(0.0, 1.0);
+                let fy = (fty - ty0 as f32).clamp(0.0, 1.0);
+
+                // Bilinear interpolation of CDF values
+                let c00 = cdfs[(ty0 * nx + tx0) * bins + bin];
+                let c10 = cdfs[(ty0 * nx + tx1) * bins + bin];
+                let c01 = cdfs[(ty1 * nx + tx0) * bins + bin];
+                let c11 = cdfs[(ty1 * nx + tx1) * bins + bin];
+
+                let top = c00 + (c10 - c00) * fx;
+                let bot = c01 + (c11 - c01) * fx;
+                dst[y * w + x] = (top + (bot - top) * fy).clamp(0.0, 1.0);
+            }
+        }
+
+        ctx.return_f32(cdfs);
+        let old = core::mem::replace(&mut planes.l, dst);
+        ctx.return_f32(old);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -761,5 +1028,75 @@ mod tests {
         ChannelSolarize { threshold: 0.5 }.apply(&mut planes, &mut FilterContext::new());
         assert!((planes.l[0] - 0.3).abs() < 1e-6, "below unchanged");
         assert!((planes.l[1] - 0.2).abs() < 1e-6, "above inverted");
+    }
+
+    // ─── Normalize tests ──────────────────────────────────────────
+
+    #[test]
+    fn normalize_stretches_range() {
+        let mut planes = OklabPlanes::new(4, 4);
+        // All values in [0.3, 0.7] — should stretch to [0, 1]
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = 0.3 + 0.4 * (i as f32 / 15.0);
+        }
+        Normalize { lower: 0.0, upper: 0.0 }.apply(&mut planes, &mut FilterContext::new());
+        let min_v = planes.l.iter().cloned().fold(f32::INFINITY, f32::min);
+        let max_v = planes.l.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        assert!(min_v < 0.05, "min should be near 0, got {min_v}");
+        assert!(max_v > 0.95, "max should be near 1, got {max_v}");
+    }
+
+    #[test]
+    fn normalize_constant_plane_unchanged() {
+        let mut planes = OklabPlanes::new(4, 4);
+        planes.l.fill(0.5);
+        let orig = planes.l.clone();
+        Normalize::default().apply(&mut planes, &mut FilterContext::new());
+        // Constant plane can't be stretched — should stay the same or go to 0
+        assert!(planes.l.iter().all(|&v| v == orig[0] || v == 0.0 || v == 1.0));
+    }
+
+    // ─── CLAHE tests ──────────────────────────────────────────────
+
+    #[test]
+    fn clahe_enhances_contrast() {
+        let mut planes = OklabPlanes::new(32, 32);
+        // Low-contrast image: all values in [0.4, 0.6]
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = 0.4 + 0.2 * (i as f32 / (32 * 32) as f32);
+        }
+        let before_range = {
+            let min = planes.l.iter().cloned().fold(f32::INFINITY, f32::min);
+            let max = planes.l.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            max - min
+        };
+        let mut c = Clahe::default();
+        c.tile_width = 8;
+        c.tile_height = 8;
+        c.apply(&mut planes, &mut FilterContext::new());
+        let after_range = {
+            let min = planes.l.iter().cloned().fold(f32::INFINITY, f32::min);
+            let max = planes.l.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            max - min
+        };
+        assert!(
+            after_range > before_range * 1.5,
+            "CLAHE should increase range: before={before_range:.3}, after={after_range:.3}"
+        );
+    }
+
+    #[test]
+    fn clahe_constant_plane_stable() {
+        let mut planes = OklabPlanes::new(16, 16);
+        planes.l.fill(0.5);
+        Clahe::default().apply(&mut planes, &mut FilterContext::new());
+        // Constant plane: CLAHE should map everything to the same CDF value
+        let first = planes.l[0];
+        for &v in &planes.l {
+            assert!(
+                (v - first).abs() < 0.01,
+                "constant plane should stay uniform: {v} vs {first}"
+            );
+        }
     }
 }
