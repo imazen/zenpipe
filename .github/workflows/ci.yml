@@ -34,42 +34,19 @@ jobs:
           - windows-11-arm
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: imazen/zen-workspace
+          path: zen-workspace
+          token: ${{ secrets.SUPERWORK_PAT }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Patch path deps to git refs
-        shell: bash
-        run: |
-          sed \
-            -e 's|path = "\.\./zenresize"|git = "https://github.com/imazen/zenresize"|g' \
-            -e 's|path = "\.\./zenblend"|git = "https://github.com/imazen/zenblend"|g' \
-            -e 's|path = "\.\./zenfilters"|git = "https://github.com/imazen/zenfilters"|g' \
-            -e 's|path = "\.\./zenlayout"|git = "https://github.com/imazen/zenlayout"|g' \
-            -e 's|path = "\.\./linear-srgb"|git = "https://github.com/imazen/linear-srgb"|g' \
-            -e 's|path = "\.\./zencodec"|git = "https://github.com/imazen/zencodec"|g' \
-            -e 's|path = "\.\./zencodecs"|git = "https://github.com/imazen/zencodecs"|g' \
-            -e 's|path = "\.\./whereat"|git = "https://github.com/imazen/whereat"|g' \
-            -e 's|path = "\.\./zennode/zennode"|git = "https://github.com/imazen/zennode"|g' \
-            -e 's|path = "\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpng"|git = "https://github.com/imazen/zenpng"|g' \
-            -e 's|path = "\.\./zenwebp"|git = "https://github.com/imazen/zenwebp"|g' \
-            -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
-            -e 's|path = "\.\./zenavif"|git = "https://github.com/imazen/zenavif"|g' \
-            -e 's|path = "\.\./zenjxl"|git = "https://github.com/imazen/zenjxl"|g' \
-            -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
-            -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
-            -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e '/zensally/d' \
-            -e '/imageflow_types/d' \
-            -e '/imageflow_riapi/d' \
-            -e 's|, "dep:imageflow_types"||g' \
-            -e 's|, "dep:imageflow_riapi"||g' \
-            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
-          printf '\n[patch.crates-io]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\nzennode = { git = "https://github.com/imazen/zennode" }\n\n[patch."https://github.com/imazen/zenjpeg"]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\n' >> Cargo.toml
-          rm -f Cargo.lock
+      - name: Install cargo-superwork
+        run: cargo install cargo-superwork
+      - name: Transform deps for CI
+        run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo clippy --all-targets --no-default-features -- -D warnings
 
@@ -88,40 +65,17 @@ jobs:
           - windows-11-arm
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: imazen/zen-workspace
+          path: zen-workspace
+          token: ${{ secrets.SUPERWORK_PAT }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Patch path deps to git refs
-        shell: bash
-        run: |
-          sed \
-            -e 's|path = "\.\./zenresize"|git = "https://github.com/imazen/zenresize"|g' \
-            -e 's|path = "\.\./zenblend"|git = "https://github.com/imazen/zenblend"|g' \
-            -e 's|path = "\.\./zenfilters"|git = "https://github.com/imazen/zenfilters"|g' \
-            -e 's|path = "\.\./zenlayout"|git = "https://github.com/imazen/zenlayout"|g' \
-            -e 's|path = "\.\./linear-srgb"|git = "https://github.com/imazen/linear-srgb"|g' \
-            -e 's|path = "\.\./zencodec"|git = "https://github.com/imazen/zencodec"|g' \
-            -e 's|path = "\.\./zencodecs"|git = "https://github.com/imazen/zencodecs"|g' \
-            -e 's|path = "\.\./whereat"|git = "https://github.com/imazen/whereat"|g' \
-            -e 's|path = "\.\./zennode/zennode"|git = "https://github.com/imazen/zennode"|g' \
-            -e 's|path = "\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpng"|git = "https://github.com/imazen/zenpng"|g' \
-            -e 's|path = "\.\./zenwebp"|git = "https://github.com/imazen/zenwebp"|g' \
-            -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
-            -e 's|path = "\.\./zenavif"|git = "https://github.com/imazen/zenavif"|g' \
-            -e 's|path = "\.\./zenjxl"|git = "https://github.com/imazen/zenjxl"|g' \
-            -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
-            -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
-            -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e '/zensally/d' \
-            -e '/imageflow_types/d' \
-            -e '/imageflow_riapi/d' \
-            -e 's|, "dep:imageflow_types"||g' \
-            -e 's|, "dep:imageflow_riapi"||g' \
-            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
-          printf '\n[patch.crates-io]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\nzennode = { git = "https://github.com/imazen/zennode" }\n\n[patch."https://github.com/imazen/zenjpeg"]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\n' >> Cargo.toml
-          rm -f Cargo.lock
+      - name: Install cargo-superwork
+        run: cargo install cargo-superwork
+      - name: Transform deps for CI
+        run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - run: cargo test --all-targets
       - run: cargo test --all-targets --no-default-features
       - run: cargo test --features zennode
@@ -132,40 +86,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: imazen/zen-workspace
+          path: zen-workspace
+          token: ${{ secrets.SUPERWORK_PAT }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
-      - name: Patch path deps to git refs
-        shell: bash
-        run: |
-          sed \
-            -e 's|path = "\.\./zenresize"|git = "https://github.com/imazen/zenresize"|g' \
-            -e 's|path = "\.\./zenblend"|git = "https://github.com/imazen/zenblend"|g' \
-            -e 's|path = "\.\./zenfilters"|git = "https://github.com/imazen/zenfilters"|g' \
-            -e 's|path = "\.\./zenlayout"|git = "https://github.com/imazen/zenlayout"|g' \
-            -e 's|path = "\.\./linear-srgb"|git = "https://github.com/imazen/linear-srgb"|g' \
-            -e 's|path = "\.\./zencodec"|git = "https://github.com/imazen/zencodec"|g' \
-            -e 's|path = "\.\./zencodecs"|git = "https://github.com/imazen/zencodecs"|g' \
-            -e 's|path = "\.\./whereat"|git = "https://github.com/imazen/whereat"|g' \
-            -e 's|path = "\.\./zennode/zennode"|git = "https://github.com/imazen/zennode"|g' \
-            -e 's|path = "\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpng"|git = "https://github.com/imazen/zenpng"|g' \
-            -e 's|path = "\.\./zenwebp"|git = "https://github.com/imazen/zenwebp"|g' \
-            -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
-            -e 's|path = "\.\./zenavif"|git = "https://github.com/imazen/zenavif"|g' \
-            -e 's|path = "\.\./zenjxl"|git = "https://github.com/imazen/zenjxl"|g' \
-            -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
-            -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
-            -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e '/zensally/d' \
-            -e '/imageflow_types/d' \
-            -e '/imageflow_riapi/d' \
-            -e 's|, "dep:imageflow_types"||g' \
-            -e 's|, "dep:imageflow_riapi"||g' \
-            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
-          printf '\n[patch.crates-io]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\nzennode = { git = "https://github.com/imazen/zennode" }\n\n[patch."https://github.com/imazen/zenjpeg"]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\n' >> Cargo.toml
-          rm -f Cargo.lock
+      - name: Install cargo-superwork
+        run: cargo install cargo-superwork
+      - name: Transform deps for CI
+        run: cargo superwork ci-prep --config zen-workspace/Superwork.toml
       - name: Check MSRV
         run: cargo hack check --rust-version
