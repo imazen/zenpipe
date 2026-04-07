@@ -61,6 +61,10 @@ impl Filter for WhitePoint {
         ChannelAccess::L_ONLY
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if (self.level - 1.0).abs() < 1e-6 && self.headroom <= 0.0 {
             return;

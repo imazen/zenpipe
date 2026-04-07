@@ -25,6 +25,7 @@ mod clarity;
 mod color_grading;
 mod color_matrix;
 mod contrast;
+mod convolve;
 mod cube_lut;
 mod dehaze;
 mod devignette;
@@ -46,13 +47,19 @@ mod invert;
 mod levels;
 mod local_tone_map;
 mod median_blur;
+mod morphology;
+mod motion_blur;
 mod noise_reduction;
 mod parametric_curve;
+mod posterize;
 mod saturation;
 mod sepia;
 mod shadow_lift;
 mod sharpen;
 mod sigmoid;
+mod solarize;
+#[cfg(feature = "srgb-compat")]
+pub mod srgb_compat;
 mod temperature;
 mod texture;
 mod tint;
@@ -96,6 +103,7 @@ pub use clarity::Clarity;
 pub use color_grading::ColorGrading;
 pub use color_matrix::ColorMatrix;
 pub use contrast::Contrast;
+pub use convolve::{ConvolutionKernel, Convolve, ConvolveTarget};
 pub use cube_lut::{CubeLut, CubeParseError, LutAccuracy, MlpLut, TensorLut};
 pub use dehaze::Dehaze;
 pub use devignette::Devignette;
@@ -115,13 +123,23 @@ pub use invert::Invert;
 pub use levels::Levels;
 pub use local_tone_map::LocalToneMap;
 pub use median_blur::MedianBlur;
+pub use morphology::{MorphOp, Morphology};
+pub use motion_blur::{MotionBlur, ZoomBlur};
 pub use noise_reduction::NoiseReduction;
 pub use parametric_curve::ParametricCurve;
+pub use posterize::Posterize;
 pub use saturation::Saturation;
 pub use sepia::Sepia;
 pub use shadow_lift::ShadowLift;
 pub use sharpen::Sharpen;
 pub use sigmoid::Sigmoid;
+pub use solarize::Solarize;
+#[cfg(feature = "srgb-compat")]
+pub use srgb_compat::{
+    ChannelPosterize, ChannelSharpen, ChannelSolarize, Clahe, DifferenceEmboss,
+    GaussianMotionBlur, HslSaturate, LaplacianEdge, LinearBrightness, LinearContrast,
+    LumaGrayscale, Normalize, SigmoidalContrast,
+};
 pub use temperature::Temperature;
 pub use texture::Texture;
 pub use tint::Tint;
@@ -130,6 +148,6 @@ pub use tone_equalizer::ToneEqualizer;
 pub use vibrance::Vibrance;
 pub use vignette::Vignette;
 #[cfg(feature = "experimental")]
-pub use warp::{Rotate, RotateMode, Warp, WarpBackground, WarpInterpolation};
+pub use warp::{PolarWarp, Rotate, RotateMode, Warp, WarpBackground, WarpInterpolation};
 pub use white_point::WhitePoint;
 pub use whites_blacks::WhitesBlacks;

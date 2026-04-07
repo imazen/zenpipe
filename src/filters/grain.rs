@@ -51,6 +51,10 @@ impl Filter for Grain {
         ChannelAccess::L_ONLY
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.amount.abs() < 1e-6 {
             return;

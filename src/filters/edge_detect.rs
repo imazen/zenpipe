@@ -72,6 +72,10 @@ impl Filter for EdgeDetect {
         ChannelAccess::L_AND_CHROMA
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn is_neighborhood(&self) -> bool {
         true
     }

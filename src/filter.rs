@@ -2,6 +2,24 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::planes::OklabPlanes;
 
+/// What a filter assumes about the values in the planes.
+///
+/// Used by the pipeline to validate filter/working-space compatibility
+/// at push time. Pushing an Oklab-specific filter into an sRGB pipeline
+/// panics with a descriptive error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaneSemantics {
+    /// Filter is pure math on plane values — works in any color space.
+    /// Examples: blur, sharpen, convolve, morphology, posterize.
+    Any,
+    /// Filter assumes planes contain Oklab L/a/b data.
+    /// Examples: Contrast (power curve on L), Saturation (chroma scale on a/b).
+    Oklab,
+    /// Filter assumes planes contain RGB data (sRGB, linear, etc.).
+    /// Examples: LinearContrast, LumaGrayscale, HslSaturate.
+    Rgb,
+}
+
 /// A photo filter that operates on planar Oklab f32 data.
 ///
 /// Filters modify `OklabPlanes` in-place. The pipeline guarantees that
@@ -62,6 +80,18 @@ pub trait Filter: Send + Sync {
     ///
     /// Default: no-op. Filters with pixel-space sigma override this.
     fn scale_for_resolution(&mut self, _scale: f32) {}
+
+    /// What this filter assumes about the values in the planes.
+    ///
+    /// The pipeline validates this at push time: an `Oklab`-semantic filter
+    /// cannot be pushed into an sRGB pipeline (and vice versa). `Any` filters
+    /// work in all pipelines.
+    ///
+    /// Default: `PlaneSemantics::Oklab` — most zenfilters are Oklab-native.
+    /// Override to `Any` for generic spatial filters, or `Rgb` for sRGB-compat filters.
+    fn plane_semantics(&self) -> PlaneSemantics {
+        PlaneSemantics::Oklab
+    }
 
     /// Apply the filter in-place to the given planes.
     ///

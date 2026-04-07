@@ -33,6 +33,10 @@ impl Filter for Alpha {
         }
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if let Some(alpha) = &mut planes.alpha {
             if (self.factor - 1.0).abs() < 1e-6 {

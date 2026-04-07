@@ -154,6 +154,91 @@ pub fn gather_oklab_to_srgb_u8(
     }
 }
 
+// ─── sRGB passthrough (ImageMagick-compatible) ─────────────────────
+
+/// Scatter interleaved linear RGB f32 directly to planes (no Oklab conversion).
+///
+/// Maps R→L, G→a, B→b planes. Used for `WorkingSpace::Srgb` where filters
+/// operate in the same color space as ImageMagick.
+pub fn scatter_srgb_passthrough(
+    src: &[f32],
+    planes: &mut OklabPlanes,
+    channels: u32,
+) {
+    let n = planes.pixel_count();
+    let ch = channels as usize;
+    debug_assert!(ch == 3 || ch == 4);
+    debug_assert!(src.len() >= n * ch);
+
+    for i in 0..n {
+        planes.l[i] = src[i * ch];
+        planes.a[i] = src[i * ch + 1];
+        planes.b[i] = src[i * ch + 2];
+    }
+
+    if ch == 4
+        && let Some(alpha) = &mut planes.alpha
+    {
+        for i in 0..n {
+            alpha[i] = src[i * ch + 3];
+        }
+    }
+}
+
+/// Scatter interleaved sRGB u8 directly to f32 planes (no Oklab conversion).
+///
+/// Normalizes u8 [0-255] to f32 [0.0-1.0]. Maps R→L, G→a, B→b.
+pub fn scatter_srgb_u8_passthrough(
+    src: &[u8],
+    planes: &mut OklabPlanes,
+    channels: u32,
+) {
+    let n = planes.pixel_count();
+    let ch = channels as usize;
+    debug_assert!(ch == 3 || ch == 4);
+    debug_assert!(src.len() >= n * ch);
+
+    let inv255 = 1.0 / 255.0;
+    for i in 0..n {
+        planes.l[i] = src[i * ch] as f32 * inv255;
+        planes.a[i] = src[i * ch + 1] as f32 * inv255;
+        planes.b[i] = src[i * ch + 2] as f32 * inv255;
+    }
+
+    if ch == 4
+        && let Some(alpha) = &mut planes.alpha
+    {
+        for i in 0..n {
+            alpha[i] = src[i * ch + 3] as f32 * inv255;
+        }
+    }
+}
+
+/// Gather f32 planes back to interleaved sRGB u8 (no Oklab conversion).
+pub fn gather_srgb_u8_passthrough(
+    planes: &OklabPlanes,
+    dst: &mut [u8],
+    channels: u32,
+) {
+    let n = planes.pixel_count();
+    let ch = channels as usize;
+    debug_assert!(ch == 3 || ch == 4);
+    debug_assert!(dst.len() >= n * ch);
+
+    for i in 0..n {
+        dst[i * ch] = (planes.l[i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        dst[i * ch + 1] = (planes.a[i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        dst[i * ch + 2] = (planes.b[i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+    }
+
+    if ch == 4 {
+        for i in 0..n {
+            let a = planes.alpha.as_ref().map_or(1.0, |alpha| alpha[i]);
+            dst[i * ch + 3] = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

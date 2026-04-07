@@ -19,6 +19,10 @@ impl Filter for Invert {
         ChannelAccess::L_AND_CHROMA
     }
 
+    fn plane_semantics(&self) -> crate::filter::PlaneSemantics {
+        crate::filter::PlaneSemantics::Any
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         // L' = 1.0 - L = -1 * L + 1.0
         simd::scale_plane(&mut planes.l, -1.0);

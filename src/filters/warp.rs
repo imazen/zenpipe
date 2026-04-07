@@ -1149,6 +1149,249 @@ impl Describe for Warp {
     }
 }
 
+// ─── Polar warp functions ──────────────────────────────────────────
+
+/// Polar coordinate warp — non-linear distortions using polar coordinates.
+///
+/// These warps can't be expressed as 3×3 matrices. Each variant computes
+/// a custom (source_x, source_y) mapping per output pixel using polar
+/// coordinates relative to a center point.
+///
+/// Uses the same interpolation infrastructure as [`Warp`].
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum PolarWarp {
+    /// Swirl: rotation angle varies with distance from center.
+    /// Near center rotates by `strength` radians, decreasing linearly to zero at `radius`.
+    Swirl {
+        strength: f32,
+        radius: f32,
+        center_x: f32,
+        center_y: f32,
+    },
+    /// Implode/Explode: radial displacement.
+    /// factor > 1 = implode (push toward center), factor < 1 = explode (push away).
+    /// factor = 1 is identity.
+    Implode {
+        factor: f32,
+        center_x: f32,
+        center_y: f32,
+    },
+    /// Wave: sinusoidal displacement.
+    /// Displaces pixels by `amplitude * sin(position * frequency)`.
+    Wave {
+        amplitude: f32,
+        frequency: f32,
+        /// 0 = horizontal waves (y displacement), 1 = vertical (x displacement), 0.5 = both
+        direction: f32,
+    },
+    /// Barrel/Pincushion lens distortion correction.
+    /// `r' = r * (1 + k1*r² + k2*r⁴ + k3*r⁶)` where r is normalized distance from center.
+    /// k > 0 = barrel (outward), k < 0 = pincushion (inward).
+    Barrel {
+        k1: f32,
+        k2: f32,
+        k3: f32,
+        center_x: f32,
+        center_y: f32,
+    },
+}
+
+impl PolarWarp {
+    /// Create a swirl centered on the image with default radius.
+    pub fn swirl(strength: f32) -> Self {
+        Self::Swirl {
+            strength,
+            radius: 0.5,
+            center_x: 0.5,
+            center_y: 0.5,
+        }
+    }
+
+    /// Create an implode/explode centered on the image.
+    pub fn implode(factor: f32) -> Self {
+        Self::Implode {
+            factor,
+            center_x: 0.5,
+            center_y: 0.5,
+        }
+    }
+
+    /// Create a horizontal wave distortion.
+    pub fn wave(amplitude: f32, frequency: f32) -> Self {
+        Self::Wave {
+            amplitude,
+            frequency,
+            direction: 0.0,
+        }
+    }
+
+    /// Create a barrel distortion correction.
+    pub fn barrel(k1: f32) -> Self {
+        Self::Barrel {
+            k1,
+            k2: 0.0,
+            k3: 0.0,
+            center_x: 0.5,
+            center_y: 0.5,
+        }
+    }
+
+    /// Map output pixel (dx, dy) to source coordinates (sx, sy).
+    fn map_pixel(&self, dx: f32, dy: f32, w: f32, h: f32) -> (f32, f32) {
+        match *self {
+            Self::Swirl {
+                strength,
+                radius,
+                center_x,
+                center_y,
+            } => {
+                let cx = center_x * w;
+                let cy = center_y * h;
+                let px = dx - cx;
+                let py = dy - cy;
+                let dist = (px * px + py * py).sqrt();
+                let max_r = radius * w.min(h);
+                if dist >= max_r || dist < 1e-6 {
+                    return (dx, dy);
+                }
+                let angle = strength * (1.0 - dist / max_r);
+                let cos_a = angle.cos();
+                let sin_a = angle.sin();
+                let sx = cx + px * cos_a - py * sin_a;
+                let sy = cy + px * sin_a + py * cos_a;
+                (sx, sy)
+            }
+            Self::Implode {
+                factor,
+                center_x,
+                center_y,
+            } => {
+                let cx = center_x * w;
+                let cy = center_y * h;
+                let px = dx - cx;
+                let py = dy - cy;
+                let dist = (px * px + py * py).sqrt();
+                if dist < 1e-6 {
+                    return (dx, dy);
+                }
+                let max_r = (w * w + h * h).sqrt() * 0.5;
+                let r_norm = dist / max_r;
+                let r_new = r_norm.powf(factor);
+                let scale = r_new / r_norm;
+                (cx + px * scale, cy + py * scale)
+            }
+            Self::Wave {
+                amplitude,
+                frequency,
+                direction,
+            } => {
+                let h_amp = amplitude * (1.0 - direction);
+                let v_amp = amplitude * direction;
+                let sx = dx + v_amp * (dy * frequency * core::f32::consts::TAU / h).sin();
+                let sy = dy + h_amp * (dx * frequency * core::f32::consts::TAU / w).sin();
+                (sx, sy)
+            }
+            Self::Barrel {
+                k1,
+                k2,
+                k3,
+                center_x,
+                center_y,
+            } => {
+                let cx = center_x * w;
+                let cy = center_y * h;
+                let px = (dx - cx) / (w * 0.5);
+                let py = (dy - cy) / (h * 0.5);
+                let r2 = px * px + py * py;
+                let r4 = r2 * r2;
+                let r6 = r4 * r2;
+                let distortion = 1.0 + k1 * r2 + k2 * r4 + k3 * r6;
+                let sx = cx + px * distortion * (w * 0.5);
+                let sy = cy + py * distortion * (h * 0.5);
+                (sx, sy)
+            }
+        }
+    }
+}
+
+impl Filter for PolarWarp {
+    fn channel_access(&self) -> ChannelAccess {
+        ChannelAccess::ALL
+    }
+
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
+    fn neighborhood_radius(&self, width: u32, height: u32) -> u32 {
+        width.max(height)
+    }
+
+    fn resize_phase(&self) -> crate::filter::ResizePhase {
+        crate::filter::ResizePhase::PostResize
+    }
+
+    fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+        let w = planes.width;
+        let h = planes.height;
+        let n = (w as usize) * (h as usize);
+        let wf = w as f32;
+        let hf = h as f32;
+
+        let mut dst_l = ctx.take_f32(n);
+        let mut dst_a = ctx.take_f32(n);
+        let mut dst_b = ctx.take_f32(n);
+        let has_alpha = planes.alpha.is_some();
+        let mut dst_alpha = if has_alpha {
+            ctx.take_f32(n)
+        } else {
+            Vec::new()
+        };
+
+        for dy in 0..h {
+            for dx in 0..w {
+                let (sx, sy) = self.map_pixel(dx as f32, dy as f32, wf, hf);
+                let out_idx = (dy as usize) * (w as usize) + (dx as usize);
+
+                sample_all_planes(
+                    &planes.l,
+                    &planes.a,
+                    &planes.b,
+                    planes.alpha.as_deref(),
+                    w,
+                    h,
+                    sx,
+                    sy,
+                    WarpBackground::Clamp,
+                    WarpInterpolation::Bicubic,
+                    &mut dst_l,
+                    &mut dst_a,
+                    &mut dst_b,
+                    if has_alpha {
+                        Some(&mut dst_alpha)
+                    } else {
+                        None
+                    },
+                    out_idx,
+                );
+            }
+        }
+
+        let old_l = core::mem::replace(&mut planes.l, dst_l);
+        let old_a = core::mem::replace(&mut planes.a, dst_a);
+        let old_b = core::mem::replace(&mut planes.b, dst_b);
+        ctx.return_f32(old_l);
+        ctx.return_f32(old_a);
+        ctx.return_f32(old_b);
+
+        if has_alpha {
+            let old_alpha = core::mem::replace(planes.alpha.as_mut().unwrap(), dst_alpha);
+            ctx.return_f32(old_alpha);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1561,6 +1804,110 @@ mod tests {
         assert!(
             max_err < 0.02,
             "0.1° rotation should barely change interior: max_err={max_err}"
+        );
+    }
+
+    // ─── Polar warp tests ──────────────────────────────────────────
+
+    #[test]
+    fn swirl_zero_strength_is_identity() {
+        let mut planes = OklabPlanes::new(32, 32);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 / 1024.0).clamp(0.0, 1.0);
+        }
+        let original = planes.l.clone();
+        PolarWarp::swirl(0.0).apply(&mut planes, &mut FilterContext::new());
+        for (i, (&got, &expected)) in planes.l.iter().zip(original.iter()).enumerate() {
+            assert!(
+                (got - expected).abs() < 0.01,
+                "zero swirl pixel {i}: expected {expected}, got {got}"
+            );
+        }
+    }
+
+    #[test]
+    fn swirl_distorts_center() {
+        let mut planes = OklabPlanes::new(64, 64);
+        // Horizontal gradient
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = planes.index(x, y);
+                planes.l[i] = x as f32 / 63.0;
+            }
+        }
+        let original = planes.l.clone();
+        PolarWarp::swirl(3.0).apply(&mut planes, &mut FilterContext::new());
+        // Center region should be significantly different
+        let mut diff = 0.0f32;
+        for y in 24..40u32 {
+            for x in 24..40u32 {
+                let i = planes.index(x, y);
+                diff += (planes.l[i] - original[i]).abs();
+            }
+        }
+        assert!(
+            diff > 5.0,
+            "swirl should distort center: diff={diff}"
+        );
+    }
+
+    #[test]
+    fn implode_one_is_near_identity() {
+        let mut planes = OklabPlanes::new(32, 32);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 / 1024.0).clamp(0.0, 1.0);
+        }
+        let original = planes.l.clone();
+        PolarWarp::implode(1.0).apply(&mut planes, &mut FilterContext::new());
+        let mut max_err = 0.0f32;
+        for (&got, &expected) in planes.l.iter().zip(original.iter()) {
+            max_err = max_err.max((got - expected).abs());
+        }
+        assert!(
+            max_err < 0.05,
+            "factor=1 should be near-identity: max_err={max_err}"
+        );
+    }
+
+    #[test]
+    fn wave_distorts_image() {
+        let mut planes = OklabPlanes::new(64, 64);
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let i = planes.index(x, y);
+                planes.l[i] = if x < 32 { 0.2 } else { 0.8 };
+            }
+        }
+        let original = planes.l.clone();
+        // direction=1.0 → horizontal displacement, which shifts vertical stripes
+        let warp = PolarWarp::Wave {
+            amplitude: 8.0,
+            frequency: 3.0,
+            direction: 1.0,
+        };
+        warp.apply(&mut planes, &mut FilterContext::new());
+        let mut diff = 0.0f32;
+        for (&a, &b) in planes.l.iter().zip(original.iter()) {
+            diff += (a - b).abs();
+        }
+        assert!(diff > 10.0, "wave should distort: diff={diff}");
+    }
+
+    #[test]
+    fn barrel_zero_is_identity() {
+        let mut planes = OklabPlanes::new(32, 32);
+        for (i, v) in planes.l.iter_mut().enumerate() {
+            *v = (i as f32 / 1024.0).clamp(0.0, 1.0);
+        }
+        let original = planes.l.clone();
+        PolarWarp::barrel(0.0).apply(&mut planes, &mut FilterContext::new());
+        let mut max_err = 0.0f32;
+        for (&got, &expected) in planes.l.iter().zip(original.iter()) {
+            max_err = max_err.max((got - expected).abs());
+        }
+        assert!(
+            max_err < 0.02,
+            "barrel k1=0 should be near-identity: max_err={max_err}"
         );
     }
 }
