@@ -1,102 +1,114 @@
-# Pipeline Guidance: Validation, Reordering, and Coalescing
+# Pipeline Guidance: Optimization, Validation, and Correction
 
-## Problem
+## Principle
 
-Users build filter pipelines from UI interactions, URL parameters, or node graphs. They make mistakes: wrong filter order, incompatible combinations, redundant operations, wrong working space. The pipeline should handle these gracefully at configurable levels of strictness.
+If the output is identical, optimize unconditionally. No flags, no configuration, no "levels." Identity elimination, affine coalescing, and commutative reordering are **free** — the pixels don't change.
 
-## Levels of Automatic Correction
+Validation (wrong order, incompatible combinations) is separate. That's about catching user errors, not optimization.
 
-### Level 0: Silent (current default for `Pipeline::push`)
+## Unconditional Optimizations (same output guaranteed)
 
-No validation. Filters run in push order. Wrong combinations produce bad output silently. Only `PlaneSemantics` is checked (panic on mismatch).
+### 1. Identity Elimination
 
-**Who wants this:** Internal code that knows what it's doing. Benchmark harnesses. Tests.
+Filters at their identity value produce no change. Remove them before processing.
 
-### Level 1: Warn — Report Issues, Don't Fix
+Add `fn is_identity(&self) -> bool` to the `Filter` trait (default `false`). `Pipeline::optimize()` strips identity filters. This skips the function call, enables better fusion, and simplifies the pipeline for debugging.
 
-What `validate_pipeline()` does today. Returns `Vec<CompatIssue>` with severity (error/warning/info). Caller decides what to do.
+| Filter | Identity condition |
+|--------|-------------------|
+| Exposure | `stops == 0.0` |
+| Contrast | `amount == 0.0` |
+| Saturation | `factor == 1.0` |
+| Vibrance | `amount == 0.0` |
+| Temperature | `shift == 0.0` |
+| Tint | `shift == 0.0` |
+| Blur | `sigma < 0.01` |
+| Sharpen | `amount == 0.0` |
+| Vignette | `amount == 0.0` |
+| Grain | `amount == 0.0` |
+| LinearContrast | `amount == 0.0` |
+| LinearBrightness | `offset == 0.0` |
+| HslSaturate | `factor == 1.0` |
 
-**Catches:**
-- Exclusive group violations (two tone mappers)
-- Wrong ordering (sharpen before denoise)
-- Range conflicts (high saturation + high gamut expansion)
-- PlaneSemantics / WorkingSpace mismatch
+Most filters already check this internally and early-return. The trait method lets the pipeline skip them entirely — no dispatch, no plane access.
 
-**Who wants this:** Editor UIs that show warnings. CLI tools that print diagnostics. Developers debugging unexpected output.
+### 2. Affine Coalescing
 
-**What to add:**
-- WorkingSpace validation (Oklab filter in sRGB pipeline → error)
-- Redundant filter detection (two Contrast filters → warning)
-- Identity filter detection (Exposure with stops=0 → info, remove it)
+Any chain of per-channel affine transforms (scale + offset) collapses to a single transform with identical output.
 
-### Level 2: Reorder — Fix Order, Report What Changed
-
-Automatically reorder filters to satisfy `ORDER_CONSTRAINTS`. Return the reordering actions taken so the UI can reflect them.
-
-**Rules (from `filter_compat.rs`):**
 ```
-denoise → sharpen (noise reduction before detail enhancement)
-denoise → clarity, texture
-median → sharpen, clarity
-recovery → highlights/shadows (fix clipping before fine-tuning)
-tone map → contrast (scene-referred before display-referred)
+LinearContrast{0.3} then LinearBrightness{0.1}:
+  pass 1: y = 1.3 * x - 0.15
+  pass 2: z = y + 0.1
+  combined: z = 1.3 * x - 0.05  (one pass, same pixels)
 ```
 
-**Algorithm:** Topological sort with ORDER_CONSTRAINTS as edges. Preserve relative order of unconstrained filters (stable sort). If a cycle exists (shouldn't with current constraints), report error instead of reordering.
+More generally: any sequence of `output = a*input + b` operations composes as `(a₁*a₂, a₁*b₂ + b₁)`. This works for sRGB contrast + brightness chains.
 
-**What to add:**
-- ResizePhase grouping: auto-split into pre-resize and post-resize groups
-- Neighborhood filters grouped to minimize scatter/gather boundaries (all per-pixel first, then neighborhood, to enable strip processing for the per-pixel group)
+For Oklab: `FusedAdjust` already coalesces Exposure + Contrast + Saturation + Temperature + Tint + HighlightsShadows + Dehaze + BlackPoint + WhitePoint into one SIMD pass. If the pipeline contains any subset of these as separate filters, replace with a single `FusedAdjust`.
 
-**Who wants this:** Drag-and-drop UIs where users rearrange filters freely. Node graph compilers. URL/KV parameter parsing where order isn't specified.
+### 3. Duplicate Collapse
 
-### Level 3: Coalesce — Fuse Compatible Operations
+Two consecutive same-type filters with composable parameters:
 
-Detect sequences of per-pixel operations that can be fused into a single pass, reducing memory bandwidth.
+- `Saturation{1.5}` → `Saturation{1.5}` = `Saturation{2.25}` (multiply factors)
+- `Exposure{0.5}` → `Exposure{0.3}` = `Exposure{0.8}` (add stops)
+- `LinearBrightness{0.1}` → `LinearBrightness{0.05}` = `LinearBrightness{0.15}` (add offsets)
+- `HueRotate{30}` → `HueRotate{15}` = `HueRotate{45}` (add angles)
 
-**Fusible operations (Oklab):**
-All parameters of `FusedAdjust`: exposure, contrast, highlights, shadows, vibrance, saturation, temperature, tint, dehaze, black_point, white_point. These are currently 11 separate filters but can run as one SIMD pass.
+### 4. Per-Pixel / Neighborhood Partitioning
 
-**Fusible operations (sRGB):**
-`LinearContrast` + `LinearBrightness` → single `output = factor * input + offset` pass. Any sequence of per-channel affine transforms collapses to one.
+Group per-pixel filters together, separate from neighborhood filters. This enables strip processing for the per-pixel group (L3-cache-friendly) while neighborhood filters get full-frame access.
 
-**Non-fusible (must stay separate):**
-- Neighborhood filters (blur, sharpen, convolution) — need scratch buffers
-- Filters that read analysis results (auto-exposure) — depend on prior filter output
-- Filters with different PlaneSemantics — can't cross working space boundaries
+```
+Before: [Exposure, Blur, Contrast, Sharpen, Saturation]
+After:  [Exposure, Contrast, Saturation] → strip  then  [Blur, Sharpen] → full-frame
+```
 
-**Algorithm:**
-1. Partition pipeline into runs of consecutive per-pixel filters with same PlaneSemantics
-2. For each Oklab run: extract FusedAdjust parameters, replace run with single FusedAdjust
-3. For each sRGB run: collapse affine chains (contrast + brightness → single scale+offset)
-4. Leave neighborhood filters and analysis-dependent filters in place
+The reordering is safe only when the per-pixel filters commute (don't depend on each other's output in a way that changes with reordering). For independent per-channel operations (exposure on L, saturation on a/b), reordering is always safe. For operations that both touch L (exposure + contrast), order matters — don't reorder.
 
-**Cost model:**
-- Per-pixel filter: ~1 ns/pixel (memory-bound, one pass over L/a/b)
-- Neighborhood filter: ~10-100 ns/pixel (compute-bound, multi-pass)
-- Scatter/gather: ~2 ns/pixel
-- Fusing N per-pixel filters: saves (N-1) × 1 ns/pixel in memory passes
+Rule: only reorder across the per-pixel/neighborhood boundary when `channel_access()` sets don't overlap.
 
-Coalescing 5 per-pixel filters into 1 FusedAdjust saves ~4 ns/pixel. On a 4K image (~8M pixels), that's ~32ms. Worth it for real-time editing, marginal for batch processing.
+## Validation (user error detection)
 
-**Who wants this:** Real-time preview pipelines. WASM demo. Mobile.
+Separate from optimization. These catch mistakes that would produce wrong output.
 
-### Level 4: Working Space Optimization (future)
+### Push-time (current)
 
-For mixed-space graphs (zennode), automatically insert color space conversions and batch same-space operations.
+- `PlaneSemantics` mismatch → panic. Oklab filter in sRGB pipeline is always a bug.
 
-**Algorithm:**
-1. Walk the filter graph
-2. Group consecutive filters with compatible PlaneSemantics
-3. At boundaries, insert `ColorSpaceConvert` nodes
-4. Minimize total conversions (NP-hard in general, but greedy works for linear pipelines)
+### On-demand (`validate_pipeline()`)
 
-**Cost model:**
-- Oklab scatter/gather: ~4 ns/pixel total
-- sRGB passthrough: ~1 ns/pixel total
-- Each space transition costs one scatter+gather
+Already implemented in `filter_compat.rs`:
+- Exclusive group violations (two tone mappers → error)
+- Wrong ordering (sharpen before denoise → error)
+- Range conflicts (high saturation + high gamut expansion → warning)
+- Sharpen without AdaptiveSharpen → info
 
-**Who wants this:** Node graph editors where users mix Oklab and sRGB filters. Automated pipelines that compose operations from different sources.
+### What to add
+
+- WorkingSpace compat check (already done via PlaneSemantics at push time)
+- Redundant filter warning (two Contrast filters — intentional or mistake?)
+- Resize phase validation (PostResize filter before resize operation)
+
+## Correction (user error fixing)
+
+These change filter order, which may change output. The caller must opt in.
+
+### Constraint-based reordering
+
+Topological sort using `ORDER_CONSTRAINTS`. Stable sort preserves relative order of unconstrained filters. Returns the changes made so the UI can reflect them.
+
+```
+Input:  [Sharpen, NoiseReduction, Contrast]
+Output: [NoiseReduction, Sharpen, Contrast]  (denoise moved before sharpen)
+```
+
+**Only when requested** — `Pipeline::reorder()` method, not automatic. The caller (UI, graph compiler) decides whether to apply.
+
+### ResizePhase auto-split
+
+`Pipeline::split_at_resize()` already exists. Partitions into pre-resize and post-resize groups based on `ResizePhase`. This is safe — the split point is well-defined.
 
 ---
 
