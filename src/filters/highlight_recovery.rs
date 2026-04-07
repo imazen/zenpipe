@@ -254,10 +254,18 @@ mod tests {
         // more midtone pixels into the compression zone). Count total
         // luminance change as a proxy: more affected pixels = bigger sum.
         let original = make();
-        let delta_weak: f32 = original.l.iter().zip(planes_weak.l.iter())
-            .map(|(&a, &b)| (a - b).abs()).sum();
-        let delta_strong: f32 = original.l.iter().zip(planes_strong.l.iter())
-            .map(|(&a, &b)| (a - b).abs()).sum();
+        let delta_weak: f32 = original
+            .l
+            .iter()
+            .zip(planes_weak.l.iter())
+            .map(|(&a, &b)| (a - b).abs())
+            .sum();
+        let delta_strong: f32 = original
+            .l
+            .iter()
+            .zip(planes_strong.l.iter())
+            .map(|(&a, &b)| (a - b).abs())
+            .sum();
         assert!(
             delta_strong > delta_weak,
             "stronger recovery should change more total luminance: weak={delta_weak} strong={delta_strong}"

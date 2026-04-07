@@ -223,7 +223,11 @@ mod tests {
         }
         let l_orig = planes.l.clone();
         let a_orig = planes.a.clone();
-        Dehaze { strength: 0.0, auto_strength: false }.apply(&mut planes, &mut FilterContext::new());
+        Dehaze {
+            strength: 0.0,
+            auto_strength: false,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, l_orig);
         assert_eq!(planes.a, a_orig);
     }
@@ -239,7 +243,11 @@ mod tests {
             *v = 0.02;
         }
         let l_std_before = std_dev(&planes.l);
-        Dehaze { strength: 0.8, auto_strength: false }.apply(&mut planes, &mut FilterContext::new());
+        Dehaze {
+            strength: 0.8,
+            auto_strength: false,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         let l_std_after = std_dev(&planes.l);
         assert!(
             l_std_after > l_std_before,
@@ -260,7 +268,11 @@ mod tests {
             *v = -0.02;
         }
         let a_orig = planes.a.clone();
-        Dehaze { strength: 1.0, auto_strength: false }.apply(&mut planes, &mut FilterContext::new());
+        Dehaze {
+            strength: 1.0,
+            auto_strength: false,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         // Chroma should be boosted (absolute values increase)
         let a_sum_before: f32 = a_orig.iter().map(|v| v.abs()).sum();
         let a_sum_after: f32 = planes.a.iter().map(|v| v.abs()).sum();
@@ -276,7 +288,11 @@ mod tests {
         for v in &mut planes.l {
             *v = 0.1; // dark pixel in hazy scene
         }
-        Dehaze { strength: 1.0, auto_strength: false }.apply(&mut planes, &mut FilterContext::new());
+        Dehaze {
+            strength: 1.0,
+            auto_strength: false,
+        }
+        .apply(&mut planes, &mut FilterContext::new());
         for v in &planes.l {
             assert!(*v >= 0.0, "L should not go negative: {v}");
         }

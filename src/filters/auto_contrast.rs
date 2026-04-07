@@ -157,8 +157,12 @@ mod tests {
         }
         let original = planes.l.clone();
         AutoContrast { strength: 1.0 }.apply(&mut planes, &mut FilterContext::new());
-        let max_delta: f32 = planes.l.iter().zip(original.iter())
-            .map(|(&a, &b)| (a - b).abs()).fold(0.0, f32::max);
+        let max_delta: f32 = planes
+            .l
+            .iter()
+            .zip(original.iter())
+            .map(|(&a, &b)| (a - b).abs())
+            .fold(0.0, f32::max);
         assert!(
             max_delta < 0.01,
             "well-balanced image should barely change: max_delta={max_delta}"

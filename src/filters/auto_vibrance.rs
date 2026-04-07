@@ -33,24 +33,24 @@ impl Default for AutoVibrance {
 const NUM_SECTORS: usize = 6;
 /// Sector boundaries in radians. Sectors wrap around at ±π.
 const SECTOR_BOUNDS: [f32; 7] = [
-    -core::f32::consts::PI,     // -180° start
-    -1.745,                      // -100° (cool/purple boundary)
-    -0.873,                      // -50°  (purple/magenta boundary)
-    0.0,                         // 0°    (magenta/warm boundary)
-    1.047,                       // 60°   (warm/yellow-green boundary)
-    2.094,                       // 120°  (yellow-green/green-cyan boundary)
-    core::f32::consts::PI,       // 180°  (green-cyan/cool boundary = wrap)
+    -core::f32::consts::PI, // -180° start
+    -1.745,                 // -100° (cool/purple boundary)
+    -0.873,                 // -50°  (purple/magenta boundary)
+    0.0,                    // 0°    (magenta/warm boundary)
+    1.047,                  // 60°   (warm/yellow-green boundary)
+    2.094,                  // 120°  (yellow-green/green-cyan boundary)
+    core::f32::consts::PI,  // 180°  (green-cyan/cool boundary = wrap)
 ];
 
 /// Target chroma per sector. These represent "good" saturation for typical photos.
 /// Sectors below these get boosted; sectors at or above are left alone.
 const SECTOR_TARGETS: [f32; NUM_SECTORS] = [
-    0.06,  // cool (sky) — modest target, sky looks good without heavy saturation
-    0.04,  // purple — low target, purple is rare and easily oversaturated
-    0.07,  // magenta-red — skin often in this range, moderate target
-    0.08,  // warm (skin/earth) — slightly higher, warm colors benefit from saturation
-    0.06,  // yellow-green — foliage, moderate
-    0.05,  // green-cyan — moderate
+    0.06, // cool (sky) — modest target, sky looks good without heavy saturation
+    0.04, // purple — low target, purple is rare and easily oversaturated
+    0.07, // magenta-red — skin often in this range, moderate target
+    0.08, // warm (skin/earth) — slightly higher, warm colors benefit from saturation
+    0.06, // yellow-green — foliage, moderate
+    0.05, // green-cyan — moderate
 ];
 
 fn hue_sector(a: f32, b: f32) -> usize {
@@ -191,8 +191,12 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a { *v = 0.05; }
-        for v in &mut planes.b { *v = 0.03; }
+        for v in &mut planes.a {
+            *v = 0.05;
+        }
+        for v in &mut planes.b {
+            *v = 0.03;
+        }
         let orig_a = planes.a.clone();
         AutoVibrance { strength: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, orig_a);
@@ -201,20 +205,30 @@ mod tests {
     #[test]
     fn boosts_muted_colors() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l { *v = 0.5; }
+        for v in &mut planes.l {
+            *v = 0.5;
+        }
         // Muted warm colors (low chroma in warm sector)
         for (i, (a, b)) in planes.a.iter_mut().zip(planes.b.iter_mut()).enumerate() {
             let t = i as f32 / 99.0;
             *a = 0.01 + t * 0.02; // small positive a
-            *b = 0.01;             // small positive b = warm hue
+            *b = 0.01; // small positive b = warm hue
         }
-        let chroma_before: f32 = planes.a.iter().zip(planes.b.iter())
+        let chroma_before: f32 = planes
+            .a
+            .iter()
+            .zip(planes.b.iter())
             .map(|(&a, &b)| (a * a + b * b).sqrt())
-            .sum::<f32>() / 100.0;
+            .sum::<f32>()
+            / 100.0;
         AutoVibrance { strength: 1.0 }.apply(&mut planes, &mut FilterContext::new());
-        let chroma_after: f32 = planes.a.iter().zip(planes.b.iter())
+        let chroma_after: f32 = planes
+            .a
+            .iter()
+            .zip(planes.b.iter())
             .map(|(&a, &b)| (a * a + b * b).sqrt())
-            .sum::<f32>() / 100.0;
+            .sum::<f32>()
+            / 100.0;
         assert!(
             chroma_after > chroma_before * 1.05,
             "muted colors should be boosted: {chroma_before} -> {chroma_after}"

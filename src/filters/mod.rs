@@ -5,10 +5,10 @@ mod auto_contrast;
 mod auto_exposure;
 mod auto_levels;
 mod auto_tone;
-mod auto_vibrance;
-mod auto_white_balance;
 #[cfg(feature = "experimental")]
 mod auto_tune;
+mod auto_vibrance;
+mod auto_white_balance;
 mod basecurve;
 mod bilateral;
 mod black_point;
@@ -82,13 +82,13 @@ pub use auto_contrast::AutoContrast;
 pub use auto_exposure::AutoExposure;
 pub use auto_levels::AutoLevels;
 pub use auto_tone::AutoTone;
-pub use auto_vibrance::AutoVibrance;
-pub use auto_white_balance::AutoWhiteBalance;
 #[cfg(feature = "experimental")]
 pub use auto_tune::{
     CLUSTER_COUNT, ClusterModel, ImageFeatures, LINEAR_MODEL_INPUTS, LINEAR_MODEL_OUTPUTS,
     LinearModel, TunedParams, rule_based_tune,
 };
+pub use auto_vibrance::AutoVibrance;
+pub use auto_white_balance::AutoWhiteBalance;
 pub use basecurve::{BasecurvePreset, BasecurveToneMap, NEUTRAL_CURVE, find_basecurve};
 pub use bilateral::Bilateral;
 pub use black_point::BlackPoint;
