@@ -144,4 +144,4 @@ required-features = ["zennode", "std"]
 
 [package.metadata.superwork.ci]
 strategy = "strip_path"
-delete = ["imageflow_types", "imageflow_riapi"]
+delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]
