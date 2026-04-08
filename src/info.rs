@@ -271,15 +271,11 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
 
         // JPEG 2000: Custom format from zenjp2
         #[cfg(feature = "jp2-decode")]
-        ImageFormat::Jp2 => {
-            crate::codecs::jp2::probe(data)?
-        }
+        ImageFormat::Jp2 => crate::codecs::jp2::probe(data)?,
 
         // SVG/SVGZ: Custom format from zensvg
         #[cfg(feature = "svg")]
-        ImageFormat::Custom(def) if def.name == "svg" => {
-            crate::codecs::svg::probe(data)?
-        }
+        ImageFormat::Custom(def) if def.name == "svg" => crate::codecs::svg::probe(data)?,
 
         _ => return Err(at!(CodecError::UnsupportedFormat(format))),
     };

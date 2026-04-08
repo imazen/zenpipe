@@ -564,9 +564,7 @@ impl<'a> DecodeRequest<'a> {
 
             // JPEG 2000
             #[cfg(feature = "jp2-decode")]
-            ImageFormat::Jp2 => {
-                crate::codecs::jp2::decode(self.data, self.limits, self.stop, dp)
-            }
+            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.stop, dp),
 
             // SVG/SVGZ
             #[cfg(feature = "svg")]

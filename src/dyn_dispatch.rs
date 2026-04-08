@@ -136,9 +136,7 @@ fn build_dyn_decoder_config(
 
         // JPEG 2000: Custom format from zenjp2
         #[cfg(feature = "jp2-decode")]
-        ImageFormat::Jp2 => {
-            Ok(Box::new(zenjp2::Jp2DecoderConfig::new()))
-        }
+        ImageFormat::Jp2 => Ok(Box::new(zenjp2::Jp2DecoderConfig::new())),
 
         // SVG/SVGZ: Custom format from zensvg
         #[cfg(feature = "svg")]
