@@ -720,6 +720,10 @@ impl EditorState {
 
         let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
 
+        // Geometry edits first
+        crate::pipeline::geometry_to_nodes(&self.geometry, self.metadata.as_ref(), &mut nodes);
+
+        // Then constrain to export size
         if max_dim > 0 && (self.source_width > max_dim || self.source_height > max_dim) {
             nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
                 w: Some(max_dim),
@@ -975,6 +979,10 @@ impl EditorState {
 
         let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
 
+        // Geometry edits first (orient → crop → rotate → flip → pad)
+        crate::pipeline::geometry_to_nodes(&self.geometry, self.metadata.as_ref(), &mut nodes);
+
+        // Then constrain to overview size
         nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
             w: Some(self.overview_max),
             h: Some(self.overview_max),
@@ -1026,10 +1034,13 @@ impl EditorState {
         let source = self.source_box()?;
         let adj = self.adjustments.to_pipeline_format(&self.schema);
 
-        let (crop_x, crop_y, crop_w, crop_h) = self.region.to_crop_pixels();
-
         let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
 
+        // Geometry edits first (orient → crop → rotate → flip → pad)
+        crate::pipeline::geometry_to_nodes(&self.geometry, self.metadata.as_ref(), &mut nodes);
+
+        // Then viewport crop (the detail region the user is looking at)
+        let (crop_x, crop_y, crop_w, crop_h) = self.region.to_crop_pixels();
         nodes.push(Box::new(zenpipe::zennode_defs::Crop {
             x: crop_x,
             y: crop_y,
@@ -1415,5 +1426,31 @@ mod tests {
         assert!(updates.iter().any(|u| matches!(u, ViewUpdate::GeometryChanged)));
         assert!(state.geometry.flip_h);
         assert!(!state.geometry.flip_v);
+    }
+
+    #[test]
+    fn geometry_flows_through_pipeline() {
+        // Verify that geometry edits actually affect the rendered output.
+        // A 200x100 image with flip_h + cardinal rotation 90 should produce
+        // a different pixel layout than without geometry.
+        let mut state = EditorState::new(200, 200);
+        state.init_from_rgba(solid_rgba(200, 100, 128, 128, 128), 200, 100);
+
+        // Render without geometry
+        let out_plain = state.render_overview().unwrap();
+        let plain_w = out_plain.width;
+        let plain_h = out_plain.height;
+
+        // Apply 90° rotation — should swap dimensions
+        state.geometry.rotation = crate::model::geometry::RotationMode::Cardinal { degrees: 90 };
+        let out_rotated = state.render_overview().unwrap();
+
+        // After 90° rotation of 200x100, the image is 100x200.
+        // Constrained to 200x200, it stays 100x200.
+        assert_ne!(
+            (plain_w, plain_h),
+            (out_rotated.width, out_rotated.height),
+            "90° rotation should change output dimensions"
+        );
     }
 }

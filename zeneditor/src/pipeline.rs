@@ -17,6 +17,110 @@ pub struct RenderOutput {
     pub height: u32,
 }
 
+/// Emit pipeline nodes from GeometryModel state.
+///
+/// Translates the editor's geometry representation to zenpipe node instances.
+/// Order: orient → crop → rotate → flip → pad. This matches the pipeline
+/// stage order in SPEC.md §11.1.
+#[cfg(feature = "std")]
+pub(crate) fn geometry_to_nodes(
+    geo: &crate::model::geometry::GeometryModel,
+    metadata: Option<&zencodec::Metadata>,
+    nodes: &mut Vec<Box<dyn zennode::NodeInstance>>,
+) {
+    use crate::model::geometry::*;
+
+    // 1. Orientation (must be first — corrects EXIF rotation before crop applies)
+    match geo.orientation {
+        OrientMode::Auto => {
+            // Extract EXIF orientation from metadata (Orientation repr(u8) = EXIF 1-8)
+            let orient_val = metadata.map(|m| m.orientation as i32).unwrap_or(1);
+            if orient_val != 1 {
+                nodes.push(Box::new(zenpipe::zennode_defs::Orient {
+                    orientation: orient_val,
+                }));
+            }
+        }
+        OrientMode::Explicit { value } => {
+            if value != 1 {
+                nodes.push(Box::new(zenpipe::zennode_defs::Orient {
+                    orientation: value as i32,
+                }));
+            }
+        }
+        OrientMode::None => {}
+    }
+
+    // 2. Crop
+    match &geo.crop {
+        CropMode::None | CropMode::Auto => {}
+        CropMode::Pixels { x, y, w, h } => {
+            nodes.push(Box::new(zenpipe::zennode_defs::Crop {
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+            }));
+        }
+        CropMode::Percent { x, y, w, h } => {
+            nodes.push(Box::new(zenpipe::zennode_defs::CropPercent {
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+            }));
+        }
+    }
+
+    // Auto crop via CropWhitespace node (if/when available in pipeline)
+    if matches!(geo.crop, CropMode::Auto) {
+        // TODO: push CropWhitespace node when zenpipe exposes it as a zennode_def.
+        // Currently crop_whitespace exists as NodeOp but not as a Node derive struct.
+    }
+
+    // 3. Rotation
+    match geo.rotation {
+        RotationMode::None | RotationMode::AutoDeskew => {}
+        RotationMode::Cardinal { degrees } => match degrees {
+            90 => nodes.push(Box::new(zenpipe::zennode_defs::Rotate90 {})),
+            180 => nodes.push(Box::new(zenpipe::zennode_defs::Rotate180 {})),
+            270 => nodes.push(Box::new(zenpipe::zennode_defs::Rotate270 {})),
+            _ => {} // invalid cardinal, ignore
+        },
+        RotationMode::Arbitrary { degrees, .. } => {
+            if degrees.abs() > 0.001 {
+                // Arbitrary rotation goes through zenfilters.rotate (experimental).
+                // For now, we emit it via the adjustments path — the node registry
+                // handles "zenfilters.rotate" if the feature is enabled.
+                // TODO: emit RotateDef directly when zenfilters experimental is stable.
+                let _ = degrees; // acknowledged but not yet wired
+            }
+        }
+    }
+
+    // AutoDeskew: would need analysis pass to detect angle, then emit RotateDef.
+    // Deferred to when document analysis pipeline is integrated.
+
+    // 4. Flip
+    if geo.flip_h {
+        nodes.push(Box::new(zenpipe::zennode_defs::FlipH {}));
+    }
+    if geo.flip_v {
+        nodes.push(Box::new(zenpipe::zennode_defs::FlipV {}));
+    }
+
+    // 5. Padding
+    if !geo.padding.is_empty() {
+        nodes.push(Box::new(zenpipe::zennode_defs::ExpandCanvas {
+            left: geo.padding.left,
+            top: geo.padding.top,
+            right: geo.padding.right,
+            bottom: geo.padding.bottom,
+            color: geo.padding.bg_color.clone(),
+        }));
+    }
+}
+
 /// NodeConverter that bridges zenfilters zennode definitions to pipeline NodeOps.
 #[cfg(feature = "std")]
 pub(crate) struct FiltersConverter;
