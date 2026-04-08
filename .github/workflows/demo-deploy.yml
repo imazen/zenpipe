@@ -39,43 +39,24 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli --version 0.2.117
 
-      - name: Clone unpublished sibling repos
-        run: |
-          cd ..
-          # Unpublished crates (path deps kept as paths)
-          for repo in zennode zenfilters zencodecs; do
-            git clone --depth 1 "https://github.com/imazen/$repo.git" "$repo"
-          done
+      - uses: actions/checkout@v4
+        with:
+          repository: imazen/zen-workspace
+          path: zen-workspace
 
-      - name: Patch zenpipe Cargo.toml for CI
+      - name: Install cargo-superwork
+        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
+
+      - name: Transform deps for CI
         run: |
-          # Convert path deps to git URLs (same as main CI)
-          sed -i \
-            -e 's|path = "\.\./zenresize"|git = "https://github.com/imazen/zenresize"|g' \
-            -e 's|path = "\.\./zenblend"|git = "https://github.com/imazen/zenblend"|g' \
-            -e 's|path = "\.\./zenlayout"|git = "https://github.com/imazen/zenlayout"|g' \
-            -e 's|path = "\.\./linear-srgb"|git = "https://github.com/imazen/linear-srgb"|g' \
-            -e 's|path = "\.\./zencodec"|git = "https://github.com/imazen/zencodec"|g' \
-            -e 's|path = "\.\./whereat"|git = "https://github.com/imazen/whereat"|g' \
-            -e 's|path = "\.\./zenjpeg/zenjpeg"|git = "https://github.com/imazen/zenjpeg"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpng"|git = "https://github.com/imazen/zenpng"|g' \
-            -e 's|path = "\.\./zenwebp"|git = "https://github.com/imazen/zenwebp"|g' \
-            -e 's|path = "\.\./zengif"|git = "https://github.com/imazen/zengif"|g' \
-            -e 's|path = "\.\./zenavif"|git = "https://github.com/imazen/zenavif"|g' \
-            -e 's|path = "\.\./zenjxl"|git = "https://github.com/imazen/zenjxl"|g' \
-            -e 's|path = "\.\./zentiff"|git = "https://github.com/imazen/zentiff"|g' \
-            -e 's|path = "\.\./zenbitmaps"|git = "https://github.com/imazen/zenbitmaps"|g' \
-            -e 's|path = "\.\./zenquant"|git = "https://github.com/imazen/zenquant"|g' \
-            -e '/zensally/d' \
-            -e '/imageflow_types/d' \
-            -e '/imageflow_riapi/d' \
-            -e 's|, "dep:imageflow_types"||g' \
-            -e 's|, "dep:imageflow_riapi"||g' \
-            Cargo.toml
-          # Add patches for unpublished crates
-          printf '\n[patch.crates-io]\nultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }\nzennode = { git = "https://github.com/imazen/zennode" }\n' >> Cargo.toml
+          cargo superwork ci-prep --config zen-workspace/Superwork.toml
+          # Transitive path dep: zenjxl -> zenjxl-decoder (separate repo)
+          python3 -c "
+          with open('Cargo.toml') as f: t = f.read()
+          patch = 'zenjxl-decoder = { git = \"https://github.com/imazen/zenjxl-decoder\" }\nzenjxl-decoder-macros = { git = \"https://github.com/imazen/zenjxl-decoder\" }\nzenjxl-decoder-simd = { git = \"https://github.com/imazen/zenjxl-decoder\" }\n'
+          t = t.replace('[patch.crates-io]\n', '[patch.crates-io]\n' + patch, 1)
+          with open('Cargo.toml', 'w') as f: f.write(t)
+          "
           rm -f Cargo.lock
 
       - name: Build WASM (threaded, nightly)
