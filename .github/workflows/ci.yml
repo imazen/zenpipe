@@ -5,95 +5,13 @@ on:
     branches: [main, master]
   pull_request:
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all --check
-
-  clippy:
-    name: Clippy (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-          - macos-26-intel
-          - windows-latest
-          - windows-11-arm
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          repository: imazen/zen-workspace
-          path: zen-workspace
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-superwork
-        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
-      - name: Clone dependency repos
-        run: cargo superwork ci-clone --add-paths --recursive --config zen-workspace/Superwork.toml
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --no-default-features -- -D warnings
-
-  test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-          - macos-26-intel
-          - windows-latest
-          - windows-11-arm
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          repository: imazen/zen-workspace
-          path: zen-workspace
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-superwork
-        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
-      - name: Clone dependency repos
-        run: cargo superwork ci-clone --add-paths --recursive --config zen-workspace/Superwork.toml
-      - run: cargo test --all-targets
-      - run: cargo test --all-targets --no-default-features
-      - run: cargo test --features zennode
-      - run: cargo test --features zennode,json-schema
-
-  msrv:
-    name: MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          repository: imazen/zen-workspace
-          path: zen-workspace
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-superwork
-        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
-      - name: Clone dependency repos
-        run: cargo superwork ci-clone --add-paths --recursive --config zen-workspace/Superwork.toml
-      - name: Check MSRV
-        run: cargo hack check --rust-version
+  rust:
+    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
+    with:
+      clippy_extra_runs: |
+        cargo clippy --all-targets --no-default-features -- -D warnings
+      test_extra_runs: |
+        cargo test --all-targets --no-default-features
+        cargo test --features zennode
+        cargo test --features zennode,json-schema
