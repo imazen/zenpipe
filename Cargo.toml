@@ -69,11 +69,11 @@ nodes-all = [
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", default-features = false, features = ["layout"] }
+zenresize = { path = "../zenresize", default-features = false, features = ["layout"] , version = "0.2.0" }
 # Image layout: constraint modes, orientation, smart crop
-zenlayout = { path = "../zenlayout", default-features = false, features = ["smart-crop"] }
+zenlayout = { path = "../zenlayout", default-features = false, features = ["smart-crop"] , version = "0.2.1" }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
-zenblend = { path = "../zenblend", default-features = false }
+zenblend = { path = "../zenblend", default-features = false , version = "0.1.2" }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
 zenpixels-convert = { version = "0.2.2", default-features = false }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
@@ -85,53 +85,53 @@ enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
 whereat = { version = "0.1.5", default-features = false }
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
-linear-srgb = { path = "../linear-srgb", default-features = false }
+linear-srgb = { path = "../linear-srgb", default-features = false , version = "0.6.7" }
 # f32 ↔ u8 reinterpretation
 bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation
 hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
-zenfilters = { path = "../zenfilters", optional = true }
+zenfilters = { path = "../zenfilters", optional = true , version = "0.1.0" }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
 moxcms = { version = "*", optional = true }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
-zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
+zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true , version = "0.1.1" }
 # Unified codec dispatch — node definitions for codec/quantize/quality-intent
-zencodecs = { path = "../zencodecs", default-features = false, optional = true }
+zencodecs = { path = "../zencodecs", default-features = false, optional = true , version = "0.1.0" }
 
 # ── Optional codec crates for node registry ──
 # Note: default-features enabled because zenjpeg's codec.rs unconditionally
 # references search::ExpertConfig which requires the `trellis` default feature.
-zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"], optional = true }
-zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true }
-zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec"], optional = true }
-zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true }
-zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true }
-zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true }
-zentiff = { path = "../zentiff", default-features = false, optional = true }
-zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true }
-zenquant = { path = "../zenquant", default-features = false, optional = true }
+zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"], optional = true , version = "0.8.2" }
+zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true , version = "0.1.2" }
+zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec"], optional = true , version = "0.4.2" }
+zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true , version = "0.7.1" }
+zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true , version = "0.1.3" }
+zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true , version = "0.1.1" }
+zentiff = { path = "../zentiff", default-features = false, optional = true , version = "0.1.0" }
+zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true , version = "0.1.3" }
+zenquant = { path = "../zenquant", default-features = false, optional = true , version = "0.1.2" }
 # JSON serialization (optional — for schema export)
 serde_json = { version = "1", optional = true }
 # Imageflow v2 compatibility (optional — for running legacy imageflow pipelines)
-imageflow_types = { path = "../../imageflow/imageflow_types", optional = true }
-imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true }
+imageflow_types = { path = "../../imageflow/imageflow_types", optional = true , version = "0.1.0" }
+imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true , version = "0.1.0" }
 # Face detection + saliency via zentract plugin (optional)
-zensally = { path = "../zensally/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true }
-zensally-zentract = { path = "../zensally/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true }
+zensally = { path = "../zensally/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true , version = "0.1.0" }
+zensally-zentract = { path = "../zensally/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true , version = "0.1.0" }
 
 [dev-dependencies]
 # Dev-deps enable extra features on the optional codec crates above.
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
-zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] }
-zengif = { path = "../zengif", features = ["zencodec", "quantizr"] }
-zennode = { path = "../zennode/zennode", features = ["derive"] }
+zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] , version = "0.8.2" }
+zengif = { path = "../zengif", features = ["zencodec", "quantizr"] , version = "0.7.1" }
+zennode = { path = "../zennode/zennode", features = ["derive"] , version = "0.1.1" }
 serde_json = "1"
 codec-corpus = "1"
 imgref = "1.12"
 rgb = { version = "0.8", features = ["as-bytes"] }
 zenbench = "0.1.3"
-zenbitmaps = { path = "../zenbitmaps", features = ["bmp"] }
+zenbitmaps = { path = "../zenbitmaps", features = ["bmp"] , version = "0.1.3" }
 
 [[example]]
 name = "bench_windowed"
@@ -143,5 +143,5 @@ harness = false
 required-features = ["zennode", "std"]
 
 [package.metadata.superwork.ci]
-strategy = "git_url"
-delete = ["imageflow_types", "imageflow_riapi"]
+strategy = "strip_path"
+delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]

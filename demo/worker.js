@@ -27,7 +27,7 @@ async function tryLoadWasm() {
     await mod.default(); // init WASM
 
     // Initialize rayon thread pool if available (requires SharedArrayBuffer + COOP/COEP)
-    if (typeof mod.initThreadPool === 'function' && typeof SharedArrayBuffer !== 'undefined') {
+    if (typeof mod.initThreadPool === 'function' && self.crossOriginIsolated) {
       try {
         const cores = navigator.hardwareConcurrency || 4;
         await mod.initThreadPool(Math.min(cores, 8));

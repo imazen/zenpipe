@@ -236,8 +236,8 @@ pub enum NodeOp {
     /// manual [`LayoutPlan`] construction.
     Constrain {
         mode: zenresize::ConstraintMode,
-        w: u32,
-        h: u32,
+        w: Option<u32>,
+        h: Option<u32>,
         /// Optional EXIF orientation (1-8) to apply during layout.
         orientation: Option<u8>,
         /// Resampling filter (default Robidoux if None).
@@ -713,7 +713,7 @@ impl PipelineGraph {
                 if let Some(exif) = orientation {
                     pipeline = pipeline.auto_orient(*exif);
                 }
-                pipeline = pipeline.constrain(zenresize::Constraint::new(*mode, *w, *h));
+                pipeline = pipeline.constrain(build_constraint(*mode, *w, *h));
                 let (ideal, request) = pipeline.plan().map_err(|e| {
                     PipeError::Op(alloc::format!("estimate layout plan failed: {e}"))
                 })?;
@@ -1327,7 +1327,7 @@ impl PipelineGraph {
                 }
 
                 // Build Constraint with gravity and canvas_color
-                let mut constraint = zenresize::Constraint::new(mode, w, h);
+                let mut constraint = build_constraint(mode, w, h);
                 if let Some((gx, gy)) = gravity {
                     constraint = constraint.gravity(zenresize::Gravity::Percentage(gx, gy));
                 }
@@ -1873,6 +1873,24 @@ fn ensure_format(
 // =============================================================================
 // Estimation helper
 // =============================================================================
+
+/// Build a `Constraint` from optional width/height.
+///
+/// Supports width-only (`--resize 800`) and height-only constraints,
+/// not just both-dimensions.
+fn build_constraint(
+    mode: zenresize::ConstraintMode,
+    w: Option<u32>,
+    h: Option<u32>,
+) -> zenresize::Constraint {
+    match (w, h) {
+        (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
+        (Some(w), None) => zenresize::Constraint::width_only(mode, w),
+        (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
+        // Both None = identity (no constraint). Use 0x0 which zenlayout treats as no-op.
+        (None, None) => zenresize::Constraint::new(mode, 0, 0),
+    }
+}
 
 /// Estimate memory for one strip buffer (16 rows at the given width and format).
 fn strip_mem(width: u32, fmt: PixelFormat) -> u64 {

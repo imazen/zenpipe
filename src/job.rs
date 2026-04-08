@@ -93,6 +93,123 @@ pub struct DecodeInfo {
     pub mime_type: String,
 }
 
+impl DecodeInfo {
+    /// Human-readable format name (e.g., "JPEG", "PNG", "WebP").
+    pub fn format_name(&self) -> &'static str {
+        match self.format {
+            zencodec::ImageFormat::Jpeg => "JPEG",
+            zencodec::ImageFormat::Png => "PNG",
+            zencodec::ImageFormat::WebP => "WebP",
+            zencodec::ImageFormat::Gif => "GIF",
+            zencodec::ImageFormat::Avif => "AVIF",
+            zencodec::ImageFormat::Jxl => "JPEG XL",
+            zencodec::ImageFormat::Heic => "HEIC",
+            zencodec::ImageFormat::Bmp => "BMP",
+            zencodec::ImageFormat::Tiff => "TIFF",
+            _ => "Unknown",
+        }
+    }
+
+    /// Bits per pixel (file size relative to pixel count).
+    pub fn bits_per_pixel(&self, file_size: usize) -> f64 {
+        let pixels = self.width as f64 * self.height as f64;
+        if pixels == 0.0 {
+            0.0
+        } else {
+            (file_size as f64 * 8.0) / pixels
+        }
+    }
+}
+
+/// Decoded pixel data from an input.
+#[derive(Clone, Debug)]
+pub struct DecodedPixels {
+    /// Raw pixel bytes (row-major, tightly packed).
+    pub data: Vec<u8>,
+    /// Image width.
+    pub width: u32,
+    /// Image height.
+    pub height: u32,
+    /// Bytes per pixel.
+    pub bytes_per_pixel: usize,
+}
+
+/// Result of comparing two images.
+#[derive(Clone, Debug)]
+pub struct CompareResult {
+    /// Peak signal-to-noise ratio in dB. `f64::INFINITY` if identical.
+    pub psnr: f64,
+    /// Width of image A.
+    pub width_a: u32,
+    /// Height of image A.
+    pub height_a: u32,
+    /// Width of image B.
+    pub width_b: u32,
+    /// Height of image B.
+    pub height_b: u32,
+    /// Whether dimensions differ.
+    pub dimensions_differ: bool,
+}
+
+/// Compare two images by decoding both and computing PSNR.
+///
+/// Both images are decoded to RGBA8. If dimensions differ, comparison
+/// uses the overlapping region and `dimensions_differ` is set.
+pub fn compare(a: &[u8], b: &[u8]) -> crate::PipeResult<CompareResult> {
+    let dec_a = decode_pixels_raw(a)?;
+    let dec_b = decode_pixels_raw(b)?;
+    let dimensions_differ = dec_a.width != dec_b.width || dec_a.height != dec_b.height;
+
+    let min_len = dec_a.data.len().min(dec_b.data.len());
+    let psnr = if min_len == 0 {
+        0.0
+    } else {
+        let mse: f64 = dec_a.data[..min_len]
+            .iter()
+            .zip(&dec_b.data[..min_len])
+            .map(|(&a, &b)| {
+                let diff = a as f64 - b as f64;
+                diff * diff
+            })
+            .sum::<f64>()
+            / min_len as f64;
+
+        if mse == 0.0 {
+            f64::INFINITY
+        } else {
+            10.0 * (255.0_f64 * 255.0 / mse).log10()
+        }
+    };
+
+    Ok(CompareResult {
+        psnr,
+        width_a: dec_a.width,
+        height_a: dec_a.height,
+        width_b: dec_b.width,
+        height_b: dec_b.height,
+        dimensions_differ,
+    })
+}
+
+/// Decode raw bytes to pixels (internal helper).
+fn decode_pixels_raw(data: &[u8]) -> crate::PipeResult<DecodedPixels> {
+    let decoded = at_crate!(zencodecs::DecodeRequest::new(data).decode_full_frame())
+        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+
+    let pixels = decoded.pixels();
+    let w = decoded.width();
+    let h = decoded.height();
+    let bpp = pixels.descriptor().bytes_per_pixel();
+    let pixel_data = pixels.as_strided_bytes().to_vec();
+
+    Ok(DecodedPixels {
+        data: pixel_data,
+        width: w,
+        height: h,
+        bytes_per_pixel: bpp,
+    })
+}
+
 /// Result of a completed image processing job.
 #[derive(Clone, Debug)]
 pub struct JobResult {
@@ -416,6 +533,97 @@ impl<'a> ImageJob<'a> {
     pub fn with_trace(mut self, config: &'a crate::trace::TraceConfig) -> Self {
         self.trace_config = Some(config);
         self
+    }
+
+    /// Set the output format from a file extension (e.g., "webp", "jpg", "png").
+    ///
+    /// Looks up the extension in the common format registry and sets
+    /// `CodecIntent::format` to `FormatChoice::Specific(...)`. Returns
+    /// the builder unchanged if the extension is not recognized.
+    pub fn with_output_extension(mut self, ext: &str) -> Self {
+        if let Some(fmt) = zencodec::ImageFormatRegistry::common().from_extension(ext) {
+            self.intent.format = Some(zencodecs::FormatChoice::Specific(fmt));
+        }
+        self
+    }
+
+    /// Set the output quality (0-100). Maps to the appropriate codec-native
+    /// quality via zencodecs calibration tables.
+    pub fn with_quality(mut self, quality: f32) -> Self {
+        self.intent.quality_fallback = Some(quality);
+        self
+    }
+
+    /// Enable lossless encoding (WebP, JXL, AVIF, PNG).
+    pub fn with_lossless(mut self, lossless: bool) -> Self {
+        self.intent.lossless = if lossless {
+            Some(zencodecs::BoolKeep::True)
+        } else {
+            None
+        };
+        self
+    }
+
+    /// Set a codec hint by key for all codecs (e.g., "effort", "speed").
+    ///
+    /// The key is inserted into every per-codec hint map. Use
+    /// `with_codec_hint_for(format_prefix, key, value)` for codec-specific hints.
+    pub fn with_codec_hint(mut self, key: &str, value: &str) -> Self {
+        let v = String::from(value);
+        self.intent.hints.jpeg.insert(String::from(key), v.clone());
+        self.intent.hints.png.insert(String::from(key), v.clone());
+        self.intent.hints.webp.insert(String::from(key), v.clone());
+        self.intent.hints.avif.insert(String::from(key), v.clone());
+        self.intent.hints.jxl.insert(String::from(key), v.clone());
+        self.intent.hints.gif.insert(String::from(key), v);
+        self
+    }
+
+    /// Set a codec hint for a specific format (e.g., "jpeg", "progressive", "true").
+    pub fn with_codec_hint_for(mut self, format: &str, key: &str, value: &str) -> Self {
+        let map = match format {
+            "jpeg" | "jpg" => &mut self.intent.hints.jpeg,
+            "png" => &mut self.intent.hints.png,
+            "webp" => &mut self.intent.hints.webp,
+            "avif" => &mut self.intent.hints.avif,
+            "jxl" => &mut self.intent.hints.jxl,
+            "gif" => &mut self.intent.hints.gif,
+            _ => return self,
+        };
+        map.insert(String::from(key), String::from(value));
+        self
+    }
+
+    /// Probe the primary input without decoding or encoding.
+    ///
+    /// Returns metadata (dimensions, format, alpha, animation, gain map).
+    /// No pixels are decoded — this is a fast header-only operation.
+    pub fn probe(&self) -> crate::PipeResult<DecodeInfo> {
+        let input_bytes = match self.io.get(&self.decode_io_id) {
+            Some(IoSlot::Input(data)) => data,
+            _ => {
+                return Err(at!(PipeError::Op(alloc::format!(
+                    "no input data for io_id {}",
+                    self.decode_io_id
+                ))));
+            }
+        };
+
+        let image_info = at_crate!(zencodecs::from_bytes_with_registry(
+            input_bytes,
+            &self.registry
+        ))
+        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+
+        Ok(DecodeInfo {
+            io_id: self.decode_io_id,
+            width: image_info.width,
+            height: image_info.height,
+            format: image_info.format,
+            has_alpha: image_info.has_alpha,
+            has_animation: image_info.is_animation(),
+            mime_type: image_info.format.mime_type().to_string(),
+        })
     }
 
     /// Execute the job: probe → decode → CMS → pipeline → encode.

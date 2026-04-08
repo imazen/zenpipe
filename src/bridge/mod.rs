@@ -31,6 +31,8 @@
 mod config;
 mod convert;
 mod dag;
+#[cfg(feature = "nodes-filters")]
+mod filters_converter;
 mod geometry;
 pub mod ordering;
 mod parse;
@@ -48,6 +50,8 @@ use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 // Re-export public types.
 pub use config::{DecodeConfig, EncodeConfig};
 pub use dag::{DagNode, build_pipeline_dag};
+#[cfg(feature = "nodes-filters")]
+pub use filters_converter::ZenFiltersConverter;
 pub use ordering::{OptimizationLevel, canonical_sort, optimize_node_order};
 
 // Sub-module items used by this module.

@@ -303,9 +303,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "cc"
-version = "1.2.58"
+version = "1.2.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1e928d4b69e3077709075a938a05ffbedfa53a84c8f766efbf8220bb1ff60e1"
+checksum = "b7a4d3ec6524d28a329fc53654bbadc9bdd7b0431f5d65f1a56ffb28a1ee5283"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -2296,6 +2296,7 @@ name = "wit-bindgen"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
+<<<<<<< HEAD
 dependencies = [
  "wit-bindgen-rust-macro",
 ]
@@ -2413,15 +2414,132 @@ name = "yuv"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d2b217e333a9afc47bc8cd1b17e93fefd52073d480c623aa82c05e507d828d7"
+=======
+>>>>>>> main
+dependencies = [
+ "wit-bindgen-rust-macro",
+]
+
+[[package]]
+name = "wit-bindgen-core"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea61de684c3ea68cb082b7a88508a8b27fcc8b797d738bfc99a82facf1d752dc"
+dependencies = [
+ "anyhow",
+ "heck",
+ "wit-parser",
+]
+
+[[package]]
+name = "wit-bindgen-rust"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7c566e0f4b284dd6561c786d9cb0142da491f46a9fbed79ea69cdad5db17f21"
+dependencies = [
+ "anyhow",
+ "heck",
+ "indexmap",
+ "prettyplease",
+ "syn",
+ "wasm-metadata",
+ "wit-bindgen-core",
+ "wit-component",
+]
+
+[[package]]
+name = "wit-bindgen-rust-macro"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c0f9bfd77e6a48eccf51359e3ae77140a7f50b1e2ebfe62422d8afdaffab17a"
+dependencies = [
+ "anyhow",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "wit-bindgen-core",
+ "wit-bindgen-rust",
+]
+
+[[package]]
+name = "wit-component"
+version = "0.244.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d66ea20e9553b30172b5e831994e35fbde2d165325bec84fc43dbf6f4eb9cb2"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "indexmap",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wasm-encoder",
+ "wasm-metadata",
+ "wasmparser",
+ "wit-parser",
+]
+
+[[package]]
+name = "wit-parser"
+version = "0.244.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecc8ac4bc1dc3381b7f59c34f00b67e18f910c2c0f50015669dde7def656a736"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap",
+ "log",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "unicode-xid",
+ "wasmparser",
+]
+
+[[package]]
+name = "writeable"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
+
+[[package]]
+name = "yoke"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abe8c5fda708d9ca3df187cae8bfb9ceda00dd96231bed36e445a1a48e66f9ca"
+dependencies = [
+ "stable_deref_trait",
+ "yoke-derive",
+ "zerofrom",
+]
+
+[[package]]
+name = "yoke-derive"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
+name = "yuv"
+version = "0.8.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d3a7e2cda3061858987ee2fb028f61695f5ee13f9490d75be6c3900df9a4ea"
 dependencies = [
  "num-traits",
 ]
 
 [[package]]
 name = "zenavif"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c8d8735d80cce9fdc8dfa0cd3f5e258d52b79aa031310d154106cd164830417"
+version = "0.1.3"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -2446,6 +2564,8 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527d0746cbfd04dab65c0fc6312bf64ef653e01d874d56f4039982491f5106a0"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -2564,12 +2684,16 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zenavif 0.1.2",
+ "zenavif 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenbitmaps 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zencodec",
  "zengif 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenjpeg 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+<<<<<<< HEAD
  "zenjxl 0.1.0",
+=======
+ "zenjxl 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+>>>>>>> main
  "zennode 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenpixels",
  "zenpixels-convert",
@@ -2698,9 +2822,27 @@ dependencies = [
 
 [[package]]
 name = "zenjxl"
+<<<<<<< HEAD
 version = "0.1.0"
+=======
+version = "0.1.1"
+dependencies = [
+ "enough",
+ "imgref",
+ "linear-srgb 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "zenjxl"
+version = "0.1.1"
+>>>>>>> main
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad5c2a2f6a1594ccfbd7eeea3008038217fcfe44ccb58d478b0fea20f7750092"
+checksum = "2b3bd1890c03fd334d21f4d89d3eee245e5fccb029ff1b03faed11a39c0e060f"
 dependencies = [
  "enough",
  "imgref",

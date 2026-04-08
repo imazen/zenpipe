@@ -331,8 +331,12 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Output as zip or individual downloads
 - Generate `<img srcset>` HTML snippet
 
-### 9.4 SVG Rendering (issue #1) ⬜
-- resvg/usvg as image source via zenpipe
+### 9.4 SVG Rendering ✅
+- `zensvg` crate: resvg + usvg for SVG/SVGZ rendering
+- Full text rendering with system fonts and custom font files
+- SVG optimization feature
+- Registered in zencodecs as a decoder
+- Can be used as text overlay source (render SVG → composite)
 
 ### 9.5 HEIC Decode ⬜
 - Pure Rust `heic` crate (on crates.io)
@@ -2320,6 +2324,10 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | **heic** | ✅ | ✅ SIMD | ❌ | ⬜ Future HEIC decode |
 | **zentiff** | ✅ | ✅ | ✅ | ⬜ Future TIFF support |
 | **zenbitmaps** | ✅ 0.1.3 | ✅ All | ✅ All | ⬜ BMP/QOI/TGA/PNM/HDR |
+| **zensvg** | ✅ | ✅ resvg+usvg | ❌ | ⬜ SVG/SVGZ render + text |
+| **zenjp2** | ✅ | ✅ hayro-jpeg2000 | ❌ | ⬜ JPEG 2000 decode |
+| **zenraw** | ✅ | ✅ rawloader | ❌ | ⬜ Camera RAW/DNG |
+| **zenpdf** | ✅ | ✅ hayro | ❌ | ⬜ PDF page render |
 
 ### 26.5 Codec Support Crates
 
@@ -2380,3 +2388,332 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | **imageflow-go** | Go bindings | Consumer |
 | **zensquoosh** | TypeScript/Preact codec frontend | Reference UI |
 | **zenimage-web** | Retired browser editor (reference for UX patterns) | Reference |
+
+---
+
+## 27. Instant Preview Architecture
+
+### 27.1 Core Principle
+Every visual change has TWO render paths:
+1. **Instant proxy** (<1ms): CSS transform or canvas drawImage from a cached low-res filtered image
+2. **Sharp render** (3-200ms): worker pipeline at target resolution
+
+The proxy is always visible during interaction. The sharp render replaces it when ready. The user never sees a blank, stale, or unfiltered frame.
+
+### 27.2 The Proxy Image
+A single **overview-sized** (512px max dim) fully-filtered image, kept up-to-date after every filter change. This is the source for ALL instant previews.
+
+```
+Filter slider changes → worker renders overview (512px) → proxy updates
+                                                          ↓
+Pan/zoom/rotate/flip/crop → CSS transform on proxy → instant
+                                                     ↓ (debounced)
+                                           worker renders detail → sharp replace
+```
+
+The proxy is the overview canvas content. It already has all current filters applied. Geometry operations (pan, zoom, rotate, flip, crop) can be approximated by CSS transforms on this proxy without any worker involvement.
+
+### 27.3 Per-Operation Proxy Strategy
+
+| Operation | Instant Proxy (<1ms) | Sharp Render (worker) |
+|-----------|---------------------|----------------------|
+| **Pan/drag** | `drawImage(overview, sx, sy, sw, sh, 0, 0, dw, dh)` | Crop + resize region at detail resolution |
+| **Scroll zoom** | CSS `transform: scale(N)` on detail canvas | Re-render at new region size |
+| **Pinch zoom** | CSS `transform: scale(N)` on detail canvas | Re-render at new region size |
+| **Rotate 90°** | CSS `transform: rotate(90deg)` on detail canvas | Pipeline re-render with orient node |
+| **Arbitrary rotate** | CSS `transform: rotate(Ndeg)` on proxy | Pipeline re-render with warp/rotate filter |
+| **Flip H** | CSS `transform: scaleX(-1)` on detail canvas | Pipeline re-render with orient node |
+| **Flip V** | CSS `transform: scaleY(-1)` on detail canvas | Pipeline re-render with orient node |
+| **Crop adjust** | `drawImage` cropping the proxy to new bounds | Pipeline re-render with new crop |
+| **Exposure** | CSS `filter: brightness(pow(2, v))` | Pipeline re-render |
+| **Contrast** | CSS `filter: contrast(1+v)` | Pipeline re-render |
+| **Saturation** | CSS `filter: saturate(f)` | Pipeline re-render |
+| **Other filters** | Show proxy at current filter state (no CSS approx) | Pipeline re-render |
+| **Film preset** | Show proxy (preset was applied to it) | Pipeline re-render |
+
+### 27.4 Implementation: ProxyRenderer
+
+```javascript
+class ProxyRenderer {
+  constructor(overviewCanvas, detailCanvas) {
+    this.overview = overviewCanvas;
+    this.detail = detailCanvas;
+    this.detailCtx = detailCanvas.getContext('2d');
+    this.pendingTransform = null;
+  }
+
+  /**
+   * Show the overview content cropped/transformed into the detail canvas.
+   * Called on every gesture frame — must be <1ms.
+   */
+  showProxy(region, transform = null) {
+    const oc = this.overview;
+    const dc = this.detail;
+    const ctx = this.detailCtx;
+
+    // Source rect on overview
+    const sx = region.x * oc.width;
+    const sy = region.y * oc.height;
+    const sw = region.w * oc.width;
+    const sh = region.h * oc.height;
+
+    // Reset any CSS transforms from previous proxy
+    dc.style.transform = '';
+
+    if (transform) {
+      // Apply CSS transform for geometry operations
+      // This is instant — no pixel work, just GPU compositing
+      dc.style.transformOrigin = 'center center';
+      dc.style.transform = transform; // e.g., 'rotate(90deg)', 'scaleX(-1)'
+    }
+
+    // Draw overview region upscaled into detail canvas
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(oc, sx, sy, sw, sh, 0, 0, dc.width, dc.height);
+  }
+
+  /**
+   * Replace proxy with sharp worker-rendered pixels.
+   * Clears any CSS transform.
+   */
+  showSharp(imageData) {
+    this.detail.style.transform = '';
+    this.detailCtx.putImageData(imageData, 0, 0);
+  }
+}
+```
+
+### 27.5 Gesture → Proxy → Worker Timeline
+
+```
+Rotate 90° button tap:
+  ├─ [0ms]   CSS: detailCanvas.style.transform = 'rotate(90deg)'
+  │          User sees the image rotated instantly (GPU compositing)
+  │
+  ├─ [0ms]   Update model: orientation = Rotate90
+  │          dispatch(Rotate90) → state change only, no render
+  │
+  ├─ [50ms]  Debounce fires → worker.postMessage({render})
+  │          Worker: Session re-renders with orient node
+  │
+  ├─ [55ms]  Worker returns sharp pixels
+  │          detailCanvas.style.transform = '' (clear CSS)
+  │          putImageData(sharp pixels)
+  │
+  └─ User perceived: instant rotation, slight quality jump at 55ms
+
+Crop handle drag:
+  ├─ [0ms]   pointermove: new crop bounds
+  │          drawImage(overview, new_sx, new_sy, new_sw, new_sh, ...)
+  │          User sees the cropped region from the low-res proxy
+  │
+  ├─ [16ms]  Next pointermove: updated crop bounds
+  │          drawImage again — tracking the drag smoothly
+  │
+  ├─ [pointerup + 50ms]  Debounce fires → worker renders detail
+  │
+  ├─ [~70ms] Worker returns sharp cropped image
+  │          putImageData replaces proxy
+  │
+  └─ User perceived: smooth drag with blurry proxy, sharp snap on release
+
+Arbitrary rotation slider:
+  ├─ [0ms]   input event: angle = 15°
+  │          CSS: detailCanvas.style.transform = 'rotate(15deg)'
+  │          This rotates the CURRENT detail canvas content (already filtered)
+  │
+  ├─ [16ms]  Next input: angle = 16°
+  │          CSS: detailCanvas.style.transform = 'rotate(16deg)'
+  │          Smooth — CSS transitions handle interpolation
+  │
+  ├─ [slider release + 50ms]  Worker renders with Rotate(16°)
+  │          Sharp rotated pixels replace CSS-rotated proxy
+  │
+  └─ User perceived: perfectly smooth rotation during drag
+```
+
+### 27.6 CSS Transform Stacking
+
+Multiple geometry operations can stack as CSS transforms during interaction:
+
+```javascript
+// User has flipped H, then is dragging rotation to 15°
+detailCanvas.style.transform = 'scaleX(-1) rotate(15deg)';
+
+// User is also zoomed 2x via pinch
+detailCanvas.style.transform = 'scaleX(-1) rotate(15deg) scale(2)';
+```
+
+When the worker catches up, ALL CSS transforms are cleared and the sharp result is a single correctly-rendered image.
+
+### 27.7 What Must NOT Use Proxy
+
+Some operations can't be approximated by CSS transforms on the proxy:
+- **Perspective correction** — needs 3D CSS perspective() which doesn't match the actual warp math
+- **Content-aware operations** — auto-crop, auto-deskew detection (need full pipeline)
+- **Filter changes without CSS equivalent** — clarity, film preset, grain, etc.
+
+For these, show a spinner or the overview proxy (blurry but filtered) while the worker renders.
+
+### 27.8 Keeping the Proxy Fresh
+
+The proxy (overview canvas) must reflect the current filter state:
+- After every filter change → re-render overview (Session cache hit on geometry, ~3ms)
+- After geometry change → re-render overview (Session cache miss, ~50ms)
+- During geometry interaction → proxy shows pre-geometry state (CSS transforms approximate the geometry)
+- After geometry committed → re-render overview at new geometry
+
+The overview Session cache makes proxy updates cheap (~3ms) for filter-only changes.
+
+---
+
+## 28. Rotation & Document Features — Complete Spec
+
+### 28.1 Rotation Modes (all in zenfilters `Rotate`)
+
+| Mode | Border Handling | Use Case | CSS Proxy |
+|------|----------------|----------|-----------|
+| **Crop** (default) | Largest inscribed rectangle, original aspect | Photo straightening — no borders visible | CSS `rotate()` on current pixels, worker sends cropped result |
+| **Deskew** | White fill for out-of-bounds | Scanned document straightening | CSS `rotate()` + white CSS background |
+| **FillClamp** | Clamp to nearest edge pixel | Seamless extension for small rotations | CSS `rotate()`, worker sends clamped result |
+| **Fill(Black)** | Black fill | Compositing workflows | CSS `rotate()` + black background |
+| **Fill(White)** | White fill | Document, print | CSS `rotate()` + white background |
+| **Fill(Transparent)** | Transparent fill | PNG/WebP alpha overlay | CSS `rotate()`, transparent canvas |
+| **Fill(Custom Color)** | Oklab L,a,b + alpha | Branded backgrounds | CSS `rotate()` + CSS `background-color` |
+
+### 28.2 Rotation UI
+
+**Coarse rotation** (buttons):
+```
+[ ↶ 90° ] [ ↷ 90° ] [ 180° ]
+```
+Instant: CSS `rotate(90deg)` on detail canvas. Worker: `Orientation::Rotate90` (pixel-perfect, no interpolation).
+
+**Fine rotation** (wheel/slider):
+```
+◄─────────────────────|────────────────────────►
+        -45°          0°         +45°
+```
+- Apple Photos–style dial at bottom of crop mode
+- Haptic snap at 0° (identity)
+- Tick marks every 1°
+- CSS `rotate(Ndeg)` as instant proxy during drag
+- On release: worker renders via `Rotate { angle, mode }`
+- "Auto" button: runs `detect_skew_angle()`, applies result
+
+**Mode selector** (when in crop mode):
+```
+[ Crop ] [ Pad: White ] [ Pad: Black ] [ Pad: Transparent ] [ Edge Clamp ]
+```
+Default: Crop (photo). Document mode defaults to Pad: White.
+
+### 28.3 Flip UI
+
+```
+[ Flip H ↔ ] [ Flip V ↕ ]
+```
+Instant: CSS `scaleX(-1)` / `scaleY(-1)`. Worker: `Orientation::FlipH` / `FlipV` (pixel-perfect).
+
+### 28.4 Perspective Correction UI
+
+**Manual mode** (4-corner drag):
+- Overlay 4 draggable corner handles on the image
+- Lines connect the corners showing the quad
+- As user drags corners, CSS `perspective()` + `transform3d()` approximates the warp
+- On release: `compute_homography(src_corners, dst_rect)` → `Warp::projective(matrix)`
+
+**Auto mode** (one-click):
+1. `find_document_quad(image)` → detected 4 corners
+2. Show corners as draggable handles (user can adjust)
+3. "Apply" → `rectify_quad(corners)` → `Warp::projective(matrix)`
+
+**CSS proxy for perspective**: 
+```css
+/* Approximate — won't match exact homography but gives visual feedback */
+detail-canvas {
+  transform: perspective(500px) rotateX(5deg) rotateY(-3deg);
+}
+```
+This won't be perfect but gives immediate feedback during corner-drag.
+
+### 28.5 Document Pipeline
+
+The document mode runs these steps, each independently adjustable:
+
+```
+┌───────────────────────────────────────────────────┐
+│ 1. Detect    find_document_quad()                 │ Auto
+│ 2. Rectify   Warp::projective(homography)         │ Auto (adjustable corners)
+│ 3. Deskew    detect_skew_angle() → Rotate(deskew) │ Auto (adjustable angle)
+│ 4. Crop      CropWhitespace { fuzz }              │ Auto (adjustable fuzz)
+│ 5. Enhance   AutoLevels + Bilateral + Sharpen     │ Auto (adjustable strength)
+│ 6. Binarize  otsu_threshold() → binarize()        │ Toggle (on/off + threshold)
+└───────────────────────────────────────────────────┘
+```
+
+**One-click "Clean Up Document"**: runs steps 1-5 with sensible defaults.
+
+**UI**: Each step shows a toggle (✓/✗) and an "adjust" chevron that expands step-specific controls:
+```
+✓ Detect quad        [adjust ▸] → corner drag handles
+✓ Rectify            [adjust ▸] → corner fine-tuning
+✓ Deskew             [adjust ▸] → angle slider + auto button
+✓ Crop whitespace    [adjust ▸] → fuzz % slider
+✓ Enhance            [adjust ▸] → contrast/sharpen sliders
+✗ Binarize           [adjust ▸] → threshold slider
+```
+
+### 28.6 Proxy Strategy for Document Pipeline
+
+| Step | Instant Proxy | Worker |
+|------|--------------|--------|
+| Quad detection | Show detected corners overlaid on image (SVG overlay) | Runs in worker, returns corner coordinates |
+| Rectify | CSS `perspective()` approximation | `Warp::projective()` full render |
+| Deskew | CSS `rotate()` | `Rotate(angle, Deskew mode)` |
+| Crop | `drawImage` with adjusted bounds | `CropWhitespace` or manual `Crop` |
+| Enhance | CSS `contrast()` + `brightness()` approximation | `AutoLevels` + `Bilateral` + `Sharpen` |
+| Binarize | CSS `filter: contrast(100)` (extreme contrast approximation) | `otsu_threshold()` + `binarize()` |
+
+### 28.7 Affine Transform UI (Advanced)
+
+For users who need arbitrary affine transforms (scale + rotate + shear + translate):
+
+**Not exposed in basic UI** — available in advanced/power-user mode:
+```
+Rotation:    [ slider -180° ... +180° ]
+Scale X:     [ slider 0.1 ... 3.0 ]
+Scale Y:     [ slider 0.1 ... 3.0 ]
+Shear X:     [ slider -1.0 ... 1.0 ]
+Shear Y:     [ slider -1.0 ... 1.0 ]
+Translate X: [ slider -50% ... +50% ]
+Translate Y: [ slider -50% ... +50% ]
+Background:  [ Clamp | Black | White | Transparent | Custom ]
+Interpolation: [ Bilinear | Bicubic | Robidoux | Lanczos3 ]
+```
+
+Each slider change → CSS `matrix()` transform as proxy → worker `Warp::affine()` on release.
+
+### 28.8 Pipeline Node Mapping
+
+| UI Action | zenpipe Node | zenfilters Function |
+|-----------|-------------|-------------------|
+| Rotate 90/180/270 | `NodeOp::Orient(Rotate90/180/270)` | Pixel-perfect copy |
+| Flip H/V | `NodeOp::Orient(FlipH/FlipV)` | Pixel-perfect copy |
+| Fine rotate (crop) | `NodeOp::Filter(Rotate { mode: Crop })` | `Rotate::new(angle)` |
+| Fine rotate (pad) | `NodeOp::Filter(Rotate { mode: Fill(bg) })` | `Rotate::new(angle).with_mode(Fill(bg))` |
+| Deskew | `NodeOp::Filter(Rotate { mode: Deskew })` | `Warp::deskew(angle, w, h)` |
+| Perspective | `NodeOp::Filter(Warp { projective })` | `Warp::projective(matrix)` |
+| Affine | `NodeOp::Filter(Warp { affine })` | `Warp::affine(a,b,tx,c,d,ty)` |
+| Auto whitespace crop | `NodeOp::CropWhitespace` | Built into zenpipe graph |
+| Auto deskew detect | — (returns angle, not a node) | `detect_skew_angle(image)` |
+| Quad detect | — (returns corners, not a node) | `find_document_quad(image)` |
+| Rectify quad | `NodeOp::Filter(Warp { projective })` | `rectify_quad(corners)` → `Warp::projective()` |
+| Binarize | `NodeOp::Filter(Binarize)` | `otsu_threshold()` + `binarize()` |
+
+### 28.9 Feature Flag
+
+zenfilters `Rotate` and `Warp` zennode defs are behind `experimental` feature. To expose in the demo:
+- Add `features = ["experimental"]` to zenfilters dep in demo crate
+- The nodes become available in the schema and via `node_to_filter()`
+- No code changes needed — just the feature flag
