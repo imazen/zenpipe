@@ -341,8 +341,10 @@ pub use zennode_impls::{PipelineCache, geometry_split, prefix_hash, subtree_hash
 /// FNV-1a hasher — deterministic, no random seed.
 ///
 /// Public so `Session` and other modules can use the same hasher.
+#[cfg(any(feature = "zennode", test))]
 pub(crate) struct FnvHasher(u64);
 
+#[cfg(any(feature = "zennode", test))]
 impl FnvHasher {
     const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
     const PRIME: u64 = 0x00000100000001B3;
@@ -352,6 +354,7 @@ impl FnvHasher {
     }
 }
 
+#[cfg(any(feature = "zennode", test))]
 impl core::hash::Hasher for FnvHasher {
     fn finish(&self) -> u64 {
         self.0
