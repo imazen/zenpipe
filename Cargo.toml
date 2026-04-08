@@ -108,7 +108,7 @@ zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec
 zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true , version = "0.7.1" }
 zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true , version = "0.1.3" }
 zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true , version = "0.1.1" }
-zentiff = { path = "../zentiff", default-features = false, optional = true , version = "0.1.0" }
+zentiff = { path = "../zenextras/zentiff", default-features = false, optional = true , version = "0.1.0" }
 zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true , version = "0.1.3" }
 zenquant = { path = "../zenquant", default-features = false, optional = true , version = "0.1.2" }
 # JSON serialization (optional — for schema export)
