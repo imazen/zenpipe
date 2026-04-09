@@ -8,6 +8,7 @@ description = "Unified image codec abstraction over zenjpeg, zenwebp, zengif, ze
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "jpeg", "webp", "avif"]
 repository = "https://github.com/imazen/zencodecs"
+exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/"]
 
 [dependencies]
 # Core (always available)
