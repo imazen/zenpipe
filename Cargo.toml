@@ -8,6 +8,7 @@ description = "Image layout computation with constraint modes, orientation, and 
 repository = "https://github.com/imazen/zenlayout"
 keywords = ["image", "layout", "resize", "crop", "orientation"]
 categories = ["graphics", "multimedia::images", "no-std"]
+exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/"]
 
 [features]
 default = ["std"]
