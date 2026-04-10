@@ -197,7 +197,7 @@ impl Instructions {
                         check(*d)?;
                     }
                 }
-                CFocus::Faces | CFocus::Auto => {}
+                CFocus::Faces | CFocus::Auto | CFocus::Saliency => {}
             }
         }
         if let Some([x, y]) = self.c_gravity {
