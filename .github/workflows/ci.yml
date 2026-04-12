@@ -29,11 +29,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Test (default features)
         run: cargo test --lib
@@ -54,11 +71,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Check (no default features)
         run: cargo check --no-default-features
@@ -88,11 +122,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Check (i686, no JPEG to avoid zenjpeg SIMD issue)
         run: cross check --target i686-unknown-linux-gnu --no-default-features --features "webp,gif,png,avif-decode,jxl-decode,heic-decode,bitmaps-bmp,zennode"
@@ -109,11 +160,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Clippy (default features)
         run: cargo clippy --lib -- -D warnings
@@ -140,11 +208,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Check MSRV (default features)
         run: cargo hack check --rust-version
@@ -162,11 +247,28 @@ jobs:
       - name: Patch path deps for CI
         shell: bash
         run: |
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/, path = "[^"]*"//g' Cargo.toml
-          else
-            sed -i 's/, path = "[^"]*"//g' Cargo.toml
-          fi
+          # Strip ", path = ..." and "path = ...," from deps that also have a version
+          # Remove [patch.crates-io] section and path-only deps (zentiff, zenjp2, zensvg)
+          # Remove [package.metadata.superwork.ci] section
+          python3 -c "
+          import re, sys
+          text = open('Cargo.toml').read()
+          # Strip path alongside version: ', path = \"...\"' or 'path = \"...\", '
+          text = re.sub(r',\s*path\s*=\s*\"[^\"]*\"', '', text)
+          text = re.sub(r'path\s*=\s*\"[^\"]*\",\s*', '', text)
+          # Remove [patch.crates-io] section (and all lines until next [section] or EOF)
+          text = re.sub(r'\[patch\.crates-io\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove [package.metadata.superwork.ci] section
+          text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
+          # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
+          text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
+          # Remove feature definitions that reference removed deps
+          text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
+          # Strip removed features from 'all' feature list
+          for feat in ['tiff', 'jp2-decode', 'svg']:
+              text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
+          open('Cargo.toml', 'w').write(text)
+          "
           rm -f Cargo.lock
       - name: Generate coverage (default features)
         run: cargo llvm-cov --lib --lcov --output-path lcov.info
