@@ -44,13 +44,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Test (default features)
         run: cargo test --lib
@@ -86,13 +88,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Check (no default features)
         run: cargo check --no-default-features
@@ -137,13 +141,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Check (i686, no JPEG to avoid zenjpeg SIMD issue)
         run: cross check --target i686-unknown-linux-gnu --no-default-features --features "webp,gif,png,avif-decode,jxl-decode,heic-decode,bitmaps-bmp,zennode"
@@ -175,13 +181,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Clippy (default features)
         run: cargo clippy --lib -- -D warnings
@@ -223,13 +231,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Check MSRV (default features)
         run: cargo hack check --rust-version
@@ -262,13 +272,15 @@ jobs:
           text = re.sub(r'\[package\.metadata\.superwork\.ci\].*?(?=\n\[|\Z)', '', text, flags=re.DOTALL)
           # Remove path-only deps (no version field) — zentiff, zenjp2, zensvg, zensim-regress, fast-ssim2
           text = re.sub(r'^(zentiff|zenjp2|zensvg|zensim-regress|fast-ssim2)\s*=\s*\{[^}]*\}\s*\n', '', text, flags=re.MULTILINE)
-          # Remove feature definitions that reference removed deps
+          # Remove feature defs that reference removed deps
           text = re.sub(r'^(tiff|jp2-decode|svg)\s*=\s*\[[^\]]*\]\s*\n', '', text, flags=re.MULTILINE)
           # Strip removed features from 'all' feature list
           for feat in ['tiff', 'jp2-decode', 'svg']:
               text = re.sub(r',?\s*\"' + re.escape(feat) + r'\"', '', text)
           open('Cargo.toml', 'w').write(text)
           "
+          # Add check-cfg for removed features so source #[cfg(feature=...)] doesn't trigger warnings
+          printf '\n[lints.rust]\nunexpected_cfgs = { level = "allow", check-cfg = ['\''cfg(feature, values("tiff", "jp2-decode", "svg"))'\''] }\n' >> Cargo.toml
           rm -f Cargo.lock
       - name: Generate coverage (default features)
         run: cargo llvm-cov --lib --lcov --output-path lcov.info
