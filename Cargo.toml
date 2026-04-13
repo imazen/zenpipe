@@ -3,59 +3,53 @@ name = "zencodecs"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
-license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+license = "AGPL-3.0-or-later"
 description = "Unified image codec abstraction over zenjpeg, zenwebp, zengif, zenavif, png, and ravif"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "jpeg", "webp", "avif"]
 repository = "https://github.com/imazen/zencodecs"
-exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/"]
 
 [dependencies]
 # Core (always available)
-enough = "0.4.3"
-whereat = { version = "0.1.5" }
+enough = "0.4"
+whereat = "0.1.4"
 thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = "0.1.13" }
-zenpixels = { version = "0.2.2", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = "0.2.3", features = ["imgref"] }
-linear-srgb = { version = "0.6.7", default-features = false }
+zencodec = { path = "../zencodec" }
+zenpixels = { version = "0.2", path = "../zenpixels/zenpixels", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = "0.2", path = "../zenpixels/zenpixels-convert", features = ["imgref"] }
+linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { version = "0.8.1", optional = true, features = ["decoder", "zencodec", "trellis"] }
-zenwebp = { version = "0.4.2", optional = true, features = ["zencodec"] }
-zengif = { version = "0.7.1", optional = true, features = ["zencodec"] }
-zenavif = { version = "0.1.2", optional = true, features = ["zencodec"] }
-zenavif-parse = { version = "0.6.0", optional = true, features = ["eager"] }
-zenpng = { version = "0.1.2", optional = true, features = ["zencodec"] }
-zenjxl = { version = "0.1.0", optional = true, default-features = false, features = ["zencodec"] }
-heic = { version = "0.1.1", optional = true, default-features = false, features = ["zencodec"] }
-zenbitmaps = { version = "0.1.3", optional = true, features = ["zencodec"] }
-zentiff = { path = "../zenextras/zentiff", optional = true, features = ["zencodec"] }
-zenraw = { version = "0.1.1", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
-zenjp2 = { path = "../zenextras/zenjp2", optional = true, features = ["zencodec"] }
-zensvg = { path = "../zenextras/zensvg", optional = true }
+zenjpeg = { path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
+zenwebp = { path = "../zenwebp", optional = true, features = ["zencodec"] }
+zengif = { path = "../zengif", optional = true, features = ["zencodec"] }
+zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
+zenavif-parse = { path = "../zenavif-parse", optional = true, features = ["eager"] }
+zenpng = { path = "../zenpng", optional = true, features = ["zencodec"] }
+zenjxl = { path = "../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
+# heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
+zenbitmaps = { path = "../zenbitmaps", optional = true, features = ["zencodec"] }
+zenraw = { path = "../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
 
 # Node definitions (optional)
-zennode = { version = "0.1.1", default-features = false, features = ["derive"], optional = true }
+zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 
 # Color management (optional)
-moxcms = { version = "0.8.1", optional = true, default-features = false }
-
-# libjpeg-turbo reference encoder for quality calibration (optional)
-turbojpeg = { version = "1.4", optional = true }
+# moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
 
 [dev-dependencies]
 png = "0.18"
-zensim-regress = { version = "0.3.0" }
+zensim-regress = { path = "../zensim/zensim-regress" }
 codec-corpus = "1"
-fast-ssim2 = { version = "0.7.1", features = ["imgref"] }
+fast-ssim2 = { path = "../fast-ssim2/fast-ssim2", features = ["imgref"] }
 rayon = "1"
+turbojpeg = "1.4"
 
 [features]
-default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "jxl-decode", "heic-decode", "bitmaps-bmp", "zennode"]
+default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
 std = []
 
 # Individual codec features
@@ -68,21 +62,14 @@ gif-quantizr = ["gif", "zengif/quantizr"]
 gif-imagequant = ["gif", "zengif/imagequant"]
 png = ["dep:zenpng"]
 png-zenquant = ["png", "zenpng/quantize"]
-png-imagequant = ["png", "zenpng/imagequant"]
 avif-decode = ["dep:zenavif"]
 avif-encode = ["dep:zenavif", "zenavif/encode", "dep:zenavif-parse"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
-heic-decode = ["dep:heic"]
+# heic-decode = ["dep:heic-decoder"]  # not cloned locally
 bitmaps = ["dep:zenbitmaps"]
 bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]
-bitmaps-qoi = ["bitmaps", "zenbitmaps/qoi"]
-bitmaps-tga = ["bitmaps", "zenbitmaps/tga"]
-bitmaps-hdr = ["bitmaps", "zenbitmaps/hdr"]
-tiff = ["dep:zentiff"]
 raw-decode = ["dep:zenraw"]
-jp2-decode = ["dep:zenjp2"]
-svg = ["dep:zensvg"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
 raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
@@ -93,14 +80,14 @@ riapi = []
 # zennode node definitions
 zennode = ["dep:zennode"]
 
-# Color management — ICC profile analysis, sRGB structural detection, profile synthesis
-cms = ["dep:moxcms"]
+# Color management
+moxcms = []  # Disabled for now
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr", "tiff", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap", "jp2-decode", "svg"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
 
 # Calibration harness (all lossy encoders)
-calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std", "dep:turbojpeg"]
+calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
 
 [[example]]
 name = "metadata_roundtrip"
@@ -135,8 +122,6 @@ name = "quality_calibrate"
 required-features = ["calibrate"]
 
 [patch.crates-io]
-zencodec = { path = "../zencodec" }
-
-[package.metadata.superwork.ci]
-strategy = "strip_path"
+zenpixels = { path = "../zenpixels/zenpixels" }
+zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
 
