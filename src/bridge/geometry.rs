@@ -23,6 +23,7 @@ pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
     "zenlayout.rotate_90",
     "zenlayout.rotate_180",
     "zenlayout.rotate_270",
+    "zenlayout.rotate_angle",
     "zenresize.constrain",
     "zenlayout.constrain",
 ];
@@ -90,6 +91,21 @@ pub(crate) fn compile_geometry_run(
             }
             "zenlayout.rotate_270" => {
                 pipeline = pipeline.rotate_270();
+            }
+            "zenlayout.rotate_angle" => {
+                let degrees = super::parse::param_f32_opt(node, "degrees").unwrap_or(0.0);
+                let mode_str = node
+                    .get_param("mode")
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .unwrap_or_default();
+                let mode = match mode_str.as_str() {
+                    "expand" => zenresize::RotateMode::Expand {
+                        color: zenresize::CanvasColor::Transparent,
+                    },
+                    "original" => zenresize::RotateMode::CropToOriginal,
+                    _ => zenresize::RotateMode::InscribedCrop,
+                };
+                pipeline = pipeline.rotate_angle(degrees, mode);
             }
             "zenresize.constrain" => {
                 let w = param_u32_opt(node, "w").filter(|&v| v > 0);
