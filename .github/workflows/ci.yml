@@ -45,7 +45,7 @@ jobs:
         run: cargo test
 
       - name: Test (no_std + alloc)
-        run: cargo test --no-default-features --features alloc --lib
+        run: cargo test --no-default-features --lib
 
       - name: Test (svg feature)
         run: cargo test --features svg
@@ -99,7 +99,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check WASM (no_std + alloc)
-        run: cargo check --target wasm32-wasip1 --no-default-features --features alloc
+        run: cargo check --target wasm32-wasip1 --no-default-features
 
   # ==========================================================================
   # Clippy

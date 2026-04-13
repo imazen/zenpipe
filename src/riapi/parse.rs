@@ -5,7 +5,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::float_math::F64Ext;
+#[allow(unused_imports)]
+use crate::float_math::Float;
 
 use super::ParseWarning;
 use super::color::parse_color;
@@ -409,7 +410,7 @@ fn parse_flip(s: &str) -> Option<(bool, bool)> {
 /// Normalize rotation to 0/90/180/270. Rounds to nearest 90, mod 360.
 fn parse_rotation(s: &str) -> Option<i32> {
     let v: f64 = s.trim().parse().ok()?;
-    let quarters = (v / 90.0).round_() as i32;
+    let quarters = (v / 90.0).round() as i32;
     let normalized = ((quarters % 4) + 4) % 4 * 90;
     Some(normalized)
 }

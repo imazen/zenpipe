@@ -26,11 +26,11 @@
 use crate::constraint::{
     CanvasColor, Constraint, ConstraintMode, Layout, LayoutError, Rect, Size, SourceCrop,
 };
-use crate::float_math::F64Ext;
+#[allow(unused_imports)]
+use crate::float_math::Float;
 use crate::orientation::Orientation;
 use whereat::{At, at};
 
-#[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
 /// Rotation amount for manual rotation commands.
@@ -95,7 +95,7 @@ impl RegionCoord {
 
     /// Resolve to absolute pixel coordinate given source dimension.
     pub fn resolve(self, source_dim: u32) -> i32 {
-        (source_dim as f64 * self.percent as f64).round_() as i32 + self.pixels
+        (source_dim as f64 * self.percent as f64).round() as i32 + self.pixels
     }
 }
 
@@ -214,7 +214,7 @@ impl SourceCrop {
 
 /// A single image processing command.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Command {
     /// Apply EXIF orientation correction (value 1-8).
     AutoOrient(u8),
@@ -232,10 +232,40 @@ pub enum Command {
     Constrain(Constraint),
     /// Add padding around the image.
     Pad(Padding),
+    /// A dimension-changing geometric effect (arbitrary rotation, etc.)
+    ///
+    /// Processed in sequence order — can appear before or after [`Constrain`].
+    /// Order matters: crop then rotate ≠ rotate then crop.
+    /// A dimension-changing spatial effect (arbitrary rotation, padding, etc.)
+    ///
+    /// Processed in sequence order by [`compute_layout_sequential()`].
+    /// Effects before the [`Constrain`](Self::Constrain) command adjust the
+    /// effective source dimensions; effects after adjust the output canvas.
+    /// The planner resolves concrete input/output dims for each effect and
+    /// stores them in [`IdealLayout::effects`].
+    Effect(alloc::boxed::Box<dyn crate::dimension::DimensionEffect>),
+}
+
+/// An effect with concrete dimensions at input and output.
+///
+/// Produced by the planner to tell the execution engine exactly what
+/// to apply and what dimensions to expect at each stage.
+#[derive(Clone, Debug)]
+pub struct ResolvedEffect {
+    /// The effect to apply.
+    pub effect: alloc::boxed::Box<dyn crate::dimension::DimensionEffect>,
+    /// Input dimensions for this effect.
+    pub input_dims: Size,
+    /// Output dimensions after this effect.
+    pub output_dims: Size,
+    /// Index in the original command sequence.
+    pub command_index: usize,
+    /// Whether this effect is before the Constrain/resize step.
+    pub before_resize: bool,
 }
 
 /// Result of the first phase of layout planning.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct IdealLayout {
     /// Net orientation to apply.
@@ -249,6 +279,17 @@ pub struct IdealLayout {
     /// If [`Align::Extend`] was used, crop to these dimensions after encoding.
     /// Canvas was extended with replicated edges; this records the real content size.
     pub content_size: Option<Size>,
+    /// Resolved dimension effects in pipeline order.
+    ///
+    /// Empty when no [`Command::Effect`] commands were used.
+    /// The execution engine reads these to insert materialization
+    /// barriers and spatial transforms.
+    /// Resolved dimension effects in pipeline order.
+    ///
+    /// Empty when no [`Command::Effect`] commands were used.
+    /// The execution engine reads these to insert materialization
+    /// barriers and spatial transforms.
+    pub effects: Vec<ResolvedEffect>,
 }
 
 /// Explicit padding specification.
@@ -859,16 +900,16 @@ impl OutputLimits {
     /// Scale all layout dimensions by a factor.
     fn scale_layout(layout: &mut Layout, scale: f64) {
         layout.resize_to = Size::new(
-            (layout.resize_to.width as f64 * scale).round_().max(1.0) as u32,
-            (layout.resize_to.height as f64 * scale).round_().max(1.0) as u32,
+            (layout.resize_to.width as f64 * scale).round().max(1.0) as u32,
+            (layout.resize_to.height as f64 * scale).round().max(1.0) as u32,
         );
         layout.canvas = Size::new(
-            (layout.canvas.width as f64 * scale).round_().max(1.0) as u32,
-            (layout.canvas.height as f64 * scale).round_().max(1.0) as u32,
+            (layout.canvas.width as f64 * scale).round().max(1.0) as u32,
+            (layout.canvas.height as f64 * scale).round().max(1.0) as u32,
         );
         layout.placement = (
-            (layout.placement.0 as f64 * scale).round_() as i32,
-            (layout.placement.1 as f64 * scale).round_() as i32,
+            (layout.placement.0 as f64 * scale).round() as i32,
+            (layout.placement.1 as f64 * scale).round() as i32,
         );
     }
 }
@@ -1292,8 +1333,8 @@ impl IdealLayout {
             None => {
                 // Auto: maintain source ratio relative to primary output.
                 let (pri_rw, pri_rh) = (self.layout.resize_to.width, self.layout.resize_to.height);
-                let tw = (pri_rw as f64 * scale_x).round_().max(1.0) as u32;
-                let th = (pri_rh as f64 * scale_y).round_().max(1.0) as u32;
+                let tw = (pri_rw as f64 * scale_x).round().max(1.0) as u32;
+                let th = (pri_rh as f64 * scale_y).round().max(1.0) as u32;
                 (tw, th)
             }
         };
@@ -1317,6 +1358,7 @@ impl IdealLayout {
             source_crop: secondary_crop,
             padding: None, // secondary planes don't get padded
             content_size: None,
+            effects: Vec::new(),
         };
 
         let sec_request = DecoderRequest {
@@ -1340,13 +1382,13 @@ fn round_to_nearest(v: u32, n: u32) -> u32 {
 /// to the target dimensions. This ensures the scaled rect always covers
 /// at least the full spatial extent of the original.
 fn scale_rect_outward(rect: Rect, scale_x: f64, scale_y: f64, max_w: u32, max_h: u32) -> Rect {
-    let x0 = (rect.x as f64 * scale_x).floor_() as u32;
-    let y0 = (rect.y as f64 * scale_y).floor_() as u32;
+    let x0 = (rect.x as f64 * scale_x).floor() as u32;
+    let y0 = (rect.y as f64 * scale_y).floor() as u32;
     let x1 = ((rect.x + rect.width) as f64 * scale_x)
-        .ceil_()
+        .ceil()
         .min(max_w as f64) as u32;
     let y1 = ((rect.y + rect.height) as f64 * scale_y)
-        .ceil_()
+        .ceil()
         .min(max_h as f64) as u32;
     Rect::new(x0, y0, (x1 - x0).max(1), (y1 - y0).max(1))
 }
@@ -1417,6 +1459,11 @@ pub fn compute_layout(
                     padding = Some(*p);
                 }
             }
+            Command::Effect(_) => {
+                // Effects are handled by compute_layout_sequential.
+                // In first-wins mode (compute_layout), effects are ignored
+                // because there's no defined ordering.
+            }
         }
     }
 
@@ -1432,7 +1479,6 @@ pub fn compute_layout(
     )
 }
 
-#[cfg(feature = "alloc")]
 /// Compute layout from command sequence with sequential evaluation.
 ///
 /// Unlike [`compute_layout()`] which uses fixed-pipeline semantics (first-wins),
@@ -1451,16 +1497,19 @@ pub fn compute_layout_sequential(
     source_h: u32,
     limits: Option<&OutputLimits>,
 ) -> Result<(IdealLayout, DecoderRequest), At<LayoutError>> {
+    use crate::dimension::DimensionEffect;
+
     // Phase 1: Partition commands into pre-constrain and post-constrain groups.
     let mut orientation = Orientation::Identity;
     let mut pre_regions: Vec<Region> = Vec::new();
     let mut constraint: Option<&Constraint> = None;
-    let mut post_ops: Vec<&Command> = Vec::new();
+    let mut post_ops: Vec<(usize, &Command)> = Vec::new();
     let mut saw_constrain = false;
+    let mut pre_effects: Vec<(usize, &dyn DimensionEffect)> = Vec::new();
 
     let mut post_orientation = Orientation::Identity;
 
-    for cmd in commands {
+    for (cmd_idx, cmd) in commands.iter().enumerate() {
         match cmd {
             Command::AutoOrient(exif) => {
                 if let Some(o) = Orientation::from_exif(*exif) {
@@ -1496,14 +1545,14 @@ pub fn compute_layout_sequential(
             }
             Command::Crop(sc) => {
                 if saw_constrain {
-                    post_ops.push(cmd);
+                    post_ops.push((cmd_idx, cmd));
                 } else {
                     pre_regions.push(sc.to_region());
                 }
             }
             Command::Region(r) => {
                 if saw_constrain {
-                    post_ops.push(cmd);
+                    post_ops.push((cmd_idx, cmd));
                 } else {
                     pre_regions.push(*r);
                 }
@@ -1516,10 +1565,11 @@ pub fn compute_layout_sequential(
                 constraint = Some(c); // last wins
                 saw_constrain = true;
                 post_ops.clear(); // reset post-ops on each new constrain
+                pre_effects.clear(); // pre-effects reset with new constrain
             }
             Command::Pad(p) => {
                 if saw_constrain || !pre_regions.is_empty() {
-                    post_ops.push(cmd);
+                    post_ops.push((cmd_idx, cmd));
                 } else {
                     pre_regions.push(Region {
                         left: RegionCoord::px(-(p.left as i32)),
@@ -1528,6 +1578,13 @@ pub fn compute_layout_sequential(
                         bottom: RegionCoord::pct_px(1.0, p.bottom as i32),
                         color: p.color,
                     });
+                }
+            }
+            Command::Effect(e) => {
+                if saw_constrain {
+                    post_ops.push((cmd_idx, cmd));
+                } else {
+                    pre_effects.push((cmd_idx, e.as_ref()));
                 }
             }
         }
@@ -1574,37 +1631,84 @@ pub fn compute_layout_sequential(
         Some(composed)
     };
 
+    // Phase 2b: Apply pre-constrain effects to the effective source dims.
+    // Effects change the dimensions the constraint sees. For example, a
+    // pre-constrain inscribed-crop rotation shrinks the source, so the
+    // constraint computes a resize target relative to the smaller canvas.
+    let (eff_w, eff_h) = {
+        let mut cw = ow;
+        let mut ch = oh;
+        for &(_, effect) in &pre_effects {
+            if let Some((nw, nh)) = effect.forward(cw, ch) {
+                cw = nw;
+                ch = nh;
+            }
+            // Analysis barriers don't change tracked dims.
+        }
+        (cw, ch)
+    };
+
     // Phase 3: Compute layout from effective region + constraint.
+    // The constraint sees post-effect dimensions (eff_w, eff_h).
     let layout = if let Some(reg) = effective_region {
-        resolve_region(reg, ow, oh, constraint)?
+        resolve_region(reg, eff_w, eff_h, constraint)?
     } else if let Some(c) = constraint {
-        c.clone().compute(ow, oh)?
+        c.clone().compute(eff_w, eff_h)?
     } else {
         Layout {
-            source: Size::new(ow, oh),
+            source: Size::new(eff_w, eff_h),
             source_crop: None,
-            resize_to: Size::new(ow, oh),
-            canvas: Size::new(ow, oh),
+            resize_to: Size::new(eff_w, eff_h),
+            canvas: Size::new(eff_w, eff_h),
             placement: (0, 0),
             canvas_color: CanvasColor::default(),
         }
     };
 
-    // Phase 4: Apply post-constrain ops to the canvas.
+    // Phase 4: Apply post-constrain ops to the canvas and resolve effects.
     let mut layout = layout;
     let mut pad_applied = false;
-    for op in &post_ops {
+    let mut resolved_effects: Vec<ResolvedEffect> = Vec::new();
+
+    // Resolve pre-constrain effects with concrete dims from the forward
+    // walk we already did in Phase 2b.
+    {
+        let mut current = Size::new(ow, oh);
+        for &(idx, effect) in &pre_effects {
+            let input_dims = current;
+            if let Some((out_w, out_h)) = effect.forward(current.width, current.height) {
+                let output_dims = Size::new(out_w, out_h);
+                resolved_effects.push(ResolvedEffect {
+                    effect: effect.clone_boxed(),
+                    input_dims,
+                    output_dims,
+                    command_index: idx,
+                    before_resize: true,
+                });
+                current = output_dims;
+            } else {
+                // Analysis barrier: record with input=output placeholder.
+                resolved_effects.push(ResolvedEffect {
+                    effect: effect.clone_boxed(),
+                    input_dims,
+                    output_dims: input_dims,
+                    command_index: idx,
+                    before_resize: true,
+                });
+            }
+        }
+    }
+
+    // Now apply post-constrain ops.
+    for &(op_idx, op) in &post_ops {
         match op {
             Command::Crop(sc) => {
-                // Post-constrain crop: trim the canvas.
-                // Content shifts relative to new canvas origin.
                 let canvas_crop = sc.resolve(layout.canvas.width, layout.canvas.height);
                 layout.placement.0 -= canvas_crop.x as i32;
                 layout.placement.1 -= canvas_crop.y as i32;
                 layout.canvas = Size::new(canvas_crop.width, canvas_crop.height);
             }
             Command::Region(r) => {
-                // Post-constrain region: redefine canvas viewport.
                 let (left, top, right, bottom) =
                     r.resolve(layout.canvas.width, layout.canvas.height);
                 let new_cw = right - left;
@@ -1626,14 +1730,37 @@ pub fn compute_layout_sequential(
                 layout.canvas_color = p.color;
                 pad_applied = true;
             }
+            Command::Effect(e) => {
+                // Post-constrain effect: apply to canvas dimensions.
+                let input_dims = layout.canvas;
+                if let Some((out_w, out_h)) = e.forward(input_dims.width, input_dims.height) {
+                    let output_dims = Size::new(out_w, out_h);
+                    resolved_effects.push(ResolvedEffect {
+                        effect: e.clone_boxed(),
+                        input_dims,
+                        output_dims,
+                        command_index: op_idx,
+                        before_resize: false,
+                    });
+                    layout.canvas = output_dims;
+                } else {
+                    // Analysis barrier — record but can't plan past it.
+                    resolved_effects.push(ResolvedEffect {
+                        effect: e.clone_boxed(),
+                        input_dims,
+                        output_dims: input_dims,
+                        command_index: op_idx,
+                        before_resize: false,
+                    });
+                }
+            }
             _ => {} // orient commands already handled
         }
     }
 
     // Build padding record for IdealLayout
     let padding = if pad_applied {
-        // Find the last pad command
-        post_ops.iter().rev().find_map(|op| match op {
+        post_ops.iter().rev().find_map(|(_, op)| match op {
             Command::Pad(p) => Some(*p),
             _ => None,
         })
@@ -1665,6 +1792,7 @@ pub fn compute_layout_sequential(
         source_crop: source_crop_in_source,
         padding,
         content_size,
+        effects: resolved_effects,
     };
 
     let request = DecoderRequest {
@@ -1676,7 +1804,6 @@ pub fn compute_layout_sequential(
     Ok((ideal, request))
 }
 
-#[cfg(feature = "alloc")]
 /// Compose two regions: `outer` defines a viewport, `inner` is relative to
 /// that viewport's coordinate system. Result is in the original source coords.
 fn compose_regions(outer: Region, inner: Region, source_w: u32, source_h: u32) -> Region {
@@ -1778,6 +1905,7 @@ fn plan_from_parts(
         source_crop: source_crop_in_source,
         padding,
         content_size,
+        effects: Vec::new(),
     };
 
     let request = DecoderRequest {
@@ -1881,10 +2009,10 @@ fn resolve_region(
             let scale_y = viewport_layout.resize_to.height as f64 / vh as f64;
 
             // Content dimensions scaled by the same factor as the viewport.
-            let content_w = (overlap_w as f64 * scale_x).round_().max(1.0) as u32;
-            let content_h = (overlap_h as f64 * scale_y).round_().max(1.0) as u32;
-            let content_place_x = (place_x as f64 * scale_x).round_() as i32;
-            let content_place_y = (place_y as f64 * scale_y).round_() as i32;
+            let content_w = (overlap_w as f64 * scale_x).round().max(1.0) as u32;
+            let content_h = (overlap_h as f64 * scale_y).round().max(1.0) as u32;
+            let content_place_x = (place_x as f64 * scale_x).round() as i32;
+            let content_place_y = (place_y as f64 * scale_y).round() as i32;
 
             // Use the constraint's canvas (which may include its own padding
             // for FitPad/WithinPad), adjusted for the viewport placement.
@@ -3649,10 +3777,10 @@ mod tests {
 
         // Round outward: origin floors, far edge ceils
         let scale: f64 = 333.0 / 1000.0;
-        let x0 = (100.0_f64 * scale).floor_() as u32;
-        let y0 = (100.0_f64 * scale).floor_() as u32;
-        let x1 = (700.0_f64 * scale).ceil_() as u32;
-        let y1 = (700.0_f64 * scale).ceil_() as u32;
+        let x0 = (100.0_f64 * scale).floor() as u32;
+        let y0 = (100.0_f64 * scale).floor() as u32;
+        let x1 = (700.0_f64 * scale).ceil() as u32;
+        let y1 = (700.0_f64 * scale).ceil() as u32;
         assert_eq!(crop.x, x0);
         assert_eq!(crop.y, y0);
         assert_eq!(crop.width, x1 - x0);

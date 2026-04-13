@@ -18,7 +18,8 @@
 //! assert!(layout.source_crop.is_some());
 //! ```
 
-use crate::float_math::F64Ext;
+#[allow(unused_imports)]
+use crate::float_math::Float;
 use whereat::{At, at};
 
 /// How to fit a source image into target dimensions.
@@ -286,10 +287,10 @@ impl SourceCrop {
                 width,
                 height,
             } => {
-                let px = (source_w as f64 * x.clamp(0.0, 1.0) as f64).round_() as u32;
-                let py = (source_h as f64 * y.clamp(0.0, 1.0) as f64).round_() as u32;
-                let pw = (source_w as f64 * width.clamp(0.0, 1.0) as f64).round_() as u32;
-                let ph = (source_h as f64 * height.clamp(0.0, 1.0) as f64).round_() as u32;
+                let px = (source_w as f64 * x.clamp(0.0, 1.0) as f64).round() as u32;
+                let py = (source_h as f64 * y.clamp(0.0, 1.0) as f64).round() as u32;
+                let pw = (source_w as f64 * width.clamp(0.0, 1.0) as f64).round() as u32;
+                let ph = (source_h as f64 * height.clamp(0.0, 1.0) as f64).round() as u32;
                 Rect {
                     x: px,
                     y: py,
@@ -771,12 +772,12 @@ impl Constraint {
             (Some(w), Some(h)) => Ok((w, h)),
             (Some(0), None) => Err(at!(LayoutError::ZeroTargetDimension)),
             (Some(w), None) => {
-                let h = (sh as f64 * w as f64 / sw as f64).round_().max(1.0) as u32;
+                let h = (sh as f64 * w as f64 / sw as f64).round().max(1.0) as u32;
                 Ok((w, h))
             }
             (None, Some(0)) => Err(at!(LayoutError::ZeroTargetDimension)),
             (None, Some(h)) => {
-                let w = (sw as f64 * h as f64 / sh as f64).round_().max(1.0) as u32;
+                let w = (sw as f64 * h as f64 / sh as f64).round().max(1.0) as u32;
                 Ok((w, h))
             }
             (None, None) => Ok((sw, sh)),
@@ -1004,7 +1005,7 @@ fn gravity_offset_1d(space: u32, gravity: &Gravity, horizontal: bool) -> u32 {
         Gravity::Center => space / 2,
         Gravity::Percentage(x, y) => {
             let pct = if horizontal { *x } else { *y };
-            (space as f64 * pct.clamp(0.0, 1.0) as f64).round_() as u32
+            (space as f64 * pct.clamp(0.0, 1.0) as f64).round() as u32
         }
     }
 }
@@ -1056,7 +1057,7 @@ fn proportional(
     } else if delta_b <= snap_amount {
         snap_b
     } else {
-        float.round_() as u32
+        float.round() as u32
     };
 
     if v == 0 { 1 } else { v }
@@ -1068,7 +1069,7 @@ fn rounding_loss_width(ratio_w: u32, ratio_h: u32, target_width: u32) -> f64 {
     let ratio = ratio_w as f64 / ratio_h as f64;
     let target_x_to_self_x = target_width as f64 / ratio_w as f64;
     let recreate_y = ratio_h as f64 * target_x_to_self_x;
-    let rounded_y = recreate_y.round_();
+    let rounded_y = recreate_y.round();
     let recreate_x_from_rounded_y = rounded_y * ratio;
     (target_width as f64 - recreate_x_from_rounded_y).abs()
 }
@@ -1079,7 +1080,7 @@ fn rounding_loss_height(ratio_w: u32, ratio_h: u32, target_height: u32) -> f64 {
     let ratio = ratio_w as f64 / ratio_h as f64;
     let target_y_to_self_y = target_height as f64 / ratio_h as f64;
     let recreate_x = ratio_w as f64 * target_y_to_self_y;
-    let rounded_x = recreate_x.round_();
+    let rounded_x = recreate_x.round();
     let recreate_y_from_rounded_x = rounded_x / ratio;
     (target_height as f64 - recreate_y_from_rounded_x).abs()
 }
@@ -2304,7 +2305,8 @@ mod tests {
 
     #[allow(dead_code)]
     mod oracle {
-        use crate::float_math::F64Ext;
+        #[allow(unused_imports)]
+        use crate::float_math::Float;
         use alloc::vec;
         use alloc::vec::Vec;
         use core::cmp::Ordering;
@@ -2374,7 +2376,7 @@ mod tests {
                 } else if delta_b.abs() <= snap_amount {
                     snap_b
                 } else {
-                    float.round_() as i32
+                    float.round() as i32
                 };
 
                 if v <= 0 { 1 } else { v }
@@ -2383,7 +2385,7 @@ mod tests {
             fn rounding_loss_based_on_target_width(&self, target_width: i32) -> f64 {
                 let target_x_to_self_x = target_width as f64 / self.w as f64;
                 let recreate_y = self.h as f64 * target_x_to_self_x;
-                let rounded_y = recreate_y.round_();
+                let rounded_y = recreate_y.round();
                 let recreate_x_from_rounded_y = rounded_y * self.ratio_f64();
                 (target_width as f64 - recreate_x_from_rounded_y).abs()
             }
@@ -2391,7 +2393,7 @@ mod tests {
             fn rounding_loss_based_on_target_height(&self, target_height: i32) -> f64 {
                 let target_y_to_self_y = target_height as f64 / self.h as f64;
                 let recreate_x = self.w as f64 * target_y_to_self_y;
-                let rounded_x = recreate_x.round_();
+                let rounded_x = recreate_x.round();
                 let recreate_y_from_rounded_x = rounded_x / self.ratio_f64();
                 (target_height as f64 - recreate_y_from_rounded_x).abs()
             }

@@ -13,7 +13,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 
 whereat::define_at_crate_info!();
@@ -21,6 +20,7 @@ whereat::define_at_crate_info!();
 mod float_math;
 
 pub mod constraint;
+pub mod dimension;
 pub mod orientation;
 pub mod plan;
 #[cfg(feature = "riapi")]
@@ -36,12 +36,14 @@ pub mod svg;
 pub use constraint::{
     CanvasColor, Constraint, ConstraintMode, Gravity, Layout, LayoutError, Rect, Size, SourceCrop,
 };
+pub use dimension::{
+    DimensionEffect, ExpandEffect, PadEffect, RotateEffect, RotateMode, TrimEffect,
+    expanded_canvas_dims, expanded_canvas_inverse, inscribed_crop_dims, inscribed_crop_inverse,
+};
 pub use orientation::Orientation;
-#[cfg(feature = "alloc")]
-pub use plan::compute_layout_sequential;
 pub use plan::{
     Align, CodecLayout, Command, DecoderOffer, DecoderRequest, FlipAxis, IdealLayout, LayoutPlan,
-    OutputLimits, Padding, Pipeline, PlaneLayout, Region, RegionCoord, Rotation, Subsampling,
-    compute_layout,
+    OutputLimits, Padding, Pipeline, PlaneLayout, Region, RegionCoord, ResolvedEffect, Rotation,
+    Subsampling, compute_layout, compute_layout_sequential,
 };
 pub use whereat::{At, ResultAtExt};

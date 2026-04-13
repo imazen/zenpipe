@@ -3,7 +3,8 @@
 use crate::constraint::{
     CanvasColor, Constraint, ConstraintMode, Gravity, LayoutError, SourceCrop,
 };
-use crate::float_math::F64Ext;
+#[allow(unused_imports)]
+use crate::float_math::Float;
 use crate::orientation::Orientation;
 use crate::plan::Pipeline;
 use whereat::At;
@@ -93,10 +94,10 @@ impl Instructions {
         // Apply zoom
         let zoom = self.zoom.unwrap_or(1.0).clamp(0.00008, 80000.0);
         if let Some(w) = &mut target_w {
-            *w = (*w as f64 * zoom).round_().clamp(1.0, i32::MAX as f64) as i32;
+            *w = (*w as f64 * zoom).round().clamp(1.0, i32::MAX as f64) as i32;
         }
         if let Some(h) = &mut target_h {
-            *h = (*h as f64 * zoom).round_().clamp(1.0, i32::MAX as f64) as i32;
+            *h = (*h as f64 * zoom).round().clamp(1.0, i32::MAX as f64) as i32;
         }
 
         // If post-resize orientation swaps axes, swap target dimensions
@@ -252,13 +253,13 @@ impl Instructions {
 
         // Cross-dimension constraints
         if w > 0 && mh > 0 && sw > 0.0 {
-            let aspect_h = (w as f64 * sh / sw).round_() as i32;
+            let aspect_h = (w as f64 * sh / sw).round() as i32;
             if aspect_h > 0 {
                 mh = mh.min(aspect_h);
             }
         }
         if h > 0 && mw > 0 && sh > 0.0 {
-            let aspect_w = (h as f64 * sw / sh).round_() as i32;
+            let aspect_w = (h as f64 * sw / sh).round() as i32;
             if aspect_w > 0 {
                 mw = mw.min(aspect_w);
             }
