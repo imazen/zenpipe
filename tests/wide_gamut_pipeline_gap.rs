@@ -80,26 +80,34 @@ fn gainmap_preserve_mode_round_trips_through_pipeline_unchanged() {
     assert!(gm.metadata.alternate_hdr_headroom > 0.0);
 }
 
-// ─── FAILING — gap trackers, marked #[ignore] ────────────────────────────
+// ─── PASSING — ICC metadata preservation through CmsMode::Preserve ───────
 
-/// JPEG with explicit ICC profile attached to source metadata: today the
-/// pipeline narrows the pixels to sRGB but may still embed the original
-/// ICC, leaving pixels-vs-metadata mismatch. The fix is at
-/// `job.rs:1004-1006` (encode handoff) AND `graph.rs:1608` (don't narrow
-/// in the first place). This test asserts the whole bit-depth survives —
-/// the byte-equal ICC should round-trip AND the pixels must still match.
-#[ignore = "Pipeline narrows to RGBA8_SRGB at graph.rs:1608 — pixels and metadata disagree on output"]
+/// `CmsMode::Preserve` must carry the source ICC profile through the
+/// pipeline byte-equal on the output. Even though pixels today get
+/// narrowed to sRGB at `graph.rs:1608`, the metadata slot is independent
+/// of the pixel path and the ICC bytes survive as an opaque blob.
+///
+/// This is a narrow preservation guarantee, NOT a pixels-match-metadata
+/// guarantee. See
+/// `jpeg_icc_preserve_leaves_pixels_and_metadata_disagreeing` below for
+/// the pixels-vs-metadata divergence xfail.
 #[test]
-fn jpeg_with_display_p3_icc_round_trips_pixels_and_metadata_consistently() {
+fn jpeg_icc_preserve_round_trips_icc_bytes_verbatim() {
     use rgb::Rgb;
-    let pixels: Vec<Rgb<u8>> = (0..32 * 32).map(|i| Rgb { r: (i % 32) as u8, g: (i / 32) as u8, b: 100 }).collect();
+    let pixels: Vec<Rgb<u8>> = (0..32 * 32)
+        .map(|i| Rgb { r: (i % 32) as u8, g: (i / 32) as u8, b: 100 })
+        .collect();
     let img = imgref::ImgVec::new(pixels, 32, 32);
     let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
         zenpixels::PixelSlice::from(img.as_ref());
 
-    // A non-sRGB ICC profile (synthetic — what matters is that it's not
-    // detected as sRGB). The pipeline's CmsMode::Preserve should keep it.
-    let icc = vec![0u8; 256]; // placeholder until we generate a real Display-P3 profile
+    // Synthetic non-sRGB ICC — what matters is that it is NOT detected as
+    // sRGB so the Preserve path actually has to carry it. Using a pattern
+    // that can't collide with our sRGB hash table (random-looking bytes).
+    let mut icc = vec![0u8; 256];
+    for (i, b) in icc.iter_mut().enumerate() {
+        *b = (i as u8).wrapping_mul(37).wrapping_add(13);
+    }
     let meta = zencodec::Metadata::none().with_icc(icc.clone());
 
     let input = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
@@ -131,6 +139,38 @@ fn jpeg_with_display_p3_icc_round_trips_pixels_and_metadata_consistently() {
         extracted.as_ref(),
         icc.as_slice(),
         "ICC profile must round-trip byte-equal under CmsMode::Preserve"
+    );
+}
+
+// ─── FAILING — gap trackers, marked #[ignore] ────────────────────────────
+
+/// The flip side of `jpeg_icc_preserve_round_trips_icc_bytes_verbatim`:
+/// ICC bytes preserve fine, but the *pixels* downstream of the pipeline
+/// are always RGBA8 sRGB because of the `graph.rs:1608` narrowing. So an
+/// input tagged with Display-P3 / Rec.2020 / PQ ICC comes out the other
+/// end with the original ICC still attached — even though the pixels are
+/// now sRGB. Pixels and metadata disagree.
+///
+/// This tracker should flip to passing once the pipeline gains a linear
+/// working format (`WorkingFormat::RgbaF32Linear`) and re-encodes with
+/// ICC-consistent pixels.
+#[ignore = "Pipeline narrows to RGBA8_SRGB at graph.rs:1608 → output pixels are sRGB even though ICC claims wider gamut"]
+#[test]
+fn jpeg_icc_preserve_leaves_pixels_and_metadata_disagreeing() {
+    // Once a `WorkingFormat` enum lands, implement this as:
+    //   1. Craft a real Display-P3 ICC blob (primaries tag ≠ sRGB).
+    //   2. Encode a JPEG whose pixels are meaningful only in Display-P3
+    //      (e.g. pure primary red at RGB=(255,0,0) which differs from
+    //      sRGB red by ~15% in Δu'v').
+    //   3. Run ImageJob with Preserve.
+    //   4. Decode the output; convert the decoded pixels from the claimed
+    //      Display-P3 back to sRGB via moxcms; assert the result is close
+    //      to the original sRGB interpretation, NOT identical (proves the
+    //      pipeline carried P3 pixels forward rather than flattening).
+    panic!(
+        "Pending: real Display-P3 ICC + CMS-aware pixel round-trip. \
+         Today graph.rs:1608 narrows pixels to sRGB before encode, so the \
+         round-tripped pixels are sRGB despite the ICC claiming Display-P3."
     );
 }
 
