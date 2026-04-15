@@ -14,7 +14,7 @@ Legend: **✓** working + tested / **○** working but no test / **-** stub / **
 |---|---|---|---|---|---|---|---|---|---|---|
 | JPEG | ✓ | 8 | ✓ | × | ✓ | ✓ | ✓ (UltraHDR MPF) | ✓ (MPF disparity) | × | × |
 | WebP | ✓ | 8 | ✓ | × | ✓ | ✓ | × | × | × | × |
-| PNG | ✓ | 8 (16→8) | ✓ | - (cICP chunk not surfaced) | ✓ | ✓ | × | × | × | × |
+| PNG | ✓ | 8 / 16 (U16 buffer) | ✓ | ✓ | ✓ | ✓ | × | × | × | × |
 | GIF | ✓ | 8 | × | × | × | × | × | × | × | × |
 | AVIF | ✓ | 8 / 10 / 12 (U16 buffer) | ✓ | ✓ | ✓ | ✓ | ✓ (tmap AV1 OBU) | - (auxl stub) | ✓ (CICP carries) | ✓ (Rec.2020 via CICP) |
 | JXL | ✓ | 8 / 10 / 12 / f32 | ✓ | ✓ | ✓ | ✓ | ✓ (jhgm — **inverse** direction) | × | ✓ | ✓ (Rec.2020 / P3) |

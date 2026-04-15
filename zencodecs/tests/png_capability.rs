@@ -120,6 +120,90 @@ fn png_rgba8_round_trip_is_lossless_pixel_byte_equal() {
     );
 }
 
+// ─── 16-bit (16 bpc) round-trip ──────────────────────────────────────────
+
+/// zenpng preserves 16-bit precision end-to-end. Encoding RGBA16 input
+/// and decoding must return the same u16 bytes (PNG is lossless) and
+/// the decoded pixel buffer's channel type must be `U16`, not narrowed
+/// to `U8` by the trait layer.
+#[test]
+fn png_rgba16_round_trip_is_lossless_pixel_byte_equal() {
+    use imgref::ImgVec;
+    use rgb::Rgba;
+    use zenpixels::{ChannelType, PixelSlice};
+
+    let pixels: Vec<Rgba<u16>> = (0..32 * 32)
+        .map(|i| Rgba {
+            r: (i * 257) as u16,
+            g: (i * 251) as u16,
+            b: (65535 - i * 257) as u16,
+            a: 0xC0DE,
+        })
+        .collect();
+    let img = ImgVec::new(pixels, 32, 32);
+    let typed: PixelSlice<'_, Rgba<u16>> = PixelSlice::from(img.as_ref());
+
+    let bytes = EncodeRequest::new(ImageFormat::Png)
+        .encode(typed.erase(), false)
+        .expect("encode PNG rgba16")
+        .into_vec();
+
+    let decoded = DecodeRequest::new(&bytes)
+        .decode_full_frame()
+        .expect("decode PNG");
+    let desc = decoded.pixels().descriptor();
+    assert_eq!(
+        desc.channel_type(),
+        ChannelType::U16,
+        "16-bit PNG must not narrow to U8; got {:?}",
+        desc.channel_type()
+    );
+
+    let actual: &[u8] = decoded.pixels().as_strided_bytes();
+    let original: &[u8] = bytemuck::cast_slice(img.buf());
+    assert_eq!(
+        actual.len(),
+        original.len(),
+        "PNG 16bpc must preserve buffer size exactly"
+    );
+    assert_eq!(
+        actual, original,
+        "PNG is lossless — 16bpc pixels must be byte-equal"
+    );
+}
+
+/// External 16-bit PNG fixtures from pngsuite (via image-rs test corpus):
+/// decode must surface `ChannelType::U16` and `info.source_color.bit_depth
+/// = Some(16)`.
+#[ignore = "needs codec-corpus PNG pngsuite at /mnt/v/GitHub/codec-corpus/; run with cargo test -- --ignored"]
+#[test]
+fn png_external_16bit_samples_decode_at_16bpc() {
+    use zenpixels::ChannelType;
+    let files = [
+        "/mnt/v/GitHub/codec-corpus/image-rs/test-images/png/16bpc/basi0g16.png",
+        "/mnt/v/GitHub/codec-corpus/image-rs/test-images/png/16bpc/basn2c16.png",
+        "/mnt/v/GitHub/codec-corpus/image-rs/test-images/png/16bpc/basn6a16.png",
+    ];
+    for f in &files {
+        let bytes = std::fs::read(f).expect("fixture must be present");
+        let decoded = DecodeRequest::new(&bytes)
+            .decode_full_frame()
+            .expect("decode 16bpc PNG");
+        assert_eq!(
+            decoded.pixels().descriptor().channel_type(),
+            ChannelType::U16,
+            "{}: expected U16 channel type",
+            f
+        );
+        assert_eq!(
+            decoded.info().source_color.bit_depth,
+            Some(16),
+            "{}: expected bit_depth=Some(16)",
+            f
+        );
+    }
+}
+
 // ─── ICC profile round-trip (iCCP chunk) ─────────────────────────────────
 
 #[test]
