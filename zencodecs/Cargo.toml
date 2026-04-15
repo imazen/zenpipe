@@ -126,7 +126,5 @@ required-features = ["std"]
 name = "quality_calibrate"
 required-features = ["calibrate"]
 
-[patch.crates-io]
-zenpixels = { path = "../../zenpixels/zenpixels" }
-zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
+# [patch.crates-io] moved to workspace root Cargo.toml
 

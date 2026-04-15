@@ -30,10 +30,7 @@ rayon = "1.10.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Ensure all crates use the same local zennode (not crates.io version).
-[patch.crates-io]
-zennode = { path = "../../zennode/zennode" }
-zencodec = { path = "../../zencodec" }
+# [patch.crates-io] moved to workspace root Cargo.toml
 
 [package.metadata.superwork.ci]
 strategy = "git_url"
