@@ -11,7 +11,13 @@ jobs:
     with:
       clippy_extra_runs: |
         cargo clippy --all-targets --no-default-features -- -D warnings
+        cargo clippy -p zenfilters --all-targets -- -D warnings
+        cargo clippy -p zenlayout --all-targets -- -D warnings
+        cargo clippy -p zencodecs --no-default-features --all-targets -- -D warnings
       test_extra_runs: |
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema
+        cargo test -p zenfilters --all-targets
+        cargo test -p zenlayout --all-targets
+        cargo test -p zencodecs --no-default-features --all-targets
