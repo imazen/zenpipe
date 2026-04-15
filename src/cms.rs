@@ -382,6 +382,19 @@ pub fn synthesize_icc_from_cicp(cicp: &CicpValues) -> Option<Vec<u8>> {
 ///
 /// For PNG sources, also checks gAMA/cHRM/cICP chunks if no ICC profile is
 /// embedded.
+///
+/// # Deprecated
+///
+/// This function synthesizes ICC bytes from CICP values just to satisfy
+/// the old `ColorManagement::build_transform` API, which only accepts
+/// raw ICC byte pairs. Use
+/// [`PluggableCms::build_source_transform`](zenpixels_convert::cms::PluggableCms)
+/// with [`SourceColor::to_color_context`] instead — it accepts
+/// `ColorProfileSource::Cicp` directly, avoiding the roundtrip.
+#[deprecated(
+    since = "0.1.1",
+    note = "use PluggableCms with SourceColor::to_color_context() instead"
+)]
 pub fn srgb_transform_icc(
     source_color: &zencodec::decode::SourceColor,
     raw_data: Option<&[u8]>,
