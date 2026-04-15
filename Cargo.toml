@@ -167,6 +167,10 @@ zennode = { path = "../zennode/zennode" }
 zennode-derive = { path = "../zennode/zennode-derive" }
 zencodec = { path = "../zencodec" }
 
+# Override zenresize's git dep on zenlayout to use our workspace copy
+[patch."https://github.com/imazen/zenlayout.git"]
+zenlayout = { path = "zenlayout" }
+
 [package.metadata.superwork.ci]
 strategy = "strip_path"
 delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]
