@@ -500,6 +500,107 @@ impl<'a> EncodeRequest<'a> {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Typed convenience: full-frame encode from imgref::ImgRef
+    //
+    // Each method picks the right `PixelDescriptor` from the typed pixel
+    // and calls [`encode`](Self::encode). RGB/Gray paths set
+    // `has_meaningful_alpha=false`; RGBA/BGRA paths set `true`.
+    //
+    // These are restored convenience wrappers — the canonical entry point
+    // is [`encode`](Self::encode) with a hand-built `PixelSlice`.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Encode a full RGB8 (sRGB) frame from an `imgref::ImgRef<rgb::Rgb<u8>>`.
+    pub fn encode_full_frame_rgb8(
+        self,
+        img: imgref::ImgRef<'_, rgb::Rgb<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Rgb<u8>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), false)
+    }
+
+    /// Encode a full RGBA8 (sRGB, straight alpha) frame.
+    pub fn encode_full_frame_rgba8(
+        self,
+        img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<u8>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), true)
+    }
+
+    /// Encode a full BGRA8 (sRGB) frame.
+    pub fn encode_full_frame_bgra8(
+        self,
+        img: imgref::ImgRef<'_, rgb::Bgra<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Bgra<u8>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), true)
+    }
+
+    /// Encode a full BGRX8 frame — alpha byte present but treated as padding.
+    pub fn encode_full_frame_bgrx8(
+        self,
+        img: imgref::ImgRef<'_, rgb::Bgra<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Bgra<u8>> = zenpixels::PixelSlice::from(img);
+        let pixels = typed
+            .with_descriptor(PixelDescriptor::BGRX8_SRGB)
+            .erase();
+        self.encode(pixels, false)
+    }
+
+    /// Encode a full grayscale 8-bit (sRGB) frame.
+    pub fn encode_full_frame_gray8(
+        self,
+        img: imgref::ImgRef<'_, rgb::Gray<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Gray<u8>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), false)
+    }
+
+    /// Encode a full RGB f32 (linear light) frame.
+    pub fn encode_full_frame_rgb_f32(
+        self,
+        img: imgref::ImgRef<'_, rgb::Rgb<f32>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Rgb<f32>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), false)
+    }
+
+    /// Encode a full RGBA f32 (linear light, straight alpha) frame.
+    pub fn encode_full_frame_rgba_f32(
+        self,
+        img: imgref::ImgRef<'_, rgb::Rgba<f32>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<f32>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), true)
+    }
+
+    /// Encode a full grayscale f32 (linear light) frame.
+    pub fn encode_full_frame_gray_f32(
+        self,
+        img: imgref::ImgRef<'_, rgb::Gray<f32>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Gray<f32>> = zenpixels::PixelSlice::from(img);
+        self.encode(typed.erase(), false)
+    }
+
+    /// Legacy spelling: same as [`encode_full_frame_rgba8`](Self::encode_full_frame_rgba8)
+    /// with explicit straight-alpha tagging.
+    pub fn encode_full_frame_srgba8_imgref(
+        self,
+        img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
+    ) -> Result<EncodeOutput> {
+        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<u8>> = zenpixels::PixelSlice::from(img);
+        let pixels = typed
+            .with_descriptor(
+                PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Straight)),
+            )
+            .erase();
+        self.encode(pixels, true)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Core dispatch
     // ═══════════════════════════════════════════════════════════════════
 
