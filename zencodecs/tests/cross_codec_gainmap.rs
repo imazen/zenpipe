@@ -105,16 +105,16 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jpeg_ultrahdr() {
 
 // ─── JPEG → AVIF (forward → forward, the common case) ───────────────────
 //
-// `EncodeRequest::with_gain_map(GainMapSource::Precomputed)` accepts a
-// gain map for AVIF, dispatches into `avif_enc::encode_with_precomputed_gainmap`,
-// and returns success — but the resulting AVIF doesn't actually embed
-// the gain map: a follow-up `decode_gain_map` returns `None`. This is
-// the "resplitting" gap the user originally asked about. Tracked
-// `#[ignore]` until the AVIF encoder genuinely writes the tmap aux item
-// + ISO 21496-1 metadata into the output.
+// This is the user's headline "resplitting" use case: take an UltraHDR
+// JPEG, decode the gain map, and re-embed it inside an AVIF tmap aux
+// item via the encoder's `with_gain_map(GainMapSource::Precomputed)`
+// path. Both metadata and pixel data must round-trip.
+//
+// Was broken until decode.rs:extract_avif_gainmap was fixed to look
+// for `zencodec::gainmap::GainMapSource` in extras (zenavif's actual
+// emitted type) instead of the older `zenavif::AvifGainMap`.
 
 #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
-#[ignore = "AVIF encoder accepts precomputed gain map but doesn't embed it in output (resplit gap)"]
 #[test]
 fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
     let donor = build_jpeg_donor(64, 64, 4.0);
@@ -159,13 +159,8 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
 }
 
 // ─── AVIF → JPEG (the reverse, also forward → forward) ───────────────────
-//
-// Blocked on the same AVIF encoder gap: we can't build an AVIF "donor"
-// because AVIF doesn't actually embed gain maps yet. Track until the
-// resplit gap above is fixed.
 
 #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
-#[ignore = "blocked on AVIF encoder gain-map-embed gap (see jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap)"]
 #[test]
 fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
     // Build an AVIF donor by going JPEG → AVIF first, then re-extract.
@@ -189,17 +184,29 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
     let avif_donor = avif_donor.expect("AVIF must yield gain map");
     assert_eq!(avif_donor.source_format, ImageFormat::Avif);
 
-    // Now go AVIF → JPEG, attaching the AVIF-extracted gain map.
-    let img2 = make_hdr_gradient(48, 48, 1.0);
-    let typed2: zenpixels::PixelSlice<'_, Rgb<f32>> =
-        zenpixels::PixelSlice::from(img2.as_ref());
+    // Now go AVIF → JPEG. JPEG's encode_with_precomputed_gainmap path
+    // dispatches on channels (3 = RGB8 / 4 = RGBA8) but AVIF decode
+    // commonly returns RGBA8 with a meaningless full-opaque alpha.
+    // Build a fresh u8 RGB SDR base from the same gradient generator
+    // used to build the AVIF, so the JPEG encoder sees stride = w*3.
+    let sdr_u8: Vec<rgb::Rgb<u8>> = (0..48 * 48)
+        .map(|i| rgb::Rgb {
+            r: ((i % 48) * 5) as u8,
+            g: ((i / 48) * 5) as u8,
+            b: 80,
+        })
+        .collect();
+    let sdr_img = imgref::ImgVec::new(sdr_u8, 48, 48);
+    let typed_sdr: zenpixels::PixelSlice<'_, rgb::Rgb<u8>> =
+        zenpixels::PixelSlice::from(sdr_img.as_ref());
+
     let jpeg_bytes = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(90.0)
         .with_gain_map(GainMapSource::Precomputed {
             gain_map: &avif_donor.gain_map,
             metadata: &avif_donor.metadata,
         })
-        .encode(typed2.erase(), false)
+        .encode(typed_sdr.erase(), false)
         .expect("JPEG re-encode with AVIF-derived gain map")
         .into_vec();
 
