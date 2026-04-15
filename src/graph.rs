@@ -1186,6 +1186,23 @@ impl PipelineGraph {
                 source = ensure_fmt!(source, format::RGBA8_SRGB, "Layout")?;
 
                 let content_size = plan.content_size;
+
+                // Split effects by where they run relative to the resize step.
+                let (before_resize, after_resize): (Vec<_>, Vec<_>) = plan
+                    .effects
+                    .iter()
+                    .cloned()
+                    .partition(|e| e.before_resize);
+
+                // Apply pre-resize effects (e.g. deskew at native resolution).
+                if !before_resize.is_empty() {
+                    source = Box::new(crate::sources::EffectSource::new(
+                        source,
+                        &before_resize,
+                        &crate::limits::Limits::default(),
+                    )?);
+                }
+
                 let in_w = source.width();
                 let in_h = source.height();
                 let resizer = crate::execute_layout::streaming_from_plan_batched(
@@ -1197,6 +1214,15 @@ impl PipelineGraph {
                     16,
                 );
                 source = Box::new(ResizeSource::from_streaming(source, resizer, 16)?);
+
+                // Apply post-resize effects (cheaper — operating on smaller buffer).
+                if !after_resize.is_empty() {
+                    source = Box::new(crate::sources::EffectSource::new(
+                        source,
+                        &after_resize,
+                        &crate::limits::Limits::default(),
+                    )?);
+                }
 
                 if let Some(cs) = content_size {
                     let out_w = source.width();

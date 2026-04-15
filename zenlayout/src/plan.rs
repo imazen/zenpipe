@@ -401,7 +401,7 @@ impl DecoderOffer {
 
 /// Final layout plan after decoder negotiation.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub struct LayoutPlan {
     /// What was requested of the decoder.
     pub decoder_request: DecoderRequest,
@@ -422,6 +422,51 @@ pub struct LayoutPlan {
     /// If [`Align::Extend`] was used, crop to these dimensions after encoding.
     /// Renderer should replicate edge pixels into the extension area.
     pub content_size: Option<Size>,
+    /// Resolved dimension effects (non-cardinal rotations, warps, content-adaptive trims).
+    ///
+    /// Copied from [`IdealLayout::effects`] during [`IdealLayout::finalize`].
+    /// Empty for the common case of cardinal rotations and axis-aligned transforms —
+    /// those are absorbed into `remaining_orientation`, `trim`, and `placement`.
+    ///
+    /// Effects with `before_resize = true` run on the source buffer before the resize;
+    /// effects with `before_resize = false` run on the resize output before canvas placement.
+    /// The execution engine must materialize upstream before each effect that cannot stream.
+    pub effects: Vec<ResolvedEffect>,
+}
+
+// `ResolvedEffect` contains `Box<dyn DimensionEffect>` which can't derive
+// PartialEq/Eq/Hash. We implement those manually on LayoutPlan by ignoring
+// `effects` — plans that differ only in attached effects compare equal. This
+// matches existing test expectations (tests don't exercise non-cardinal effects
+// for equality) while still allowing the field to carry data for execution.
+impl PartialEq for LayoutPlan {
+    fn eq(&self, other: &Self) -> bool {
+        self.decoder_request == other.decoder_request
+            && self.trim == other.trim
+            && self.resize_to == other.resize_to
+            && self.remaining_orientation == other.remaining_orientation
+            && self.canvas == other.canvas
+            && self.placement == other.placement
+            && self.canvas_color == other.canvas_color
+            && self.resize_is_identity == other.resize_is_identity
+            && self.content_size == other.content_size
+        // `effects` intentionally excluded (see comment above).
+    }
+}
+impl Eq for LayoutPlan {}
+impl core::hash::Hash for LayoutPlan {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.decoder_request.hash(state);
+        self.trim.hash(state);
+        self.resize_to.hash(state);
+        self.remaining_orientation.hash(state);
+        self.canvas.hash(state);
+        self.placement.hash(state);
+        self.canvas_color.hash(state);
+        self.resize_is_identity.hash(state);
+        self.content_size.hash(state);
+        // `effects` intentionally excluded.
+    }
 }
 
 impl LayoutPlan {
@@ -441,6 +486,7 @@ impl LayoutPlan {
             canvas_color: CanvasColor::Transparent,
             resize_is_identity: true,
             content_size: None,
+            effects: Vec::new(),
         }
     }
 
@@ -2062,6 +2108,7 @@ pub(crate) fn finalize(
         canvas_color: ideal.layout.canvas_color,
         resize_is_identity,
         content_size: ideal.content_size,
+        effects: ideal.effects.clone(),
     }
 }
 

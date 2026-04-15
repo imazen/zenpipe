@@ -2,6 +2,7 @@ mod callback;
 mod composite;
 mod crop;
 mod edge_replicate;
+mod effects;
 mod expand_canvas;
 #[cfg(feature = "std")]
 mod filter;
@@ -21,6 +22,7 @@ pub use callback::CallbackSource;
 pub use composite::CompositeSource;
 pub use crop::CropSource;
 pub use edge_replicate::EdgeReplicateSource;
+pub use effects::EffectSource;
 pub use expand_canvas::ExpandCanvasSource;
 #[cfg(feature = "std")]
 pub use filter::FilterSource;
