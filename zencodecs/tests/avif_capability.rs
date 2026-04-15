@@ -178,13 +178,23 @@ fn build_minimal_exif_with_orientation(value: u16) -> Vec<u8> {
     v
 }
 
-/// AVIF stores EXIF in an `Exif` HEIF item. zenavif's encode path does
-/// not currently propagate the inbound `Metadata::exif` blob into that
-/// item — the bytes are silently dropped. This test stays as the
-/// regression gate so that, the day the encoder wires it up, this
-/// passes without further code changes.
+/// AVIF stores EXIF in an `Exif` HEIF item. The whole metadata
+/// pipeline (zencodecs → zenavif → ravif → zenavif-serialize) does
+/// pass the bytes through, AND the encoded AVIF *does* contain the
+/// "Exif" 4-byte box type at the right place — so the item is
+/// emitted. But per ISO/IEC 23008-12 §A.2.1, the AVIF Exif item
+/// payload must begin with a 4-byte big-endian `tiff_header_offset`
+/// before the TIFF data. zenavif-serialize/lib.rs:515 writes the
+/// caller's bytes directly as the extent payload — no offset prefix
+/// — so zenavif-parse rejects the item with `InvalidData("EXIF
+/// offset exceeds item size")`, which surfaces as
+/// `extracted_meta.exif == None` after decode.
+///
+/// Tracked diagnostic in `avif_gainmap_diagnostic.rs`.
+/// Fix needs to land in zenavif-serialize (prepend `[0u8; 4]` to
+/// the extent payload) — out of scope for zencodecs alone.
 #[cfg(feature = "avif-encode")]
-#[ignore = "AVIF encoder doesn't propagate Metadata::exif into the Exif item"]
+#[ignore = "zenavif-serialize emits AVIF Exif item without tiff_header_offset prefix (ISO 23008-12 §A.2.1)"]
 #[test]
 fn avif_exif_round_trip_preserves_blob() {
     let img = rgb8_image(32, 32);
