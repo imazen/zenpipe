@@ -22,13 +22,13 @@ zenpipe = { path = "..", features = [
     "nodes-filters",
     "std", "lossless-jpeg",
 ] }
-zennode = { path = "../../zennode/zennode", features = ["derive", "serde"] }
+zennode = { workspace = true, features = ["serde"] }
 
 clap = { version = "4.6.0", features = ["derive"] }
 glob = "0.3.2"
 rayon = "1.10.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde.workspace = true
+serde_json.workspace = true
 
 # [patch.crates-io] moved to workspace root Cargo.toml
 

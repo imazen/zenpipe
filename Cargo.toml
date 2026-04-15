@@ -85,33 +85,33 @@ nodes-all = [
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", default-features = false , version = "0.2.0" }
 # Image layout: constraint modes, orientation, smart crop
-zenlayout = { path = "zenlayout", default-features = false, features = ["smart-crop"] , version = "0.2.1" }
+zenlayout = { workspace = true, features = ["smart-crop"] }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
 zenblend = { path = "../zenblend", default-features = false , version = "0.1.2" }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
-zenpixels-convert = { version = "0.2.2", default-features = false }
+zenpixels-convert.workspace = true
 # Pixel buffer types, ColorContext, ICC/CICP metadata
-zenpixels = { version = "0.2.2", default-features = false }
+zenpixels.workspace = true
 # Codec trait abstraction (decode/encode, animation, streaming)
-zencodec = { version = "0.1.16", default-features = false }
+zencodec.workspace = true
 # Cooperative cancellation
-enough = { version = "0.4", default-features = false }
+enough.workspace = true
 # Error location tracking (re-exported by zenpixels for BufferError)
-whereat = { version = "0.1.5", default-features = false }
+whereat.workspace = true
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
-linear-srgb = { path = "../linear-srgb", default-features = false , version = "0.6.7" }
+linear-srgb.workspace = true
 # f32 ↔ u8 reinterpretation
-bytemuck = { version = "1", features = ["derive"] }
+bytemuck = { workspace = true, features = ["derive"] }
 # HashMap for graph compilation
 hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
-zenfilters = { path = "zenfilters", optional = true , version = "0.1.0" }
+zenfilters = { workspace = true, optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
 moxcms = { version = "*", optional = true }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
-zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true , version = "0.1.1" }
+zennode = { workspace = true, optional = true }
 # Unified codec dispatch — node definitions for codec/quantize/quality-intent
-zencodecs = { path = "zencodecs", default-features = false, optional = true , version = "0.1.0" }
+zencodecs = { workspace = true, optional = true }
 
 # ── Optional codec crates for node registry ──
 # Note: default-features enabled because zenjpeg's codec.rs unconditionally
@@ -126,7 +126,7 @@ zentiff = { path = "../zenextras/zentiff", default-features = false, optional = 
 zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true , version = "0.1.3" }
 zenquant = { path = "../zenquant", default-features = false, optional = true , version = "0.1.2" }
 # JSON serialization (optional — for schema export)
-serde_json = { version = "1", optional = true }
+serde_json = { workspace = true, optional = true }
 # Imageflow v2 compatibility (optional — for running legacy imageflow pipelines)
 imageflow_types = { path = "../../imageflow/imageflow_types", optional = true , version = "0.1.0" }
 imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true , version = "0.1.0" }
@@ -139,8 +139,8 @@ zensally-zentract = { path = "../zensally/crates/zensally-zentract", default-fea
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] , version = "0.8.2" }
 zengif = { path = "../zengif", features = ["zencodec", "quantizr"] , version = "0.7.1" }
-zennode = { path = "../zennode/zennode", features = ["derive"] , version = "0.1.1" }
-serde_json = "1"
+zennode = { workspace = true }
+serde_json.workspace = true
 codec-corpus = "1"
 imgref = "1.12"
 rgb = { version = "0.8", features = ["as-bytes"] }
@@ -158,6 +158,25 @@ required-features = ["zennode", "std"]
 
 [workspace]
 members = ["zencodecs", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
+
+[workspace.dependencies]
+# ── Shared across 3+ members ──
+enough = { version = "0.4", default-features = false }
+whereat = { version = "0.1.5", default-features = false }
+bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
+linear-srgb = { version = "0.6.8", default-features = false }
+zenpixels = { version = "0.2.3", default-features = false }
+zenpixels-convert = { version = "0.2.4", default-features = false }
+zencodec = { version = "0.1.16", default-features = false }
+# ── Serialization ──
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ── Workspace members ──
+zenfilters = { path = "zenfilters", version = "0.1.0" }
+zencodecs = { path = "zencodecs", version = "0.1.0", default-features = false }
+zenlayout = { path = "zenlayout", version = "0.2.1", default-features = false }
+# ── External path deps ──
+zennode = { path = "../zennode/zennode", version = "0.1.1", default-features = false, features = ["derive"] }
 
 [patch.crates-io]
 # Consolidated from workspace members — all path deps for local development

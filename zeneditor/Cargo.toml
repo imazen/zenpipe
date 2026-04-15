@@ -38,30 +38,30 @@ decode = [
 [dependencies]
 # Core pipeline (parent directory)
 zenpipe = { path = "..", default-features = false, features = ["zennode"] }
-zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"] }
+zennode.workspace = true
 
 # Photo filters (workspace sibling)
-zenfilters = { path = "../zenfilters", features = ["zennode"], optional = true }
+zenfilters = { workspace = true, features = ["zennode"], optional = true }
 
 # Codec traits and types (Metadata, ImageFormat)
-zencodec = { version = "0.1.16", default-features = false }
+zencodec.workspace = true
 
 # Pixel format descriptors
-zenpixels = { version = "0.2.2", default-features = false }
+zenpixels.workspace = true
 
 # Cooperative cancellation
-enough = { version = "0.4", default-features = false }
+enough.workspace = true
 
 # Serialization for Command/ViewUpdate protocol and adjustment maps
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde.workspace = true
+serde_json.workspace = true
 
 # Unified codec dispatch for encoding and decoding (workspace sibling).
-zencodecs = { path = "../zencodecs", default-features = false, optional = true }
+zencodecs = { workspace = true, optional = true }
 
 [dev-dependencies]
-zenfilters = { path = "../zenfilters", features = ["zennode"] }
-zencodecs = { path = "../zencodecs", default-features = false, features = [
+zenfilters = { workspace = true, features = ["zennode"] }
+zencodecs = { workspace = true, features = [
     "jpeg", "png", "webp", "gif", "gif-quantizr",
     "jxl-encode", "avif-encode",
     "jxl-decode", "avif-decode", "heic-decode",
