@@ -1,0 +1,74 @@
+name: Film Look Gallery
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/filters/film_looks.rs'
+      - 'examples/film_look_gallery.rs'
+      - 'site/**'
+      - '.github/workflows/gallery.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-gallery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Patch path deps for CI
+        shell: bash
+        run: |
+          sed \
+            -e 's|, path = "\.\./zenpixels/zenpixels"||g' \
+            -e 's|, path = "\.\./zenpixels/zenpixels-convert"||g' \
+            -e 's|, path = "\.\./whereat"||g' \
+            -e 's|, path = "\.\./zensim/zensim"||g' \
+            -e 's|, path = "\.\./zenresize"||g' \
+            -e '/zencodecs/d' \
+            -e '/zenraw/d' \
+            -e '/zenbench/d' \
+            -e '/zennode/d' \
+            -e '/\[patch.crates-io\]/,$d' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
+
+      - name: Build gallery tool
+        run: cargo build --release --features experimental --example film_look_gallery
+
+      - name: Generate gallery (codec-corpus downloads images automatically)
+        run: |
+          mkdir -p _site/gallery
+          ./target/release/examples/film_look_gallery _site/gallery
+
+      - name: Copy site files
+        run: cp site/index.html _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+
+  deploy:
+    needs: build-gallery
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

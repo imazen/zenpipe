@@ -1,0 +1,119 @@
+[package]
+name = "zenfilters"
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.93"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Photo filter operations on planar Oklab f32 data with SIMD acceleration"
+repository = "https://github.com/imazen/zenfilters"
+keywords = ["image", "filter", "oklab", "simd", "photo"]
+categories = ["multimedia::images", "graphics"]
+exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/"]
+
+[lints.rust]
+# CI strips some features — allow their cfg references to remain
+unexpected_cfgs = { level = "allow" }
+
+[features]
+default = []
+experimental = []
+srgb-compat = []
+serde = ["dep:serde", "dep:serde-big-array"]
+srgb-filters = ["dep:rgb", "zenpixels/rgb"]
+zennode = ["dep:zennode"]
+
+[dependencies]
+archmage = { version = "0.9.17", features = ["avx512"] }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+serde-big-array = { version = "0.5.1", optional = true }
+bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
+linear-srgb = { version = "0.6.8" }
+magetypes = { version = "0.9.17" }
+rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
+zenpixels = { version = "0.2.3", features = ["planar"] }
+whereat = { version = "0.1.5" }
+zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
+zenpixels-convert = { version = "0.2.4" }
+
+[dev-dependencies]
+imgref = "1.12"
+palette = { version = "0.7", default-features = false, features = ["std"] }
+rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
+enough = "0.4"
+zensim = { version = "0.2.5", default-features = false }
+zenpixels = { version = "0.2.2", features = ["planar", "rgb"] }
+zenpixels-convert = { version = "0.2.4", features = ["planar"] }
+
+# Native-only: deps that don't compile for wasm32
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
+zenbench = { version = "0.1.2", features = ["criterion-compat"] }
+libblur = { version = "0.23", default-features = true }
+zenresize = { version = "0.2.1", default-features = false, features = ["std"] }
+image = "0.25"
+codec-corpus = "1.0.3"
+
+[[example]]
+name = "blur_bench"
+required-features = ["experimental"]
+
+[[example]]
+name = "fused_bench"
+required-features = ["experimental"]
+
+[[example]]
+name = "train_autotune"
+required-features = ["experimental"]
+
+[[example]]
+name = "compare_autotune"
+required-features = ["experimental"]
+
+[[example]]
+name = "darktable_parity"
+required-features = ["experimental"]
+
+[[example]]
+name = "mobile_parity"
+required-features = ["experimental"]
+
+[[example]]
+name = "perf_probe"
+required-features = ["experimental"]
+
+[[example]]
+name = "warp_bench"
+required-features = ["experimental"]
+
+[[example]]
+name = "film_look_gallery"
+required-features = ["experimental"]
+
+[[example]]
+name = "filter_audit"
+required-features = ["experimental"]
+
+[[test]]
+name = "reference_validation"
+
+[[test]]
+name = "quality_validation"
+
+[[test]]
+name = "imagemagick_comparison"
+required-features = ["srgb-compat"]
+
+[[bench]]
+name = "row_batch"
+harness = false
+required-features = ["srgb-filters"]
+
+[[bench]]
+name = "color_grading"
+harness = false
+
+[package.metadata.superwork.ci]
+strategy = "strip_path"
+delete = ["zencodecs", "zenraw", "zenbench", "zennode"]
+delete_sections = ["patch.crates-io"]
+

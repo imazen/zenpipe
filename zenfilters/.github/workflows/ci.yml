@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-latest
+          - macos-26-intel
+          - windows-latest
+          - windows-11-arm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Patch path deps for CI
+        shell: bash
+        run: |
+          # Published deps: strip path overrides
+          # Unpublished dev-deps (zencodecs, zenraw, zenbench): delete lines
+          sed \
+            -e 's|, path = "\.\./zenpixels/zenpixels"||g' \
+            -e 's|, path = "\.\./zenpixels/zenpixels-convert"||g' \
+            -e 's|, path = "\.\./whereat"||g' \
+            -e 's|, path = "\.\./zensim/zensim"||g' \
+            -e 's|, path = "\.\./zenresize"||g' \
+            -e '/zencodecs/d' \
+            -e '/zenraw/d' \
+            -e '/zenbench/d' \
+            -e '/zennode/d' \
+            -e '/\[patch.crates-io\]/,$d' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
+
+      - name: Test (default features)
+        run: cargo test --lib --tests
+
+      - name: Test (serde)
+        run: cargo test --lib --tests --features serde
+
+      - name: Test (srgb-filters)
+        run: cargo test --lib --tests --features srgb-filters
+
+      - name: Test (all features)
+        run: cargo test --lib --tests --features "experimental,serde,srgb-filters"
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Patch path deps for CI
+        shell: bash
+        run: |
+          sed \
+            -e 's|, path = "\.\./zenpixels/zenpixels"||g' \
+            -e 's|, path = "\.\./zenpixels/zenpixels-convert"||g' \
+            -e 's|, path = "\.\./whereat"||g' \
+            -e 's|, path = "\.\./zensim/zensim"||g' \
+            -e 's|, path = "\.\./zenresize"||g' \
+            -e '/zencodecs/d' \
+            -e '/zenraw/d' \
+            -e '/zenbench/d' \
+            -e '/zennode/d' \
+            -e '/\[patch.crates-io\]/,$d' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
+
+      - name: Clippy (all features)
+        run: cargo clippy --lib --tests --features "experimental,serde,srgb-filters" -- -D warnings
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Patch path deps for CI
+        shell: bash
+        run: |
+          sed \
+            -e 's|, path = "\.\./zenpixels/zenpixels"||g' \
+            -e 's|, path = "\.\./zenpixels/zenpixels-convert"||g' \
+            -e 's|, path = "\.\./whereat"||g' \
+            -e 's|, path = "\.\./zensim/zensim"||g' \
+            -e 's|, path = "\.\./zenresize"||g' \
+            -e '/zencodecs/d' \
+            -e '/zenraw/d' \
+            -e '/zenbench/d' \
+            -e '/zennode/d' \
+            -e '/\[patch.crates-io\]/,$d' \
+            Cargo.toml > Cargo.toml.ci && mv Cargo.toml.ci Cargo.toml
+          rm -f Cargo.lock
+
+      - name: Check MSRV
+        run: cargo hack check --rust-version
