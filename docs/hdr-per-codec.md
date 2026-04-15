@@ -23,7 +23,7 @@ Legend: **✓** working + tested / **○** working but no test / **-** stub / **
 | TIFF | ○ | 16 | ○ | × | ○ | ○ | × | × | × | × |
 | BMP | ✓ | 8 / 16 | × | × | × | × | × | × | × | × |
 | PNM/PFM | ✓ | 8 / f32 (PFM) | × | × | × | × | × | × | × | × |
-| Farbfeld | ✓ | 16 | × | × | × | × | × | × | × | × |
+| Farbfeld | ✓ | 16 (U16 buffer) | × | × | × | × | × | × | × | × |
 
 ### Encode
 

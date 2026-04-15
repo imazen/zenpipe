@@ -193,16 +193,54 @@ fn farbfeld_rgba8_round_trip() {
     assert_eq!(decoded.info().format, ImageFormat::Farbfeld);
 }
 
-/// Farbfeld is designed to preserve 16-bit RGBA precision. Today
-/// zencodecs surfaces it as 8-bit through the trait — when bit depth
-/// preservation is wired (likely the same fix as the wide-gamut
-/// pipeline gap), this test becomes a true precision assertion.
+/// Farbfeld is designed to preserve 16-bit RGBA precision. zenbitmaps'
+/// Farbfeld adapter surfaces it correctly as a U16 pixel buffer, and
+/// round-tripping 16-bit input is byte-equal (format is lossless).
 #[cfg(feature = "bitmaps")]
-#[ignore = "Farbfeld decode currently narrows to 8-bit through the trait interface"]
 #[test]
-fn farbfeld_round_trip_preserves_16bit_precision() {
-    panic!(
-        "Pending: 16-bit pipeline support. \
-         Assertion: encode RGBA16 → decode RGBA16 → byte-equal pixels"
+fn farbfeld_rgba16_round_trip_is_lossless_pixel_byte_equal() {
+    use imgref::ImgVec;
+    use rgb::Rgba;
+    use zenpixels::{ChannelType, PixelSlice};
+
+    // Source: distinct 16-bit pattern per channel — picks up narrowing
+    // (each byte of the u16 matters).
+    let pixels: Vec<Rgba<u16>> = (0..32 * 32)
+        .map(|i| Rgba {
+            r: (i * 257) as u16,
+            g: (i * 251) as u16,
+            b: (65535 - i * 257) as u16,
+            a: 0xDEAD,
+        })
+        .collect();
+    let img = ImgVec::new(pixels, 32, 32);
+    let typed: PixelSlice<'_, Rgba<u16>> = PixelSlice::from(img.as_ref());
+
+    let bytes = EncodeRequest::new(ImageFormat::Farbfeld)
+        .encode(typed.erase(), false)
+        .expect("encode Farbfeld rgba16")
+        .into_vec();
+
+    let decoded = DecodeRequest::new(&bytes)
+        .decode_full_frame()
+        .expect("decode Farbfeld");
+    let desc = decoded.pixels().descriptor();
+    assert_eq!(
+        desc.channel_type(),
+        ChannelType::U16,
+        "Farbfeld decode must preserve 16-bit channel type, got {:?}",
+        desc.channel_type()
+    );
+
+    let actual: &[u8] = decoded.pixels().as_strided_bytes();
+    let original: &[u8] = bytemuck::cast_slice(img.buf());
+    assert_eq!(
+        actual.len(),
+        original.len(),
+        "Farbfeld round-trip must preserve buffer byte-length"
+    );
+    assert_eq!(
+        actual, original,
+        "Farbfeld is lossless — 16-bit pixels must be byte-equal"
     );
 }
