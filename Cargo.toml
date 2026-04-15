@@ -151,6 +151,10 @@ zenbitmaps = { path = "../zenbitmaps", features = ["bmp"] , version = "0.1.3" }
 name = "bench_windowed"
 required-features = ["std"]
 
+[[example]]
+name = "riapi_reference"
+required-features = ["json-schema", "zennode"]
+
 [[bench]]
 name = "session_cache"
 harness = false
