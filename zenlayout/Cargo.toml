@@ -1,0 +1,24 @@
+[package]
+name = "zenlayout"
+version = "0.2.2"
+edition = "2024"
+rust-version = "1.89"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Image layout computation with constraint modes, orientation, and decoder negotiation"
+repository = "https://github.com/imazen/zenlayout"
+keywords = ["image", "layout", "resize", "crop", "orientation"]
+categories = ["graphics", "multimedia::images", "no-std"]
+exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/"]
+
+[features]
+default = ["std"]
+std = ["num-traits/std"]
+svg = ["std"]
+riapi = []
+smart-crop = []
+# zennode = ["dep:zennode", "alloc"]
+
+[dependencies]
+whereat = { version = "0.1.5", default-features = false }
+num-traits = { version = "0.2.19", default-features = false, features = ["libm"] }
+# zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="826" viewBox="0 0 400 826">
+<style>
+  text { font-family: "Consolas", "DejaVu Sans Mono", "Courier New", monospace; }
+  .label { font-size: 13px; font-weight: bold; fill: #333; }
+  .dim { font-size: 11px; font-weight: bold; fill: #1a4a70; }
+  .annotation { font-size: 11px; fill: #666; }
+  .content { fill: #6ba3d6; stroke: #2c6faa; stroke-width: 1.5; }
+  .content-fill { fill: #6ba3d6; }
+  .discard { fill: #c5d5e4; stroke: #9ab0c5; stroke-width: 1; }
+  .padding { fill: #fff; stroke: #bbb; stroke-width: 1; }
+  .extend-fill { fill: #b8d4ee; stroke: #7baed0; stroke-width: 1; stroke-dasharray: 4,2; }
+  .arrow { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+  .arrowhead { fill: #666; }
+  @media (prefers-color-scheme: dark) {
+    .label { fill: #e0e0e0; }
+    .dim { fill: #9dc4e8; }
+    .annotation { fill: #aaa; }
+    .content { fill: #3a72a4; stroke: #5a9fd4; }
+    .content-fill { fill: #3a72a4; }
+    .discard { fill: #2c3d4d; stroke: #4a6070; }
+    .padding { fill: #fff; stroke: #666; }
+    .extend-fill { fill: #2a4a65; stroke: #4a7a9e; }
+    .arrow { stroke: #888; }
+    .arrowhead { fill: #888; }
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" class="arrowhead"/>
+  </marker>
+</defs>
+<text x="200" y="44" class="label" text-anchor="middle">Source</text>
+<rect x="50.0" y="52.0" width="300.0" height="168.8" class="content" rx="2"/>
+<text x="200.0" y="136.4" class="dim" text-anchor="middle" dominant-baseline="central">1920×1080</text>
+<text x="200" y="234.8" class="annotation" text-anchor="middle">Rotate90</text>
+<line x1="200" y1="260.0" x2="200" y2="294.0" class="arrow"/>
+<text x="200" y="316" class="label" text-anchor="middle">Orient</text>
+<rect x="143.8" y="324.0" width="112.5" height="200.0" class="content" rx="2"/>
+<text x="200.0" y="424.0" class="dim" text-anchor="middle" dominant-baseline="central">1080×1920</text>
+<text x="200" y="538.0" class="annotation" text-anchor="middle">Rotate90</text>
+<line x1="200" y1="532.0" x2="200" y2="566.0" class="arrow"/>
+<text x="200" y="588" class="label" text-anchor="middle">Resize</text>
+<rect x="169.1" y="596.0" width="61.9" height="110.0" class="content" rx="2"/>
+<text x="200.0" y="651.0" class="dim" text-anchor="middle" dominant-baseline="central">540×960</text>
+</svg>
