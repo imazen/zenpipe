@@ -23,7 +23,7 @@ zenpixels-convert = { version = "0.2", path = "../../zenpixels/zenpixels-convert
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
+zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec", "trellis"] }
 zenwebp = { path = "../../zenwebp", optional = true, features = ["zencodec"] }
 zengif = { path = "../../zengif", optional = true, features = ["zencodec"] }
 zenavif = { path = "../../zenavif", optional = true, features = ["zencodec"] }
