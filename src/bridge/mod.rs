@@ -1235,15 +1235,15 @@ mod core_tests {
     fn parse_constraint_mode_aliases() {
         assert_eq!(
             parse_constraint_mode("crop").unwrap(),
-            zenresize::ConstraintMode::FitCrop
+            zenlayout::ConstraintMode::FitCrop
         );
         assert_eq!(
             parse_constraint_mode("pad").unwrap(),
-            zenresize::ConstraintMode::FitPad
+            zenlayout::ConstraintMode::FitPad
         );
         assert_eq!(
             parse_constraint_mode("within").unwrap(),
-            zenresize::ConstraintMode::Within
+            zenlayout::ConstraintMode::Within
         );
     }
 
@@ -1461,15 +1461,15 @@ mod tests {
     fn parse_constraint_mode_aliases() {
         assert_eq!(
             parse_constraint_mode("crop").unwrap(),
-            zenresize::ConstraintMode::FitCrop
+            zenlayout::ConstraintMode::FitCrop
         );
         assert_eq!(
             parse_constraint_mode("pad").unwrap(),
-            zenresize::ConstraintMode::FitPad
+            zenlayout::ConstraintMode::FitPad
         );
         assert_eq!(
             parse_constraint_mode("within").unwrap(),
-            zenresize::ConstraintMode::Within
+            zenlayout::ConstraintMode::Within
         );
     }
 

@@ -216,11 +216,11 @@ pub(crate) fn convert_single(
     match schema_id {
         "zenlayout.crop" => convert_crop(node),
         "zenlayout.orient" => convert_orient(node),
-        "zenlayout.flip_h" => Ok(NodeOp::Orient(zenresize::Orientation::FlipH)),
-        "zenlayout.flip_v" => Ok(NodeOp::Orient(zenresize::Orientation::FlipV)),
-        "zenlayout.rotate_90" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate90)),
-        "zenlayout.rotate_180" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate180)),
-        "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenresize::Orientation::Rotate270)),
+        "zenlayout.flip_h" => Ok(NodeOp::Orient(zenlayout::Orientation::FlipH)),
+        "zenlayout.flip_v" => Ok(NodeOp::Orient(zenlayout::Orientation::FlipV)),
+        "zenlayout.rotate_90" => Ok(NodeOp::Orient(zenlayout::Orientation::Rotate90)),
+        "zenlayout.rotate_180" => Ok(NodeOp::Orient(zenlayout::Orientation::Rotate180)),
+        "zenlayout.rotate_270" => Ok(NodeOp::Orient(zenlayout::Orientation::Rotate270)),
         "zenresize.constrain" => convert_zenresize_constrain(node),
         "zenlayout.constrain" => convert_zenlayout_constrain(node),
 

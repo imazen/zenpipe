@@ -3804,7 +3804,6 @@ dependencies = [
  "safe_unaligned_simd",
  "whereat",
  "zenblend 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "zenlayout 0.2.2",
  "zenpixels",
 ]
 

@@ -1,5 +1,5 @@
 //! Geometry fusion: compile a run of adjacent geometry nodes into a single
-//! `NodeOp::Layout` using `zenresize::Pipeline`.
+//! `NodeOp::Layout` using `zenlayout::Pipeline`.
 
 use zennode::NodeInstance;
 
@@ -35,7 +35,7 @@ pub(crate) fn is_geometry_node(schema_id: &str) -> bool {
 
 /// Compile a run of adjacent geometry nodes into a single `NodeOp::Layout`.
 ///
-/// Feeds the geometry run through `zenresize::Pipeline` to produce a single
+/// Feeds the geometry run through `zenlayout::Pipeline` to produce a single
 /// `LayoutPlan`, then emits `NodeOp::Layout { plan, filter }`. This avoids
 /// creating separate Crop, Orient, Resize graph nodes — everything is fused
 /// into one streaming pass.
@@ -59,7 +59,7 @@ pub(crate) fn compile_geometry_run(
         )));
     }
 
-    let mut pipeline = zenresize::Pipeline::new(source_w, source_h);
+    let mut pipeline = zenlayout::Pipeline::new(source_w, source_h);
     let mut filter: Option<zenresize::Filter> = None;
 
     for &node in nodes {
@@ -99,11 +99,11 @@ pub(crate) fn compile_geometry_run(
                     .and_then(|v| v.as_str().map(|s| s.to_string()))
                     .unwrap_or_default();
                 let mode = match mode_str.as_str() {
-                    "expand" => zenresize::RotateMode::Expand {
-                        color: zenresize::CanvasColor::Transparent,
+                    "expand" => zenlayout::RotateMode::Expand {
+                        color: zenlayout::CanvasColor::Transparent,
                     },
-                    "original" => zenresize::RotateMode::CropToOriginal,
-                    _ => zenresize::RotateMode::InscribedCrop,
+                    "original" => zenlayout::RotateMode::CropToOriginal,
+                    _ => zenlayout::RotateMode::InscribedCrop,
                 };
                 pipeline = pipeline.rotate_angle(degrees, mode);
             }
@@ -113,10 +113,10 @@ pub(crate) fn compile_geometry_run(
                 let mode_str = param_str(node, "mode")?;
                 let mode = parse_constraint_mode(&mode_str)?;
                 let constraint = match (w, h) {
-                    (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
-                    (Some(w), None) => zenresize::Constraint::width_only(mode, w),
-                    (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
-                    (None, None) => zenresize::Constraint::new(mode, 0, 0),
+                    (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
+                    (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
+                    (None, Some(h)) => zenlayout::Constraint::height_only(mode, h),
+                    (None, None) => zenlayout::Constraint::new(mode, 0, 0),
                 };
                 pipeline = pipeline.constrain(constraint);
                 // down_filter is optional — absent means auto (Robidoux).
@@ -134,10 +134,10 @@ pub(crate) fn compile_geometry_run(
                 let mode_str = param_str(node, "mode")?;
                 let mode = parse_constraint_mode(&mode_str)?;
                 let constraint = match (w, h) {
-                    (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
-                    (Some(w), None) => zenresize::Constraint::width_only(mode, w),
-                    (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
-                    (None, None) => zenresize::Constraint::new(mode, 0, 0),
+                    (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
+                    (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
+                    (None, Some(h)) => zenlayout::Constraint::height_only(mode, h),
+                    (None, None) => zenlayout::Constraint::new(mode, 0, 0),
                 };
                 pipeline = pipeline.constrain(constraint);
             }
@@ -168,7 +168,7 @@ pub(crate) fn compile_geometry_run(
             "geometry fusion plan failed: {e}"
         )))
     })?;
-    let offer = zenresize::DecoderOffer::full_decode(source_w, source_h);
+    let offer = zenlayout::DecoderOffer::full_decode(source_w, source_h);
     let plan = ideal.finalize(&request, &offer);
     let f = filter.unwrap_or(zenresize::Filter::Robidoux);
 

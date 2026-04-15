@@ -51,7 +51,8 @@ use crate::format::PixelFormat;
 use crate::sidecar::{ProcessedSidecar, SidecarPlan, SidecarStream};
 use crate::sources::MaterializedSource;
 
-use zenresize::{Filter, Size};
+use zenresize::Filter;
+use zenlayout::Size;
 
 // ─── Configuration ───
 
@@ -421,7 +422,7 @@ fn process_sidecar(
     // transforms from the ratio of source-to-output dimensions.
     let primary_output = Size::new(primary.width(), primary.height());
 
-    let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
+    let (primary_ideal, _request) = zenlayout::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_output.width, primary_output.height)
         .plan()
         .map_err(|e| {
@@ -455,7 +456,7 @@ fn process_sidecar_from_dims(
 ) -> crate::PipeResult<ProcessedSidecar> {
     let sidecar_source = Size::new(sidecar_stream.width, sidecar_stream.height);
 
-    let (primary_ideal, _request) = zenresize::Pipeline::new(source_info.width, source_info.height)
+    let (primary_ideal, _request) = zenlayout::Pipeline::new(source_info.width, source_info.height)
         .fit(primary_w, primary_h)
         .plan()
         .map_err(|e| {

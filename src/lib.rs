@@ -22,6 +22,7 @@ use whereat::at;
 
 pub mod cache;
 mod error;
+pub mod execute_layout;
 pub mod format;
 pub mod graph;
 pub mod limits;

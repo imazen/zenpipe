@@ -180,13 +180,13 @@ fn streaming_4k_resize_filter() {
 
 #[test]
 fn streaming_4k_layout() {
-    use zenresize::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
+    use zenlayout::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
 
     let t0 = Instant::now();
 
     let request = DecoderRequest::new(Size::new(1920, 1080), Orientation::Identity);
     let offer = DecoderOffer::full_decode(WIDTH, HEIGHT);
-    let (ideal, _req) = zenresize::Pipeline::new(WIDTH, HEIGHT)
+    let (ideal, _req) = zenlayout::Pipeline::new(WIDTH, HEIGHT)
         .constrain(Constraint::new(ConstraintMode::Distort, 1920, 1080))
         .plan()
         .unwrap();
@@ -231,15 +231,15 @@ fn streaming_4k_layout() {
 
 #[test]
 fn streaming_4k_layout_fliph() {
-    use zenresize::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
+    use zenlayout::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
 
     let request = DecoderRequest::new(Size::new(1920, 1080), Orientation::FlipH);
     let offer = DecoderOffer::full_decode(WIDTH, HEIGHT);
-    let (ideal, _req) = zenresize::Pipeline::new(WIDTH, HEIGHT)
+    let (ideal, _req) = zenlayout::Pipeline::new(WIDTH, HEIGHT)
         .constrain(Constraint::new(ConstraintMode::Distort, 1920, 1080))
         .plan()
         .unwrap();
-    let (ideal, _): (zenresize::IdealLayout, _) = (ideal, _req);
+    let (ideal, _): (zenlayout::IdealLayout, _) = (ideal, _req);
     let plan = ideal.finalize(&request, &offer);
 
     let mut g = PipelineGraph::new();

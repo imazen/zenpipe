@@ -19,7 +19,8 @@ use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 use crate::sources::MaterializedSource;
 
 use zencodec::GainMapParams;
-use zenresize::{DecoderOffer, DecoderRequest, Filter, IdealLayout, LayoutPlan, Orientation, Size};
+use zenresize::Filter;
+use zenlayout::{DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation, Size};
 
 /// What kind of auxiliary data the sidecar carries.
 #[derive(Clone, Debug)]
@@ -186,7 +187,7 @@ mod tests {
     use super::*;
     use crate::format::RGBA8_SRGB;
     use crate::strip::Strip;
-    use zenresize::Pipeline;
+    use zenlayout::Pipeline;
 
     /// A test source that produces solid-color strips.
     struct SolidSource {

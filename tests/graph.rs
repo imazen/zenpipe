@@ -148,7 +148,7 @@ fn pixel_op_fusion() {
 fn orient_flip_h() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipH));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::FlipH));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -172,7 +172,7 @@ fn orient_flip_h() {
 fn orient_flip_v() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipV));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::FlipV));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -193,7 +193,7 @@ fn orient_flip_v() {
 fn orient_rotate_90() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Rotate90));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Rotate90));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -211,7 +211,7 @@ fn orient_rotate_90() {
 fn orient_rotate_180() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Rotate180));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Rotate180));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -234,7 +234,7 @@ fn orient_rotate_180() {
 fn orient_transpose() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Transpose));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Transpose));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -262,7 +262,7 @@ fn orient_identity_passthrough() {
     // Identity orientation should be a no-op (no materialization)
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Identity));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Identity));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);
@@ -280,7 +280,7 @@ fn orient_identity_passthrough() {
 #[test]
 fn layout_resize_via_zenresize() {
     // Use Layout node to resize via zenresize's full pipeline
-    use zenresize::{DecoderOffer, DecoderRequest, Orientation, Size};
+    use zenlayout::{DecoderOffer, DecoderRequest, Orientation, Size};
 
     let in_w = 8u32;
     let in_h = 8u32;
@@ -290,9 +290,9 @@ fn layout_resize_via_zenresize() {
     // Build a LayoutPlan for simple resize (no crop, no orient, no canvas padding)
     let request = DecoderRequest::new(Size::new(out_w, out_h), Orientation::Identity);
     let offer = DecoderOffer::full_decode(in_w, in_h);
-    let ideal = zenresize::Pipeline::new(in_w, in_h)
-        .constrain(zenresize::Constraint::new(
-            zenresize::ConstraintMode::Distort,
+    let ideal = zenlayout::Pipeline::new(in_w, in_h)
+        .constrain(zenlayout::Constraint::new(
+            zenlayout::ConstraintMode::Distort,
             out_w,
             out_h,
         ))
@@ -404,7 +404,7 @@ fn crop_then_orient_chain() {
         w: 4,
         h: 2,
     });
-    let flip = g.add_node(NodeOp::Orient(zenresize::Orientation::FlipH));
+    let flip = g.add_node(NodeOp::Orient(zenlayout::Orientation::FlipH));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, crop, EdgeKind::Input);
     g.add_edge(crop, flip, EdgeKind::Input);
@@ -518,11 +518,11 @@ fn auto_format_conversion_for_composite() {
 #[test]
 fn layout_composite_streaming() {
     // LayoutComposite should stream (not materialize) — composite fg over bg
-    use zenresize::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
+    use zenlayout::{Constraint, ConstraintMode, DecoderOffer, DecoderRequest, Orientation, Size};
 
     let request = DecoderRequest::new(Size::new(4, 4), Orientation::Identity);
     let offer = DecoderOffer::full_decode(8, 8);
-    let (ideal, _req) = zenresize::Pipeline::new(8, 8)
+    let (ideal, _req) = zenlayout::Pipeline::new(8, 8)
         .constrain(Constraint::new(ConstraintMode::Distort, 4, 4))
         .plan()
         .unwrap();

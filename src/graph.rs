@@ -185,7 +185,7 @@ pub enum NodeOp {
 
     // === Layout: crop + orient + resize + canvas via zenresize ===
     /// Execute a [`LayoutPlan`] — handles crop, orientation, resize, and canvas
-    /// placement in a single streaming pass via [`zenresize::streaming_from_plan_batched`].
+    /// placement in a single streaming pass via [`crate::execute_layout::streaming_from_plan_batched`].
     ///
     /// Input must be `Rgba8`. All steps (crop, resize, padding, orientation)
     /// are handled inside one [`StreamingResize`](zenresize::StreamingResize)
@@ -194,7 +194,7 @@ pub enum NodeOp {
     /// Falls back to materializing `execute_layout` only for edge extension
     /// (`content_size`).
     Layout {
-        plan: zenresize::LayoutPlan,
+        plan: zenlayout::LayoutPlan,
         filter: zenresize::Filter,
     },
 
@@ -206,7 +206,7 @@ pub enum NodeOp {
     /// Both inputs must be `Rgba8`. Delegates to
     /// [`zenresize::execute_layout_with_background`].
     LayoutComposite {
-        plan: zenresize::LayoutPlan,
+        plan: zenlayout::LayoutPlan,
         filter: zenresize::Filter,
     },
 
@@ -235,7 +235,7 @@ pub enum NodeOp {
     /// Equivalent to [`Layout`](NodeOp::Layout) but without requiring
     /// manual [`LayoutPlan`] construction.
     Constrain {
-        mode: zenresize::ConstraintMode,
+        mode: zenlayout::ConstraintMode,
         w: Option<u32>,
         h: Option<u32>,
         /// Optional EXIF orientation (1-8) to apply during layout.
@@ -248,10 +248,10 @@ pub enum NodeOp {
         /// None = center (0.5, 0.5).
         gravity: Option<(f32, f32)>,
         /// Canvas fill color for pad modes. None = transparent.
-        canvas_color: Option<zenresize::CanvasColor>,
+        canvas_color: Option<zenlayout::CanvasColor>,
         /// Matte color for alpha compositing during resize. None = no matte.
         /// Execution pending zenresize support for matte compositing during resize.
-        matte_color: Option<zenresize::CanvasColor>,
+        matte_color: Option<zenlayout::CanvasColor>,
         /// Scaling colorspace: true = linear light, false = sRGB gamma. None = linear (default).
         scaling_linear: Option<bool>,
         /// Kernel width scale factor (>1.0 = softer, <1.0 = sharper). None = 1.0.
@@ -280,8 +280,8 @@ pub enum NodeOp {
     ResizeAdvanced(zenresize::ResizeConfig),
 
     /// Apply an orientation transform (any of the 8 EXIF orientations).
-    /// Delegates to [`zenresize::orient_image`]. Materializes.
-    Orient(zenresize::Orientation),
+    /// Delegates to [`crate::execute_layout::orient_image`]. Materializes.
+    Orient(zenlayout::Orientation),
 
     /// Auto-orient from raw EXIF orientation tag value (1-8).
     ///
@@ -698,8 +698,8 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let (in_w, in_h) = if let Some(exif) = orientation {
-                    let o = zenresize::Orientation::from_exif(*exif)
-                        .unwrap_or(zenresize::Orientation::Identity);
+                    let o = zenlayout::Orientation::from_exif(*exif)
+                        .unwrap_or(zenlayout::Orientation::Identity);
                     if o.swaps_axes() {
                         (upstream.height, upstream.width)
                     } else {
@@ -709,7 +709,7 @@ impl PipelineGraph {
                     (upstream.width, upstream.height)
                 };
                 // Use zenlayout to compute output dimensions
-                let mut pipeline = zenresize::Pipeline::new(in_w, in_h);
+                let mut pipeline = zenlayout::Pipeline::new(in_w, in_h);
                 if let Some(exif) = orientation {
                     pipeline = pipeline.auto_orient(*exif);
                 }
@@ -717,7 +717,7 @@ impl PipelineGraph {
                 let (ideal, request) = pipeline.plan().map_err(|e| {
                     PipeError::Op(alloc::format!("estimate layout plan failed: {e}"))
                 })?;
-                let offer = zenresize::DecoderOffer::full_decode(in_w, in_h);
+                let offer = zenlayout::DecoderOffer::full_decode(in_w, in_h);
                 let plan = ideal.finalize(&request, &offer);
                 let out_w = plan.canvas.width;
                 let out_h = plan.canvas.height;
@@ -728,8 +728,8 @@ impl PipelineGraph {
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
                 // Orient may need materialization
                 if orientation.is_some() {
-                    let o = zenresize::Orientation::from_exif(orientation.unwrap())
-                        .unwrap_or(zenresize::Orientation::Identity);
+                    let o = zenlayout::Orientation::from_exif(orientation.unwrap())
+                        .unwrap_or(zenlayout::Orientation::Identity);
                     if o.swaps_axes() {
                         est.materializes = true;
                         let mat = upstream.width as u64
@@ -800,8 +800,8 @@ impl PipelineGraph {
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let orientation = match op {
                     NodeOp::Orient(o) => *o,
-                    NodeOp::AutoOrient(exif) => zenresize::Orientation::from_exif(*exif)
-                        .unwrap_or(zenresize::Orientation::Identity),
+                    NodeOp::AutoOrient(exif) => zenlayout::Orientation::from_exif(*exif)
+                        .unwrap_or(zenlayout::Orientation::Identity),
                     _ => unreachable!(),
                 };
                 let (out_w, out_h) = if orientation.swaps_axes() {
@@ -1188,7 +1188,7 @@ impl PipelineGraph {
                 let content_size = plan.content_size;
                 let in_w = source.width();
                 let in_h = source.height();
-                let resizer = zenresize::streaming_from_plan_batched(
+                let resizer = crate::execute_layout::streaming_from_plan_batched(
                     in_w,
                     in_h,
                     &plan,
@@ -1215,14 +1215,14 @@ impl PipelineGraph {
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
 
-                plan.canvas_color = zenresize::CanvasColor::Transparent;
+                plan.canvas_color = zenlayout::CanvasColor::Transparent;
 
                 let mut fg = self.compile_node(fg_id, sources, depth + 1)?;
                 let meta = capture_meta!(fg);
                 fg = ensure_fmt!(fg, format::RGBA8_SRGB, "LayoutComposite")?;
                 let fg_w = fg.width();
                 let fg_h = fg.height();
-                let resizer = zenresize::streaming_from_plan_batched(
+                let resizer = crate::execute_layout::streaming_from_plan_batched(
                     fg_w,
                     fg_h,
                     &plan,
@@ -1321,7 +1321,7 @@ impl PipelineGraph {
                 let in_w = upstream.width();
                 let in_h = upstream.height();
 
-                let mut pipeline = zenresize::Pipeline::new(in_w, in_h);
+                let mut pipeline = zenlayout::Pipeline::new(in_w, in_h);
                 if let Some(exif) = orientation {
                     pipeline = pipeline.auto_orient(exif);
                 }
@@ -1329,7 +1329,7 @@ impl PipelineGraph {
                 // Build Constraint with gravity and canvas_color
                 let mut constraint = build_constraint(mode, w, h);
                 if let Some((gx, gy)) = gravity {
-                    constraint = constraint.gravity(zenresize::Gravity::Percentage(gx, gy));
+                    constraint = constraint.gravity(zenlayout::Gravity::Percentage(gx, gy));
                 }
                 if let Some(cc) = canvas_color {
                     constraint = constraint.canvas_color(cc);
@@ -1339,7 +1339,7 @@ impl PipelineGraph {
                 let (ideal, request) = pipeline
                     .plan()
                     .map_err(|e| at!(PipeError::Op(alloc::format!("layout plan failed: {e}"))))?;
-                let offer = zenresize::DecoderOffer::full_decode(in_w, in_h);
+                let offer = zenlayout::DecoderOffer::full_decode(in_w, in_h);
                 let plan = ideal.finalize(&request, &offer);
                 let f = filter.unwrap_or(zenresize::Filter::Robidoux);
 
@@ -1390,7 +1390,7 @@ impl PipelineGraph {
 
                 let mut source: Box<dyn Source> = if has_advanced {
                     // Build ResizeConfig from plan, then layer on advanced params
-                    let mut config = zenresize::config_from_plan(
+                    let mut config = crate::execute_layout::config_from_plan(
                         in_w,
                         in_h,
                         &plan,
@@ -1418,7 +1418,7 @@ impl PipelineGraph {
                     Box::new(ResizeSource::new(upstream, &config, 16)?)
                 } else {
                     // Simple path — use streaming_from_plan_batched
-                    let resizer = zenresize::streaming_from_plan_batched(
+                    let resizer = crate::execute_layout::streaming_from_plan_batched(
                         in_w,
                         in_h,
                         &plan,
@@ -1464,8 +1464,8 @@ impl PipelineGraph {
             ),
 
             NodeOp::AutoOrient(exif) => {
-                let orientation = zenresize::Orientation::from_exif(exif)
-                    .unwrap_or(zenresize::Orientation::Identity);
+                let orientation = zenlayout::Orientation::from_exif(exif)
+                    .unwrap_or(zenlayout::Orientation::Identity);
                 compile_orient(
                     self,
                     node_id,
@@ -1814,7 +1814,7 @@ fn compile_orient(
     graph: &mut PipelineGraph,
     node_id: NodeId,
     sources: &mut hashbrown::HashMap<NodeId, Box<dyn Source>>,
-    orientation: zenresize::Orientation,
+    orientation: zenlayout::Orientation,
     depth: usize,
     #[cfg(feature = "std")] tracer: &crate::trace::Tracer,
 ) -> crate::PipeResult<(Box<dyn Source>, Option<UpstreamMeta>)> {
@@ -1840,7 +1840,7 @@ fn compile_orient(
             upstream,
             move |data, w, h, _fmt| {
                 let (result, new_w, new_h) =
-                    zenresize::orient_image(data, in_w, in_h, orientation, 4);
+                    crate::execute_layout::orient_image(data, in_w, in_h, orientation, 4);
                 *data = result;
                 *w = new_w;
                 *h = new_h;
@@ -1879,16 +1879,16 @@ fn ensure_format(
 /// Supports width-only (`--resize 800`) and height-only constraints,
 /// not just both-dimensions.
 fn build_constraint(
-    mode: zenresize::ConstraintMode,
+    mode: zenlayout::ConstraintMode,
     w: Option<u32>,
     h: Option<u32>,
-) -> zenresize::Constraint {
+) -> zenlayout::Constraint {
     match (w, h) {
-        (Some(w), Some(h)) => zenresize::Constraint::new(mode, w, h),
-        (Some(w), None) => zenresize::Constraint::width_only(mode, w),
-        (None, Some(h)) => zenresize::Constraint::height_only(mode, h),
+        (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
+        (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
+        (None, Some(h)) => zenlayout::Constraint::height_only(mode, h),
         // Both None = identity (no constraint). Use 0x0 which zenlayout treats as no-op.
-        (None, None) => zenresize::Constraint::new(mode, 0, 0),
+        (None, None) => zenlayout::Constraint::new(mode, 0, 0),
     }
 }
 

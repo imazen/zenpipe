@@ -1065,7 +1065,7 @@ fn graph_analyze_modifies_pipeline() {
 fn estimate_orient_swaps_axes() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let orient = g.add_node(NodeOp::Orient(zenresize::Orientation::Rotate90));
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Rotate90));
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, orient, EdgeKind::Input);
     g.add_edge(orient, out, EdgeKind::Input);

@@ -53,17 +53,17 @@ pub(crate) fn param_f32_opt(node: &dyn NodeInstance, name: &str) -> Option<f32> 
     node.get_param(name).and_then(|v| v.as_f32())
 }
 
-pub(crate) fn parse_constraint_mode(s: &str) -> crate::PipeResult<zenresize::ConstraintMode> {
+pub(crate) fn parse_constraint_mode(s: &str) -> crate::PipeResult<zenlayout::ConstraintMode> {
     match s {
-        "distort" => Ok(zenresize::ConstraintMode::Distort),
-        "fit" => Ok(zenresize::ConstraintMode::Fit),
-        "within" => Ok(zenresize::ConstraintMode::Within),
-        "fit_crop" | "crop" => Ok(zenresize::ConstraintMode::FitCrop),
-        "within_crop" => Ok(zenresize::ConstraintMode::WithinCrop),
-        "fit_pad" | "pad" => Ok(zenresize::ConstraintMode::FitPad),
-        "within_pad" => Ok(zenresize::ConstraintMode::WithinPad),
-        "pad_within" => Ok(zenresize::ConstraintMode::PadWithin),
-        "aspect_crop" => Ok(zenresize::ConstraintMode::AspectCrop),
+        "distort" => Ok(zenlayout::ConstraintMode::Distort),
+        "fit" => Ok(zenlayout::ConstraintMode::Fit),
+        "within" => Ok(zenlayout::ConstraintMode::Within),
+        "fit_crop" | "crop" => Ok(zenlayout::ConstraintMode::FitCrop),
+        "within_crop" => Ok(zenlayout::ConstraintMode::WithinCrop),
+        "fit_pad" | "pad" => Ok(zenlayout::ConstraintMode::FitPad),
+        "within_pad" => Ok(zenlayout::ConstraintMode::WithinPad),
+        "pad_within" => Ok(zenlayout::ConstraintMode::PadWithin),
+        "aspect_crop" => Ok(zenlayout::ConstraintMode::AspectCrop),
         // "larger_than" not yet in zenresize
         "larger_than" => Err(at!(PipeError::Op(
             "larger_than mode not yet supported".into(),
@@ -89,17 +89,17 @@ pub(crate) fn parse_gravity_anchor(s: &str) -> Option<(f32, f32)> {
     })
 }
 
-pub(crate) fn parse_canvas_color(s: &str) -> Option<zenresize::CanvasColor> {
+pub(crate) fn parse_canvas_color(s: &str) -> Option<zenlayout::CanvasColor> {
     let lower = s.to_ascii_lowercase();
     Some(match lower.as_str() {
-        "transparent" | "" => zenresize::CanvasColor::Transparent,
-        "white" => zenresize::CanvasColor::Srgb {
+        "transparent" | "" => zenlayout::CanvasColor::Transparent,
+        "white" => zenlayout::CanvasColor::Srgb {
             r: 255,
             g: 255,
             b: 255,
             a: 255,
         },
-        "black" => zenresize::CanvasColor::Srgb {
+        "black" => zenlayout::CanvasColor::Srgb {
             r: 0,
             g: 0,
             b: 0,
@@ -115,13 +115,13 @@ pub(crate) fn parse_canvas_color(s: &str) -> Option<zenresize::CanvasColor> {
                 })
                 .collect();
             match bytes.len() {
-                3 => zenresize::CanvasColor::Srgb {
+                3 => zenlayout::CanvasColor::Srgb {
                     r: bytes[0],
                     g: bytes[1],
                     b: bytes[2],
                     a: 255,
                 },
-                4 => zenresize::CanvasColor::Srgb {
+                4 => zenlayout::CanvasColor::Srgb {
                     r: bytes[0],
                     g: bytes[1],
                     b: bytes[2],

@@ -1,0 +1,2 @@
+cargo:rustc-link-arg-benches=-rdynamic
+cargo:rerun-if-changed=build.rs

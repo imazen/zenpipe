@@ -37,7 +37,7 @@ std = [
     "dep:moxcms",
 ]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
-zennode = ["dep:zennode", "zenresize/layout", "dep:zencodecs", "zencodecs/zennode"]
+zennode = ["dep:zennode", "dep:zencodecs", "zencodecs/zennode"]
 # Local-dev only: gate bridge tests requiring zennode_defs modules in zenresize/zenlayout.
 # These modules are WIP (commented out in those crates) and not available via git. Never enabled in CI.
 zennode-defs = ["zennode"]
@@ -83,7 +83,7 @@ nodes-all = [
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", default-features = false, features = ["layout"] , version = "0.2.0" }
+zenresize = { path = "../zenresize", default-features = false , version = "0.2.0" }
 # Image layout: constraint modes, orientation, smart crop
 zenlayout = { path = "zenlayout", default-features = false, features = ["smart-crop"] , version = "0.2.1" }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
