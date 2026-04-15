@@ -243,10 +243,110 @@ pub fn expand_zen(
         // For now, silently ignored even with the feature.
     }
 
+    // Parse legacy IR4 padding/border/margin shorthand into an ExpandCanvas node.
+    // Keys: paddingwidth, paddingheight, paddingcolor, borderwidth, bordercolor, margin.
+    // Semantics: `margin` adds to all sides; `padding*` adds uniform horizontal/vertical;
+    // `border*` is a styled border (rendered here as plain padding — true border rendering
+    // with a colored edge stripe is deferred).
+    if let Some(expand) = parse_expand_shorthand(querystring) {
+        nodes.push(Box::new(expand));
+    }
+
     Ok(ExpandedRiapi {
         nodes,
         preset,
         warnings,
+    })
+}
+
+/// Parse IR4 padding/border/margin shorthand into an `ExpandCanvas` node.
+///
+/// Supported keys (all optional, additive):
+/// - `paddingwidth` — adds N px to left and right
+/// - `paddingheight` — adds N px to top and bottom
+/// - `margin` — adds N px to all four sides
+/// - `borderwidth` — adds N px to all four sides (styled border — currently rendered as plain padding)
+/// - `paddingcolor` — fill color for padding area (CSS name or hex)
+/// - `bordercolor` — border color (takes precedence over paddingcolor when present)
+///
+/// Returns `None` if no padding-related keys are present.
+fn parse_expand_shorthand(querystring: &str) -> Option<crate::zennode_defs::ExpandCanvas> {
+    use crate::zennode_defs::ExpandCanvas;
+
+    let mut padding_w: u32 = 0;
+    let mut padding_h: u32 = 0;
+    let mut margin: u32 = 0;
+    let mut border: u32 = 0;
+    let mut color: Option<String> = None;
+    let mut border_color: Option<String> = None;
+    let mut saw_any = false;
+
+    for part in querystring.split('&') {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        let key_lc = key.to_ascii_lowercase();
+        match key_lc.as_str() {
+            "paddingwidth" => {
+                if let Ok(v) = value.parse::<u32>() {
+                    padding_w = v;
+                    saw_any = true;
+                }
+            }
+            "paddingheight" => {
+                if let Ok(v) = value.parse::<u32>() {
+                    padding_h = v;
+                    saw_any = true;
+                }
+            }
+            "margin" => {
+                if let Ok(v) = value.parse::<u32>() {
+                    margin = v;
+                    saw_any = true;
+                }
+            }
+            "borderwidth" => {
+                if let Ok(v) = value.parse::<u32>() {
+                    border = v;
+                    saw_any = true;
+                }
+            }
+            "paddingcolor" => {
+                color = Some(value.to_string());
+                saw_any = true;
+            }
+            "bordercolor" => {
+                border_color = Some(value.to_string());
+                saw_any = true;
+            }
+            _ => {}
+        }
+    }
+
+    if !saw_any {
+        return None;
+    }
+
+    let left = padding_w + margin + border;
+    let right = padding_w + margin + border;
+    let top = padding_h + margin + border;
+    let bottom = padding_h + margin + border;
+
+    if left == 0 && right == 0 && top == 0 && bottom == 0 {
+        // Only color specified, no geometry change — skip.
+        return None;
+    }
+
+    let fill = border_color
+        .or(color)
+        .unwrap_or_else(|| String::from("transparent"));
+
+    Some(ExpandCanvas {
+        left,
+        top,
+        right,
+        bottom,
+        color: fill,
     })
 }
 

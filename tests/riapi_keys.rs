@@ -1033,3 +1033,92 @@ fn c_focus_no_unconsumed_warnings() {
         "c.focus/c.zoom/c.finalmode should not produce warnings, got: {focus_warnings:?}"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PADDING / BORDER / MARGIN shorthand (IR4 legacy)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn paddingwidth_produces_expand_canvas() {
+    let r = expand_zen("w=800&h=600&paddingwidth=20");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    assert_eq!(ec.get_param("left").and_then(|v| v.as_u32()), Some(20));
+    assert_eq!(ec.get_param("right").and_then(|v| v.as_u32()), Some(20));
+    assert_eq!(ec.get_param("top").and_then(|v| v.as_u32()), Some(0));
+    assert_eq!(ec.get_param("bottom").and_then(|v| v.as_u32()), Some(0));
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn paddingheight_applies_to_top_and_bottom() {
+    let r = expand_zen("w=800&h=600&paddingheight=15");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    assert_eq!(ec.get_param("top").and_then(|v| v.as_u32()), Some(15));
+    assert_eq!(ec.get_param("bottom").and_then(|v| v.as_u32()), Some(15));
+    assert_eq!(ec.get_param("left").and_then(|v| v.as_u32()), Some(0));
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn margin_applies_to_all_sides() {
+    let r = expand_zen("w=800&h=600&margin=10");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    for side in &["left", "right", "top", "bottom"] {
+        assert_eq!(
+            ec.get_param(side).and_then(|v| v.as_u32()),
+            Some(10),
+            "margin should set {side}"
+        );
+    }
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn paddingcolor_sets_color() {
+    let r = expand_zen("w=800&h=600&margin=5&paddingcolor=white");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    assert_eq!(
+        ec.get_param("color").and_then(|v| v.as_str().map(String::from)),
+        Some("white".to_string())
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn borderwidth_applies_to_all_sides() {
+    let r = expand_zen("w=800&h=600&borderwidth=3&bordercolor=red");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    for side in &["left", "right", "top", "bottom"] {
+        assert_eq!(ec.get_param(side).and_then(|v| v.as_u32()), Some(3));
+    }
+    assert_eq!(
+        ec.get_param("color").and_then(|v| v.as_str().map(String::from)),
+        Some("red".to_string())
+    );
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn combined_padding_margin_border_sums() {
+    // margin + borderwidth + paddingwidth should all add on horizontal sides
+    let r = expand_zen("w=800&h=600&paddingwidth=5&margin=10&borderwidth=2");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
+    // left = right = 5 + 10 + 2 = 17
+    assert_eq!(ec.get_param("left").and_then(|v| v.as_u32()), Some(17));
+    assert_eq!(ec.get_param("right").and_then(|v| v.as_u32()), Some(17));
+    // top = bottom = 0 (paddingwidth) + 10 (margin) + 2 (border) = 12
+    assert_eq!(ec.get_param("top").and_then(|v| v.as_u32()), Some(12));
+    assert_eq!(ec.get_param("bottom").and_then(|v| v.as_u32()), Some(12));
+}
+
+#[cfg(feature = "imageflow-compat")]
+#[test]
+fn no_padding_keys_produces_no_expand_canvas() {
+    let r = expand_zen("w=800&h=600&mode=crop");
+    let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas");
+    assert!(
+        ec.is_none(),
+        "querystring without padding keys should not produce ExpandCanvas"
+    );
+}
