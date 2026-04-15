@@ -135,14 +135,26 @@ impl<'a> DecodeRequest<'a> {
     fn resolve_format(&self) -> Result<ImageFormat> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
-        let format = match self.format {
-            Some(f) => f,
-            None => crate::info::detect_format(self.data)
-                .ok_or_else(|| at!(CodecError::UnrecognizedFormat))?,
+        let (format, explicit) = match self.format {
+            Some(f) => (f, true),
+            None => (
+                crate::info::detect_format(self.data)
+                    .ok_or_else(|| at!(CodecError::UnrecognizedFormat))?,
+                false,
+            ),
         };
-        if !registry.can_decode(format) {
+        // Custom formats (e.g. RAW/DNG) are not tracked by the
+        // `AllowedFormats` bitset — see registry.rs. When the caller
+        // explicitly opts in via `with_format(Custom(...))`, treat that
+        // as authorization and skip the registry check.
+        let is_custom = matches!(format, ImageFormat::Custom(_));
+        if !is_custom && !registry.can_decode(format) {
             return Err(at!(CodecError::DisabledFormat(format)));
         }
+        // Detection-path Custom formats also pass through — the caller
+        // can't whitelist them via the registry, so the only way to
+        // refuse is via `with_format` to override.
+        let _ = explicit;
         Ok(format)
     }
 
