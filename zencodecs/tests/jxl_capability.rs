@@ -6,6 +6,9 @@
 //! base = HDR / alternate = SDR — opposite of JPEG UltraHDR and AVIF tmap).
 //!
 //! See `docs/hdr-per-codec.md` for the full per-codec test plan.
+//!
+//! Real HDR fixtures live in `/mnt/v/GitHub/codec-corpus/jxl/features/` and
+//! are exercised by the `--ignored` tests at the bottom of this file.
 
 #![cfg(feature = "jxl-decode")]
 
@@ -377,5 +380,80 @@ fn jxl_gainmap_round_trip_inverse_direction() {
     assert!(
         gm_jxl.metadata.alternate_hdr_headroom > 0.0,
         "round-tripped gain map must declare positive HDR headroom"
+    );
+}
+
+// ─── Real HDR fixtures from codec-corpus ──────────────────────────────────
+//
+// `hdr_pq_test.jxl`:  1024×1024, 10-bit, CICP (9, 16, 0, true)
+//                     → BT.2020 primaries + PQ transfer + identity matrix.
+// `hdr_hlg_test.jxl`: 1024×1024, 10-bit, CICP (9, 18, 0, true)
+//                     → BT.2020 primaries + HLG transfer + identity matrix.
+// `pq_gradient.jxl`:  1088×64, 16-bit, CICP (1, 16, 0, true) → BT.709 + PQ.
+
+const HDR_PQ_JXL_FIXTURE: &str =
+    "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_pq_test.jxl";
+const HDR_HLG_JXL_FIXTURE: &str =
+    "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_hlg_test.jxl";
+
+#[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
+#[test]
+fn jxl_hdr_pq_fixture_surfaces_rec2020_primaries_and_pq_transfer() {
+    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE)
+        .expect("HDR PQ JXL fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(
+        &bytes,
+        &zencodecs::AllowedFormats::all(),
+    )
+    .expect("probe JXL HDR PQ");
+    let cicp = info.source_color.cicp.expect("JXL must surface CICP");
+    assert_eq!(
+        cicp.color_primaries, 9,
+        "HDR PQ JXL fixture is BT.2020 (CICP primaries=9), got {}",
+        cicp.color_primaries
+    );
+    assert_eq!(
+        cicp.transfer_characteristics, 16,
+        "HDR PQ JXL fixture is PQ (CICP transfer=16), got {}",
+        cicp.transfer_characteristics
+    );
+    assert!(cicp.full_range);
+}
+
+#[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
+#[test]
+fn jxl_hdr_hlg_fixture_surfaces_hlg_transfer() {
+    let bytes = std::fs::read(HDR_HLG_JXL_FIXTURE)
+        .expect("HDR HLG JXL fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(
+        &bytes,
+        &zencodecs::AllowedFormats::all(),
+    )
+    .expect("probe JXL HDR HLG");
+    let cicp = info.source_color.cicp.expect("JXL must surface CICP");
+    assert_eq!(
+        cicp.transfer_characteristics, 18,
+        "HDR HLG JXL fixture is HLG (CICP transfer=18), got {}",
+        cicp.transfer_characteristics
+    );
+}
+
+#[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
+#[test]
+fn jxl_hdr_fixture_decode_preserves_10bit_pixel_width() {
+    use zenpixels::ChannelType;
+    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE)
+        .expect("HDR PQ JXL fixture must be present");
+    let decoded = DecodeRequest::new(&bytes)
+        .decode_full_frame()
+        .expect("decode HDR PQ JXL");
+    let desc = decoded.pixels().descriptor();
+    // zenjxl decode preserves bit depth: 10-bit source surfaces as U16.
+    // Verified empirically via probe.
+    assert_ne!(
+        desc.channel_type(),
+        ChannelType::U8,
+        "10-bit HDR JXL must not narrow to U8; got {:?}",
+        desc.channel_type()
     );
 }

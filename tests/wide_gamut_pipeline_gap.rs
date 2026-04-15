@@ -208,14 +208,22 @@ fn avif_10bit_round_trips_bit_depth_without_resize() {
     );
 }
 
-/// JXL HDR (f32 codestream) must preserve bit depth when no resize is
-/// requested. Today: forced to 8-bit sRGB at `graph.rs:1608`.
-#[ignore = "Pipeline narrows JXL f32 → RGBA8_SRGB at graph.rs:1608"]
+/// JXL HDR (10/12/16-bit or f32 codestream) must preserve bit depth
+/// when no resize is requested. zenjxl decode itself preserves bit
+/// depth (verified in `jxl_hdr_fixture_decode_preserves_10bit_pixel_width`
+/// — 10-bit HDR JXL surfaces as U16). The gap is the pipeline: today
+/// `graph.rs:1608` narrows every decoded buffer to RGBA8 before the
+/// re-encode stage runs, flattening HDR content.
+///
+/// Flips to passing once a `WorkingFormat` enum routes HDR sources
+/// through the linear-light path.
+#[ignore = "Pipeline narrows JXL U16/f32 → RGBA8 at graph.rs:1608 (zenjxl decode itself preserves bit depth)"]
 #[test]
 fn jxl_hdr_f32_round_trips_bit_depth_without_resize() {
     panic!(
-        "Pending: synthetic JXL HDR f32 fixture. \
-         Assertion: round-tripped decoded.source_color.bit_depth >= Some(16)"
+        "Pending: WorkingFormat enum routing HDR through linear. \
+         Fixture available at /mnt/v/GitHub/codec-corpus/jxl/features/hdr_pq_test.jxl. \
+         Assertion: round-tripped decoded.source_color.bit_depth >= Some(10)"
     );
 }
 

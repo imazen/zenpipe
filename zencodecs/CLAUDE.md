@@ -783,8 +783,7 @@ See private notes for details — do not commit vulnerability specifics.
 
 ## Known Issues
 
-- avif-encode feature broken (zenrav1e build error: missing EncoderConfig fields)
-- jxl-encode feature broken (jxl-encoder build error: butteraugli_iters field)
+(none currently — avif-encode and jxl-encode both compile as of 2026-04-15)
 
 ## User Feedback Log
 
