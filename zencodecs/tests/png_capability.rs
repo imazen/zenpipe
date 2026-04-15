@@ -210,22 +210,36 @@ fn decode_handles_garbage_png_without_panic() {
     let _ = DecodeRequest::new(&bytes).decode_full_frame();
 }
 
-// ─── PNG cICP chunk extraction (documented gap) ──────────────────────────
+// ─── PNG cICP chunk round-trip ──────────────────────────────────────────
 
-/// PNG 1.3+ defines the `cICP` chunk for CICP-style colour metadata
-/// (ITU-T H.273). `zenpng` doesn't currently parse it and surface it as
-/// `SourceColor.cicp`. This test pins the gap — the day zenpng surfaces
-/// cICP, this passes without further code changes here.
+/// PNG 1.3+ defines the `cICP` chunk for CICP-style color metadata
+/// (ITU-T H.273). zenpng's encode + decode both wire the chunk through
+/// (zenpng/src/codec.rs:2349 → with_cicp on encode,
+/// zenpng/src/decoder/mod.rs:58 → ancillary.cicp on decode), and the
+/// zencodecs adapter forwards Metadata::cicp into PngWriteMetadata.
 ///
-/// The fixture would be a hand-crafted PNG with a `cICP` chunk
-/// declaring (1, 13, 0, true) — sRGB code points. Today we lack a
-/// generator; the assertion shape is recorded.
-#[ignore = "zenpng doesn't parse the cICP chunk and surface it as SourceColor.cicp yet"]
+/// This test verifies the full round-trip:
+/// `Metadata::with_cicp(BT2100_PQ)` → cICP chunk → decode →
+/// `info.source_color.cicp == Some(BT2100_PQ)`.
 #[test]
-fn png_cicp_chunk_is_extracted_into_source_color() {
-    panic!(
-        "Pending: hand-craft a PNG with cICP chunk declaring (1,13,0,true). \
-         Assertion: decoded.info().source_color.cicp == Some(Cicp {{ \
-         color_primaries: 1, transfer_characteristics: 13, .. }})"
-    );
+fn png_cicp_chunk_round_trips() {
+    use zencodec::Cicp;
+    let img = rgb8_image(32, 32);
+    // BT.2100 PQ — primaries=9, transfer=16, matrix=9, full_range=true.
+    // (Picked deliberately non-default to prove it's the value we set.)
+    let cicp = Cicp::BT2100_PQ;
+    let meta = Metadata::none().with_cicp(cicp);
+
+    let bytes = encode_png_with_meta(img.as_ref(), meta);
+    let decoded = decode_full(&bytes);
+
+    let extracted = decoded
+        .info()
+        .source_color
+        .cicp
+        .expect("CICP must round-trip on PNG via the cICP chunk");
+    assert_eq!(extracted.color_primaries, 9);
+    assert_eq!(extracted.transfer_characteristics, 16);
+    assert_eq!(extracted.matrix_coefficients, 9);
+    assert!(extracted.full_range);
 }
