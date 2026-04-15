@@ -222,15 +222,42 @@ fn avif_exif_round_trip_preserves_blob() {
     );
 }
 
-/// AVIF's preferred way to convey orientation is the `irot` / `imir` HEIF
-/// transform boxes, not the EXIF Orientation tag — `zenavif` decodes the
-/// transforms but does not currently re-derive the EXIF Orientation tag
-/// from them, nor honor an inbound EXIF Orientation when encoding.
-///
-/// Tracked gap. Re-enable when zenavif wires EXIF orientation into the
-/// irot/imir round-trip so this test can pass without a code change.
+/// Positive test: when the caller sets `Metadata::orientation` directly,
+/// AVIF translates it through irot/imir HEIF transforms on encode and
+/// decoder reads it back into `info.orientation`.
 #[cfg(feature = "avif-encode")]
-#[ignore = "AVIF encoder doesn't apply inbound EXIF Orientation; decoder doesn't synthesize one from irot"]
+#[test]
+fn avif_explicit_orientation_round_trips_via_irot() {
+    use zencodec::Orientation;
+    let img = rgb8_image(32, 32);
+    let meta = Metadata::none().with_orientation(Orientation::Rotate90);
+
+    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img.as_ref());
+    let bytes = EncodeRequest::new(ImageFormat::Avif)
+        .with_quality(75.0)
+        .with_metadata(meta)
+        .encode(typed.erase(), false)
+        .expect("AVIF encode")
+        .into_vec();
+
+    let decoded = decode_full(&bytes);
+    let extracted = decoded.info().orientation;
+    assert_eq!(
+        extracted,
+        Orientation::Rotate90,
+        "AVIF irot/imir must round-trip an explicit Metadata::orientation"
+    );
+}
+
+/// AVIF's preferred way to convey orientation is the `irot` / `imir` HEIF
+/// transform boxes, not the EXIF Orientation tag. zencodec's
+/// `Metadata::orientation` field IS the explicit channel for this.
+///
+/// As a convenience, `Metadata::with_exif(blob)` now auto-parses the
+/// EXIF Orientation tag (0x0112) and sets `self.orientation` if not
+/// already explicitly set. This test verifies the full round-trip:
+/// EXIF blob → meta.orientation → AVIF irot → decoded info.orientation.
+#[cfg(feature = "avif-encode")]
 #[test]
 fn avif_exif_orientation_round_trip_via_irot() {
     let img = rgb8_image(32, 32);
