@@ -389,38 +389,39 @@ pub fn srgb_transform_icc(
 ) -> Option<(Vec<u8>, Vec<u8>)> {
     let dst_icc = srgb_icc_profile();
 
-    // 1. Try embedded ICC profile.
-    if let Some(icc) = &source_color.icc_profile
-        && !icc.is_empty()
-    {
-        if is_srgb_for_mode(icc, mode) {
-            return None; // Already sRGB
+    // Honor color_authority: to_color_context() drops the non-authoritative
+    // field so as_profile_source() returns the right one.
+    let ctx = source_color.to_color_context();
+    match ctx.as_profile_source() {
+        Some(zenpixels::ColorProfileSource::Icc(icc)) if !icc.is_empty() => {
+            if is_srgb_for_mode(icc, mode) {
+                return None;
+            }
+            return Some((icc.to_vec(), dst_icc));
         }
-        return Some((icc.to_vec(), dst_icc));
+        Some(zenpixels::ColorProfileSource::Cicp(cicp_val)) => {
+            if cicp_val.color_primaries == 1 && cicp_val.transfer_characteristics == 13 {
+                return None;
+            }
+            let cicp = CicpValues {
+                colour_primaries: cicp_val.color_primaries,
+                transfer_characteristics: cicp_val.transfer_characteristics,
+                matrix_coefficients: cicp_val.matrix_coefficients,
+                full_range: if cicp_val.full_range { 1 } else { 0 },
+            };
+            if let Some(src_icc) = synthesize_icc_from_cicp(&cicp) {
+                return Some((src_icc, dst_icc));
+            }
+        }
+        _ => {}
     }
 
-    // 2. Check CICP on SourceColor (non-PNG path).
-    if let Some(cicp_val) = source_color.cicp {
-        if cicp_val.color_primaries == 1 && cicp_val.transfer_characteristics == 13 {
-            return None; // sRGB via CICP
-        }
-        let cicp = CicpValues {
-            colour_primaries: cicp_val.color_primaries,
-            transfer_characteristics: cicp_val.transfer_characteristics,
-            matrix_coefficients: cicp_val.matrix_coefficients,
-            full_range: if cicp_val.full_range { 1 } else { 0 },
-        };
-        if let Some(src_icc) = synthesize_icc_from_cicp(&cicp) {
-            return Some((src_icc, dst_icc));
-        }
-    }
-
-    // 3. For PNG: parse raw bytes for gAMA/cHRM/cICP chunks.
+    // Fallback: parse raw PNG bytes for gAMA/cHRM/cICP chunks.
     if let Some(data) = raw_data {
         return png_srgb_transform_icc(data, mode);
     }
 
-    // 4. No color info -- assume sRGB.
+    // No color info — assume sRGB.
     None
 }
 
