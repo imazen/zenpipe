@@ -32,7 +32,7 @@ zenpng = { path = "../../zenpng", optional = true, features = ["zencodec"] }
 zenjxl = { path = "../../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { path = "../../zenbitmaps", optional = true, features = ["zencodec"] }
-zenraw = { path = "../../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
+zenraw = { path = "../../zenraw", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
 
 # Node definitions (optional)
 zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"], optional = true }

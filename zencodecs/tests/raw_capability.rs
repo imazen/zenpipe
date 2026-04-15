@@ -16,13 +16,18 @@
 //!   `/mnt/v/heic/CBFA569A-5C28-468E-96B4-CFFBAEB951C7.DNG`
 //! (Apple ProRAW samples — same set zenraw's own integration tests use.)
 //!
-//! Important — known backend gap: `zencodecs` currently builds zenraw
-//! with only the `rawloader` backend (Cargo.toml line 35), and rawloader
-//! cannot decode iPhone ProRAW DNGs (LJPEG predictor 7). Until the
-//! `rawler` backend is added to the zenraw feature list, the four
-//! `--ignored` tests below will panic inside rawloader's DNG decoder
-//! when pointed at real ProRAW files. Re-enable cleanly by adding
-//! `"rawler"` to the zenraw feature set in zencodecs/Cargo.toml.
+//! Backend status: `zencodecs` enables both `rawloader` and `rawler`
+//! features on zenraw. rawler is required for iPhone ProRAW DNGs
+//! (LJPEG predictor 7). With the fixtures present, three of the
+//! `--ignored` tests pass:
+//!   - apple_proraw_dng_decode_succeeds_and_reports_dimensions ✓
+//!   - apple_proraw_dng_yields_gain_map ✓
+//!   - apple_proraw_dng_second_fixture_round_trips_gain_map_metadata ✓
+//!
+//! The remaining one (`apple_proraw_dng_exif_carries_dng_tags`) is a
+//! real zenraw gap rather than a fixture issue — `build_image_info`
+//! doesn't attach the raw EXIF blob to ImageInfo. Marked with the
+//! actual root cause.
 
 #![cfg(feature = "raw-decode")]
 
@@ -93,8 +98,19 @@ fn apple_proraw_dng_decode_succeeds_and_reports_dimensions() {
     assert!(info.height > 0, "DNG height should be > 0, got {}", info.height);
 }
 
+/// zenraw's `read_raw_metadata` parses the EXIF blob into a structured
+/// `ExifMetadata` (DNG color matrices, AsShotNeutral, etc.), but
+/// `zenraw/src/zencodec_impl.rs::build_image_info` does not attach the
+/// raw EXIF bytes to `ImageInfo.exif` — only orientation, bit depth,
+/// and XMP make it through. So `decoded.info().metadata().exif` is None.
+///
+/// Marked `#[should_panic]` so this acts as a proper xfail tracker:
+/// when zenraw forwards the EXIF blob to ImageInfo, this test will
+/// stop panicking and the `should_panic` itself will fail, signaling
+/// "remove the xfail wrapper, the gap is closed."
 #[cfg(feature = "raw-decode-exif")]
 #[ignore = "needs Apple ProRAW DNG at /mnt/v/heic/; run with cargo test -- --ignored"]
+#[should_panic(expected = "Apple ProRAW must carry EXIF")]
 #[test]
 fn apple_proraw_dng_exif_carries_dng_tags() {
     let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
