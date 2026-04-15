@@ -190,15 +190,20 @@ fn avif_rec2020_pq_round_trips_primaries() {
     panic!("Test body pending fixture; assertion: decoded.cicp.primaries == 9 (Rec.2020) after ImageJob round-trip");
 }
 
-/// AVIF 10-bit / 12-bit decode currently returns RGBA8 from the trait.
-/// Even if it didn't, the pipeline would narrow at the resize stage.
-/// This test pins the expected behavior: a 10-bit AVIF re-encoded
-/// through ImageJob with no resize should preserve bit depth.
-#[ignore = "AVIF 10-bit decode + pipeline both narrow to 8-bit"]
+/// AVIF 10/12-bit decode already preserves bit depth at the codec layer
+/// — the `U16` channel buffer comes out of zenavif correctly (verified
+/// in `avif_hdr_fixture_decode_preserves_10bit_pixel_width`). The gap
+/// here is PURELY the pipeline: `graph.rs:1608` narrows the u16 buffer
+/// to RGBA8 before any downstream stage. A 10-bit AVIF fed through
+/// ImageJob with no resize re-emerges as 8-bit.
+///
+/// Blocked: also needs `avif-encode` for the re-encode side (currently
+/// the `nodes-avif` feature only pulls `avif-decode`).
+#[ignore = "Pipeline narrows 10-bit AVIF → RGBA8 at graph.rs:1608 (zenavif decode itself preserves u16)"]
 #[test]
 fn avif_10bit_round_trips_bit_depth_without_resize() {
     panic!(
-        "Pending: synthetic 10-bit AVIF fixture. \
+        "Pending: avif-encode route in ImageJob + WorkingFormat enum. \
          Assertion: round-tripped decoded.source_color.bit_depth == Some(10)"
     );
 }

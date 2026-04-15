@@ -317,6 +317,81 @@ fn decode_gain_map_returns_none_for_plain_avif() {
     );
 }
 
+// ─── Real HDR fixture: BT.709 + PQ transfer (ISO 21496-1 HDR base) ───────
+//
+// Fixture: seine_hdr_gainmap_srgb.avif (from gainmap-samples corpus).
+// CICP = (1, 16, 6, true) = BT.709 primaries + PQ transfer + BT.709 matrix
+// + full range. 10-bit. Real-world HDR AVIF shipped by content pipelines.
+
+const HDR_AVIF_FIXTURE: &str =
+    "/mnt/v/input/gainmap-samples/avif/seine_hdr_gainmap_srgb.avif";
+
+#[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
+#[test]
+fn avif_hdr_fixture_surfaces_pq_transfer_characteristic() {
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
+        .expect("HDR AVIF fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(
+        &bytes,
+        &zencodecs::AllowedFormats::all(),
+    )
+    .expect("probe HDR AVIF");
+    let cicp = info
+        .source_color
+        .cicp
+        .expect("AVIF colr box must surface CICP");
+    assert_eq!(
+        cicp.transfer_characteristics, 16,
+        "HDR fixture must report PQ (CICP transfer=16), got {}",
+        cicp.transfer_characteristics
+    );
+    assert!(cicp.full_range, "HDR AVIF fixture is full-range");
+}
+
+#[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
+#[test]
+fn avif_hdr_fixture_surfaces_10bit_depth() {
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
+        .expect("HDR AVIF fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(
+        &bytes,
+        &zencodecs::AllowedFormats::all(),
+    )
+    .expect("probe HDR AVIF");
+    assert_eq!(
+        info.source_color.bit_depth,
+        Some(10),
+        "HDR AVIF fixture is 10-bit — probe must surface bit_depth=Some(10)"
+    );
+}
+
+/// Tracker for AVIF decode narrowing: the fixture is 10-bit PQ, but
+/// `decode_full_frame()` today returns an 8-bit `PixelBuffer` (via the
+/// trait's `RGBA8_SRGB` descriptor). Fix requires routing the decoded
+/// u16 buffer through zenpixels' `Rgba16` channel type rather than
+/// narrowing at the codec adapter.
+#[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
+#[test]
+fn avif_hdr_fixture_decode_preserves_10bit_pixel_width() {
+    use zenpixels::ChannelType;
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
+        .expect("HDR AVIF fixture must be present");
+    let decoded = DecodeRequest::new(&bytes)
+        .decode_full_frame()
+        .expect("decode HDR AVIF");
+    let desc = decoded.pixels().descriptor();
+    // zenavif-trait returns a 16-bit buffer for 10-bit sources (rather
+    // than narrowing to u8). This test pins that invariant — if a future
+    // refactor accidentally narrows to U8, we catch it.
+    assert_ne!(
+        desc.channel_type(),
+        ChannelType::U8,
+        "10-bit HDR AVIF must not narrow to U8; got {:?}",
+        desc.channel_type()
+    );
+    // Verified empirically: zenavif returns ChannelType::U16 for 10-bit sources.
+}
+
 // ─── Robustness ───────────────────────────────────────────────────────────
 
 #[cfg(feature = "jpeg-ultrahdr")]
