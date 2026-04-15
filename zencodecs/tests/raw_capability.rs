@@ -98,21 +98,55 @@ fn apple_proraw_dng_decode_succeeds_and_reports_dimensions() {
     assert!(info.height > 0, "DNG height should be > 0, got {}", info.height);
 }
 
-/// zenraw's `read_raw_metadata` parses the EXIF blob into a structured
-/// `ExifMetadata` (DNG color matrices, AsShotNeutral, etc.), but
-/// `zenraw/src/zencodec_impl.rs::build_image_info` does not attach the
-/// raw EXIF bytes to `ImageInfo.exif` — only orientation, bit depth,
-/// and XMP make it through. So `decoded.info().metadata().exif` is None.
+/// Apple ProRAW DNGs carry DNG-specific EXIF tags (camera color
+/// matrices, AsShotNeutral, etc.) needed for proper raw → RGB color
+/// reconstruction. zencodecs exposes these via
+/// `DecodeRequest::read_raw_metadata()` which calls into zenraw's
+/// kamadak-exif parser.
 ///
-/// Marked `#[should_panic]` so this acts as a proper xfail tracker:
-/// when zenraw forwards the EXIF blob to ImageInfo, this test will
-/// stop panicking and the `should_panic` itself will fail, signaling
-/// "remove the xfail wrapper, the gap is closed."
+/// Note: the structured `ExifMetadata` IS available, but the raw EXIF
+/// blob is NOT attached to `ImageInfo.exif` — that's a separate gap
+/// in zenraw's `build_image_info` that's tracked separately
+/// (apple_proraw_dng_raw_exif_blob_attached_to_info).
 #[cfg(feature = "raw-decode-exif")]
 #[ignore = "needs Apple ProRAW DNG at /mnt/v/heic/; run with cargo test -- --ignored"]
-#[should_panic(expected = "Apple ProRAW must carry EXIF")]
 #[test]
 fn apple_proraw_dng_exif_carries_dng_tags() {
+    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
+        .expect("Apple ProRAW fixture must be present");
+    let exif_meta = DecodeRequest::new(&bytes)
+        .with_format(zencodec::ImageFormat::Custom(&zenraw::DNG_FORMAT))
+        .read_raw_metadata()
+        .expect("zenraw must return structured ExifMetadata for Apple ProRAW");
+
+    assert!(
+        exif_meta.make.is_some(),
+        "Apple ProRAW must carry camera Make tag"
+    );
+    // Apple ProRAW DNG-specific: at least one of the color matrices.
+    assert!(
+        exif_meta.color_matrix_1.is_some()
+            || exif_meta.color_matrix_2.is_some(),
+        "Apple ProRAW must carry at least one ColorMatrix DNG tag"
+    );
+    // AsShotNeutral is the white-balance reference for raw conversion.
+    assert!(
+        exif_meta.as_shot_neutral.is_some(),
+        "Apple ProRAW must carry AsShotNeutral DNG tag"
+    );
+}
+
+/// Tracker for the separate gap: zenraw doesn't attach the raw EXIF
+/// blob to `ImageInfo.exif` (only orientation, bit_depth, and XMP).
+/// `zenraw/src/zencodec_impl.rs::build_image_info`. The structured
+/// metadata IS extractable via `read_raw_metadata` (see test above);
+/// this test is for the case where a caller wants the raw bytes for
+/// re-embedding in another format.
+#[cfg(feature = "raw-decode-exif")]
+#[ignore = "needs fixture + zenraw build_image_info doesn't attach raw EXIF blob to ImageInfo"]
+#[should_panic(expected = "raw EXIF blob")]
+#[test]
+fn apple_proraw_dng_raw_exif_blob_attached_to_info() {
     let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
         .expect("Apple ProRAW fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
@@ -121,12 +155,10 @@ fn apple_proraw_dng_exif_carries_dng_tags() {
         .expect("decode Apple ProRAW DNG");
     let info = decoded.info();
     let meta = info.metadata();
-    let exif = meta.exif.as_ref().expect("Apple ProRAW must carry EXIF");
-    assert!(
-        !exif.is_empty(),
-        "Apple ProRAW EXIF blob should be non-empty; got {} bytes",
-        exif.len()
-    );
+    let _exif = meta
+        .exif
+        .as_ref()
+        .expect("Apple ProRAW must carry raw EXIF blob on ImageInfo");
 }
 
 #[cfg(all(feature = "raw-decode-gainmap", feature = "jpeg-ultrahdr"))]

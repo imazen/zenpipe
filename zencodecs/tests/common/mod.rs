@@ -1,5 +1,7 @@
 //! Shared test helpers for zencodecs integration tests.
 
+#![allow(dead_code)]
+
 use imgref::ImgVec;
 use rgb::{Rgb, Rgba};
 use zencodecs::{EncodeRequest, ImageFormat};
@@ -22,12 +24,7 @@ pub fn rgba8_image(w: usize, h: usize) -> ImgVec<Rgba<u8>> {
         .map(|i| {
             let x = (i % w) as u8;
             let y = (i / w) as u8;
-            Rgba {
-                r: x,
-                g: y,
-                b: 128,
-                a: 200,
-            }
+            Rgba { r: x, g: y, b: 128, a: 200 }
         })
         .collect();
     ImgVec::new(pixels, w, h)
