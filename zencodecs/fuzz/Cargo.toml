@@ -1,0 +1,129 @@
+[package]
+name = "zencodecs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+enough = "0.4.3"
+
+zencodec = "0.1.11"
+zenpixels = { version = "0.2.1", default-features = false }
+codec-corpus = { path = "../../../codec-corpus/crate" }
+
+[dependencies.zencodecs]
+path = ".."
+# Use all decodable codecs + encoders that build.
+# Excluded: avif-encode (zenrav1e build error), jxl-encode (jxl-encoder build error)
+# Excluded: raw-decode-gainmap (requires jpeg-ultrahdr which needs std features)
+features = [
+    "jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant",
+    "png", "png-zenquant", "avif-decode", "jxl-decode",
+    "heic-decode", "bitmaps", "bitmaps-bmp", "bitmaps-qoi",
+    "bitmaps-tga", "bitmaps-hdr",
+    "raw-decode", "raw-decode-exif",
+    "cms", "riapi",
+]
+
+# Prevent workspace interference
+[workspace]
+members = ["."]
+
+[patch.crates-io]
+zencodec = { path = "../../zencodec" }
+zenavif-parse = { path = "../../zenavif-parse" }
+ultrahdr-core = { path = "../../ultrahdr/ultrahdr-core" }
+zenjpeg = { path = "../../zenjpeg/zenjpeg" }
+
+[profile.release]
+debug = 1
+opt-level = 3
+
+[[bin]]
+name = "fuzz_probe"
+path = "fuzz_targets/fuzz_probe.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_decode"
+path = "fuzz_targets/fuzz_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_decode_limits"
+path = "fuzz_targets/fuzz_decode_limits.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_push_decode"
+path = "fuzz_targets/fuzz_push_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_animation"
+path = "fuzz_targets/fuzz_animation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_transcode"
+path = "fuzz_targets/fuzz_transcode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_exif"
+path = "fuzz_targets/fuzz_exif.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_gainmap"
+path = "fuzz_targets/fuzz_gainmap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_depthmap"
+path = "fuzz_targets/fuzz_depthmap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip"
+path = "fuzz_targets/fuzz_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_select"
+path = "fuzz_targets/fuzz_select.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "seed_corpus_tool"
+path = "seed_corpus_tool.rs"
+test = false
+doc = false
+bench = false

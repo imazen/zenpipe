@@ -1,0 +1,21 @@
+# jpeg.checksums — v1
+
+## roundtrip gray8
+~ brute-cliff-8e1b56491c:sea  x86_64-avx512  @3f7639a  auto-accepted vs rude-osprey-a36cebcb96:sea score=97.6 maxΔ=[1,1,1]
+~ crisp-grape-d428a0be1a:sea  x86_64-avx512  @e7a2590  auto-accepted vs brute-cliff-8e1b56491c:sea score=92.1 maxΔ=[1,1,1]
+
+## roundtrip rgb_f32
+~ quick-stork-9ac2502e45:sea  x86_64-avx512  @3f7639a  auto-accepted vs naval-cub-710462c5eb:sea score=97.4 maxΔ=[1,1,1]
+~ oval-core-d3565f3287:sea  x86_64-avx512  @e7a2590  auto-accepted vs quick-stork-9ac2502e45:sea score=91.0 maxΔ=[3,2,3]
+
+## roundtrip rgb8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]
+~ lost-bat-f51e49b229:sea  x86_64-avx512  @e7a2590  auto-accepted vs civil-arc-d2b6f2be7b:sea score=89.7 maxΔ=[3,2,6]
+
+## roundtrip bgra8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]
+~ lost-bat-f51e49b229:sea  x86_64-avx512  @e7a2590  auto-accepted vs civil-arc-d2b6f2be7b:sea score=89.7 maxΔ=[3,2,6]
+
+## roundtrip rgba8
+~ civil-arc-d2b6f2be7b:sea  x86_64-avx512  @3f7639a  auto-accepted vs soft-oak-5c3657dbd1:sea score=94.0 maxΔ=[3,2,5]
+~ lost-bat-f51e49b229:sea  x86_64-avx512  @e7a2590  auto-accepted vs civil-arc-d2b6f2be7b:sea score=89.7 maxΔ=[3,2,6]

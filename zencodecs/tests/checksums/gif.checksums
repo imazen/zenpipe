@@ -1,0 +1,9 @@
+# gif.checksums — v1
+
+## roundtrip rgb8
+~ civic-lodge-e92d884692:sea  x86_64-avx512  @bb0c6e8  auto-accepted vs loyal-hull-04ba4bdeef:sea score=65.5 maxΔ=[38,25,19]
+~ ionic-swift-57f7dd6471:sea  x86_64-avx512  @e7a2590  auto-accepted vs civic-lodge-e92d884692:sea score=72.7 maxΔ=[38,25,19]
+
+## roundtrip rgba8
+~ civic-lodge-e92d884692:sea  x86_64-avx512  @bb0c6e8  auto-accepted vs loyal-hull-04ba4bdeef:sea score=65.5 maxΔ=[38,25,19]
+~ ionic-swift-57f7dd6471:sea  x86_64-avx512  @e7a2590  auto-accepted vs civic-lodge-e92d884692:sea score=72.7 maxΔ=[38,25,19]

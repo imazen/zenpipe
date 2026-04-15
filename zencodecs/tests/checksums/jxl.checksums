@@ -1,0 +1,17 @@
+# jxl.checksums — v1
+
+## roundtrip gray_f32
+~ prior-oat-82d46319f2:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ kind-flock-30f60eca35:sea  x86_64-avx512  @55a1d40  auto-accepted vs prior-oat-82d46319f2:sea score=92.0 maxΔ=[2,2,2]
+
+## roundtrip gray8
+~ cute-toad-67d702ef7e:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ cool-pearl-e8d21bd216:sea  x86_64-avx512  @55a1d40  auto-accepted vs cute-toad-67d702ef7e:sea score=92.0 maxΔ=[2,2,2]
+
+## roundtrip rgb_f32
+~ core-peach-a311cb7912:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ curly-frog-29d9c553bd:sea  x86_64-avx512  @55a1d40  auto-accepted vs core-peach-a311cb7912:sea score=88.6 maxΔ=[31,15,6]
+
+## roundtrip rgb8
+~ core-peach-a311cb7912:sea  x86_64-avx512  @fb84dea  auto-accepted
+~ curly-frog-29d9c553bd:sea  x86_64-avx512  @55a1d40  auto-accepted vs core-peach-a311cb7912:sea score=88.6 maxΔ=[31,15,6]

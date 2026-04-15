@@ -1,0 +1,10 @@
+# Quality Calibration Sweep - 2026-03-08
+#
+# Corpus: CID22-512 (209 images, 512x512)
+# Quality levels: 26 (Q5..Q99)
+# Codecs: jpeg (jpegli), webp (zenwebp), avif (zenavif, speed 10), jxl (zenjxl)
+# Metric: SSIMULACRA2 via fast-ssim2
+# Total measurements: 21,736 (5434 per codec, 26 JXL failures)
+# Total time: 429s
+# Commit: 7577085
+# Command: cargo run --release --no-default-features --features calibrate --example quality_calibrate -- --corpus ~/work/codec-corpus/CID22/CID22-512/training --output /mnt/v/output/quality-calibrate

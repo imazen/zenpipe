@@ -1,0 +1,24 @@
+[package]
+name = "zcimg"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Multi-format image processor: transcode, resize, inspect"
+
+[[bin]]
+name = "zcimg"
+path = "src/main.rs"
+
+[dependencies]
+zencodecs = { path = "..", features = ["jpeg", "webp", "gif", "gif-quantizr", "png", "avif-decode", "avif-encode", "std"] }
+zencodec = { version = "0.1.12" }
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+rayon = "1.10"
+indicatif = "0.17"
+anyhow = "1"
+glob = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+kamadak-exif = "0.6"
+roxmltree = "0.21"

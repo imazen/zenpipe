@@ -1,0 +1,105 @@
+# Multi-format image dictionary for libFuzzer.
+# Contains magic bytes and structural tokens for all supported formats.
+
+# JPEG
+"\xff\xd8\xff"
+"\xff\xd8\xff\xe0"
+"\xff\xd8\xff\xe1"
+"\xff\xd8\xff\xdb"
+"\xff\xd9"
+"\xff\xc0"
+"\xff\xc2"
+"\xff\xda"
+
+# PNG
+"\x89PNG\x0d\x0a\x1a\x0a"
+"IHDR"
+"IDAT"
+"IEND"
+"tEXt"
+"iTXt"
+"iCCP"
+"eXIf"
+"acTL"
+"fcTL"
+"fdAT"
+
+# GIF
+"GIF87a"
+"GIF89a"
+"\x21\xf9"
+"\x21\xff"
+"NETSCAPE2.0"
+
+# WebP
+"RIFF"
+"WEBP"
+"VP8 "
+"VP8L"
+"VP8X"
+"ANIM"
+"ANMF"
+
+# AVIF / HEIC (ISOBMFF)
+"ftyp"
+"ftypavif"
+"ftypavis"
+"ftypheic"
+"ftypheix"
+"ftypmif1"
+"mdat"
+"meta"
+"iloc"
+"iinf"
+"pitm"
+"iprp"
+
+# JXL
+"\xff\x0a"
+"\x00\x00\x00\x0cJXL \x0d\x0a\x87\x0a"
+
+# TIFF
+"II\x2a\x00"
+"MM\x00\x2a"
+
+# BMP
+"BM"
+
+# PNM
+"P1"
+"P2"
+"P3"
+"P4"
+"P5"
+"P6"
+"P7"
+
+# PAM
+"P7\x0a"
+"ENDHDR"
+"WIDTH"
+"HEIGHT"
+"DEPTH"
+"MAXVAL"
+"TUPLTYPE"
+
+# QOI
+"qoif"
+
+# Farbfeld
+"farbfeld"
+
+# TGA (no fixed magic, but common patterns)
+"\x00\x00\x02"
+"\x00\x00\x0a"
+
+# Radiance HDR
+"#?RADIANCE"
+"#?RGBE"
+
+# EXIF
+"Exif\x00\x00"
+
+# DNG tags
+"\xc6\x12"
+"\xc6\x14"
