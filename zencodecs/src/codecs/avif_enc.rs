@@ -126,8 +126,11 @@ pub(crate) fn encode_with_precomputed_gainmap(
         extract_av1_from_avif(&result.avif_file)?
     };
 
-    // Step 2: Serialize ISO 21496-1 metadata
-    let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496(metadata);
+    // Step 2: Serialize ISO 21496-1 metadata in the AVIF tmap container format.
+    let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496(
+        metadata,
+        zenjpeg::ultrahdr::Iso21496Format::AvifTmap,
+    );
 
     // Step 3: Build the main encoder with gain map attached
     let mut enc = build_encoding(quality, effort, codec_config);
