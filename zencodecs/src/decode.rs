@@ -706,22 +706,18 @@ fn avif_gain_map_to_params(meta: &zenavif::GainMapMetadata) -> zencodec::GainMap
 fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
     use crate::gainmap::{DecodedGainMap, GainMap};
 
-    let bundle = output.extras::<zenjxl::GainMapBundle>()?;
+    // zenjxl attaches the gain map as a `zencodec::gainmap::GainMapSource`
+    // (codec.rs:1441 → bundle_to_gain_map_source). Look up that type, NOT
+    // the older `zenjxl::GainMapBundle` — same bug shape as AVIF had.
+    let source = output.extras::<zencodec::gainmap::GainMapSource>()?;
 
-    // Parse ISO 21496-1 binary metadata from the jhgm bundle
-    let metadata = if !bundle.metadata.is_empty() {
-        zenjpeg::ultrahdr::parse_iso21496(
-            &bundle.metadata,
-            zenjpeg::ultrahdr::Iso21496Format::JpegApp2,
-        )
-        .ok()?
-    } else {
-        crate::gainmap::GainMapMetadata::default()
-    };
+    // The metadata is already parsed into log2-domain GainMapParams;
+    // convert to linear-domain GainMapMetadata.
+    let metadata = crate::gainmap::params_to_metadata(&source.metadata.params);
 
-    // Decode the bare JXL codestream to get gain map pixels
+    // Decode the bare JXL codestream to get gain map pixels.
     use alloc::vec::Vec;
-    let gm_output = zenjxl::decode(&bundle.gain_map_codestream, None, &[]).ok()?;
+    let gm_output = zenjxl::decode(&source.data, None, &[]).ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gm_rgb8 = gm_output.pixels.to_rgb8();
     let gm_ref = gm_rgb8.as_imgref();
@@ -729,12 +725,11 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     let gm_h = gm_ref.height() as u32;
     let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
 
-    // Determine channels: if all R==G==B, it's effectively grayscale
+    // Determine channels: if all R==G==B, it's effectively grayscale.
     let is_gray = gm_bytes
         .chunks_exact(3)
         .all(|px| px[0] == px[1] && px[1] == px[2]);
     let (data, channels) = if is_gray {
-        // Collapse to single channel
         let gray: Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();
         (gray, 1u8)
     } else {

@@ -227,15 +227,14 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
 
 /// JXL's `jhgm` gain map convention is inverse: base is HDR, gain map
 /// tone-maps to SDR. Re-encoding a JPEG forward-direction gain map into
-/// JXL requires the encoder to either flip the direction in metadata,
-/// or fail loudly. This test exercises that path; the assertion accepts
+/// JXL: we ship the metadata as-is (no direction flip) and rely on the
+/// caller to interpret the result correctly. The assertion accepts
 /// either a flipped direction OR a coherent (still-decodable) result.
 ///
-/// Today: marked `#[ignore]` until the cross-direction encode is
-/// validated end-to-end. The JXL encoder accepts a precomputed gain map
-/// but the direction reconciliation hasn't been verified.
+/// Was blocked until decode.rs:extract_jxl_gainmap was fixed to look
+/// for `zencodec::gainmap::GainMapSource` in extras (zenjxl's actual
+/// emitted type) instead of the older `zenjxl::GainMapBundle`.
 #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
-#[ignore = "JXL inverse-direction re-encode of a forward-direction gain map not yet validated"]
 #[test]
 fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
     let donor = build_jpeg_donor(32, 32, 4.0);

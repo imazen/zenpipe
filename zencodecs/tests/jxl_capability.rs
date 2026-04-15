@@ -338,7 +338,6 @@ fn decode_gain_map_handles_garbage_jxl_without_panic() {
     feature = "jpeg",
     feature = "jpeg-ultrahdr"
 ))]
-#[ignore = "JXL gain map re-encode flow not yet validated end-to-end; tracker test"]
 #[test]
 fn jxl_gainmap_round_trip_inverse_direction() {
     // Source: an UltraHDR JPEG (forward direction).
