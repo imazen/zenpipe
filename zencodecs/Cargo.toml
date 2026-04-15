@@ -38,7 +38,7 @@ zenraw = { path = "../../zenraw", optional = true, default-features = false, fea
 zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 
 # Color management (optional)
-# moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
+moxcms = { version = "0.7", optional = true, default-features = false }
 
 [dev-dependencies]
 png = "0.18"
@@ -85,8 +85,8 @@ riapi = []
 zennode = ["dep:zennode"]
 
 # Color management
-cms = ["moxcms"]
-moxcms = []  # Disabled for now
+cms = ["dep:moxcms"]
+moxcms = ["dep:moxcms"]  # alias for back-compat
 
 # All codecs
 all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
