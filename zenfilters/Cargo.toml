@@ -46,7 +46,8 @@ zenpixels-convert = { version = "0.2.4", features = ["planar"] }
 
 # Native-only: deps that don't compile for wasm32
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
+# zenraw disabled — core2 crate fully yanked, breaks rawler→libflate chain
+# zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
 zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 libblur = { version = "0.23", default-features = true }
 zenresize = { version = "0.2.1", default-features = false, features = ["std"] }

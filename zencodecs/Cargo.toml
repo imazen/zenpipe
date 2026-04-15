@@ -17,34 +17,34 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { path = "../zencodec" }
-zenpixels = { version = "0.2", path = "../zenpixels/zenpixels", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = "0.2", path = "../zenpixels/zenpixels-convert", features = ["imgref"] }
+zencodec = { path = "../../zencodec" }
+zenpixels = { version = "0.2", path = "../../zenpixels/zenpixels", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = "0.2", path = "../../zenpixels/zenpixels-convert", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { path = "../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
-zenwebp = { path = "../zenwebp", optional = true, features = ["zencodec"] }
-zengif = { path = "../zengif", optional = true, features = ["zencodec"] }
-zenavif = { path = "../zenavif", optional = true, features = ["zencodec"] }
-zenavif-parse = { path = "../zenavif-parse", optional = true, features = ["eager"] }
-zenpng = { path = "../zenpng", optional = true, features = ["zencodec"] }
-zenjxl = { path = "../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
-# heic-decoder = { path = "../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
-zenbitmaps = { path = "../zenbitmaps", optional = true, features = ["zencodec"] }
-zenraw = { path = "../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
+zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec"] }
+zenwebp = { path = "../../zenwebp", optional = true, features = ["zencodec"] }
+zengif = { path = "../../zengif", optional = true, features = ["zencodec"] }
+zenavif = { path = "../../zenavif", optional = true, features = ["zencodec"] }
+zenavif-parse = { path = "../../zenavif-parse", optional = true, features = ["eager"] }
+zenpng = { path = "../../zenpng", optional = true, features = ["zencodec"] }
+zenjxl = { path = "../../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
+# heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
+zenbitmaps = { path = "../../zenbitmaps", optional = true, features = ["zencodec"] }
+zenraw = { path = "../../zenraw", optional = true, default-features = false, features = ["rawloader", "std", "zencodec", "exif"] }
 
 # Node definitions (optional)
-zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true }
+zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"], optional = true }
 
 # Color management (optional)
 # moxcms = { version = "0.8", optional = true, default-features = false }  # Disabled for now
 
 [dev-dependencies]
 png = "0.18"
-zensim-regress = { path = "../zensim/zensim-regress" }
+zensim-regress = { path = "../../zensim/zensim-regress" }
 codec-corpus = "1"
-fast-ssim2 = { path = "../fast-ssim2/fast-ssim2", features = ["imgref"] }
+fast-ssim2 = { path = "../../fast-ssim2/fast-ssim2", features = ["imgref"] }
 rayon = "1"
 turbojpeg = "1.4"
 
@@ -66,9 +66,13 @@ avif-decode = ["dep:zenavif"]
 avif-encode = ["dep:zenavif", "zenavif/encode", "dep:zenavif-parse"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
-# heic-decode = ["dep:heic-decoder"]  # not cloned locally
+heic-decode = []  # stub — heic-decoder not cloned locally
+tiff = []  # stub — zentiff integration pending
 bitmaps = ["dep:zenbitmaps"]
 bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]
+bitmaps-hdr = ["bitmaps"]  # stub — HDR bitmap support pending
+bitmaps-qoi = ["bitmaps"]  # stub — QOI support pending
+bitmaps-tga = ["bitmaps"]  # stub — TGA support pending
 raw-decode = ["dep:zenraw"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
@@ -81,6 +85,7 @@ riapi = []
 zennode = ["dep:zennode"]
 
 # Color management
+cms = ["moxcms"]
 moxcms = []  # Disabled for now
 
 # All codecs
@@ -122,6 +127,6 @@ name = "quality_calibrate"
 required-features = ["calibrate"]
 
 [patch.crates-io]
-zenpixels = { path = "../zenpixels/zenpixels" }
-zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
+zenpixels = { path = "../../zenpixels/zenpixels" }
+zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
 

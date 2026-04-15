@@ -40,11 +40,11 @@ decode = [
 zenpipe = { path = "..", default-features = false, features = ["zennode"] }
 zennode = { path = "../../zennode/zennode", default-features = false, features = ["derive"] }
 
-# Photo filters (requires std)
-zenfilters = { path = "../../zenfilters", features = ["zennode"], optional = true }
+# Photo filters (workspace sibling)
+zenfilters = { path = "../zenfilters", features = ["zennode"], optional = true }
 
 # Codec traits and types (Metadata, ImageFormat)
-zencodec = { version = "0.1.12", default-features = false }
+zencodec = { version = "0.1.16", default-features = false }
 
 # Pixel format descriptors
 zenpixels = { version = "0.2.2", default-features = false }
@@ -56,19 +56,14 @@ enough = { version = "0.4", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Unified codec dispatch for encoding and decoding.
-zencodecs = { path = "../../zencodecs", default-features = false, optional = true }
+# Unified codec dispatch for encoding and decoding (workspace sibling).
+zencodecs = { path = "../zencodecs", default-features = false, optional = true }
 
 [dev-dependencies]
-zenfilters = { path = "../../zenfilters", features = ["zennode"] }
-zencodecs = { path = "../../zencodecs", default-features = false, features = [
+zenfilters = { path = "../zenfilters", features = ["zennode"] }
+zencodecs = { path = "../zencodecs", default-features = false, features = [
     "jpeg", "png", "webp", "gif", "gif-quantizr",
     "jxl-encode", "avif-encode",
     "jxl-decode", "avif-decode", "heic-decode",
     "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
 ] }
-
-[patch.crates-io]
-zennode = { path = "../../zennode/zennode" }
-zennode-derive = { path = "../../zennode/zennode-derive" }
-zencodec = { path = "../../zencodec" }

@@ -85,7 +85,7 @@ nodes-all = [
 # Streaming resize (V-first, row push/pull, ring buffer)
 zenresize = { path = "../zenresize", default-features = false, features = ["layout"] , version = "0.2.0" }
 # Image layout: constraint modes, orientation, smart crop
-zenlayout = { path = "../zenlayout", default-features = false, features = ["smart-crop"] , version = "0.2.1" }
+zenlayout = { path = "zenlayout", default-features = false, features = ["smart-crop"] , version = "0.2.1" }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
 zenblend = { path = "../zenblend", default-features = false , version = "0.1.2" }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
@@ -93,7 +93,7 @@ zenpixels-convert = { version = "0.2.2", default-features = false }
 # Pixel buffer types, ColorContext, ICC/CICP metadata
 zenpixels = { version = "0.2.2", default-features = false }
 # Codec trait abstraction (decode/encode, animation, streaming)
-zencodec = { version = "0.1.13", default-features = false }
+zencodec = { version = "0.1.16", default-features = false }
 # Cooperative cancellation
 enough = { version = "0.4", default-features = false }
 # Error location tracking (re-exported by zenpixels for BufferError)
@@ -105,23 +105,23 @@ bytemuck = { version = "1", features = ["derive"] }
 # HashMap for graph compilation
 hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
-zenfilters = { path = "../zenfilters", optional = true , version = "0.1.0" }
+zenfilters = { path = "zenfilters", optional = true , version = "0.1.0" }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
 moxcms = { version = "*", optional = true }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
 zennode = { path = "../zennode/zennode", default-features = false, features = ["derive"], optional = true , version = "0.1.1" }
 # Unified codec dispatch — node definitions for codec/quantize/quality-intent
-zencodecs = { path = "../zencodecs", default-features = false, optional = true , version = "0.1.13" }
+zencodecs = { path = "zencodecs", default-features = false, optional = true , version = "0.1.0" }
 
 # ── Optional codec crates for node registry ──
 # Note: default-features enabled because zenjpeg's codec.rs unconditionally
 # references search::ExpertConfig which requires the `trellis` default feature.
 zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"], optional = true , version = "0.8.2" }
-zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true , version = "0.1.13" }
+zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true , version = "0.1.0" }
 zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec"], optional = true , version = "0.4.2" }
 zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true , version = "0.7.1" }
-zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true , version = "0.1.13" }
-zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true , version = "0.1.13" }
+zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true , version = "0.1.3" }
+zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true , version = "0.1.0" }
 zentiff = { path = "../zenextras/zentiff", default-features = false, optional = true , version = "0.1.0" }
 zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true , version = "0.1.3" }
 zenquant = { path = "../zenquant", default-features = false, optional = true , version = "0.1.2" }
@@ -155,6 +155,17 @@ required-features = ["std"]
 name = "session_cache"
 harness = false
 required-features = ["zennode", "std"]
+
+[workspace]
+members = ["zencodecs", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
+
+[patch.crates-io]
+# Consolidated from workspace members — all path deps for local development
+zenpixels = { path = "../zenpixels/zenpixels" }
+zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
+zennode = { path = "../zennode/zennode" }
+zennode-derive = { path = "../zennode/zennode-derive" }
+zencodec = { path = "../zencodec" }
 
 [package.metadata.superwork.ci]
 strategy = "strip_path"
