@@ -23,7 +23,7 @@ pub struct Limits {
     pub max_duration_ms: Option<u64>,
     /// Threading policy for codec operations.
     ///
-    /// Defaults to [`ThreadingPolicy::Unlimited`]. Use [`ThreadingPolicy::SingleThread`]
+    /// Defaults to [`ThreadingPolicy::Parallel`]. Use [`ThreadingPolicy::Sequential`]
     /// for deterministic output or constrained environments.
     pub threading: zencodec::ThreadingPolicy,
 }
@@ -39,7 +39,7 @@ impl Default for Limits {
             max_output_bytes: None,
             max_frames: None,
             max_duration_ms: None,
-            threading: zencodec::ThreadingPolicy::Unlimited,
+            threading: zencodec::ThreadingPolicy::Parallel,
         }
     }
 }
@@ -64,7 +64,7 @@ impl Limits {
             max_output_bytes: Some(100 * 1024 * 1024),
             max_frames: Some(1000),
             max_duration_ms: Some(60_000),
-            threading: zencodec::ThreadingPolicy::Unlimited,
+            threading: zencodec::ThreadingPolicy::Parallel,
         }
     }
 
@@ -253,7 +253,7 @@ mod tests {
             max_output_bytes: Some(5_000_000),
             max_frames: Some(100),
             max_duration_ms: Some(30_000),
-            threading: zencodec::ThreadingPolicy::SingleThread,
+            threading: zencodec::ThreadingPolicy::Sequential,
         };
 
         let rl = to_resource_limits(&limits);
@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(rl.max_output_bytes, Some(5_000_000));
         assert_eq!(rl.max_frames, Some(100));
         assert_eq!(rl.max_animation_ms, Some(30_000));
-        assert_eq!(rl.threading, zencodec::ThreadingPolicy::SingleThread);
+        assert_eq!(rl.threading, zencodec::ThreadingPolicy::Sequential);
     }
 
     #[test]
@@ -282,6 +282,6 @@ mod tests {
         assert_eq!(rl.max_output_bytes, None);
         assert_eq!(rl.max_frames, None);
         assert_eq!(rl.max_animation_ms, None);
-        assert_eq!(rl.threading, zencodec::ThreadingPolicy::Unlimited);
+        assert_eq!(rl.threading, zencodec::ThreadingPolicy::Parallel);
     }
 }
