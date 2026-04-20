@@ -30,10 +30,10 @@ bytemuck = { version = "1.21", default-features = false, features = ["extern_cra
 linear-srgb = { version = "0.6.8" }
 magetypes = { version = "0.9.17" }
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
-zenpixels = { version = "0.2.3", features = ["planar"] }
+zenpixels = { version = "0.2.10", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
-zenpixels-convert = { version = "0.2.4" }
+zenpixels-convert = { version = "0.2.10" }
 
 [dev-dependencies]
 imgref = "1.12"
@@ -41,8 +41,8 @@ palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 enough = "0.4"
 zensim = { version = "0.2.5", default-features = false }
-zenpixels = { version = "0.2.2", features = ["planar", "rgb"] }
-zenpixels-convert = { version = "0.2.4", features = ["planar"] }
+zenpixels = { version = "0.2.10", features = ["planar", "rgb"] }
+zenpixels-convert = { version = "0.2.10", features = ["planar"] }
 
 # Native-only: deps that don't compile for wasm32
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
