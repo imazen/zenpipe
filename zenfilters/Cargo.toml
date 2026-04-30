@@ -34,6 +34,7 @@ zenpixels = { version = "0.2.10", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
 zenpixels-convert = { version = "0.2.10" }
+garb = { version = "0.2.7", default-features = false, features = ["experimental"] }
 
 [dev-dependencies]
 imgref = "1.12"
