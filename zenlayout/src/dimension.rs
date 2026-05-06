@@ -1706,6 +1706,7 @@ mod tests {
             a[r1][7] = -yd * ys;
             a[r1][8] = ys;
         }
+        #[allow(clippy::needless_range_loop)]
         for col in 0..8 {
             let mut max_row = col;
             let mut max_val = a[col][col].abs();
