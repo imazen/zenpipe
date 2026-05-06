@@ -1738,10 +1738,19 @@ pub fn compute_layout_sequential(
                 }
             }
             Command::Pad(p) => {
-                layout.canvas = Size::new(
-                    layout.canvas.width + p.left + p.right,
-                    layout.canvas.height + p.top + p.bottom,
-                );
+                let new_w = layout
+                    .canvas
+                    .width
+                    .checked_add(p.left)
+                    .and_then(|v| v.checked_add(p.right))
+                    .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+                let new_h = layout
+                    .canvas
+                    .height
+                    .checked_add(p.top)
+                    .and_then(|v| v.checked_add(p.bottom))
+                    .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+                layout.canvas = Size::new(new_w, new_h);
                 layout.placement.0 += p.left as i32;
                 layout.placement.1 += p.top as i32;
                 layout.canvas_color = p.color;
@@ -1888,11 +1897,20 @@ fn plan_from_parts(
 
     // 3. Apply explicit padding if present (additive on existing canvas).
     let layout = if let Some(pad) = &padding {
+        let new_w = layout
+            .canvas
+            .width
+            .checked_add(pad.left)
+            .and_then(|v| v.checked_add(pad.right))
+            .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+        let new_h = layout
+            .canvas
+            .height
+            .checked_add(pad.top)
+            .and_then(|v| v.checked_add(pad.bottom))
+            .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
         Layout {
-            canvas: Size::new(
-                layout.canvas.width + pad.left + pad.right,
-                layout.canvas.height + pad.top + pad.bottom,
-            ),
+            canvas: Size::new(new_w, new_h),
             placement: (
                 layout.placement.0 + pad.left as i32,
                 layout.placement.1 + pad.top as i32,

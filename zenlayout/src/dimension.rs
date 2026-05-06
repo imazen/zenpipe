@@ -227,7 +227,11 @@ impl DimensionEffect for PadEffect {
         let right = self.right.resolve(w).max(0) as u32;
         let top = self.top.resolve(h).max(0) as u32;
         let bottom = self.bottom.resolve(h).max(0) as u32;
-        Some((w + left + right, h + top + bottom))
+        // Saturate adversarial sums so callers get a clamped dimension rather
+        // than a debug-time panic / release-mode wrap to a bogus small value.
+        let out_w = w.checked_add(left)?.checked_add(right)?;
+        let out_h = h.checked_add(top)?.checked_add(bottom)?;
+        Some((out_w, out_h))
     }
 
     fn inverse(&self, w: u32, h: u32) -> Option<(u32, u32)> {
@@ -277,7 +281,9 @@ pub struct ExpandEffect {
 
 impl DimensionEffect for ExpandEffect {
     fn forward(&self, w: u32, h: u32) -> Option<(u32, u32)> {
-        Some((w + self.left + self.right, h + self.top + self.bottom))
+        let out_w = w.checked_add(self.left)?.checked_add(self.right)?;
+        let out_h = h.checked_add(self.top)?.checked_add(self.bottom)?;
+        Some((out_w, out_h))
     }
 
     fn inverse(&self, w: u32, h: u32) -> Option<(u32, u32)> {
@@ -1720,5 +1726,48 @@ mod tests {
             h[col] = s / a[col][col];
         }
         Some([h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1.0])
+    }
+
+    // ---- Regression: dimension arithmetic must not panic / wrap on
+    //      adversarial inputs ----
+
+    #[test]
+    fn pad_forward_overflow_is_none() {
+        // Adding pixel padding to a near-u32::MAX canvas would overflow the
+        // unsigned add. Ensure forward() reports None instead of panicking
+        // (debug) or wrapping (release).
+        use crate::plan::RegionCoord;
+        let pad = PadEffect {
+            left: RegionCoord::px(i32::MAX),
+            right: RegionCoord::px(0),
+            top: RegionCoord::px(0),
+            bottom: RegionCoord::px(0),
+            color: crate::CanvasColor::default(),
+        };
+        assert_eq!(pad.forward(u32::MAX - 10, 100), None);
+    }
+
+    #[test]
+    fn expand_forward_overflow_is_none() {
+        let exp = ExpandEffect {
+            left: u32::MAX / 2 + 100,
+            right: u32::MAX / 2 + 100,
+            top: 0,
+            bottom: 0,
+        };
+        assert_eq!(exp.forward(1, 1), None);
+    }
+
+    #[test]
+    fn pad_forward_normal_inputs_still_work() {
+        use crate::plan::RegionCoord;
+        let pad = PadEffect {
+            left: RegionCoord::px(10),
+            right: RegionCoord::px(20),
+            top: RegionCoord::px(0),
+            bottom: RegionCoord::px(0),
+            color: crate::CanvasColor::default(),
+        };
+        assert_eq!(pad.forward(100, 50), Some((130, 50)));
     }
 }
