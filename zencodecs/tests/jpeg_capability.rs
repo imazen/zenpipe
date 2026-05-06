@@ -65,8 +65,7 @@ fn encode_jpeg_rgba8_ignore_alpha(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Ve
     let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img);
     let pixels = typed
         .with_descriptor(
-            PixelDescriptor::RGBA8_SRGB
-                .with_alpha(Some(zenpixels::AlphaMode::Undefined)),
+            PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Undefined)),
         )
         .erase();
     EncodeRequest::new(ImageFormat::Jpeg)
@@ -229,10 +228,7 @@ fn jpeg_xmp_round_trip_preserves_marker() {
     let decoded = decode_full(&bytes);
 
     let extracted_meta = decoded.info().metadata();
-    let extracted = extracted_meta
-        .xmp
-        .as_ref()
-        .expect("XMP should round-trip");
+    let extracted = extracted_meta.xmp.as_ref().expect("XMP should round-trip");
     let s = core::str::from_utf8(extracted).expect("XMP must be UTF-8");
     assert!(
         s.contains("capability test marker"),

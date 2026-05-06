@@ -19,9 +19,7 @@
 
 use imgref::ImgVec;
 use rgb::Rgb;
-use zencodecs::{
-    DecodeRequest, EncodeRequest, GainMapSource, ImageFormat, PixelBufferConvertExt,
-};
+use zencodecs::{DecodeRequest, EncodeRequest, GainMapSource, ImageFormat, PixelBufferConvertExt};
 
 // ─── Fixture ─────────────────────────────────────────────────────────────
 
@@ -43,11 +41,7 @@ fn make_hdr_gradient(w: usize, h: usize, peak: f32) -> ImgVec<Rgb<f32>> {
 /// Encode a synthetic HDR image as a UltraHDR JPEG and decode it back to
 /// `(SDR base pixels, gain map, metadata)`. This is the "donor" used by
 /// the cross-codec re-encode tests below.
-fn build_jpeg_donor(
-    w: usize,
-    h: usize,
-    peak: f32,
-) -> zencodecs::DecodedGainMap {
+fn build_jpeg_donor(w: usize, h: usize, peak: f32) -> zencodecs::DecodedGainMap {
     let img = make_hdr_gradient(w, h, peak);
     let bytes = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(90.0)
@@ -95,8 +89,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jpeg_ultrahdr() {
     let (_, gm_out) = DecodeRequest::new(&bytes)
         .decode_gain_map()
         .expect("decode JPEG gain map");
-    let gm_out = gm_out
-        .expect("JPEG → JPEG via with_gain_map(Precomputed) must round-trip");
+    let gm_out = gm_out.expect("JPEG → JPEG via with_gain_map(Precomputed) must round-trip");
 
     assert_eq!(gm_out.source_format, ImageFormat::Jpeg);
     assert!(!gm_out.base_is_hdr, "JPEG forward direction preserved");
@@ -118,14 +111,16 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jpeg_ultrahdr() {
 #[test]
 fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
     let donor = build_jpeg_donor(64, 64, 4.0);
-    assert!(!donor.base_is_hdr, "JPEG UltraHDR must be forward direction");
+    assert!(
+        !donor.base_is_hdr,
+        "JPEG UltraHDR must be forward direction"
+    );
 
     // Build a fresh SDR base in linear-light f32 (the AVIF encoder
     // accepts whatever format its EncodeRequest takes; the gain map
     // attaches via with_gain_map).
     let img = make_hdr_gradient(64, 64, 1.0); // peak=1.0 → SDR-only base
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> =
-        zenpixels::PixelSlice::from(img.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
 
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
@@ -149,9 +144,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
     );
     // Headroom must round-trip within tolerance — re-encoding can lose
     // a tiny bit of precision in the metadata serialisation.
-    let dh = (donor.metadata.alternate_hdr_headroom
-        - gm_out.metadata.alternate_hdr_headroom)
-        .abs();
+    let dh = (donor.metadata.alternate_hdr_headroom - gm_out.metadata.alternate_hdr_headroom).abs();
     assert!(
         dh < 0.05,
         "alternate_hdr_headroom must round-trip within 0.05; got Δ = {dh}"
@@ -166,8 +159,7 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
     // Build an AVIF donor by going JPEG → AVIF first, then re-extract.
     let jpeg_donor = build_jpeg_donor(48, 48, 3.5);
     let img = make_hdr_gradient(48, 48, 1.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> =
-        zenpixels::PixelSlice::from(img.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
         .with_gain_map(GainMapSource::Precomputed {
@@ -213,14 +205,10 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
     let (_, jpeg_round_tripped) = DecodeRequest::new(&jpeg_bytes)
         .decode_gain_map()
         .expect("decode round-tripped JPEG");
-    let jpeg_round_tripped =
-        jpeg_round_tripped.expect("AVIF→JPEG must produce a gain map");
+    let jpeg_round_tripped = jpeg_round_tripped.expect("AVIF→JPEG must produce a gain map");
 
     assert_eq!(jpeg_round_tripped.source_format, ImageFormat::Jpeg);
-    assert!(
-        !jpeg_round_tripped.base_is_hdr,
-        "JPEG UltraHDR base is SDR"
-    );
+    assert!(!jpeg_round_tripped.base_is_hdr, "JPEG UltraHDR base is SDR");
 }
 
 // ─── JPEG → JXL (forward → inverse — the direction-flip case) ────────────
@@ -243,8 +231,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
     // For a JXL encode with the JXL convention, the base image should
     // be HDR. We provide HDR pixels here.
     let hdr = make_hdr_gradient(32, 32, 4.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> =
-        zenpixels::PixelSlice::from(hdr.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(hdr.as_ref());
 
     let jxl_bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
@@ -265,8 +252,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
     // (degenerate but at least the metadata round-trips). What we
     // refuse: a missing or zero-valued metadata block.
     assert!(
-        gm_out.metadata.alternate_hdr_headroom > 0.0
-            || gm_out.metadata.base_hdr_headroom > 0.0,
+        gm_out.metadata.alternate_hdr_headroom > 0.0 || gm_out.metadata.base_hdr_headroom > 0.0,
         "JXL round-tripped gain map must declare some HDR headroom"
     );
 }
@@ -279,8 +265,7 @@ fn avif_encode_without_with_gain_map_produces_plain_avif() {
     // Sanity: omitting `with_gain_map` must not somehow magic a gain map
     // into the output. This pins the negative case for the resplit path.
     let img = make_hdr_gradient(32, 32, 4.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> =
-        zenpixels::PixelSlice::from(img.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
     let bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
         .encode(typed.erase(), false)

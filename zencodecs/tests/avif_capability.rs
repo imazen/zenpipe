@@ -37,11 +37,7 @@ fn encode_avif_rgb8(img: ImgRef<'_, Rgb<u8>>, quality: f32) -> Vec<u8> {
 }
 
 #[cfg(feature = "avif-encode")]
-fn encode_avif_with_meta(
-    img: ImgRef<'_, Rgb<u8>>,
-    meta: Metadata,
-    quality: f32,
-) -> Vec<u8> {
+fn encode_avif_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
     let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
     EncodeRequest::new(ImageFormat::Avif)
         .with_quality(quality)
@@ -215,9 +211,7 @@ fn avif_exif_round_trip_preserves_blob() {
         .expect("EXIF should round-trip on AVIF");
     let needle = &exif[8..]; // skip 8-byte TIFF header — search for IFD bytes
     assert!(
-        extracted
-            .windows(needle.len())
-            .any(|w| w == needle),
+        extracted.windows(needle.len()).any(|w| w == needle),
         "EXIF round-trip should contain the original IFD payload"
     );
 }
@@ -323,19 +317,14 @@ fn decode_gain_map_returns_none_for_plain_avif() {
 // CICP = (1, 16, 6, true) = BT.709 primaries + PQ transfer + BT.709 matrix
 // + full range. 10-bit. Real-world HDR AVIF shipped by content pipelines.
 
-const HDR_AVIF_FIXTURE: &str =
-    "/mnt/v/input/gainmap-samples/avif/seine_hdr_gainmap_srgb.avif";
+const HDR_AVIF_FIXTURE: &str = "/mnt/v/input/gainmap-samples/avif/seine_hdr_gainmap_srgb.avif";
 
 #[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
 #[test]
 fn avif_hdr_fixture_surfaces_pq_transfer_characteristic() {
-    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
-        .expect("HDR AVIF fixture must be present");
-    let info = zencodecs::from_bytes_with_registry(
-        &bytes,
-        &zencodecs::AllowedFormats::all(),
-    )
-    .expect("probe HDR AVIF");
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE).expect("HDR AVIF fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(&bytes, &zencodecs::AllowedFormats::all())
+        .expect("probe HDR AVIF");
     let cicp = info
         .source_color
         .cicp
@@ -351,13 +340,9 @@ fn avif_hdr_fixture_surfaces_pq_transfer_characteristic() {
 #[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
 #[test]
 fn avif_hdr_fixture_surfaces_10bit_depth() {
-    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
-        .expect("HDR AVIF fixture must be present");
-    let info = zencodecs::from_bytes_with_registry(
-        &bytes,
-        &zencodecs::AllowedFormats::all(),
-    )
-    .expect("probe HDR AVIF");
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE).expect("HDR AVIF fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(&bytes, &zencodecs::AllowedFormats::all())
+        .expect("probe HDR AVIF");
     assert_eq!(
         info.source_color.bit_depth,
         Some(10),
@@ -374,8 +359,7 @@ fn avif_hdr_fixture_surfaces_10bit_depth() {
 #[test]
 fn avif_hdr_fixture_decode_preserves_10bit_pixel_width() {
     use zenpixels::ChannelType;
-    let bytes = std::fs::read(HDR_AVIF_FIXTURE)
-        .expect("HDR AVIF fixture must be present");
+    let bytes = std::fs::read(HDR_AVIF_FIXTURE).expect("HDR AVIF fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode HDR AVIF");
@@ -399,7 +383,6 @@ fn avif_hdr_fixture_decode_preserves_10bit_pixel_width() {
 fn decode_gain_map_handles_garbage_avif_without_panic() {
     // Truncated AVIF magic. Implementation must error or return None,
     // never panic.
-    let bytes: Vec<u8> = b"\x00\x00\x00\x20ftypavif\x00\x00\x00\x00garbage"
-        .to_vec();
+    let bytes: Vec<u8> = b"\x00\x00\x00\x20ftypavif\x00\x00\x00\x00garbage".to_vec();
     let _ = DecodeRequest::new(&bytes).decode_gain_map();
 }

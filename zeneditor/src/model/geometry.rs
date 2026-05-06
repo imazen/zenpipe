@@ -115,7 +115,10 @@ pub enum RotationMode {
     /// §13.1: `Rotate` struct with Lanczos3 interpolation.
     /// `border` controls edge handling.
     #[serde(rename = "arbitrary")]
-    Arbitrary { degrees: f32, border: RotationBorder },
+    Arbitrary {
+        degrees: f32,
+        border: RotationBorder,
+    },
     /// Auto-deskew — detect skew angle and correct.
     /// §11.3: "Auto-straighten: detect horizon line and auto-rotate to level"
     /// §13.1: zenfilters `Warp::deskew()` via rotate.

@@ -543,9 +543,7 @@ impl<'a> EncodeRequest<'a> {
         img: imgref::ImgRef<'_, rgb::Bgra<u8>>,
     ) -> Result<EncodeOutput> {
         let typed: zenpixels::PixelSlice<'_, rgb::Bgra<u8>> = zenpixels::PixelSlice::from(img);
-        let pixels = typed
-            .with_descriptor(PixelDescriptor::BGRX8_SRGB)
-            .erase();
+        let pixels = typed.with_descriptor(PixelDescriptor::BGRX8_SRGB).erase();
         self.encode(pixels, false)
     }
 

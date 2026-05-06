@@ -54,11 +54,7 @@ fn encode_webp_rgba8(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Vec<u8> {
         .into_vec()
 }
 
-fn encode_webp_with_meta(
-    img: ImgRef<'_, Rgb<u8>>,
-    meta: Metadata,
-    quality: f32,
-) -> Vec<u8> {
+fn encode_webp_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
     let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
     EncodeRequest::new(ImageFormat::WebP)
         .with_quality(quality)

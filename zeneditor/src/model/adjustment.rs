@@ -74,7 +74,8 @@ impl AdjustmentModel {
         if old == Some(value) {
             return false;
         }
-        self.values.insert(key.to_string(), ParamValue::Number(value));
+        self.values
+            .insert(key.to_string(), ParamValue::Number(value));
         self.touched.insert(key.to_string());
         true
     }
@@ -114,10 +115,8 @@ impl AdjustmentModel {
     /// Reset all parameters to identity.
     pub fn reset_all(&mut self, schema: &SchemaModel) {
         for desc in schema.all_params() {
-            self.values.insert(
-                desc.adjust_key.clone(),
-                ParamValue::Number(desc.identity),
-            );
+            self.values
+                .insert(desc.adjust_key.clone(), ParamValue::Number(desc.identity));
         }
         self.touched.clear();
         self.film_preset = None;
@@ -150,10 +149,7 @@ impl AdjustmentModel {
     ///
     /// Output: `{"zenfilters.exposure": {"stops": 1.5}, ...}`
     /// Only includes nodes where at least one param differs from identity.
-    pub fn to_pipeline_format(
-        &self,
-        schema: &SchemaModel,
-    ) -> BTreeMap<String, serde_json::Value> {
+    pub fn to_pipeline_format(&self, schema: &SchemaModel) -> BTreeMap<String, serde_json::Value> {
         schema.build_pipeline_adjustments(&self.values)
     }
 

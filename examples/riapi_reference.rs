@@ -31,11 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     emit_footer(&mut out, &schemas)?;
 
     fs::write(&output_path, &out)?;
-    eprintln!(
-        "Wrote {} bytes to {}",
-        out.len(),
-        output_path
-    );
+    eprintln!("Wrote {} bytes to {}", out.len(), output_path);
     Ok(())
 }
 
@@ -58,7 +54,10 @@ fn emit_header(out: &mut Vec<u8>) -> std::io::Result<()> {
 
 fn emit_toc(out: &mut Vec<u8>, qs_keys: &Value) -> std::io::Result<()> {
     writeln!(out, "## Contents\n")?;
-    writeln!(out, "- [Querystring keys index](#querystring-keys-index) — flat list of every key")?;
+    writeln!(
+        out,
+        "- [Querystring keys index](#querystring-keys-index) — flat list of every key"
+    )?;
     writeln!(out, "- [Nodes](#nodes) — detailed reference per node")?;
 
     let nodes = qs_keys.get("nodes").and_then(|n| n.as_object());
@@ -79,10 +78,7 @@ fn emit_toc(out: &mut Vec<u8>, qs_keys: &Value) -> std::io::Result<()> {
 
 fn emit_all_keys_index(out: &mut Vec<u8>, qs_keys: &Value) -> std::io::Result<()> {
     writeln!(out, "## Querystring keys index\n")?;
-    writeln!(
-        out,
-        "| Key | Aliases | Node | Param | Type |"
-    )?;
+    writeln!(out, "| Key | Aliases | Node | Param | Type |")?;
     writeln!(out, "|---|---|---|---|---|")?;
 
     // Flatten: one row per (key, alias) pair, sorted.
@@ -95,10 +91,7 @@ fn emit_all_keys_index(out: &mut Vec<u8>, qs_keys: &Value) -> std::io::Result<()
                 None => continue,
             };
             for key_entry in keys {
-                let key = key_entry
-                    .get("key")
-                    .and_then(|k| k.as_str())
-                    .unwrap_or("?");
+                let key = key_entry.get("key").and_then(|k| k.as_str()).unwrap_or("?");
                 let param = key_entry
                     .get("param")
                     .and_then(|p| p.as_str())
@@ -123,7 +116,11 @@ fn emit_all_keys_index(out: &mut Vec<u8>, qs_keys: &Value) -> std::io::Result<()
                 let row = format!(
                     "| `{}` | {} | [`{}`](#{}) | `{}` | {} |",
                     key,
-                    if aliases.is_empty() { "—".into() } else { aliases },
+                    if aliases.is_empty() {
+                        "—".into()
+                    } else {
+                        aliases
+                    },
                     node_id,
                     anchor_for(node_id),
                     param,
@@ -180,7 +177,10 @@ fn emit_node_sections(
             }
         };
 
-        writeln!(out, "| Key | Aliases | Param | Type | Default | Description |")?;
+        writeln!(
+            out,
+            "| Key | Aliases | Param | Type | Default | Description |"
+        )?;
         writeln!(out, "|---|---|---|---|---|---|")?;
         for key_entry in keys {
             let key = key_entry.get("key").and_then(|k| k.as_str()).unwrap_or("?");
@@ -276,7 +276,10 @@ fn emit_enum_values(out: &mut Vec<u8>, schema: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
-fn emit_footer(out: &mut Vec<u8>, schemas: &zenpipe::schema_export::ExportedSchemas) -> std::io::Result<()> {
+fn emit_footer(
+    out: &mut Vec<u8>,
+    schemas: &zenpipe::schema_export::ExportedSchemas,
+) -> std::io::Result<()> {
     let num_nodes = schemas
         .querystring_keys
         .get("nodes")

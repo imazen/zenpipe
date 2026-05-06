@@ -145,10 +145,7 @@ fn jxl_rgb_f32_hdr_encode_decode_round_trip() {
     // should reflect the f32 input (or the codec's chosen wider type),
     // not silently narrow to 8.
     let bit_depth = decoded.info().source_color.bit_depth;
-    assert!(
-        bit_depth.is_some(),
-        "JXL must report bit_depth on decode"
-    );
+    assert!(bit_depth.is_some(), "JXL must report bit_depth on decode");
 }
 
 #[cfg(feature = "jxl-encode")]
@@ -235,10 +232,7 @@ fn jxl_valid_icc_round_trip() {
         .icc_profile
         .as_ref()
         .expect("valid ICC must round-trip on JXL");
-    assert!(
-        !extracted.is_empty(),
-        "round-tripped ICC must not be empty"
-    );
+    assert!(!extracted.is_empty(), "round-tripped ICC must not be empty");
 }
 
 // ─── CICP / color space ───────────────────────────────────────────────────
@@ -313,8 +307,7 @@ fn decode_gain_map_returns_none_for_plain_jxl() {
 #[test]
 fn decode_gain_map_handles_garbage_jxl_without_panic() {
     // JXL container magic followed by garbage. Must not panic.
-    let bytes: Vec<u8> = b"\x00\x00\x00\x0cJXL \r\n\x87\ngarbage past header"
-        .to_vec();
+    let bytes: Vec<u8> = b"\x00\x00\x00\x0cJXL \r\n\x87\ngarbage past header".to_vec();
     let _ = DecodeRequest::new(&bytes).decode_gain_map();
 }
 
@@ -336,11 +329,7 @@ fn decode_gain_map_handles_garbage_jxl_without_panic() {
 ///
 /// This is the cross-codec direction-flip case the audit flagged as
 /// the highest-risk JXL gain map test.
-#[cfg(all(
-    feature = "jxl-encode",
-    feature = "jpeg",
-    feature = "jpeg-ultrahdr"
-))]
+#[cfg(all(feature = "jxl-encode", feature = "jpeg", feature = "jpeg-ultrahdr"))]
 #[test]
 fn jxl_gainmap_round_trip_inverse_direction() {
     // Source: an UltraHDR JPEG (forward direction).
@@ -391,21 +380,15 @@ fn jxl_gainmap_round_trip_inverse_direction() {
 //                     → BT.2020 primaries + HLG transfer + identity matrix.
 // `pq_gradient.jxl`:  1088×64, 16-bit, CICP (1, 16, 0, true) → BT.709 + PQ.
 
-const HDR_PQ_JXL_FIXTURE: &str =
-    "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_pq_test.jxl";
-const HDR_HLG_JXL_FIXTURE: &str =
-    "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_hlg_test.jxl";
+const HDR_PQ_JXL_FIXTURE: &str = "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_pq_test.jxl";
+const HDR_HLG_JXL_FIXTURE: &str = "/mnt/v/GitHub/codec-corpus/jxl/features/hdr_hlg_test.jxl";
 
 #[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
 #[test]
 fn jxl_hdr_pq_fixture_surfaces_rec2020_primaries_and_pq_transfer() {
-    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE)
-        .expect("HDR PQ JXL fixture must be present");
-    let info = zencodecs::from_bytes_with_registry(
-        &bytes,
-        &zencodecs::AllowedFormats::all(),
-    )
-    .expect("probe JXL HDR PQ");
+    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE).expect("HDR PQ JXL fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(&bytes, &zencodecs::AllowedFormats::all())
+        .expect("probe JXL HDR PQ");
     let cicp = info.source_color.cicp.expect("JXL must surface CICP");
     assert_eq!(
         cicp.color_primaries, 9,
@@ -423,13 +406,9 @@ fn jxl_hdr_pq_fixture_surfaces_rec2020_primaries_and_pq_transfer() {
 #[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
 #[test]
 fn jxl_hdr_hlg_fixture_surfaces_hlg_transfer() {
-    let bytes = std::fs::read(HDR_HLG_JXL_FIXTURE)
-        .expect("HDR HLG JXL fixture must be present");
-    let info = zencodecs::from_bytes_with_registry(
-        &bytes,
-        &zencodecs::AllowedFormats::all(),
-    )
-    .expect("probe JXL HDR HLG");
+    let bytes = std::fs::read(HDR_HLG_JXL_FIXTURE).expect("HDR HLG JXL fixture must be present");
+    let info = zencodecs::from_bytes_with_registry(&bytes, &zencodecs::AllowedFormats::all())
+        .expect("probe JXL HDR HLG");
     let cicp = info.source_color.cicp.expect("JXL must surface CICP");
     assert_eq!(
         cicp.transfer_characteristics, 18,
@@ -442,8 +421,7 @@ fn jxl_hdr_hlg_fixture_surfaces_hlg_transfer() {
 #[test]
 fn jxl_hdr_fixture_decode_preserves_10bit_pixel_width() {
     use zenpixels::ChannelType;
-    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE)
-        .expect("HDR PQ JXL fixture must be present");
+    let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE).expect("HDR PQ JXL fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode HDR PQ JXL");

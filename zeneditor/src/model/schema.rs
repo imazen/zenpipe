@@ -342,10 +342,7 @@ impl SchemaModel {
                     }
                     ParamKind::Number => {
                         let n = val.as_f64();
-                        node_params.insert(
-                            p.param_name.clone(),
-                            serde_json::Value::from(n),
-                        );
+                        node_params.insert(p.param_name.clone(), serde_json::Value::from(n));
                         if (n - p.identity).abs() > 1e-6 {
                             any_changed = true;
                         }
@@ -355,8 +352,11 @@ impl SchemaModel {
 
             // Assemble arrays
             for (arr_name, acc) in &arrays {
-                let arr_val: Vec<serde_json::Value> =
-                    acc.values.iter().map(|v| serde_json::Value::from(*v)).collect();
+                let arr_val: Vec<serde_json::Value> = acc
+                    .values
+                    .iter()
+                    .map(|v| serde_json::Value::from(*v))
+                    .collect();
                 node_params.insert(arr_name.clone(), serde_json::Value::Array(arr_val));
                 if acc.any_changed {
                     any_changed = true;
@@ -390,7 +390,10 @@ fn parse_numeric_param(
     schema: &serde_json::Value,
     group: &str,
 ) -> ParamDescriptor {
-    let min = schema.get("minimum").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let min = schema
+        .get("minimum")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     let max = schema
         .get("maximum")
         .and_then(|v| v.as_f64())
@@ -408,10 +411,7 @@ fn parse_numeric_param(
         .and_then(|v| v.as_f64())
         .unwrap_or(0.01);
 
-    let slider = match schema
-        .get("x-zennode-slider")
-        .and_then(|v| v.as_str())
-    {
+    let slider = match schema.get("x-zennode-slider").and_then(|v| v.as_str()) {
         Some("square_from_slider") => SliderType::SquareFromSlider,
         Some("factor_centered") => SliderType::FactorCentered,
         _ => SliderType::Linear,

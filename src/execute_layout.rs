@@ -8,13 +8,11 @@ use alloc::vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use zenresize::composite::{Background, CompositeError};
-use zenresize::{Filter, Resizer};
-use zenresize::{PixelDescriptor, AlphaMode, ChannelLayout, ChannelType};
-use zenlayout::{
-    CanvasColor, DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation,
-};
 use whereat::{At, ResultAtExt, at};
+use zenlayout::{CanvasColor, DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation};
+use zenresize::composite::{Background, CompositeError};
+use zenresize::{AlphaMode, ChannelLayout, ChannelType, PixelDescriptor};
+use zenresize::{Filter, Resizer};
 
 /// Bridge: convert zenlayout Orientation to zenresize OrientOutput.
 fn orient_from(o: Orientation) -> zenresize::OrientOutput {

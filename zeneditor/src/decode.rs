@@ -64,9 +64,7 @@ pub fn decode_native(bytes: &[u8]) -> Result<NativeDecodeOutput, String> {
             let mut packed = Vec::with_capacity(dst_row_bytes * height as usize);
             for y in 0..height as usize {
                 let start = y * src_stride;
-                packed.extend_from_slice(
-                    &pixels.as_strided_bytes()[start..start + dst_row_bytes],
-                );
+                packed.extend_from_slice(&pixels.as_strided_bytes()[start..start + dst_row_bytes]);
             }
             packed
         }

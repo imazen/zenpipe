@@ -51,8 +51,8 @@ use crate::format::PixelFormat;
 use crate::sidecar::{ProcessedSidecar, SidecarPlan, SidecarStream};
 use crate::sources::MaterializedSource;
 
-use zenresize::Filter;
 use zenlayout::Size;
+use zenresize::Filter;
 
 // ─── Configuration ───
 
