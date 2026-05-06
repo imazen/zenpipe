@@ -760,7 +760,17 @@ pub fn inscribed_crop_inverse(out_w: u32, out_h: u32, angle_rad: f32) -> (u32, u
 
     // Slow path: robust 1D scan with binary search on src_h. Handles extreme
     // aspect ratios where the aspect-based estimate is badly wrong.
-    let sw_max = out_w.saturating_add(64).max(out_w * 2);
+    //
+    // Bound the scan with saturating arithmetic — `out_w * 2` panics in
+    // debug for out_w >= 2^31. We also cap the scan to a hard ceiling so
+    // adversarial near-u32::MAX inputs don't turn this into a DoS vector;
+    // for practical inscribed-crop inverse problems the answer is within
+    // ~2x of out_w, and 1 << 20 is far past anything sensible callers ship.
+    const MAX_SW_SCAN: u32 = 1 << 20;
+    let sw_max = out_w
+        .saturating_add(64)
+        .max(out_w.saturating_mul(2))
+        .min(out_w.saturating_add(MAX_SW_SCAN));
     for sw in out_w..=sw_max {
         // Grow upper bound until forward.1 reaches out_h (or we give up).
         let mut hi: u32 = out_h.max(2);
@@ -1730,6 +1740,15 @@ mod tests {
 
     // ---- Regression: dimension arithmetic must not panic / wrap on
     //      adversarial inputs ----
+
+    #[test]
+    fn inscribed_crop_inverse_extreme_dim_does_not_panic() {
+        // Previously: `out_w * 2` panicked in debug at out_w = u32::MAX,
+        // and the unbounded sw loop was a DoS vector. Saturating_mul
+        // plus a hard MAX_SW_SCAN cap keeps the call bounded and safe.
+        let _ = inscribed_crop_inverse(u32::MAX, u32::MAX, 0.5);
+        let _ = inscribed_crop_inverse(u32::MAX - 1, 100, 0.1);
+    }
 
     #[test]
     fn pad_forward_overflow_is_none() {
