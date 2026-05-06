@@ -734,8 +734,19 @@ impl CodecLayout {
         let mcu = subsampling.mcu_size();
 
         // Extend to MCU boundary (should already be aligned if using mcu_align).
-        let ext_w = w.div_ceil(mcu.width) * mcu.width;
-        let ext_h = h.div_ceil(mcu.height) * mcu.height;
+        // Saturate the round-up multiplication: w.div_ceil(16) * 16 wraps to
+        // 0 when w > u32::MAX - 15. Cap the extended dim at the largest
+        // multiple of mcu.{width,height} that still fits in u32 so callers
+        // get a well-defined (clamped) layout rather than a division-by-zero
+        // panic downstream.
+        let ext_w = w
+            .div_ceil(mcu.width)
+            .checked_mul(mcu.width)
+            .unwrap_or_else(|| u32::MAX - (u32::MAX % mcu.width));
+        let ext_h = h
+            .div_ceil(mcu.height)
+            .checked_mul(mcu.height)
+            .unwrap_or_else(|| u32::MAX - (u32::MAX % mcu.height));
 
         let mcu_cols = ext_w / mcu.width;
         let mcu_rows = ext_h / mcu.height;
@@ -5453,6 +5464,19 @@ mod tests {
         assert_eq!(r.top.pixels, -i32::MAX);
         assert_eq!(r.right.pixels, -1);
         assert_eq!(r.bottom.pixels, -1);
+    }
+
+    #[test]
+    fn codec_layout_new_no_overflow_on_max_canvas() {
+        // u32::MAX.div_ceil(16) * 16 = 2^32 (overflow). Verify the
+        // saturating fallback produces a valid (clamped) layout instead
+        // of panicking or wrapping to zero.
+        let cl = CodecLayout::new(Size::new(u32::MAX, u32::MAX), Subsampling::S420);
+        // Extended dims fit in u32 and are divisible by mcu dims.
+        assert_eq!(cl.luma.extended.width % cl.mcu_size.width, 0);
+        assert_eq!(cl.luma.extended.height % cl.mcu_size.height, 0);
+        assert!(cl.luma.extended.width >= u32::MAX - cl.mcu_size.width);
+        assert!(cl.luma.extended.height >= u32::MAX - cl.mcu_size.height);
     }
 
     #[test]
