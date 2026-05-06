@@ -62,15 +62,29 @@ impl<'a> DecoderSource<'a> {
                 let fmt = pixels.descriptor();
                 let rows = pixels.rows();
                 let bpp = fmt.bytes_per_pixel();
-                let row_bytes = w as usize * bpp;
+                let row_bytes = (w as usize).checked_mul(bpp).ok_or_else(|| {
+                    at!(PipeError::LimitExceeded(alloc::format!(
+                        "DecoderSource row_bytes overflow: w={w} bpp={bpp}"
+                    )))
+                })?;
+                let cap = (rows as usize).checked_mul(row_bytes).ok_or_else(|| {
+                    at!(PipeError::LimitExceeded(alloc::format!(
+                        "DecoderSource first_batch capacity overflow: rows={rows} row_bytes={row_bytes}"
+                    )))
+                })?;
 
                 // Copy first batch data for replay on first next() call.
-                let mut data = Vec::with_capacity(rows as usize * row_bytes);
+                let mut data = Vec::with_capacity(cap);
                 for r in 0..rows {
                     let row = pixels.row(r);
                     data.extend_from_slice(&row[..row_bytes]);
                 }
-                (fmt, Some((rows, data, row_bytes as u32)))
+                let row_bytes_u32 = u32::try_from(row_bytes).map_err(|_| {
+                    at!(PipeError::LimitExceeded(alloc::format!(
+                        "DecoderSource row_bytes {row_bytes} doesn't fit u32"
+                    )))
+                })?;
+                (fmt, Some((rows, data, row_bytes_u32)))
             }
             None => {
                 // Empty image — use a sensible default.
@@ -85,7 +99,7 @@ impl<'a> DecoderSource<'a> {
             width: w,
             height: h,
             format,
-            buf: StripBuf::new(w, sh, format),
+            buf: StripBuf::try_new(w, sh, format)?,
             first_batch,
             y: 0,
         })
@@ -108,7 +122,7 @@ impl<'a> DecoderSource<'a> {
             width: w,
             height: h,
             format,
-            buf: StripBuf::new(w, sh, format),
+            buf: StripBuf::try_new(w, sh, format)?,
             first_batch: None,
             y: 0,
         })

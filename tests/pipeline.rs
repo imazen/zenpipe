@@ -486,7 +486,7 @@ fn edge_replicate_right_and_bottom() {
     }
 
     let src = CallbackSource::from_data(&data, width, height, format::RGBA8_SRGB, 16);
-    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 3, 6, 5);
+    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 3, 6, 5).unwrap();
 
     assert_eq!(edge.width(), 6);
     assert_eq!(edge.height(), 5);
@@ -518,7 +518,7 @@ fn edge_replicate_right_and_bottom() {
 fn edge_replicate_no_expansion() {
     // When content == canvas, should pass through unchanged
     let src = solid_rgba8(4, 4, 100, 200, 50, 255);
-    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 4, 4, 4);
+    let mut edge = EdgeReplicateSource::new(Box::new(src), 4, 4, 4, 4).unwrap();
 
     assert_eq!(edge.width(), 4);
     assert_eq!(edge.height(), 4);

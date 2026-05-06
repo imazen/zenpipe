@@ -10,7 +10,9 @@ use crate::Source;
 #[allow(unused_imports)]
 use whereat::at;
 
+use crate::error::PipeError;
 use crate::format::PixelFormat;
+use crate::limits::checked_buffer_size;
 use crate::strip::{Strip, StripBuf};
 
 /// Expands upstream content to canvas dimensions via edge replication.
@@ -67,11 +69,17 @@ impl EdgeReplicateSource {
         content_h: u32,
         canvas_w: u32,
         canvas_h: u32,
-    ) -> Self {
+    ) -> crate::PipeResult<Self> {
+        if canvas_w < content_w || canvas_h < content_h {
+            return Err(at!(PipeError::DimensionMismatch(alloc::format!(
+                "EdgeReplicate canvas ({canvas_w}x{canvas_h}) smaller than content ({content_w}x{content_h})"
+            ))));
+        }
         let format = upstream.format();
         let bpp = format.bytes_per_pixel();
-        let row_bytes = canvas_w as usize * bpp;
-        Self {
+        let row_bytes = checked_buffer_size(canvas_w, 1, bpp)?;
+        let buf = StripBuf::try_new(canvas_w, 16.min(canvas_h), format)?;
+        Ok(Self {
             upstream,
             content_w,
             content_h,
@@ -80,11 +88,11 @@ impl EdgeReplicateSource {
             format,
             bpp,
             last_row: vec![0u8; row_bytes],
-            buf: StripBuf::new(canvas_w, 16.min(canvas_h), format),
+            buf,
             y: 0,
             pending: None,
             upstream_done: false,
-        }
+        })
     }
 
     /// Pull next row from upstream (content area only).

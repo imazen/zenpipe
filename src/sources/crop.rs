@@ -6,6 +6,7 @@ use whereat::at;
 
 use crate::error::PipeError;
 use crate::format::PixelFormat;
+use crate::limits::checked_dim_add;
 use crate::strip::{Strip, StripBuf};
 
 /// Crops a region from an upstream source without materializing.
@@ -39,13 +40,25 @@ impl CropSource {
         let uw = upstream.width();
         let uh = upstream.height();
 
-        if x + w > uw || y + h > uh {
+        // Reject wrap-around: x+w must fit in u32 and stay within source.
+        let x_end = checked_dim_add(x, w).map_err(|_| {
+            at!(PipeError::DimensionMismatch(alloc::format!(
+                "crop x+w overflow: x={x} w={w}"
+            )))
+        })?;
+        let y_end = checked_dim_add(y, h).map_err(|_| {
+            at!(PipeError::DimensionMismatch(alloc::format!(
+                "crop y+h overflow: y={y} h={h}"
+            )))
+        })?;
+        if x_end > uw || y_end > uh {
             return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                 "crop ({x},{y},{w},{h}) exceeds source ({uw},{uh})"
             ))));
         }
 
         let sh = 16u32.min(h);
+        let buf = StripBuf::try_new(w, sh, fmt)?;
         Ok(Self {
             upstream,
             x,
@@ -54,7 +67,7 @@ impl CropSource {
             crop_h: h,
             format: fmt,
             strip_height: sh,
-            buf: StripBuf::new(w, sh, fmt),
+            buf,
             out_y: 0,
             upstream_y: 0,
         })
@@ -84,15 +97,17 @@ impl Source for CropSource {
             let strip = self.upstream.next()?;
             let Some(strip) = strip else { break };
 
+            // Pre-compute end-of-region; constructor verified y+crop_h fits.
+            let region_end = self.y.saturating_add(self.crop_h);
             for r in 0..strip.rows() {
-                let abs_y = self.upstream_y + r;
+                let abs_y = self.upstream_y.saturating_add(r);
 
                 // Skip rows before crop region
                 if abs_y < self.y {
                     continue;
                 }
                 // Stop after crop region
-                if abs_y >= self.y + self.crop_h {
+                if abs_y >= region_end {
                     self.out_y += self.buf.rows_filled();
                     return if self.buf.rows_filled() > 0 {
                         Ok(Some(self.buf.as_strip()))
@@ -109,7 +124,7 @@ impl Source for CropSource {
                 let cropped = Self::extract_row_into(src_row, self.x, self.crop_w, bpp);
                 self.buf.push_row(cropped);
             }
-            self.upstream_y += strip.rows();
+            self.upstream_y = self.upstream_y.saturating_add(strip.rows());
         }
 
         if self.buf.rows_filled() == 0 {

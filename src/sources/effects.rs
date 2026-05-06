@@ -56,15 +56,33 @@ impl EffectSource {
         limits.check(width, height, fmt)?;
 
         let row_bytes = fmt.aligned_stride(width);
-        let mut data = vec![0u8; row_bytes * height as usize];
+        let total = crate::limits::checked_stride_buffer(row_bytes, height)?;
+        let mut data = vec![0u8; total];
         let mut y = 0u32;
         while let Some(strip) = upstream.next()? {
             for r in 0..strip.rows() {
-                let dst_start = (y + r) as usize * row_bytes;
+                let dst_start = (y as usize)
+                    .checked_add(r as usize)
+                    .and_then(|v| v.checked_mul(row_bytes))
+                    .ok_or_else(|| {
+                        at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                            "Effect dst offset overflow: y={y} r={r} row_bytes={row_bytes}"
+                        )))
+                    })?;
                 let src_row = strip.row(r);
-                data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
+                let dst_end = dst_start.checked_add(row_bytes).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Effect dst end overflow"
+                    )))
+                })?;
+                if dst_end > data.len() {
+                    return Err(at!(crate::error::PipeError::DimensionMismatch(
+                        alloc::format!("Effect upstream over-produced rows")
+                    )));
+                }
+                data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);
             }
-            y += strip.rows();
+            y = y.saturating_add(strip.rows());
         }
 
         let mut cur_w = width;
@@ -84,10 +102,17 @@ impl EffectSource {
                 ))));
             }
 
+            // Re-check limits against the effect's *output* dims — declared
+            // output_dims can be larger than input (e.g., RotateEffect::Expand).
+            // Without this re-check, a chain of expanding effects would
+            // bypass the perimeter limit (audit M3 / C3 partial mitigation).
+            limits.check(out_w, out_h, fmt)?;
+
             // Inverse-mapping: for every output pixel, find source coordinate and interpolate.
-            let out_stride = (out_w as usize) * 4;
-            let mut out = vec![0u8; out_stride * out_h as usize];
-            let src_stride = (cur_w as usize) * 4;
+            let out_stride = crate::limits::checked_buffer_size(out_w, 1, 4)?;
+            let buf_size = crate::limits::checked_stride_buffer(out_stride, out_h)?;
+            let mut out = vec![0u8; buf_size];
+            let src_stride = crate::limits::checked_buffer_size(cur_w, 1, 4)?;
 
             for oy in 0..out_h {
                 for ox in 0..out_w {

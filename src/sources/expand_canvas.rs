@@ -6,7 +6,9 @@ use crate::Source;
 #[allow(unused_imports)]
 use whereat::at;
 
+use crate::error::PipeError;
 use crate::format::PixelFormat;
+use crate::limits::checked_buffer_size;
 use crate::strip::{Strip, StripBuf};
 
 /// Streaming canvas expansion — places upstream on a larger canvas with padding.
@@ -61,6 +63,11 @@ impl ExpandCanvasSource {
     /// Place upstream content on a `canvas_w × canvas_h` canvas at offset
     /// `(place_x, place_y)`. Negative offsets crop the content; positive
     /// offsets add padding filled with `bg_pixel`.
+    ///
+    /// Returns `Err(LimitExceeded)` if `canvas_w * bpp` overflows `usize`.
+    /// `place_x`/`place_y` of [`i32::MIN`] are accepted via
+    /// [`unsigned_abs`](i32::unsigned_abs) (the previous `(-place_x) as u32`
+    /// would have wrapped).
     pub fn new(
         upstream: Box<dyn Source>,
         canvas_w: u32,
@@ -68,13 +75,14 @@ impl ExpandCanvasSource {
         place_x: i32,
         place_y: i32,
         bg_pixel: [u8; 4],
-    ) -> Self {
+    ) -> crate::PipeResult<Self> {
         let fmt = upstream.format();
         let src_w = upstream.width();
         let src_h = upstream.height();
 
-        let skip_x = if place_x < 0 { (-place_x) as u32 } else { 0 };
-        let skip_y = if place_y < 0 { (-place_y) as u32 } else { 0 };
+        // unsigned_abs handles i32::MIN correctly; -i32::MIN as u32 overflows.
+        let skip_x = if place_x < 0 { place_x.unsigned_abs() } else { 0 };
+        let skip_y = if place_y < 0 { place_y.unsigned_abs() } else { 0 };
         let dst_x = if place_x >= 0 { place_x as u32 } else { 0 };
         let dst_y = if place_y >= 0 { place_y as u32 } else { 0 };
 
@@ -85,16 +93,44 @@ impl ExpandCanvasSource {
             .saturating_sub(skip_y)
             .min(canvas_h.saturating_sub(dst_y));
 
-        // Pre-build a full background row
+        // Pre-build a full background row.
+        // Branch on bpp: chunks_exact_mut(4) is only correct for 4-byte
+        // pixels. For other bpp, replicate the appropriate prefix of the
+        // 4-byte bg_pixel (or zero-fill for non-RGBA layouts).
         let bpp = fmt.bytes_per_pixel();
-        let row_len = canvas_w as usize * bpp;
+        let row_len = checked_buffer_size(canvas_w, 1, bpp).map_err(|e| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "ExpandCanvas bg_row size overflow: canvas_w={canvas_w} bpp={bpp}: {e}",
+                e = e.error()
+            )))
+        })?;
         let mut bg_row = vec![0u8; row_len];
-        for chunk in bg_row.chunks_exact_mut(4) {
-            chunk.copy_from_slice(&bg_pixel);
+        match bpp {
+            4 => {
+                for chunk in bg_row.chunks_exact_mut(4) {
+                    chunk.copy_from_slice(&bg_pixel);
+                }
+            }
+            3 => {
+                for chunk in bg_row.chunks_exact_mut(3) {
+                    chunk.copy_from_slice(&bg_pixel[..3]);
+                }
+            }
+            2 => {
+                for chunk in bg_row.chunks_exact_mut(2) {
+                    chunk.copy_from_slice(&bg_pixel[..2]);
+                }
+            }
+            1 => bg_row.fill(bg_pixel[0]),
+            // Wider pixels (U16/F32 multi-channel) — leave as zero rather
+            // than reinterpret a u8 4-tuple. Caller should not depend on a
+            // specific non-zero background for these formats.
+            _ => {}
         }
 
         let sh = 16u32.min(canvas_h);
-        Self {
+        let buf = StripBuf::try_new(canvas_w, sh, fmt)?;
+        Ok(Self {
             upstream,
             canvas_w,
             canvas_h,
@@ -107,12 +143,12 @@ impl ExpandCanvasSource {
             bg_row,
             format: fmt,
             strip_height: sh,
-            buf: StripBuf::new(canvas_w, sh, fmt),
+            buf,
             out_y: 0,
             pending: None,
             upstream_rows_consumed: 0,
             upstream_exhausted: false,
-        }
+        })
     }
 
     /// Pull the next upstream row, refilling the pending strip if needed.
@@ -185,11 +221,14 @@ impl Source for ExpandCanvasSource {
         self.buf.reset();
 
         let content_y_start = self.place_y;
-        let content_y_end = self.place_y + self.content_h;
+        // place_y + content_h validated bounded by canvas_h via construction
+        // (content_h = saturating_sub of canvas_h - place_y), so saturating_add
+        // here is safe and never produces an out-of-canvas value.
+        let content_y_end = self.place_y.saturating_add(self.content_h);
         let bpp = self.format.bytes_per_pixel();
 
         for r in 0..rows_wanted {
-            let canvas_y = self.out_y + r;
+            let canvas_y = self.out_y.saturating_add(r);
 
             if canvas_y >= content_y_start && canvas_y < content_y_end {
                 // Content row: start with bg, blit content pixels

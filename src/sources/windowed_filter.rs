@@ -112,19 +112,54 @@ impl WindowedFilterSource {
 
         let width = upstream.width();
         let height = upstream.height();
-        let row_len = width as usize * 4; // RGBA f32
+        // RGBA f32 row — count of f32 elements per row (= width * 4 channels).
+        let row_len = (width as usize).checked_mul(4).ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "WindowedFilter row_len overflow: width={width}"
+            )))
+        })?;
 
         // Scale strip height to target ~75% utilization:
         // utilization = strip / (strip + 2*overlap). For 75%: strip = 6*overlap.
         // Minimum 64, capped to image height. Large strips amortize overlap cost.
+        // `overlap` flows from `pipeline.max_neighborhood_radius` and is
+        // otherwise untrusted — checked_mul rejects overflow rather than
+        // wrapping to a tiny strip / window size.
         let strip_height = if overlap > 0 {
-            (overlap * 6).max(64).min(height)
+            let times_six = overlap.checked_mul(6).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "WindowedFilter overlap*6 overflow: overlap={overlap}"
+                )))
+            })?;
+            times_six.max(64).min(height)
         } else {
             64.min(height)
         };
 
         // Max window = strip_height + 2*overlap, capped to image height
-        let max_window = (strip_height + 2 * overlap).min(height);
+        let two_overlap = overlap.checked_mul(2).ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "WindowedFilter 2*overlap overflow: overlap={overlap}"
+            )))
+        })?;
+        let max_window = strip_height
+            .checked_add(two_overlap)
+            .ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "WindowedFilter strip+2*overlap overflow: strip={strip_height} 2*overlap={two_overlap}"
+                )))
+            })?
+            .min(height);
+
+        // Compute the f32-element count for the row buffers and reject
+        // overflow before reaching the infallible vec! allocations.
+        let total_f32 = row_len.checked_mul(max_window as usize).ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "WindowedFilter buffer overflow: row_len={row_len} max_window={max_window}"
+            )))
+        })?;
+
+        let out_strip = StripBuf::try_new(width, strip_height, format::RGBAF32_LINEAR)?;
 
         Ok(Self {
             upstream,
@@ -134,12 +169,12 @@ impl WindowedFilterSource {
             strip_height,
             width,
             total_height: height,
-            row_buf: vec![0.0f32; row_len * max_window as usize],
+            row_buf: vec![0.0f32; total_f32],
             row_len,
             buf_start_y: 0,
             buf_rows: 0,
-            out_f32: vec![0.0f32; row_len * max_window as usize],
-            out_strip: StripBuf::new(width, strip_height, format::RGBAF32_LINEAR),
+            out_f32: vec![0.0f32; total_f32],
+            out_strip,
             output_y: 0,
             upstream_y: 0,
             upstream_done: false,
@@ -164,10 +199,9 @@ impl WindowedFilterSource {
         if let Some(ref mut pending) = self.pending {
             if pending.remaining() > 0 {
                 let row_u8 = pending.row(pending.next_row);
-                let row_f32: &[f32] = bytemuck::cast_slice(row_u8);
-                let result = row_f32[..self.row_len].to_vec();
+                let result = u8_row_to_f32_vec(row_u8, self.row_len)?;
                 pending.next_row += 1;
-                self.upstream_y += 1;
+                self.upstream_y = self.upstream_y.saturating_add(1);
                 if pending.remaining() == 0 {
                     self.pending = None;
                 }
@@ -194,10 +228,9 @@ impl WindowedFilterSource {
         };
 
         let row_u8 = pending.row(0);
-        let row_f32: &[f32] = bytemuck::cast_slice(row_u8);
-        let result = row_f32[..self.row_len].to_vec();
+        let result = u8_row_to_f32_vec(row_u8, self.row_len)?;
         pending.next_row = 1;
-        self.upstream_y += 1;
+        self.upstream_y = self.upstream_y.saturating_add(1);
 
         if pending.remaining() > 0 {
             self.pending = Some(pending);
@@ -211,9 +244,13 @@ impl WindowedFilterSource {
     fn prepare_window(&mut self) -> crate::PipeResult<(u32, u32)> {
         let y = self.output_y;
 
-        // Window bounds (global coordinates)
+        // Window bounds (global coordinates) — saturating arithmetic so a
+        // huge overlap can't push the additions past u32::MAX.
         let window_top = y.saturating_sub(self.overlap);
-        let window_bottom = (y + self.strip_height + self.overlap).min(self.total_height);
+        let window_bottom = y
+            .saturating_add(self.strip_height)
+            .saturating_add(self.overlap)
+            .min(self.total_height);
         let window_height = window_bottom - window_top;
         let output_offset = y - window_top; // offset of first output row in window
 
@@ -305,4 +342,24 @@ impl Source for WindowedFilterSource {
     fn format(&self) -> PixelFormat {
         format::RGBAF32_LINEAR
     }
+}
+
+/// Validate that a u8 row is `expected_f32 * 4` bytes and reinterpret as
+/// f32, returning a vec. Returns `DimensionMismatch` instead of letting
+/// `bytemuck::cast_slice` panic on a misaligned upstream row.
+fn u8_row_to_f32_vec(row_u8: &[u8], expected_f32: usize) -> crate::PipeResult<Vec<f32>> {
+    let needed_bytes = expected_f32.checked_mul(4).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(alloc::format!(
+            "WindowedFilter row byte size overflow: {expected_f32} f32"
+        )))
+    })?;
+    if row_u8.len() < needed_bytes || row_u8.len() % 4 != 0 {
+        return Err(at!(PipeError::DimensionMismatch(alloc::format!(
+            "WindowedFilter upstream row not f32-aligned or short: have {} bytes, need {}",
+            row_u8.len(),
+            needed_bytes
+        ))));
+    }
+    let row_f32: &[f32] = bytemuck::cast_slice(&row_u8[..needed_bytes]);
+    Ok(row_f32.to_vec())
 }

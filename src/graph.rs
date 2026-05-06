@@ -961,9 +961,31 @@ impl PipelineGraph {
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                // Use checked_add so an estimate that would wrap u32 is rejected
+                // before downstream limit checks see an undercount (audit H7).
+                let new_w = upstream
+                    .width
+                    .checked_add(*left)
+                    .and_then(|v| v.checked_add(*right))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas estimate width overflow: w={} left={left} right={right}",
+                            upstream.width
+                        )))
+                    })?;
+                let new_h = upstream
+                    .height
+                    .checked_add(*top)
+                    .and_then(|v| v.checked_add(*bottom))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas estimate height overflow: h={} top={top} bottom={bottom}",
+                            upstream.height
+                        )))
+                    })?;
                 Ok(SourceInfo {
-                    width: upstream.width + left + right,
-                    height: upstream.height + top + bottom,
+                    width: new_w,
+                    height: new_h,
                     format: upstream.format,
                 })
             }
@@ -1258,7 +1280,7 @@ impl PipelineGraph {
                     if cs.width < out_w || cs.height < out_h {
                         source = Box::new(EdgeReplicateSource::new(
                             source, cs.width, cs.height, out_w, out_h,
-                        ));
+                        )?);
                     }
                 }
 
@@ -1490,7 +1512,7 @@ impl PipelineGraph {
                     if cs.width < out_w || cs.height < out_h {
                         source = Box::new(EdgeReplicateSource::new(
                             source, cs.width, cs.height, out_w, out_h,
-                        ));
+                        )?);
                     }
                 }
 
@@ -1771,8 +1793,23 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 let src_w = upstream.width();
                 let src_h = upstream.height();
-                let canvas_w = src_w + left + right;
-                let canvas_h = src_h + top + bottom;
+                // Reject u32 wrap on canvas dim arithmetic (audit H7).
+                let canvas_w = src_w
+                    .checked_add(left)
+                    .and_then(|v| v.checked_add(right))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas canvas width overflow: src_w={src_w} left={left} right={right}"
+                        )))
+                    })?;
+                let canvas_h = src_h
+                    .checked_add(top)
+                    .and_then(|v| v.checked_add(bottom))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas canvas height overflow: src_h={src_h} top={top} bottom={bottom}"
+                        )))
+                    })?;
                 Ok((
                     Box::new(ExpandCanvasSource::new(
                         upstream,
@@ -1781,7 +1818,7 @@ impl PipelineGraph {
                         left as i32,
                         top as i32,
                         bg_color,
-                    )),
+                    )?),
                     meta,
                 ))
             }

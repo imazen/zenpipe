@@ -276,10 +276,15 @@ impl FrameSink {
         format: PixelFormat,
     ) -> Self {
         let stride = format.aligned_stride(width);
+        // Saturating fallback for the infallible-`new` ABI: try checked,
+        // and on overflow fall through to a zero-length buffer that the
+        // first frame copy will explicitly reject. New code should prefer
+        // the fallible variant.
+        let total = crate::limits::checked_stride_buffer(stride, height).unwrap_or(0);
         Self {
             encoder: Some(encoder),
             output: None,
-            frame_buf: vec![0u8; stride * height as usize],
+            frame_buf: vec![0u8; total],
             width,
             height,
             rows_accumulated: 0,
@@ -404,12 +409,75 @@ pub fn transcode(
     out_width: u32,
     out_height: u32,
     out_format: PixelFormat,
+    build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
+) -> crate::PipeResult<EncodeOutput> {
+    transcode_with_stop_and_limits(
+        decoder,
+        encoder,
+        out_width,
+        out_height,
+        out_format,
+        build_pipeline,
+        &enough::Unstoppable,
+        None,
+    )
+}
+
+/// Like [`transcode`], but checks `stop` between frames and inside the
+/// per-frame pipeline (audit H8 / M6).
+pub fn transcode_with_stop(
+    decoder: Box<dyn DynAnimationFrameDecoder>,
+    encoder: Box<dyn DynAnimationFrameEncoder>,
+    out_width: u32,
+    out_height: u32,
+    out_format: PixelFormat,
+    build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
+    stop: &dyn enough::Stop,
+) -> crate::PipeResult<EncodeOutput> {
+    transcode_with_stop_and_limits(
+        decoder,
+        encoder,
+        out_width,
+        out_height,
+        out_format,
+        build_pipeline,
+        stop,
+        None,
+    )
+}
+
+/// Full transcode entry point with cancellation and per-iteration frame-
+/// count enforcement (audit H8: decoders that lazily report `frame_count`
+/// can otherwise bypass the up-front `Limits::max_frames` check).
+pub fn transcode_with_stop_and_limits(
+    decoder: Box<dyn DynAnimationFrameDecoder>,
+    encoder: Box<dyn DynAnimationFrameEncoder>,
+    out_width: u32,
+    out_height: u32,
+    out_format: PixelFormat,
     mut build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
+    stop: &dyn enough::Stop,
+    max_frames: Option<u32>,
 ) -> crate::PipeResult<EncodeOutput> {
     let mut frame_source = FrameSource::new(decoder)?;
     let mut frame_sink = FrameSink::new(encoder, out_width, out_height, out_format);
 
+    let mut frames_seen: u32 = 0;
     while let Some(info) = frame_source.frame_info() {
+        stop.check().map_err(|_| at!(PipeError::Cancelled))?;
+
+        // Per-iteration max_frames check — covers the case where the
+        // decoder's `frame_count()` returned `None` so the up-front check
+        // in `job::run` was skipped.
+        if let Some(max) = max_frames
+            && frames_seen >= max
+        {
+            return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                "animation frame count exceeds max {max}"
+            ))));
+        }
+        frames_seen = frames_seen.saturating_add(1);
+
         // Build per-frame pipeline.
         // We need to give the pipeline a Source. Since FrameSource holds the
         // current frame data, we create a MemSource from its current state.
@@ -423,7 +491,7 @@ pub fn transcode(
 
         // Drain pipeline into frame sink.
         frame_sink.begin_frame();
-        crate::execute(pipeline.as_mut(), &mut frame_sink)?;
+        crate::execute_with_stop(pipeline.as_mut(), &mut frame_sink, stop)?;
         frame_sink.finish_frame(info.duration_ms)?;
 
         // Advance to next frame.
