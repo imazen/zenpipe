@@ -61,4 +61,6 @@ Cargo.toml.original.txt
 fuzz-*.log
 demo/crate/target-threaded/
 .claude/
+
+# Agent coordination marker (never committed)
 .workongoing
