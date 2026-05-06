@@ -888,9 +888,7 @@ impl core::fmt::Display for LayoutError {
                 f.write_str("region viewport has zero or negative width or height")
             }
             Self::NonFiniteFloat => f.write_str("a float parameter contains NaN or infinity"),
-            Self::DimensionOverflow => {
-                f.write_str("computed dimension would exceed u32::MAX")
-            }
+            Self::DimensionOverflow => f.write_str("computed dimension would exceed u32::MAX"),
         }
     }
 }
