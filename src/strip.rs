@@ -29,17 +29,34 @@ pub struct StripBuf {
 
 impl StripBuf {
     /// Create a new strip buffer with space for `max_rows` rows.
+    ///
+    /// Panics if `stride * max_rows` overflows `usize`. Use
+    /// [`try_new`](Self::try_new) for fallible construction; the panic
+    /// path remains for backwards compatibility with infallible callers,
+    /// but new code should prefer the fallible variant.
     pub fn new(width: u32, max_rows: u32, format: PixelFormat) -> Self {
+        Self::try_new(width, max_rows, format)
+            .unwrap_or_else(|e| panic!("StripBuf::new: dimension overflow: {}", e.error()))
+    }
+
+    /// Fallible constructor. Returns `Err(LimitExceeded)` if
+    /// `stride * max_rows` overflows `usize` (reachable on 32-bit / wasm32).
+    pub fn try_new(
+        width: u32,
+        max_rows: u32,
+        format: PixelFormat,
+    ) -> crate::PipeResult<Self> {
         let stride = format.aligned_stride(width);
-        Self {
-            data: vec![0u8; stride * max_rows as usize],
+        let total = crate::limits::checked_stride_buffer(stride, max_rows)?;
+        Ok(Self {
+            data: vec![0u8; total],
             width,
             stride,
             format,
             color: None,
             rows_filled: 0,
             capacity_rows: max_rows,
-        }
+        })
     }
 
     /// Set the color context for strips produced by this buffer.
@@ -126,19 +143,34 @@ impl StripBuf {
     }
 
     /// Resize buffer for a different format/width (reallocates if needed).
+    ///
+    /// Panics if `stride * max_rows` overflows `usize`. Prefer
+    /// [`try_reconfigure`](Self::try_reconfigure) on untrusted input.
     pub fn reconfigure(&mut self, width: u32, max_rows: u32, format: PixelFormat) {
+        self.try_reconfigure(width, max_rows, format)
+            .unwrap_or_else(|e| panic!("StripBuf::reconfigure: dimension overflow: {}", e.error()))
+    }
+
+    /// Fallible variant of [`reconfigure`](Self::reconfigure).
+    pub fn try_reconfigure(
+        &mut self,
+        width: u32,
+        max_rows: u32,
+        format: PixelFormat,
+    ) -> crate::PipeResult<()> {
         let stride = format.aligned_stride(width);
         if self.width != width || self.capacity_rows != max_rows || self.format != format {
+            let needed = crate::limits::checked_stride_buffer(stride, max_rows)?;
             self.width = width;
             self.stride = stride;
             self.format = format;
             self.capacity_rows = max_rows;
-            let needed = stride * max_rows as usize;
             if self.data.len() < needed {
                 self.data.resize(needed, 0);
             }
         }
         self.rows_filled = 0;
+        Ok(())
     }
 }
 

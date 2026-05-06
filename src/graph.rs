@@ -560,36 +560,64 @@ impl PipelineGraph {
             }
         }
 
-        // Cycle detection via DFS with coloring (white/gray/black)
-        // 0=white (unvisited), 1=gray (in progress), 2=black (done)
+        // Cycle detection via iterative DFS with coloring (white/gray/black).
+        // 0=white (unvisited), 1=gray (in progress), 2=black (done).
+        //
+        // Iterative — recursive DFS would blow the stack on a deep linear
+        // DAG (no MAX_GRAPH_DEPTH guard fires before the OS stack does on
+        // ~30k–100k linearly-chained nodes).
         let mut color = alloc::vec![0u8; self.nodes.len()];
         for start in 0..self.nodes.len() {
             if color[start] == 0 {
-                self.dfs_cycle_check(start, &mut color)?;
+                self.dfs_cycle_check_iter(start, &mut color)?;
             }
         }
 
         Ok(())
     }
 
-    /// DFS cycle detection. Traverses edges in reverse (to→from is our direction).
-    fn dfs_cycle_check(&self, node: usize, color: &mut [u8]) -> crate::PipeResult<()> {
-        color[node] = 1; // gray — in progress
-        // Follow edges where this node is the target (upstream nodes)
-        for e in &self.edges {
-            if e.to == node {
-                let upstream = e.from;
-                if color[upstream] == 1 {
-                    return Err(at!(PipeError::Op(alloc::format!(
-                        "cycle detected: node {upstream} → node {node}"
-                    ))));
+    /// Iterative DFS cycle detection. Traverses edges in reverse (to→from is
+    /// our direction). Uses an explicit work stack so the OS call stack stays
+    /// bounded regardless of graph depth.
+    fn dfs_cycle_check_iter(&self, start: usize, color: &mut [u8]) -> crate::PipeResult<()> {
+        // Each frame: (node, index_of_next_edge_to_examine).
+        // On first push, color[node] is set to 1 (gray); when the frame's
+        // edge-iteration completes, we pop and set color[node] = 2 (black).
+        let mut stack: alloc::vec::Vec<(usize, usize)> = alloc::vec::Vec::new();
+        color[start] = 1;
+        stack.push((start, 0));
+
+        while let Some((node, mut edge_idx)) = stack.pop() {
+            let mut advanced = false;
+            while edge_idx < self.edges.len() {
+                let e = &self.edges[edge_idx];
+                edge_idx += 1;
+                if e.to != node {
+                    continue;
                 }
-                if color[upstream] == 0 {
-                    self.dfs_cycle_check(upstream, color)?;
+                let upstream = e.from;
+                match color[upstream] {
+                    1 => {
+                        return Err(at!(PipeError::Op(alloc::format!(
+                            "cycle detected: node {upstream} → node {node}"
+                        ))));
+                    }
+                    0 => {
+                        // Save resumption point on this frame, then descend.
+                        stack.push((node, edge_idx));
+                        color[upstream] = 1;
+                        stack.push((upstream, 0));
+                        advanced = true;
+                        break;
+                    }
+                    _ => { /* black — already fully explored */ }
                 }
             }
+            if !advanced {
+                // All edges exhausted — mark this node black.
+                color[node] = 2;
+            }
         }
-        color[node] = 2; // black — done
         Ok(())
     }
 

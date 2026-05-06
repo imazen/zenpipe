@@ -243,6 +243,53 @@ impl Limits {
     }
 }
 
+/// Compute `width * height * bpp` as a `usize`, returning a
+/// [`PipeError::LimitExceeded`] on overflow (32-bit, wasm32, i686 are
+/// primary targets where this is reachable).
+///
+/// Use at every site that previously did `width as usize * height as usize
+/// * bpp` followed by `vec![0u8; n]`.
+pub fn checked_buffer_size(
+    width: u32,
+    height: u32,
+    bytes_per_pixel: usize,
+) -> crate::PipeResult<usize> {
+    let row = (width as usize)
+        .checked_mul(bytes_per_pixel)
+        .ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "row size overflow: width {width} * bpp {bytes_per_pixel}"
+            )))
+        })?;
+    row.checked_mul(height as usize).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(alloc::format!(
+            "buffer size overflow: row {row} * height {height}"
+        )))
+    })
+}
+
+/// Compute `stride * height` as a `usize`, returning a
+/// [`PipeError::LimitExceeded`] on overflow.
+pub fn checked_stride_buffer(stride: usize, height: u32) -> crate::PipeResult<usize> {
+    stride.checked_mul(height as usize).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(alloc::format!(
+            "buffer size overflow: stride {stride} * height {height}"
+        )))
+    })
+}
+
+/// Compute `a + b` as `u32`, returning a [`PipeError::LimitExceeded`] on overflow.
+///
+/// Use for dimension addition (canvas geometry, crop offsets, etc.) where
+/// silent wrap would produce a smaller dimension that bypasses limit checks.
+pub fn checked_dim_add(a: u32, b: u32) -> crate::PipeResult<u32> {
+    a.checked_add(b).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(alloc::format!(
+            "dimension overflow: {a} + {b} > u32::MAX"
+        )))
+    })
+}
+
 // =========================================================================
 // AllocationTracker — runtime memory accounting
 // =========================================================================
@@ -319,10 +366,59 @@ impl AllocationTracker {
     /// push `current_bytes` past the configured limit.
     ///
     /// The returned [`AllocationGuard`] decrements `current_bytes` on drop.
+    ///
+    /// Atomic check-and-add via `compare_exchange`: when multiple threads
+    /// race, at most one wins for any given budget; losers retry against
+    /// the updated current total or surface a limit error.
     pub fn allocate(self: &Arc<Self>, bytes: u64) -> crate::PipeResult<AllocationGuard> {
-        self.check(bytes)?;
+        let new_total = if self.limit_bytes > 0 {
+            let mut current = self.current_bytes.load(Ordering::Acquire);
+            loop {
+                let candidate = current.checked_add(bytes).ok_or_else(|| {
+                    at!(PipeError::LimitExceeded(alloc::format!(
+                        "memory: requested {bytes} bytes overflows u64 (current {current})"
+                    )))
+                })?;
+                if candidate > self.limit_bytes {
+                    return Err(at!(PipeError::LimitExceeded(alloc::format!(
+                        "memory: {} + {} = {} bytes exceeds limit {}",
+                        current,
+                        bytes,
+                        candidate,
+                        self.limit_bytes,
+                    ))));
+                }
+                match self.current_bytes.compare_exchange_weak(
+                    current,
+                    candidate,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break candidate,
+                    Err(actual) => current = actual,
+                }
+            }
+        } else {
+            // Unlimited: still need overflow protection on the running total.
+            let mut current = self.current_bytes.load(Ordering::Acquire);
+            loop {
+                let candidate = current.checked_add(bytes).ok_or_else(|| {
+                    at!(PipeError::LimitExceeded(alloc::format!(
+                        "memory: requested {bytes} bytes overflows u64 (current {current})"
+                    )))
+                })?;
+                match self.current_bytes.compare_exchange_weak(
+                    current,
+                    candidate,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break candidate,
+                    Err(actual) => current = actual,
+                }
+            }
+        };
 
-        let new_total = self.current_bytes.fetch_add(bytes, Ordering::SeqCst) + bytes;
         self.peak_bytes.fetch_max(new_total, Ordering::SeqCst);
         self.allocation_count.fetch_add(1, Ordering::SeqCst);
 
@@ -339,16 +435,23 @@ impl AllocationTracker {
     }
 
     /// Check whether `requested` bytes can be allocated without exceeding
-    /// the limit. Does **not** actually allocate.
+    /// the limit. Does **not** actually allocate, and is therefore subject
+    /// to TOCTOU under concurrency — prefer [`allocate()`](Self::allocate)
+    /// when you intend to acquire the bytes.
     pub fn check(&self, requested: u64) -> crate::PipeResult<()> {
         if self.limit_bytes > 0 {
             let current = self.current_bytes.load(Ordering::SeqCst);
-            if current + requested > self.limit_bytes {
+            let candidate = current.checked_add(requested).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "memory: requested {requested} bytes overflows u64 (current {current})"
+                )))
+            })?;
+            if candidate > self.limit_bytes {
                 return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "memory: {} + {} = {} bytes exceeds limit {}",
                     current,
                     requested,
-                    current + requested,
+                    candidate,
                     self.limit_bytes,
                 ))));
             }
