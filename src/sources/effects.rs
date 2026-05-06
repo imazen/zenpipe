@@ -49,9 +49,9 @@ impl EffectSource {
         let height = upstream.height();
         let fmt = upstream.format();
         if fmt != format::RGBA8_SRGB {
-            return Err(at!(crate::error::PipeError::Op(alloc::string::String::from(
-                "EffectSource requires RGBA8_SRGB input"
-            ))));
+            return Err(at!(crate::error::PipeError::Op(
+                alloc::string::String::from("EffectSource requires RGBA8_SRGB input")
+            )));
         }
         limits.check(width, height, fmt)?;
 
@@ -98,7 +98,10 @@ impl EffectSource {
             if in_w != cur_w || in_h != cur_h {
                 return Err(at!(crate::error::PipeError::Op(alloc::format!(
                     "EffectSource: effect input_dims ({}x{}) don't match current buffer ({}x{})",
-                    in_w, in_h, cur_w, cur_h
+                    in_w,
+                    in_h,
+                    cur_w,
+                    cur_h
                 ))));
             }
 
@@ -118,10 +121,12 @@ impl EffectSource {
                 for ox in 0..out_w {
                     // `inverse_point` returns source coordinate for this output pixel.
                     // Centre-of-pixel convention: the center of pixel (ox, oy) is (ox + 0.5, oy + 0.5).
-                    let (sx, sy) = match effect
-                        .effect
-                        .inverse_point(ox as f32 + 0.5, oy as f32 + 0.5, in_w, in_h)
-                    {
+                    let (sx, sy) = match effect.effect.inverse_point(
+                        ox as f32 + 0.5,
+                        oy as f32 + 0.5,
+                        in_w,
+                        in_h,
+                    ) {
                         Some(p) => p,
                         None => {
                             // Content-adaptive effect — skip for now (fill with transparent).
@@ -164,7 +169,14 @@ impl Source for EffectSource {
         let end = (self.y + rows) as usize * stride;
         self.y += rows;
         Ok(Some(
-            Strip::new(&self.data[start..end], self.width, rows, stride, self.format).pipe_err()?,
+            Strip::new(
+                &self.data[start..end],
+                self.width,
+                rows,
+                stride,
+                self.format,
+            )
+            .pipe_err()?,
         ))
     }
 
@@ -227,7 +239,8 @@ fn sample_bilinear_rgba8(
     let w11 = fx * fy;
 
     for c in 0..4 {
-        let v = p00[c] as f32 * w00 + p10[c] as f32 * w10 + p01[c] as f32 * w01 + p11[c] as f32 * w11;
+        let v =
+            p00[c] as f32 * w00 + p10[c] as f32 * w10 + p01[c] as f32 * w01 + p11[c] as f32 * w11;
         dst[c] = v.round().clamp(0.0, 255.0) as u8;
     }
 }
@@ -236,8 +249,8 @@ fn sample_bilinear_rgba8(
 mod tests {
     use super::*;
     use crate::sources::MaterializedSource;
-    use zenlayout::dimension::{RotateEffect, RotateMode};
     use zenlayout::Size;
+    use zenlayout::dimension::{RotateEffect, RotateMode};
 
     fn solid_red_source(w: u32, h: u32) -> Box<dyn Source> {
         let mut data = vec![0u8; (w * h * 4) as usize];

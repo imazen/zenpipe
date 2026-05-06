@@ -135,20 +135,16 @@ impl Source for IccTransformSource {
         let row_bytes = dst_stride.min(src_stride);
         let src_bytes = strip.as_strided_bytes();
         for r in 0..height {
-            let src_start = (r as usize)
-                .checked_mul(src_stride)
-                .ok_or_else(|| {
-                    at!(PipeError::LimitExceeded(alloc::format!(
-                        "icc src offset overflow: r={r} src_stride={src_stride}"
-                    )))
-                })?;
-            let dst_start = (r as usize)
-                .checked_mul(dst_stride)
-                .ok_or_else(|| {
-                    at!(PipeError::LimitExceeded(alloc::format!(
-                        "icc dst offset overflow: r={r} dst_stride={dst_stride}"
-                    )))
-                })?;
+            let src_start = (r as usize).checked_mul(src_stride).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "icc src offset overflow: r={r} src_stride={src_stride}"
+                )))
+            })?;
+            let dst_start = (r as usize).checked_mul(dst_stride).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "icc dst offset overflow: r={r} dst_stride={dst_stride}"
+                )))
+            })?;
             // Defensive bound check — upstream may lie about row length.
             let src_end = src_start
                 .checked_add(row_bytes)

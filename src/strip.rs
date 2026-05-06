@@ -41,11 +41,7 @@ impl StripBuf {
 
     /// Fallible constructor. Returns `Err(LimitExceeded)` if
     /// `stride * max_rows` overflows `usize` (reachable on 32-bit / wasm32).
-    pub fn try_new(
-        width: u32,
-        max_rows: u32,
-        format: PixelFormat,
-    ) -> crate::PipeResult<Self> {
+    pub fn try_new(width: u32, max_rows: u32, format: PixelFormat) -> crate::PipeResult<Self> {
         let stride = format.aligned_stride(width);
         let total = crate::limits::checked_stride_buffer(stride, max_rows)?;
         Ok(Self {

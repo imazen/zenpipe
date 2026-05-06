@@ -149,8 +149,19 @@ impl Default for ResourceEstimate {
 
 impl ResourceEstimate {
     /// Total worst-case peak memory (streaming + materialization).
+    ///
+    /// Saturating add — if a pathological graph pushes either accumulator
+    /// near `u64::MAX`, we return the saturated value rather than wrapping
+    /// (which would silently underflow the > comparison in `check`).
     pub fn peak_memory_bytes(&self) -> u64 {
-        self.streaming_bytes + self.materialization_bytes
+        self.streaming_bytes
+            .saturating_add(self.materialization_bytes)
+    }
+
+    /// Saturating add to `streaming_bytes`. Used internally so per-node
+    /// accumulators can't overflow u64 over a deep graph (audit M5).
+    pub(crate) fn add_streaming(&mut self, bytes: u64) {
+        self.streaming_bytes = self.streaming_bytes.saturating_add(bytes);
     }
 
     /// Check this estimate against resource limits.
@@ -1091,14 +1102,27 @@ impl PipelineGraph {
     }
 
     fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> crate::PipeResult<NodeId> {
+        // Return an error if there are *multiple* edges of the same kind
+        // into this node (audit M4). validate() does not enforce per-kind
+        // cardinality, so a job that accidentally declared two Input edges
+        // would have silently dropped one in the previous code.
+        let mut found: Option<NodeId> = None;
         for e in &self.edges {
             if e.to == node_id && e.kind == kind {
-                return Ok(e.from);
+                if let Some(prev) = found {
+                    return Err(at!(PipeError::Op(alloc::format!(
+                        "node {node_id} has multiple {kind:?} input edges (from {prev} and {})",
+                        e.from
+                    ))));
+                }
+                found = Some(e.from);
             }
         }
-        Err(at!(PipeError::Op(alloc::format!(
-            "node {node_id} has no {kind:?} input edge"
-        ))))
+        found.ok_or_else(|| {
+            at!(PipeError::Op(alloc::format!(
+                "node {node_id} has no {kind:?} input edge"
+            )))
+        })
     }
 
     fn output_count(&self, node_id: NodeId) -> usize {
@@ -1238,11 +1262,8 @@ impl PipelineGraph {
                 let content_size = plan.content_size;
 
                 // Split effects by where they run relative to the resize step.
-                let (before_resize, after_resize): (Vec<_>, Vec<_>) = plan
-                    .effects
-                    .iter()
-                    .cloned()
-                    .partition(|e| e.before_resize);
+                let (before_resize, after_resize): (Vec<_>, Vec<_>) =
+                    plan.effects.iter().cloned().partition(|e| e.before_resize);
 
                 // Apply pre-resize effects (e.g. deskew at native resolution).
                 if !before_resize.is_empty() {

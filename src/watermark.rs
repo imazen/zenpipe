@@ -171,16 +171,28 @@ fn compute_bounding_box(w: u32, h: u32, fit_box: &FitBox) -> Option<(i32, i32, i
             right,
             bottom,
         } => {
-            if left + right < w && top + bottom < h {
-                Some((
-                    *left as i32,
-                    *top as i32,
-                    w as i32 - *right as i32,
-                    h as i32 - *bottom as i32,
-                ))
-            } else {
-                None
+            // Reject u32 wrap on left+right / top+bottom (audit M9), and
+            // reject margin values that don't fit i32 since downstream
+            // arithmetic uses signed offsets.
+            let lr = left.checked_add(*right)?;
+            let tb = top.checked_add(*bottom)?;
+            if lr >= w || tb >= h {
+                return None;
             }
+            if *left > i32::MAX as u32
+                || *top > i32::MAX as u32
+                || *right > i32::MAX as u32
+                || *bottom > i32::MAX as u32
+                || w > i32::MAX as u32
+                || h > i32::MAX as u32
+            {
+                return None;
+            }
+            let x0 = *left as i32;
+            let y0 = *top as i32;
+            let x1 = (w as i32).checked_sub(*right as i32)?;
+            let y1 = (h as i32).checked_sub(*bottom as i32)?;
+            Some((x0, y0, x1, y1))
         }
         FitBox::Percentage { x1, y1, x2, y2 } => {
             let to_px = |pct: f32, dim: u32| -> i32 {

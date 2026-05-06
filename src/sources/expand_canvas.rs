@@ -81,8 +81,16 @@ impl ExpandCanvasSource {
         let src_h = upstream.height();
 
         // unsigned_abs handles i32::MIN correctly; -i32::MIN as u32 overflows.
-        let skip_x = if place_x < 0 { place_x.unsigned_abs() } else { 0 };
-        let skip_y = if place_y < 0 { place_y.unsigned_abs() } else { 0 };
+        let skip_x = if place_x < 0 {
+            place_x.unsigned_abs()
+        } else {
+            0
+        };
+        let skip_y = if place_y < 0 {
+            place_y.unsigned_abs()
+        } else {
+            0
+        };
         let dst_x = if place_x >= 0 { place_x as u32 } else { 0 };
         let dst_y = if place_y >= 0 { place_y as u32 } else { 0 };
 
