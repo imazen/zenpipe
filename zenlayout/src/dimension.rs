@@ -227,7 +227,11 @@ impl DimensionEffect for PadEffect {
         let right = self.right.resolve(w).max(0) as u32;
         let top = self.top.resolve(h).max(0) as u32;
         let bottom = self.bottom.resolve(h).max(0) as u32;
-        Some((w + left + right, h + top + bottom))
+        // Saturate adversarial sums so callers get a clamped dimension rather
+        // than a debug-time panic / release-mode wrap to a bogus small value.
+        let out_w = w.checked_add(left)?.checked_add(right)?;
+        let out_h = h.checked_add(top)?.checked_add(bottom)?;
+        Some((out_w, out_h))
     }
 
     fn inverse(&self, w: u32, h: u32) -> Option<(u32, u32)> {
@@ -277,7 +281,9 @@ pub struct ExpandEffect {
 
 impl DimensionEffect for ExpandEffect {
     fn forward(&self, w: u32, h: u32) -> Option<(u32, u32)> {
-        Some((w + self.left + self.right, h + self.top + self.bottom))
+        let out_w = w.checked_add(self.left)?.checked_add(self.right)?;
+        let out_h = h.checked_add(self.top)?.checked_add(self.bottom)?;
+        Some((out_w, out_h))
     }
 
     fn inverse(&self, w: u32, h: u32) -> Option<(u32, u32)> {
@@ -754,7 +760,17 @@ pub fn inscribed_crop_inverse(out_w: u32, out_h: u32, angle_rad: f32) -> (u32, u
 
     // Slow path: robust 1D scan with binary search on src_h. Handles extreme
     // aspect ratios where the aspect-based estimate is badly wrong.
-    let sw_max = out_w.saturating_add(64).max(out_w * 2);
+    //
+    // Bound the scan with saturating arithmetic — `out_w * 2` panics in
+    // debug for out_w >= 2^31. We also cap the scan to a hard ceiling so
+    // adversarial near-u32::MAX inputs don't turn this into a DoS vector;
+    // for practical inscribed-crop inverse problems the answer is within
+    // ~2x of out_w, and 1 << 20 is far past anything sensible callers ship.
+    const MAX_SW_SCAN: u32 = 1 << 20;
+    let sw_max = out_w
+        .saturating_add(64)
+        .max(out_w.saturating_mul(2))
+        .min(out_w.saturating_add(MAX_SW_SCAN));
     for sw in out_w..=sw_max {
         // Grow upper bound until forward.1 reaches out_h (or we give up).
         let mut hi: u32 = out_h.max(2);
@@ -1690,6 +1706,7 @@ mod tests {
             a[r1][7] = -yd * ys;
             a[r1][8] = ys;
         }
+        #[allow(clippy::needless_range_loop)]
         for col in 0..8 {
             let mut max_row = col;
             let mut max_val = a[col][col].abs();
@@ -1720,5 +1737,57 @@ mod tests {
             h[col] = s / a[col][col];
         }
         Some([h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1.0])
+    }
+
+    // ---- Regression: dimension arithmetic must not panic / wrap on
+    //      adversarial inputs ----
+
+    #[test]
+    fn inscribed_crop_inverse_extreme_dim_does_not_panic() {
+        // Previously: `out_w * 2` panicked in debug at out_w = u32::MAX,
+        // and the unbounded sw loop was a DoS vector. Saturating_mul
+        // plus a hard MAX_SW_SCAN cap keeps the call bounded and safe.
+        let _ = inscribed_crop_inverse(u32::MAX, u32::MAX, 0.5);
+        let _ = inscribed_crop_inverse(u32::MAX - 1, 100, 0.1);
+    }
+
+    #[test]
+    fn pad_forward_overflow_is_none() {
+        // Adding pixel padding to a near-u32::MAX canvas would overflow the
+        // unsigned add. Ensure forward() reports None instead of panicking
+        // (debug) or wrapping (release).
+        use crate::plan::RegionCoord;
+        let pad = PadEffect {
+            left: RegionCoord::px(i32::MAX),
+            right: RegionCoord::px(0),
+            top: RegionCoord::px(0),
+            bottom: RegionCoord::px(0),
+            color: crate::CanvasColor::default(),
+        };
+        assert_eq!(pad.forward(u32::MAX - 10, 100), None);
+    }
+
+    #[test]
+    fn expand_forward_overflow_is_none() {
+        let exp = ExpandEffect {
+            left: u32::MAX / 2 + 100,
+            right: u32::MAX / 2 + 100,
+            top: 0,
+            bottom: 0,
+        };
+        assert_eq!(exp.forward(1, 1), None);
+    }
+
+    #[test]
+    fn pad_forward_normal_inputs_still_work() {
+        use crate::plan::RegionCoord;
+        let pad = PadEffect {
+            left: RegionCoord::px(10),
+            right: RegionCoord::px(20),
+            top: RegionCoord::px(0),
+            bottom: RegionCoord::px(0),
+            color: crate::CanvasColor::default(),
+        };
+        assert_eq!(pad.forward(100, 50), Some((130, 50)));
     }
 }

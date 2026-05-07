@@ -94,8 +94,15 @@ impl RegionCoord {
     }
 
     /// Resolve to absolute pixel coordinate given source dimension.
+    ///
+    /// Saturates instead of overflowing: an extreme `source_dim * percent`
+    /// product or `pixels` offset clamps to `i32::MIN..=i32::MAX` rather
+    /// than panicking in debug or wrapping in release.
     pub fn resolve(self, source_dim: u32) -> i32 {
-        (source_dim as f64 * self.percent as f64).round() as i32 + self.pixels
+        let scaled = (source_dim as f64 * self.percent as f64).round();
+        // f64 -> i32 with `as` already saturates to i32::MIN/MAX in Rust 1.45+.
+        let scaled_i32 = scaled as i32;
+        scaled_i32.saturating_add(self.pixels)
     }
 }
 
@@ -144,12 +151,22 @@ impl Region {
     }
 
     /// Uniform padding around the full source.
+    ///
+    /// `amount` is clamped to `i32::MAX` so callers passing values up to
+    /// `u32::MAX` don't trip `-(i32::MIN)` overflow inside `RegionCoord::px`.
     pub const fn padded(amount: u32, color: CanvasColor) -> Self {
+        // Saturating cast: any u32 above i32::MAX is clamped down. Once `a`
+        // is in `0..=i32::MAX`, both `-a` and `+a` are representable as i32.
+        let a = if amount > i32::MAX as u32 {
+            i32::MAX
+        } else {
+            amount as i32
+        };
         Self {
-            left: RegionCoord::px(-(amount as i32)),
-            top: RegionCoord::px(-(amount as i32)),
-            right: RegionCoord::pct_px(1.0, amount as i32),
-            bottom: RegionCoord::pct_px(1.0, amount as i32),
+            left: RegionCoord::px(-a),
+            top: RegionCoord::px(-a),
+            right: RegionCoord::pct_px(1.0, a),
+            bottom: RegionCoord::pct_px(1.0, a),
             color,
         }
     }
@@ -158,12 +175,26 @@ impl Region {
     ///
     /// Creates a viewport in negative coordinate space with the given
     /// dimensions, guaranteeing zero overlap with the source image.
+    ///
+    /// `width` and `height` are clamped to `i32::MAX - 1` so adversarial
+    /// near-`u32::MAX` inputs don't trigger `-(i32::MIN)` overflow when
+    /// computing the negative-space placement.
     pub const fn blank(width: u32, height: u32, color: CanvasColor) -> Self {
         // Place viewport so right edge = -1, bottom edge = -1.
         // Source occupies [0, source_w) × [0, source_h), so a viewport
         // ending at -1 can never overlap regardless of source dimensions.
-        let w = width as i32;
-        let h = height as i32;
+        // Saturating cast keeps `-w - 1` and `-h - 1` inside i32.
+        let cap = i32::MAX - 1;
+        let w = if width > cap as u32 {
+            cap
+        } else {
+            width as i32
+        };
+        let h = if height > cap as u32 {
+            cap
+        } else {
+            height as i32
+        };
         Self {
             left: RegionCoord::px(-w - 1),
             top: RegionCoord::px(-h - 1),
@@ -703,8 +734,19 @@ impl CodecLayout {
         let mcu = subsampling.mcu_size();
 
         // Extend to MCU boundary (should already be aligned if using mcu_align).
-        let ext_w = w.div_ceil(mcu.width) * mcu.width;
-        let ext_h = h.div_ceil(mcu.height) * mcu.height;
+        // Saturate the round-up multiplication: w.div_ceil(16) * 16 wraps to
+        // 0 when w > u32::MAX - 15. Cap the extended dim at the largest
+        // multiple of mcu.{width,height} that still fits in u32 so callers
+        // get a well-defined (clamped) layout rather than a division-by-zero
+        // panic downstream.
+        let ext_w = w
+            .div_ceil(mcu.width)
+            .checked_mul(mcu.width)
+            .unwrap_or_else(|| u32::MAX - (u32::MAX % mcu.width));
+        let ext_h = h
+            .div_ceil(mcu.height)
+            .checked_mul(mcu.height)
+            .unwrap_or_else(|| u32::MAX - (u32::MAX % mcu.height));
 
         let mcu_cols = ext_w / mcu.width;
         let mcu_rows = ext_h / mcu.height;
@@ -1588,11 +1630,24 @@ pub fn compute_layout_sequential(
                 if saw_constrain || !pre_regions.is_empty() {
                     post_ops.push((cmd_idx, cmd));
                 } else {
+                    // Saturate u32 -> i32 so adversarial pad amounts above
+                    // i32::MAX don't trip `-(i32::MIN)` overflow.
+                    let sat = |v: u32| -> i32 {
+                        if v > i32::MAX as u32 {
+                            i32::MAX
+                        } else {
+                            v as i32
+                        }
+                    };
+                    let pl = sat(p.left);
+                    let pt = sat(p.top);
+                    let pr = sat(p.right);
+                    let pb = sat(p.bottom);
                     pre_regions.push(Region {
-                        left: RegionCoord::px(-(p.left as i32)),
-                        top: RegionCoord::px(-(p.top as i32)),
-                        right: RegionCoord::pct_px(1.0, p.right as i32),
-                        bottom: RegionCoord::pct_px(1.0, p.bottom as i32),
+                        left: RegionCoord::px(-pl),
+                        top: RegionCoord::px(-pt),
+                        right: RegionCoord::pct_px(1.0, pr),
+                        bottom: RegionCoord::pct_px(1.0, pb),
                         color: p.color,
                     });
                 }
@@ -1738,10 +1793,19 @@ pub fn compute_layout_sequential(
                 }
             }
             Command::Pad(p) => {
-                layout.canvas = Size::new(
-                    layout.canvas.width + p.left + p.right,
-                    layout.canvas.height + p.top + p.bottom,
-                );
+                let new_w = layout
+                    .canvas
+                    .width
+                    .checked_add(p.left)
+                    .and_then(|v| v.checked_add(p.right))
+                    .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+                let new_h = layout
+                    .canvas
+                    .height
+                    .checked_add(p.top)
+                    .and_then(|v| v.checked_add(p.bottom))
+                    .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+                layout.canvas = Size::new(new_w, new_h);
                 layout.placement.0 += p.left as i32;
                 layout.placement.1 += p.top as i32;
                 layout.canvas_color = p.color;
@@ -1888,11 +1952,20 @@ fn plan_from_parts(
 
     // 3. Apply explicit padding if present (additive on existing canvas).
     let layout = if let Some(pad) = &padding {
+        let new_w = layout
+            .canvas
+            .width
+            .checked_add(pad.left)
+            .and_then(|v| v.checked_add(pad.right))
+            .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
+        let new_h = layout
+            .canvas
+            .height
+            .checked_add(pad.top)
+            .and_then(|v| v.checked_add(pad.bottom))
+            .ok_or_else(|| at!(LayoutError::DimensionOverflow))?;
         Layout {
-            canvas: Size::new(
-                layout.canvas.width + pad.left + pad.right,
-                layout.canvas.height + pad.top + pad.bottom,
-            ),
+            canvas: Size::new(new_w, new_h),
             placement: (
                 layout.placement.0 + pad.left as i32,
                 layout.placement.1 + pad.top as i32,
@@ -1959,13 +2032,16 @@ fn resolve_region(
     }
     let (left, top, right, bottom) = reg.resolve(source_w, source_h);
 
-    let vw = right - left;
-    let vh = bottom - top;
+    // Use i64 to avoid i32 overflow when adversarial inputs span the full
+    // i32 range (e.g. left = -i32::MAX, right = +i32::MAX).
+    let vw = right as i64 - left as i64;
+    let vh = bottom as i64 - top as i64;
     if vw <= 0 || vh <= 0 {
         return Err(at!(LayoutError::ZeroRegionDimension));
     }
-    let vw = vw as u32;
-    let vh = vh as u32;
+    // Cap at u32::MAX so the canvas stays representable.
+    let vw = vw.min(u32::MAX as i64) as u32;
+    let vh = vh.min(u32::MAX as i64) as u32;
 
     // Compute overlap with source [0, source_w) × [0, source_h)
     let ol = left.max(0);
@@ -5361,5 +5437,59 @@ mod tests {
         let (ideal, _) = compute_layout_sequential(&commands, 800, 600, None).unwrap();
         // Canvas should be expanded by 40 in each direction
         assert_eq!(ideal.layout.canvas, Size::new(440, 340));
+    }
+
+    // ---- Regression: u32 -> i32 cast + negate must not panic on
+    //      adversarial inputs ----
+
+    #[test]
+    fn region_padded_no_overflow_on_max_amount() {
+        // amount = u32::MAX would previously cast to i32::MIN and
+        // `-(i32::MIN)` panics in debug, wraps in release.
+        let r = Region::padded(u32::MAX, CanvasColor::Transparent);
+        // Saturating cast keeps the offset representable.
+        assert_eq!(r.left.pixels, -i32::MAX);
+        assert_eq!(r.top.pixels, -i32::MAX);
+        assert_eq!(r.right.pixels, i32::MAX);
+        assert_eq!(r.bottom.pixels, i32::MAX);
+    }
+
+    #[test]
+    fn region_blank_no_overflow_on_max_dims() {
+        // width/height near u32::MAX would previously cast to i32::MIN
+        // and `-w - 1` panic. Saturating cap keeps it safe.
+        let r = Region::blank(u32::MAX, u32::MAX, CanvasColor::Transparent);
+        // -((i32::MAX - 1)) - 1 == -i32::MAX
+        assert_eq!(r.left.pixels, -i32::MAX);
+        assert_eq!(r.top.pixels, -i32::MAX);
+        assert_eq!(r.right.pixels, -1);
+        assert_eq!(r.bottom.pixels, -1);
+    }
+
+    #[test]
+    fn codec_layout_new_no_overflow_on_max_canvas() {
+        // u32::MAX.div_ceil(16) * 16 = 2^32 (overflow). Verify the
+        // saturating fallback produces a valid (clamped) layout instead
+        // of panicking or wrapping to zero.
+        let cl = CodecLayout::new(Size::new(u32::MAX, u32::MAX), Subsampling::S420);
+        // Extended dims fit in u32 and are divisible by mcu dims.
+        assert_eq!(cl.luma.extended.width % cl.mcu_size.width, 0);
+        assert_eq!(cl.luma.extended.height % cl.mcu_size.height, 0);
+        assert!(cl.luma.extended.width >= u32::MAX - cl.mcu_size.width);
+        assert!(cl.luma.extended.height >= u32::MAX - cl.mcu_size.height);
+    }
+
+    #[test]
+    fn pre_region_pad_no_overflow_on_max_amount() {
+        // The pre-constrain pad-as-region path also did `-(p.left as i32)`.
+        let commands = [Command::Pad(Padding::new(
+            u32::MAX,
+            u32::MAX,
+            u32::MAX,
+            u32::MAX,
+            CanvasColor::Transparent,
+        ))];
+        // Should not panic even with adversarial padding values.
+        let _ = compute_layout_sequential(&commands, 100, 100, None);
     }
 }

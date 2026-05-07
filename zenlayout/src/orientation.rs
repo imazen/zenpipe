@@ -183,19 +183,29 @@ impl Orientation {
     ///
     /// Given a rect in post-orientation (display) space and the source image
     /// dimensions, returns the corresponding rect in pre-orientation (source) space.
+    ///
+    /// Subtractions saturate at zero so out-of-source rects (which would
+    /// otherwise produce `u32` underflow panics in debug or wrap to huge
+    /// values in release) instead clamp to the source edge. Callers that
+    /// require the input rect to fit inside the source must validate it
+    /// themselves; this method's contract is "never panic on adversarial
+    /// input."
     pub fn transform_rect_to_source(self, rect: Rect, source_w: u32, source_h: u32) -> Rect {
         let (rx, ry, rw, rh) = (rect.x, rect.y, rect.width, rect.height);
         let (sw, sh) = (source_w, source_h);
 
+        // Helper: sw - rx - rw, never underflows.
+        let sub2 = |a: u32, b: u32, c: u32| a.saturating_sub(b).saturating_sub(c);
+
         match self {
             Self::Identity => Rect::new(rx, ry, rw, rh),
-            Self::FlipH => Rect::new(sw - rx - rw, ry, rw, rh),
-            Self::Rotate90 => Rect::new(ry, sh - rx - rw, rh, rw),
+            Self::FlipH => Rect::new(sub2(sw, rx, rw), ry, rw, rh),
+            Self::Rotate90 => Rect::new(ry, sub2(sh, rx, rw), rh, rw),
             Self::Transpose => Rect::new(ry, rx, rh, rw),
-            Self::Rotate180 => Rect::new(sw - rx - rw, sh - ry - rh, rw, rh),
-            Self::FlipV => Rect::new(rx, sh - ry - rh, rw, rh),
-            Self::Rotate270 => Rect::new(sw - ry - rh, rx, rh, rw),
-            Self::Transverse => Rect::new(sw - ry - rh, sh - rx - rw, rh, rw),
+            Self::Rotate180 => Rect::new(sub2(sw, rx, rw), sub2(sh, ry, rh), rw, rh),
+            Self::FlipV => Rect::new(rx, sub2(sh, ry, rh), rw, rh),
+            Self::Rotate270 => Rect::new(sub2(sw, ry, rh), rx, rh, rw),
+            Self::Transverse => Rect::new(sub2(sw, ry, rh), sub2(sh, rx, rw), rh, rw),
         }
     }
 }
@@ -534,6 +544,24 @@ mod tests {
             Orientation::FlipV => (x, h - 1 - y),
             Orientation::Rotate270 => (y, w - 1 - x),
             Orientation::Transverse => (h - 1 - y, w - 1 - x),
+        }
+    }
+
+    // ---- Regression: out-of-source rects must clamp instead of underflowing ----
+
+    #[test]
+    fn transform_rect_to_source_oob_does_not_panic() {
+        // rect.x + rect.width > source_w would previously underflow inside
+        // FlipH, Rotate180, Transverse. Saturating subtraction now clamps.
+        let rect = Rect::new(50, 50, 1000, 1000);
+        let sw = 100;
+        let sh = 100;
+        for &o in &ALL {
+            let r = o.transform_rect_to_source(rect, sw, sh);
+            // The output is necessarily clamped — what matters is no panic.
+            // x and y must remain in u32 range (saturating_sub guarantees).
+            // We only assert the call returned without panicking.
+            let _ = r;
         }
     }
 }
