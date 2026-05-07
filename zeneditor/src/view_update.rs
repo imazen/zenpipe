@@ -40,23 +40,14 @@ pub enum ViewUpdate {
     AllParamsReset,
 
     /// Film preset selection changed.
-    FilmPresetChanged {
-        id: Option<String>,
-        intensity: f32,
-    },
+    FilmPresetChanged { id: Option<String>, intensity: f32 },
 
     /// Undo/redo state changed.
-    HistoryChanged {
-        can_undo: bool,
-        can_redo: bool,
-    },
+    HistoryChanged { can_undo: bool, can_redo: bool },
 
     // ─── Source info ───
     /// Source image loaded and ready.
-    SourceLoaded {
-        width: u32,
-        height: u32,
-    },
+    SourceLoaded { width: u32, height: u32 },
 
     /// Source upgraded with native decode (metadata now available).
     MetadataUpgraded {
@@ -124,10 +115,7 @@ pub enum ViewUpdate {
     // ─── Errors ───
     /// An error occurred. If `recoverable`, the editor auto-reverts to
     /// last safe state.
-    Error {
-        message: String,
-        recoverable: bool,
-    },
+    Error { message: String, recoverable: bool },
 
     // ─── Status ───
     /// A render started (overview + detail).

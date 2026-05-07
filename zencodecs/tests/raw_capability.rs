@@ -33,10 +33,8 @@
 
 use zencodecs::DecodeRequest;
 
-const APPLE_PRORAW_FIXTURE: &str =
-    "/mnt/v/heic/46CD6167-C36B-4F98-B386-2300D8E840F0.DNG";
-const APPLE_PRORAW_FIXTURE_2: &str =
-    "/mnt/v/heic/CBFA569A-5C28-468E-96B4-CFFBAEB951C7.DNG";
+const APPLE_PRORAW_FIXTURE: &str = "/mnt/v/heic/46CD6167-C36B-4F98-B386-2300D8E840F0.DNG";
+const APPLE_PRORAW_FIXTURE_2: &str = "/mnt/v/heic/CBFA569A-5C28-468E-96B4-CFFBAEB951C7.DNG";
 
 // ─── Fixture-free tests ───────────────────────────────────────────────────
 
@@ -45,22 +43,27 @@ const APPLE_PRORAW_FIXTURE_2: &str =
 fn raw_probe_handles_garbage_without_panic() {
     let bytes = b"not a raw file at all, just garbage bytes";
     // probe will return Err(UnrecognizedFormat) — never panic.
-    let _ = zencodecs::from_bytes_with_registry(
-        bytes,
-        &zencodecs::AllowedFormats::all(),
-    );
+    let _ = zencodecs::from_bytes_with_registry(bytes, &zencodecs::AllowedFormats::all());
 }
 
 /// `decode_gain_map` on a regular JPEG must NOT spuriously match the
 /// Apple ProRAW MPF path. The dispatcher should detect "regular JPEG,
 /// no UltraHDR XMP, no Apple MPF gain map" and return None.
-#[cfg(all(feature = "jpeg", feature = "jpeg-ultrahdr", feature = "raw-decode-gainmap"))]
+#[cfg(all(
+    feature = "jpeg",
+    feature = "jpeg-ultrahdr",
+    feature = "raw-decode-gainmap"
+))]
 #[test]
 fn decode_gain_map_returns_none_for_jpeg_without_apple_mpf() {
     use imgref::ImgVec;
     use rgb::Rgb;
     let pixels: Vec<Rgb<u8>> = (0..32 * 32)
-        .map(|i| Rgb { r: (i % 32) as u8, g: 0, b: 0 })
+        .map(|i| Rgb {
+            r: (i % 32) as u8,
+            g: 0,
+            b: 0,
+        })
         .collect();
     let img = ImgVec::new(pixels, 32, 32);
     let bytes = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
@@ -94,8 +97,16 @@ fn apple_proraw_dng_decode_succeeds_and_reports_dimensions() {
         .decode_full_frame()
         .expect("Apple ProRAW DNG must decode via Custom dispatch");
     let info = decoded.info();
-    assert!(info.width > 0, "DNG width should be > 0, got {}", info.width);
-    assert!(info.height > 0, "DNG height should be > 0, got {}", info.height);
+    assert!(
+        info.width > 0,
+        "DNG width should be > 0, got {}",
+        info.width
+    );
+    assert!(
+        info.height > 0,
+        "DNG height should be > 0, got {}",
+        info.height
+    );
 }
 
 /// Apple ProRAW DNGs carry DNG-specific EXIF tags (camera color
@@ -112,8 +123,7 @@ fn apple_proraw_dng_decode_succeeds_and_reports_dimensions() {
 #[ignore = "needs Apple ProRAW DNG at /mnt/v/heic/; run with cargo test -- --ignored"]
 #[test]
 fn apple_proraw_dng_exif_carries_dng_tags() {
-    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
-        .expect("Apple ProRAW fixture must be present");
+    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE).expect("Apple ProRAW fixture must be present");
     let exif_meta = DecodeRequest::new(&bytes)
         .with_format(zencodec::ImageFormat::Custom(&zenraw::DNG_FORMAT))
         .read_raw_metadata()
@@ -125,8 +135,7 @@ fn apple_proraw_dng_exif_carries_dng_tags() {
     );
     // Apple ProRAW DNG-specific: at least one of the color matrices.
     assert!(
-        exif_meta.color_matrix_1.is_some()
-            || exif_meta.color_matrix_2.is_some(),
+        exif_meta.color_matrix_1.is_some() || exif_meta.color_matrix_2.is_some(),
         "Apple ProRAW must carry at least one ColorMatrix DNG tag"
     );
     // AsShotNeutral is the white-balance reference for raw conversion.
@@ -147,8 +156,7 @@ fn apple_proraw_dng_exif_carries_dng_tags() {
 #[should_panic(expected = "raw EXIF blob")]
 #[test]
 fn apple_proraw_dng_raw_exif_blob_attached_to_info() {
-    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
-        .expect("Apple ProRAW fixture must be present");
+    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE).expect("Apple ProRAW fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
         .with_format(zencodec::ImageFormat::Custom(&zenraw::DNG_FORMAT))
         .decode_full_frame()
@@ -165,16 +173,13 @@ fn apple_proraw_dng_raw_exif_blob_attached_to_info() {
 #[ignore = "needs Apple ProRAW DNG at /mnt/v/heic/; run with cargo test -- --ignored"]
 #[test]
 fn apple_proraw_dng_yields_gain_map() {
-    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE)
-        .expect("Apple ProRAW fixture must be present");
+    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE).expect("Apple ProRAW fixture must be present");
 
     let (_decoded, gm) = DecodeRequest::new(&bytes)
         .with_format(zencodec::ImageFormat::Custom(&zenraw::DNG_FORMAT))
         .decode_gain_map()
         .expect("decode_gain_map on Apple ProRAW must not error");
-    let gm = gm.expect(
-        "Apple ProRAW DNG must yield a gain map via the MPF preview path"
-    );
+    let gm = gm.expect("Apple ProRAW DNG must yield a gain map via the MPF preview path");
 
     assert!(
         gm.gain_map.width > 0 && gm.gain_map.height > 0,
@@ -198,8 +203,8 @@ fn apple_proraw_dng_second_fixture_round_trips_gain_map_metadata() {
     // Variant fixture: confirms the Apple MPF path isn't tied to one
     // specific file's quirks. If both fixtures decode and yield gain
     // maps with consistent metadata shape, the path is reliable.
-    let bytes = std::fs::read(APPLE_PRORAW_FIXTURE_2)
-        .expect("second Apple ProRAW fixture must be present");
+    let bytes =
+        std::fs::read(APPLE_PRORAW_FIXTURE_2).expect("second Apple ProRAW fixture must be present");
 
     let (_decoded, gm) = DecodeRequest::new(&bytes)
         .with_format(zencodec::ImageFormat::Custom(&zenraw::DNG_FORMAT))

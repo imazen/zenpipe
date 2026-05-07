@@ -149,8 +149,19 @@ impl Default for ResourceEstimate {
 
 impl ResourceEstimate {
     /// Total worst-case peak memory (streaming + materialization).
+    ///
+    /// Saturating add — if a pathological graph pushes either accumulator
+    /// near `u64::MAX`, we return the saturated value rather than wrapping
+    /// (which would silently underflow the > comparison in `check`).
     pub fn peak_memory_bytes(&self) -> u64 {
-        self.streaming_bytes + self.materialization_bytes
+        self.streaming_bytes
+            .saturating_add(self.materialization_bytes)
+    }
+
+    /// Saturating add to `streaming_bytes`. Used internally so per-node
+    /// accumulators can't overflow u64 over a deep graph (audit M5).
+    pub(crate) fn add_streaming(&mut self, bytes: u64) {
+        self.streaming_bytes = self.streaming_bytes.saturating_add(bytes);
     }
 
     /// Check this estimate against resource limits.
@@ -560,36 +571,64 @@ impl PipelineGraph {
             }
         }
 
-        // Cycle detection via DFS with coloring (white/gray/black)
-        // 0=white (unvisited), 1=gray (in progress), 2=black (done)
+        // Cycle detection via iterative DFS with coloring (white/gray/black).
+        // 0=white (unvisited), 1=gray (in progress), 2=black (done).
+        //
+        // Iterative — recursive DFS would blow the stack on a deep linear
+        // DAG (no MAX_GRAPH_DEPTH guard fires before the OS stack does on
+        // ~30k–100k linearly-chained nodes).
         let mut color = alloc::vec![0u8; self.nodes.len()];
         for start in 0..self.nodes.len() {
             if color[start] == 0 {
-                self.dfs_cycle_check(start, &mut color)?;
+                self.dfs_cycle_check_iter(start, &mut color)?;
             }
         }
 
         Ok(())
     }
 
-    /// DFS cycle detection. Traverses edges in reverse (to→from is our direction).
-    fn dfs_cycle_check(&self, node: usize, color: &mut [u8]) -> crate::PipeResult<()> {
-        color[node] = 1; // gray — in progress
-        // Follow edges where this node is the target (upstream nodes)
-        for e in &self.edges {
-            if e.to == node {
-                let upstream = e.from;
-                if color[upstream] == 1 {
-                    return Err(at!(PipeError::Op(alloc::format!(
-                        "cycle detected: node {upstream} → node {node}"
-                    ))));
+    /// Iterative DFS cycle detection. Traverses edges in reverse (to→from is
+    /// our direction). Uses an explicit work stack so the OS call stack stays
+    /// bounded regardless of graph depth.
+    fn dfs_cycle_check_iter(&self, start: usize, color: &mut [u8]) -> crate::PipeResult<()> {
+        // Each frame: (node, index_of_next_edge_to_examine).
+        // On first push, color[node] is set to 1 (gray); when the frame's
+        // edge-iteration completes, we pop and set color[node] = 2 (black).
+        let mut stack: alloc::vec::Vec<(usize, usize)> = alloc::vec::Vec::new();
+        color[start] = 1;
+        stack.push((start, 0));
+
+        while let Some((node, mut edge_idx)) = stack.pop() {
+            let mut advanced = false;
+            while edge_idx < self.edges.len() {
+                let e = &self.edges[edge_idx];
+                edge_idx += 1;
+                if e.to != node {
+                    continue;
                 }
-                if color[upstream] == 0 {
-                    self.dfs_cycle_check(upstream, color)?;
+                let upstream = e.from;
+                match color[upstream] {
+                    1 => {
+                        return Err(at!(PipeError::Op(alloc::format!(
+                            "cycle detected: node {upstream} → node {node}"
+                        ))));
+                    }
+                    0 => {
+                        // Save resumption point on this frame, then descend.
+                        stack.push((node, edge_idx));
+                        color[upstream] = 1;
+                        stack.push((upstream, 0));
+                        advanced = true;
+                        break;
+                    }
+                    _ => { /* black — already fully explored */ }
                 }
             }
+            if !advanced {
+                // All edges exhausted — mark this node black.
+                color[node] = 2;
+            }
         }
-        color[node] = 2; // black — done
         Ok(())
     }
 
@@ -933,9 +972,31 @@ impl PipelineGraph {
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                // Use checked_add so an estimate that would wrap u32 is rejected
+                // before downstream limit checks see an undercount (audit H7).
+                let new_w = upstream
+                    .width
+                    .checked_add(*left)
+                    .and_then(|v| v.checked_add(*right))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas estimate width overflow: w={} left={left} right={right}",
+                            upstream.width
+                        )))
+                    })?;
+                let new_h = upstream
+                    .height
+                    .checked_add(*top)
+                    .and_then(|v| v.checked_add(*bottom))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas estimate height overflow: h={} top={top} bottom={bottom}",
+                            upstream.height
+                        )))
+                    })?;
                 Ok(SourceInfo {
-                    width: upstream.width + left + right,
-                    height: upstream.height + top + bottom,
+                    width: new_w,
+                    height: new_h,
                     format: upstream.format,
                 })
             }
@@ -1041,14 +1102,27 @@ impl PipelineGraph {
     }
 
     fn find_input(&self, node_id: NodeId, kind: EdgeKind) -> crate::PipeResult<NodeId> {
+        // Return an error if there are *multiple* edges of the same kind
+        // into this node (audit M4). validate() does not enforce per-kind
+        // cardinality, so a job that accidentally declared two Input edges
+        // would have silently dropped one in the previous code.
+        let mut found: Option<NodeId> = None;
         for e in &self.edges {
             if e.to == node_id && e.kind == kind {
-                return Ok(e.from);
+                if let Some(prev) = found {
+                    return Err(at!(PipeError::Op(alloc::format!(
+                        "node {node_id} has multiple {kind:?} input edges (from {prev} and {})",
+                        e.from
+                    ))));
+                }
+                found = Some(e.from);
             }
         }
-        Err(at!(PipeError::Op(alloc::format!(
-            "node {node_id} has no {kind:?} input edge"
-        ))))
+        found.ok_or_else(|| {
+            at!(PipeError::Op(alloc::format!(
+                "node {node_id} has no {kind:?} input edge"
+            )))
+        })
     }
 
     fn output_count(&self, node_id: NodeId) -> usize {
@@ -1188,11 +1262,8 @@ impl PipelineGraph {
                 let content_size = plan.content_size;
 
                 // Split effects by where they run relative to the resize step.
-                let (before_resize, after_resize): (Vec<_>, Vec<_>) = plan
-                    .effects
-                    .iter()
-                    .cloned()
-                    .partition(|e| e.before_resize);
+                let (before_resize, after_resize): (Vec<_>, Vec<_>) =
+                    plan.effects.iter().cloned().partition(|e| e.before_resize);
 
                 // Apply pre-resize effects (e.g. deskew at native resolution).
                 if !before_resize.is_empty() {
@@ -1230,7 +1301,7 @@ impl PipelineGraph {
                     if cs.width < out_w || cs.height < out_h {
                         source = Box::new(EdgeReplicateSource::new(
                             source, cs.width, cs.height, out_w, out_h,
-                        ));
+                        )?);
                     }
                 }
 
@@ -1462,7 +1533,7 @@ impl PipelineGraph {
                     if cs.width < out_w || cs.height < out_h {
                         source = Box::new(EdgeReplicateSource::new(
                             source, cs.width, cs.height, out_w, out_h,
-                        ));
+                        )?);
                     }
                 }
 
@@ -1743,8 +1814,23 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 let src_w = upstream.width();
                 let src_h = upstream.height();
-                let canvas_w = src_w + left + right;
-                let canvas_h = src_h + top + bottom;
+                // Reject u32 wrap on canvas dim arithmetic (audit H7).
+                let canvas_w = src_w
+                    .checked_add(left)
+                    .and_then(|v| v.checked_add(right))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas canvas width overflow: src_w={src_w} left={left} right={right}"
+                        )))
+                    })?;
+                let canvas_h = src_h
+                    .checked_add(top)
+                    .and_then(|v| v.checked_add(bottom))
+                    .ok_or_else(|| {
+                        at!(PipeError::LimitExceeded(alloc::format!(
+                            "ExpandCanvas canvas height overflow: src_h={src_h} top={top} bottom={bottom}"
+                        )))
+                    })?;
                 Ok((
                     Box::new(ExpandCanvasSource::new(
                         upstream,
@@ -1753,7 +1839,7 @@ impl PipelineGraph {
                         left as i32,
                         top as i32,
                         bg_color,
-                    )),
+                    )?),
                     meta,
                 ))
             }

@@ -104,7 +104,7 @@ fn expand_canvas_padding_all_sides() {
     // 4x4 red image placed at (2, 2) on an 8x8 canvas with blue background
     let src = solid_source(4, 4, [255, 0, 0, 255]);
     let bg = [0, 0, 255, 255]; // blue
-    let mut canvas = ExpandCanvasSource::new(src, 8, 8, 2, 2, bg);
+    let mut canvas = ExpandCanvasSource::new(src, 8, 8, 2, 2, bg).unwrap();
 
     assert_eq!(canvas.width(), 8);
     assert_eq!(canvas.height(), 8);
@@ -144,7 +144,7 @@ fn expand_canvas_padding_all_sides() {
 fn expand_canvas_no_padding() {
     // Place a 4x4 image at (0, 0) on a 4x4 canvas — should be identity
     let src = solid_source(4, 4, [42, 42, 42, 255]);
-    let mut canvas = ExpandCanvasSource::new(src, 4, 4, 0, 0, [0, 0, 0, 0]);
+    let mut canvas = ExpandCanvasSource::new(src, 4, 4, 0, 0, [0, 0, 0, 0]).unwrap();
 
     assert_eq!(canvas.width(), 4);
     assert_eq!(canvas.height(), 4);
@@ -161,7 +161,7 @@ fn expand_canvas_negative_offset_crops_content() {
     // Place at (-2, -1) on a 4x4 canvas: skip 2 source cols, 1 source row
     // Source is 6x6 gradient, canvas is 4x4
     let src = gradient_source(6, 6);
-    let mut canvas = ExpandCanvasSource::new(src, 4, 4, -2, -1, [0, 0, 0, 255]);
+    let mut canvas = ExpandCanvasSource::new(src, 4, 4, -2, -1, [0, 0, 0, 255]).unwrap();
 
     assert_eq!(canvas.width(), 4);
     assert_eq!(canvas.height(), 4);
@@ -183,7 +183,7 @@ fn expand_canvas_negative_offset_crops_content() {
 fn expand_canvas_larger_canvas_than_source() {
     // 2x2 source, 10x10 canvas, placed at (4, 4)
     let src = solid_source(2, 2, [128, 64, 32, 255]);
-    let mut canvas = ExpandCanvasSource::new(src, 10, 10, 4, 4, [0, 0, 0, 255]);
+    let mut canvas = ExpandCanvasSource::new(src, 10, 10, 4, 4, [0, 0, 0, 255]).unwrap();
 
     assert_eq!(canvas.width(), 10);
     assert_eq!(canvas.height(), 10);

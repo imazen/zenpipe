@@ -29,7 +29,11 @@ fn zenavif_trait_path_with_metadata_writes_exif_item() {
     use zencodec::encode::{EncodeJob as _, Encoder as _, EncoderConfig as _};
 
     let base_pixels: Vec<Rgb<u8>> = (0..16 * 16)
-        .map(|i| Rgb { r: (i % 16) as u8, g: 80, b: 50 })
+        .map(|i| Rgb {
+            r: (i % 16) as u8,
+            g: 80,
+            b: 50,
+        })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 16, 16);
 
@@ -49,12 +53,10 @@ fn zenavif_trait_path_with_metadata_writes_exif_item() {
     job = job.with_metadata(meta);
     let encoder = job.encoder().expect("build encoder");
 
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
-        zenpixels::PixelSlice::from(base.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
     let result = encoder.encode(typed.erase()).expect("encode");
 
-    let parser = zenavif_parse::AvifParser::from_bytes(result.as_ref())
-        .expect("parse");
+    let parser = zenavif_parse::AvifParser::from_bytes(result.as_ref()).expect("parse");
     let exif_result = parser.exif();
     assert!(
         exif_result.is_some(),
@@ -73,7 +75,11 @@ fn zenavif_trait_path_with_metadata_writes_exif_item() {
 #[test]
 fn bare_zenavif_with_exif_actually_writes_exif_item() {
     let base_pixels: Vec<Rgb<u8>> = (0..16 * 16)
-        .map(|i| Rgb { r: (i % 16) as u8, g: 80, b: 50 })
+        .map(|i| Rgb {
+            r: (i % 16) as u8,
+            g: 80,
+            b: 50,
+        })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 16, 16);
 
@@ -95,8 +101,8 @@ fn bare_zenavif_with_exif_actually_writes_exif_item() {
     )
     .expect("bare zenavif encode with EXIF");
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&result.avif_file)
-        .expect("parse zenavif AVIF");
+    let parser =
+        zenavif_parse::AvifParser::from_bytes(&result.avif_file).expect("parse zenavif AVIF");
     let exif_result = parser.exif();
     assert!(
         exif_result.is_some(),
@@ -126,7 +132,11 @@ fn compare_bare_vs_zencodecs_exif_byte_search() {
     use zencodecs::{EncodeRequest, ImageFormat, Metadata};
 
     let pixels: Vec<Rgb<u8>> = (0..16 * 16)
-        .map(|i| Rgb { r: (i % 16) as u8, g: 80, b: 50 })
+        .map(|i| Rgb {
+            r: (i % 16) as u8,
+            g: 80,
+            b: 50,
+        })
         .collect();
     let img = imgref::ImgVec::new(pixels, 16, 16);
 
@@ -150,8 +160,7 @@ fn compare_bare_vs_zencodecs_exif_byte_search() {
     .expect("bare encode");
 
     // zencodecs full path
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
-        zenpixels::PixelSlice::from(img.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(img.as_ref());
     let zen = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
         .with_metadata(Metadata::none().with_exif(exif.clone()))
@@ -160,22 +169,17 @@ fn compare_bare_vs_zencodecs_exif_byte_search() {
     let zen_bytes = zen.into_vec();
 
     // Find "Exif" 4-byte marker (box header convention).
-    let bare_has_exif = bare
-        .avif_file
-        .windows(4)
-        .any(|w| w == b"Exif" || w == b"infe" && bare.avif_file.windows(8).any(|w8| w8 == b"infeExif"));
-    let zen_has_exif = zen_bytes
-        .windows(4)
-        .any(|w| w == b"Exif");
+    let bare_has_exif = bare.avif_file.windows(4).any(|w| {
+        w == b"Exif" || w == b"infe" && bare.avif_file.windows(8).any(|w8| w8 == b"infeExif")
+    });
+    let zen_has_exif = zen_bytes.windows(4).any(|w| w == b"Exif");
 
     let bare_unique_idx = bare.avif_file.windows(4).position(|w| w == b"Exif");
     let zen_unique_idx = zen_bytes.windows(4).position(|w| w == b"Exif");
 
-    let bare_parser = zenavif_parse::AvifParser::from_bytes(&bare.avif_file)
-        .expect("parse bare");
+    let bare_parser = zenavif_parse::AvifParser::from_bytes(&bare.avif_file).expect("parse bare");
     let bare_parsed = bare_parser.exif().is_some();
-    let zen_parser = zenavif_parse::AvifParser::from_bytes(&zen_bytes)
-        .expect("parse zen");
+    let zen_parser = zenavif_parse::AvifParser::from_bytes(&zen_bytes).expect("parse zen");
     let zen_parsed = zen_parser.exif().is_some();
 
     let _ = bare_has_exif;
@@ -203,11 +207,14 @@ fn zencodecs_with_metadata_exif_actually_writes_exif_item() {
     use zencodecs::{EncodeRequest, ImageFormat, Metadata};
 
     let base_pixels: Vec<Rgb<u8>> = (0..16 * 16)
-        .map(|i| Rgb { r: (i % 16) as u8, g: 80, b: 50 })
+        .map(|i| Rgb {
+            r: (i % 16) as u8,
+            g: 80,
+            b: 50,
+        })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 16, 16);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
-        zenpixels::PixelSlice::from(base.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
 
     // Minimal valid EXIF blob: TIFF header + 1 IFD entry (Orientation=6).
     let mut exif = Vec::new();
@@ -228,8 +235,8 @@ fn zencodecs_with_metadata_exif_actually_writes_exif_item() {
         .expect("zencodecs encode AVIF with EXIF metadata")
         .into_vec();
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif_bytes)
-        .expect("parse zencodecs-emitted AVIF");
+    let parser =
+        zenavif_parse::AvifParser::from_bytes(&avif_bytes).expect("parse zencodecs-emitted AVIF");
     let exif_result = parser.exif();
     assert!(
         exif_result.is_some(),
@@ -253,9 +260,7 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
     use zencodecs::{EncodeRequest, GainMapSource, ImageFormat};
 
     // Build a synthetic gain map struct manually (no need for a donor).
-    let gm_pixels: Vec<u8> = (0..16 * 16 * 3)
-        .map(|i| ((i * 7) % 256) as u8)
-        .collect();
+    let gm_pixels: Vec<u8> = (0..16 * 16 * 3).map(|i| ((i * 7) % 256) as u8).collect();
     let gain_map = zencodecs::gainmap::GainMap {
         data: gm_pixels,
         width: 16,
@@ -279,8 +284,7 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
         })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 32, 32);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
-        zenpixels::PixelSlice::from(base.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
 
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
@@ -292,8 +296,8 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
         .expect("zencodecs encode with gain map")
         .into_vec();
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif_bytes)
-        .expect("parse zencodecs-emitted AVIF");
+    let parser =
+        zenavif_parse::AvifParser::from_bytes(&avif_bytes).expect("parse zencodecs-emitted AVIF");
     let gm_result = parser.gain_map();
     assert!(
         gm_result.is_some(),
@@ -331,12 +335,9 @@ fn zenavif_with_gain_map_actually_embeds_tmap_item() {
         zencodec::StopToken::new(zencodec::enough::Unstoppable),
     )
     .expect("encode gain map AVIF");
-    let parser = zenavif_parse::AvifParser::from_bytes(&gm_avif.avif_file)
-        .expect("parse gain map AVIF");
-    let av1_data = parser
-        .primary_data()
-        .expect("extract primary AV1")
-        .to_vec();
+    let parser =
+        zenavif_parse::AvifParser::from_bytes(&gm_avif.avif_file).expect("parse gain map AVIF");
+    let av1_data = parser.primary_data().expect("extract primary AV1").to_vec();
 
     // Synthetic ISO 21496-1 metadata blob.
     let iso_metadata = vec![0u8; 64];
@@ -359,8 +360,7 @@ fn zenavif_with_gain_map_actually_embeds_tmap_item() {
     // Inspect the output AVIF directly with zenavif_parse — does it see
     // a gain map item? This is the binary question we care about.
     let parser =
-        zenavif_parse::AvifParser::from_bytes(&main_avif.avif_file)
-            .expect("parse main AVIF");
+        zenavif_parse::AvifParser::from_bytes(&main_avif.avif_file).expect("parse main AVIF");
 
     // The parser should expose some gain map indication. Try the most
     // likely accessor and assert it's not None.
@@ -370,9 +370,7 @@ fn zenavif_with_gain_map_actually_embeds_tmap_item() {
         "AVIF encoded with .with_gain_map(...) must contain a tmap aux item — \
          parser.gain_map() returned None"
     );
-    let gm = gm_result
-        .unwrap()
-        .expect("gain map item resolves cleanly");
+    let gm = gm_result.unwrap().expect("gain map item resolves cleanly");
     assert!(
         !gm.gain_map_data.is_empty(),
         "tmap AV1 data must be non-empty"

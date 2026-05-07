@@ -24,9 +24,7 @@ use zenpipe::sources::MaterializedSource;
 use crate::command::Command;
 #[cfg(feature = "encode")]
 use crate::encode::{EncodeResult, encode_pixels};
-use crate::model::{
-    AdjustmentModel, ExportModel, HistoryModel, RegionModel, SchemaModel,
-};
+use crate::model::{AdjustmentModel, ExportModel, HistoryModel, RegionModel, SchemaModel};
 use crate::pipeline::{RenderOutput, make_source_info, pack_rgba};
 use crate::view_update::ViewUpdate;
 
@@ -136,8 +134,9 @@ impl EditorState {
 
     /// Initialize from pre-decoded RGBA8 sRGB pixels.
     pub fn init_from_rgba(&mut self, pixels: Vec<u8>, width: u32, height: u32) {
-        self.source_pixels =
-            Some(MaterializedSource::from_data(pixels, width, height, RGBA8_SRGB));
+        self.source_pixels = Some(MaterializedSource::from_data(
+            pixels, width, height, RGBA8_SRGB,
+        ));
         self.source_width = width;
         self.source_height = height;
         self.source_hash = compute_hash(width, height, None);
@@ -158,8 +157,9 @@ impl EditorState {
         metadata: zencodec::Metadata,
         format: zencodec::ImageFormat,
     ) {
-        self.source_pixels =
-            Some(MaterializedSource::from_data(pixels, width, height, RGBA8_SRGB));
+        self.source_pixels = Some(MaterializedSource::from_data(
+            pixels, width, height, RGBA8_SRGB,
+        ));
         self.source_width = width;
         self.source_height = height;
         self.metadata = Some(metadata);
@@ -178,7 +178,10 @@ impl EditorState {
     /// browser-decoded preview; this replaces those pixels with the correct
     /// high-quality decode and preserves metadata.
     #[cfg(feature = "decode")]
-    pub fn init_from_bytes(&mut self, bytes: &[u8]) -> Result<crate::decode::NativeDecodeOutput, String> {
+    pub fn init_from_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<crate::decode::NativeDecodeOutput, String> {
         let decoded = crate::decode::decode_native(bytes)?;
         let output_info = crate::decode::NativeDecodeOutput {
             data: Vec::new(), // don't clone the pixels for the return value
@@ -248,10 +251,7 @@ impl EditorState {
             } => {
                 self.init_from_rgba(data, width, height);
                 vec![
-                    ViewUpdate::SourceLoaded {
-                        width,
-                        height,
-                    },
+                    ViewUpdate::SourceLoaded { width, height },
                     ViewUpdate::RenderNeeded,
                 ]
             }
@@ -329,10 +329,7 @@ impl EditorState {
                     self.render_needed = true;
                     self.detail_only = false;
                     vec![
-                        ViewUpdate::ParamChanged {
-                            key,
-                            value,
-                        },
+                        ViewUpdate::ParamChanged { key, value },
                         ViewUpdate::RenderNeeded,
                     ]
                 } else {
@@ -601,25 +598,23 @@ impl EditorState {
                 }]
             }
 
-            Command::LoadRecipe { json } => {
-                match crate::model::Recipe::from_json(&json) {
-                    Ok(recipe) => {
-                        self.apply_recipe(&recipe);
-                        self.render_needed = true;
-                        self.detail_only = false;
-                        vec![
-                            ViewUpdate::RecipeLoaded,
-                            ViewUpdate::AllParamsReset,
-                            ViewUpdate::GeometryChanged,
-                            ViewUpdate::RenderNeeded,
-                        ]
-                    }
-                    Err(e) => vec![ViewUpdate::Error {
-                        message: e,
-                        recoverable: false,
-                    }],
+            Command::LoadRecipe { json } => match crate::model::Recipe::from_json(&json) {
+                Ok(recipe) => {
+                    self.apply_recipe(&recipe);
+                    self.render_needed = true;
+                    self.detail_only = false;
+                    vec![
+                        ViewUpdate::RecipeLoaded,
+                        ViewUpdate::AllParamsReset,
+                        ViewUpdate::GeometryChanged,
+                        ViewUpdate::RenderNeeded,
+                    ]
                 }
-            }
+                Err(e) => vec![ViewUpdate::Error {
+                    message: e,
+                    recoverable: false,
+                }],
+            },
 
             Command::GetSchema => {
                 vec![ViewUpdate::Schema {
@@ -811,10 +806,7 @@ impl EditorState {
     /// Encode at overview size for inline preview in the export modal.
     #[cfg(feature = "encode")]
     pub fn encode_preview(&mut self) -> Result<EncodeResult, String> {
-        self.encode_at_overview_size(
-            &self.export.format.clone(),
-            &self.export.options.clone(),
-        )
+        self.encode_at_overview_size(&self.export.format.clone(), &self.export.options.clone())
     }
 
     /// Encode at full resolution for download.
@@ -935,12 +927,7 @@ impl EditorState {
 
     /// Save current state as a recipe.
     pub fn save_recipe(&self, name: Option<String>) -> crate::model::Recipe {
-        crate::model::recipe::snapshot_recipe(
-            &self.geometry,
-            &self.adjustments,
-            &self.export,
-            name,
-        )
+        crate::model::recipe::snapshot_recipe(&self.geometry, &self.adjustments, &self.export, name)
     }
 
     /// Apply a recipe, overwriting current adjustments, geometry, and export.
@@ -1238,7 +1225,11 @@ mod tests {
         });
 
         assert!(state.render_needed());
-        assert!(updates.iter().any(|u| matches!(u, ViewUpdate::RenderNeeded)));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::RenderNeeded))
+        );
     }
 
     #[test]
@@ -1251,12 +1242,16 @@ mod tests {
         state.render_needed = true;
 
         let updates = state.render_if_needed().unwrap();
-        assert!(updates
-            .iter()
-            .any(|u| matches!(u, ViewUpdate::OverviewPixels { .. })));
-        assert!(updates
-            .iter()
-            .any(|u| matches!(u, ViewUpdate::DetailPixels { .. })));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::OverviewPixels { .. }))
+        );
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::DetailPixels { .. }))
+        );
     }
 
     #[test]
@@ -1305,9 +1300,11 @@ mod tests {
         state.adjustments.set("zenfilters.exposure.stops", 1.5);
 
         let updates = state.dispatch(Command::ResetAll);
-        assert!(updates
-            .iter()
-            .any(|u| matches!(u, ViewUpdate::AllParamsReset)));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::AllParamsReset))
+        );
     }
 
     #[test]
@@ -1322,9 +1319,11 @@ mod tests {
             h: 0.4,
         });
 
-        assert!(updates
-            .iter()
-            .any(|u| matches!(u, ViewUpdate::RegionChanged { .. })));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::RegionChanged { .. }))
+        );
         assert!((state.region.x - 0.1).abs() < 1e-6);
     }
 
@@ -1400,12 +1399,19 @@ mod tests {
 
         // Load recipe
         let updates = state.dispatch(Command::LoadRecipe { json });
-        assert!(updates.iter().any(|u| matches!(u, ViewUpdate::RecipeLoaded)));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::RecipeLoaded))
+        );
 
         // Verify state was restored
         assert!(state.geometry.flip_h);
         assert_eq!(state.adjustments.film_preset.as_deref(), Some("portra"));
-        assert_eq!(state.export.hdr_mode, crate::model::export::HdrMode::Tonemap);
+        assert_eq!(
+            state.export.hdr_mode,
+            crate::model::export::HdrMode::Tonemap
+        );
     }
 
     #[test]
@@ -1414,16 +1420,29 @@ mod tests {
         state.init_from_rgba(solid_rgba(100, 100, 128, 128, 128), 100, 100);
 
         let updates = state.dispatch(Command::SetCrop {
-            crop: crate::model::geometry::CropMode::Percent { x: 0.1, y: 0.1, w: 0.8, h: 0.8 },
+            crop: crate::model::geometry::CropMode::Percent {
+                x: 0.1,
+                y: 0.1,
+                w: 0.8,
+                h: 0.8,
+            },
         });
-        assert!(updates.iter().any(|u| matches!(u, ViewUpdate::GeometryChanged)));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::GeometryChanged))
+        );
         assert!(state.render_needed());
 
         let updates = state.dispatch(Command::SetFlip {
             horizontal: true,
             vertical: false,
         });
-        assert!(updates.iter().any(|u| matches!(u, ViewUpdate::GeometryChanged)));
+        assert!(
+            updates
+                .iter()
+                .any(|u| matches!(u, ViewUpdate::GeometryChanged))
+        );
         assert!(state.geometry.flip_h);
         assert!(!state.geometry.flip_v);
     }

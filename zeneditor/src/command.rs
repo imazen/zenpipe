@@ -58,10 +58,7 @@ pub enum Command {
     SetParamBool { key: String, value: bool },
 
     /// Set the film look preset and intensity.
-    SetFilmPreset {
-        id: Option<String>,
-        intensity: f32,
-    },
+    SetFilmPreset { id: Option<String>, intensity: f32 },
 
     /// Reset a single parameter to its identity value.
     ResetParam { key: String },
@@ -111,7 +108,10 @@ pub enum Command {
     SetExportDims { width: u32, height: u32 },
 
     /// Set a format-specific export option (e.g. quality, effort, lossless).
-    SetExportOption { key: String, value: serde_json::Value },
+    SetExportOption {
+        key: String,
+        value: serde_json::Value,
+    },
 
     /// Request an encode at overview size (for inline preview in export modal).
     EncodePreview,
@@ -120,9 +120,7 @@ pub enum Command {
     EncodeFull,
 
     /// Set HDR handling mode.
-    SetHdrMode {
-        mode: crate::model::export::HdrMode,
-    },
+    SetHdrMode { mode: crate::model::export::HdrMode },
 
     /// Set metadata preservation policy.
     SetMetadataPolicy {

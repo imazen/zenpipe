@@ -95,11 +95,14 @@ fn gainmap_preserve_mode_round_trips_through_pipeline_unchanged() {
 fn jpeg_icc_preserve_round_trips_icc_bytes_verbatim() {
     use rgb::Rgb;
     let pixels: Vec<Rgb<u8>> = (0..32 * 32)
-        .map(|i| Rgb { r: (i % 32) as u8, g: (i / 32) as u8, b: 100 })
+        .map(|i| Rgb {
+            r: (i % 32) as u8,
+            g: (i / 32) as u8,
+            b: 100,
+        })
         .collect();
     let img = imgref::ImgVec::new(pixels, 32, 32);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> =
-        zenpixels::PixelSlice::from(img.as_ref());
+    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(img.as_ref());
 
     // Synthetic non-sRGB ICC — what matters is that it is NOT detected as
     // sRGB so the Preserve path actually has to carry it. Using a pattern
@@ -187,7 +190,9 @@ fn avif_rec2020_pq_round_trips_primaries() {
     // Pending real AVIF Rec.2020 PQ generation. Today this test would
     // need a fixture file; once the pipeline preserves primaries, the
     // test should round-trip without needing one.
-    panic!("Test body pending fixture; assertion: decoded.cicp.primaries == 9 (Rec.2020) after ImageJob round-trip");
+    panic!(
+        "Test body pending fixture; assertion: decoded.cicp.primaries == 9 (Rec.2020) after ImageJob round-trip"
+    );
 }
 
 /// AVIF 10/12-bit decode already preserves bit depth at the codec layer

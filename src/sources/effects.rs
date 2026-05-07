@@ -49,22 +49,40 @@ impl EffectSource {
         let height = upstream.height();
         let fmt = upstream.format();
         if fmt != format::RGBA8_SRGB {
-            return Err(at!(crate::error::PipeError::Op(alloc::string::String::from(
-                "EffectSource requires RGBA8_SRGB input"
-            ))));
+            return Err(at!(crate::error::PipeError::Op(
+                alloc::string::String::from("EffectSource requires RGBA8_SRGB input")
+            )));
         }
         limits.check(width, height, fmt)?;
 
         let row_bytes = fmt.aligned_stride(width);
-        let mut data = vec![0u8; row_bytes * height as usize];
+        let total = crate::limits::checked_stride_buffer(row_bytes, height)?;
+        let mut data = vec![0u8; total];
         let mut y = 0u32;
         while let Some(strip) = upstream.next()? {
             for r in 0..strip.rows() {
-                let dst_start = (y + r) as usize * row_bytes;
+                let dst_start = (y as usize)
+                    .checked_add(r as usize)
+                    .and_then(|v| v.checked_mul(row_bytes))
+                    .ok_or_else(|| {
+                        at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                            "Effect dst offset overflow: y={y} r={r} row_bytes={row_bytes}"
+                        )))
+                    })?;
                 let src_row = strip.row(r);
-                data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
+                let dst_end = dst_start.checked_add(row_bytes).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Effect dst end overflow"
+                    )))
+                })?;
+                if dst_end > data.len() {
+                    return Err(at!(crate::error::PipeError::DimensionMismatch(
+                        alloc::format!("Effect upstream over-produced rows")
+                    )));
+                }
+                data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);
             }
-            y += strip.rows();
+            y = y.saturating_add(strip.rows());
         }
 
         let mut cur_w = width;
@@ -80,23 +98,35 @@ impl EffectSource {
             if in_w != cur_w || in_h != cur_h {
                 return Err(at!(crate::error::PipeError::Op(alloc::format!(
                     "EffectSource: effect input_dims ({}x{}) don't match current buffer ({}x{})",
-                    in_w, in_h, cur_w, cur_h
+                    in_w,
+                    in_h,
+                    cur_w,
+                    cur_h
                 ))));
             }
 
+            // Re-check limits against the effect's *output* dims — declared
+            // output_dims can be larger than input (e.g., RotateEffect::Expand).
+            // Without this re-check, a chain of expanding effects would
+            // bypass the perimeter limit (audit M3 / C3 partial mitigation).
+            limits.check(out_w, out_h, fmt)?;
+
             // Inverse-mapping: for every output pixel, find source coordinate and interpolate.
-            let out_stride = (out_w as usize) * 4;
-            let mut out = vec![0u8; out_stride * out_h as usize];
-            let src_stride = (cur_w as usize) * 4;
+            let out_stride = crate::limits::checked_buffer_size(out_w, 1, 4)?;
+            let buf_size = crate::limits::checked_stride_buffer(out_stride, out_h)?;
+            let mut out = vec![0u8; buf_size];
+            let src_stride = crate::limits::checked_buffer_size(cur_w, 1, 4)?;
 
             for oy in 0..out_h {
                 for ox in 0..out_w {
                     // `inverse_point` returns source coordinate for this output pixel.
                     // Centre-of-pixel convention: the center of pixel (ox, oy) is (ox + 0.5, oy + 0.5).
-                    let (sx, sy) = match effect
-                        .effect
-                        .inverse_point(ox as f32 + 0.5, oy as f32 + 0.5, in_w, in_h)
-                    {
+                    let (sx, sy) = match effect.effect.inverse_point(
+                        ox as f32 + 0.5,
+                        oy as f32 + 0.5,
+                        in_w,
+                        in_h,
+                    ) {
                         Some(p) => p,
                         None => {
                             // Content-adaptive effect — skip for now (fill with transparent).
@@ -139,7 +169,14 @@ impl Source for EffectSource {
         let end = (self.y + rows) as usize * stride;
         self.y += rows;
         Ok(Some(
-            Strip::new(&self.data[start..end], self.width, rows, stride, self.format).pipe_err()?,
+            Strip::new(
+                &self.data[start..end],
+                self.width,
+                rows,
+                stride,
+                self.format,
+            )
+            .pipe_err()?,
         ))
     }
 
@@ -202,7 +239,8 @@ fn sample_bilinear_rgba8(
     let w11 = fx * fy;
 
     for c in 0..4 {
-        let v = p00[c] as f32 * w00 + p10[c] as f32 * w10 + p01[c] as f32 * w01 + p11[c] as f32 * w11;
+        let v =
+            p00[c] as f32 * w00 + p10[c] as f32 * w10 + p01[c] as f32 * w01 + p11[c] as f32 * w11;
         dst[c] = v.round().clamp(0.0, 255.0) as u8;
     }
 }
@@ -211,8 +249,8 @@ fn sample_bilinear_rgba8(
 mod tests {
     use super::*;
     use crate::sources::MaterializedSource;
-    use zenlayout::dimension::{RotateEffect, RotateMode};
     use zenlayout::Size;
+    use zenlayout::dimension::{RotateEffect, RotateMode};
 
     fn solid_red_source(w: u32, h: u32) -> Box<dyn Source> {
         let mut data = vec![0u8; (w * h * 4) as usize];

@@ -121,23 +121,49 @@ impl Source for IccTransformSource {
 
         let width = strip.width();
         let height = strip.rows();
-        let stride = self.format.aligned_stride(width);
-        let total_bytes = stride * height as usize;
+        let dst_stride = self.format.aligned_stride(width);
+        let src_stride = strip.stride();
+        let total_bytes = crate::limits::checked_stride_buffer(dst_stride, height)?;
 
         self.buf.resize(total_bytes, 0);
 
+        // Use the ROW length the CMS expects (dst_stride covers `width`
+        // pixels at the destination format) for the slice it transforms,
+        // but slice the source by ITS stride. Mixing the two — as the
+        // pre-fix code did — caused either OOB reads (if src_stride <
+        // dst_stride) or silent truncation (if src_stride > dst_stride).
+        let row_bytes = dst_stride.min(src_stride);
+        let src_bytes = strip.as_strided_bytes();
         for r in 0..height {
-            let src_start = r as usize * strip.stride();
-            let dst_start = r as usize * stride;
+            let src_start = (r as usize).checked_mul(src_stride).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "icc src offset overflow: r={r} src_stride={src_stride}"
+                )))
+            })?;
+            let dst_start = (r as usize).checked_mul(dst_stride).ok_or_else(|| {
+                at!(PipeError::LimitExceeded(alloc::format!(
+                    "icc dst offset overflow: r={r} dst_stride={dst_stride}"
+                )))
+            })?;
+            // Defensive bound check — upstream may lie about row length.
+            let src_end = src_start
+                .checked_add(row_bytes)
+                .filter(|&end| end <= src_bytes.len())
+                .ok_or_else(|| {
+                    at!(PipeError::DimensionMismatch(alloc::format!(
+                        "icc upstream row {r} out of bounds: need {row_bytes} bytes from offset {src_start} of {len}",
+                        len = src_bytes.len()
+                    )))
+                })?;
             self.transform.transform_row(
-                &strip.as_strided_bytes()[src_start..src_start + stride],
-                &mut self.buf[dst_start..dst_start + stride],
+                &src_bytes[src_start..src_end],
+                &mut self.buf[dst_start..dst_start + row_bytes],
                 width,
             );
         }
 
         Ok(Some(
-            Strip::new(&self.buf, width, height, stride, self.format).pipe_err()?,
+            Strip::new(&self.buf, width, height, dst_stride, self.format).pipe_err()?,
         ))
     }
 

@@ -19,8 +19,8 @@ use crate::graph::{EdgeKind, NodeOp, PipelineGraph};
 use crate::sources::MaterializedSource;
 
 use zencodec::GainMapParams;
-use zenresize::Filter;
 use zenlayout::{DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation, Size};
+use zenresize::Filter;
 
 /// What kind of auxiliary data the sidecar carries.
 #[derive(Clone, Debug)]

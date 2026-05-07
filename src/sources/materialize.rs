@@ -46,6 +46,8 @@ impl MaterializedSource {
     /// Drain all strips from `upstream` into memory, checking `stop` between strips.
     ///
     /// Returns `PipeError::Cancelled` if the stop signal fires mid-drain.
+    /// Returns `PipeError::LimitExceeded` if `stride * height` overflows
+    /// `usize` (audit C2).
     pub fn from_source_stoppable(
         mut upstream: Box<dyn Source>,
         stop: &dyn enough::Stop,
@@ -54,18 +56,39 @@ impl MaterializedSource {
         let height = upstream.height();
         let format = upstream.format();
         let row_bytes = format.aligned_stride(width);
-        let mut data = vec![0u8; row_bytes * height as usize];
+        let total = crate::limits::checked_stride_buffer(row_bytes, height)?;
+        let mut data = vec![0u8; total];
         let mut y = 0u32;
 
         while let Some(strip) = upstream.next()? {
             stop.check()
                 .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
             for r in 0..strip.rows() {
-                let dst_start = (y + r) as usize * row_bytes;
+                let dst_start = (y as usize)
+                    .checked_add(r as usize)
+                    .and_then(|v| v.checked_mul(row_bytes))
+                    .ok_or_else(|| {
+                        at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                            "Materialize dst offset overflow: y={y} r={r} row_bytes={row_bytes}"
+                        )))
+                    })?;
                 let src_row = strip.row(r);
-                data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
+                let dst_end = dst_start.checked_add(row_bytes).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Materialize dst end overflow: dst_start={dst_start} row_bytes={row_bytes}"
+                    )))
+                })?;
+                if dst_end > data.len() {
+                    return Err(at!(crate::error::PipeError::DimensionMismatch(
+                        alloc::format!(
+                            "Materialize upstream over-produced rows: dst_end={dst_end} buf={}",
+                            data.len()
+                        )
+                    )));
+                }
+                data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);
             }
-            y += strip.rows();
+            y = y.saturating_add(strip.rows());
         }
 
         Ok(Self {

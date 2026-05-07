@@ -149,13 +149,15 @@ impl MatteFlattenOp {
 }
 
 impl PixelOp for MatteFlattenOp {
-    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
-        let n = width as usize * height as usize;
-        for i in 0..n {
-            let p = &input[i * 4..i * 4 + 4];
+    fn apply(&mut self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        // Iterate by chunks_exact — let the slice length bound the loop
+        // rather than computing `width * height` (which overflows on
+        // 32-bit for large dims, audit M7).
+        let inputs = input.chunks_exact(4);
+        let outputs = output.chunks_exact_mut(3);
+        for (p, o) in inputs.zip(outputs) {
             let a = p[3] as u32;
             let inv = 255 - a;
-            let o = &mut output[i * 3..i * 3 + 3];
             for c in 0..3 {
                 o[c] = ((p[c] as u32 * a + self.matte[c] as u32 * inv + 127) / 255) as u8;
             }
@@ -192,10 +194,13 @@ impl ScaleAlphaOp {
 }
 
 impl PixelOp for ScaleAlphaOp {
-    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+    fn apply(&mut self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+        // Bound by slice lengths (audit M7) — width*height*4 wraps on
+        // 32-bit for large dims, and bytemuck::cast_slice already returns
+        // a slice whose length matches the byte buffer.
         let in_f32: &[f32] = bytemuck::cast_slice(input);
         let out_f32: &mut [f32] = bytemuck::cast_slice_mut(output);
-        let len = width as usize * height as usize * 4;
+        let len = in_f32.len().min(out_f32.len());
         for i in 0..len {
             out_f32[i] = in_f32[i] * self.opacity;
         }

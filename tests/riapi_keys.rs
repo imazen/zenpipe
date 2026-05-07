@@ -1079,7 +1079,8 @@ fn paddingcolor_sets_color() {
     let r = expand_zen("w=800&h=600&margin=5&paddingcolor=white");
     let ec = find_expanded_node(&r.nodes, "zenlayout.expand_canvas").expect("ExpandCanvas node");
     assert_eq!(
-        ec.get_param("color").and_then(|v| v.as_str().map(String::from)),
+        ec.get_param("color")
+            .and_then(|v| v.as_str().map(String::from)),
         Some("white".to_string())
     );
 }
@@ -1093,7 +1094,8 @@ fn borderwidth_applies_to_all_sides() {
         assert_eq!(ec.get_param(side).and_then(|v| v.as_u32()), Some(3));
     }
     assert_eq!(
-        ec.get_param("color").and_then(|v| v.as_str().map(String::from)),
+        ec.get_param("color")
+            .and_then(|v| v.as_str().map(String::from)),
         Some("red".to_string())
     );
 }

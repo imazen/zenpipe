@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::Source;
 #[allow(unused_imports)]
@@ -27,6 +28,8 @@ pub struct CompositeSource {
     height: u32,
     strip_height: u32,
     buf: StripBuf,
+    /// Reusable per-row composite buffer (pre-allocated; was per-row alloc).
+    composite_row_buf: Vec<u8>,
     y: u32,
     blend_mode: zenblend::BlendMode,
 }
@@ -73,6 +76,8 @@ impl CompositeSource {
         let h = background.height();
         let fg_h = foreground.height();
         let sh = 16u32.min(h);
+        let buf = StripBuf::try_new(w, sh, fmt)?;
+        let stride = buf.stride();
 
         Ok(Self {
             background,
@@ -83,7 +88,8 @@ impl CompositeSource {
             width: w,
             height: h,
             strip_height: sh,
-            buf: StripBuf::new(w, sh, fmt),
+            buf,
+            composite_row_buf: vec![0u8; stride],
             y: 0,
             blend_mode: zenblend::BlendMode::SrcOver,
         })
@@ -98,8 +104,14 @@ impl Source for CompositeSource {
 
         let rows_wanted = self.strip_height.min(self.height - self.y);
         self.buf
-            .reconfigure(self.width, rows_wanted, format::RGBAF32_LINEAR_PREMUL);
+            .try_reconfigure(self.width, rows_wanted, format::RGBAF32_LINEAR_PREMUL)?;
         self.buf.reset();
+
+        // Ensure the reusable composite row keeps up with stride changes.
+        let stride = self.buf.stride();
+        if self.composite_row_buf.len() < stride {
+            self.composite_row_buf.resize(stride, 0);
+        }
 
         // Pull background strip
         let bg_strip = self.background.next()?;
@@ -107,9 +119,11 @@ impl Source for CompositeSource {
             return Ok(None);
         };
 
-        // Check if foreground overlaps this strip's y range
-        let strip_y_end = self.y + bg_strip.rows();
-        let fg_overlaps = self.y < self.fg_y + self.fg_h && strip_y_end > self.fg_y;
+        // Check if foreground overlaps this strip's y range (saturating —
+        // u32 add wrap could otherwise push the comparison out of bounds).
+        let strip_y_end = self.y.saturating_add(bg_strip.rows());
+        let fg_y_end = self.fg_y.saturating_add(self.fg_h);
+        let fg_overlaps = self.y < fg_y_end && strip_y_end > self.fg_y;
 
         if !fg_overlaps {
             // No foreground — pass through background
@@ -121,28 +135,26 @@ impl Source for CompositeSource {
             let fg_strip = self.foreground.next()?;
 
             for r in 0..bg_strip.rows() {
-                let abs_y = self.y + r;
+                let abs_y = self.y.saturating_add(r);
                 let bg_row = bg_strip.row(r);
 
-                let has_fg =
-                    abs_y >= self.fg_y && abs_y < self.fg_y + self.fg_h && fg_strip.is_some();
+                let has_fg = abs_y >= self.fg_y && abs_y < fg_y_end && fg_strip.is_some();
 
                 if has_fg {
                     let fg = fg_strip.as_ref().unwrap();
                     let fg_local_y = abs_y - self.fg_y;
                     if fg_local_y < fg.rows() {
                         let fg_row = fg.row(fg_local_y);
-                        let stride = self.buf.stride();
-                        let mut out_row = vec![0u8; stride];
+                        let out_row = &mut self.composite_row_buf[..stride];
                         composite_row_over(
                             bg_row,
                             fg_row,
-                            &mut out_row,
+                            out_row,
                             self.fg_x as usize,
                             self.width as usize,
                             self.blend_mode,
-                        );
-                        self.buf.push_row(&out_row);
+                        )?;
+                        self.buf.push_row(out_row);
                         continue;
                     }
                 }
@@ -167,6 +179,9 @@ impl Source for CompositeSource {
 }
 
 /// Blend one row: fg placed at `fg_x_offset` within bg, result written to out.
+///
+/// Validates that bg/fg/out byte lengths are multiples of 4 (f32 size) before
+/// reinterpreting; previously `bytemuck::cast_slice` would panic on misalign.
 fn composite_row_over(
     bg: &[u8],
     fg: &[u8],
@@ -174,19 +189,40 @@ fn composite_row_over(
     fg_x_offset: usize,
     bg_width: usize,
     mode: zenblend::BlendMode,
-) {
+) -> crate::PipeResult<()> {
+    if bg.len() % 4 != 0 || fg.len() % 4 != 0 || out.len() % 4 != 0 {
+        return Err(at!(PipeError::DimensionMismatch(alloc::format!(
+            "composite row not f32-aligned: bg={} fg={} out={}",
+            bg.len(),
+            fg.len(),
+            out.len()
+        ))));
+    }
     let bg_f32: &[f32] = bytemuck::cast_slice(bg);
     let fg_f32: &[f32] = bytemuck::cast_slice(fg);
     let out_f32: &mut [f32] = bytemuck::cast_slice_mut(out);
 
-    // Start with background
-    out_f32.copy_from_slice(bg_f32);
+    // Make sure out can hold bg.
+    if out_f32.len() < bg_f32.len() {
+        return Err(at!(PipeError::DimensionMismatch(alloc::format!(
+            "composite out shorter than bg: out_f32={} bg_f32={}",
+            out_f32.len(),
+            bg_f32.len()
+        ))));
+    }
+    let bg_len = bg_f32.len();
+    out_f32[..bg_len].copy_from_slice(bg_f32);
 
-    // Determine the overlapping pixel range
+    // Determine the overlapping pixel range — checked add (audit H5d).
     let fg_pixels = fg_f32.len() / 4;
-    let blend_end = (fg_x_offset + fg_pixels).min(bg_width);
+    let fg_far = fg_x_offset.checked_add(fg_pixels).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(alloc::format!(
+            "composite fg_x_offset+fg_pixels overflow: {fg_x_offset} + {fg_pixels}"
+        )))
+    })?;
+    let blend_end = fg_far.min(bg_width);
     if fg_x_offset >= blend_end {
-        return;
+        return Ok(());
     }
     let blend_pixels = blend_end - fg_x_offset;
 
@@ -208,4 +244,5 @@ fn composite_row_over(
     let bg_portion: alloc::vec::Vec<f32> = out_f32[dst_start..dst_end].to_vec();
     out_f32[dst_start..dst_end].copy_from_slice(&fg_f32[..fg_end]);
     zenblend::blend_row(&mut out_f32[dst_start..dst_end], &bg_portion, mode);
+    Ok(())
 }

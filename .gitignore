@@ -61,3 +61,4 @@ Cargo.toml.original.txt
 fuzz-*.log
 demo/crate/target-threaded/
 .claude/
+.workongoing

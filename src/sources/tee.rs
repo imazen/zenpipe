@@ -58,22 +58,53 @@ impl TeeSource {
     }
 
     /// Materialize the upstream source and prepare for fan-out.
+    ///
+    /// Returns `LimitExceeded` if `width * bpp * height` overflows `usize`
+    /// or if upstream produces more rows than the declared height (audit C2).
     pub fn new(mut upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
-        let stride = width as usize * format.bytes_per_pixel();
+        let bpp = format.bytes_per_pixel();
+        let stride = (width as usize).checked_mul(bpp).ok_or_else(|| {
+            at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                "Tee stride overflow: width={width} bpp={bpp}"
+            )))
+        })?;
+        let total = crate::limits::checked_stride_buffer(stride, height)?;
 
-        let mut data = vec![0u8; stride * height as usize];
+        let mut data = vec![0u8; total];
         let mut y = 0usize;
 
         while let Some(strip) = upstream.next()? {
             for r in 0..strip.rows() {
-                let dst_start = (y + r as usize) * stride;
+                let row_idx = y.checked_add(r as usize).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Tee row index overflow: y={y} r={r}"
+                    )))
+                })?;
+                let dst_start = row_idx.checked_mul(stride).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Tee dst offset overflow: row_idx={row_idx} stride={stride}"
+                    )))
+                })?;
+                let dst_end = dst_start.checked_add(stride).ok_or_else(|| {
+                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
+                        "Tee dst end overflow: dst_start={dst_start} stride={stride}"
+                    )))
+                })?;
+                if dst_end > data.len() {
+                    return Err(at!(crate::error::PipeError::DimensionMismatch(
+                        alloc::format!(
+                            "Tee upstream over-produced rows: dst_end={dst_end} buf={}",
+                            data.len()
+                        )
+                    )));
+                }
                 let src_row = strip.row(r);
-                data[dst_start..dst_start + stride].copy_from_slice(&src_row[..stride]);
+                data[dst_start..dst_end].copy_from_slice(&src_row[..stride]);
             }
-            y += strip.rows() as usize;
+            y = y.saturating_add(strip.rows() as usize);
         }
 
         Ok(Self {
