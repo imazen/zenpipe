@@ -36,6 +36,7 @@
 use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::{Filter, PlaneSemantics, ResizePhase};
+use crate::filters::guided_filter::guided_filter_plane;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
 use crate::prelude::*;
@@ -74,6 +75,16 @@ pub struct BackgroundFlatten {
     /// gradient/uneven illumination (e.g. lighting falloff) flattens uniformly
     /// to white. When `false`, a single constant background level is used.
     pub flatten_gradient: bool,
+    /// How strongly background chroma (color cast / chroma noise) is pulled
+    /// toward neutral, `0.0`–`1.0`. Applied only to background pixels.
+    pub chroma_neutralize: f32,
+    /// How strongly halos / fringes are suppressed in the background band that
+    /// hugs the product silhouette, `0.0`–`1.0`. Uses an edge-preserving
+    /// guided filter (overshoot/ringing) plus chroma decontamination.
+    pub halo_removal: f32,
+    /// Width, in pixels, of the silhouette-side background band that halo
+    /// removal acts on. Typical `3`–`12`.
+    pub halo_radius: f32,
 }
 
 impl Default for BackgroundFlatten {
@@ -88,6 +99,9 @@ impl Default for BackgroundFlatten {
             max_lift: 0.20,
             auto_skip: true,
             flatten_gradient: true,
+            chroma_neutralize: 0.7,
+            halo_removal: 0.6,
+            halo_radius: 6.0,
         }
     }
 }
@@ -122,7 +136,9 @@ fn percentile(vals: &mut [f32], q: f32) -> f32 {
     }
     let k = ((vals.len() - 1) as f32 * q.clamp(0.0, 1.0)).round() as usize;
     let k = k.min(vals.len() - 1);
-    vals.select_nth_unstable_by(k, |a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
+    vals.select_nth_unstable_by(k, |a, b| {
+        a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal)
+    });
     vals[k]
 }
 
@@ -139,7 +155,9 @@ pub(crate) fn estimate_border_background(
     let mut ls: Vec<f32> = Vec::new();
     let mut cs: Vec<f32> = Vec::new();
     let is_border = |x: usize, y: usize| -> bool {
-        x < thickness || x >= w.saturating_sub(thickness) || y < thickness
+        x < thickness
+            || x >= w.saturating_sub(thickness)
+            || y < thickness
             || y >= h.saturating_sub(thickness)
     };
     for y in 0..h {
@@ -515,6 +533,7 @@ impl Filter for BackgroundFlatten {
 
     fn scale_for_resolution(&mut self, scale: f32) {
         self.feather = (self.feather * scale).max(0.5);
+        self.halo_radius = (self.halo_radius * scale).max(0.0);
     }
 
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
@@ -530,7 +549,11 @@ impl Filter for BackgroundFlatten {
 
         // Step 0: border estimate + applicability gate.
         let est = estimate_border_background(planes, self.border_frac, self.min_white);
-        let applic = if self.auto_skip { est.applicability } else { 1.0 };
+        let applic = if self.auto_skip {
+            est.applicability
+        } else {
+            1.0
+        };
         if applic <= 1e-4 {
             return;
         }
@@ -561,12 +584,70 @@ impl Filter for BackgroundFlatten {
                 likeness[i] * smoothstep(0.0, feather, dist[i])
             };
         }
+        ctx.return_f32(likeness);
 
         // Step 5: fit the (optionally gradient) background surface so the
-        // whitening knee tracks uneven illumination, then ease background
-        // pixels toward pure white with a shadow-preserving soft knee.
+        // whitening knee tracks uneven illumination.
         let surface = fit_background_surface(planes, &weight, w, h, self.flatten_gradient);
 
+        // Step 6: halo / fringe removal in the background band hugging the
+        // silhouette. An edge-preserving guided filter suppresses bright
+        // overshoot and ringing without softening the true silhouette edge,
+        // and chroma is decontaminated toward neutral. Acts on the
+        // background side only, so the product edge is preserved.
+        let halo = (self.halo_removal.clamp(0.0, 1.0)) * global;
+        let halo_radius = self.halo_radius.max(0.0);
+        if halo > 1e-4 && halo_radius > 0.5 {
+            let mut band = ctx.take_f32(n);
+            for i in 0..n {
+                band[i] = if connected[i] == 0 {
+                    0.0
+                } else {
+                    smoothstep(halo_radius, 0.0, dist[i])
+                };
+            }
+            // Edge-preserving guided filter suppresses ringing / mottling on
+            // the background side without softening the true silhouette edge.
+            let mut l_smooth = ctx.take_f32(n);
+            let sigma = (halo_radius * 0.5).max(1.0);
+            guided_filter_plane(
+                &planes.l,
+                &planes.l,
+                &mut l_smooth,
+                planes.width,
+                planes.height,
+                sigma,
+                1.0e-3,
+                ctx,
+            );
+            for y in 0..h {
+                let row = y * w;
+                for x in 0..w {
+                    let i = row + x;
+                    let bw = band[i] * halo;
+                    if bw <= 1e-5 {
+                        continue;
+                    }
+                    // 1. Guided smoothing.
+                    let sm = planes.l[i] * (1.0 - bw) + l_smooth[i] * bw;
+                    // 2. Overshoot suppression: a guided filter preserves the
+                    //    overshoot at strong edges, so explicitly pull values
+                    //    above the local background level `bx` back down — this
+                    //    is what removes bright halo rings.
+                    let bx = surface.eval(x, y);
+                    planes.l[i] = if sm > bx { sm + (bx - sm) * bw } else { sm };
+                    // 3. Chroma decontamination (defringe color halos).
+                    planes.a[i] *= 1.0 - bw;
+                    planes.b[i] *= 1.0 - bw;
+                }
+            }
+            ctx.return_f32(l_smooth);
+            ctx.return_f32(band);
+        }
+
+        // Step 7: shadow-preserving soft-knee whitening of L, plus chroma
+        // neutralization, over the feathered background.
+        let chroma_neutralize = self.chroma_neutralize.clamp(0.0, 1.0);
         for y in 0..h {
             let row = y * w;
             for x in 0..w {
@@ -584,13 +665,18 @@ impl Filter for BackgroundFlatten {
                 let mut delta = (1.0 - l) * t * alpha;
                 delta = delta.clamp(-max_lift, max_lift);
                 planes.l[i] = (l + delta).clamp(0.0, 1.5);
+
+                if chroma_neutralize > 0.0 {
+                    let cw = t * alpha * chroma_neutralize;
+                    planes.a[i] *= 1.0 - cw;
+                    planes.b[i] *= 1.0 - cw;
+                }
             }
         }
 
         ctx.return_f32(weight);
         ctx.return_f32(dist);
         ctx.return_u8(connected);
-        ctx.return_f32(likeness);
     }
 }
 
@@ -604,7 +690,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "strength",
             label: "Strength",
             description: "Master effect strength (0 = off)",
-            kind: ParamKind::Float { min: 0.0, max: 1.0, default: 1.0, identity: 0.0, step: 0.01 },
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 1.0,
+                default: 1.0,
+                identity: 0.0,
+                step: 0.01,
+            },
             unit: "",
             section: "Main",
             slider: SliderMapping::Linear,
@@ -613,7 +705,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "min_white",
             label: "Min White",
             description: "Minimum border lightness to treat the image as a white-background shot",
-            kind: ParamKind::Float { min: 0.5, max: 0.99, default: 0.80, identity: 0.80, step: 0.01 },
+            kind: ParamKind::Float {
+                min: 0.5,
+                max: 0.99,
+                default: 0.80,
+                identity: 0.80,
+                step: 0.01,
+            },
             unit: "",
             section: "Detection",
             slider: SliderMapping::Linear,
@@ -622,7 +720,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "chroma_tolerance",
             label: "Chroma Tolerance",
             description: "Max chroma a pixel may have and still count as background",
-            kind: ParamKind::Float { min: 0.01, max: 0.15, default: 0.05, identity: 0.05, step: 0.005 },
+            kind: ParamKind::Float {
+                min: 0.01,
+                max: 0.15,
+                default: 0.05,
+                identity: 0.05,
+                step: 0.005,
+            },
             unit: "",
             section: "Detection",
             slider: SliderMapping::Linear,
@@ -631,7 +735,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "feather",
             label: "Feather",
             description: "Edge-in feather distance",
-            kind: ParamKind::Float { min: 0.0, max: 128.0, default: 12.0, identity: 0.0, step: 1.0 },
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 128.0,
+                default: 12.0,
+                identity: 0.0,
+                step: 1.0,
+            },
             unit: "px",
             section: "Main",
             slider: SliderMapping::SquareFromSlider,
@@ -640,7 +750,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "shadow_protection",
             label: "Shadow Protection",
             description: "Lightness margin below the background floor that is never whitened",
-            kind: ParamKind::Float { min: 0.0, max: 0.4, default: 0.10, identity: 0.4, step: 0.01 },
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 0.4,
+                default: 0.10,
+                identity: 0.4,
+                step: 0.01,
+            },
             unit: "",
             section: "Main",
             slider: SliderMapping::Linear,
@@ -649,7 +765,13 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "max_lift",
             label: "Max Lift",
             description: "Hard cap on how much a pixel's lightness may be raised",
-            kind: ParamKind::Float { min: 0.0, max: 1.0, default: 0.20, identity: 0.0, step: 0.01 },
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 1.0,
+                default: 0.20,
+                identity: 0.0,
+                step: 0.01,
+            },
             unit: "",
             section: "Advanced",
             slider: SliderMapping::Linear,
@@ -658,9 +780,60 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             name: "border_frac",
             label: "Border Sample",
             description: "Border band fraction sampled for background estimation",
-            kind: ParamKind::Float { min: 0.01, max: 0.2, default: 0.04, identity: 0.04, step: 0.005 },
+            kind: ParamKind::Float {
+                min: 0.01,
+                max: 0.2,
+                default: 0.04,
+                identity: 0.04,
+                step: 0.005,
+            },
             unit: "",
             section: "Detection",
+            slider: SliderMapping::Linear,
+        },
+        ParamDesc {
+            name: "chroma_neutralize",
+            label: "Chroma Neutralize",
+            description: "Pull background color cast / chroma noise toward neutral",
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 1.0,
+                default: 0.7,
+                identity: 0.0,
+                step: 0.01,
+            },
+            unit: "",
+            section: "Color",
+            slider: SliderMapping::Linear,
+        },
+        ParamDesc {
+            name: "halo_removal",
+            label: "Halo Removal",
+            description: "Suppress halos / fringes in the background band along the silhouette",
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 1.0,
+                default: 0.6,
+                identity: 0.0,
+                step: 0.01,
+            },
+            unit: "",
+            section: "Halo",
+            slider: SliderMapping::Linear,
+        },
+        ParamDesc {
+            name: "halo_radius",
+            label: "Halo Radius",
+            description: "Width of the silhouette-side band that halo removal acts on",
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 32.0,
+                default: 6.0,
+                identity: 0.0,
+                step: 0.5,
+            },
+            unit: "px",
+            section: "Halo",
             slider: SliderMapping::Linear,
         },
         ParamDesc {
@@ -698,6 +871,9 @@ impl Describe for BackgroundFlatten {
             "shadow_protection" => Some(ParamValue::Float(self.shadow_protection)),
             "max_lift" => Some(ParamValue::Float(self.max_lift)),
             "border_frac" => Some(ParamValue::Float(self.border_frac)),
+            "chroma_neutralize" => Some(ParamValue::Float(self.chroma_neutralize)),
+            "halo_removal" => Some(ParamValue::Float(self.halo_removal)),
+            "halo_radius" => Some(ParamValue::Float(self.halo_radius)),
             "auto_skip" => Some(ParamValue::Bool(self.auto_skip)),
             "flatten_gradient" => Some(ParamValue::Bool(self.flatten_gradient)),
             _ => None,
@@ -729,6 +905,9 @@ impl Describe for BackgroundFlatten {
                     "shadow_protection" => self.shadow_protection = v.clamp(0.0, 0.5),
                     "max_lift" => self.max_lift = v.clamp(0.0, 1.0),
                     "border_frac" => self.border_frac = v.clamp(0.005, 0.45),
+                    "chroma_neutralize" => self.chroma_neutralize = v.clamp(0.0, 1.0),
+                    "halo_removal" => self.halo_removal = v.clamp(0.0, 1.0),
+                    "halo_radius" => self.halo_radius = v.max(0.0),
                     _ => return false,
                 }
                 true
@@ -751,8 +930,7 @@ mod tests {
             for x in 0..wu {
                 let i = y * wu + x;
                 // Deterministic pseudo-noise around 0.95.
-                let noise =
-                    (((x * 31 + y * 17) % 13) as f32 / 13.0 - 0.5) * 0.03;
+                let noise = (((x * 31 + y * 17) % 13) as f32 / 13.0 - 0.5) * 0.03;
                 p.l[i] = 0.95 + noise;
                 p.a[i] = 0.0;
                 p.b[i] = 0.0;
@@ -818,7 +996,11 @@ mod tests {
         let strip = (w as usize) * 4;
         let var_before: f32 = {
             let m = mean(&orig.l[..strip]);
-            orig.l[..strip].iter().map(|v| (v - m) * (v - m)).sum::<f32>() / strip as f32
+            orig.l[..strip]
+                .iter()
+                .map(|v| (v - m) * (v - m))
+                .sum::<f32>()
+                / strip as f32
         };
         let var_after: f32 = {
             let m = mean(&p.l[..strip]);
@@ -901,7 +1083,10 @@ mod tests {
         for i in 0..p.l.len() {
             max_err = max_err.max((p.l[i] - orig.l[i]).abs());
         }
-        assert!(max_err < 1e-4, "non-white-bg image should be a no-op, max_err={max_err}");
+        assert!(
+            max_err < 1e-4,
+            "non-white-bg image should be a no-op, max_err={max_err}"
+        );
     }
 
     #[test]
@@ -946,7 +1131,13 @@ mod tests {
         }
         let weight = vec![1.0f32; w * h];
         let surf = fit_background_surface(&p, &weight, w, h, true);
-        for &(x, y) in &[(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w / 2, h / 2)] {
+        for &(x, y) in &[
+            (0, 0),
+            (w - 1, 0),
+            (0, h - 1),
+            (w - 1, h - 1),
+            (w / 2, h / 2),
+        ] {
             let got = surf.eval(x, y);
             let expect = plane(x, y);
             assert!(
@@ -1021,6 +1212,99 @@ mod tests {
     }
 
     #[test]
+    fn neutralizes_background_chroma() {
+        let (w, h) = (96u32, 96u32);
+        let wu = w as usize;
+        let hu = h as usize;
+        let mut p = OklabPlanes::new(w, h);
+        // Near-white background with a slight (low) color cast.
+        for i in 0..(w * h) as usize {
+            p.l[i] = 0.95;
+            p.a[i] = 0.03;
+            p.b[i] = -0.02;
+        }
+        // Saturated dark product in the center.
+        let (x0, x1, y0, y1) = (wu / 3, 2 * wu / 3, hu / 3, 2 * hu / 3);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = y * wu + x;
+                p.l[i] = 0.30;
+                p.a[i] = 0.12;
+                p.b[i] = 0.05;
+            }
+        }
+        let orig = p.clone();
+        BackgroundFlatten::default().apply(&mut p, &mut FilterContext::new());
+
+        let chroma = |a: f32, b: f32| (a * a + b * b).sqrt();
+        let c_before = chroma(orig.a[0], orig.b[0]);
+        let c_after = chroma(p.a[0], p.b[0]);
+        assert!(
+            c_after < c_before * 0.6,
+            "background chroma should be neutralized: {c_before} -> {c_after}"
+        );
+        // Product color must be preserved.
+        let ci = (hu / 2) * wu + wu / 2;
+        assert!(
+            (p.a[ci] - orig.a[ci]).abs() < 1e-4 && (p.b[ci] - orig.b[ci]).abs() < 1e-4,
+            "product color must be preserved"
+        );
+    }
+
+    #[test]
+    fn removes_luminance_overshoot_halo() {
+        let (w, h) = (120u32, 120u32);
+        let wu = w as usize;
+        let hu = h as usize;
+        let (x0, x1, y0, y1) = (wu / 3, 2 * wu / 3, hu / 3, 2 * hu / 3);
+        let build = || {
+            let mut p = OklabPlanes::new(w, h);
+            for v in p.l.iter_mut() {
+                *v = 0.95;
+            }
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    p.l[y * wu + x] = 0.25; // dark product
+                }
+            }
+            // Bright overshoot ring one pixel outside the product square.
+            for x in (x0 - 1)..=x1 {
+                p.l[(y0 - 1) * wu + x] = 1.05;
+                p.l[y1 * wu + x] = 1.05;
+            }
+            for y in (y0 - 1)..=y1 {
+                p.l[y * wu + (x0 - 1)] = 1.05;
+                p.l[y * wu + x1] = 1.05;
+            }
+            p
+        };
+        let ring = (y0 - 1) * wu + (wu / 2); // top ring pixel, center column
+
+        let mut on = build();
+        BackgroundFlatten {
+            halo_removal: 1.0,
+            halo_radius: 8.0,
+            ..Default::default()
+        }
+        .apply(&mut on, &mut FilterContext::new());
+
+        let mut off = build();
+        BackgroundFlatten {
+            halo_removal: 0.0,
+            halo_radius: 8.0,
+            ..Default::default()
+        }
+        .apply(&mut off, &mut FilterContext::new());
+
+        assert!(
+            on.l[ring] < off.l[ring] - 0.02,
+            "halo removal should reduce the bright overshoot ring: on={}, off={}",
+            on.l[ring],
+            off.l[ring]
+        );
+    }
+
+    #[test]
     fn chamfer_distance_basic() {
         // Single source at center; corners should have larger distance.
         let (w, h) = (9usize, 9usize);
@@ -1031,7 +1315,10 @@ mod tests {
         assert_eq!(dist[4 * w + 4], 0.0);
         let adjacent = dist[4 * w + 5];
         let corner = dist[0];
-        assert!((adjacent - 1.0).abs() < 1e-4, "adjacent dist ~1, got {adjacent}");
+        assert!(
+            (adjacent - 1.0).abs() < 1e-4,
+            "adjacent dist ~1, got {adjacent}"
+        );
         assert!(corner > adjacent, "corner farther than adjacent");
     }
 }
