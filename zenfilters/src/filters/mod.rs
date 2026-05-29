@@ -9,6 +9,7 @@ mod auto_tone;
 mod auto_tune;
 mod auto_vibrance;
 mod auto_white_balance;
+mod background_flatten;
 mod basecurve;
 mod bilateral;
 mod black_point;
@@ -89,6 +90,7 @@ pub use auto_tune::{
 };
 pub use auto_vibrance::AutoVibrance;
 pub use auto_white_balance::AutoWhiteBalance;
+pub use background_flatten::BackgroundFlatten;
 pub use basecurve::{BasecurvePreset, BasecurveToneMap, NEUTRAL_CURVE, find_basecurve};
 pub use bilateral::Bilateral;
 pub use black_point::BlackPoint;
