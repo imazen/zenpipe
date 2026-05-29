@@ -5,14 +5,20 @@
 ### Added
 - `ClipartFlatten` filter: flattens AI-clipart "waviness" / bubble-noise inside
   nominally-flat colour regions while keeping crisp edges and intentional shading
-  (complement to `BackgroundFlatten`, which only touches the background). Built-in
-  OKLab k-means quantizer (with near-duplicate centroid merging) → connected
-  regions per palette colour → per-region mean + variance; eases flat-fill
-  interiors toward their clean region mean by `strength × region_flatness ×
-  boundary_keep × membership`, so shaded regions, region boundaries, and
-  anti-aliased/off-colour pixels are preserved. `Describe` schema + 6 tests.
-  `examples/clipart_flatten_demo.rs` runs it over a clipart dir with zensim-scored
-  before/after/diff output. (f45ca9b)
+  (complement to `BackgroundFlatten`, which only touches the background).
+  - Stage 1 (default): ease L/a/b toward an edge-preserving guided-filter base
+    (He et al.) — removes low-variance waviness while keeping edges and genuine
+    shading, with no bilateral staircase/gradient-reversal. Params `strength`,
+    `waviness_scale`, `flatness`.
+  - Stage 2 (`cartoon` > 0): quantize the guided base → connected regions per
+    palette colour → snap flat-fill interiors to the region mean for a hard flat
+    look, gated by region-variance and a boundary feather so shaded regions and
+    edges survive.
+  - Optional `zenquant` feature: the cartoon-snap palette comes from zenquant
+    (perceptual OKLab, dither disabled), which gives a more faithful flat than the
+    built-in OKLab k-means. `Describe` schema + 7 tests.
+  - `examples/clipart_flatten_demo.rs`: red diff heatmaps + zensim-scored
+    before/after/diff over a clipart dir, with a `--cartoon` knob. (f45ca9b, 8aea1c5)
 - `BackgroundFlatten` filter: conservative, automated white-background flattening
   for e-commerce product photos. Estimates the border background and skips
   non-white-background shots (with a central-subject gate that rejects bright

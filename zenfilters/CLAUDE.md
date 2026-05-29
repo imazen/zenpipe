@@ -40,20 +40,29 @@ Before training a neural model, zenfilters needs all the adjustment capabilities
 
 **DONE (2026-05-29, AI-clipart cleanup — complement to white-bg flatten):**
 - ~~Clip-art waviness/bubble-noise flatten~~ → `ClipartFlatten`
-  (`src/filters/clipart_flatten.rs`): flattens nominally-flat colour regions of
-  AI clipart while keeping crisp edges + intentional shading. Built-in OKLab
-  k-means quantizer (centroid-merge to avoid over-segmentation) → 4-connected
-  regions per palette colour → per-region mean + colour-variance; eases flat-fill
-  interiors toward the clean region mean by
-  `strength × region_flatness × boundary_keep(chamfer-dist) × membership`.
-  Shaded regions (high variance), region boundaries (edge_feather band), and
-  off-colour/anti-aliased pixels are preserved. `Describe` schema + 6 tests.
-  Demo `examples/clipart_flatten_demo.rs`. Chains after `BackgroundFlatten`;
-  wrap in `MetricGated` for a subtlety guarantee. Research synthesis at
-  `/mnt/v/output/zenfilters/clipart-cleanup-research.md`.
-  Built-in quantizer for v1; `zenquant` can supply a higher-quality palette later.
-  Possible v2: harder cartoon-flat mode (L0 / palette-snap), guided-filter polish,
-  dither for true-gradient regions.
+  (`src/filters/clipart_flatten.rs`), v2: flattens nominally-flat colour regions
+  of AI clipart while keeping crisp edges + intentional shading.
+  - **Stage 1 (default, `cartoon`=0):** ease L/a/b toward an edge-preserving
+    **guided-filter base** (reuses `guided_filter::guided_filter_plane`). Removes
+    low-variance waviness, keeps edges + smooth shading, no bilateral staircase /
+    gradient-reversal. Params `strength`, `waviness_scale` (guided σ), `flatness`
+    (guided eps).
+  - **Stage 2 (`cartoon`>0):** quantize the guided base → 4-connected regions per
+    palette colour → snap flat-fill interiors to the region mean, gated by
+    `region_flatness × boundary_keep(chamfer-dist)` so shaded regions + edges
+    survive. Params `palette_size`, `color_tolerance` (centroid-merge dist),
+    `edge_feather`.
+  - **`zenquant` feature** (opt-in): cartoon-snap palette via zenquant (perceptual
+    OKLab, dither off) — verified more *faithful* than built-in k-means on the
+    clipart corpus (preserves intended shading/detail better). Path:
+    Oklab guided base → BT.709 sRGB8 → `zenquant::quantize`. Built-in k-means is
+    the default (no_std/wasm-safe).
+  - `Describe` schema + 7 tests (default + zenquant). Demo
+    `examples/clipart_flatten_demo.rs` (red diff heatmaps, `--cartoon`,
+    `--features experimental,zenquant`). Chains after `BackgroundFlatten`; wrap in
+    `MetricGated` for a subtlety guarantee. Research: `/mnt/v/output/zenfilters/clipart-cleanup-research.md`.
+  - v1→v2 was driven by reviewing red-diff heatmaps: v1's membership gate protected
+    the waviness peaks themselves; the guided-base approach fixed it.
 
 **Still missing (lower priority or needs external data):**
 - **Tone Curve Saturation refinement** — per-region saturation on the curve
