@@ -70,6 +70,10 @@ pub struct BackgroundFlatten {
     /// When `true`, automatically reduce strength or skip when the border does
     /// not look like a bright neutral studio background.
     pub auto_skip: bool,
+    /// When `true`, fit a smooth low-order surface to the background so a
+    /// gradient/uneven illumination (e.g. lighting falloff) flattens uniformly
+    /// to white. When `false`, a single constant background level is used.
+    pub flatten_gradient: bool,
 }
 
 impl Default for BackgroundFlatten {
@@ -83,6 +87,7 @@ impl Default for BackgroundFlatten {
             shadow_protection: 0.10,
             max_lift: 0.20,
             auto_skip: true,
+            flatten_gradient: true,
         }
     }
 }
@@ -327,6 +332,164 @@ pub(crate) fn chamfer_distance(source: &[u8], w: usize, h: usize, out: &mut [f32
     }
 }
 
+/// A smooth low-order model of the background lightness `B(x, y)`.
+///
+/// Either constant (`nterms == 1`, weighted mean) or a full quadric
+/// (`nterms == 6`, basis `[1, nx, ny, nx², nx·ny, ny²]` over normalized
+/// coordinates `nx = x/(w-1)`, `ny = y/(h-1)`). Used to anchor the whitening
+/// knee per-pixel so a gradient background flattens uniformly.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BackgroundSurface {
+    coef: [f64; 6],
+    nterms: usize,
+    inv_w: f32,
+    inv_h: f32,
+}
+
+impl BackgroundSurface {
+    #[inline]
+    fn basis(nx: f32, ny: f32) -> [f64; 6] {
+        [
+            1.0,
+            nx as f64,
+            ny as f64,
+            (nx * nx) as f64,
+            (nx * ny) as f64,
+            (ny * ny) as f64,
+        ]
+    }
+
+    /// Evaluate `B(x, y)`.
+    #[inline]
+    pub(crate) fn eval(&self, x: usize, y: usize) -> f32 {
+        let nx = x as f32 * self.inv_w;
+        let ny = y as f32 * self.inv_h;
+        let phi = Self::basis(nx, ny);
+        let mut s = 0.0f64;
+        for k in 0..self.nterms {
+            s += self.coef[k] * phi[k];
+        }
+        s as f32
+    }
+}
+
+/// Solve an `n×n` linear system `m·x = rhs` via Gaussian elimination with
+/// partial pivoting (`n ≤ 6`). Returns `None` if (near-)singular.
+fn solve_linear(mut m: [[f64; 6]; 6], mut rhs: [f64; 6], n: usize) -> Option<[f64; 6]> {
+    for col in 0..n {
+        // Partial pivot.
+        let mut piv = col;
+        let mut best = m[col][col].abs();
+        for r in (col + 1)..n {
+            let v = m[r][col].abs();
+            if v > best {
+                best = v;
+                piv = r;
+            }
+        }
+        if best < 1e-12 {
+            return None;
+        }
+        if piv != col {
+            m.swap(col, piv);
+            rhs.swap(col, piv);
+        }
+        let inv = 1.0 / m[col][col];
+        for r in (col + 1)..n {
+            let f = m[r][col] * inv;
+            if f != 0.0 {
+                for c in col..n {
+                    m[r][c] -= f * m[col][c];
+                }
+                rhs[r] -= f * rhs[col];
+            }
+        }
+    }
+    // Back-substitution.
+    let mut x = [0.0f64; 6];
+    for i in (0..n).rev() {
+        let mut s = rhs[i];
+        for c in (i + 1)..n {
+            s -= m[i][c] * x[c];
+        }
+        x[i] = s / m[i][i];
+    }
+    Some(x)
+}
+
+/// Fit [`BackgroundSurface`] to the connected-background pixels, weighted by
+/// `weight` (typically `likeness × feather`). When `quadric` is false (or the
+/// quadric system is singular) the result is the weighted-mean constant level.
+pub(crate) fn fit_background_surface(
+    planes: &OklabPlanes,
+    weight: &[f32],
+    w: usize,
+    h: usize,
+    quadric: bool,
+) -> BackgroundSurface {
+    let inv_w = 1.0 / ((w.max(2) - 1) as f32);
+    let inv_h = 1.0 / ((h.max(2) - 1) as f32);
+
+    // Weighted mean (always available as the constant fallback).
+    let mut wsum = 0.0f64;
+    let mut lwsum = 0.0f64;
+    for y in 0..h {
+        let row = y * w;
+        for x in 0..w {
+            let wt = weight[row + x] as f64;
+            if wt > 0.0 {
+                wsum += wt;
+                lwsum += wt * planes.l[row + x] as f64;
+            }
+        }
+    }
+    let mean = if wsum > 1e-9 { lwsum / wsum } else { 1.0 };
+    let constant = BackgroundSurface {
+        coef: [mean, 0.0, 0.0, 0.0, 0.0, 0.0],
+        nterms: 1,
+        inv_w,
+        inv_h,
+    };
+
+    if !quadric || wsum < 1e-6 {
+        return constant;
+    }
+
+    // Weighted normal equations for the 6-term quadric.
+    let n = 6;
+    let mut m = [[0.0f64; 6]; 6];
+    let mut rhs = [0.0f64; 6];
+    for y in 0..h {
+        let row = y * w;
+        let ny = y as f32 * inv_h;
+        for x in 0..w {
+            let wt = weight[row + x] as f64;
+            if wt <= 0.0 {
+                continue;
+            }
+            let nx = x as f32 * inv_w;
+            let phi = BackgroundSurface::basis(nx, ny);
+            let l = planes.l[row + x] as f64;
+            for i in 0..n {
+                rhs[i] += wt * phi[i] * l;
+                for j in 0..n {
+                    m[i][j] += wt * phi[i] * phi[j];
+                }
+            }
+        }
+    }
+
+    match solve_linear(m, rhs, n) {
+        Some(coef) => BackgroundSurface {
+            coef,
+            nterms: n,
+            inv_w,
+            inv_h,
+        },
+        None => constant,
+    }
+}
+
 impl Filter for BackgroundFlatten {
     fn channel_access(&self) -> ChannelAccess {
         ChannelAccess::L_AND_CHROMA
@@ -385,30 +548,46 @@ impl Filter for BackgroundFlatten {
         let mut dist = ctx.take_f32(n);
         chamfer_distance(&connected, w, h, &mut dist);
 
-        // Step 4: shadow-preserving soft-knee whitening of L.
+        // Step 4: per-pixel background weight = connectivity × likeness × feather.
+        // The feather ramps the effect to zero at the product silhouette.
         let feather = self.feather.max(0.5);
-        // Anchor the knee just below the background noise floor so background
-        // noise is fully whitened but true shadows are protected.
-        let white_pt = est.l_floor;
-        let knee_lo = est.l_floor - self.shadow_protection.max(0.0);
         let max_lift = self.max_lift.max(0.0);
-
+        let sp = self.shadow_protection.max(0.0);
+        let mut weight = ctx.take_f32(n);
         for i in 0..n {
-            if connected[i] == 0 {
-                continue;
-            }
-            let l = planes.l[i];
-            let feather_w = smoothstep(0.0, feather, dist[i]);
-            let alpha = feather_w * likeness[i] * global;
-            if alpha <= 1e-5 {
-                continue;
-            }
-            let t = smoothstep(knee_lo, white_pt, l);
-            let mut delta = (1.0 - l) * t * alpha;
-            delta = delta.clamp(-max_lift, max_lift);
-            planes.l[i] = (l + delta).clamp(0.0, 1.5);
+            weight[i] = if connected[i] == 0 {
+                0.0
+            } else {
+                likeness[i] * smoothstep(0.0, feather, dist[i])
+            };
         }
 
+        // Step 5: fit the (optionally gradient) background surface so the
+        // whitening knee tracks uneven illumination, then ease background
+        // pixels toward pure white with a shadow-preserving soft knee.
+        let surface = fit_background_surface(planes, &weight, w, h, self.flatten_gradient);
+
+        for y in 0..h {
+            let row = y * w;
+            for x in 0..w {
+                let i = row + x;
+                let alpha = weight[i] * global;
+                if alpha <= 1e-5 {
+                    continue;
+                }
+                let l = planes.l[i];
+                // Knee anchored on the local background level `bx`: pixels at or
+                // above `bx` whiten fully; pixels darker than `bx - shadow_protection`
+                // (true shadows) are untouched.
+                let bx = surface.eval(x, y);
+                let t = smoothstep(bx - sp, bx, l);
+                let mut delta = (1.0 - l) * t * alpha;
+                delta = delta.clamp(-max_lift, max_lift);
+                planes.l[i] = (l + delta).clamp(0.0, 1.5);
+            }
+        }
+
+        ctx.return_f32(weight);
         ctx.return_f32(dist);
         ctx.return_u8(connected);
         ctx.return_f32(likeness);
@@ -485,6 +664,15 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             slider: SliderMapping::Linear,
         },
         ParamDesc {
+            name: "flatten_gradient",
+            label: "Flatten Gradient",
+            description: "Fit a smooth surface so an uneven/gradient background flattens uniformly",
+            kind: ParamKind::Bool { default: true },
+            unit: "",
+            section: "Advanced",
+            slider: SliderMapping::NotSlider,
+        },
+        ParamDesc {
             name: "auto_skip",
             label: "Auto Skip",
             description: "Reduce or skip automatically when the image is not a white-background shot",
@@ -511,15 +699,19 @@ impl Describe for BackgroundFlatten {
             "max_lift" => Some(ParamValue::Float(self.max_lift)),
             "border_frac" => Some(ParamValue::Float(self.border_frac)),
             "auto_skip" => Some(ParamValue::Bool(self.auto_skip)),
+            "flatten_gradient" => Some(ParamValue::Bool(self.flatten_gradient)),
             _ => None,
         }
     }
 
     fn set_param(&mut self, name: &str, value: ParamValue) -> bool {
         match name {
-            "auto_skip" => {
+            "auto_skip" | "flatten_gradient" => {
                 if let ParamValue::Bool(b) = value {
-                    self.auto_skip = b;
+                    match name {
+                        "auto_skip" => self.auto_skip = b,
+                        _ => self.flatten_gradient = b,
+                    }
                     return true;
                 }
                 false
@@ -736,6 +928,96 @@ mod tests {
         flood_fill_border(&like, w, h, 0.5, 0.35, &mut out);
         assert_eq!(out[0], 1, "corner should be connected");
         assert_eq!(out[2 * w + 2], 0, "enclosed center must not be connected");
+    }
+
+    #[test]
+    fn surface_fit_recovers_plane() {
+        let (w, h) = (40usize, 30usize);
+        let mut p = OklabPlanes::new(w as u32, h as u32);
+        let plane = |x: usize, y: usize| {
+            let nx = x as f32 / (w as f32 - 1.0);
+            let ny = y as f32 / (h as f32 - 1.0);
+            0.80 + 0.15 * nx + 0.04 * ny
+        };
+        for y in 0..h {
+            for x in 0..w {
+                p.l[y * w + x] = plane(x, y);
+            }
+        }
+        let weight = vec![1.0f32; w * h];
+        let surf = fit_background_surface(&p, &weight, w, h, true);
+        for &(x, y) in &[(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w / 2, h / 2)] {
+            let got = surf.eval(x, y);
+            let expect = plane(x, y);
+            assert!(
+                (got - expect).abs() < 1e-3,
+                "surface at ({x},{y}): {got} vs {expect}"
+            );
+        }
+    }
+
+    /// Vertical gradient background (top darker, bottom brighter) + center
+    /// product. With `flatten_gradient` the whole background reaches white;
+    /// without it, the darker (top) end is left visibly under-whitened.
+    fn gradient_on_white(w: u32, h: u32) -> OklabPlanes {
+        let mut p = OklabPlanes::new(w, h);
+        let wu = w as usize;
+        let hu = h as usize;
+        for y in 0..hu {
+            for x in 0..wu {
+                let i = y * wu + x;
+                let g = 0.90 + 0.09 * (y as f32 / (hu as f32 - 1.0));
+                let noise = (((x * 7 + y * 13) % 11) as f32 / 11.0 - 0.5) * 0.02;
+                p.l[i] = g + noise;
+            }
+        }
+        let (x0, x1, y0, y1) = (wu / 3, 2 * wu / 3, hu / 3, 2 * hu / 3);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                p.l[y * wu + x] = 0.25;
+                p.a[y * wu + x] = 0.03;
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn flattens_gradient_uniformly() {
+        let (w, h) = (96u32, 96u32);
+        let wu = w as usize;
+        let top = 4 * wu + 48; // background, above product
+        let bot = 92 * wu + 48; // background, below product
+
+        let mut on = gradient_on_white(w, h);
+        BackgroundFlatten {
+            flatten_gradient: true,
+            ..Default::default()
+        }
+        .apply(&mut on, &mut FilterContext::new());
+
+        let mut off = gradient_on_white(w, h);
+        BackgroundFlatten {
+            flatten_gradient: false,
+            ..Default::default()
+        }
+        .apply(&mut off, &mut FilterContext::new());
+
+        // With gradient fit, both the dark (top) and bright (bottom) ends of
+        // the background reach near-white.
+        assert!(
+            on.l[top] > 0.985 && on.l[bot] > 0.985,
+            "gradient fit should whiten both ends: top={}, bot={}",
+            on.l[top],
+            on.l[bot]
+        );
+        // Without it, the constant knee leaves the darker (top) end visibly
+        // less white than the gradient-aware result.
+        assert!(
+            off.l[top] < on.l[top] - 0.02,
+            "constant knee should under-whiten the dark end: off_top={}, on_top={}",
+            off.l[top],
+            on.l[top]
+        );
     }
 
     #[test]
