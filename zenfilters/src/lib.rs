@@ -95,6 +95,7 @@ mod fused_params;
 mod gamut_lut;
 mod gamut_map;
 pub mod masked;
+pub mod metric_gate;
 pub mod param_schema;
 mod pipeline;
 mod planes;
