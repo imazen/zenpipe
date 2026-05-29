@@ -824,7 +824,7 @@ checksum = "dd2e7510819d6fbf51a5545c8f922716ecfb14df168a3242f7d33e0239efe6a1"
 
 [[package]]
 name = "fast-ssim2"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "archmage",
  "imgref",
@@ -940,9 +940,9 @@ dependencies = [
 
 [[package]]
 name = "garb"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae3f56f280a24621bef5778559c4502d10136565311efa37a7b4ca257dce00ed"
+checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1756,6 +1756,12 @@ checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
 dependencies = [
  "imgref",
 ]
+
+[[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 
 [[package]]
 name = "macro-attr"
@@ -3924,6 +3930,8 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9711cf1c3363003dd436f5b5dc113f7881f9b377613eecbf41f91b6b85626442"
 dependencies = [
  "archmage",
  "garb",
@@ -3935,7 +3943,7 @@ dependencies = [
 
 [[package]]
 name = "zenavif"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4169,7 +4177,7 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.8.4"
+version = "0.8.7"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -4415,12 +4423,12 @@ dependencies = [
 
 [[package]]
 name = "zenpredict"
-version = "0.1.0"
+version = "0.2.1"
+source = "git+https://github.com/imazen/zenanalyze?rev=9a9be8200f26f643b45338711426cacae820f3a1#9a9be8200f26f643b45338711426cacae820f3a1"
 dependencies = [
  "bytemuck",
  "libm",
- "serde",
- "serde_json",
+ "lz4_flex",
 ]
 
 [[package]]
@@ -4604,7 +4612,7 @@ dependencies = [
 
 [[package]]
 name = "zensim"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -4632,7 +4640,7 @@ dependencies = [
  "zenpixels",
  "zenpng 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenresize 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "zensim 0.2.7",
+ "zensim 0.3.0",
 ]
 
 [[package]]
