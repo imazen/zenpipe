@@ -106,6 +106,10 @@ required-features = ["experimental"]
 name = "clipart_flatten_demo"
 required-features = ["experimental"]
 
+[[example]]
+name = "white_diff"
+required-features = ["experimental"]
+
 [[test]]
 name = "reference_validation"
 
