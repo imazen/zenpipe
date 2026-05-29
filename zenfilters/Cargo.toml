@@ -94,6 +94,10 @@ required-features = ["experimental"]
 name = "filter_audit"
 required-features = ["experimental"]
 
+[[example]]
+name = "whitebg_corpus"
+required-features = ["experimental"]
+
 [[test]]
 name = "reference_validation"
 

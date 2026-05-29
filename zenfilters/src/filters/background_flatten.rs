@@ -350,6 +350,33 @@ pub(crate) fn chamfer_distance(source: &[u8], w: usize, h: usize, out: &mut [f32
     }
 }
 
+/// Fraction of the central region (middle half in each axis) that is
+/// connected background. A genuine product-on-white shot has a distinct
+/// central subject, so this is low; a bright subjectless scene (sky, high-key
+/// photo) is background-like in the center too and yields a high value.
+pub(crate) fn central_background_fraction(connected: &[u8], w: usize, h: usize) -> f32 {
+    let x0 = w / 4;
+    let x1 = (3 * w / 4).max(x0 + 1);
+    let y0 = h / 4;
+    let y1 = (3 * h / 4).max(y0 + 1);
+    let mut total = 0u32;
+    let mut bg = 0u32;
+    for y in y0..y1 {
+        let row = y * w;
+        for x in x0..x1 {
+            total += 1;
+            if connected[row + x] != 0 {
+                bg += 1;
+            }
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        bg as f32 / total as f32
+    }
+}
+
 /// A smooth low-order model of the background lightness `B(x, y)`.
 ///
 /// Either constant (`nterms == 1`, weighted mean) or a full quadric
@@ -557,7 +584,7 @@ impl Filter for BackgroundFlatten {
         if applic <= 1e-4 {
             return;
         }
-        let global = (self.strength * applic).clamp(0.0, 1.0);
+        let mut global = (self.strength * applic).clamp(0.0, 1.0);
 
         // Step 1: background-likeness.
         let mut likeness = ctx.take_f32(n);
@@ -566,6 +593,22 @@ impl Filter for BackgroundFlatten {
         // Step 2: edge-seeded flood fill.
         let mut connected = ctx.take_u8(n);
         flood_fill_border(&likeness, w, h, 0.5, 0.35, &mut connected);
+
+        // Step 2.5: reject bright *subjectless* scenes. A genuine product shot
+        // has a distinct central subject (the product is NOT connected
+        // background); a high-key / sky photo passes the bright-neutral-uniform
+        // border check but is background-like in the center too. If the center
+        // is mostly background, this is almost certainly not a product-on-white
+        // shot, so scale down or skip.
+        if self.auto_skip {
+            let center_bg = central_background_fraction(&connected, w, h);
+            global *= 1.0 - smoothstep(0.70, 0.92, center_bg);
+            if global <= 1e-4 {
+                ctx.return_u8(connected);
+                ctx.return_f32(likeness);
+                return;
+            }
+        }
 
         // Step 3: distance transform from the silhouette → feather.
         let mut dist = ctx.take_f32(n);
@@ -1086,6 +1129,29 @@ mod tests {
         assert!(
             max_err < 1e-4,
             "non-white-bg image should be a no-op, max_err={max_err}"
+        );
+    }
+
+    #[test]
+    fn near_noop_on_subjectless_bright_scene() {
+        // Bright, neutral, uniform — but NO central subject (like a sky /
+        // high-key photo). The border check passes, but the central-subject
+        // gate must reject it so the filter does not flatten a real scene.
+        let (w, h) = (96u32, 96u32);
+        let mut p = OklabPlanes::new(w, h);
+        for (i, v) in p.l.iter_mut().enumerate() {
+            let nse = ((i * 37) % 11) as f32 / 11.0 - 0.5;
+            *v = 0.93 + 0.02 * nse;
+        }
+        let orig = p.clone();
+        BackgroundFlatten::default().apply(&mut p, &mut FilterContext::new());
+        let mut max_err = 0.0f32;
+        for i in 0..p.l.len() {
+            max_err = max_err.max((p.l[i] - orig.l[i]).abs());
+        }
+        assert!(
+            max_err < 1e-4,
+            "subjectless bright scene must be skipped, max_err={max_err}"
         );
     }
 
