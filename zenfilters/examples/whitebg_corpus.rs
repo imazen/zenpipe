@@ -58,7 +58,7 @@ fn zensim_score(a: &RgbImage, b: &RgbImage) -> f64 {
     let a_px: &[[u8; 3]] = bytemuck::cast_slice(a.as_raw());
     let b_px: &[[u8; 3]] = bytemuck::cast_slice(b.as_raw());
     let (w, h) = a.dimensions();
-    let z = Zensim::new(ZensimProfile::latest()).with_parallel(false);
+    let z = Zensim::new(ZensimProfile::latest()).with_parallel(true);
     let src = RgbSlice::new(a_px, w as usize, h as usize);
     let dst = RgbSlice::new(b_px, w as usize, h as usize);
     z.compute(&src, &dst).unwrap().score()
@@ -352,32 +352,49 @@ fn parse_args() -> (PathBuf, Option<PathBuf>, f64) {
     (out, input, min_zensim)
 }
 
-fn load_dir(dir: &Path) -> Vec<(String, RgbImage)> {
+/// Recursively load images under `root`. The returned name is the path
+/// relative to `root` (without extension, `/` preserved) so the output tree
+/// mirrors the source tree under `before/`, `after/`, `diff/` subfolders.
+/// Source files are only read, never written.
+fn load_dir(root: &Path) -> Vec<(String, RgbImage)> {
     let mut out = Vec::new();
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("could not read --input {}: {e}", dir.display());
-            return out;
-        }
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase());
-        if !matches!(
-            ext.as_deref(),
-            Some("png" | "jpg" | "jpeg" | "bmp" | "tiff")
-        ) {
-            continue;
-        }
-        if let Ok(img) = image::open(&path) {
-            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("img");
-            out.push((format!("input_{name}"), img.to_rgb8()));
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("skip {}: {e}", dir.display());
+                continue;
+            }
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase());
+            if !matches!(
+                ext.as_deref(),
+                Some("png" | "jpg" | "jpeg" | "bmp" | "tiff" | "webp")
+            ) {
+                continue;
+            }
+            match image::open(&path) {
+                Ok(img) => {
+                    let rel = path.strip_prefix(root).unwrap_or(&path);
+                    let mut name = rel.with_extension("").to_string_lossy().into_owned();
+                    name = name.replace('\\', "/");
+                    out.push((name, img.to_rgb8()));
+                }
+                Err(e) => eprintln!("skip {}: {e}", path.display()),
+            }
         }
     }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
     out
 }
 
@@ -385,10 +402,19 @@ fn main() {
     let (out_dir, input, min_zensim) = parse_args();
     std::fs::create_dir_all(&out_dir).expect("create output dir");
 
-    let mut images = synthetic_scenes();
-    images.extend(cid22_samples());
-    if let Some(dir) = &input {
-        images.extend(load_dir(dir));
+    // With an explicit corpus, process only that corpus; otherwise run the
+    // built-in synthetic scenes + CID22 safety samples.
+    let images = if let Some(dir) = &input {
+        load_dir(dir)
+    } else {
+        let mut v = synthetic_scenes();
+        v.extend(cid22_samples());
+        v
+    };
+
+    // Output goes to before/ after/ diff/ subfolders (source files untouched).
+    for sub in ["before", "after", "diff"] {
+        std::fs::create_dir_all(out_dir.join(sub)).expect("create output subdir");
     }
 
     let mut csv = String::from(
@@ -410,9 +436,13 @@ fn main() {
         let (mean_d, max_d) = mean_max_diff(img, &res.out);
         let diff = diff_heatmap(img, &res.out, 12);
 
-        img.save(out_dir.join(format!("{name}_before.png"))).ok();
-        res.out.save(out_dir.join(format!("{name}_after.png"))).ok();
-        diff.save(out_dir.join(format!("{name}_diff.png"))).ok();
+        for (sub, im) in [("before", img), ("after", &res.out), ("diff", &diff)] {
+            let dst = out_dir.join(sub).join(format!("{name}.png"));
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+            im.save(&dst).ok();
+        }
 
         let verdict = if res.strength <= 0.001 {
             "skipped"
