@@ -98,6 +98,10 @@ required-features = ["experimental"]
 name = "whitebg_corpus"
 required-features = ["experimental"]
 
+[[example]]
+name = "clipart_flatten_demo"
+required-features = ["experimental"]
+
 [[test]]
 name = "reference_validation"
 
