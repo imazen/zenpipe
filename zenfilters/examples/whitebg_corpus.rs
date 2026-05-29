@@ -24,6 +24,10 @@
 //!
 //! Output defaults to `/mnt/v/output/zenfilters/whitebg/`.
 
+// Per-channel `for c in 0..3` loops over fixed RGB triples read clearer than
+// iterator gymnastics here.
+#![allow(clippy::needless_range_loop)]
+
 use image::{ImageBuffer, Rgb, RgbImage};
 use std::path::{Path, PathBuf};
 
@@ -396,8 +400,8 @@ fn main() {
         out_dir.display()
     );
     println!(
-        "{:<26} {:>6} {:>10} {:>10} {:>9} {:>8}  {}",
-        "image", "stren", "z_full", "z_final", "meanΔ", "maxΔ", "verdict"
+        "{:<26} {:>6} {:>10} {:>10} {:>9} {:>8}  verdict",
+        "image", "stren", "z_full", "z_final", "meanΔ", "maxΔ"
     );
 
     for (name, img) in &images {

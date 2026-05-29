@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `BackgroundFlatten` filter: conservative, automated white-background flattening
+  for e-commerce product photos. Estimates the border background and skips
+  non-white-background shots (with a central-subject gate that rejects bright
+  high-key / sky scenes); grows an edge-seeded flood-fill background mask so only
+  border-connected background is touched; feathers the effect to zero at the
+  product silhouette; fits a low-order surface so gradient/uneven backgrounds
+  flatten uniformly; eases the background to pure white with a shadow-preserving
+  soft knee and a max-lift cap; neutralizes background color cast; and removes
+  halos/fringes in the silhouette-side band (guided-filter smoothing + overshoot
+  clamp + chroma decontamination). `Describe` schema included. (3646257, 87f0201, 6a78411, d3ab689)
+- `metric_gate` module: `MetricGated<M>` wraps any filter with a perceptual
+  quality gate — apply, score the change with a pluggable `QualityMetric`, then
+  binary-search the edit strength back under a just-noticeable threshold (or skip).
+  Any `Fn(&OklabPlanes, &OklabPlanes) -> f32` is a metric, so zensim et al. plug
+  in without new dependencies; `OklabDeltaMetric` is a zero-dep default. (e9019c5)
+- `whitebg_corpus` example (experimental): runs `BackgroundFlatten` over synthetic
+  white-bg scenes + CID22 safety samples + a `--input` dir, scores with zensim,
+  scales back / skips, and writes before/after/diff images + a CSV report. (d3ab689)
+
 ## 0.1.0 — 2026-04-01
 
 Initial release.

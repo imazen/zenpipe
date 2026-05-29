@@ -22,6 +22,22 @@ Before training a neural model, zenfilters needs all the adjustment capabilities
 - ~~Geometric Transform~~ → `Warp` (experimental, 3×3 projective matrix, bilinear interp, rotation/deskew/affine/perspective)
 - ~~Masked Filter~~ → `masked::MaskedFilter` (linear gradient, radial gradient, luminance range masks)
 
+**DONE (2026-05-28, e-commerce white-background flatten):**
+- ~~White-background flatten~~ → `BackgroundFlatten` (`src/filters/background_flatten.rs`):
+  conservative automated flatten of noisy/uneven near-white product backgrounds.
+  Border estimate + applicability gate + **central-subject gate** (rejects bright
+  high-key/sky scenes); edge-seeded flood-fill background mask (only border-connected
+  background is touched); chamfer-distance feather (effect → 0 at the silhouette);
+  low-order surface fit for gradient backgrounds; shadow-preserving soft-knee
+  whitening (max-lift cap); chroma neutralization; halo/fringe removal via guided
+  filter + overshoot clamp + chroma decontamination. `Describe` schema + 13 unit tests.
+- ~~Metric-gated edits~~ → `metric_gate::MetricGated<M>` (`src/metric_gate.rs`):
+  apply → score (pluggable `QualityMetric`; any `Fn(&OklabPlanes,&OklabPlanes)->f32`,
+  so zensim plugs in as a closure) → binary-search strength back under a JND
+  threshold, or skip. `OklabDeltaMetric` zero-dep default. 4 unit tests.
+- Validation/demo: `examples/whitebg_corpus.rs` (experimental) — zensim-scored,
+  scaled-back/skipped, before/after/diff images + CSV to `/mnt/v/output/zenfilters/whitebg`.
+
 **Still missing (lower priority or needs external data):**
 - **Tone Curve Saturation refinement** — per-region saturation on the curve
 - **Lens Blur** — AI depth-based bokeh with bokeh shape styles
