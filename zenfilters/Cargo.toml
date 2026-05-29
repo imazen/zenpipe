@@ -21,6 +21,9 @@ srgb-compat = []
 serde = ["dep:serde", "dep:serde-big-array"]
 srgb-filters = ["dep:rgb", "zenpixels/rgb"]
 zennode = ["dep:zennode"]
+# Use zenquant (perceptual OKLab quantizer) for ClipartFlatten's region palette
+# instead of the built-in k-means. Opt-in (adds a dependency).
+zenquant = ["dep:zenquant", "dep:rgb"]
 
 [dependencies]
 archmage = { version = "0.9.17", features = ["avx512"] }
@@ -34,6 +37,7 @@ zenpixels = { version = "0.2.10", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
 zenpixels-convert = { version = "0.2.10" }
+zenquant = { path = "../../zenquant", version = "0.1.2", default-features = false, optional = true }
 
 [dev-dependencies]
 imgref = "1.12"

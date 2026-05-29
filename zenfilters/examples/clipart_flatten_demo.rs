@@ -15,13 +15,14 @@ use zenfilters::filters::ClipartFlatten;
 use zenfilters::{FilterContext, Pipeline, PipelineConfig, apply_to_buffer};
 use zensim::{RgbSlice, Zensim, ZensimProfile};
 
-fn flatten(img: &RgbImage, strength: f32) -> RgbImage {
+fn flatten(img: &RgbImage, strength: f32, cartoon: f32) -> RgbImage {
     let (w, h) = img.dimensions();
     let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
     let input = zenpixels::buffer::PixelBuffer::from_vec(img.as_raw().clone(), w, h, desc).unwrap();
     let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     let mut f = ClipartFlatten::default();
     f.strength = strength;
+    f.cartoon = cartoon;
     pipeline.push(Box::new(f));
     let mut ctx = FilterContext::new();
     let out = apply_to_buffer(&pipeline, &input, true, &mut ctx).unwrap();
@@ -41,6 +42,8 @@ fn zensim_score(a: &RgbImage, b: &RgbImage) -> f64 {
     .score()
 }
 
+/// Red diff heatmap: per-pixel max-channel delta amplified onto a black→red→
+/// yellow ramp so where (and how strongly) the filter changed pixels is obvious.
 fn diff_heatmap(a: &RgbImage, b: &RgbImage, amp: u32) -> RgbImage {
     let (w, h) = a.dimensions();
     let mut out = RgbImage::new(w, h);
@@ -49,8 +52,11 @@ fn diff_heatmap(a: &RgbImage, b: &RgbImage, amp: u32) -> RgbImage {
             .map(|c| (pa[c] as i32 - pb[c] as i32).unsigned_abs())
             .max()
             .unwrap_or(0);
-        let v = (d * amp).min(255) as u8;
-        *px = Rgb([v, v, v]);
+        let v = (d * amp).min(255) as i32;
+        // 0..128 → black→red, 128..255 → red→yellow (green ramps in)
+        let r = v.min(255) as u8;
+        let g = ((v - 128).max(0) * 2).min(255) as u8;
+        *px = Rgb([r, g, 0]);
     }
     out
 }
@@ -89,7 +95,8 @@ fn load_dir(root: &Path) -> Vec<(String, RgbImage)> {
 fn main() {
     let mut input = PathBuf::from("/mnt/v/zen/ai/clipart");
     let mut out_dir = PathBuf::from("/mnt/v/zen/ai/_clipartflatten");
-    let mut strength = 0.8f32;
+    let mut strength = 0.85f32;
+    let mut cartoon = 0.0f32;
     let mut limit = usize::MAX;
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -104,7 +111,11 @@ fn main() {
                 i += 1;
             }
             "--strength" if i + 1 < args.len() => {
-                strength = args[i + 1].parse().unwrap_or(0.8);
+                strength = args[i + 1].parse().unwrap_or(0.85);
+                i += 1;
+            }
+            "--cartoon" if i + 1 < args.len() => {
+                cartoon = args[i + 1].parse().unwrap_or(0.0);
                 i += 1;
             }
             "--limit" if i + 1 < args.len() => {
@@ -122,7 +133,7 @@ fn main() {
     let images = load_dir(&input);
     let mut csv = String::from("name,width,height,strength,zensim,mean_diff,max_diff\n");
     println!(
-        "ClipartFlatten demo — {} images (limit {}), strength={strength}, out={}",
+        "ClipartFlatten demo — {} images (limit {}), strength={strength}, cartoon={cartoon}, out={}",
         images.len(),
         limit,
         out_dir.display()
@@ -134,7 +145,7 @@ fn main() {
 
     for (name, img) in images.iter().take(limit) {
         let (w, h) = img.dimensions();
-        let res = flatten(img, strength);
+        let res = flatten(img, strength, cartoon);
         let z = zensim_score(img, &res);
         let mut sum = 0u64;
         let mut maxd = 0u8;
