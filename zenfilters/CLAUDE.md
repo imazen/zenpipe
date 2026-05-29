@@ -38,6 +38,23 @@ Before training a neural model, zenfilters needs all the adjustment capabilities
 - Validation/demo: `examples/whitebg_corpus.rs` (experimental) — zensim-scored,
   scaled-back/skipped, before/after/diff images + CSV to `/mnt/v/output/zenfilters/whitebg`.
 
+**DONE (2026-05-29, AI-clipart cleanup — complement to white-bg flatten):**
+- ~~Clip-art waviness/bubble-noise flatten~~ → `ClipartFlatten`
+  (`src/filters/clipart_flatten.rs`): flattens nominally-flat colour regions of
+  AI clipart while keeping crisp edges + intentional shading. Built-in OKLab
+  k-means quantizer (centroid-merge to avoid over-segmentation) → 4-connected
+  regions per palette colour → per-region mean + colour-variance; eases flat-fill
+  interiors toward the clean region mean by
+  `strength × region_flatness × boundary_keep(chamfer-dist) × membership`.
+  Shaded regions (high variance), region boundaries (edge_feather band), and
+  off-colour/anti-aliased pixels are preserved. `Describe` schema + 6 tests.
+  Demo `examples/clipart_flatten_demo.rs`. Chains after `BackgroundFlatten`;
+  wrap in `MetricGated` for a subtlety guarantee. Research synthesis at
+  `/mnt/v/output/zenfilters/clipart-cleanup-research.md`.
+  Built-in quantizer for v1; `zenquant` can supply a higher-quality palette later.
+  Possible v2: harder cartoon-flat mode (L0 / palette-snap), guided-filter polish,
+  dither for true-gradient regions.
+
 **Still missing (lower priority or needs external data):**
 - **Tone Curve Saturation refinement** — per-region saturation on the curve
 - **Lens Blur** — AI depth-based bokeh with bokeh shape styles

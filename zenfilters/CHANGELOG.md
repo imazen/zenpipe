@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Added
+- `ClipartFlatten` filter: flattens AI-clipart "waviness" / bubble-noise inside
+  nominally-flat colour regions while keeping crisp edges and intentional shading
+  (complement to `BackgroundFlatten`, which only touches the background). Built-in
+  OKLab k-means quantizer (with near-duplicate centroid merging) → connected
+  regions per palette colour → per-region mean + variance; eases flat-fill
+  interiors toward their clean region mean by `strength × region_flatness ×
+  boundary_keep × membership`, so shaded regions, region boundaries, and
+  anti-aliased/off-colour pixels are preserved. `Describe` schema + 6 tests.
+  `examples/clipart_flatten_demo.rs` runs it over a clipart dir with zensim-scored
+  before/after/diff output. (f45ca9b)
 - `BackgroundFlatten` filter: conservative, automated white-background flattening
   for e-commerce product photos. Estimates the border background and skips
   non-white-background shots (with a central-subject gate that rejects bright
