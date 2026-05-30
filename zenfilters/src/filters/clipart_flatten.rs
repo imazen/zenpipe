@@ -244,25 +244,6 @@ pub(crate) fn connected_components(labels: &[u16], w: usize, h: usize, rid: &mut
     next
 }
 
-/// Per-pixel gradient magnitude of a plane (central differences, edge-clamped).
-///
-/// Used to tell a genuinely-flat fill (≈0 gradient — safe to snap to a flat
-/// colour) from a smooth shading gradient (consistent nonzero gradient — must
-/// NOT be snapped, or quantization-cell boundaries become visible steps/bands).
-fn gradient_magnitude(plane: &[f32], w: usize, h: usize, out: &mut [f32]) {
-    for y in 0..h {
-        let yp = y.saturating_sub(1);
-        let yn = (y + 1).min(h - 1);
-        for x in 0..w {
-            let xp = x.saturating_sub(1);
-            let xn = (x + 1).min(w - 1);
-            let gx = plane[y * w + xn] - plane[y * w + xp];
-            let gy = plane[yn * w + x] - plane[yp * w + x];
-            out[y * w + x] = (gx * gx + gy * gy).sqrt();
-        }
-    }
-}
-
 impl Filter for ClipartFlatten {
     fn channel_access(&self) -> ChannelAccess {
         ChannelAccess::L_AND_CHROMA
@@ -382,28 +363,11 @@ impl Filter for ClipartFlatten {
         chamfer_distance(&boundary, wu, hu, &mut dist);
         let feather = self.edge_feather.max(0.25);
 
-        // Per-pixel gradient of the guided base → "is this a flat fill?" gate.
-        // Snapping to a single region-mean colour only looks right where the
-        // region is actually flat. Where the guided base has a consistent slope
-        // (smooth shading / gradient background), snapping each quantization
-        // cell to its own constant produces a visible step at the cell boundary
-        // (the banding bug). Gate the snap down as local gradient rises so flat
-        // fills (logos, hero blocks, clipart) collapse fully while gradients are
-        // left to the guided base (waviness already removed, no steps).
-        let mut grad = ctx.take_f32(n);
-        gradient_magnitude(&gl, wu, hu, &mut grad);
-        // Gradient thresholds in Oklab-L per pixel: below g_lo = flat (full
-        // snap), above g_hi = sloped (no snap). Tie to `flatness` so the gate
-        // tracks the same "what counts as flat" scale as the region gate.
-        let g_lo = (eps * 4.0).sqrt() * 0.5;
-        let g_hi = (eps * 4.0).sqrt() * 2.0;
-
         // target = lerp(guided_base, region_mean, snap); result = lerp(orig, target, strength)
         for i in 0..n {
             let r = rid[i] as usize;
             let boundary_keep = smoothstep(0.0, feather, dist[i]);
-            let flat_here = 1.0 - smoothstep(g_lo, g_hi, grad[i]);
-            let snap = cartoon * region_flat[r] * boundary_keep * flat_here;
+            let snap = cartoon * region_flat[r] * boundary_keep;
             let tl = gl[i] + (mean[r][0] - gl[i]) * snap;
             let ta = ga[i] + (mean[r][1] - ga[i]) * snap;
             let tb = gb[i] + (mean[r][2] - gb[i]) * snap;
@@ -412,7 +376,6 @@ impl Filter for ClipartFlatten {
             planes.b[i] += (tb - planes.b[i]) * strength;
         }
 
-        ctx.return_f32(grad);
         ctx.return_f32(dist);
         ctx.return_u8(boundary);
         ctx.return_f32(gb);

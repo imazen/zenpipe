@@ -5,9 +5,7 @@
 #![cfg(feature = "experimental")]
 
 use zenfilters::FilterContext;
-use zenfilters::blur_internals::{
-    GaussianKernel, gaussian_blur_plane, gaussian_blur_plane_scalar,
-};
+use zenfilters::blur_internals::{GaussianKernel, gaussian_blur_plane, gaussian_blur_plane_scalar};
 
 fn make_plane(w: usize, h: usize) -> Vec<f32> {
     let mut v = vec![0.0f32; w * h];
@@ -68,6 +66,8 @@ fn dump_row_divergence_profile() {
             mn = mn.min(d);
             mx = mx.max(d);
         }
-        eprintln!("worst row {y}: signed diff range [{mn:.5}, {mx:.5}] (flat band if both same sign & similar)");
+        eprintln!(
+            "worst row {y}: signed diff range [{mn:.5}, {mx:.5}] (flat band if both same sign & similar)"
+        );
     }
 }

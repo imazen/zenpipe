@@ -13,9 +13,7 @@
 #![cfg(feature = "experimental")]
 
 use zenfilters::FilterContext;
-use zenfilters::blur_internals::{
-    GaussianKernel, gaussian_blur_plane, gaussian_blur_plane_scalar,
-};
+use zenfilters::blur_internals::{GaussianKernel, gaussian_blur_plane, gaussian_blur_plane_scalar};
 
 /// Build a banding-prone test plane: a large near-flat region carrying a gentle
 /// vertical gradient plus low-amplitude content (the regime where AI-clipart
