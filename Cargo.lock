@@ -1428,15 +1428,14 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a2883a4596ba0212a4f005c29f55cc7d4e91603cc6574a91fe67338091849ac"
+version = "0.3.2"
 dependencies = [
  "archmage",
  "bytemuck",
  "enough",
  "hashbrown 0.16.1",
  "imgref",
+ "jxl-encoder-macros",
  "jxl-encoder-simd",
  "once_cell",
  "rgb",
@@ -1445,12 +1444,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jxl-encoder-macros"
+version = "0.3.2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "jxl-encoder-simd"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f88c8baa7c73e9a4f7fdd58b9d996f2fef793416b4ea099f16adbe9b454e39f6"
+version = "0.3.2"
 dependencies = [
  "archmage",
+ "libm",
  "magetypes",
 ]
 
@@ -4053,7 +4060,7 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
  "almost-enough",
  "enough",

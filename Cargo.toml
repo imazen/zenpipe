@@ -189,6 +189,9 @@ zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
 zennode = { path = "../zennode/zennode" }
 zennode-derive = { path = "../zennode/zennode-derive" }
 zencodec = { path = "../zencodec" }
+# Unpublished: zenjxl's encoder (0.3.2 not yet on crates.io). Required for the
+# `jxl-encode` feature; stripped at release time like the other path patches.
+jxl-encoder = { path = "../jxl-encoder/jxl-encoder" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]
