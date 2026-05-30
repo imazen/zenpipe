@@ -93,3 +93,81 @@ fn clipart_gentle_no_visible_band() {
         "gentle ClipartFlatten introduced a visible horizontal band: {mag:.4} L at row {y}"
     );
 }
+
+/// FULL cartoon mode must ALSO not band a smooth gradient background: the
+/// gradient gate suppresses the region-mean snap where the guided base is
+/// sloped, so quantization-cell boundaries don't become visible steps.
+#[test]
+fn clipart_cartoon_no_visible_band_on_gradient() {
+    let (y, mag) = run(1.0);
+    assert!(
+        mag < 0.02,
+        "cartoon ClipartFlatten banded a smooth gradient: {mag:.4} L at row {y}"
+    );
+}
+
+/// A multi-flat-colour "logo" with undulation: several large constant-colour
+/// blocks, each carrying low-amplitude waviness. Full cartoon mode MUST still
+/// collapse the undulation inside the flat blocks (that's its whole purpose for
+/// logos / marketing heroes / clipart). This guards against the gradient gate
+/// over-suppressing and turning cartoon into a no-op.
+fn flat_blocks_with_undulation(w: usize, h: usize) -> OklabPlanes {
+    let mut p = OklabPlanes::new(w as u32, h as u32);
+    // Four constant base colours in quadrants (distinct in L and chroma).
+    let bases = [
+        [0.55f32, 0.10, -0.05],
+        [0.72, -0.08, 0.06],
+        [0.40, 0.04, 0.10],
+        [0.85, 0.0, 0.0],
+    ];
+    for y in 0..h {
+        for x in 0..w {
+            let q = (if x >= w / 2 { 1 } else { 0 }) + (if y >= h / 2 { 2 } else { 0 });
+            let b = bases[q];
+            // Low-amplitude undulation (the artifact to remove) — smooth, not noise.
+            let u = ((x as f32 * 0.13).sin() + (y as f32 * 0.11).sin()) * 0.012;
+            let i = y * w + x;
+            p.l[i] = b[0] + u;
+            p.a[i] = b[1] + u * 0.3;
+            p.b[i] = b[2] - u * 0.3;
+        }
+    }
+    p
+}
+
+fn region_l_var(l: &[f32], w: usize, x0: usize, x1: usize, y0: usize, y1: usize) -> f32 {
+    let mut s = 0.0f32;
+    let mut c = 0usize;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            s += l[y * w + x];
+            c += 1;
+        }
+    }
+    let m = s / c as f32;
+    let mut v = 0.0f32;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let d = l[y * w + x] - m;
+            v += d * d;
+        }
+    }
+    v / c as f32
+}
+
+#[test]
+fn clipart_cartoon_still_flattens_flat_blocks() {
+    let (w, h) = (256usize, 256usize);
+    let p = flat_blocks_with_undulation(w, h);
+    let before = region_l_var(&p.l, w, 8, w / 2 - 8, 8, h / 2 - 8); // top-left block interior
+    let mut out = p;
+    let mut f = ClipartFlatten::default();
+    f.cartoon = 1.0;
+    f.apply(&mut out, &mut FilterContext::new());
+    let after = region_l_var(&out.l, w, 8, w / 2 - 8, 8, h / 2 - 8);
+    eprintln!("flat-block interior L-variance: before={before:.6} after={after:.6}");
+    assert!(
+        after < before * 0.5,
+        "cartoon must still collapse undulation in flat blocks: var {before:.6} -> {after:.6}"
+    );
+}
