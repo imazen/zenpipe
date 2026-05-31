@@ -303,7 +303,11 @@ fn codecs() -> Vec<Support> {
         orient_from_exif: V::Gap(G_ORIENT_EXIF_NORM),
         orient_from_field: V::Gap(G_ORIENT_FIELD),
         xmp: V::Ok,
-        cicp: V::Gap(G_CICP_NATIVE), // codestream color encoding not driven from Metadata::cicp
+        // Metadata::cicp now drives the JXL codestream enum color encoding
+        // (zencodec::resolve_color_emit under ColorPolicy::Balanced); a redundant
+        // ICC is dropped (JXL is cicp_safe_sole_carrier) and the decoder
+        // synthesizes one back from the enum, so `Icc::PresentReencoded` holds.
+        cicp: V::Ok,
     });
 
     v

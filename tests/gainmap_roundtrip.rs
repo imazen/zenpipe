@@ -3,7 +3,8 @@
 //! Verifies that ImageJob preserves gain maps through the pipeline:
 //! decode → process → encode, with automatic geometry tracking.
 
-#![cfg(all(feature = "job", feature = "nodes-jpeg"))]
+// Gain-map encode/decode lives behind `job-ultrahdr` (which implies `job`).
+#![cfg(all(feature = "job-ultrahdr", feature = "nodes-jpeg"))]
 
 use zenpipe::job::{GainMapMode, ImageJob};
 

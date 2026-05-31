@@ -127,7 +127,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     };
 
     // Step 2: Serialize ISO 21496-1 metadata in the AVIF tmap container format.
-    let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496(
+    let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496_fmt(
         metadata,
         zenjpeg::ultrahdr::Iso21496Format::AvifTmap,
     );

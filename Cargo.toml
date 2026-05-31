@@ -41,8 +41,16 @@ zennode = ["dep:zennode", "dep:zencodecs", "zencodecs/zennode"]
 # Local-dev only: gate bridge tests requiring zennode_defs modules in zenresize/zenlayout.
 # These modules are WIP (commented out in those crates) and not available via git. Never enabled in CI.
 zennode-defs = ["zennode"]
-# High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS + gain map support).
-job = ["zennode", "std", "zencodecs/cms", "zencodecs/jpeg-ultrahdr"]
+# High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS).
+# `jpeg-ultrahdr` (gain-map encode) is intentionally NOT forced here, so plain
+# web delivery (decode -> resize -> re-encode) builds without the UltraHDR stack.
+# The zencodecs<->zenjpeg gain-map bridge (gainmap.rs params_to_metadata /
+# metadata_to_params) is ported to the channels-based GainMapParams; opt in with
+# `job-ultrahdr` for gain-map encode.
+job = ["zennode", "std", "zencodecs/cms"]
+# Opt-in: `job` plus gain-map (UltraHDR) encode via the zencodecs<->zenjpeg
+# bridge. Roundtrip-tested (tests/gainmap_roundtrip.rs).
+job-ultrahdr = ["job", "zencodecs/jpeg-ultrahdr"]
 # JSON Schema / OpenAPI schema export from node registry.
 json-schema = ["zennode", "zennode/json-schema", "zencodecs/zennode", "dep:serde_json"]
 # Imageflow v2 compat: translate v2 Node/EncoderPreset/Framewise/Build001 to zen pipeline.

@@ -176,9 +176,10 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
+    use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
-        UhdrRawImage, encode_ultrahdr,
+        encode_ultrahdr,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -206,13 +207,13 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
         rgba_data.extend_from_slice(&1.0f32.to_le_bytes()); // alpha = 1.0
     }
 
-    let hdr = UhdrRawImage::from_data(
+    let hdr = pixel_buffer_from_vec(
+        rgba_data,
         width,
         height,
-        UhdrPixelFormat::Rgba32F,
+        UhdrPixelFormat::RgbaF32,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Linear,
-        rgba_data,
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
@@ -246,9 +247,10 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
+    use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
-        UhdrRawImage, encode_ultrahdr,
+        encode_ultrahdr,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -266,13 +268,13 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     let (buf, _, _) = img.to_contiguous_buf();
     let rgba_bytes: &[u8] = bytemuck::cast_slice(buf.as_ref());
 
-    let hdr = UhdrRawImage::from_data(
+    let hdr = pixel_buffer_from_vec(
+        rgba_bytes.to_vec(),
         width,
         height,
-        UhdrPixelFormat::Rgba32F,
+        UhdrPixelFormat::RgbaF32,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Linear,
-        rgba_bytes.to_vec(),
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
@@ -306,8 +308,9 @@ pub(crate) fn encode_with_precomputed_gainmap(
     metadata: &crate::gainmap::GainMapMetadata,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
+    use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
-        UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage, encode_with_gainmap,
+        UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, encode_with_gainmap,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -321,13 +324,13 @@ pub(crate) fn encode_with_precomputed_gainmap(
         }
     };
 
-    let sdr = UhdrRawImage::from_data(
+    let sdr = pixel_buffer_from_vec(
+        sdr_pixels.to_vec(),
         width,
         height,
         pixel_format,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Srgb,
-        sdr_pixels.to_vec(),
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 

@@ -696,9 +696,18 @@ impl<'a> ImageJob<'a> {
         let try_extract_gainmap =
             self.gain_map_mode == GainMapMode::Preserve && format_may_have_gainmap;
 
+        // Gain-map extraction requires the `job-ultrahdr` feature (gain-map
+        // encode/decode lives behind `zencodecs/jpeg-ultrahdr`). Without it we
+        // always take the plain decode path — gain maps are simply not carried.
+        #[cfg(feature = "job-ultrahdr")]
         let (source, gain_map_sidecar) = if try_extract_gainmap {
             self.decode_source_with_gainmap(input_bytes)?
         } else {
+            (self.decode_source(input_bytes, &image_info)?, None)
+        };
+        #[cfg(not(feature = "job-ultrahdr"))]
+        let (source, gain_map_sidecar) = {
+            let _ = try_extract_gainmap;
             (self.decode_source(input_bytes, &image_info)?, None)
         };
 
@@ -797,6 +806,7 @@ impl<'a> ImageJob<'a> {
     /// Returns `(base_source, Option<SidecarStream>)`. The gain map is
     /// wrapped as a SidecarStream for the orchestration layer to track
     /// through geometry transforms.
+    #[cfg(feature = "job-ultrahdr")]
     fn decode_source_with_gainmap(
         &self,
         data: &[u8],
@@ -1006,7 +1016,9 @@ impl<'a> ImageJob<'a> {
         }
 
         // Prepare gain map data for re-embedding (if sidecar was preserved).
-        // These live outside the encode_request borrow scope.
+        // These live outside the encode_request borrow scope. Gated on
+        // `job-ultrahdr`: without it there is never a gain-map sidecar.
+        #[cfg(feature = "job-ultrahdr")]
         let gain_map_data = output.sidecar.and_then(|sidecar| {
             if let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind {
                 let metadata = zencodecs::gainmap::params_to_metadata(params);
@@ -1033,6 +1045,7 @@ impl<'a> ImageJob<'a> {
             target_format,
             zencodec::ImageFormat::Jpeg | zencodec::ImageFormat::Avif | zencodec::ImageFormat::Jxl
         );
+        #[cfg(feature = "job-ultrahdr")]
         if target_supports_gainmap {
             if let Some((ref gm, ref meta)) = gain_map_data {
                 encode_request =
@@ -1046,7 +1059,13 @@ impl<'a> ImageJob<'a> {
         // When a gain map is present, use one-shot encode (gain map embedding
         // requires full-frame access for MPF/tmap/jhgm assembly).
         // Otherwise, try streaming encode with one-shot fallback.
+        #[cfg(feature = "job-ultrahdr")]
         let has_gain_map_data = gain_map_data.is_some();
+        #[cfg(not(feature = "job-ultrahdr"))]
+        let has_gain_map_data = {
+            let _ = target_supports_gainmap;
+            false
+        };
         let streaming_result = if has_gain_map_data {
             None // Force one-shot path
         } else {
@@ -1086,6 +1105,7 @@ impl<'a> ImageJob<'a> {
                     .with_registry(&self.registry);
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
+                #[cfg(feature = "job-ultrahdr")]
                 if target_supports_gainmap {
                     if let Some((ref gm, ref meta)) = gain_map_data {
                         oneshot_request =

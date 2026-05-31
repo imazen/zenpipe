@@ -18,7 +18,8 @@
 //! routed conditionally via a `WorkingFormat` enum), these tests will
 //! activate and pass without further code changes.
 
-#![cfg(all(feature = "job", feature = "nodes-jpeg"))]
+// Exercises gain-map / HDR APIs behind `job-ultrahdr` (which implies `job`).
+#![cfg(all(feature = "job-ultrahdr", feature = "nodes-jpeg"))]
 
 use zenpipe::job::{CmsMode, ImageJob};
 

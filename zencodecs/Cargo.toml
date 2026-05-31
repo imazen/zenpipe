@@ -24,6 +24,9 @@ linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
 zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec", "trellis"] }
+# UltraHDR gain-map math + the `pixel_buffer_from_vec` constructor (unifies with
+# the copy zenjpeg pulls in). Gated with jpeg-ultrahdr.
+ultrahdr-core = { version = "0.5.0", optional = true, default-features = false }
 zenwebp = { path = "../../zenwebp", optional = true, features = ["zencodec"] }
 zengif = { path = "../../zengif", optional = true, features = ["zencodec"] }
 zenavif = { path = "../../zenavif", optional = true, features = ["zencodec"] }
@@ -54,7 +57,7 @@ std = []
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr"]
+jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
