@@ -38,6 +38,20 @@ Before training a neural model, zenfilters needs all the adjustment capabilities
 - Validation/demo: `examples/whitebg_corpus.rs` (experimental) — zensim-scored,
   scaled-back/skipped, before/after/diff images + CSV to `/mnt/v/output/zenfilters/whitebg`.
 
+**DONE (2026-05-31, validated gentle white-bg noise removal — "the one"):**
+- The blessed recipe for gently removing sub-pixel render noise from near-white
+  backgrounds without touching the product/shadows or creating edge lines lives in
+  `examples/ai_corpus_flatten.rs::white_snap` and is documented in
+  `docs/white-background-cleanup.md`. Recipe: border-median guard → measure the
+  image's own tiny white band → border-connected flood (change-allowed mask) →
+  snap to **pure 255**, feathered by luminance AND by a **large (~64px) chamfer
+  spatial feather** from the nearest non-background pixel (so the 255→shadow
+  transition is imperceptible and product/shadow pixels are never touched).
+  Validated on the AI product corpus (713/750 cleaned, shadows preserved, no
+  halos). `BackgroundFlatten` at full strength over-reached on light/colored
+  products — see the doc's "approaches that failed" for why. Candidate to promote
+  to a library `BackgroundClean` filter.
+
 **DONE (2026-05-29, AI-clipart cleanup — complement to white-bg flatten):**
 - ~~Clip-art waviness/bubble-noise flatten~~ → `ClipartFlatten`
   (`src/filters/clipart_flatten.rs`), v2: flattens nominally-flat colour regions
