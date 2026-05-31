@@ -437,7 +437,7 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { max_colors: 35000, min_flat_frac: 0.60, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 8.0 };
+    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 8.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
@@ -512,9 +512,11 @@ fn main() {
     let root = Path::new(&root);
     // Cartoon dirs are flat-art candidates; `is_flat_art` skips photographic
     // content (e.g. marketing heroes) within them. Products get the white snap.
-    let jobs: [(&str, Mode); 6] = [
+    // illustrations are detailed painterly art (~290k colours), not flat clipart,
+    // so they're excluded from the cartoon pass. infographics stay in the list
+    // but is_flat_art skips the complex/photographic ones.
+    let jobs: [(&str, Mode); 5] = [
         ("icons", Mode::Cartoon),
-        ("illustrations", Mode::Cartoon),
         ("clipart", Mode::Cartoon),
         ("infographics", Mode::Cartoon),
         ("marketing", Mode::Cartoon),
