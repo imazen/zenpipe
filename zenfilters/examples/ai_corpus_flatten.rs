@@ -1,22 +1,24 @@
-//! ai_corpus_flatten — batch-flatten the AI image corpus, whole-frame.
+//! ai_corpus_flatten — batch-flatten the AI image corpus, whole-frame, re-run-safe.
 //!
 //! Mapping (top-level dirs under `--root`, recursed):
-//!   - `icons`, `infographics`, `marketing` → `ClipartFlatten` cartoon
-//!   - `products`                            → `BackgroundFlatten` white-flatten
+//!   - `icons`, `infographics`, `marketing` → `ClipartFlatten` cartoon (`--cartoon`)
+//!   - `products`                            → conservative white-background snap
+//!
+//! White snap (ported from the gen-clothing `clean_bg.clean_array` approach that
+//! the corpus was validated on): only the *very*-near-white, border-connected
+//! background is touched. The editable band is a TINY measured range around the
+//! image's average white (mean/std of its near-white pixels); anything darker —
+//! shadows, the product, its interior whites — is below the band and left
+//! exactly as-is, so shadow edges stay soft (no hard mask boundary). The snap is
+//! feathered across the band and skips non-white / coloured backgrounds.
 //!
 //! Re-run-safe naming (per image, alongside it):
 //!   - `_orig_<name>`  — pristine original, written ONCE, never overwritten
 //!   - `<name>`        — the flattened result (takes the original filename)
 //!   - `_diff_<name>.png` — coloured 10× diff (orig vs flattened)
-//!   - `_skip_<name>`  — marker for a non-candidate (and `<name>` is restored to the original)
+//!   - `_skip_<name>`  — marker for a non-candidate (and `<name>` is the original)
 //! Every run reads the pristine `_orig_` as its source, so repeated runs never
 //! degrade the image and never clobber the original.
-//!
-//! White flatten is bounded to the TRUE background: after flattening, a strict
-//! border-seeded flood fill through near-white / low-saturation pixels defines
-//! the background; the original is restored everywhere outside it. So the diff is
-//! always a single contiguous region from the edges inward — light products,
-//! coloured products, and shadows are never touched in their interior.
 
 #![allow(clippy::needless_range_loop)]
 
@@ -24,8 +26,8 @@ use std::path::Path;
 
 use image::{ImageBuffer, Rgb, RgbImage};
 
-use zenfilters::filters::{BackgroundFlatten, ClipartFlatten};
-use zenfilters::{Filter, FilterContext, Pipeline, PipelineConfig, apply_to_buffer};
+use zenfilters::filters::ClipartFlatten;
+use zenfilters::{FilterContext, Pipeline, PipelineConfig, apply_to_buffer};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -33,52 +35,34 @@ enum Mode {
     White,
 }
 
-// ─── pipeline bridge (whole-frame: BackgroundFlatten/ClipartFlatten are
-//     neighborhood filters, so the pipeline processes the full frame at once) ──
+// ─── cartoon (ClipartFlatten) — whole-frame neighborhood filter ──────
 
-fn run_filter(img: &RgbImage, filter: Box<dyn Filter>) -> Option<RgbImage> {
+fn cartoon_flatten(img: &RgbImage, cartoon: f32) -> Option<RgbImage> {
     let (w, h) = img.dimensions();
     let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
     let input = zenpixels::buffer::PixelBuffer::from_vec(img.as_raw().clone(), w, h, desc).ok()?;
     let mut pipeline = Pipeline::new(PipelineConfig::default()).ok()?;
-    pipeline.push(filter);
+    let mut f = ClipartFlatten::default();
+    f.cartoon = cartoon;
+    pipeline.push(Box::new(f));
     let mut ctx = FilterContext::new();
     let out = apply_to_buffer(&pipeline, &input, true, &mut ctx).ok()?;
     ImageBuffer::from_raw(w, h, out.copy_to_contiguous_bytes())
 }
 
-fn flatten(img: &RgbImage, mode: Mode) -> Option<RgbImage> {
-    match mode {
-        Mode::White => {
-            let mut f = BackgroundFlatten::default();
-            f.auto_skip = false; // candidacy + strict clip handle non-white; don't let the
-                                 // central-subject gate no-op clean shots
-            run_filter(img, Box::new(f))
-        }
-        Mode::Cartoon => {
-            let mut f = ClipartFlatten::default();
-            f.cartoon = 1.0;
-            run_filter(img, Box::new(f))
-        }
-    }
+// ─── helpers ─────────────────────────────────────────────────────────
+
+#[inline]
+fn min_chan(p: &Rgb<u8>) -> u8 {
+    p[0].min(p[1]).min(p[2])
 }
-
-// ─── luminance / saturation helpers ─────────────────────────────────
-
 #[inline]
 fn luma(p: &Rgb<u8>) -> f32 {
     (0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32) / 255.0
 }
-#[inline]
-fn sat(p: &Rgb<u8>) -> f32 {
-    let mx = p[0].max(p[1]).max(p[2]) as f32;
-    let mn = p[0].min(p[1]).min(p[2]) as f32;
-    (mx - mn) / 255.0
-}
-
 fn region_luma(img: &RgbImage, x0: u32, x1: u32, y0: u32, y1: u32) -> f32 {
-    let mut s = 0.0f32;
-    let mut c = 0.0f32;
+    let mut s = 0.0;
+    let mut c = 0.0;
     for y in y0..y1 {
         for x in x0..x1 {
             s += luma(img.get_pixel(x, y));
@@ -88,22 +72,18 @@ fn region_luma(img: &RgbImage, x0: u32, x1: u32, y0: u32, y1: u32) -> f32 {
     if c > 0.0 { s / c } else { 0.0 }
 }
 
-/// Mean luminance of the four corner patches (reliable background sample).
-fn corner_bg_luma(img: &RgbImage) -> f32 {
-    let (w, h) = img.dimensions();
-    let cs = (w.min(h) / 8).max(4);
-    0.25 * (region_luma(img, 0, cs, 0, cs)
-        + region_luma(img, w - cs, w, 0, cs)
-        + region_luma(img, 0, cs, h - cs, h)
-        + region_luma(img, w - cs, w, h - cs, h))
+#[inline]
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    if (e1 - e0).abs() < 1e-6 {
+        return if x < e0 { 0.0 } else { 1.0 };
+    }
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
-// ─── candidacy / skip ────────────────────────────────────────────────
+// ─── cartoon candidacy (corner gradient) ─────────────────────────────
 
-/// Judged from the corners (centred / on-model subjects contaminate edge bands
-/// but not corners). Skip a strong corner gradient (backdrop we won't climb);
-/// white mode also skips non-near-white corners (nothing to flatten).
-fn is_candidate(img: &RgbImage, mode: Mode, grad_thresh: f32) -> bool {
+fn cartoon_candidate(img: &RgbImage, grad_thresh: f32) -> bool {
     let (w, h) = img.dimensions();
     if w < 8 || h < 8 {
         return false;
@@ -115,41 +95,56 @@ fn is_candidate(img: &RgbImage, mode: Mode, grad_thresh: f32) -> bool {
     let br = region_luma(img, w - cs, w, h - cs, h);
     let vgrad = (0.5 * (tl + tr) - 0.5 * (bl + br)).abs();
     let hgrad = (0.5 * (tl + bl) - 0.5 * (tr + br)).abs();
-    if vgrad > grad_thresh || hgrad > grad_thresh {
-        return false;
-    }
-    if mode == Mode::White && 0.25 * (tl + tr + bl + br) < 0.80 {
-        return false;
-    }
-    true
+    vgrad <= grad_thresh && hgrad <= grad_thresh
 }
 
-// ─── strict background clip (white mode) ─────────────────────────────
+// ─── conservative white-background snap ──────────────────────────────
 
-/// Restore the original everywhere that is NOT part of the contiguous,
-/// border-connected near-white background. A 4-connected flood fill seeds from
-/// the image border and grows only through pixels that are near the background
-/// level (`luma > bg - luma_margin`) and low-saturation (`sat < sat_thresh`),
-/// so it halts at any product edge — including a light/cream product or a
-/// coloured one. The flattened result is kept only inside that mask.
-fn clip_to_background(orig: &RgbImage, flat: &RgbImage, luma_margin: f32, sat_thresh: f32) -> RgbImage {
+/// Snap the border-connected, very-near-white background to pure white, within
+/// a tiny measured band around the image's average white. Returns (result,
+/// snapped). `snapped == false` => non-white background / nothing to do (skip).
+fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32) -> (RgbImage, bool) {
     let (w, h) = orig.dimensions();
     let (wu, hu) = (w as usize, h as usize);
-    let bg = corner_bg_luma(orig);
-    let lo = bg - luma_margin;
 
-    let keep = |x: u32, y: u32| -> bool {
-        let p = orig.get_pixel(x, y);
-        luma(p) > lo && sat(p) < sat_thresh
+    // Border min-channel stats (the background sample).
+    let mut border: Vec<u8> = Vec::new();
+    for x in 0..w {
+        border.push(min_chan(orig.get_pixel(x, 0)));
+        border.push(min_chan(orig.get_pixel(x, h - 1)));
+    }
+    for y in 0..h {
+        border.push(min_chan(orig.get_pixel(0, y)));
+        border.push(min_chan(orig.get_pixel(w - 1, y)));
+    }
+    border.sort_unstable();
+    let median = border[border.len() / 2];
+    if median < skip_floor {
+        return (orig.clone(), false); // not a near-white background shot
+    }
+
+    // Average white = mean/std of the near-white border pixels (min-chan >= 244).
+    let near: Vec<f32> = border.iter().filter(|&&v| v >= 244).map(|&v| v as f32).collect();
+    let (white_mean, white_std) = if near.len() >= 8 {
+        let m = near.iter().sum::<f32>() / near.len() as f32;
+        let var = near.iter().map(|v| (v - m) * (v - m)).sum::<f32>() / near.len() as f32;
+        (m, var.sqrt())
+    } else {
+        (252.0, 1.0)
     };
+    // Tiny editable band: a few levels / std below the average white.
+    let thresh = (white_mean - (5.0 + 4.0 * white_std)).clamp(244.0, 252.0);
+    let thresh_u8 = thresh as u8;
 
+    // Flood-fill the border-connected near-white region (min-chan >= thresh).
+    let keep = |x: u32, y: u32| min_chan(orig.get_pixel(x, y)) >= thresh_u8;
     let mut mask = vec![0u8; wu * hu];
     let mut stack: Vec<u32> = Vec::new();
-    let push = |x: u32, y: u32, mask: &mut [u8], stack: &mut Vec<u32>| {
+    let push = |x: u32, y: u32, mask: &mut [u8], st: &mut Vec<u32>| {
         let i = (y as usize) * wu + x as usize;
         if mask[i] == 0 && keep(x, y) {
             mask[i] = 1;
-            stack.push(i as u32);
+            st.push(i as u32);
         }
     };
     for x in 0..w {
@@ -159,6 +154,9 @@ fn clip_to_background(orig: &RgbImage, flat: &RgbImage, luma_margin: f32, sat_th
     for y in 0..h {
         push(0, y, &mut mask, &mut stack);
         push(w - 1, y, &mut mask, &mut stack);
+    }
+    if stack.is_empty() {
+        return (orig.clone(), false);
     }
     while let Some(idx) = stack.pop() {
         let i = idx as usize;
@@ -177,15 +175,25 @@ fn clip_to_background(orig: &RgbImage, flat: &RgbImage, luma_margin: f32, sat_th
         }
     }
 
+    // Feathered snap to pure white across the tiny band [thresh, thresh+ramp]:
+    // pixels at the bottom of the band are barely touched (soft shadow-side
+    // edge), the true white is taken fully to 255.
     let mut out = orig.clone();
     for y in 0..h {
         for x in 0..w {
-            if mask[(y as usize) * wu + x as usize] == 1 {
-                out.put_pixel(x, y, *flat.get_pixel(x, y));
+            if mask[(y as usize) * wu + x as usize] == 0 {
+                continue;
             }
+            let p = *orig.get_pixel(x, y);
+            let wgt = smoothstep(thresh, thresh + ramp, min_chan(&p) as f32);
+            if wgt <= 0.0 {
+                continue;
+            }
+            let mix = |c: u8| (c as f32 + (255.0 - c as f32) * wgt).round().clamp(0.0, 255.0) as u8;
+            out.put_pixel(x, y, Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
         }
     }
-    out
+    (out, true)
 }
 
 // ─── coloured, magnified diff ────────────────────────────────────────
@@ -227,7 +235,15 @@ fn is_output(name: &str) -> bool {
     name.starts_with("_orig_") || name.starts_with("_diff_") || name.starts_with("_skip_")
 }
 
-fn process_image(path: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, st: f32, stats: &mut Stats) {
+struct Cfg {
+    grad_thresh: f32,
+    amp: u32,
+    cartoon: f32,
+    skip_floor: u8,
+    ramp: f32,
+}
+
+fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
     let parent = match path.parent() {
         Some(p) => p,
         None => return,
@@ -239,16 +255,13 @@ fn process_image(path: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, s
     let stem = Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or(&name).to_string();
     let orig_path = parent.join(format!("_orig_{name}"));
 
-    // Write-once pristine backup: copy the (still-original) working file ONCE.
-    // On re-runs `_orig_` already exists and is never overwritten.
     if !orig_path.exists() {
         if let Err(e) = std::fs::copy(path, &orig_path) {
             eprintln!("error  backup {}: {e}", orig_path.display());
             stats.errors += 1;
-            return; // never overwrite the working file if the backup failed
+            return;
         }
     }
-    // Always flatten FROM the pristine original.
     let img = match image::open(&orig_path) {
         Ok(im) => im.to_rgb8(),
         Err(e) => {
@@ -258,8 +271,25 @@ fn process_image(path: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, s
         }
     };
 
-    if !is_candidate(&img, mode, grad_thresh) {
-        // Restore the original into the working slot and mark skipped.
+    let (flat, processed) = match mode {
+        Mode::White => white_snap(&img, cfg.skip_floor, cfg.ramp),
+        Mode::Cartoon => {
+            if cartoon_candidate(&img, cfg.grad_thresh) {
+                match cartoon_flatten(&img, cfg.cartoon) {
+                    Some(f) => (f, true),
+                    None => {
+                        eprintln!("error  cartoon {}", path.display());
+                        stats.errors += 1;
+                        return;
+                    }
+                }
+            } else {
+                (img.clone(), false)
+            }
+        }
+    };
+
+    if !processed {
         let _ = std::fs::copy(&orig_path, path);
         let _ = std::fs::copy(&orig_path, parent.join(format!("_skip_{name}")));
         let _ = std::fs::remove_file(parent.join(format!("_diff_{stem}.png")));
@@ -267,23 +297,7 @@ fn process_image(path: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, s
         return;
     }
 
-    let flat0 = match flatten(&img, mode) {
-        Some(f) => f,
-        None => {
-            eprintln!("error  flatten {}", path.display());
-            stats.errors += 1;
-            return;
-        }
-    };
-    // White flatten is bounded to the true background; cartoon is intentionally
-    // whole-image.
-    let flat = if mode == Mode::White {
-        clip_to_background(&img, &flat0, lm, st)
-    } else {
-        flat0
-    };
-    let diff = color_diff(&img, &flat, 242, amp);
-
+    let diff = color_diff(&img, &flat, 242, cfg.amp);
     let mut ok = true;
     if let Err(e) = flat.save(path) {
         eprintln!("error  save {}: {e}", path.display());
@@ -301,7 +315,7 @@ fn process_image(path: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, s
     }
 }
 
-fn walk(dir: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, st: f32, stats: &mut Stats) {
+fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) => {
@@ -312,12 +326,12 @@ fn walk(dir: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, st: f32, st
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            walk(&path, mode, grad_thresh, amp, lm, st, stats);
+            walk(&path, mode, cfg, stats);
             continue;
         }
         if let Some(n) = path.file_name().and_then(|s| s.to_str()) {
             if is_image(n) && !is_output(n) {
-                process_image(&path, mode, grad_thresh, amp, lm, st, stats);
+                process_image(&path, mode, cfg, stats);
             }
         }
     }
@@ -325,48 +339,52 @@ fn walk(dir: &Path, mode: Mode, grad_thresh: f32, amp: u32, lm: f32, st: f32, st
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut grad_thresh = 0.08f32;
-    let mut amp = 10u32;
-    let mut luma_margin = 0.06f32; // how far below the corner background a pixel may be and still be background
-    let mut sat_thresh = 0.10f32; // max saturation for a background pixel
+    let mut cfg = Cfg { grad_thresh: 0.08, amp: 10, cartoon: 1.0, skip_floor: 235, ramp: 6.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
-        let next = || args.get(i + 1).cloned();
+        let val = args.get(i + 1).cloned();
+        let mut took = false;
         match args[i].as_str() {
             "--root" => {
-                if let Some(v) = next() {
+                if let Some(v) = val {
                     root = v;
-                    i += 1;
+                    took = true;
                 }
             }
             "--grad-thresh" => {
-                if let Some(v) = next() {
-                    grad_thresh = v.parse().unwrap_or(grad_thresh);
-                    i += 1;
+                if let Some(v) = val {
+                    cfg.grad_thresh = v.parse().unwrap_or(cfg.grad_thresh);
+                    took = true;
                 }
             }
             "--diff-amp" => {
-                if let Some(v) = next() {
-                    amp = v.parse().unwrap_or(amp);
-                    i += 1;
+                if let Some(v) = val {
+                    cfg.amp = v.parse().unwrap_or(cfg.amp);
+                    took = true;
                 }
             }
-            "--luma-margin" => {
-                if let Some(v) = next() {
-                    luma_margin = v.parse().unwrap_or(luma_margin);
-                    i += 1;
+            "--cartoon" => {
+                if let Some(v) = val {
+                    cfg.cartoon = v.parse().unwrap_or(cfg.cartoon);
+                    took = true;
                 }
             }
-            "--sat-thresh" => {
-                if let Some(v) = next() {
-                    sat_thresh = v.parse().unwrap_or(sat_thresh);
-                    i += 1;
+            "--skip-floor" => {
+                if let Some(v) = val {
+                    cfg.skip_floor = v.parse().unwrap_or(cfg.skip_floor);
+                    took = true;
+                }
+            }
+            "--white-ramp" => {
+                if let Some(v) = val {
+                    cfg.ramp = v.parse().unwrap_or(cfg.ramp);
+                    took = true;
                 }
             }
             other => eprintln!("ignoring arg: {other}"),
         }
-        i += 1;
+        i += if took { 2 } else { 1 };
     }
 
     let root = Path::new(&root);
@@ -377,8 +395,8 @@ fn main() {
         ("products", Mode::White),
     ];
     println!(
-        "ai_corpus_flatten: root={} grad_thresh={grad_thresh} diff_amp={amp} luma_margin={luma_margin} sat_thresh={sat_thresh}",
-        root.display()
+        "ai_corpus_flatten: root={} cartoon={} grad_thresh={} skip_floor={} white_ramp={} diff_amp={}",
+        root.display(), cfg.cartoon, cfg.grad_thresh, cfg.skip_floor, cfg.ramp, cfg.amp
     );
     let mut total = Stats::default();
     for (dir, mode) in jobs {
@@ -388,7 +406,7 @@ fn main() {
             continue;
         }
         let mut s = Stats::default();
-        walk(&path, mode, grad_thresh, amp, luma_margin, sat_thresh, &mut s);
+        walk(&path, mode, &cfg, &mut s);
         let mn = if mode == Mode::Cartoon { "cartoon" } else { "white" };
         println!("  {dir:14} [{mn:7}]  processed={:<5} skipped={:<5} errors={}", s.processed, s.skipped, s.errors);
         total.processed += s.processed;
