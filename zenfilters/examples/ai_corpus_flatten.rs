@@ -62,22 +62,6 @@ fn min_chan(p: &Rgb<u8>) -> u8 {
     p[0].min(p[1]).min(p[2])
 }
 #[inline]
-fn luma(p: &Rgb<u8>) -> f32 {
-    (0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32) / 255.0
-}
-fn region_luma(img: &RgbImage, x0: u32, x1: u32, y0: u32, y1: u32) -> f32 {
-    let mut s = 0.0;
-    let mut c = 0.0;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            s += luma(img.get_pixel(x, y));
-            c += 1.0;
-        }
-    }
-    if c > 0.0 { s / c } else { 0.0 }
-}
-
-#[inline]
 fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
     if (e1 - e0).abs() < 1e-6 {
         return if x < e0 { 0.0 } else { 1.0 };
@@ -86,29 +70,120 @@ fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-// ─── cartoon candidacy (corner gradient) ─────────────────────────────
+// ─── cartoon candidacy: flat-art vs photographic ─────────────────────
 
-fn cartoon_candidate(img: &RgbImage, grad_thresh: f32) -> bool {
+/// True if the image is flat vector-style art (clipart / logos / icons /
+/// illustrations) rather than a photograph. Cartoon flattening only suits flat
+/// art; photographic heroes and continuous-tone images are skipped.
+///
+/// Flat art has FEW distinct colours (a handful of constant fills) — clipart
+/// ~12k, logos ~21k — whereas photos/complex infographics have 90k–120k. A
+/// flat-fraction alone fails (a smooth photographic sky reads as "flat"), so the
+/// primary test is a unique-colour cap (with early-exit), backed by a tight
+/// near-constant-fill fraction.
+fn is_flat_art(img: &RgbImage, max_colors: u32, min_flat_frac: f32) -> bool {
     let (w, h) = img.dimensions();
     if w < 8 || h < 8 {
         return false;
     }
-    let cs = (w.min(h) / 8).max(4);
-    let tl = region_luma(img, 0, cs, 0, cs);
-    let tr = region_luma(img, w - cs, w, 0, cs);
-    let bl = region_luma(img, 0, cs, h - cs, h);
-    let br = region_luma(img, w - cs, w, h - cs, h);
-    let vgrad = (0.5 * (tl + tr) - 0.5 * (bl + br)).abs();
-    let hgrad = (0.5 * (tl + bl) - 0.5 * (tr + br)).abs();
-    vgrad <= grad_thresh && hgrad <= grad_thresh
+    let mut set: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    for p in img.pixels() {
+        set.insert(((p[0] as u32) << 16) | ((p[1] as u32) << 8) | p[2] as u32);
+        if set.len() as u32 > max_colors {
+            return false; // too many distinct colours → photographic / continuous-tone
+        }
+    }
+    // Tight near-constant-fill fraction (subsampled): flat art is mostly exact fills.
+    let step = ((w.max(h) as f32) / 220.0).ceil() as u32;
+    let step = step.max(1);
+    let mut flat = 0u32;
+    let mut tot = 0u32;
+    let mut y = 0;
+    while y + step < h {
+        let mut x = 0;
+        while x + step < w {
+            let p = img.get_pixel(x, y);
+            let r = img.get_pixel(x + step, y);
+            let d = img.get_pixel(x, y + step);
+            let g = (0..3)
+                .map(|c| (p[c] as i32 - r[c] as i32).abs().max((p[c] as i32 - d[c] as i32).abs()))
+                .max()
+                .unwrap_or(0);
+            if g <= 2 {
+                flat += 1;
+            }
+            tot += 1;
+            x += step;
+        }
+        y += step;
+    }
+    tot > 0 && (flat as f32 / tot as f32) >= min_flat_frac
 }
 
 // ─── conservative white-background snap ──────────────────────────────
 
+/// Two-pass chamfer distance (in px) to the nearest `source[i] == 0` pixel.
+fn chamfer(source: &[u8], w: usize, h: usize) -> Vec<f32> {
+    const BIG: f32 = 1e9;
+    const D1: f32 = 1.0;
+    const D2: f32 = std::f32::consts::SQRT_2;
+    let mut d: Vec<f32> = source.iter().map(|&s| if s == 0 { 0.0 } else { BIG }).collect();
+    if w == 0 || h == 0 {
+        return d;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            let i = y * w + x;
+            if d[i] == 0.0 {
+                continue;
+            }
+            let mut b = d[i];
+            if x > 0 {
+                b = b.min(d[i - 1] + D1);
+            }
+            if y > 0 {
+                b = b.min(d[i - w] + D1);
+                if x > 0 {
+                    b = b.min(d[i - w - 1] + D2);
+                }
+                if x + 1 < w {
+                    b = b.min(d[i - w + 1] + D2);
+                }
+            }
+            d[i] = b;
+        }
+    }
+    for y in (0..h).rev() {
+        for x in (0..w).rev() {
+            let i = y * w + x;
+            if d[i] == 0.0 {
+                continue;
+            }
+            let mut b = d[i];
+            if x + 1 < w {
+                b = b.min(d[i + 1] + D1);
+            }
+            if y + 1 < h {
+                b = b.min(d[i + w] + D1);
+                if x + 1 < w {
+                    b = b.min(d[i + w + 1] + D2);
+                }
+                if x > 0 {
+                    b = b.min(d[i + w - 1] + D2);
+                }
+            }
+            d[i] = b;
+        }
+    }
+    d
+}
+
 /// Snap the border-connected, very-near-white background to pure white, within
-/// a tiny measured band around the image's average white. Returns (result,
-/// snapped). `snapped == false` => non-white background / nothing to do (skip).
-fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32) -> (RgbImage, bool) {
+/// a tiny measured band around the image's average white. The snap is faded out
+/// within `shadow_radius` px of any non-near-white ("no-go") pixel, so it never
+/// runs right up against a shadow/product edge (avoids a hard boundary). Returns
+/// (result, snapped); `snapped == false` => non-white background / nothing to do.
+fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) -> (RgbImage, bool) {
     let (w, h) = orig.dimensions();
     let (wu, hu) = (w as usize, h as usize);
 
@@ -180,17 +255,31 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32) -> (RgbImage, bool) {
         }
     }
 
-    // Feathered snap to pure white across the tiny band [thresh, thresh+ramp]:
-    // pixels at the bottom of the band are barely touched (soft shadow-side
-    // edge), the true white is taken fully to 255.
+    // Spatial distance from the nearest "no-go" pixel (anything not near-white:
+    // shadows, the product). The snap is faded out within `shadow_radius` px of
+    // those, so it stays a radius away from shadow/product edges.
+    let nogo_src: Vec<u8> = (0..wu * hu)
+        .map(|i| {
+            let (x, y) = ((i % wu) as u32, (i / wu) as u32);
+            if min_chan(orig.get_pixel(x, y)) >= thresh_u8 { 1 } else { 0 }
+        })
+        .collect();
+    let dist = chamfer(&nogo_src, wu, hu);
+    let radius = shadow_radius.max(0.5);
+
+    // Feathered snap to pure white: luminance feather across [thresh, thresh+ramp]
+    // AND spatial feather across [0, radius] from the nearest shadow/product.
     let mut out = orig.clone();
     for y in 0..h {
         for x in 0..w {
-            if mask[(y as usize) * wu + x as usize] == 0 {
+            let i = (y as usize) * wu + x as usize;
+            if mask[i] == 0 {
                 continue;
             }
             let p = *orig.get_pixel(x, y);
-            let wgt = smoothstep(thresh, thresh + ramp, min_chan(&p) as f32);
+            let w_lum = smoothstep(thresh, thresh + ramp, min_chan(&p) as f32);
+            let w_spatial = smoothstep(0.0, radius, dist[i]);
+            let wgt = w_lum * w_spatial;
             if wgt <= 0.0 {
                 continue;
             }
@@ -241,13 +330,15 @@ fn is_output(name: &str) -> bool {
 }
 
 struct Cfg {
-    grad_thresh: f32,
+    max_colors: u32,
+    min_flat_frac: f32,
     amp: u32,
     cartoon: f32,
     waviness: f32,
     flatness: f32,
     skip_floor: u8,
     ramp: f32,
+    shadow_radius: f32,
 }
 
 fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
@@ -279,9 +370,9 @@ fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
     };
 
     let (flat, processed) = match mode {
-        Mode::White => white_snap(&img, cfg.skip_floor, cfg.ramp),
+        Mode::White => white_snap(&img, cfg.skip_floor, cfg.ramp, cfg.shadow_radius),
         Mode::Cartoon => {
-            if cartoon_candidate(&img, cfg.grad_thresh) {
+            if is_flat_art(&img, cfg.max_colors, cfg.min_flat_frac) {
                 match cartoon_flatten(&img, cfg.cartoon, cfg.waviness, cfg.flatness) {
                     Some(f) => (f, true),
                     None => {
@@ -346,7 +437,7 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { grad_thresh: 0.08, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0 };
+    let mut cfg = Cfg { max_colors: 35000, min_flat_frac: 0.60, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 8.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
@@ -359,9 +450,15 @@ fn main() {
                     took = true;
                 }
             }
-            "--grad-thresh" => {
+            "--min-flat-frac" => {
                 if let Some(v) = val {
-                    cfg.grad_thresh = v.parse().unwrap_or(cfg.grad_thresh);
+                    cfg.min_flat_frac = v.parse().unwrap_or(cfg.min_flat_frac);
+                    took = true;
+                }
+            }
+            "--max-colors" => {
+                if let Some(v) = val {
+                    cfg.max_colors = v.parse().unwrap_or(cfg.max_colors);
                     took = true;
                 }
             }
@@ -401,21 +498,31 @@ fn main() {
                     took = true;
                 }
             }
+            "--shadow-radius" => {
+                if let Some(v) = val {
+                    cfg.shadow_radius = v.parse().unwrap_or(cfg.shadow_radius);
+                    took = true;
+                }
+            }
             other => eprintln!("ignoring arg: {other}"),
         }
         i += if took { 2 } else { 1 };
     }
 
     let root = Path::new(&root);
-    let jobs: [(&str, Mode); 4] = [
+    // Cartoon dirs are flat-art candidates; `is_flat_art` skips photographic
+    // content (e.g. marketing heroes) within them. Products get the white snap.
+    let jobs: [(&str, Mode); 6] = [
         ("icons", Mode::Cartoon),
+        ("illustrations", Mode::Cartoon),
+        ("clipart", Mode::Cartoon),
         ("infographics", Mode::Cartoon),
         ("marketing", Mode::Cartoon),
         ("products", Mode::White),
     ];
     println!(
-        "ai_corpus_flatten: root={} cartoon={} grad_thresh={} skip_floor={} white_ramp={} diff_amp={}",
-        root.display(), cfg.cartoon, cfg.grad_thresh, cfg.skip_floor, cfg.ramp, cfg.amp
+        "ai_corpus_flatten: root={} cartoon={} min_flat_frac={} skip_floor={} white_ramp={} shadow_radius={} diff_amp={}",
+        root.display(), cfg.cartoon, cfg.min_flat_frac, cfg.skip_floor, cfg.ramp, cfg.shadow_radius, cfg.amp
     );
     let mut total = Stats::default();
     for (dir, mode) in jobs {
