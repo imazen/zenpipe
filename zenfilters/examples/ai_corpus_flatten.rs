@@ -37,13 +37,18 @@ enum Mode {
 
 // ─── cartoon (ClipartFlatten) — whole-frame neighborhood filter ──────
 
-fn cartoon_flatten(img: &RgbImage, cartoon: f32) -> Option<RgbImage> {
+fn cartoon_flatten(img: &RgbImage, cartoon: f32, waviness: f32, flatness: f32) -> Option<RgbImage> {
     let (w, h) = img.dimensions();
     let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
     let input = zenpixels::buffer::PixelBuffer::from_vec(img.as_raw().clone(), w, h, desc).ok()?;
     let mut pipeline = Pipeline::new(PipelineConfig::default()).ok()?;
     let mut f = ClipartFlatten::default();
     f.cartoon = cartoon;
+    // The guided-filter base (edge-preserving, no posterization) is what removes
+    // AI "undulation"/bubble-noise. Its scale must match the undulation size, so
+    // expose it; larger eps flattens more low-variance texture.
+    f.waviness_scale = waviness;
+    f.flatness = flatness;
     pipeline.push(Box::new(f));
     let mut ctx = FilterContext::new();
     let out = apply_to_buffer(&pipeline, &input, true, &mut ctx).ok()?;
@@ -239,6 +244,8 @@ struct Cfg {
     grad_thresh: f32,
     amp: u32,
     cartoon: f32,
+    waviness: f32,
+    flatness: f32,
     skip_floor: u8,
     ramp: f32,
 }
@@ -275,7 +282,7 @@ fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
         Mode::White => white_snap(&img, cfg.skip_floor, cfg.ramp),
         Mode::Cartoon => {
             if cartoon_candidate(&img, cfg.grad_thresh) {
-                match cartoon_flatten(&img, cfg.cartoon) {
+                match cartoon_flatten(&img, cfg.cartoon, cfg.waviness, cfg.flatness) {
                     Some(f) => (f, true),
                     None => {
                         eprintln!("error  cartoon {}", path.display());
@@ -339,7 +346,7 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { grad_thresh: 0.08, amp: 10, cartoon: 1.0, skip_floor: 235, ramp: 6.0 };
+    let mut cfg = Cfg { grad_thresh: 0.08, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
@@ -367,6 +374,18 @@ fn main() {
             "--cartoon" => {
                 if let Some(v) = val {
                     cfg.cartoon = v.parse().unwrap_or(cfg.cartoon);
+                    took = true;
+                }
+            }
+            "--waviness" => {
+                if let Some(v) = val {
+                    cfg.waviness = v.parse().unwrap_or(cfg.waviness);
+                    took = true;
+                }
+            }
+            "--flatness" => {
+                if let Some(v) = val {
+                    cfg.flatness = v.parse().unwrap_or(cfg.flatness);
                     took = true;
                 }
             }
