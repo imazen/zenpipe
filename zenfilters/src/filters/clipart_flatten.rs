@@ -363,14 +363,64 @@ impl Filter for ClipartFlatten {
         chamfer_distance(&boundary, wu, hu, &mut dist);
         let feather = self.edge_feather.max(0.25);
 
-        // target = lerp(guided_base, region_mean, snap); result = lerp(orig, target, strength)
+        // Palette colours = the per-label mean of the guided base (the effective
+        // flat-fill colours). The cartoon snap pulls each pixel toward a *soft*
+        // partition-of-unity blend of these — `softmax(-dist²/τ²)` over the
+        // palette, with `τ` ≈ the palette spacing (`color_tolerance`). This is the
+        // key to not banding a gradient: snapping each connected cell to its own
+        // single mean stepped at every cell boundary, whereas the soft blend is
+        // ≈ identity along a gradient (evenly-spaced palette, weights shift
+        // smoothly) yet collapses an isolated flat colour to its palette entry
+        // (only that colour has weight). Edges and shaded regions stay protected
+        // by the same `region_flat × boundary_keep` gate as before.
+        let num_labels = labels.iter().copied().max().unwrap_or(0) as usize + 1;
+        let mut psum = vec![[0.0f64; 3]; num_labels];
+        let mut pcnt = vec![0u32; num_labels];
+        for i in 0..n {
+            let k = labels[i] as usize;
+            psum[k][0] += gl[i] as f64;
+            psum[k][1] += ga[i] as f64;
+            psum[k][2] += gb[i] as f64;
+            pcnt[k] += 1;
+        }
+        let mut palette: Vec<[f32; 3]> = Vec::with_capacity(num_labels);
+        for k in 0..num_labels {
+            if pcnt[k] > 0 {
+                let inv = 1.0 / pcnt[k] as f64;
+                palette.push([
+                    (psum[k][0] * inv) as f32,
+                    (psum[k][1] * inv) as f32,
+                    (psum[k][2] * inv) as f32,
+                ]);
+            }
+        }
+        let tau = self.color_tolerance.max(1e-3);
+        let inv_tau2 = 1.0 / (tau * tau);
+
+        // target = lerp(guided_base, soft_palette_blend, snap); result = lerp(orig, target, strength)
         for i in 0..n {
             let r = rid[i] as usize;
+            let g = [gl[i], ga[i], gb[i]];
+            // Soft partition-of-unity assignment over the palette.
+            let mut wsum = 0.0f32;
+            let mut acc = [0.0f32; 3];
+            for &p in &palette {
+                let wv = (-dist2(g, p) * inv_tau2).exp();
+                wsum += wv;
+                acc[0] += wv * p[0];
+                acc[1] += wv * p[1];
+                acc[2] += wv * p[2];
+            }
+            let target = if wsum > 1e-12 {
+                [acc[0] / wsum, acc[1] / wsum, acc[2] / wsum]
+            } else {
+                g
+            };
             let boundary_keep = smoothstep(0.0, feather, dist[i]);
             let snap = cartoon * region_flat[r] * boundary_keep;
-            let tl = gl[i] + (mean[r][0] - gl[i]) * snap;
-            let ta = ga[i] + (mean[r][1] - ga[i]) * snap;
-            let tb = gb[i] + (mean[r][2] - gb[i]) * snap;
+            let tl = gl[i] + (target[0] - gl[i]) * snap;
+            let ta = ga[i] + (target[1] - ga[i]) * snap;
+            let tb = gb[i] + (target[2] - gb[i]) * snap;
             planes.l[i] += (tl - planes.l[i]) * strength;
             planes.a[i] += (ta - planes.a[i]) * strength;
             planes.b[i] += (tb - planes.b[i]) * strength;
