@@ -34,6 +34,7 @@
 //! ≈ `1.0`), and chroma is `sqrt(a² + b²)` (neutral ≈ `0`).
 
 use crate::access::ChannelAccess;
+use crate::blur::{GaussianKernel, gaussian_blur_plane};
 use crate::context::FilterContext;
 use crate::filter::{Filter, PlaneSemantics, ResizePhase};
 use crate::filters::guided_filter::guided_filter_plane;
@@ -629,9 +630,122 @@ impl Filter for BackgroundFlatten {
         }
         ctx.return_f32(likeness);
 
+        // Step 4.5: low-pass of L. A pixel's *smoothed* lightness tells coherent
+        // structure (a soft shadow sitting on the white) apart from incoherent
+        // background noise: an isolated noise dip averages back to the bright
+        // background, while a shadow stays dark across its whole neighbourhood.
+        // This drives both the shadow-robust surface fit and the whitening gate
+        // below, so the flattener sticks to the *actual* background instead of
+        // creeping up shadows.
+        let blur_sigma = 3.0f32;
+        let mut l_smooth = ctx.take_f32(n);
+        {
+            let kernel = GaussianKernel::new(blur_sigma);
+            gaussian_blur_plane(&planes.l, &mut l_smooth, planes.width, planes.height, &kernel, ctx);
+        }
+
         // Step 5: fit the (optionally gradient) background surface so the
-        // whitening knee tracks uneven illumination.
-        let surface = fit_background_surface(planes, &weight, w, h, self.flatten_gradient);
+        // whitening knee tracks uneven illumination. A first pass can be dragged
+        // (or made to overshoot) by a soft shadow whose penumbra is still bright
+        // enough to score as background, so re-fit after rejecting pixels whose
+        // smoothed L sits more than `shadow_protection` below the first estimate.
+        let surface0 = fit_background_surface(planes, &weight, w, h, self.flatten_gradient);
+        let mut fit_weight = ctx.take_f32(n);
+        let mut bg_mask = ctx.take_f32(n);
+        let mut bg_levels: Vec<f32> = Vec::new();
+        let mut dropped = false;
+        for y in 0..h {
+            let row = y * w;
+            for x in 0..w {
+                let i = row + x;
+                let wt = weight[i];
+                if wt <= 0.0 {
+                    fit_weight[i] = 0.0;
+                    bg_mask[i] = 0.0;
+                    continue;
+                }
+                if l_smooth[i] < surface0.eval(x, y) - sp {
+                    fit_weight[i] = 0.0;
+                    bg_mask[i] = 0.0;
+                    dropped = true;
+                } else {
+                    fit_weight[i] = wt;
+                    bg_mask[i] = 1.0;
+                    bg_levels.push(l_smooth[i]);
+                }
+            }
+        }
+        let surface = if dropped {
+            fit_background_surface(planes, &fit_weight, w, h, self.flatten_gradient)
+        } else {
+            surface0
+        };
+        ctx.return_f32(fit_weight);
+
+        // Robust upper bound on the background brightness. A flexible quadric
+        // fit to a background with a large central hole (the subject) bows
+        // outward and can read *above* the true background at the corners, which
+        // makes the whitening knee under-whiten real background and the
+        // structure gate misjudge bright background as shadow. Cap the surface
+        // at the observed background level so it can't inflate past it. (No lower
+        // cap: the quadric can legitimately extrapolate low across the hole, and
+        // flooring it there would pull the structure reference down onto the
+        // shadow's bright fringe and let lift leak back onto the shadow.)
+        let bg_hi = if bg_levels.len() >= 8 {
+            percentile(&mut bg_levels, 0.98)
+        } else {
+            1.5
+        };
+
+        // Per-pixel background-level reference for the shadow gate, by diffusing
+        // the *real* background lightness into the holes (subject + shadow) via a
+        // wide normalized convolution: `bg_ref = blur(L_smooth · m) / blur(m)`.
+        // Unlike the quadric — which bows toward the centre of a large hole and
+        // would read the shadow's bright fringe as background — this fills each
+        // hole from the surrounding background, so a soft shadow stays clearly
+        // *below* its reference and is not lifted. It still tracks a gradient
+        // background (a symmetric blur of a smooth ramp returns the ramp).
+        //
+        // The mask is refined iteratively: a soft shadow's penumbra is bright
+        // enough to start *inside* the mask and drag the reference down, so after
+        // each pass any pixel sitting coherently below the current reference is
+        // dropped and the reference recomputed. This is local (each threshold is
+        // per-pixel against `bg_ref`), so it converges to the true background on a
+        // flat OR a gradient background without a global brightness cut.
+        let ref_sigma = ((w.min(h) as f32) * 0.12).clamp(8.0, 48.0);
+        let kref = GaussianKernel::new(ref_sigma);
+        let mut bg_ref = ctx.take_f32(n);
+        let mut scratch_in = ctx.take_f32(n);
+        let mut scratch_blur = ctx.take_f32(n);
+        let mut den = ctx.take_f32(n);
+        let refine_eps = (sp * 0.25).max(0.02);
+        for pass in 0..3 {
+            if pass > 0 {
+                // Drop pixels that sit coherently below the current reference;
+                // these are shadow (or its bright fringe), not background.
+                for i in 0..n {
+                    if bg_mask[i] > 0.0 && l_smooth[i] < bg_ref[i] - refine_eps {
+                        bg_mask[i] = 0.0;
+                    }
+                }
+            }
+            for i in 0..n {
+                scratch_in[i] = l_smooth[i] * bg_mask[i];
+            }
+            gaussian_blur_plane(&scratch_in, &mut scratch_blur, planes.width, planes.height, &kref, ctx);
+            gaussian_blur_plane(&bg_mask, &mut den, planes.width, planes.height, &kref, ctx);
+            for i in 0..n {
+                bg_ref[i] = if den[i] > 1e-3 {
+                    scratch_blur[i] / den[i]
+                } else {
+                    bg_hi
+                };
+            }
+        }
+        ctx.return_f32(den);
+        ctx.return_f32(scratch_blur);
+        ctx.return_f32(scratch_in);
+        ctx.return_f32(bg_mask);
 
         // Step 6: halo / fringe removal in the background band hugging the
         // silhouette. An edge-preserving guided filter suppresses bright
@@ -677,7 +791,7 @@ impl Filter for BackgroundFlatten {
                     //    overshoot at strong edges, so explicitly pull values
                     //    above the local background level `bx` back down — this
                     //    is what removes bright halo rings.
-                    let bx = surface.eval(x, y);
+                    let bx = surface.eval(x, y).min(bg_hi);
                     planes.l[i] = if sm > bx { sm + (bx - sm) * bw } else { sm };
                     // 3. Chroma decontamination (defringe color halos).
                     planes.a[i] *= 1.0 - bw;
@@ -703,14 +817,32 @@ impl Filter for BackgroundFlatten {
                 // Knee anchored on the local background level `bx`: pixels at or
                 // above `bx` whiten fully; pixels darker than `bx - shadow_protection`
                 // (true shadows) are untouched.
-                let bx = surface.eval(x, y);
+                let bx = surface.eval(x, y).min(bg_hi);
                 let t = smoothstep(bx - sp, bx, l);
-                let mut delta = (1.0 - l) * t * alpha;
+                // Structure gate on the *smoothed* L vs the diffused background
+                // reference: a coherent region darker than the local background (a
+                // soft shadow) is held back even where its bright fringe would
+                // otherwise pass the per-pixel knee, while an isolated noise dip —
+                // whose neighbourhood is still at background level — keeps full
+                // strength so background noise still flattens. This is what stops
+                // the flattener from creeping up shadows.
+                // The ramp sits just below `bg_ref`: full strength only where the
+                // smoothed L is within the background's own fluctuation of the
+                // reference (a noise dip), falling to zero once it is coherently
+                // below it (a shadow). The discriminating scale is the background
+                // noise, not `shadow_protection`; it only widens for an unusually
+                // large protection setting.
+                let rb = bg_ref[i];
+                let shadow_tol = 0.03_f32.max(sp * 0.3);
+                let noise_tol = 0.008_f32;
+                let structure = smoothstep(rb - shadow_tol, rb - noise_tol, l_smooth[i]);
+                let gate = t * structure;
+                let mut delta = (1.0 - l) * gate * alpha;
                 delta = delta.clamp(-max_lift, max_lift);
                 planes.l[i] = (l + delta).clamp(0.0, 1.5);
 
                 if chroma_neutralize > 0.0 {
-                    let cw = t * alpha * chroma_neutralize;
+                    let cw = gate * alpha * chroma_neutralize;
                     planes.a[i] *= 1.0 - cw;
                     planes.b[i] *= 1.0 - cw;
                 }
@@ -719,6 +851,8 @@ impl Filter for BackgroundFlatten {
 
         ctx.return_f32(weight);
         ctx.return_f32(dist);
+        ctx.return_f32(l_smooth);
+        ctx.return_f32(bg_ref);
         ctx.return_u8(connected);
     }
 }
@@ -1367,6 +1501,98 @@ mod tests {
             "halo removal should reduce the bright overshoot ring: on={}, off={}",
             on.l[ring],
             off.l[ring]
+        );
+    }
+
+    /// Near-white background with a large dark subject and a *soft contact
+    /// shadow* below it: a smooth penumbra ramp from clearly-below-floor up to
+    /// background level, plus light noise. This is the case where the
+    /// soft-knee whitening used to "creep up" the shadow — lifting the bright
+    /// end of the penumbra toward white and erasing the soft shadow.
+    fn soft_shadow_on_white(w: u32, h: u32) -> OklabPlanes {
+        let mut p = OklabPlanes::new(w, h);
+        let wu = w as usize;
+        let hu = h as usize;
+        for y in 0..hu {
+            for x in 0..wu {
+                let i = y * wu + x;
+                let noise = (((x * 31 + y * 17) % 13) as f32 / 13.0 - 0.5) * 0.03;
+                p.l[i] = 0.95 + noise;
+                p.a[i] = 0.0;
+                p.b[i] = 0.0;
+            }
+        }
+        // Large dark subject across the upper-middle so the central-subject gate
+        // recognises a product (not a subjectless bright scene).
+        let py0 = hu / 4; // 0.25 h
+        let py1 = hu * 9 / 16; // ~0.56 h
+        for y in py0..py1 {
+            for x in (wu / 4)..(3 * wu / 4) {
+                let i = y * wu + x;
+                p.l[i] = 0.22;
+                p.a[i] = 0.03;
+                p.b[i] = -0.02;
+            }
+        }
+        // Soft contact shadow directly below the subject: a smooth vertical
+        // penumbra ramp 0.78 -> 0.95 over `sh` rows, spanning the subject width.
+        let sy0 = py1;
+        let sy1 = (py1 + hu / 4).min(hu); // 0.25 h tall penumbra
+        let sh = (sy1 - sy0).max(1) as f32;
+        for y in sy0..sy1 {
+            let frac = (y - sy0) as f32 / sh;
+            let base = 0.78 + (0.95 - 0.78) * frac;
+            for x in (wu / 4)..(3 * wu / 4) {
+                let i = y * wu + x;
+                let noise = (((x * 31 + y * 17) % 13) as f32 / 13.0 - 0.5) * 0.02;
+                p.l[i] = base + noise;
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn does_not_creep_up_soft_shadow() {
+        let (w, h) = (128u32, 128u32);
+        let wu = w as usize;
+        let hu = h as usize;
+        let mut p = soft_shadow_on_white(w, h);
+        let orig = p.clone();
+        BackgroundFlatten::default().apply(&mut p, &mut FilterContext::new());
+
+        // The soft-shadow penumbra region (interior, away from subject edge and
+        // image bottom). Its mean lightness must NOT creep up toward white.
+        let sy0 = hu * 9 / 16 + 2;
+        let sy1 = (hu * 9 / 16 + hu / 4).min(hu) - 2;
+        let sx0 = wu / 4 + 4;
+        let sx1 = 3 * wu / 4 - 4;
+        let mut before = 0.0f32;
+        let mut after = 0.0f32;
+        let mut cnt = 0.0f32;
+        for y in sy0..sy1 {
+            for x in sx0..sx1 {
+                let i = y * wu + x;
+                before += orig.l[i];
+                after += p.l[i];
+                cnt += 1.0;
+            }
+        }
+        before /= cnt;
+        after /= cnt;
+        let creep = after - before;
+
+        // The far background must still be whitened (filter is active).
+        let corner = p.l[2 * wu + 2];
+        assert!(
+            corner > 0.975,
+            "far background should still whiten: {} -> {}",
+            orig.l[2 * wu + 2],
+            corner
+        );
+        // The shadow must stay put: no meaningful upward creep.
+        assert!(
+            creep < 0.008,
+            "soft shadow crept up toward white: mean L {before:.4} -> {after:.4} (creep {creep:+.4})"
         );
     }
 
