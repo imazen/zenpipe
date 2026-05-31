@@ -267,14 +267,14 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
     let dist = chamfer(&nogo_src, wu, hu);
     let radius = shadow_radius.max(0.5);
 
-    // Snap toward the MEASURED average white, not pure 255 — snapping to 255
-    // brightens the bg above its own level, and the contrast against the
-    // (feathered) near-shadow band reads as a halo line at the edge. Snapping to
-    // the bg's own white just removes the noise (uniform clean bg) with no
-    // brightening, so there's no contrast and no edge line. Feathered by
-    // luminance across [thresh, thresh+ramp] and spatially across [0, radius]
-    // from the nearest shadow/product so it eases in, never an abrupt boundary.
-    let snap_target = white_mean.clamp(250.0, 255.0);
+    // Snap to PURE white (255) — a clean white background, no off-white clash
+    // with the white page. The edge line is avoided not by under-brightening but
+    // by a LARGE spatial feather: the snap eases from full 255 (open background)
+    // down to zero over `shadow_radius` px as it approaches any shadow/product,
+    // so the 255→original transition is spread out and imperceptible. The feather
+    // only ever touches near-white background pixels (the flood mask); it fades to
+    // zero at the no-go boundary and never modifies product/shadow pixels.
+    let snap_target = 255.0f32;
     let mut out = orig.clone();
     for y in 0..h {
         for x in 0..w {
@@ -443,7 +443,7 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 20.0 };
+    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 64.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
