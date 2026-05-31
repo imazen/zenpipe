@@ -42,7 +42,7 @@ Before training a neural model, zenfilters needs all the adjustment capabilities
 - The blessed recipe for gently removing sub-pixel render noise from near-white
   backgrounds without touching the product/shadows or creating edge lines lives in
   `examples/ai_corpus_flatten.rs::white_snap` and is documented in
-  `docs/white-background-cleanup.md`. Recipe: border-median guard → measure the
+  `WHITE-BG-CLEANUP.md`. Recipe: border-median guard → measure the
   image's own tiny white band → border-connected flood (change-allowed mask) →
   snap to **pure 255**, feathered by luminance AND by a **large (~64px) chamfer
   spatial feather** from the nearest non-background pixel (so the 255→shadow
