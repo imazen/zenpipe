@@ -53,7 +53,15 @@ fn run_filter(img: &RgbImage, filter: Box<dyn Filter>) -> Option<RgbImage> {
 
 fn flatten(img: &RgbImage, mode: Mode) -> Option<RgbImage> {
     match mode {
-        Mode::White => run_filter(img, Box::new(BackgroundFlatten::default())),
+        Mode::White => {
+            // This corpus is known product-on-white, and the candidacy gate
+            // already routes dark/non-white backgrounds to `_skip_`. Disable the
+            // filter's own auto-skip so its conservative central-subject gate
+            // doesn't no-op clean ghost/flat shots that happen to be mostly white.
+            let mut f = BackgroundFlatten::default();
+            f.auto_skip = false;
+            run_filter(img, Box::new(f))
+        }
         Mode::Cartoon => {
             let mut f = ClipartFlatten::default();
             f.cartoon = 1.0;
@@ -82,30 +90,36 @@ fn region_luma(img: &RgbImage, x0: u32, x1: u32, y0: u32, y1: u32) -> f32 {
     if c > 0.0 { s / c } else { 0.0 }
 }
 
-/// A good candidate has a roughly-uniform border. A strong top↔bottom or
-/// left↔right border gradient marks a backdrop we don't want to climb; in white
-/// mode the border must also be near-white. Non-candidates are skipped.
+/// Candidacy is judged from the four *corner* patches, which are almost always
+/// background (a centred product or an on-model subject contaminates a full edge
+/// band but not the corners). A strong top↔bottom or left↔right corner gradient
+/// marks a backdrop gradient we don't want to climb; white mode additionally
+/// requires the corners to be near-white (else it's a dark/coloured-bg shot with
+/// nothing to flatten). Non-candidates are skipped.
 fn is_candidate(img: &RgbImage, mode: Mode, grad_thresh: f32) -> bool {
     let (w, h) = img.dimensions();
     if w < 8 || h < 8 {
         return false;
     }
-    let bh = (h / 10).max(1);
-    let bw = (w / 10).max(1);
-    let top = region_luma(img, 0, w, 0, bh);
-    let bot = region_luma(img, 0, w, h - bh, h);
-    let left = region_luma(img, 0, bw, 0, h);
-    let right = region_luma(img, w - bw, w, 0, h);
+    let cs = (w.min(h) / 8).max(4);
+    let tl = region_luma(img, 0, cs, 0, cs);
+    let tr = region_luma(img, w - cs, w, 0, cs);
+    let bl = region_luma(img, 0, cs, h - cs, h);
+    let br = region_luma(img, w - cs, w, h - cs, h);
 
-    let vgrad = (top - bot).abs();
-    let hgrad = (left - right).abs();
+    let top_c = 0.5 * (tl + tr);
+    let bot_c = 0.5 * (bl + br);
+    let left_c = 0.5 * (tl + bl);
+    let right_c = 0.5 * (tr + br);
+    let vgrad = (top_c - bot_c).abs();
+    let hgrad = (left_c - right_c).abs();
     if vgrad > grad_thresh || hgrad > grad_thresh {
         return false; // directional backdrop gradient — don't climb it
     }
     if mode == Mode::White {
-        let border = 0.25 * (top + bot + left + right);
-        if border < 0.72 {
-            return false; // not a near-white background shot
+        let mean_c = 0.25 * (tl + tr + bl + br);
+        if mean_c < 0.80 {
+            return false; // dark / coloured background — nothing to flatten
         }
     }
     true
