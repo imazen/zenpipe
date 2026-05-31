@@ -267,8 +267,14 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
     let dist = chamfer(&nogo_src, wu, hu);
     let radius = shadow_radius.max(0.5);
 
-    // Feathered snap to pure white: luminance feather across [thresh, thresh+ramp]
-    // AND spatial feather across [0, radius] from the nearest shadow/product.
+    // Snap toward the MEASURED average white, not pure 255 — snapping to 255
+    // brightens the bg above its own level, and the contrast against the
+    // (feathered) near-shadow band reads as a halo line at the edge. Snapping to
+    // the bg's own white just removes the noise (uniform clean bg) with no
+    // brightening, so there's no contrast and no edge line. Feathered by
+    // luminance across [thresh, thresh+ramp] and spatially across [0, radius]
+    // from the nearest shadow/product so it eases in, never an abrupt boundary.
+    let snap_target = white_mean.clamp(250.0, 255.0);
     let mut out = orig.clone();
     for y in 0..h {
         for x in 0..w {
@@ -283,7 +289,7 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
             if wgt <= 0.0 {
                 continue;
             }
-            let mix = |c: u8| (c as f32 + (255.0 - c as f32) * wgt).round().clamp(0.0, 255.0) as u8;
+            let mix = |c: u8| (c as f32 + (snap_target - c as f32) * wgt).round().clamp(0.0, 255.0) as u8;
             out.put_pixel(x, y, Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
         }
     }
@@ -437,7 +443,7 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 8.0 };
+    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 20.0 };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
@@ -512,12 +518,12 @@ fn main() {
     let root = Path::new(&root);
     // Cartoon dirs are flat-art candidates; `is_flat_art` skips photographic
     // content (e.g. marketing heroes) within them. Products get the white snap.
-    // illustrations are detailed painterly art (~290k colours), not flat clipart,
-    // so they're excluded from the cartoon pass. infographics stay in the list
-    // but is_flat_art skips the complex/photographic ones.
-    let jobs: [(&str, Mode); 5] = [
+    // `clipart` is deliberately EXCLUDED — it was already hand-fixed; do not touch
+    // it. `illustrations` are detailed painterly art (~290k colours), not flat
+    // clipart, so they're excluded too. infographics stay in the list but
+    // is_flat_art skips the complex/photographic ones.
+    let jobs: [(&str, Mode); 4] = [
         ("icons", Mode::Cartoon),
-        ("clipart", Mode::Cartoon),
         ("infographics", Mode::Cartoon),
         ("marketing", Mode::Cartoon),
         ("products", Mode::White),
