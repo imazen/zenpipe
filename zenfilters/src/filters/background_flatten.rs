@@ -69,6 +69,11 @@ pub struct BackgroundFlatten {
     /// Hard cap on how much a single pixel's `L` may be raised, in Oklab `L`
     /// units. Keeps the flattening gentle and invisible. Typical `0.1`–`0.3`.
     pub max_lift: f32,
+    /// How strongly a soft shadow *sitting on the background* is lightly blurred
+    /// to smooth its noise, `0.0`–`1.0`. `0.0` (default) leaves shadows
+    /// untouched. This never lifts the shadow toward white — it only averages
+    /// out high-frequency noise within the shadow, preserving its lightness.
+    pub shadow_blur: f32,
     /// When `true`, automatically reduce strength or skip when the border does
     /// not look like a bright neutral studio background.
     pub auto_skip: bool,
@@ -98,6 +103,7 @@ impl Default for BackgroundFlatten {
             feather: 12.0,
             shadow_protection: 0.10,
             max_lift: 0.20,
+            shadow_blur: 0.0,
             auto_skip: true,
             flatten_gradient: true,
             chroma_neutralize: 0.7,
@@ -849,6 +855,34 @@ impl Filter for BackgroundFlatten {
             }
         }
 
+        // Step 8: optional light blur of soft shadows sitting on the background.
+        // Smooths shadow noise without lifting it: blends L toward its own
+        // low-pass (which has the same local mean) only where a connected-
+        // background pixel is coherently darker than the diffused background
+        // reference (i.e. a shadow on the white), scaled by overall strength.
+        // The background and the subject itself are left untouched.
+        let shadow_blur = self.shadow_blur.clamp(0.0, 1.0);
+        if shadow_blur > 1e-4 {
+            let shadow_tol = 0.03_f32.max(sp * 0.3);
+            let noise_tol = 0.008_f32;
+            for y in 0..h {
+                let row = y * w;
+                for x in 0..w {
+                    let i = row + x;
+                    if connected[i] == 0 {
+                        continue;
+                    }
+                    let structure =
+                        smoothstep(bg_ref[i] - shadow_tol, bg_ref[i] - noise_tol, l_smooth[i]);
+                    let bw = shadow_blur * (1.0 - structure) * global;
+                    if bw <= 1e-5 {
+                        continue;
+                    }
+                    planes.l[i] = planes.l[i] * (1.0 - bw) + l_smooth[i] * bw;
+                }
+            }
+        }
+
         ctx.return_f32(weight);
         ctx.return_f32(dist);
         ctx.return_f32(l_smooth);
@@ -954,6 +988,21 @@ static BACKGROUND_FLATTEN_SCHEMA: FilterSchema = FilterSchema {
             slider: SliderMapping::Linear,
         },
         ParamDesc {
+            name: "shadow_blur",
+            label: "Shadow Blur",
+            description: "Lightly blur soft shadows on the background to smooth their noise (never lifts them)",
+            kind: ParamKind::Float {
+                min: 0.0,
+                max: 1.0,
+                default: 0.0,
+                identity: 0.0,
+                step: 0.01,
+            },
+            unit: "",
+            section: "Advanced",
+            slider: SliderMapping::Linear,
+        },
+        ParamDesc {
             name: "border_frac",
             label: "Border Sample",
             description: "Border band fraction sampled for background estimation",
@@ -1047,6 +1096,7 @@ impl Describe for BackgroundFlatten {
             "feather" => Some(ParamValue::Float(self.feather)),
             "shadow_protection" => Some(ParamValue::Float(self.shadow_protection)),
             "max_lift" => Some(ParamValue::Float(self.max_lift)),
+            "shadow_blur" => Some(ParamValue::Float(self.shadow_blur)),
             "border_frac" => Some(ParamValue::Float(self.border_frac)),
             "chroma_neutralize" => Some(ParamValue::Float(self.chroma_neutralize)),
             "halo_removal" => Some(ParamValue::Float(self.halo_removal)),
@@ -1081,6 +1131,7 @@ impl Describe for BackgroundFlatten {
                     "feather" => self.feather = v.max(0.0),
                     "shadow_protection" => self.shadow_protection = v.clamp(0.0, 0.5),
                     "max_lift" => self.max_lift = v.clamp(0.0, 1.0),
+                    "shadow_blur" => self.shadow_blur = v.clamp(0.0, 1.0),
                     "border_frac" => self.border_frac = v.clamp(0.005, 0.45),
                     "chroma_neutralize" => self.chroma_neutralize = v.clamp(0.0, 1.0),
                     "halo_removal" => self.halo_removal = v.clamp(0.0, 1.0),
@@ -1593,6 +1644,104 @@ mod tests {
         assert!(
             creep < 0.008,
             "soft shadow crept up toward white: mean L {before:.4} -> {after:.4} (creep {creep:+.4})"
+        );
+    }
+
+    /// Near-white background, dark subject, and a *flat, noisy* contact-shadow
+    /// patch below it (constant lightness + strong high-frequency noise).
+    fn flat_shadow_on_white(w: u32, h: u32) -> OklabPlanes {
+        let mut p = OklabPlanes::new(w, h);
+        let wu = w as usize;
+        let hu = h as usize;
+        for y in 0..hu {
+            for x in 0..wu {
+                let i = y * wu + x;
+                let noise = (((x * 31 + y * 17) % 13) as f32 / 13.0 - 0.5) * 0.03;
+                p.l[i] = 0.95 + noise;
+                p.a[i] = 0.0;
+                p.b[i] = 0.0;
+            }
+        }
+        // Dark subject, upper-middle.
+        for y in (hu / 8)..(hu * 3 / 8) {
+            for x in (wu / 4)..(3 * wu / 4) {
+                p.l[y * wu + x] = 0.22;
+            }
+        }
+        // Flat shadow patch below the subject: constant L with strong noise.
+        for y in (hu * 3 / 8)..(hu * 5 / 8) {
+            for x in (wu / 4)..(3 * wu / 4) {
+                let i = y * wu + x;
+                let noise = (((x * 53 + y * 29) % 17) as f32 / 17.0 - 0.5) * 0.08;
+                p.l[i] = 0.82 + noise;
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn shadow_blur_smooths_without_lifting() {
+        let (w, h) = (128u32, 128u32);
+        let wu = w as usize;
+        let hu = h as usize;
+        let orig = flat_shadow_on_white(w, h);
+
+        let mut off = orig.clone();
+        BackgroundFlatten {
+            shadow_blur: 0.0,
+            ..Default::default()
+        }
+        .apply(&mut off, &mut FilterContext::new());
+        let mut on = orig.clone();
+        BackgroundFlatten {
+            shadow_blur: 1.0,
+            ..Default::default()
+        }
+        .apply(&mut on, &mut FilterContext::new());
+
+        // Deep interior of the shadow patch — far enough from the subject/
+        // background edges that the light blur can't bleed them in.
+        let sy0 = hu * 3 / 8 + 12;
+        let sy1 = hu * 5 / 8 - 12;
+        let sx0 = wu / 4 + 12;
+        let sx1 = 3 * wu / 4 - 12;
+        let stats = |p: &OklabPlanes| -> (f32, f32) {
+            let mut s = 0.0f32;
+            let mut c = 0.0f32;
+            for y in sy0..sy1 {
+                for x in sx0..sx1 {
+                    s += p.l[y * wu + x];
+                    c += 1.0;
+                }
+            }
+            let m = s / c;
+            let mut v = 0.0f32;
+            for y in sy0..sy1 {
+                for x in sx0..sx1 {
+                    let d = p.l[y * wu + x] - m;
+                    v += d * d;
+                }
+            }
+            (m, v / c)
+        };
+        let (m_orig, _) = stats(&orig);
+        let (m_off, v_off) = stats(&off);
+        let (m_on, v_on) = stats(&on);
+
+        // Baseline: the filter itself must not lift the shadow (the creep gate).
+        assert!(
+            (m_off - m_orig).abs() < 0.01,
+            "base filter must not lift the shadow: {m_orig:.4} -> {m_off:.4}"
+        );
+        // shadow_blur smooths the shadow's high-frequency noise.
+        assert!(
+            v_on < v_off * 0.6,
+            "shadow_blur should reduce shadow noise variance: {v_off:.6} -> {v_on:.6}"
+        );
+        // ...without changing the shadow's lightness.
+        assert!(
+            (m_on - m_off).abs() < 0.006,
+            "shadow_blur must not lift the shadow: {m_off:.4} -> {m_on:.4}"
         );
     }
 
