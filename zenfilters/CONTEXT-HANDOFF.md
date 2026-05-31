@@ -1,7 +1,27 @@
 # zenfilters — Context Handoff (2026-05-30)
 
-Two filter fixes the user wants, both still **OPEN**. Plus durable work that
-**did** land. Read this top-to-bottom before touching code.
+> **STATUS 2026-05-31 — BOTH FIXES SHIPPED & VERIFIED ON `origin/main`.**
+> The two filter fixes below are now **DONE** (kept here as the record of intent
+> and approach):
+> - **FIX 2 (BackgroundFlatten shadow-creep)** — `9c3bfb4` (anti-creep) +
+>   `b4e0c4b` (new optional `shadow_blur`). The whitening lift is now gated by a
+>   *structure* term (low-pass of L vs a diffused, iteratively-refined background
+>   reference built by normalized convolution), so a coherent soft shadow is not
+>   lifted while background noise still flattens. Regression test
+>   `does_not_creep_up_soft_shadow` (creep +0.0506 → passing < 0.008) +
+>   `shadow_blur_smooths_without_lifting`.
+> - **FIX 1 (ClipartFlatten cartoon banding)** — `f0e05d0`. Cartoon snap now
+>   targets a soft partition-of-unity blend of the per-label palette
+>   (`softmax(-d²/τ²)`, τ ~ `color_tolerance`) instead of the per-region mean, so
+>   a gradient is ≈ identity (no cell-boundary step) yet flat blocks still
+>   collapse. Both regression tests in `tests/clipart_banding.rs` pass together:
+>   `clipart_cartoon_no_visible_band_on_gradient` + `clipart_cartoon_still_flattens_flat_blocks`.
+> - Verified GREEN: full zenfilters lib **600 passed**, `clipart_banding` 4
+>   passed, lib clippy clean. (zenpipe CI is pre-existing red on unrelated example
+>   targets, e.g. `warp_bench` referencing the private `warp_simd` module — not
+>   from this work.)
+>
+> The historical notes below describe the state *before* these fixes landed.
 
 ---
 
