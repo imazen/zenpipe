@@ -23,7 +23,7 @@ zenpixels-convert = { version = "0.2.10", path = "../../zenpixels/zenpixels-conv
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec", "trellis"] }
+zenjpeg = { path = "../../zenjpeg/zenjpeg", optional = true, features = ["decoder", "zencodec", "trellis", "recompress"] }
 # UltraHDR gain-map math + the `pixel_buffer_from_vec` constructor (unifies with
 # the copy zenjpeg pulls in). Gated with jpeg-ultrahdr.
 ultrahdr-core = { version = "0.5.0", optional = true, default-features = false }
@@ -43,6 +43,11 @@ zennode = { path = "../../zennode/zennode", default-features = false, features =
 # Color management (optional)
 moxcms = { version = "0.7", optional = true, default-features = false }
 
+# Quality-targeted transcode scorer (optional): zensim Profile-A metric for the
+# general decode→re-encode quality loop (transcode_to_quality). Lean build — no
+# threads/avx512 forced; SIMD still dispatches at runtime.
+zensim = { version = "0.3.0", path = "../../zensim/zensim", optional = true, default-features = false, features = ["imgref"] }
+
 [dev-dependencies]
 png = "0.18"
 zensim-regress = { path = "../../zensim/zensim-regress" }
@@ -54,6 +59,13 @@ turbojpeg = "1.4"
 [features]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
 std = []
+
+# Quality-targeted transcode: wire the scorer-driven routes in
+# `transcode_to_quality` (the zensim Profile-A scorer + zenjxl's JPEG→JXL
+# coefficient-domain recompressor). Without it, only the self-contained
+# JPEG→JPEG recompress route is wired. `zenjxl?/jpeg-lossy` only fires when a
+# jxl feature has already pulled in zenjxl.
+transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]

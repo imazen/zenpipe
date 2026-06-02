@@ -200,6 +200,10 @@ zencodec = { path = "../zencodec" }
 # Unpublished: zenjxl's encoder (0.3.2 not yet on crates.io). Required for the
 # `jxl-encode` feature; stripped at release time like the other path patches.
 jxl-encoder = { path = "../jxl-encoder/jxl-encoder" }
+# Local zenjpeg is 0.8.7; crates.io tops out at 0.8.4. zenjxl's `jpeg-lossy`
+# feature requires ^0.8.7 transitively, so patch it to the workspace copy (used
+# by the JPEG→JXL transcode route; stripped at release like the others).
+zenjpeg = { path = "../zenjpeg/zenjpeg" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]

@@ -236,6 +236,134 @@ pub fn transcode(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// transcode_to_quality — hit a zensim Profile-A target at minimum bytes
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Transcode `data` to `target`, hitting a **zensim Profile-A** quality
+/// `target_zq` (0.0–100.0, higher = closer to the source) at the **smallest byte
+/// size** achievable, using the most effective means for the source→target pair.
+///
+/// Routing (each codec already owns the hard part — this just dispatches and keeps
+/// the smallest result that meets the target):
+///
+/// - **JPEG→JPEG** — [`zenjpeg::recompress`]: coefficient-domain re-quantization
+///   that auto-selects Preserve / Deblock / Tuned / Lossless and is guaranteed
+///   never to regress size. Self-contained (calibration `OneShot`; the closed
+///   loop needs zenjpeg's `recompress-iqa`).
+/// - **JPEG→JXL** — [`zenjxl::jpeg_lossy`] (the `transcode-iqa` feature): zenjxl's
+///   coefficient-domain recompressor runs its own closed loop to the target,
+///   driven by a zensim Profile-A scorer, with the lossless transcode as the
+///   floor. No decode→re-encode here.
+/// - **Other pairs** — [`CodecError::UnsupportedOperation`]. Each codec owns its
+///   own target API (zenavif `auto_tune`'s one-shot MLP, zenwebp/zenjpeg target
+///   loops); routing those through here is the next step.
+///
+/// `opts` and `registry` are accepted for forward-compatibility; the wired
+/// recompress routes are self-contained and ignore them.
+pub fn transcode_to_quality(
+    data: &[u8],
+    target: ImageFormat,
+    target_zq: f32,
+    opts: &TranscodeOptions,
+    registry: &AllowedFormats,
+) -> Result<TranscodeOutput> {
+    let _ = (opts, registry);
+    let source =
+        crate::info::detect_format(data).ok_or_else(|| at!(CodecError::UnrecognizedFormat))?;
+    match (source, target) {
+        #[cfg(feature = "jpeg")]
+        (ImageFormat::Jpeg, ImageFormat::Jpeg) => recompress_jpeg_to_jpeg(data, target_zq),
+        #[cfg(all(feature = "jpeg", feature = "transcode-iqa", feature = "jxl-decode"))]
+        (ImageFormat::Jpeg, ImageFormat::Jxl) => recompress_jpeg_to_jxl(data, target_zq),
+        _ => Err(at!(CodecError::UnsupportedOperation {
+            format: target,
+            detail: "no native quality-targeted route for this source→target pair. Wired: \
+                     JPEG→JPEG (zenjpeg recompress), JPEG→JXL (zenjxl jpeg_lossy; needs the \
+                     `transcode-iqa` feature). Other targets should dispatch to their codec's \
+                     own target API (zenavif auto_tune, zenwebp/zenjpeg target loops).",
+        })),
+    }
+}
+
+/// JPEG→JPEG: coefficient-domain recompression to a zensim Profile-A target.
+/// Returns the source bytes unchanged when recompression wouldn't beat it
+/// (`RecompressResult::NoOp`), preserving the no-size-regression invariant.
+#[cfg(feature = "jpeg")]
+fn recompress_jpeg_to_jpeg(data: &[u8], target_zq: f32) -> Result<TranscodeOutput> {
+    use zenjpeg::recompress::{RecompressOptions, recompress};
+    let result = recompress(data, &RecompressOptions::new(target_zq)).map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "jpeg recompress: {e}"
+        )))
+    })?;
+    let bytes = result
+        .output_bytes()
+        .map(<[u8]>::to_vec)
+        .unwrap_or_else(|| data.to_vec());
+    Ok(TranscodeOutput {
+        data: bytes,
+        format: ImageFormat::Jpeg,
+        mime_type: ImageFormat::Jpeg.mime_type(),
+    })
+}
+
+/// JPEG→JXL: hand zenjxl's coefficient-domain recompressor a **zensim Profile-A**
+/// scorer and let its own closed loop hit `target_zq`, with the lossless
+/// transcode as the floor. Uses the existing [`zenjxl::jpeg_lossy`] system — no
+/// decode→re-encode here. JPEG is opaque, so RGB8 scoring is exact.
+#[cfg(all(feature = "transcode-iqa", feature = "jxl-decode"))]
+fn recompress_jpeg_to_jxl(data: &[u8], target_zq: f32) -> Result<TranscodeOutput> {
+    use zenjxl::jpeg_lossy::{
+        InferredMetric, JpegRecompressMethod, QualityTarget, recompress_jpeg_lossy,
+        recompress_jpeg_lossy_target,
+    };
+    use zensim::{Zensim, ZensimProfile};
+
+    // RelativeScorer = Fn(ref_rgb8, dist_rgb8, w, h) -> f32 over the packed RGB8
+    // buffers zenjxl decodes internally. Higher zensim-A = better.
+    let metric = Zensim::new(ZensimProfile::A);
+    let scorer = move |r: &[u8], d: &[u8], w: u32, h: u32| -> f32 {
+        let (pw, ph) = (w as usize, h as usize);
+        let rs = zensim::RgbSlice::new(bytemuck::cast_slice(r), pw, ph);
+        let ds = zensim::RgbSlice::new(bytemuck::cast_slice(d), pw, ph);
+        metric
+            .compute(&rs, &ds)
+            .map(|x| x.score() as f32)
+            .unwrap_or(0.0)
+    };
+
+    // Prefer an absolute zensim-A target (vs the original, via the source's
+    // inferred quality floor); fall back to a relative target (vs the source's
+    // own decoded pixels) when the floor can't be read — e.g. adaptive-quant
+    // sources whose quant tables don't map to a standard IJG quality.
+    let result = match QualityTarget::inferred_preliminary(data, InferredMetric::ZensimA, target_zq)
+    {
+        Some(target) => {
+            recompress_jpeg_lossy_target(data, JpegRecompressMethod::Auto, target, &scorer, 7)
+        }
+        None => recompress_jpeg_lossy(
+            data,
+            JpegRecompressMethod::Auto,
+            target_zq,
+            true,
+            &scorer,
+            7,
+        ),
+    };
+    // Auto = min(coarsen, re-encode); never larger/worse than the lossless floor.
+    let bytes = result.map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "jpeg→jxl recompress: {e}"
+        )))
+    })?;
+    Ok(TranscodeOutput {
+        data: bytes,
+        format: ImageFormat::Jxl,
+        mime_type: ImageFormat::Jxl.mime_type(),
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // TranscodeSink — streaming decode→encode bridge
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -499,6 +627,49 @@ mod tests {
             .unwrap();
         assert_eq!(decoded.width(), 10);
         assert_eq!(decoded.height(), 10);
+    }
+
+    /// JPEG→JXL via zenjxl's `jpeg_lossy` coefficient-domain recompressor with a
+    /// zensim-A target. Exercises the existing system end-to-end and verifies a
+    /// decodable JXL at the source dimensions — no zencodecs-side re-encode loop.
+    #[cfg(all(feature = "transcode-iqa", feature = "jpeg", feature = "jxl-decode"))]
+    #[test]
+    fn transcode_to_quality_jpeg_to_jxl() {
+        // Gradient + XOR high-frequency content so the source JPEG has real
+        // structure for the recompressor to act on.
+        let (w, h) = (64usize, 64usize);
+        let mut px = alloc::vec::Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                px.push(rgb::Rgb {
+                    r: (x * 4) as u8,
+                    g: (y * 4) as u8,
+                    b: ((x ^ y) * 4) as u8,
+                });
+            }
+        }
+        let img = imgref::ImgVec::new(px, w, h);
+        let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality(90.0)
+            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .unwrap();
+
+        let out = transcode_to_quality(
+            jpeg.data(),
+            ImageFormat::Jxl,
+            85.0,
+            &TranscodeOptions::default(),
+            &AllowedFormats::all(),
+        )
+        .unwrap();
+        assert_eq!(out.format, ImageFormat::Jxl);
+        assert!(!out.data.is_empty());
+
+        let decoded = crate::DecodeRequest::new(&out.data)
+            .decode_full_frame()
+            .unwrap();
+        assert_eq!(decoded.width() as usize, w);
+        assert_eq!(decoded.height() as usize, h);
     }
 
     /// Round-trip: encode a tiny image, transcode keeping the same format.

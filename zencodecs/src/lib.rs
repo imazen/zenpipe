@@ -392,4 +392,4 @@ pub fn decode_gain_map(
 ///     &AllowedFormats::all(),
 /// )?;
 /// ```
-pub use transcode::transcode;
+pub use transcode::{transcode, transcode_to_quality};
