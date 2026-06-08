@@ -518,6 +518,8 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub effort: Option<u32>,
     pub lossless: bool,
     pub metadata: Option<crate::Metadata>,
+    /// Retention policy applied to `metadata` at the codec boundary.
+    pub metadata_policy: zencodec::MetadataPolicy,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub stop: Option<StopToken>,
@@ -543,7 +545,7 @@ pub(crate) fn dyn_animation_frame_encoder(
                 job = job.with_limits(to_resource_limits(lim));
             }
             if let Some(meta) = params.metadata {
-                job = job.with_metadata(meta);
+                job = job.with_metadata_policy(meta, params.metadata_policy);
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);

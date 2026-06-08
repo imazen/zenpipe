@@ -22,6 +22,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
+use zencodec::MetadataPolicy;
 use zencodec::decode::{DecodeRowSink, SinkError};
 use zencodec::encode::{DynEncoder, EncodeOutput};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
@@ -38,13 +39,21 @@ use whereat::at;
 /// Options controlling a transcode operation.
 ///
 /// Controls metadata roundtrip, supplement handling, and alpha compositing.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TranscodeOptions {
     /// Metadata to embed in the output (EXIF, ICC, XMP).
     ///
     /// - `None` (default): extract metadata from the source and roundtrip it.
     /// - `Some(meta)`: use the provided metadata instead of the source's.
     pub metadata: Option<zencodec::Metadata>,
+
+    /// Retention policy applied to the embedded metadata.
+    ///
+    /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim roundtrip, with a
+    /// stale EXIF orientation tag reconciled against the authoritative field).
+    /// Set [`MetadataPolicy::Web`] to strip GPS/camera/timestamps/XMP for web
+    /// publishing while keeping orientation, rights, and color signaling.
+    pub metadata_policy: MetadataPolicy,
 
     /// How to handle container supplements (gain maps, depth maps, etc.)
     /// during transcode.
@@ -55,6 +64,19 @@ pub struct TranscodeOptions {
     ///
     /// `None` defaults to white `[255, 255, 255]`.
     pub matte: Option<[u8; 3]>,
+}
+
+impl Default for TranscodeOptions {
+    fn default() -> Self {
+        Self {
+            metadata: None,
+            // No implicit privacy choice: roundtrip verbatim by default. Callers
+            // publishing to the web should set `MetadataPolicy::Web`.
+            metadata_policy: MetadataPolicy::PreserveExact,
+            supplements: SupplementPolicy::default(),
+            matte: None,
+        }
+    }
 }
 
 /// What to do with container supplements (gain maps, depth maps, etc.)
@@ -216,6 +238,7 @@ pub fn transcode(
     let mut request = crate::EncodeRequest::new(format)
         .with_quality(decision.quality.quality)
         .with_metadata(metadata)
+        .with_metadata_policy(opts.metadata_policy)
         .with_registry(registry);
 
     if decision.lossless {

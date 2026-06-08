@@ -145,6 +145,12 @@ pub use transcode::{
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
+/// New in zencodec 0.1.21: field-level metadata retention ([`MetadataPolicy`])
+/// and color-carrier emission ([`ColorEmitPolicy`]). Set them on an
+/// [`EncodeRequest`] via [`EncodeRequest::with_metadata_policy`] /
+/// [`EncodeRequest::with_color_emit_policy`], or on a [`transcode`] via
+/// [`TranscodeOptions`].
+pub use zencodec::{ColorEmitPolicy, MetadataPolicy};
 pub use zencodec::StopToken;
 pub use zencodec::decode::SourceColor;
 

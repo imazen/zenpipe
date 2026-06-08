@@ -18,6 +18,9 @@ pub(crate) struct EncodeParams<'a> {
     pub effort: Option<u32>,
     pub lossless: bool,
     pub metadata: Option<Metadata>,
+    /// Retention policy applied to `metadata` at the codec boundary via
+    /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
+    pub metadata_policy: zencodec::MetadataPolicy,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub stop: Option<StopToken>,
@@ -59,7 +62,7 @@ where
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
             if let Some(meta) = params.metadata {
-                job = job.with_metadata(meta);
+                job = job.with_metadata_policy(meta, params.metadata_policy);
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);
@@ -188,7 +191,9 @@ where
             job = job.with_stop(s);
         }
         if let Some(m) = metadata {
-            job = job.with_metadata(m);
+            // Type-erased convenience path carries no policy; embed verbatim
+            // (PreserveExact also reconciles a stale EXIF orientation tag).
+            job = job.with_metadata_policy(m, zencodec::MetadataPolicy::PreserveExact);
         }
         if let Some(l) = limits {
             job = job.with_limits(crate::limits::to_resource_limits(l));
@@ -257,7 +262,7 @@ where
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
     if let Some(meta) = params.metadata {
-        job = job.with_metadata(meta);
+        job = job.with_metadata_policy(meta, params.metadata_policy);
     }
     if let Some(ep) = params.encode_policy {
         job = job.with_policy(ep);

@@ -15,6 +15,7 @@ use crate::select::ImageFacts;
 use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, StopToken};
 use whereat::at;
 use zencodec::encode::EncodePolicy;
+use zencodec::{ColorEmitPolicy, MetadataPolicy};
 use zenpixels::PixelDescriptor;
 
 pub use zencodec::encode::EncodeOutput;
@@ -43,6 +44,9 @@ pub struct EncodeRequest<'a> {
     limits: Option<&'a Limits>,
     stop: Option<StopToken>,
     metadata: Option<Metadata>,
+    /// Retention policy applied to `metadata` when the codec embeds it.
+    /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim).
+    metadata_policy: MetadataPolicy,
     registry: Option<&'a AllowedFormats>,
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
@@ -69,6 +73,7 @@ impl<'a> EncodeRequest<'a> {
             limits: None,
             stop: None,
             metadata: None,
+            metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
             codec_config: None,
             policy: None,
@@ -93,6 +98,7 @@ impl<'a> EncodeRequest<'a> {
             limits: None,
             stop: None,
             metadata: None,
+            metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
             codec_config: None,
             policy: None,
@@ -142,6 +148,20 @@ impl<'a> EncodeRequest<'a> {
     /// supports EXIF, etc.
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
+        self
+    }
+
+    /// Set the metadata **retention policy** applied when the codec embeds the
+    /// metadata attached via [`with_metadata`](Self::with_metadata).
+    ///
+    /// Defaults to [`MetadataPolicy::PreserveExact`] — embed verbatim, reconciling
+    /// only a stale EXIF orientation tag (the double-rotation guard). For web
+    /// publishing prefer [`MetadataPolicy::Web`], which strips
+    /// GPS/camera/timestamps/XMP while keeping orientation, rights, and color
+    /// signaling. The policy is applied at the codec boundary via
+    /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
+    pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
+        self.metadata_policy = policy;
         self
     }
 
@@ -205,6 +225,21 @@ impl<'a> EncodeRequest<'a> {
     /// ```
     pub fn with_encode_policy(mut self, policy: EncodePolicy) -> Self {
         self.encode_policy = Some(policy);
+        self
+    }
+
+    /// Set the **color-emission** policy (ICC profile vs CICP code points) for the
+    /// output — e.g. [`ColorEmitPolicy::Compact`] (prefer CICP, drop a redundant
+    /// ICC) or [`ColorEmitPolicy::Compatibility`] (always embed an ICC).
+    ///
+    /// Convenience over [`with_encode_policy`](Self::with_encode_policy): it merges
+    /// into the encode policy's `color` field, leaving the coarse `embed_*` gates
+    /// untouched. Codecs read it during encode via
+    /// [`EncodePolicy::resolve_color`](zencodec::encode::EncodePolicy::resolve_color)
+    /// and reconcile it against their carriers with `zencodec::resolve_color_emit`.
+    pub fn with_color_emit_policy(mut self, policy: ColorEmitPolicy) -> Self {
+        let ep = self.encode_policy.unwrap_or_else(EncodePolicy::none);
+        self.encode_policy = Some(ep.with_color(policy));
         self
     }
 
@@ -365,6 +400,7 @@ impl<'a> EncodeRequest<'a> {
                 effort: self.effort,
                 lossless: self.lossless,
                 metadata: self.metadata,
+                metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: self.limits,
                 stop: self.stop,
@@ -459,6 +495,7 @@ impl<'a> EncodeRequest<'a> {
             effort: self.effort,
             lossless: self.lossless,
             metadata: self.metadata,
+            metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: self.limits,
             stop: self.stop,
@@ -691,6 +728,7 @@ impl<'a> EncodeRequest<'a> {
             effort: self.effort,
             lossless: self.lossless,
             metadata: self.metadata,
+            metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: self.limits,
             stop: self.stop.clone(),
