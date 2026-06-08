@@ -204,6 +204,11 @@ jxl-encoder = { path = "../jxl-encoder/jxl-encoder" }
 # feature requires ^0.8.7 transitively, so patch it to the workspace copy (used
 # by the JPEG→JXL transcode route; stripped at release like the others).
 zenjpeg = { path = "../zenjpeg/zenjpeg" }
+# zenjxl-decoder 0.3.8 (local) adds reconstruct_jpeg (lossless JXL→JPEG, JBRD /
+# brunsli-parity); crates.io tops out at 0.3.7. Patch so the lossless JPEG↔JXL
+# transcode pair resolves to one copy across zenjxl (decode) and zencodecs
+# (reconstruct + the `jpeg` feature). Stripped at release like the others.
+zenjxl-decoder = { path = "../zenjxl-decoder/zenjxl-decoder" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]

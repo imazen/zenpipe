@@ -102,9 +102,45 @@ zencodecs/
 - `ImageInfo` has `icc_profile`, `exif`, `xmp` fields (all `Option<Vec<u8>>`)
 - `ImageInfo::metadata()` returns `ImageMetadata` borrowing from the info (for roundtrip convenience)
 - `ImageMetadata<'a>` with `icc_profile`, `exif`, `xmp` fields (all `Option<&'a [u8]>`)
-- Passed to `EncodeRequest::with_metadata(&meta)`
+- Passed to `EncodeRequest::with_metadata(meta)`; the **retention policy** is set separately via `EncodeRequest::with_metadata_policy(MetadataPolicy)` (default `PreserveExact`) and applied at the codec boundary with `EncodeJob::with_metadata_policy` (zencodec 0.1.21). See the dated section below.
 - **Decode extraction**: JPEG (ICC/EXIF/XMP via zenjpeg extras), WebP (ICC/EXIF/XMP via demuxer), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC from codestream, EXIF/XMP from container Exif/xml boxes), AVIF/GIF (none)
 - **Encode embedding**: JPEG (ICC/EXIF/XMP), WebP (ICC/EXIF/XMP via mux), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC/EXIF/XMP via container boxes), AVIF (EXIF only), GIF (none)
+
+### zencodec 0.1.21 adoption + lossless JPEG↔JXL transcode (2026-06-08)
+
+Caught the dispatch layer up to zencodec 0.1.21 and wired the special-case JPEG/JXL
+transcode APIs.
+
+**Metadata retention** (replaces the now-deprecated `EncodeJob::with_metadata`):
+- `EncodeRequest::with_metadata_policy(MetadataPolicy)` + `TranscodeOptions::metadata_policy`.
+  Default `MetadataPolicy::PreserveExact` (verbatim + EXIF-orientation-tag reconciliation, the
+  double-rotation guard — a behavior-preserving migration). Web-publishing callers set
+  `MetadataPolicy::Web` (strips GPS/camera/timestamps/XMP, keeps orientation/rights/color).
+- Dispatch (`dispatch.rs`, `dyn_dispatch.rs`) now calls `job.with_metadata_policy(meta, policy)`;
+  the 4 deprecation warnings are gone. `MetadataPolicy` re-exported at the crate root.
+
+**Color emission**: `EncodeRequest::with_color_emit_policy(ColorEmitPolicy)` merges into
+`EncodePolicy.color`; codecs resolve it via `EncodePolicy::resolve_color` + `resolve_color_emit`.
+`ColorEmitPolicy` re-exported.
+
+**Special-case transcode APIs** (`transcode.rs`):
+- `transcode_to_quality(data, target, target_zq, ..)` — quality-targeted, coefficient-domain:
+  JPEG→JPEG via `zenjpeg::recompress`; JPEG→JXL lossy via `zenjxl::jpeg_lossy` (feature
+  `transcode-iqa`, zensim Profile-A scorer). Other pairs → `UnsupportedOperation`.
+- `transcode_jpeg_to_jxl_lossless(jpeg, effort)` — byte-exact JPEG→JXL (JBRD / brunsli-parity)
+  via `zenjxl::LosslessConfig::encode_jpeg_transcode`. Feature `jpeg-jxl-transcode`.
+- `reconstruct_jpeg_from_jxl(jxl)` — the inverse, JXL→JPEG, via `zenjxl_decoder::reconstruct_jpeg`.
+  Feature `jxl-jpeg-reconstruct` (decode-side only; needs neither zenjpeg nor the JXL encoder).
+- New dep: `zenjxl-decoder` (optional, `jpeg` feature for the JBRD box); patched to the local
+  0.3.8 at the zenpipe workspace root.
+
+**Verified** (2026-06-08): 243 lib tests pass; the reconstruct + lossless round-trip tests pass;
+every transcode route compiles against the live codec crates. **Known**: 2 `metadata_conformance`
+orientation assertions (`orientation_from_exif_tag`,
+`transcode_orientation_transfer_matches_carrier_support`) trip because the *concurrent, uncommitted*
+zenpng decode-orientation sweep closes a gap the stale verdict table still marks open (zenpipe#36) —
+not caused by this work; they pass against committed zenpng main. Re-derive the verdict table when
+that sweep lands.
 
 ### Pixel Conversions
 - `PixelBuffer` provides pixel format conversion, byte access, and dimension accessors via zenpixels

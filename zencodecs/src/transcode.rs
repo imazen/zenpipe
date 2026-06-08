@@ -290,7 +290,7 @@ pub fn transcode_to_quality(
     opts: &TranscodeOptions,
     registry: &AllowedFormats,
 ) -> Result<TranscodeOutput> {
-    let _ = (opts, registry);
+    let _ = (target_zq, opts, registry);
     let source =
         crate::info::detect_format(data).ok_or_else(|| at!(CodecError::UnrecognizedFormat))?;
     match (source, target) {
@@ -383,6 +383,63 @@ fn recompress_jpeg_to_jxl(data: &[u8], target_zq: f32) -> Result<TranscodeOutput
         data: bytes,
         format: ImageFormat::Jxl,
         mime_type: ImageFormat::Jxl.mime_type(),
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Lossless byte-exact JPEG↔JXL transcode (JBRD / brunsli-parity)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Losslessly transcode a baseline/extended JPEG to JPEG XL so the **exact
+/// original JPEG bitstream** can later be recovered with
+/// [`reconstruct_jpeg_from_jxl`] (the brunsli-equivalent JBRD path). The JXL is
+/// typically ~20% smaller than the source JPEG and carries the reconstruction
+/// data; no pixels are re-encoded and no quality is lost.
+///
+/// `effort` (1–10) trades encode time for output size; it does **not** affect the
+/// reconstructed bytes — the round-trip is byte-exact at every effort.
+///
+/// Returns [`CodecError::InvalidInput`] for JPEGs outside the JBRD boundary (CMYK,
+/// arithmetic coding, 12-bit, chroma sampling factors > 2). For those, fall back
+/// to a lossy route ([`transcode_to_quality`]) or keep the source JPEG.
+///
+/// Requires the `jpeg-jxl-transcode` feature.
+#[cfg(feature = "jpeg-jxl-transcode")]
+pub fn transcode_jpeg_to_jxl_lossless(jpeg: &[u8], effort: u8) -> Result<TranscodeOutput> {
+    use zenjxl::LosslessConfig;
+    let data = LosslessConfig::new()
+        .with_effort(effort)
+        .encode_jpeg_transcode(jpeg)
+        .map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "jpeg→jxl lossless transcode: {e}"
+            )))
+        })?;
+    Ok(TranscodeOutput {
+        data,
+        format: ImageFormat::Jxl,
+        mime_type: ImageFormat::Jxl.mime_type(),
+    })
+}
+
+/// Reconstruct the **byte-exact original JPEG** from a JPEG XL produced by a
+/// lossless JPEG transcode (a JBRD reconstruction box is present) — the inverse
+/// of [`transcode_jpeg_to_jxl_lossless`]. Pure Rust; no external `djxl`.
+///
+/// - `Ok(Some(jpeg))` — the JXL carried reconstruction data; the bytes are the
+///   exact original JPEG.
+/// - `Ok(None)` — a valid JXL that is **not** a JPEG transcode (no JBRD box), so
+///   there is no original JPEG to recover. Decode it as pixels instead (e.g. via
+///   [`DecodeRequest`](crate::DecodeRequest)).
+///
+/// Requires the `jxl-jpeg-reconstruct` feature (decode-side only — independent of
+/// the JPEG/JXL encoders).
+#[cfg(feature = "jxl-jpeg-reconstruct")]
+pub fn reconstruct_jpeg_from_jxl(jxl: &[u8]) -> Result<Option<Vec<u8>>> {
+    zenjxl_decoder::reconstruct_jpeg(jxl).map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "jxl→jpeg reconstruct: {e}"
+        )))
     })
 }
 
@@ -593,6 +650,41 @@ mod tests {
         assert!(opts.metadata.is_none());
         assert!(opts.matte.is_none());
         assert!(matches!(opts.supplements, SupplementPolicy::Preserve));
+        // Verbatim by default — no implicit privacy choice.
+        assert!(matches!(opts.metadata_policy, MetadataPolicy::PreserveExact));
+    }
+
+    #[cfg(feature = "jxl-jpeg-reconstruct")]
+    #[test]
+    fn reconstruct_rejects_non_transcode_input() {
+        // Garbage / non-JXL input must not panic: it returns an error or Ok(None),
+        // never bogus JPEG bytes.
+        let r = reconstruct_jpeg_from_jxl(&[0xFF, 0x0A, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
+        assert!(matches!(r, Err(_) | Ok(None)));
+    }
+
+    #[cfg(feature = "jpeg-jxl-transcode")]
+    #[test]
+    fn jpeg_jxl_lossless_roundtrips_or_rejects() {
+        // Brunsli-equivalent contract: a lossless JPEG→JXL transcode either cleanly
+        // rejects (outside the JBRD boundary) or reconstructs the ORIGINAL JPEG
+        // byte-for-byte. Never silent corruption.
+        let jpeg: &[u8] = include_bytes!("../tests/images/ultrahdr_sample.jpg");
+        match transcode_jpeg_to_jxl_lossless(jpeg, 7) {
+            Ok(out) => {
+                assert_eq!(out.format, ImageFormat::Jxl);
+                let recon = reconstruct_jpeg_from_jxl(&out.data)
+                    .expect("reconstruct must not error on our own transcode")
+                    .expect("our lossless transcode embeds a JBRD reconstruction box");
+                assert_eq!(
+                    recon, jpeg,
+                    "lossless JPEG→JXL→JPEG must reconstruct byte-for-byte"
+                );
+            }
+            // Outside the JBRD boundary (multi-image / unsupported sampling, etc.):
+            // a clean rejection is contract-correct — never a corrupt result.
+            Err(_) => {}
+        }
     }
 
     /// Round-trip: encode a tiny JPEG, transcode to WebP, verify output.

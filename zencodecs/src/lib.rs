@@ -399,3 +399,11 @@ pub fn decode_gain_map(
 /// )?;
 /// ```
 pub use transcode::{transcode, transcode_to_quality};
+/// Lossless byte-exact JPEG→JXL transcode (JBRD / brunsli-parity). See
+/// [`transcode::transcode_jpeg_to_jxl_lossless`].
+#[cfg(feature = "jpeg-jxl-transcode")]
+pub use transcode::transcode_jpeg_to_jxl_lossless;
+/// Lossless JXL→JPEG reconstruction (the inverse). See
+/// [`transcode::reconstruct_jpeg_from_jxl`].
+#[cfg(feature = "jxl-jpeg-reconstruct")]
+pub use transcode::reconstruct_jpeg_from_jxl;

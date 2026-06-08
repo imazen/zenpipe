@@ -605,14 +605,18 @@ fn transcode_transfers_copyright_between_exif_codecs() {
                 .exif
                 .as_ref()
                 .unwrap_or_else(|| panic!("[{}→{}] EXIF lost in transcode", src.name, dst.name));
-            let copyright = parse_exif(blob)
-                .and_then(|e| e.copyright())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "[{}→{}] Copyright absent after transcode",
-                        src.name, dst.name
-                    )
-                });
+            // `copyright()` returns a `Cow` borrowing the parsed `Exif` (zencodec
+            // 0.1.21), so bind it before extracting (mirrors the round-trip case
+            // above) — a `.and_then(|e| e.copyright())` would return a dangling ref.
+            let parsed = parse_exif(blob).unwrap_or_else(|| {
+                panic!("[{}→{}] round-tripped EXIF unparseable", src.name, dst.name)
+            });
+            let copyright = parsed.copyright().unwrap_or_else(|| {
+                panic!(
+                    "[{}→{}] Copyright absent after transcode",
+                    src.name, dst.name
+                )
+            });
             assert!(
                 copyright.contains(COPYRIGHT),
                 "[{}→{}] Copyright corrupted: {copyright:?}",

@@ -4113,6 +4113,7 @@ dependencies = [
  "zengif",
  "zenjpeg",
  "zenjxl",
+ "zenjxl-decoder",
  "zennode",
  "zenpixels",
  "zenpixels-convert",
@@ -4252,13 +4253,12 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2472ddb04d13fa16c5a77b887f9b35fb5db9199faa5fee2e78e8291375ebf65"
+version = "0.3.8"
 dependencies = [
  "aligned-vec",
  "array-init",
  "atomic_refcell",
+ "brotli",
  "bytemuck",
  "byteorder",
  "enough",
@@ -4273,9 +4273,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-macros"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09a3d86c2a21bb5bf1988bc773e7d3442e484d38bcda489c4888ab900ab291c5"
+version = "0.3.8"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -4285,9 +4283,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-simd"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "462ec084fd9c206908eb261c79e696bc057f88884e66ee82cfd4f2219808ccbc"
+version = "0.3.8"
 dependencies = [
  "archmage",
  "paste",

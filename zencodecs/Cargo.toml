@@ -33,6 +33,11 @@ zenavif = { path = "../../zenavif", optional = true, features = ["zencodec"] }
 zenavif-parse = { path = "../../zenavif-parse", optional = true, features = ["eager"] }
 zenpng = { path = "../../zenpng", optional = true, features = ["zencodec"] }
 zenjxl = { path = "../../zenjxl", optional = true, default-features = false, features = ["zencodec"] }
+# Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
+# `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
+# encoder, so the reconstruct direction builds independently. Patched to the local
+# 0.3.8 at the workspace root (crates.io tops out at 0.3.7).
+zenjxl-decoder = { version = "0.3.8", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { path = "../../zenbitmaps", optional = true, features = ["zencodec"] }
 zenraw = { path = "../../zenraw", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
@@ -81,6 +86,16 @@ avif-decode = ["dep:zenavif"]
 avif-encode = ["dep:zenavif", "zenavif/encode", "dep:zenavif-parse"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]
+
+# Lossless JXL→JPEG reconstruction (reconstruct_jpeg_from_jxl; JBRD / brunsli-parity).
+# Decode-side only: zenjxl-decoder + brotli for the JBRD box. Independent of the
+# JPEG/JXL encoders, so it builds without the lossy/encoder chain.
+jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
+
+# Lossless byte-exact JPEG→JXL transcode (transcode_jpeg_to_jxl_lossless) via zenjxl's
+# LosslessConfig::encode_jpeg_transcode (jxl-encoder `jpeg-reencoding`, pulled by
+# zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
+jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
 heic-decode = []  # stub — heic-decoder not cloned locally
 tiff = []  # stub — zentiff integration pending
 svg = []  # stub — zensvg crate not cloned locally
