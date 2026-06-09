@@ -398,7 +398,7 @@ pub fn decode_gain_map(
 ///     &AllowedFormats::all(),
 /// )?;
 /// ```
-pub use transcode::{transcode, transcode_to_quality};
+pub use transcode::{QualityTarget, transcode, transcode_to_quality};
 /// Lossless byte-exact JPEG→JXL transcode (JBRD / brunsli-parity). See
 /// [`transcode::transcode_jpeg_to_jxl_lossless`].
 #[cfg(feature = "jpeg-jxl-transcode")]
