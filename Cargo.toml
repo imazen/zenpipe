@@ -9,6 +9,8 @@ repository = "https://github.com/imazen/zenpipe"
 keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 exclude = [
+    "docs/",
+    "tests/public_api_doc.rs",
     "CLAUDE.md",
     "CONTEXT-HANDOFF.md",
     "FEEDBACK.md",
