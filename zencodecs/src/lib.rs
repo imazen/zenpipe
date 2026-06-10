@@ -145,14 +145,14 @@ pub use transcode::{
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
+pub use zencodec::StopToken;
+pub use zencodec::decode::SourceColor;
 /// New in zencodec 0.1.21: field-level metadata retention ([`MetadataPolicy`])
 /// and color-carrier emission ([`ColorEmitPolicy`]). Set them on an
 /// [`EncodeRequest`] via [`EncodeRequest::with_metadata_policy`] /
 /// [`EncodeRequest::with_color_emit_policy`], or on a [`transcode`] via
 /// [`TranscodeOptions`].
 pub use zencodec::{ColorEmitPolicy, MetadataPolicy};
-pub use zencodec::StopToken;
-pub use zencodec::decode::SourceColor;
 
 // Color / ICC profile classification
 #[cfg(feature = "cms")]
@@ -381,6 +381,14 @@ pub fn decode_gain_map(
         .decode_gain_map()
 }
 
+/// Lossless JXL→JPEG reconstruction (the inverse). See
+/// [`transcode::reconstruct_jpeg_from_jxl`].
+#[cfg(feature = "jxl-jpeg-reconstruct")]
+pub use transcode::reconstruct_jpeg_from_jxl;
+/// Lossless byte-exact JPEG→JXL transcode (JBRD / brunsli-parity). See
+/// [`transcode::transcode_jpeg_to_jxl_lossless`].
+#[cfg(feature = "jpeg-jxl-transcode")]
+pub use transcode::transcode_jpeg_to_jxl_lossless;
 /// Transcode an image: decode and re-encode to a different format/quality.
 ///
 /// This is a convenience wrapper around [`transcode::transcode`].
@@ -399,11 +407,3 @@ pub fn decode_gain_map(
 /// )?;
 /// ```
 pub use transcode::{QualityTarget, transcode, transcode_to_quality};
-/// Lossless byte-exact JPEG→JXL transcode (JBRD / brunsli-parity). See
-/// [`transcode::transcode_jpeg_to_jxl_lossless`].
-#[cfg(feature = "jpeg-jxl-transcode")]
-pub use transcode::transcode_jpeg_to_jxl_lossless;
-/// Lossless JXL→JPEG reconstruction (the inverse). See
-/// [`transcode::reconstruct_jpeg_from_jxl`].
-#[cfg(feature = "jxl-jpeg-reconstruct")]
-pub use transcode::reconstruct_jpeg_from_jxl;

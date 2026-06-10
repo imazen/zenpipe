@@ -106,7 +106,11 @@ fn is_flat_art(img: &RgbImage, max_colors: u32, min_flat_frac: f32) -> bool {
             let r = img.get_pixel(x + step, y);
             let d = img.get_pixel(x, y + step);
             let g = (0..3)
-                .map(|c| (p[c] as i32 - r[c] as i32).abs().max((p[c] as i32 - d[c] as i32).abs()))
+                .map(|c| {
+                    (p[c] as i32 - r[c] as i32)
+                        .abs()
+                        .max((p[c] as i32 - d[c] as i32).abs())
+                })
                 .max()
                 .unwrap_or(0);
             if g <= 2 {
@@ -127,7 +131,10 @@ fn chamfer(source: &[u8], w: usize, h: usize) -> Vec<f32> {
     const BIG: f32 = 1e9;
     const D1: f32 = 1.0;
     const D2: f32 = std::f32::consts::SQRT_2;
-    let mut d: Vec<f32> = source.iter().map(|&s| if s == 0 { 0.0 } else { BIG }).collect();
+    let mut d: Vec<f32> = source
+        .iter()
+        .map(|&s| if s == 0 { 0.0 } else { BIG })
+        .collect();
     if w == 0 || h == 0 {
         return d;
     }
@@ -204,7 +211,11 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
     }
 
     // Average white = mean/std of the near-white border pixels (min-chan >= 244).
-    let near: Vec<f32> = border.iter().filter(|&&v| v >= 244).map(|&v| v as f32).collect();
+    let near: Vec<f32> = border
+        .iter()
+        .filter(|&&v| v >= 244)
+        .map(|&v| v as f32)
+        .collect();
     let (white_mean, white_std) = if near.len() >= 8 {
         let m = near.iter().sum::<f32>() / near.len() as f32;
         let var = near.iter().map(|v| (v - m) * (v - m)).sum::<f32>() / near.len() as f32;
@@ -261,7 +272,11 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
     let nogo_src: Vec<u8> = (0..wu * hu)
         .map(|i| {
             let (x, y) = ((i % wu) as u32, (i / wu) as u32);
-            if min_chan(orig.get_pixel(x, y)) >= thresh_u8 { 1 } else { 0 }
+            if min_chan(orig.get_pixel(x, y)) >= thresh_u8 {
+                1
+            } else {
+                0
+            }
         })
         .collect();
     let dist = chamfer(&nogo_src, wu, hu);
@@ -289,7 +304,11 @@ fn white_snap(orig: &RgbImage, skip_floor: u8, ramp: f32, shadow_radius: f32) ->
             if wgt <= 0.0 {
                 continue;
             }
-            let mix = |c: u8| (c as f32 + (snap_target - c as f32) * wgt).round().clamp(0.0, 255.0) as u8;
+            let mix = |c: u8| {
+                (c as f32 + (snap_target - c as f32) * wgt)
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
             out.put_pixel(x, y, Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
         }
     }
@@ -305,14 +324,29 @@ fn color_diff(orig: &RgbImage, flat: &RgbImage, white_u8: u8, amp: u32) -> RgbIm
         for x in 0..w {
             let o = orig.get_pixel(x, y);
             let f = flat.get_pixel(x, y);
-            let d = (0..3).map(|c| (o[c] as i32 - f[c] as i32).unsigned_abs()).max().unwrap_or(0);
+            let d = (0..3)
+                .map(|c| (o[c] as i32 - f[c] as i32).unsigned_abs())
+                .max()
+                .unwrap_or(0);
             let mag = (d * amp).min(255);
             if mag == 0 {
                 continue;
             }
             let is_white = o[0] >= white_u8 && o[1] >= white_u8 && o[2] >= white_u8;
-            let (cr, cg, cb) = if is_white { (255u32, 0, 0) } else { (255u32, 165, 0) };
-            out.put_pixel(x, y, Rgb([(cr * mag / 255) as u8, (cg * mag / 255) as u8, (cb * mag / 255) as u8]));
+            let (cr, cg, cb) = if is_white {
+                (255u32, 0, 0)
+            } else {
+                (255u32, 165, 0)
+            };
+            out.put_pixel(
+                x,
+                y,
+                Rgb([
+                    (cr * mag / 255) as u8,
+                    (cg * mag / 255) as u8,
+                    (cb * mag / 255) as u8,
+                ]),
+            );
         }
     }
     out
@@ -356,7 +390,11 @@ fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
         Some(s) => s.to_string(),
         None => return,
     };
-    let stem = Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or(&name).to_string();
+    let stem = Path::new(&name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&name)
+        .to_string();
     let orig_path = parent.join(format!("_orig_{name}"));
 
     if !orig_path.exists() {
@@ -443,7 +481,17 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
 
 fn main() {
     let mut root = String::from("/mnt/v/zen/ai-corpus");
-    let mut cfg = Cfg { max_colors: 80000, min_flat_frac: 0.55, amp: 10, cartoon: 1.0, waviness: 3.0, flatness: 0.0010, skip_floor: 235, ramp: 6.0, shadow_radius: 64.0 };
+    let mut cfg = Cfg {
+        max_colors: 80000,
+        min_flat_frac: 0.55,
+        amp: 10,
+        cartoon: 1.0,
+        waviness: 3.0,
+        flatness: 0.0010,
+        skip_floor: 235,
+        ramp: 6.0,
+        shadow_radius: 64.0,
+    };
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < args.len() {
@@ -530,7 +578,13 @@ fn main() {
     ];
     println!(
         "ai_corpus_flatten: root={} cartoon={} min_flat_frac={} skip_floor={} white_ramp={} shadow_radius={} diff_amp={}",
-        root.display(), cfg.cartoon, cfg.min_flat_frac, cfg.skip_floor, cfg.ramp, cfg.shadow_radius, cfg.amp
+        root.display(),
+        cfg.cartoon,
+        cfg.min_flat_frac,
+        cfg.skip_floor,
+        cfg.ramp,
+        cfg.shadow_radius,
+        cfg.amp
     );
     let mut total = Stats::default();
     for (dir, mode) in jobs {
@@ -541,11 +595,21 @@ fn main() {
         }
         let mut s = Stats::default();
         walk(&path, mode, &cfg, &mut s);
-        let mn = if mode == Mode::Cartoon { "cartoon" } else { "white" };
-        println!("  {dir:14} [{mn:7}]  processed={:<5} skipped={:<5} errors={}", s.processed, s.skipped, s.errors);
+        let mn = if mode == Mode::Cartoon {
+            "cartoon"
+        } else {
+            "white"
+        };
+        println!(
+            "  {dir:14} [{mn:7}]  processed={:<5} skipped={:<5} errors={}",
+            s.processed, s.skipped, s.errors
+        );
         total.processed += s.processed;
         total.skipped += s.skipped;
         total.errors += s.errors;
     }
-    println!("DONE  processed={} skipped={} errors={}", total.processed, total.skipped, total.errors);
+    println!(
+        "DONE  processed={} skipped={} errors={}",
+        total.processed, total.skipped, total.errors
+    );
 }

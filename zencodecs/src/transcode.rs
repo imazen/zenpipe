@@ -716,7 +716,10 @@ mod tests {
         assert!(opts.matte.is_none());
         assert!(matches!(opts.supplements, SupplementPolicy::Preserve));
         // Verbatim by default — no implicit privacy choice.
-        assert!(matches!(opts.metadata_policy, MetadataPolicy::PreserveExact));
+        assert!(matches!(
+            opts.metadata_policy,
+            MetadataPolicy::PreserveExact
+        ));
     }
 
     #[cfg(feature = "jxl-jpeg-reconstruct")]

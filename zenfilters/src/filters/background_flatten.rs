@@ -647,7 +647,14 @@ impl Filter for BackgroundFlatten {
         let mut l_smooth = ctx.take_f32(n);
         {
             let kernel = GaussianKernel::new(blur_sigma);
-            gaussian_blur_plane(&planes.l, &mut l_smooth, planes.width, planes.height, &kernel, ctx);
+            gaussian_blur_plane(
+                &planes.l,
+                &mut l_smooth,
+                planes.width,
+                planes.height,
+                &kernel,
+                ctx,
+            );
         }
 
         // Step 5: fit the (optionally gradient) background surface so the
@@ -738,7 +745,14 @@ impl Filter for BackgroundFlatten {
             for i in 0..n {
                 scratch_in[i] = l_smooth[i] * bg_mask[i];
             }
-            gaussian_blur_plane(&scratch_in, &mut scratch_blur, planes.width, planes.height, &kref, ctx);
+            gaussian_blur_plane(
+                &scratch_in,
+                &mut scratch_blur,
+                planes.width,
+                planes.height,
+                &kref,
+                ctx,
+            );
             gaussian_blur_plane(&bg_mask, &mut den, planes.width, planes.height, &kref, ctx);
             for i in 0..n {
                 bg_ref[i] = if den[i] > 1e-3 {
