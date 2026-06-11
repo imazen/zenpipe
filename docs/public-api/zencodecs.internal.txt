@@ -1,0 +1,57 @@
+# zencodecs public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                           12
+#   trait roster entries (type × trait)        17
+#
+# per-module pub lines:
+#   (root)                            1
+#   cms                               1
+#   codec_id                          1
+#   depthmap                          4
+#   exif                              2
+#   intent                            2
+#   transcode                         1
+
+## items (12 lines)
+
+pub fn FormatSet::assert_fields_are_eq(&self)
+pub fn cms::CmsMode::assert_fields_are_eq(&self)
+pub fn codec_id::CodecId::assert_fields_are_eq(&self)
+pub fn depthmap::DepthMeasureType::assert_fields_are_eq(&self)
+pub fn depthmap::DepthPixelFormat::assert_fields_are_eq(&self)
+pub fn depthmap::DepthSource::assert_fields_are_eq(&self)
+pub fn depthmap::DepthUnits::assert_fields_are_eq(&self)
+pub fn exif::Rational::assert_fields_are_eq(&self)
+pub fn exif::SRational::assert_fields_are_eq(&self)
+pub fn intent::BoolKeep::assert_fields_are_eq(&self)
+pub fn intent::FormatChoice::assert_fields_are_eq(&self)
+pub fn transcode::SupplementSet::assert_fields_are_eq(&self)
+
+## trait impls (17 types)
+
+AllowedFormats: TrivialClone
+FormatSet: TrivialClone
+cms::CmsMode: TrivialClone
+codec_id::CodecId: TrivialClone
+depthmap::DepthFormat: TrivialClone
+depthmap::DepthMeasureType: TrivialClone
+depthmap::DepthPixelFormat: TrivialClone
+depthmap::DepthSource: TrivialClone
+depthmap::DepthUnits: TrivialClone
+exif::Rational: TrivialClone
+exif::SRational: TrivialClone
+intent::BoolKeep: TrivialClone
+intent::FormatChoice: TrivialClone
+quality::QualityProfile: TrivialClone
+transcode::QualityTarget: TrivialClone
+transcode::SupplementPolicy: TrivialClone
+transcode::SupplementSet: TrivialClone

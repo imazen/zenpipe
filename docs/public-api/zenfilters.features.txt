@@ -1,0 +1,889 @@
+# zenfilters public API — additions from non-default features
+# features: experimental,serde,srgb-compat,srgb-filters,zennode,zenquant
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                10
+#   pub types (struct/enum/trait/alias)       165
+#   pub consts/statics                         72
+#   free functions                             28
+#   inherent methods                           41
+#   struct fields                             297
+#   enum variants                              20
+#   trait roster entries (type × trait)       682
+#   auto-trait-complete types                 150
+#
+# per-module pub lines:
+#   (root)                           13
+#   document                         48
+#   filters                         173
+#   segment                          37
+#   srgb_filters                     12
+#   zennode_defs                    350
+
+## items (610 lines)
+
+pub mod document
+pub mod document::deskew
+pub mod document::homography
+pub mod document::lsd
+pub document::lsd::LineSegment::angle: f32
+pub document::lsd::LineSegment::length: f32
+pub document::lsd::LineSegment::nfa: f32
+pub document::lsd::LineSegment::width: f32
+pub document::lsd::LineSegment::x1: f32
+pub document::lsd::LineSegment::x2: f32
+pub document::lsd::LineSegment::y1: f32
+pub document::lsd::LineSegment::y2: f32
+pub fn document::lsd::LineSegment::length_sq(&self) -> f32
+pub fn document::lsd::compute_gradient_magnitude(&[f32], &mut [f32], u32, u32)
+pub mod document::otsu
+pub mod document::quad
+pub document::quad::DocumentQuad::corners: [(f32, f32); 4]
+pub document::quad::DocumentQuad::score: f32
+pub struct document::DocumentQuad [also: document::quad]
+pub document::DocumentQuad::corners: [(f32, f32); 4]
+pub document::DocumentQuad::score: f32
+pub struct document::LineSegment [also: document::lsd]
+pub document::LineSegment::angle: f32
+pub document::LineSegment::length: f32
+pub document::LineSegment::nfa: f32
+pub document::LineSegment::width: f32
+pub document::LineSegment::x1: f32
+pub document::LineSegment::x2: f32
+pub document::LineSegment::y1: f32
+pub document::LineSegment::y2: f32
+pub fn document::lsd::LineSegment::length_sq(&self) -> f32
+pub fn document::binarize(&mut [f32], f32) [also: document::otsu]
+pub fn document::compute_homography(&[(f32, f32); 4], &[(f32, f32); 4]) -> core::option::Option<[f32; 9]> [also: document::homography]
+pub fn document::detect_line_segments(&[f32], u32, u32, &mut FilterContext) -> alloc::vec::Vec<document::lsd::LineSegment> [also: document::lsd]
+pub fn document::detect_skew_angle(&[f32], u32, u32, f32, &mut FilterContext) -> f32 [also: document::deskew]
+pub fn document::find_document_quad(&[document::lsd::LineSegment], &[f32], &[f32], u32, u32) -> core::option::Option<document::quad::DocumentQuad> [also: document::quad]
+pub fn document::otsu_threshold(&[f32]) -> f32 [also: document::otsu]
+pub fn document::rectify_quad(&[(f32, f32); 4], f32, f32) -> core::option::Option<[f32; 9]> [also: document::homography]
+pub fn document::score_quad(&[(f32, f32); 4], &[f32], &[f32], u32, u32) -> f32 [also: document::quad]
+pub mod filters::srgb_compat
+pub filters::srgb_compat::ChannelPosterize::levels: u32
+pub filters::srgb_compat::ChannelSharpen::amount: f32
+pub filters::srgb_compat::ChannelSharpen::sigma: f32
+pub filters::srgb_compat::ChannelSolarize::threshold: f32
+pub filters::srgb_compat::Clahe::bins: u32
+pub filters::srgb_compat::Clahe::clip_limit: f32
+pub filters::srgb_compat::Clahe::tile_height: u32
+pub filters::srgb_compat::Clahe::tile_width: u32
+pub filters::srgb_compat::DifferenceEmboss::sigma: f32
+pub filters::srgb_compat::GaussianMotionBlur::angle: f32
+pub filters::srgb_compat::GaussianMotionBlur::sigma: f32
+pub filters::srgb_compat::HslSaturate::factor: f32
+pub filters::srgb_compat::LaplacianEdge::radius: u32
+pub filters::srgb_compat::LinearBrightness::offset: f32
+pub filters::srgb_compat::LinearContrast::amount: f32
+pub filters::srgb_compat::Normalize::lower: f32
+pub filters::srgb_compat::Normalize::upper: f32
+pub fn filters::srgb_compat::Normalize::auto_level() -> Self
+pub filters::srgb_compat::SigmoidalContrast::amount: f32
+pub filters::srgb_compat::SigmoidalContrast::midpoint: f32
+pub enum filters::PolarWarp
+pub filters::PolarWarp::Barrel
+pub filters::PolarWarp::Barrel::center_x: f32
+pub filters::PolarWarp::Barrel::center_y: f32
+pub filters::PolarWarp::Barrel::k1: f32
+pub filters::PolarWarp::Barrel::k2: f32
+pub filters::PolarWarp::Barrel::k3: f32
+pub filters::PolarWarp::Implode
+pub filters::PolarWarp::Implode::center_x: f32
+pub filters::PolarWarp::Implode::center_y: f32
+pub filters::PolarWarp::Implode::factor: f32
+pub filters::PolarWarp::Swirl
+pub filters::PolarWarp::Swirl::center_x: f32
+pub filters::PolarWarp::Swirl::center_y: f32
+pub filters::PolarWarp::Swirl::radius: f32
+pub filters::PolarWarp::Swirl::strength: f32
+pub filters::PolarWarp::Wave
+pub filters::PolarWarp::Wave::amplitude: f32
+pub filters::PolarWarp::Wave::direction: f32
+pub filters::PolarWarp::Wave::frequency: f32
+pub fn filters::PolarWarp::barrel(f32) -> Self
+pub fn filters::PolarWarp::implode(f32) -> Self
+pub fn filters::PolarWarp::swirl(f32) -> Self
+pub fn filters::PolarWarp::wave(f32, f32) -> Self
+pub enum filters::RotateMode
+pub filters::RotateMode::Crop
+pub filters::RotateMode::Deskew
+pub filters::RotateMode::Fill(filters::WarpBackground)
+pub filters::RotateMode::FillClamp
+pub const fn filters::RotateMode::black() -> Self
+pub const fn filters::RotateMode::transparent() -> Self
+pub const fn filters::RotateMode::white() -> Self
+pub enum filters::WarpBackground
+pub filters::WarpBackground::Clamp
+pub filters::WarpBackground::Color
+pub filters::WarpBackground::Color::a: f32
+pub filters::WarpBackground::Color::alpha: f32
+pub filters::WarpBackground::Color::b: f32
+pub filters::WarpBackground::Color::l: f32
+pub const fn filters::WarpBackground::black() -> Self
+pub const fn filters::WarpBackground::transparent() -> Self
+pub const fn filters::WarpBackground::white() -> Self
+pub enum filters::WarpInterpolation
+pub filters::WarpInterpolation::Bicubic
+pub filters::WarpInterpolation::Bilinear
+pub filters::WarpInterpolation::Lanczos3
+pub filters::WarpInterpolation::Robidoux
+#[non_exhaustive] pub struct filters::ChannelPosterize [also: filters::srgb_compat]
+pub filters::ChannelPosterize::levels: u32
+#[non_exhaustive] pub struct filters::ChannelSharpen [also: filters::srgb_compat]
+pub filters::ChannelSharpen::amount: f32
+pub filters::ChannelSharpen::sigma: f32
+#[non_exhaustive] pub struct filters::ChannelSolarize [also: filters::srgb_compat]
+pub filters::ChannelSolarize::threshold: f32
+#[non_exhaustive] pub struct filters::Clahe [also: filters::srgb_compat]
+pub filters::Clahe::bins: u32
+pub filters::Clahe::clip_limit: f32
+pub filters::Clahe::tile_height: u32
+pub filters::Clahe::tile_width: u32
+pub struct filters::ClusterModel
+pub filters::ClusterModel::centroids: [[f32; 142]; 64]
+pub filters::ClusterModel::params: [[f32; 18]; 64]
+pub fn filters::ClusterModel::predict(&self, &filters::ImageFeatures) -> filters::TunedParams
+pub fn filters::ClusterModel::predict_blend(&self, &filters::ImageFeatures, usize) -> filters::TunedParams
+#[non_exhaustive] pub struct filters::DifferenceEmboss [also: filters::srgb_compat]
+pub filters::DifferenceEmboss::sigma: f32
+#[non_exhaustive] pub struct filters::GaussianMotionBlur [also: filters::srgb_compat]
+pub filters::GaussianMotionBlur::angle: f32
+pub filters::GaussianMotionBlur::sigma: f32
+#[non_exhaustive] pub struct filters::HslSaturate [also: filters::srgb_compat]
+pub filters::HslSaturate::factor: f32
+pub struct filters::ImageFeatures
+pub filters::ImageFeatures::a_histogram: [f32; 32]
+pub filters::ImageFeatures::b_histogram: [f32; 32]
+pub filters::ImageFeatures::channel_stats: [f32; 6]
+pub filters::ImageFeatures::dynamic_range: f32
+pub filters::ImageFeatures::l_histogram: [f32; 64]
+pub filters::ImageFeatures::l_percentiles: [f32; 7]
+pub fn filters::ImageFeatures::extract(&OklabPlanes) -> Self
+pub fn filters::ImageFeatures::from_tensor(&[f32]) -> Self
+pub fn filters::ImageFeatures::to_tensor(&self) -> alloc::vec::Vec<f32>
+#[non_exhaustive] pub struct filters::LaplacianEdge [also: filters::srgb_compat]
+pub filters::LaplacianEdge::radius: u32
+#[non_exhaustive] pub struct filters::LinearBrightness [also: filters::srgb_compat]
+pub filters::LinearBrightness::offset: f32
+#[non_exhaustive] pub struct filters::LinearContrast [also: filters::srgb_compat]
+pub filters::LinearContrast::amount: f32
+pub struct filters::LinearModel
+pub filters::LinearModel::bias: [f32; 18]
+pub filters::LinearModel::weights: [f32; 2556]
+pub fn filters::LinearModel::predict(&self, &filters::ImageFeatures) -> filters::TunedParams
+#[non_exhaustive] pub struct filters::LumaGrayscale [also: filters::srgb_compat]
+#[non_exhaustive] pub struct filters::Normalize [also: filters::srgb_compat]
+pub filters::Normalize::lower: f32
+pub filters::Normalize::upper: f32
+pub fn filters::srgb_compat::Normalize::auto_level() -> Self
+pub struct filters::Rotate
+pub filters::Rotate::angle_degrees: f32
+pub filters::Rotate::mode: filters::RotateMode
+pub fn filters::Rotate::new(f32) -> Self
+pub fn filters::Rotate::to_warp(&self, u32, u32) -> filters::Warp
+pub fn filters::Rotate::with_mode(self, filters::RotateMode) -> Self
+#[non_exhaustive] pub struct filters::SigmoidalContrast [also: filters::srgb_compat]
+pub filters::SigmoidalContrast::amount: f32
+pub filters::SigmoidalContrast::midpoint: f32
+pub struct filters::TunedParams
+pub filters::TunedParams::black_point: f32
+pub filters::TunedParams::clarity: f32
+pub filters::TunedParams::contrast: f32
+pub filters::TunedParams::exposure: f32
+pub filters::TunedParams::gamut_expand: f32
+pub filters::TunedParams::highlight_recovery: f32
+pub filters::TunedParams::highlights: f32
+pub filters::TunedParams::local_tonemap: f32
+pub filters::TunedParams::saturation: f32
+pub filters::TunedParams::shadow_lift: f32
+pub filters::TunedParams::shadows: f32
+pub filters::TunedParams::sharpen: f32
+pub filters::TunedParams::sigmoid_contrast: f32
+pub filters::TunedParams::sigmoid_skew: f32
+pub filters::TunedParams::temperature: f32
+pub filters::TunedParams::tint: f32
+pub filters::TunedParams::vibrance: f32
+pub filters::TunedParams::white_point: f32
+pub fn filters::TunedParams::build_pipeline(&self) -> Pipeline
+pub fn filters::TunedParams::build_pipeline_linear(&self, f32, f32) -> Pipeline
+pub fn filters::TunedParams::from_array(&[f32; 18]) -> Self
+pub fn filters::TunedParams::to_array(&self) -> [f32; 18]
+#[non_exhaustive] pub struct filters::Warp
+pub filters::Warp::background: filters::WarpBackground
+pub filters::Warp::interpolation: filters::WarpInterpolation
+pub filters::Warp::matrix: [f32; 9]
+pub fn filters::Warp::affine(f32, f32, f32, f32, f32, f32) -> Self
+pub fn filters::Warp::deskew(f32, u32, u32) -> Self
+pub fn filters::Warp::projective([f32; 9]) -> Self
+pub fn filters::Warp::rotate_180(u32, u32) -> Self
+pub fn filters::Warp::rotate_270(u32, u32) -> Self
+pub fn filters::Warp::rotate_90(u32, u32) -> Self
+pub fn filters::Warp::rotation(f32, u32, u32) -> Self
+pub fn filters::Warp::rotation_around(f32, f32, f32) -> Self
+pub fn filters::Warp::with_max_quality(self) -> Self
+pub const filters::CLUSTER_COUNT: usize
+pub const filters::LINEAR_MODEL_INPUTS: usize
+pub const filters::LINEAR_MODEL_OUTPUTS: usize
+pub fn filters::rule_based_tune(&filters::ImageFeatures) -> filters::TunedParams
+pub mod segment
+#[non_exhaustive] pub struct segment::SegmentConfig
+pub segment::SegmentConfig::foliage_chroma_min: f32
+pub segment::SegmentConfig::foliage_hue_falloff: f32
+pub segment::SegmentConfig::foliage_hue_hi: f32
+pub segment::SegmentConfig::foliage_hue_lo: f32
+pub segment::SegmentConfig::highlight_hi: f32
+pub segment::SegmentConfig::highlight_lo: f32
+pub segment::SegmentConfig::midtone_center: f32
+pub segment::SegmentConfig::midtone_width: f32
+pub segment::SegmentConfig::saturated_hi: f32
+pub segment::SegmentConfig::saturated_lo: f32
+pub segment::SegmentConfig::shadow_hi: f32
+pub segment::SegmentConfig::shadow_lo: f32
+pub segment::SegmentConfig::sigma: f32
+pub segment::SegmentConfig::sky_b_max: f32
+pub segment::SegmentConfig::sky_l_min: f32
+pub segment::SegmentConfig::sky_var_max: f32
+pub segment::SegmentConfig::texture_midpoint: f32
+pub segment::SegmentConfig::texture_steepness: f32
+#[non_exhaustive] pub struct segment::SegmentMasks
+pub segment::SegmentMasks::foliage: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::high_texture: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::highlight: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::midtone: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::saturated_color: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::shadow: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::sky: alloc::vec::Vec<f32>
+pub segment::SegmentMasks::smooth_region: alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::compute(&OklabPlanes, &segment::SegmentConfig, &mut FilterContext) -> Self
+pub fn segment::SegmentMasks::foliage(&OklabPlanes, &segment::SegmentConfig) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::high_texture(&OklabPlanes, &segment::SegmentConfig, &mut FilterContext) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::highlight(&OklabPlanes, &segment::SegmentConfig) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::midtone(&OklabPlanes, &segment::SegmentConfig) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::saturated_color(&OklabPlanes, &segment::SegmentConfig) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::shadow(&OklabPlanes, &segment::SegmentConfig) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::sky(&OklabPlanes, &segment::SegmentConfig, &mut FilterContext) -> alloc::vec::Vec<f32>
+pub fn segment::SegmentMasks::smooth_region(&OklabPlanes, &segment::SegmentConfig, &mut FilterContext) -> alloc::vec::Vec<f32>
+pub mod srgb_filters
+#[non_exhaustive] pub enum srgb_filters::SrgbColorFilter
+pub srgb_filters::SrgbColorFilter::Alpha(f32)
+pub srgb_filters::SrgbColorFilter::GrayscaleBt709
+pub srgb_filters::SrgbColorFilter::GrayscaleFlat
+pub srgb_filters::SrgbColorFilter::GrayscaleNtsc
+pub srgb_filters::SrgbColorFilter::Invert
+pub srgb_filters::SrgbColorFilter::Sepia
+pub fn srgb_filters::blur(&mut zenpixels::buffer::PixelBuffer, f32)
+pub fn srgb_filters::color_adjust(&mut zenpixels::buffer::PixelSliceMut<'_>, f32, f32, f32)
+pub fn srgb_filters::color_filter(&mut zenpixels::buffer::PixelSliceMut<'_>, &srgb_filters::SrgbColorFilter)
+pub fn srgb_filters::color_matrix(&mut zenpixels::buffer::PixelSliceMut<'_>, &[f32; 25])
+pub fn srgb_filters::sharpen(&mut zenpixels::buffer::PixelBuffer, f32)
+pub mod zennode_defs
+pub struct zennode_defs::AdaptiveSharpen
+pub zennode_defs::AdaptiveSharpen::amount: f32
+pub zennode_defs::AdaptiveSharpen::detail: f32
+pub zennode_defs::AdaptiveSharpen::masking: f32
+pub zennode_defs::AdaptiveSharpen::noise_floor: f32
+pub zennode_defs::AdaptiveSharpen::sigma: f32
+pub struct zennode_defs::AdaptiveSharpenNodeDef
+pub struct zennode_defs::Alpha
+pub zennode_defs::Alpha::factor: f32
+pub struct zennode_defs::AlphaNodeDef
+pub struct zennode_defs::AscCdl
+pub zennode_defs::AscCdl::offset_b: f32
+pub zennode_defs::AscCdl::offset_g: f32
+pub zennode_defs::AscCdl::offset_r: f32
+pub zennode_defs::AscCdl::power_b: f32
+pub zennode_defs::AscCdl::power_g: f32
+pub zennode_defs::AscCdl::power_r: f32
+pub zennode_defs::AscCdl::saturation: f32
+pub zennode_defs::AscCdl::slope_b: f32
+pub zennode_defs::AscCdl::slope_g: f32
+pub zennode_defs::AscCdl::slope_r: f32
+pub struct zennode_defs::AscCdlNodeDef
+pub struct zennode_defs::AutoContrastDef
+pub zennode_defs::AutoContrastDef::strength: f32
+pub struct zennode_defs::AutoContrastDefNodeDef
+pub struct zennode_defs::AutoExposureDef
+pub zennode_defs::AutoExposureDef::max_correction: f32
+pub zennode_defs::AutoExposureDef::strength: f32
+pub zennode_defs::AutoExposureDef::target: f32
+pub struct zennode_defs::AutoExposureDefNodeDef
+pub struct zennode_defs::AutoLevelsDef
+pub zennode_defs::AutoLevelsDef::clip_high: f32
+pub zennode_defs::AutoLevelsDef::clip_low: f32
+pub zennode_defs::AutoLevelsDef::remove_cast: bool
+pub zennode_defs::AutoLevelsDef::scale_chroma: bool
+pub zennode_defs::AutoLevelsDef::strength: f32
+pub zennode_defs::AutoLevelsDef::target_midpoint: f32
+pub struct zennode_defs::AutoLevelsDefNodeDef
+pub struct zennode_defs::AutoToneDef
+pub zennode_defs::AutoToneDef::preserve_intent: f32
+pub zennode_defs::AutoToneDef::strength: f32
+pub struct zennode_defs::AutoToneDefNodeDef
+pub struct zennode_defs::AutoVibranceDef
+pub zennode_defs::AutoVibranceDef::strength: f32
+pub struct zennode_defs::AutoVibranceDefNodeDef
+pub struct zennode_defs::AutoWhiteBalanceDef
+pub zennode_defs::AutoWhiteBalanceDef::strength: f32
+pub struct zennode_defs::AutoWhiteBalanceDefNodeDef
+pub struct zennode_defs::BasecurveToneMap
+pub zennode_defs::BasecurveToneMap::chroma_compression: f32
+pub zennode_defs::BasecurveToneMap::preset: alloc::string::String
+pub struct zennode_defs::BasecurveToneMapNodeDef
+pub struct zennode_defs::BilateralDef
+pub zennode_defs::BilateralDef::range_sigma: f32
+pub zennode_defs::BilateralDef::spatial_sigma: f32
+pub zennode_defs::BilateralDef::strength: f32
+pub struct zennode_defs::BilateralDefNodeDef
+pub struct zennode_defs::BlackPoint
+pub zennode_defs::BlackPoint::level: f32
+pub struct zennode_defs::BlackPointNodeDef
+pub struct zennode_defs::Bloom
+pub zennode_defs::Bloom::amount: f32
+pub zennode_defs::Bloom::sigma: f32
+pub zennode_defs::Bloom::threshold: f32
+pub struct zennode_defs::BloomNodeDef
+pub struct zennode_defs::BlurDef
+pub zennode_defs::BlurDef::sigma: f32
+pub struct zennode_defs::BlurDefNodeDef
+pub struct zennode_defs::Brilliance
+pub zennode_defs::Brilliance::amount: f32
+pub zennode_defs::Brilliance::highlight_strength: f32
+pub zennode_defs::Brilliance::shadow_strength: f32
+pub zennode_defs::Brilliance::sigma: f32
+pub struct zennode_defs::BrillianceNodeDef
+pub struct zennode_defs::BwMixer
+pub zennode_defs::BwMixer::weights: [f32; 8]
+pub struct zennode_defs::BwMixerNodeDef
+pub struct zennode_defs::CameraCalibration
+pub zennode_defs::CameraCalibration::blue_hue: f32
+pub zennode_defs::CameraCalibration::blue_saturation: f32
+pub zennode_defs::CameraCalibration::green_hue: f32
+pub zennode_defs::CameraCalibration::green_saturation: f32
+pub zennode_defs::CameraCalibration::red_hue: f32
+pub zennode_defs::CameraCalibration::red_saturation: f32
+pub zennode_defs::CameraCalibration::shadow_tint: f32
+pub struct zennode_defs::CameraCalibrationNodeDef
+pub struct zennode_defs::ChannelCurvesDef
+pub zennode_defs::ChannelCurvesDef::blue_points: alloc::string::String
+pub zennode_defs::ChannelCurvesDef::green_points: alloc::string::String
+pub zennode_defs::ChannelCurvesDef::red_points: alloc::string::String
+pub struct zennode_defs::ChannelCurvesDefNodeDef
+pub struct zennode_defs::ChromaticAberrationDef
+pub zennode_defs::ChromaticAberrationDef::shift_a: f32
+pub zennode_defs::ChromaticAberrationDef::shift_b: f32
+pub struct zennode_defs::ChromaticAberrationDefNodeDef
+pub struct zennode_defs::Clarity
+pub zennode_defs::Clarity::amount: f32
+pub zennode_defs::Clarity::sigma: f32
+pub struct zennode_defs::ClarityNodeDef
+pub struct zennode_defs::ColorGrading
+pub zennode_defs::ColorGrading::balance: f32
+pub zennode_defs::ColorGrading::highlight_a: f32
+pub zennode_defs::ColorGrading::highlight_b: f32
+pub zennode_defs::ColorGrading::midtone_a: f32
+pub zennode_defs::ColorGrading::midtone_b: f32
+pub zennode_defs::ColorGrading::shadow_a: f32
+pub zennode_defs::ColorGrading::shadow_b: f32
+pub struct zennode_defs::ColorGradingNodeDef
+pub struct zennode_defs::ColorMatrix
+pub zennode_defs::ColorMatrix::matrix: [f32; 25]
+pub struct zennode_defs::ColorMatrixNodeDef
+pub struct zennode_defs::Contrast
+pub zennode_defs::Contrast::amount: f32
+pub struct zennode_defs::ContrastNodeDef
+pub struct zennode_defs::CubeLut
+pub zennode_defs::CubeLut::strength: f32
+pub struct zennode_defs::CubeLutNodeDef
+pub struct zennode_defs::Dehaze
+pub zennode_defs::Dehaze::strength: f32
+pub struct zennode_defs::DehazeNodeDef
+pub struct zennode_defs::DevignetteDef
+pub zennode_defs::DevignetteDef::exponent: f32
+pub zennode_defs::DevignetteDef::strength: f32
+pub struct zennode_defs::DevignetteDefNodeDef
+pub struct zennode_defs::DtSigmoid
+pub zennode_defs::DtSigmoid::contrast: f32
+pub zennode_defs::DtSigmoid::hue_preservation: f32
+pub zennode_defs::DtSigmoid::skew: f32
+pub struct zennode_defs::DtSigmoidNodeDef
+pub struct zennode_defs::EdgeDetectDef
+pub zennode_defs::EdgeDetectDef::mode: i32
+pub zennode_defs::EdgeDetectDef::strength: f32
+pub struct zennode_defs::EdgeDetectDefNodeDef
+pub struct zennode_defs::Exposure
+pub zennode_defs::Exposure::stops: f32
+pub struct zennode_defs::ExposureNodeDef
+pub struct zennode_defs::FilmLook
+pub zennode_defs::FilmLook::preset: alloc::string::String
+pub zennode_defs::FilmLook::strength: f32
+pub struct zennode_defs::FilmLookNodeDef
+pub struct zennode_defs::FusedAdjustDef
+pub zennode_defs::FusedAdjustDef::black_point: f32
+pub zennode_defs::FusedAdjustDef::contrast: f32
+pub zennode_defs::FusedAdjustDef::dehaze: f32
+pub zennode_defs::FusedAdjustDef::exposure: f32
+pub zennode_defs::FusedAdjustDef::highlights: f32
+pub zennode_defs::FusedAdjustDef::saturation: f32
+pub zennode_defs::FusedAdjustDef::shadows: f32
+pub zennode_defs::FusedAdjustDef::temperature: f32
+pub zennode_defs::FusedAdjustDef::tint: f32
+pub zennode_defs::FusedAdjustDef::vibrance: f32
+pub zennode_defs::FusedAdjustDef::vibrance_protection: f32
+pub zennode_defs::FusedAdjustDef::white_point: f32
+pub struct zennode_defs::FusedAdjustDefNodeDef
+pub struct zennode_defs::GamutExpandDef
+pub zennode_defs::GamutExpandDef::strength: f32
+pub struct zennode_defs::GamutExpandDefNodeDef
+pub struct zennode_defs::Grain
+pub zennode_defs::Grain::amount: f32
+pub zennode_defs::Grain::seed: i32
+pub zennode_defs::Grain::size: f32
+pub struct zennode_defs::GrainNodeDef
+pub struct zennode_defs::Grayscale
+pub zennode_defs::Grayscale::algorithm: alloc::string::String
+pub struct zennode_defs::GrayscaleNodeDef
+pub struct zennode_defs::HighlightRecovery
+pub zennode_defs::HighlightRecovery::strength: f32
+pub struct zennode_defs::HighlightRecoveryNodeDef
+pub struct zennode_defs::HighlightsShadows
+pub zennode_defs::HighlightsShadows::highlight_threshold: f32
+pub zennode_defs::HighlightsShadows::highlights: f32
+pub zennode_defs::HighlightsShadows::shadow_threshold: f32
+pub zennode_defs::HighlightsShadows::shadows: f32
+pub struct zennode_defs::HighlightsShadowsNodeDef
+pub struct zennode_defs::HslAdjust
+pub zennode_defs::HslAdjust::hue: [f32; 8]
+pub zennode_defs::HslAdjust::luminance: [f32; 8]
+pub zennode_defs::HslAdjust::saturation: [f32; 8]
+pub struct zennode_defs::HslAdjustNodeDef
+pub struct zennode_defs::HueCurves
+pub struct zennode_defs::HueCurvesNodeDef
+pub struct zennode_defs::HueRotate
+pub zennode_defs::HueRotate::degrees: f32
+pub struct zennode_defs::HueRotateNodeDef
+pub struct zennode_defs::Invert
+pub zennode_defs::Invert::enabled: bool
+pub struct zennode_defs::InvertNodeDef
+pub struct zennode_defs::Levels
+pub zennode_defs::Levels::gamma: f32
+pub zennode_defs::Levels::in_black: f32
+pub zennode_defs::Levels::in_white: f32
+pub zennode_defs::Levels::out_black: f32
+pub zennode_defs::Levels::out_white: f32
+pub struct zennode_defs::LevelsNodeDef
+pub struct zennode_defs::LocalToneMapDef
+pub zennode_defs::LocalToneMapDef::compression: f32
+pub zennode_defs::LocalToneMapDef::detail_boost: f32
+pub zennode_defs::LocalToneMapDef::sigma: f32
+pub struct zennode_defs::LocalToneMapDefNodeDef
+pub struct zennode_defs::MedianBlurDef
+pub zennode_defs::MedianBlurDef::filter_chroma: bool
+pub zennode_defs::MedianBlurDef::radius: i32
+pub struct zennode_defs::MedianBlurDefNodeDef
+pub struct zennode_defs::NoiseReduction
+pub zennode_defs::NoiseReduction::chroma: f32
+pub zennode_defs::NoiseReduction::chroma_detail: f32
+pub zennode_defs::NoiseReduction::detail: f32
+pub zennode_defs::NoiseReduction::luminance: f32
+pub zennode_defs::NoiseReduction::luminance_contrast: f32
+pub zennode_defs::NoiseReduction::scales: i32
+pub struct zennode_defs::NoiseReductionNodeDef
+pub struct zennode_defs::ParametricCurve
+pub zennode_defs::ParametricCurve::darks: f32
+pub zennode_defs::ParametricCurve::highlights: f32
+pub zennode_defs::ParametricCurve::lights: f32
+pub zennode_defs::ParametricCurve::shadows: f32
+pub zennode_defs::ParametricCurve::split_highlights: f32
+pub zennode_defs::ParametricCurve::split_midtones: f32
+pub zennode_defs::ParametricCurve::split_shadows: f32
+pub struct zennode_defs::ParametricCurveNodeDef
+pub struct zennode_defs::RotateDef
+pub zennode_defs::RotateDef::angle: f32
+pub zennode_defs::RotateDef::mode: i32
+pub struct zennode_defs::RotateDefNodeDef
+pub struct zennode_defs::Saturation
+pub zennode_defs::Saturation::factor: f32
+pub struct zennode_defs::SaturationNodeDef
+pub struct zennode_defs::Sepia
+pub zennode_defs::Sepia::amount: f32
+pub struct zennode_defs::SepiaNodeDef
+pub struct zennode_defs::ShadowLift
+pub zennode_defs::ShadowLift::strength: f32
+pub struct zennode_defs::ShadowLiftNodeDef
+pub struct zennode_defs::Sharpen
+pub zennode_defs::Sharpen::amount: f32
+pub zennode_defs::Sharpen::sigma: f32
+pub struct zennode_defs::SharpenNodeDef
+pub struct zennode_defs::Sigmoid
+pub zennode_defs::Sigmoid::chroma_compression: f32
+pub zennode_defs::Sigmoid::contrast: f32
+pub zennode_defs::Sigmoid::skew: f32
+pub struct zennode_defs::SigmoidNodeDef
+pub struct zennode_defs::Temperature
+pub zennode_defs::Temperature::shift: f32
+pub struct zennode_defs::TemperatureNodeDef
+pub struct zennode_defs::Texture
+pub zennode_defs::Texture::amount: f32
+pub zennode_defs::Texture::sigma: f32
+pub struct zennode_defs::TextureNodeDef
+pub struct zennode_defs::Tint
+pub zennode_defs::Tint::shift: f32
+pub struct zennode_defs::TintNodeDef
+pub struct zennode_defs::ToneCurve
+pub zennode_defs::ToneCurve::points: alloc::string::String
+pub struct zennode_defs::ToneCurveNodeDef
+pub struct zennode_defs::ToneEqualizerDef
+pub zennode_defs::ToneEqualizerDef::edge_preservation: f32
+pub zennode_defs::ToneEqualizerDef::smoothing: f32
+pub zennode_defs::ToneEqualizerDef::zones: [f32; 9]
+pub struct zennode_defs::ToneEqualizerDefNodeDef
+pub struct zennode_defs::Vibrance
+pub zennode_defs::Vibrance::amount: f32
+pub zennode_defs::Vibrance::protection: f32
+pub struct zennode_defs::VibranceNodeDef
+pub struct zennode_defs::Vignette
+pub zennode_defs::Vignette::feather: f32
+pub zennode_defs::Vignette::midpoint: f32
+pub zennode_defs::Vignette::roundness: f32
+pub zennode_defs::Vignette::strength: f32
+pub struct zennode_defs::VignetteNodeDef
+pub struct zennode_defs::WarpDef
+pub zennode_defs::WarpDef::background: i32
+pub zennode_defs::WarpDef::interpolation: i32
+pub zennode_defs::WarpDef::matrix: [f32; 9]
+pub struct zennode_defs::WarpDefNodeDef
+pub struct zennode_defs::WhitePoint
+pub zennode_defs::WhitePoint::headroom: f32
+pub zennode_defs::WhitePoint::level: f32
+pub struct zennode_defs::WhitePointNodeDef
+pub struct zennode_defs::WhitesBlacks
+pub zennode_defs::WhitesBlacks::blacks: f32
+pub zennode_defs::WhitesBlacks::whites: f32
+pub struct zennode_defs::WhitesBlacksNodeDef
+pub static zennode_defs::ADAPTIVE_SHARPEN_NODE: zennode_defs::AdaptiveSharpenNodeDef
+pub static zennode_defs::ALL: &[&dyn zennode::traits::NodeDef]
+pub static zennode_defs::ALPHA_NODE: zennode_defs::AlphaNodeDef
+pub static zennode_defs::ASC_CDL_NODE: zennode_defs::AscCdlNodeDef
+pub static zennode_defs::AUTO_CONTRAST_DEF_NODE: zennode_defs::AutoContrastDefNodeDef
+pub static zennode_defs::AUTO_EXPOSURE_DEF_NODE: zennode_defs::AutoExposureDefNodeDef
+pub static zennode_defs::AUTO_LEVELS_DEF_NODE: zennode_defs::AutoLevelsDefNodeDef
+pub static zennode_defs::AUTO_TONE_DEF_NODE: zennode_defs::AutoToneDefNodeDef
+pub static zennode_defs::AUTO_VIBRANCE_DEF_NODE: zennode_defs::AutoVibranceDefNodeDef
+pub static zennode_defs::AUTO_WHITE_BALANCE_DEF_NODE: zennode_defs::AutoWhiteBalanceDefNodeDef
+pub static zennode_defs::BASECURVE_TONE_MAP_NODE: zennode_defs::BasecurveToneMapNodeDef
+pub static zennode_defs::BILATERAL_DEF_NODE: zennode_defs::BilateralDefNodeDef
+pub static zennode_defs::BLACK_POINT_NODE: zennode_defs::BlackPointNodeDef
+pub static zennode_defs::BLOOM_NODE: zennode_defs::BloomNodeDef
+pub static zennode_defs::BLUR_DEF_NODE: zennode_defs::BlurDefNodeDef
+pub static zennode_defs::BRILLIANCE_NODE: zennode_defs::BrillianceNodeDef
+pub static zennode_defs::BW_MIXER_NODE: zennode_defs::BwMixerNodeDef
+pub static zennode_defs::CAMERA_CALIBRATION_NODE: zennode_defs::CameraCalibrationNodeDef
+pub static zennode_defs::CHANNEL_CURVES_DEF_NODE: zennode_defs::ChannelCurvesDefNodeDef
+pub static zennode_defs::CHROMATIC_ABERRATION_DEF_NODE: zennode_defs::ChromaticAberrationDefNodeDef
+pub static zennode_defs::CLARITY_NODE: zennode_defs::ClarityNodeDef
+pub static zennode_defs::COLOR_GRADING_NODE: zennode_defs::ColorGradingNodeDef
+pub static zennode_defs::COLOR_MATRIX_NODE: zennode_defs::ColorMatrixNodeDef
+pub static zennode_defs::CONTRAST_NODE: zennode_defs::ContrastNodeDef
+pub static zennode_defs::CUBE_LUT_NODE: zennode_defs::CubeLutNodeDef
+pub static zennode_defs::DEHAZE_NODE: zennode_defs::DehazeNodeDef
+pub static zennode_defs::DEVIGNETTE_DEF_NODE: zennode_defs::DevignetteDefNodeDef
+pub static zennode_defs::DT_SIGMOID_NODE: zennode_defs::DtSigmoidNodeDef
+pub static zennode_defs::EDGE_DETECT_DEF_NODE: zennode_defs::EdgeDetectDefNodeDef
+pub static zennode_defs::EXPOSURE_NODE: zennode_defs::ExposureNodeDef
+pub static zennode_defs::FILM_LOOK_NODE: zennode_defs::FilmLookNodeDef
+pub static zennode_defs::FUSED_ADJUST_DEF_NODE: zennode_defs::FusedAdjustDefNodeDef
+pub static zennode_defs::GAMUT_EXPAND_DEF_NODE: zennode_defs::GamutExpandDefNodeDef
+pub static zennode_defs::GEOMETRY: &[&dyn zennode::traits::NodeDef]
+pub static zennode_defs::GRAIN_NODE: zennode_defs::GrainNodeDef
+pub static zennode_defs::GRAYSCALE_NODE: zennode_defs::GrayscaleNodeDef
+pub static zennode_defs::HIGHLIGHTS_SHADOWS_NODE: zennode_defs::HighlightsShadowsNodeDef
+pub static zennode_defs::HIGHLIGHT_RECOVERY_NODE: zennode_defs::HighlightRecoveryNodeDef
+pub static zennode_defs::HSL_ADJUST_NODE: zennode_defs::HslAdjustNodeDef
+pub static zennode_defs::HUE_CURVES_NODE: zennode_defs::HueCurvesNodeDef
+pub static zennode_defs::HUE_ROTATE_NODE: zennode_defs::HueRotateNodeDef
+pub static zennode_defs::INVERT_NODE: zennode_defs::InvertNodeDef
+pub static zennode_defs::LEVELS_NODE: zennode_defs::LevelsNodeDef
+pub static zennode_defs::LOCAL_TONE_MAP_DEF_NODE: zennode_defs::LocalToneMapDefNodeDef
+pub static zennode_defs::MEDIAN_BLUR_DEF_NODE: zennode_defs::MedianBlurDefNodeDef
+pub static zennode_defs::NOISE_REDUCTION_NODE: zennode_defs::NoiseReductionNodeDef
+pub static zennode_defs::PARAMETRIC_CURVE_NODE: zennode_defs::ParametricCurveNodeDef
+pub static zennode_defs::ROTATE_DEF_NODE: zennode_defs::RotateDefNodeDef
+pub static zennode_defs::SATURATION_NODE: zennode_defs::SaturationNodeDef
+pub static zennode_defs::SEPIA_NODE: zennode_defs::SepiaNodeDef
+pub static zennode_defs::SHADOW_LIFT_NODE: zennode_defs::ShadowLiftNodeDef
+pub static zennode_defs::SHARPEN_NODE: zennode_defs::SharpenNodeDef
+pub static zennode_defs::SIGMOID_NODE: zennode_defs::SigmoidNodeDef
+pub static zennode_defs::TEMPERATURE_NODE: zennode_defs::TemperatureNodeDef
+pub static zennode_defs::TEXTURE_NODE: zennode_defs::TextureNodeDef
+pub static zennode_defs::TINT_NODE: zennode_defs::TintNodeDef
+pub static zennode_defs::TONE_CURVE_NODE: zennode_defs::ToneCurveNodeDef
+pub static zennode_defs::TONE_EQUALIZER_DEF_NODE: zennode_defs::ToneEqualizerDefNodeDef
+pub static zennode_defs::VIBRANCE_NODE: zennode_defs::VibranceNodeDef
+pub static zennode_defs::VIGNETTE_NODE: zennode_defs::VignetteNodeDef
+pub static zennode_defs::WARP_DEF_NODE: zennode_defs::WarpDefNodeDef
+pub static zennode_defs::WHITES_BLACKS_NODE: zennode_defs::WhitesBlacksNodeDef
+pub static zennode_defs::WHITE_POINT_NODE: zennode_defs::WhitePointNodeDef
+pub fn zennode_defs::is_zenfilters_node(&str) -> bool
+pub fn zennode_defs::node_to_filter(&dyn zennode::traits::NodeInstance) -> core::option::Option<alloc::boxed::Box<dyn Filter>>
+pub fn zennode_defs::register(&mut zennode::registry::NodeRegistry)
+pub fn zennode_defs::register_all(&mut zennode::registry::NodeRegistry)
+pub fn PipelineConfig::linear_rgb() -> Self
+pub fn PipelineConfig::srgb_compat() -> Self
+pub fn fused_interleaved_adjust(&[f32], &mut [f32], u32, &zenpixels_convert::gamut::GamutMatrix, &zenpixels_convert::gamut::GamutMatrix, f32, f32, &FusedAdjustParams)
+
+## trait impls (241 types)
+
+FusedAdjustParams: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+ResizePhase: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+document::lsd::LineSegment: Clone, Debug
+document::quad::DocumentQuad: Clone, Debug
+filter_compat::CompatIssue: serde_core::de::Deserialize<'static>, serde_core::ser::Serialize
+filter_compat::FilterTag: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filter_compat::RangeConflict: serde_core::de::Deserialize<'static>, serde_core::ser::Serialize
+filters::AdaptiveSharpen: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Alpha: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AscCdl: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoContrast: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoExposure: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoLevels: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoTone: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoVibrance: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::AutoWhiteBalance: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::BackgroundFlatten: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::BasecurvePreset: serde_core::ser::Serialize
+filters::BasecurveToneMap: serde_core::de::Deserialize<'static>, serde_core::ser::Serialize
+filters::Bilateral: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::BlackPoint: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Bloom: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Blur: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Brilliance: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::BwMixer: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::CameraCalibration: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ChannelCurves: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ChromaticAberration: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Clarity: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ClipartFlatten: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ClusterModel: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ColorGrading: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ColorMatrix: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Contrast: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ConvolutionKernel: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Convolve: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ConvolveTarget: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::CubeLut: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Dehaze: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Devignette: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::EdgeDetect: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::EdgeMode: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Exposure: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::FilmLook: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::FilmPreset: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::FusedAdjust: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::GamutExpand: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Grain: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Grayscale: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::HighlightRecovery: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::HighlightsShadows: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::HslAdjust: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::HueCurves: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::HueRotate: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ImageFeatures: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Invert: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Levels: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::LinearModel: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::LocalToneMap: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::MedianBlur: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::MlpLut: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::MorphOp: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Morphology: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::MotionBlur: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::NoiseReduction: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ParametricCurve: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::PolarWarp: Clone, Debug, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Posterize: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Rotate: Clone, Copy, Debug, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::RotateMode: Clone, Copy, Debug, Default, PartialEq, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Saturation: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Sepia: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ShadowLift: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Sharpen: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Sigmoid: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Solarize: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Temperature: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::TensorLut: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Texture: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Tint: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ToneCurve: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ToneEqualizer: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::TunedParams: Clone, Debug, Default, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Vibrance: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Vignette: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::Warp: Clone, Debug, Default, Filter, param_schema::Describe, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::WarpBackground: Clone, Copy, Debug, PartialEq, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::WarpInterpolation: Clone, Copy, Debug, Eq, PartialEq, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::WhitePoint: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::WhitesBlacks: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::ZoomBlur: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::dt_sigmoid::DtSigmoidParams: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::ChannelPosterize: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::ChannelSharpen: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::ChannelSolarize: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::Clahe: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::DifferenceEmboss: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::GaussianMotionBlur: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::HslSaturate: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::LaplacianEdge: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::LinearBrightness: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::LinearContrast: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::LumaGrayscale: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::Normalize: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+filters::srgb_compat::SigmoidalContrast: Clone, Debug, Default, Filter, serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+masked::Mask: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+param_schema::FilterGroup: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+param_schema::FilterSchema: serde_core::ser::Serialize
+param_schema::ParamDesc: serde_core::ser::Serialize
+param_schema::ParamKind: serde_core::ser::Serialize
+param_schema::ParamValue: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+param_schema::SliderMapping: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+presets::Preset: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+presets::PresetAdjust: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+presets::PresetCategory: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+presets::PresetSigmoid: serde_core::de::Deserialize<'de>, serde_core::ser::Serialize
+segment::SegmentConfig: Clone, Debug, Default
+segment::SegmentMasks: Clone, Debug
+srgb_filters::SrgbColorFilter: Clone, Debug
+zennode_defs::AdaptiveSharpen: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AdaptiveSharpenNodeDef: zennode::traits::NodeDef
+zennode_defs::Alpha: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AlphaNodeDef: zennode::traits::NodeDef
+zennode_defs::AscCdl: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AscCdlNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoContrastDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoContrastDefNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoExposureDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoExposureDefNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoLevelsDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoLevelsDefNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoToneDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoToneDefNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoVibranceDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoVibranceDefNodeDef: zennode::traits::NodeDef
+zennode_defs::AutoWhiteBalanceDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoWhiteBalanceDefNodeDef: zennode::traits::NodeDef
+zennode_defs::BasecurveToneMap: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BasecurveToneMapNodeDef: zennode::traits::NodeDef
+zennode_defs::BilateralDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BilateralDefNodeDef: zennode::traits::NodeDef
+zennode_defs::BlackPoint: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BlackPointNodeDef: zennode::traits::NodeDef
+zennode_defs::Bloom: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BloomNodeDef: zennode::traits::NodeDef
+zennode_defs::BlurDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BlurDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Brilliance: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BrillianceNodeDef: zennode::traits::NodeDef
+zennode_defs::BwMixer: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::BwMixerNodeDef: zennode::traits::NodeDef
+zennode_defs::CameraCalibration: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::CameraCalibrationNodeDef: zennode::traits::NodeDef
+zennode_defs::ChannelCurvesDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ChannelCurvesDefNodeDef: zennode::traits::NodeDef
+zennode_defs::ChromaticAberrationDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ChromaticAberrationDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Clarity: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ClarityNodeDef: zennode::traits::NodeDef
+zennode_defs::ColorGrading: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ColorGradingNodeDef: zennode::traits::NodeDef
+zennode_defs::ColorMatrix: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ColorMatrixNodeDef: zennode::traits::NodeDef
+zennode_defs::Contrast: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ContrastNodeDef: zennode::traits::NodeDef
+zennode_defs::CubeLut: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::CubeLutNodeDef: zennode::traits::NodeDef
+zennode_defs::Dehaze: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::DehazeNodeDef: zennode::traits::NodeDef
+zennode_defs::DevignetteDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::DevignetteDefNodeDef: zennode::traits::NodeDef
+zennode_defs::DtSigmoid: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::DtSigmoidNodeDef: zennode::traits::NodeDef
+zennode_defs::EdgeDetectDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::EdgeDetectDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Exposure: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ExposureNodeDef: zennode::traits::NodeDef
+zennode_defs::FilmLook: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::FilmLookNodeDef: zennode::traits::NodeDef
+zennode_defs::FusedAdjustDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::FusedAdjustDefNodeDef: zennode::traits::NodeDef
+zennode_defs::GamutExpandDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::GamutExpandDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Grain: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::GrainNodeDef: zennode::traits::NodeDef
+zennode_defs::Grayscale: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::GrayscaleNodeDef: zennode::traits::NodeDef
+zennode_defs::HighlightRecovery: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::HighlightRecoveryNodeDef: zennode::traits::NodeDef
+zennode_defs::HighlightsShadows: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::HighlightsShadowsNodeDef: zennode::traits::NodeDef
+zennode_defs::HslAdjust: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::HslAdjustNodeDef: zennode::traits::NodeDef
+zennode_defs::HueCurves: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::HueCurvesNodeDef: zennode::traits::NodeDef
+zennode_defs::HueRotate: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::HueRotateNodeDef: zennode::traits::NodeDef
+zennode_defs::Invert: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::InvertNodeDef: zennode::traits::NodeDef
+zennode_defs::Levels: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::LevelsNodeDef: zennode::traits::NodeDef
+zennode_defs::LocalToneMapDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::LocalToneMapDefNodeDef: zennode::traits::NodeDef
+zennode_defs::MedianBlurDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::MedianBlurDefNodeDef: zennode::traits::NodeDef
+zennode_defs::NoiseReduction: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::NoiseReductionNodeDef: zennode::traits::NodeDef
+zennode_defs::ParametricCurve: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ParametricCurveNodeDef: zennode::traits::NodeDef
+zennode_defs::RotateDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::RotateDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Saturation: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::SaturationNodeDef: zennode::traits::NodeDef
+zennode_defs::Sepia: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::SepiaNodeDef: zennode::traits::NodeDef
+zennode_defs::ShadowLift: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ShadowLiftNodeDef: zennode::traits::NodeDef
+zennode_defs::Sharpen: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::SharpenNodeDef: zennode::traits::NodeDef
+zennode_defs::Sigmoid: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::SigmoidNodeDef: zennode::traits::NodeDef
+zennode_defs::Temperature: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::TemperatureNodeDef: zennode::traits::NodeDef
+zennode_defs::Texture: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::TextureNodeDef: zennode::traits::NodeDef
+zennode_defs::Tint: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::TintNodeDef: zennode::traits::NodeDef
+zennode_defs::ToneCurve: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ToneCurveNodeDef: zennode::traits::NodeDef
+zennode_defs::ToneEqualizerDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::ToneEqualizerDefNodeDef: zennode::traits::NodeDef
+zennode_defs::Vibrance: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::VibranceNodeDef: zennode::traits::NodeDef
+zennode_defs::Vignette: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::VignetteNodeDef: zennode::traits::NodeDef
+zennode_defs::WarpDef: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::WarpDefNodeDef: zennode::traits::NodeDef
+zennode_defs::WhitePoint: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::WhitePointNodeDef: zennode::traits::NodeDef
+zennode_defs::WhitesBlacks: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::WhitesBlacksNodeDef: zennode::traits::NodeDef
+
+## auto traits
+
+150 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe

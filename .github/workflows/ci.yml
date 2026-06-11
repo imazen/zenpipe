@@ -13,26 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Public-API snapshot freshness gate (docs/public-api/, tests/public_api_doc.rs).
-  # The reusable rust-ci.yml below has no env passthrough, so its matrix jobs
-  # skip the snapshot test (ZEN_API_DOC unset under GITHUB_ACTIONS == off);
-  # this job runs the =check gate with nightly rustdoc + cargo-public-api.
-  api-doc:
-    name: Public-API snapshots
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: imazen/zen-workspace/.github/actions/setup@main
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for cargo-public-api
-      - uses: dtolnay/rust-toolchain@stable # restore stable as default
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-public-api
-      - name: Public-API snapshots are current
-        run: cargo test -p zenpipe --test public_api_doc
-        env:
-          ZEN_API_DOC: check
-
   rust:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:

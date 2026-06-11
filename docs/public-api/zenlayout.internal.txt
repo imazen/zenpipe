@@ -1,0 +1,77 @@
+# zenlayout public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                           21
+#   trait roster entries (type × trait)        30
+#
+# per-module pub lines:
+#   constraint                        5
+#   orientation                       1
+#   plan                             10
+#   riapi                             3
+#   smart_crop                        2
+
+## items (21 lines)
+
+pub fn constraint::ConstraintMode::assert_fields_are_eq(&self)
+pub fn constraint::Layout::assert_fields_are_eq(&self)
+pub fn constraint::LayoutError::assert_fields_are_eq(&self)
+pub fn constraint::Rect::assert_fields_are_eq(&self)
+pub fn constraint::Size::assert_fields_are_eq(&self)
+pub fn orientation::Orientation::assert_fields_are_eq(&self)
+pub fn plan::Align::assert_fields_are_eq(&self)
+pub fn plan::CodecLayout::assert_fields_are_eq(&self)
+pub fn plan::DecoderOffer::assert_fields_are_eq(&self)
+pub fn plan::DecoderRequest::assert_fields_are_eq(&self)
+pub fn plan::FlipAxis::assert_fields_are_eq(&self)
+pub fn plan::OutputLimits::assert_fields_are_eq(&self)
+pub fn plan::Padding::assert_fields_are_eq(&self)
+pub fn plan::PlaneLayout::assert_fields_are_eq(&self)
+pub fn plan::Rotation::assert_fields_are_eq(&self)
+pub fn plan::Subsampling::assert_fields_are_eq(&self)
+pub fn riapi::ParseWarning::assert_fields_are_eq(&self)
+pub fn riapi::instructions::FitMode::assert_fields_are_eq(&self)
+pub fn riapi::instructions::ScaleMode::assert_fields_are_eq(&self)
+pub fn smart_crop::AspectRatio::assert_fields_are_eq(&self)
+pub fn smart_crop::CropMode::assert_fields_are_eq(&self)
+
+## trait impls (30 types)
+
+constraint::CanvasColor: TrivialClone
+constraint::ConstraintMode: TrivialClone
+constraint::Gravity: TrivialClone
+constraint::LayoutError: TrivialClone
+constraint::Rect: TrivialClone
+constraint::Size: TrivialClone
+constraint::SourceCrop: TrivialClone
+dimension::ExpandEffect: TrivialClone
+dimension::PadEffect: TrivialClone
+dimension::ResolutionPolicy: TrivialClone
+dimension::RotateEffect: TrivialClone
+dimension::RotateMode: TrivialClone
+dimension::TrimEffect: TrivialClone
+orientation::Orientation: TrivialClone
+plan::Align: TrivialClone
+plan::CodecLayout: TrivialClone
+plan::FlipAxis: TrivialClone
+plan::OutputLimits: TrivialClone
+plan::Padding: TrivialClone
+plan::PlaneLayout: TrivialClone
+plan::Region: TrivialClone
+plan::RegionCoord: TrivialClone
+plan::Rotation: TrivialClone
+plan::Subsampling: TrivialClone
+riapi::instructions::Anchor1D: TrivialClone
+riapi::instructions::FitMode: TrivialClone
+riapi::instructions::ScaleMode: TrivialClone
+smart_crop::AspectRatio: TrivialClone
+smart_crop::CropMode: TrivialClone
+smart_crop::FocusRect: TrivialClone

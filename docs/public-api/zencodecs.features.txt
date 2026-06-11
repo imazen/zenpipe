@@ -1,0 +1,64 @@
+# zencodecs public API — additions from non-default features
+# features: jxl-encode,cms
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 1
+#   pub types (struct/enum/trait/alias)         4
+#   free functions                              9
+#   struct fields                              10
+#   enum variants                               5
+#   re-exports                                  2
+#   trait roster entries (type × trait)         9
+#   auto-trait-complete types                   2
+#
+# per-module pub lines:
+#   (root)                           13
+#   cms                              18
+
+## items (29 lines)
+
+pub use JxlEncodeJob
+pub use JxlEncoderConfig
+pub mod cms
+pub cms::CmsMode::Compat
+pub cms::CmsMode::SceneReferred
+pub cms::PngColorInfo::chromaticities: core::option::Option<[u32; 8]>
+pub cms::PngColorInfo::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub cms::PngColorInfo::gamma: core::option::Option<u32>
+pub cms::PngColorInfo::has_iccp_chunk: bool
+pub cms::PngColorInfo::has_srgb_chunk: bool
+pub fn cms::is_srgb_for_mode(&[u8], cms::CmsMode) -> bool
+pub fn cms::is_srgb_icc_structural(&[u8]) -> bool
+pub fn cms::parse_png_color_chunks(&[u8]) -> cms::PngColorInfo
+pub fn cms::png_srgb_transform_icc(&[u8], cms::CmsMode) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub fn cms::png_srgb_transform_icc_ex(&[u8], bool) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub fn cms::srgb_icc_profile() -> alloc::vec::Vec<u8>
+pub fn cms::srgb_transform_icc(&zencodec::info::SourceColor, core::option::Option<&[u8]>, cms::CmsMode) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub fn cms::synthesize_icc_from_cicp(zenpixels::cicp::Cicp) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn cms::synthesize_icc_from_gama(u32, &core::option::Option<[u32; 8]>) -> core::option::Option<alloc::vec::Vec<u8>>
+pub enum CmsMode [also: cms]
+pub CmsMode::Compat
+pub CmsMode::SceneReferred
+pub CodecError::ColorManagement(alloc::string::String)
+pub struct PngColorInfo [also: cms]
+pub PngColorInfo::chromaticities: core::option::Option<[u32; 8]>
+pub PngColorInfo::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub PngColorInfo::gamma: core::option::Option<u32>
+pub PngColorInfo::has_iccp_chunk: bool
+pub PngColorInfo::has_srgb_chunk: bool
+
+## trait impls (2 types)
+
+cms::CmsMode: Clone, Copy, Debug, Default, Eq, PartialEq
+cms::PngColorInfo: Clone, Debug, Default
+
+## auto traits
+
+2 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe

@@ -10,7 +10,6 @@ keywords = ["image", "pipeline", "streaming", "scanline"]
 categories = ["graphics", "multimedia::images"]
 exclude = [
     "docs/",
-    "tests/public_api_doc.rs",
     "CLAUDE.md",
     "CONTEXT-HANDOFF.md",
     "FEEDBACK.md",
@@ -46,9 +45,8 @@ zennode-defs = ["zennode"]
 # High-level bytes-in/bytes-out job API (requires zennode + std + zencodecs CMS).
 # `jpeg-ultrahdr` (gain-map encode) is intentionally NOT forced here, so plain
 # web delivery (decode -> resize -> re-encode) builds without the UltraHDR stack.
-# The zencodecs<->zenjpeg gain-map bridge (gainmap.rs params_to_metadata /
-# metadata_to_params) is ported to the channels-based GainMapParams; opt in with
-# `job-ultrahdr` for gain-map encode.
+# GainMapMetadata is a type alias for zencodec::GainMapParams (ultrahdr-core
+# 0.5); opt in with `job-ultrahdr` for gain-map encode.
 job = ["zennode", "std", "zencodecs/cms"]
 # Opt-in: `job` plus gain-map (UltraHDR) encode via the zencodecs<->zenjpeg
 # bridge. Roundtrip-tested (tests/gainmap_roundtrip.rs).
@@ -172,6 +170,10 @@ required-features = ["zennode", "std"]
 
 [workspace]
 members = ["zencodecs", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
+# `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
+# `cargo test` and every CI job never compile its dependency tree or run
+# rustdoc. Regenerate via `just api-doc`.
+exclude = ["apidoc"]
 
 [workspace.dependencies]
 # ── Shared across 3+ members ──

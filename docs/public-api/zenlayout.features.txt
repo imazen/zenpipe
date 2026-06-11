@@ -1,0 +1,199 @@
+# zenlayout public API — additions from non-default features
+# features: riapi,smart-crop,std,svg
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 4
+#   pub types (struct/enum/trait/alias)        18
+#   pub consts/statics                          6
+#   free functions                              4
+#   inherent methods                           12
+#   struct fields                              70
+#   enum variants                              41
+#   trait roster entries (type × trait)        53
+#   auto-trait-complete types                  13
+#
+# per-module pub lines:
+#   (root)                            3
+#   riapi                           117
+#   smart_crop                       34
+#   svg                               1
+
+## items (150 lines)
+
+pub mod riapi
+pub mod riapi::instructions
+pub riapi::instructions::Anchor1D::Center
+pub riapi::instructions::Anchor1D::Far
+pub riapi::instructions::Anchor1D::Near
+pub riapi::instructions::Anchor1D::Percent(f32)
+pub riapi::instructions::CFocus::Auto
+pub riapi::instructions::CFocus::Faces
+pub riapi::instructions::CFocus::Point([f64; 2])
+pub riapi::instructions::CFocus::Rects(alloc::vec::Vec<[f64; 4]>)
+pub riapi::instructions::CFocus::Saliency
+pub riapi::instructions::FitMode::AspectCrop
+pub riapi::instructions::FitMode::Crop
+pub riapi::instructions::FitMode::Max
+pub riapi::instructions::FitMode::Pad
+pub riapi::instructions::FitMode::Stretch
+pub riapi::instructions::ScaleMode::Both
+pub riapi::instructions::ScaleMode::DownscaleOnly
+pub riapi::instructions::ScaleMode::UpscaleCanvas
+pub riapi::instructions::ScaleMode::UpscaleOnly
+pub riapi::instructions::Instructions::anchor: core::option::Option<(riapi::instructions::Anchor1D, riapi::instructions::Anchor1D)>
+pub riapi::instructions::Instructions::autorotate: core::option::Option<bool>
+pub riapi::instructions::Instructions::bgcolor: core::option::Option<constraint::CanvasColor>
+pub riapi::instructions::Instructions::c_finalmode: core::option::Option<alloc::string::String>
+pub riapi::instructions::Instructions::c_focus: core::option::Option<riapi::instructions::CFocus>
+pub riapi::instructions::Instructions::c_gravity: core::option::Option<[f64; 2]>
+pub riapi::instructions::Instructions::c_zoom: core::option::Option<bool>
+pub riapi::instructions::Instructions::crop: core::option::Option<[f64; 4]>
+pub riapi::instructions::Instructions::cropxunits: core::option::Option<f64>
+pub riapi::instructions::Instructions::cropyunits: core::option::Option<f64>
+pub riapi::instructions::Instructions::extras: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub riapi::instructions::Instructions::flip: core::option::Option<(bool, bool)>
+pub riapi::instructions::Instructions::h: core::option::Option<i32>
+pub riapi::instructions::Instructions::legacy_max_height: core::option::Option<i32>
+pub riapi::instructions::Instructions::legacy_max_width: core::option::Option<i32>
+pub riapi::instructions::Instructions::mode: core::option::Option<riapi::instructions::FitMode>
+pub riapi::instructions::Instructions::rotate: core::option::Option<i32>
+pub riapi::instructions::Instructions::scale: core::option::Option<riapi::instructions::ScaleMode>
+pub riapi::instructions::Instructions::sflip: core::option::Option<(bool, bool)>
+pub riapi::instructions::Instructions::srotate: core::option::Option<i32>
+pub riapi::instructions::Instructions::w: core::option::Option<i32>
+pub riapi::instructions::Instructions::zoom: core::option::Option<f64>
+pub fn riapi::instructions::Instructions::extras(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub fn riapi::instructions::Instructions::focus_needs_detection(&self) -> bool
+pub fn riapi::instructions::Instructions::focus_rects(&self) -> alloc::vec::Vec<smart_crop::FocusRect>
+pub fn riapi::instructions::Instructions::new() -> Self
+pub fn riapi::instructions::Instructions::to_pipeline(&self, u32, u32, core::option::Option<u8>) -> core::result::Result<plan::Pipeline, whereat::at::At<constraint::LayoutError>>
+#[non_exhaustive] pub enum riapi::Anchor1D [also: riapi::instructions]
+pub riapi::Anchor1D::Center
+pub riapi::Anchor1D::Far
+pub riapi::Anchor1D::Near
+pub riapi::Anchor1D::Percent(f32)
+pub enum riapi::CFocus [also: riapi::instructions]
+pub riapi::CFocus::Auto
+pub riapi::CFocus::Faces
+pub riapi::CFocus::Point([f64; 2])
+pub riapi::CFocus::Rects(alloc::vec::Vec<[f64; 4]>)
+pub riapi::CFocus::Saliency
+#[non_exhaustive] pub enum riapi::FitMode [also: riapi::instructions]
+pub riapi::FitMode::AspectCrop
+pub riapi::FitMode::Crop
+pub riapi::FitMode::Max
+pub riapi::FitMode::Pad
+pub riapi::FitMode::Stretch
+pub enum riapi::ParseWarning
+pub riapi::ParseWarning::DuplicateKey
+pub riapi::ParseWarning::DuplicateKey::key: alloc::string::String
+pub riapi::ParseWarning::DuplicateKey::value: alloc::string::String
+pub riapi::ParseWarning::KeyNotRecognized
+pub riapi::ParseWarning::KeyNotRecognized::key: alloc::string::String
+pub riapi::ParseWarning::KeyNotRecognized::value: alloc::string::String
+pub riapi::ParseWarning::ValueInvalid
+pub riapi::ParseWarning::ValueInvalid::key: &'static str
+pub riapi::ParseWarning::ValueInvalid::reason: &'static str
+pub riapi::ParseWarning::ValueInvalid::value: alloc::string::String
+#[non_exhaustive] pub enum riapi::ScaleMode [also: riapi::instructions]
+pub riapi::ScaleMode::Both
+pub riapi::ScaleMode::DownscaleOnly
+pub riapi::ScaleMode::UpscaleCanvas
+pub riapi::ScaleMode::UpscaleOnly
+#[non_exhaustive] pub struct riapi::Instructions [also: riapi::instructions]
+pub riapi::Instructions::anchor: core::option::Option<(riapi::instructions::Anchor1D, riapi::instructions::Anchor1D)>
+pub riapi::Instructions::autorotate: core::option::Option<bool>
+pub riapi::Instructions::bgcolor: core::option::Option<constraint::CanvasColor>
+pub riapi::Instructions::c_finalmode: core::option::Option<alloc::string::String>
+pub riapi::Instructions::c_focus: core::option::Option<riapi::instructions::CFocus>
+pub riapi::Instructions::c_gravity: core::option::Option<[f64; 2]>
+pub riapi::Instructions::c_zoom: core::option::Option<bool>
+pub riapi::Instructions::crop: core::option::Option<[f64; 4]>
+pub riapi::Instructions::cropxunits: core::option::Option<f64>
+pub riapi::Instructions::cropyunits: core::option::Option<f64>
+pub riapi::Instructions::extras: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub riapi::Instructions::flip: core::option::Option<(bool, bool)>
+pub riapi::Instructions::h: core::option::Option<i32>
+pub riapi::Instructions::legacy_max_height: core::option::Option<i32>
+pub riapi::Instructions::legacy_max_width: core::option::Option<i32>
+pub riapi::Instructions::mode: core::option::Option<riapi::instructions::FitMode>
+pub riapi::Instructions::rotate: core::option::Option<i32>
+pub riapi::Instructions::scale: core::option::Option<riapi::instructions::ScaleMode>
+pub riapi::Instructions::sflip: core::option::Option<(bool, bool)>
+pub riapi::Instructions::srotate: core::option::Option<i32>
+pub riapi::Instructions::w: core::option::Option<i32>
+pub riapi::Instructions::zoom: core::option::Option<f64>
+pub fn riapi::instructions::Instructions::extras(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub fn riapi::instructions::Instructions::focus_needs_detection(&self) -> bool
+pub fn riapi::instructions::Instructions::focus_rects(&self) -> alloc::vec::Vec<smart_crop::FocusRect>
+pub fn riapi::instructions::Instructions::new() -> Self
+pub fn riapi::instructions::Instructions::to_pipeline(&self, u32, u32, core::option::Option<u8>) -> core::result::Result<plan::Pipeline, whereat::at::At<constraint::LayoutError>>
+#[non_exhaustive] pub struct riapi::ParseResult
+pub riapi::ParseResult::instructions: riapi::instructions::Instructions
+pub riapi::ParseResult::warnings: alloc::vec::Vec<riapi::ParseWarning>
+pub fn riapi::parse(&str) -> riapi::ParseResult
+pub fn riapi::parse_color(&str) -> core::option::Option<constraint::CanvasColor>
+pub mod smart_crop
+#[non_exhaustive] pub enum smart_crop::CropMode
+pub smart_crop::CropMode::Maximal
+pub smart_crop::CropMode::Minimal
+pub struct smart_crop::AspectRatio
+pub smart_crop::AspectRatio::h: u32
+pub smart_crop::AspectRatio::w: u32
+pub struct smart_crop::CropConfig
+pub smart_crop::CropConfig::focus_vertical_position: f32
+pub smart_crop::CropConfig::min_focus_visibility: f32
+pub smart_crop::CropConfig::mode: smart_crop::CropMode
+pub smart_crop::CropConfig::target_aspect: smart_crop::AspectRatio
+pub smart_crop::CropConfig::zoom_padding: f32
+pub struct smart_crop::FocusRect
+pub smart_crop::FocusRect::weight: f32
+pub smart_crop::FocusRect::x1: f32
+pub smart_crop::FocusRect::x2: f32
+pub smart_crop::FocusRect::y1: f32
+pub smart_crop::FocusRect::y2: f32
+pub struct smart_crop::HeatMap
+pub smart_crop::HeatMap::data: alloc::vec::Vec<f32>
+pub smart_crop::HeatMap::height: u32
+pub smart_crop::HeatMap::width: u32
+pub struct smart_crop::SmartCropInput
+pub smart_crop::SmartCropInput::focus_regions: alloc::vec::Vec<smart_crop::FocusRect>
+pub smart_crop::SmartCropInput::heatmap: core::option::Option<smart_crop::HeatMap>
+pub fn smart_crop::SmartCropInput::compute_crop(&self, u32, u32, &smart_crop::CropConfig) -> core::option::Option<constraint::Rect>
+pub fn smart_crop::SmartCropInput::compute_crops(&self, u32, u32, &[(smart_crop::AspectRatio, smart_crop::CropMode)]) -> alloc::vec::Vec<core::option::Option<constraint::Rect>>
+pub const smart_crop::LANDSCAPE_16_9: smart_crop::AspectRatio
+pub const smart_crop::LANDSCAPE_4_3: smart_crop::AspectRatio
+pub const smart_crop::PORTRAIT_3_4: smart_crop::AspectRatio
+pub const smart_crop::PORTRAIT_4_5: smart_crop::AspectRatio
+pub const smart_crop::PORTRAIT_9_16: smart_crop::AspectRatio
+pub const smart_crop::SQUARE: smart_crop::AspectRatio
+pub fn smart_crop::compute_crop(u32, u32, &[smart_crop::FocusRect], core::option::Option<&smart_crop::HeatMap>, &smart_crop::CropConfig) -> core::option::Option<constraint::Rect>
+pub mod svg
+pub fn svg::render_layout_svg(&plan::IdealLayout, &plan::LayoutPlan) -> alloc::string::String
+
+## trait impls (13 types)
+
+riapi::ParseResult: Clone, Debug, Default
+riapi::ParseWarning: Clone, Debug, Eq, PartialEq
+riapi::instructions::Anchor1D: Clone, Copy, Debug, PartialEq
+riapi::instructions::CFocus: Clone, Debug, PartialEq
+riapi::instructions::FitMode: Clone, Copy, Debug, Eq, Hash, PartialEq
+riapi::instructions::Instructions: Clone, Debug, Default, PartialEq
+riapi::instructions::ScaleMode: Clone, Copy, Debug, Eq, Hash, PartialEq
+smart_crop::AspectRatio: Clone, Copy, Debug, Eq, Hash, PartialEq
+smart_crop::CropConfig: Clone, Debug, Default
+smart_crop::CropMode: Clone, Copy, Debug, Eq, Hash, PartialEq
+smart_crop::FocusRect: Clone, Copy, Debug, PartialEq
+smart_crop::HeatMap: Clone, Debug
+smart_crop::SmartCropInput: Clone, Debug
+
+## auto traits
+
+13 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
