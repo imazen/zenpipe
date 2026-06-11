@@ -13,6 +13,11 @@
 //! let source = IccTransformSource::new(upstream, &src_icc, &dst_icc, &MoxCms)?;
 //! ```
 
+// ColorManagement is deprecated upstream in favor of PluggableCms; this
+// source keeps the old trait until zenpipe's CMS surface migrates — the
+// generic `C: ColorManagement` parameter is public API.
+#![allow(deprecated)]
+
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

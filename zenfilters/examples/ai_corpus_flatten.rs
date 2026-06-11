@@ -17,10 +17,13 @@
 //!   - `<name>`        — the flattened result (takes the original filename)
 //!   - `_diff_<name>.png` — coloured 10× diff (orig vs flattened)
 //!   - `_skip_<name>`  — marker for a non-candidate (and `<name>` is the original)
+//!
 //! Every run reads the pristine `_orig_` as its source, so repeated runs never
 //! degrade the image and never clobber the original.
 
 #![allow(clippy::needless_range_loop)]
+// collapsing these would need let-chains (Rust 1.88+); workspace MSRV is older
+#![allow(clippy::collapsible_if)]
 
 use std::path::Path;
 

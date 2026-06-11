@@ -185,5 +185,21 @@ required-features = ["all"]
 name = "stop_and_limits"
 required-features = ["jpeg", "webp", "gif"]
 
+# Cross-codec transcode conformance: needs the core codec corpus to have
+# anything to transcode between (per-codec entries are cfg-gated inside).
+[[test]]
+name = "metadata_conformance"
+required-features = ["jpeg", "webp", "png", "gif"]
+
+# Corpus roundtrips and stop-latency probes drive real codecs; the
+# binaries are empty shells without them.
+[[test]]
+name = "corpus"
+required-features = ["jpeg", "webp", "png", "gif"]
+
+[[test]]
+name = "stop_latency"
+required-features = ["jpeg", "webp", "png", "gif"]
+
 # [patch.crates-io] moved to workspace root Cargo.toml
 

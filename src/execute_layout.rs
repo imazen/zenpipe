@@ -31,6 +31,7 @@ fn orient_from(o: Orientation) -> zenresize::OrientOutput {
 }
 
 /// Bridge: convert zenlayout CanvasColor to zenresize SolidBackground.
+#[allow(dead_code)] // not yet wired into the layout path; kept for canvas work
 fn solid_background_from_canvas_color(
     color: &zenlayout::CanvasColor,
     desc: PixelDescriptor,

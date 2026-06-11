@@ -334,7 +334,7 @@ mod tests {
 
         // Read per-pixel values regardless of what layout the pipeline
         // emitted (channel 0 is the gain value in both Gray and RGB).
-        let ch = mat.format().channels() as usize;
+        let ch = mat.format().channels();
         let values: alloc::vec::Vec<u8> = mat
             .data()
             .chunks_exact(mat.format().aligned_stride(mat.width()))

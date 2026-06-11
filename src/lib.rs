@@ -113,7 +113,10 @@ pub use zenpixels_convert::{
 pub use enough::{Stop, Unstoppable};
 
 // Re-export CMS types (std only — moxcms requires std).
+// ColorManagement is deprecated upstream in favor of PluggableCms; the
+// re-export stays until zenpipe's CMS surface migrates (public API).
 #[cfg(feature = "std")]
+#[allow(deprecated)]
 pub use zenpixels_convert::cms::{ColorManagement, RowTransform};
 #[cfg(feature = "std")]
 pub use zenpixels_convert::cms_moxcms::MoxCms;

@@ -190,7 +190,7 @@ fn composite_row_over(
     bg_width: usize,
     mode: zenblend::BlendMode,
 ) -> crate::PipeResult<()> {
-    if bg.len() % 4 != 0 || fg.len() % 4 != 0 || out.len() % 4 != 0 {
+    if !bg.len().is_multiple_of(4) || !fg.len().is_multiple_of(4) || !out.len().is_multiple_of(4) {
         return Err(at!(PipeError::DimensionMismatch(alloc::format!(
             "composite row not f32-aligned: bg={} fg={} out={}",
             bg.len(),

@@ -160,6 +160,7 @@ impl ResourceEstimate {
 
     /// Saturating add to `streaming_bytes`. Used internally so per-node
     /// accumulators can't overflow u64 over a deep graph (audit M5).
+    #[allow(dead_code)] // audit-M5 wiring pending; kept so accumulation stays saturating
     pub(crate) fn add_streaming(&mut self, bytes: u64) {
         self.streaming_bytes = self.streaming_bytes.saturating_add(bytes);
     }

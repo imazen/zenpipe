@@ -449,6 +449,7 @@ pub fn transcode_with_stop(
 /// Full transcode entry point with cancellation and per-iteration frame-
 /// count enforcement (audit H8: decoders that lazily report `frame_count`
 /// can otherwise bypass the up-front `Limits::max_frames` check).
+#[allow(clippy::too_many_arguments)] // public API; regrouping params is a break
 pub fn transcode_with_stop_and_limits(
     decoder: Box<dyn DynAnimationFrameDecoder>,
     encoder: Box<dyn DynAnimationFrameEncoder>,

@@ -81,6 +81,36 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
+// With every codec backend compiled out (zenpipe builds zencodecs with
+// `default-features = false` until nodes-* features enable codecs), the
+// per-format dispatch surface — match arms, helpers, macros, and the
+// feature-gated test bodies — is dead by construction. Relax the
+// dead-code lints for that degenerate combination only.
+#![cfg_attr(
+    not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-decode",
+        feature = "avif-encode",
+        feature = "jxl-decode",
+        feature = "jxl-encode",
+        feature = "heic-decode",
+        feature = "tiff",
+        feature = "svg",
+        feature = "jp2-decode",
+        feature = "bitmaps",
+        feature = "raw-decode"
+    )),
+    allow(
+        dead_code,
+        unused_imports,
+        unused_macros,
+        unused_variables,
+        unreachable_code
+    )
+)]
 
 extern crate alloc;
 

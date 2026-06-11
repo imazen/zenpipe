@@ -71,13 +71,13 @@ impl EffectSource {
                     })?;
                 let src_row = strip.row(r);
                 let dst_end = dst_start.checked_add(row_bytes).ok_or_else(|| {
-                    at!(crate::error::PipeError::LimitExceeded(alloc::format!(
-                        "Effect dst end overflow"
-                    )))
+                    at!(crate::error::PipeError::LimitExceeded(
+                        alloc::string::String::from("Effect dst end overflow")
+                    ))
                 })?;
                 if dst_end > data.len() {
                     return Err(at!(crate::error::PipeError::DimensionMismatch(
-                        alloc::format!("Effect upstream over-produced rows")
+                        alloc::string::String::from("Effect upstream over-produced rows")
                     )));
                 }
                 data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);

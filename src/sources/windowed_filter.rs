@@ -353,7 +353,7 @@ fn u8_row_to_f32_vec(row_u8: &[u8], expected_f32: usize) -> crate::PipeResult<Ve
             "WindowedFilter row byte size overflow: {expected_f32} f32"
         )))
     })?;
-    if row_u8.len() < needed_bytes || row_u8.len() % 4 != 0 {
+    if row_u8.len() < needed_bytes || !row_u8.len().is_multiple_of(4) {
         return Err(at!(PipeError::DimensionMismatch(alloc::format!(
             "WindowedFilter upstream row not f32-aligned or short: have {} bytes, need {}",
             row_u8.len(),
