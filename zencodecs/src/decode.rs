@@ -676,10 +676,10 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     let gm_h = gm_ref.height() as u32;
     let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
 
-    // Determine channels: if all R==G==B, it's effectively grayscale.
-    let is_gray = gm_bytes
-        .chunks_exact(3)
-        .all(|px| px[0] == px[1] && px[1] == px[2]);
+    // Collapse to single-channel when provably achromatic — the shared
+    // load-bearing analysis (R==G==B over every pixel) is the predicate.
+    use zenpixels_convert::PixelSliceLoadBearingExt as _;
+    let is_gray = gm_rgb8.as_slice().determine_load_bearing().uses_chroma == Some(false);
     let (data, channels) = if is_gray {
         let gray: Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();
         (gray, 1u8)
