@@ -6,6 +6,26 @@ Optional color management via moxcms.
 See `/home/lilith/work/codec-design/README.md` for API design guidelines.
 See `/home/lilith/work/zendiff/API_COMPARISON.md` for per-codec convergence status.
 
+## Known Bugs
+
+- **zenjpeg `parse_xmp` zeroes per-channel hdrgm fields for element-form XMP**
+  (sibling repo — fix belongs in `zenjpeg/zenjpeg/src/container/xmp.rs:255+`):
+  `extract_attribute` only handles `hdrgm:GainMapMax="…"` attribute syntax;
+  files writing `GainMapMin`/`GainMapMax`/`Gamma` as XMP *elements* (rdf:Seq
+  form — e.g. `/mnt/v/input/gainmap-samples/jpeg/seine_sdr_gainmap_srgb.jpg`,
+  whose scalar HDRCapacity* attributes parse fine) come back with
+  min=max=gamma=0. Caught by
+  `tests/gainmap_integration.rs::jpeg_ultrahdr_seine_gainmap`
+  (`params.validate()` rejects gamma=0) — failing as of 2026-06-11, exposed
+  when the long-uncompilable `jpeg-ultrahdr` targets were repaired (4a0b261).
+- **CI never builds the gain-map surface**: `.github/workflows/ci.yml` tests
+  only `--no-default-features` for zencodecs; nothing compiles
+  `--features all,cms,std --all-targets`, which is how the ultrahdr-core 0.5
+  drift rotted unseen. Add such a job.
+- `codecs/jpeg::encode_ultrahdr_rgb_f32`/`_rgba_f32` ignore `_metadata` and
+  hardcode `UhdrColorGamut::Bt709` — P3/BT.2020 HDR input is mistagged on the
+  UltraHDR encode path.
+
 ## Purpose
 
 A codec dispatch layer for image proxies, CLI tools, and batch processors that handle

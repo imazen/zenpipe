@@ -39,8 +39,49 @@ All notable changes to `zencodecs` are documented here. Format follows
 - `TranscodeOptions` gained a hand-written `Default` (was derived) because
   `MetadataPolicy` has no `Default` by design (metadata retention is an explicit
   privacy choice).
+- **Dependency-equivalence ablation** (see
+  `docs/public-api/ABLATION-zencodecs-deps.md`) — local implementations replaced
+  by their canonical homes in dependencies (0f5eb6c, d08aa89):
+  - `icc_profile_is_srgb` delegates to `zenpixels::icc::is_common_srgb`
+    (normalized-hash, web-corpus table) — drops the local 22-entry exact-byte
+    FNV table; detection is now robust to timestamp/padding-only profile
+    variants (strict superset).
+  - `cms::synthesize_icc_from_cicp` takes `zencodec::Cicp` and delegates to
+    `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp` (bundled full
+    H.273 grid, no CMS). sRGB-family CICP now answers `None` (never fabricates
+    an sRGB profile, matching the codec-sweep convention; callers already
+    treat `None` as no-transform), BT.709-transfer inputs no longer get a
+    709→sRGB micro-transform, and assigned-but-exotic code points (e.g.
+    DCI-P3) now synthesize instead of silently falling through to
+    assumed-sRGB. PQ/HLG still never produce a naive ICC→sRGB transform.
+  - JPEG probe orientation parses via `zencodec::helpers::parse_exif_orientation`
+    (was a zenjpeg::lossless reach-in + manual `Orientation::from_exif`).
+  - Both gain-map RGB→gray collapses (JXL extras, Apple ProRAW) decide via
+    `zenpixels_convert::PixelSliceLoadBearingExt::determine_load_bearing`;
+    the ProRAW path previously sampled only the first 100 pixels before
+    discarding chroma for the whole map.
+
+### Removed
+- `cms::CicpValues` — use `zencodec::Cicp` (`PngColorInfo.cicp` changed type
+  accordingly; crate is unpublished, no external users) (0f5eb6c).
+- `gainmap::params_to_metadata` / `gainmap::metadata_to_params` — identity
+  clones since ultrahdr-core 0.5 made `GainMapMetadata` an alias for
+  `zencodec::GainMapParams`; use the params directly (4a0b261).
+- Dead `decode::avif_gain_map_to_params` — unused since zenavif started
+  attaching `zencodec::gainmap::GainMapSource` with parsed params (4a0b261).
 
 ### Fixed
 - `tests/metadata_conformance.rs`: bind the parsed `Exif` before calling
   `copyright()`, which now returns a borrowing `Cow` in zencodec 0.1.21 (was a
   borrow-after-move, E0515).
+- **ultrahdr-core 0.5 drift across the `jpeg-ultrahdr` / `raw-decode-gainmap` /
+  `avif-encode` feature-gated targets** — these had stopped compiling entirely
+  (default-feature CI never builds them): flat `gain_map_max`/`gain_map_min`/
+  `gamma`/offset field literals and `GainMapMetadata::new()` against the
+  channels-based `#[non_exhaustive]` `zencodec::GainMapParams`;
+  `serialize_iso21496` → `serialize_iso21496_fmt(.., Iso21496Format::JxlJhgm)`;
+  `UhdrRawImage::from_data` → `ultrahdr_core::pixel_buffer_from_vec`;
+  `apply_gainmap` returning a `PixelBuffer` (was `.data`);
+  `zenjxl::container::is_container` → `zenjxl::is_container`; dyn decoder
+  `decode_full_frame()` → `decode()`; zenwebp configs under
+  `zenwebp::zencodec::` (4a0b261).
