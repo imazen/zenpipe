@@ -80,9 +80,14 @@ fn srgb_black_scaled() {
     check(SKCMS, "misc/sRGB_black_scaled.icc", true);
 }
 
+/// `Kodak_sRGB.icc` is a 150 KB LUT profile with a real perceptual
+/// rendering: moxcms measures max u16 identity error 15265 (~59 u8 steps)
+/// under perceptual intent (rel-colorimetric/saturation: unsupported
+/// profile connection). Substituting "it's sRGB, skip the CMS" would
+/// silently drop that transform — the pre-0.2.13 `true` was a bug.
 #[test]
 fn srgb_kodak() {
-    check(SKCMS, "misc/Kodak_sRGB.icc", true);
+    check(SKCMS, "misc/Kodak_sRGB.icc", false);
 }
 
 // ── Compact-ICC-Profiles (libjxl) ──────────────────────────────────────
@@ -108,35 +113,51 @@ fn compact_srgb_v4() {
 }
 
 // ── ICC.org v4/v5 variants ─────────────────────────────────────────────
+//
+// None of these are skip-CMS-safe, so `is_common_srgb` must say `false`
+// (zenpipe#42, measured 2026-06-11 via `icc-gen`'s probe42 — moxcms
+// RGB-lattice identity error against sRGB, per rendering intent):
+//
+// - v5/iccMAX profiles (`sRGB_D65_MAT`, `sRGB_D65_colorimetric`,
+//   `sRGB_ISO22028` — header version 05000000; ISO22028 is even class
+//   `cenc`): the production CMS (moxcms) cannot parse iccMAX at all, so
+//   matrix+TRC equivalence is unverifiable and substitution untestable.
+// - v4 LUT profiles (`Appearance`, `beta`, `preference`): genuinely
+//   non-identity renderings — perceptual max u16 error 20014–28671
+//   (~78–112 u8 steps), rel-colorimetric 2403–7610 (~9–30 u8 steps).
+//   The v4 *preference* profile is deliberately non-colorimetric.
+//
+// The pre-0.2.13 recognizer returned `true` for all of these, silently
+// skipping real color transforms.
 
 #[test]
 fn srgb_d65_mat_v5() {
-    check(SKCMS, "color.org/sRGB_D65_MAT.icc", true);
+    check(SKCMS, "color.org/sRGB_D65_MAT.icc", false);
 }
 
 #[test]
 fn srgb_d65_colorimetric_v5() {
-    check(SKCMS, "color.org/sRGB_D65_colorimetric.icc", true);
+    check(SKCMS, "color.org/sRGB_D65_colorimetric.icc", false);
 }
 
 #[test]
 fn srgb_v4_appearance() {
-    check(SKCMS, "color.org/sRGB_ICC_v4_Appearance.icc", true);
+    check(SKCMS, "color.org/sRGB_ICC_v4_Appearance.icc", false);
 }
 
 #[test]
 fn srgb_iso22028() {
-    check(SKCMS, "color.org/sRGB_ISO22028.icc", true);
+    check(SKCMS, "color.org/sRGB_ISO22028.icc", false);
 }
 
 #[test]
 fn srgb_v4_preference() {
-    check(SKCMS, "color.org/sRGB_v4_ICC_preference.icc", true);
+    check(SKCMS, "color.org/sRGB_v4_ICC_preference.icc", false);
 }
 
 #[test]
 fn srgb_v4_beta() {
-    check(SKCMS, "misc/sRGB_ICC_v4_beta.icc", true);
+    check(SKCMS, "misc/sRGB_ICC_v4_beta.icc", false);
 }
 
 // ── System profiles ────────────────────────────────────────────────────
@@ -152,13 +173,17 @@ fn ghostscript_srgb() {
     }
 }
 
+/// e-sRGB (PIMA 7667) is the *extended-range* sRGB variant — its encoding
+/// maps a wider range, so the transform to plain sRGB is nowhere near
+/// identity: moxcms measures max u16 error 24575 (~96 u8 steps) across
+/// all rendering intents. Recognizing it as sRGB was a pre-0.2.13 bug.
 #[test]
 fn ghostscript_esrgb() {
     let path = "/usr/share/color/icc/ghostscript/esrgb.icc";
     if let Ok(data) = std::fs::read(path) {
         assert!(
-            icc_profile_is_srgb(&data),
-            "ghostscript esrgb.icc should match"
+            !icc_profile_is_srgb(&data),
+            "ghostscript esrgb.icc (e-sRGB, extended-range) must NOT match plain sRGB"
         );
     }
 }

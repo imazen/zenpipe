@@ -54,6 +54,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   requires matrix 0 (RGB storage); echoing the source's matrix 9
   verbatim, as the test originally pinned, was a spec violation. The
   encoded chunk is `[9, 16, 0, 1]` (verified at the byte level).
+- `icc_srgb`: the 8 expectations stale against the zenpixels-convert
+  0.2.13 normalized hash DB flipped to `false` with measured ground truth
+  (#42, via zenpixels `icc-gen --bin probe42`): e-sRGB and the v4
+  LUT/preference profiles have →sRGB identity errors of ~9–112 u8 steps
+  (real transforms the old recognizer silently skipped); the v5/iccMAX
+  trio doesn't parse under the production CMS at all. The 0.2.13
+  narrowing was correct on every count.
 
 #### Fixed
 
