@@ -188,9 +188,9 @@ fn decode_gain_map_from_ultrahdr_jpeg() {
     );
     // Metadata should have non-trivial boost (HDR content was >1.0, so log2 > 0)
     assert!(
-        gm.metadata.gain_map_max[0] > 0.0,
-        "gain_map_max should be > 0.0 (log2), got {}",
-        gm.metadata.gain_map_max[0],
+        gm.metadata.channels[0].max > 0.0,
+        "channel max gain should be > 0.0 (log2), got {}",
+        gm.metadata.channels[0].max,
     );
 }
 
@@ -329,8 +329,8 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
     // Reconstruct HDR from SDR base + gain map via ultrahdr-core directly
     use zencodecs::PixelBufferConvertTypedExt as _;
     use zenjpeg::ultrahdr::{
-        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
-        Unstoppable, apply_gainmap,
+        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, Unstoppable,
+        apply_gainmap,
     };
     let rgb8 = output.into_buffer().to_rgb8();
     let img_ref = rgb8.as_imgref();
@@ -338,15 +338,15 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
     let width = img_ref.width() as u32;
     let height = img_ref.height() as u32;
 
-    let sdr = UhdrRawImage::from_data(
+    let sdr = ultrahdr_core::pixel_buffer_from_vec(
+        base_bytes.to_vec(),
         width,
         height,
         UhdrPixelFormat::Rgb8,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Srgb,
-        base_bytes.to_vec(),
     )
-    .expect("RawImage creation failed");
+    .expect("pixel buffer creation failed");
 
     let hdr_result = apply_gainmap(
         &sdr,
@@ -357,7 +357,7 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
         Unstoppable,
     )
     .expect("apply_gainmap failed");
-    let hdr_data = hdr_result.data;
+    let hdr_data = hdr_result.as_slice().as_strided_bytes().to_vec();
 
     // HDR output is linear f32 RGBA: 4 floats per pixel = 16 bytes per pixel
     let expected_len = width as usize * height as usize * 16;

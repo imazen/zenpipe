@@ -12,7 +12,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::Rgb;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelSlice;
 
 // ─── Inline fixtures (avoid common/mod.rs feature drift) ──────────────────
 

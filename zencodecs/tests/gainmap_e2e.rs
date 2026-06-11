@@ -67,8 +67,8 @@ fn reconstruct_hdr(
     display_boost: f32,
 ) -> Vec<u8> {
     use zenjpeg::ultrahdr::{
-        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, UhdrRawImage,
-        Unstoppable, apply_gainmap,
+        HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, Unstoppable,
+        apply_gainmap,
     };
 
     let pixel_format = match channels {
@@ -77,15 +77,15 @@ fn reconstruct_hdr(
         _ => panic!("unsupported channels: {channels}"),
     };
 
-    let sdr = UhdrRawImage::from_data(
+    let sdr = ultrahdr_core::pixel_buffer_from_vec(
+        base_bytes.to_vec(),
         w,
         h,
         pixel_format,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Srgb,
-        base_bytes.to_vec(),
     )
-    .expect("RawImage creation failed");
+    .expect("pixel buffer creation failed");
 
     let hdr_result = apply_gainmap(
         &sdr,
@@ -97,7 +97,7 @@ fn reconstruct_hdr(
     )
     .expect("apply_gainmap failed");
 
-    hdr_result.data
+    hdr_result.as_slice().as_strided_bytes().to_vec()
 }
 
 /// Assert gain map fields are well-formed.
@@ -186,12 +186,12 @@ fn e2e_gain_map_metadata_reflects_hdr_content() {
     let (_, gm_low) = decode_with_gainmap(&bytes_low);
     let gm_low = gm_low.expect("must have gain map");
 
-    // High-peak content should have higher gain_map_max (log2 domain)
+    // High-peak content should have higher max gain (log2 domain)
     assert!(
-        gm_high.metadata.gain_map_max[0] >= gm_low.metadata.gain_map_max[0],
-        "higher peak ({}) should have >= gain_map_max than lower peak ({})",
-        gm_high.metadata.gain_map_max[0],
-        gm_low.metadata.gain_map_max[0],
+        gm_high.metadata.channels[0].max >= gm_low.metadata.channels[0].max,
+        "higher peak ({}) should have >= max gain than lower peak ({})",
+        gm_high.metadata.channels[0].max,
+        gm_low.metadata.channels[0].max,
     );
 }
 
@@ -225,7 +225,7 @@ fn e2e_gain_map_passthrough_jpeg_to_jpeg() {
 
     // Verify the gain map data survived the passthrough
     assert_gain_map_valid(&gm.gain_map);
-    assert!(gm.metadata.gain_map_max[0] > 0.0);
+    assert!(gm.metadata.channels[0].max > 0.0);
 }
 
 // ─── E2E: Gain Map Extraction Consistency ───────────────────────────────────
@@ -242,9 +242,18 @@ fn e2e_decode_gain_map_twice_same_result() {
     let gm2 = gm2.expect("second decode must have gain map");
 
     // Metadata should be identical
-    assert_eq!(gm1.metadata.gain_map_max, gm2.metadata.gain_map_max);
-    assert_eq!(gm1.metadata.gain_map_min, gm2.metadata.gain_map_min);
-    assert_eq!(gm1.metadata.gamma, gm2.metadata.gamma);
+    assert_eq!(
+        gm1.metadata.channels.map(|c| c.max),
+        gm2.metadata.channels.map(|c| c.max)
+    );
+    assert_eq!(
+        gm1.metadata.channels.map(|c| c.min),
+        gm2.metadata.channels.map(|c| c.min)
+    );
+    assert_eq!(
+        gm1.metadata.channels.map(|c| c.gamma),
+        gm2.metadata.channels.map(|c| c.gamma)
+    );
     assert_eq!(
         gm1.metadata.alternate_hdr_headroom,
         gm2.metadata.alternate_hdr_headroom
@@ -427,17 +436,21 @@ mod jxl_gainmap {
             channels: 1,
         };
 
-        // Step 3: Create ISO 21496-1 metadata (log2/f64 domain)
-        let metadata = GainMapMetadata {
-            gain_map_max: [2.0; 3],
-            gain_map_min: [0.0; 3],
-            gamma: [1.0; 3],
-            base_offset: [1.0 / 64.0; 3],
-            alternate_offset: [1.0 / 64.0; 3],
-            base_hdr_headroom: 0.0,
-            alternate_hdr_headroom: 2.0,
-            use_base_color_space: true,
-            ..GainMapMetadata::default()
+        // Step 3: Create ISO 21496-1 metadata (log2/f64 domain).
+        // `GainMapMetadata` (= `GainMapParams`) is `#[non_exhaustive]`.
+        let metadata = {
+            let mut m = GainMapMetadata::default();
+            m.channels = [zencodecs::gainmap::GainMapChannel {
+                min: 0.0,
+                max: 2.0,
+                gamma: 1.0,
+                base_offset: 1.0 / 64.0,
+                alternate_offset: 1.0 / 64.0,
+            }; 3];
+            m.base_hdr_headroom = 0.0;
+            m.alternate_hdr_headroom = 2.0;
+            m.use_base_color_space = true;
+            m
         };
 
         // Step 4: Encode to JXL with gain map
@@ -456,7 +469,7 @@ mod jxl_gainmap {
 
         // Step 5: Verify the output is in container format (jhgm requires container)
         assert!(
-            zenjxl::container::is_container(output.data()),
+            zenjxl::is_container(output.data()),
             "JXL output with gain map should be in container format"
         );
 
@@ -480,14 +493,14 @@ mod jxl_gainmap {
         // Step 8: Verify ISO 21496-1 metadata roundtripped (log2 domain)
         let eps = 0.01;
         assert!(
-            (gm.metadata.gain_map_max[0] - 2.0).abs() < eps,
-            "gain_map_max should be ~2.0 (log2), got {}",
-            gm.metadata.gain_map_max[0],
+            (gm.metadata.channels[0].max - 2.0).abs() < eps,
+            "channel max gain should be ~2.0 (log2), got {}",
+            gm.metadata.channels[0].max,
         );
         assert!(
-            (gm.metadata.gain_map_min[0] - 0.0).abs() < eps,
-            "gain_map_min should be ~0.0 (log2), got {}",
-            gm.metadata.gain_map_min[0],
+            (gm.metadata.channels[0].min - 0.0).abs() < eps,
+            "channel min gain should be ~0.0 (log2), got {}",
+            gm.metadata.channels[0].min,
         );
         assert!(
             (gm.metadata.alternate_hdr_headroom - 2.0).abs() < eps,
@@ -495,9 +508,9 @@ mod jxl_gainmap {
             gm.metadata.alternate_hdr_headroom,
         );
         assert!(
-            (gm.metadata.gamma[0] - 1.0).abs() < eps,
+            (gm.metadata.channels[0].gamma - 1.0).abs() < eps,
             "gamma should be ~1.0, got {}",
-            gm.metadata.gamma[0],
+            gm.metadata.channels[0].gamma,
         );
 
         // Step 9: Verify gain map pixel data roundtripped (lossless encode)
@@ -545,16 +558,20 @@ mod jxl_gainmap {
             channels: 3,
         };
 
-        let metadata = GainMapMetadata {
-            gain_map_max: [3.0f64.log2(), 3.5f64.log2(), 2.5f64.log2()],
-            gain_map_min: [0.0; 3],
-            gamma: [1.0; 3],
-            base_offset: [1.0 / 64.0; 3],
-            alternate_offset: [1.0 / 64.0; 3],
-            base_hdr_headroom: 0.0,
-            alternate_hdr_headroom: 3.5f64.log2(),
-            use_base_color_space: true,
-            ..GainMapMetadata::default()
+        let metadata = {
+            let mut m = GainMapMetadata::default();
+            let maxes = [3.0f64.log2(), 3.5f64.log2(), 2.5f64.log2()];
+            m.channels = core::array::from_fn(|i| zencodecs::gainmap::GainMapChannel {
+                min: 0.0,
+                max: maxes[i],
+                gamma: 1.0,
+                base_offset: 1.0 / 64.0,
+                alternate_offset: 1.0 / 64.0,
+            });
+            m.base_hdr_headroom = 0.0;
+            m.alternate_hdr_headroom = 3.5f64.log2();
+            m.use_base_color_space = true;
+            m
         };
 
         let source = GainMapSource::Precomputed {
@@ -567,7 +584,7 @@ mod jxl_gainmap {
             .encode_full_frame_rgb8(img.as_ref())
             .expect("JXL encode with RGB gain map failed");
 
-        assert!(zenjxl::container::is_container(output.data()));
+        assert!(zenjxl::is_container(output.data()));
 
         // Decode and verify
         let (_decoded, decoded_gm) = DecodeRequest::new(output.data())

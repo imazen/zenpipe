@@ -94,19 +94,9 @@ fn run() {
     println!("Direction:  {:?}", direction);
     println!("Source:     {:?}", gm.source_format);
 
-    // Metadata in log2/f64 domain (as stored in GainMapMetadata / ultrahdr-core).
-    let meta = &gm.metadata;
-    println!("\n--- Metadata (log2/f64 domain) ---");
-    println!("  gain_map_max:          {:?}", meta.gain_map_max);
-    println!("  gain_map_min:          {:?}", meta.gain_map_min);
-    println!("  gamma:                 {:?}", meta.gamma);
-    println!("  base_offset:           {:?}", meta.base_offset);
-    println!("  alternate_offset:      {:?}", meta.alternate_offset);
-    println!("  base_hdr_headroom:     {}", meta.base_hdr_headroom);
-    println!("  alternate_hdr_headroom:{}", meta.alternate_hdr_headroom);
-    println!("  use_base_cspace:       {}", meta.use_base_color_space);
-
     // Params in log2 domain (canonical ISO 21496-1 representation).
+    // `GainMapMetadata` is an alias for `GainMapParams` since ultrahdr-core 0.5,
+    // so this block prints the stored metadata verbatim.
     let params: GainMapParams = gm.params();
     println!("\n--- Params (log2 domain) ---");
     let ch_label = if params.is_single_channel() {

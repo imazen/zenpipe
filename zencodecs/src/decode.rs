@@ -195,9 +195,9 @@ impl<'a> DecodeRequest<'a> {
     ///   (Apple ProRAW). Requires the `raw-decode-gainmap` feature.
     /// - **Other formats**: Returns `None` for gain map.
     ///
-    /// The returned [`DecodedGainMap`] can reconstruct HDR from SDR (or vice versa)
-    /// via its [`reconstruct_hdr`](crate::DecodedGainMap::reconstruct_hdr) /
-    /// [`reconstruct_sdr`](crate::DecodedGainMap::reconstruct_sdr) methods.
+    /// The returned [`DecodedGainMap`] carries the gain map pixels + ISO 21496-1
+    /// metadata; reconstruct the alternate rendition with
+    /// [`zenjpeg::ultrahdr::apply_gainmap()`].
     ///
     /// # Example
     ///
@@ -632,9 +632,9 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     // which is no longer emitted to extras.
     let source = output.extras::<zencodec::gainmap::GainMapSource>()?;
 
-    // The metadata is already in log2 domain (`GainMapParams`); convert
-    // to ultrahdr's linear-domain `GainMapMetadata`.
-    let uhdr_metadata = crate::gainmap::params_to_metadata(&source.metadata.params);
+    // `GainMapMetadata` is an alias for `GainMapParams` (ultrahdr-core 0.5),
+    // so the parsed params are used directly.
+    let uhdr_metadata = source.metadata.params.clone();
 
     // Decode the raw AV1 gain map to pixels.
     let (gm_data, gm_w, gm_h, gm_ch) = zenavif::decode_av1_obu(&source.data).ok()?;
@@ -652,55 +652,6 @@ fn extract_avif_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::Decoded
     })
 }
 
-/// Convert zenavif-parse's rational gain map metadata to zencodec's canonical
-/// log2-domain [`GainMapParams`](zencodec::GainMapParams).
-///
-/// ISO 21496-1 stores gains and headroom as log2 rational fractions.
-/// zenavif-parse preserves these as raw numerator/denominator pairs.
-/// This function divides them to f64 and stores in `GainMapParams` which
-/// keeps gains/headroom in log2 domain (gamma/offsets are already linear).
-#[cfg(all(feature = "avif-decode", feature = "jpeg-ultrahdr"))]
-fn avif_gain_map_to_params(meta: &zenavif::GainMapMetadata) -> zencodec::GainMapParams {
-    let safe_div = |n: i64, d: u64| -> f64 { if d == 0 { 0.0 } else { n as f64 / d as f64 } };
-    let safe_div_u = |n: u64, d: u64| -> f64 { if d == 0 { 0.0 } else { n as f64 / d as f64 } };
-
-    let convert_channel = |ch: &zenavif::GainMapChannel| -> zencodec::GainMapChannel {
-        zencodec::GainMapChannel {
-            // Gains: n/d produces log2 value — GainMapParams stores log2
-            min: safe_div(ch.gain_map_min_n as i64, ch.gain_map_min_d as u64),
-            max: safe_div(ch.gain_map_max_n as i64, ch.gain_map_max_d as u64),
-            // Gamma and offsets: n/d produces linear value — GainMapParams stores linear
-            gamma: safe_div_u(ch.gamma_n as u64, ch.gamma_d as u64),
-            base_offset: safe_div(ch.base_offset_n as i64, ch.base_offset_d as u64),
-            alternate_offset: safe_div(ch.alternate_offset_n as i64, ch.alternate_offset_d as u64),
-        }
-    };
-
-    let mut channels = [zencodec::GainMapChannel::default(); 3];
-    channels[0] = convert_channel(&meta.channels[0]);
-    if meta.is_multichannel {
-        channels[1] = convert_channel(&meta.channels[1]);
-        channels[2] = convert_channel(&meta.channels[2]);
-    } else {
-        channels[1] = channels[0];
-        channels[2] = channels[0];
-    }
-
-    let mut params = zencodec::GainMapParams::default();
-    params.channels = channels;
-    // Headroom: n/d produces log2 value — GainMapParams stores log2
-    params.base_hdr_headroom = safe_div_u(
-        meta.base_hdr_headroom_n as u64,
-        meta.base_hdr_headroom_d as u64,
-    );
-    params.alternate_hdr_headroom = safe_div_u(
-        meta.alternate_hdr_headroom_n as u64,
-        meta.alternate_hdr_headroom_d as u64,
-    );
-    params.use_base_color_space = meta.use_base_colour_space;
-    params
-}
-
 /// Extract a gain map from a JXL DecodeOutput's extras, if present.
 #[cfg(all(feature = "jxl-decode", feature = "jpeg-ultrahdr"))]
 fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedGainMap> {
@@ -711,9 +662,9 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     // the older `zenjxl::GainMapBundle` — same bug shape as AVIF had.
     let source = output.extras::<zencodec::gainmap::GainMapSource>()?;
 
-    // The metadata is already parsed into log2-domain GainMapParams;
-    // convert to linear-domain GainMapMetadata.
-    let metadata = crate::gainmap::params_to_metadata(&source.metadata.params);
+    // `GainMapMetadata` is an alias for `GainMapParams` (ultrahdr-core 0.5),
+    // so the parsed params are used directly.
+    let metadata = source.metadata.params.clone();
 
     // Decode the bare JXL codestream to get gain map pixels.
     use alloc::vec::Vec;

@@ -42,26 +42,6 @@ pub use zenjpeg::ultrahdr::GainMap;
 // Re-export zencodec gain map types.
 pub use zencodec::gainmap::{GainMapChannel, GainMapParams, GainMapPresence};
 
-/// Convert [`GainMapParams`] (log2/f64 domain) → [`GainMapMetadata`] (log2/f64 domain).
-///
-/// Both types now use the same domain, so this is a trivial field copy.
-#[cfg(feature = "jpeg-ultrahdr")]
-pub fn params_to_metadata(p: &GainMapParams) -> GainMapMetadata {
-    // ultrahdr-core 0.5 defines `GainMapMetadata` as a type alias for
-    // `GainMapParams` (the same channels-based, log2/f64 ISO 21496-1 struct),
-    // so this is an identity copy.
-    p.clone()
-}
-
-/// Convert [`GainMapMetadata`] (log2/f64 domain) → [`GainMapParams`] (log2/f64 domain).
-///
-/// Both types now use the same domain, so this is a trivial field copy.
-#[cfg(feature = "jpeg-ultrahdr")]
-pub fn metadata_to_params(m: &GainMapMetadata) -> GainMapParams {
-    // Identity copy — see `params_to_metadata`.
-    m.clone()
-}
-
 /// Gain map extracted from a decoded image.
 ///
 /// Format-agnostic: works for JPEG (UltraHDR), AVIF (tmap), and JXL (jhgm).
@@ -123,9 +103,10 @@ pub enum GainMapSource<'a> {
 
 #[cfg(feature = "jpeg-ultrahdr")]
 impl DecodedGainMap {
-    /// Convert the stored [`GainMapMetadata`] to the canonical [`GainMapParams`].
+    /// The stored ISO 21496-1 parameters. [`GainMapMetadata`] is an alias for
+    /// the canonical [`GainMapParams`] since ultrahdr-core 0.5.
     pub fn params(&self) -> GainMapParams {
-        metadata_to_params(&self.metadata)
+        self.metadata.clone()
     }
 
     /// Build a [`GainMapInfo`](zencodec::GainMapInfo) describing this gain map
@@ -255,6 +236,25 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
 
+    /// Build ISO 21496-1 params the way a JPEG UltraHDR decode would
+    /// (SDR base, 2-stop alternate headroom). `GainMapParams` is
+    /// `#[non_exhaustive]`, so construction goes through `default()`.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    fn test_metadata() -> GainMapMetadata {
+        let mut m = GainMapMetadata::default();
+        m.channels = [GainMapChannel {
+            min: 0.0,
+            max: 2.0,
+            gamma: 1.0,
+            base_offset: 1.0 / 64.0,
+            alternate_offset: 1.0 / 64.0,
+        }; 3];
+        m.base_hdr_headroom = 0.0;
+        m.alternate_hdr_headroom = 2.0;
+        m.use_base_color_space = true;
+        m
+    }
+
     #[cfg(feature = "jpeg-ultrahdr")]
     #[test]
     fn decoded_gainmap_jpeg_sdr_base() {
@@ -265,17 +265,7 @@ mod tests {
                 height: 2,
                 channels: 1,
             },
-            metadata: GainMapMetadata {
-                gain_map_max: [2.0; 3],
-                gain_map_min: [0.0; 3],
-                gamma: [1.0; 3],
-                base_offset: [1.0 / 64.0; 3],
-                alternate_offset: [1.0 / 64.0; 3],
-                base_hdr_headroom: 0.0,
-                alternate_hdr_headroom: 2.0,
-                use_base_color_space: true,
-                ..GainMapMetadata::default()
-            },
+            metadata: test_metadata(),
             base_is_hdr: false,
             source_format: ImageFormat::Jpeg,
         };
@@ -310,17 +300,7 @@ mod tests {
             height: 8,
             channels: 1,
         };
-        let meta = GainMapMetadata {
-            gain_map_max: [2.0; 3],
-            gain_map_min: [0.0; 3],
-            gamma: [1.0; 3],
-            base_offset: [1.0 / 64.0; 3],
-            alternate_offset: [1.0 / 64.0; 3],
-            base_hdr_headroom: 0.0,
-            alternate_hdr_headroom: 2.0,
-            use_base_color_space: true,
-            ..GainMapMetadata::default()
-        };
+        let meta = test_metadata();
         let source = GainMapSource::Precomputed {
             gain_map: &img,
             metadata: &meta,
@@ -330,31 +310,8 @@ mod tests {
                 assert_eq!(gain_map.width, 8);
                 assert_eq!(gain_map.height, 8);
                 assert_eq!(gain_map.channels, 1);
-                assert_eq!(metadata.gain_map_max[0], 2.0);
+                assert_eq!(metadata.channels[0].max, 2.0);
             }
-        }
-    }
-
-    #[cfg(feature = "jpeg-ultrahdr")]
-    #[test]
-    fn params_metadata_roundtrip() {
-        let meta = GainMapMetadata {
-            gain_map_max: [2.0; 3],
-            gain_map_min: [0.0; 3],
-            gamma: [1.0; 3],
-            base_offset: [1.0 / 64.0; 3],
-            alternate_offset: [1.0 / 64.0; 3],
-            base_hdr_headroom: 0.0,
-            alternate_hdr_headroom: 2.0,
-            use_base_color_space: true,
-            ..GainMapMetadata::default()
-        };
-        let params = metadata_to_params(&meta);
-        let meta2 = params_to_metadata(&params);
-        for i in 0..3 {
-            assert!((meta.gain_map_max[i] - meta2.gain_map_max[i]).abs() < 0.01);
-            assert!((meta.gain_map_min[i] - meta2.gain_map_min[i]).abs() < 0.01);
-            assert!((meta.gamma[i] - meta2.gamma[i]).abs() < 0.01);
         }
     }
 }

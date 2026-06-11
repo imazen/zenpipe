@@ -96,11 +96,11 @@ pub(crate) fn encode_with_precomputed_gainmap(
         }
     };
 
-    // 3. Serialize ISO 21496-1 metadata. JXL uses the same payload layout as
-    // JPEG APP2 (`minimum_version(u16)` prefix, no extra version byte).
-    let iso_bytes = zenjpeg::ultrahdr::serialize_iso21496(
+    // 3. Serialize ISO 21496-1 metadata. The jhgm box carries the bare ISO
+    // payload (`minimum_version(u16)` prefix — no URN, no extra version byte).
+    let iso_bytes = zenjpeg::ultrahdr::serialize_iso21496_fmt(
         metadata,
-        zenjpeg::ultrahdr::Iso21496Format::JpegApp2,
+        zenjpeg::ultrahdr::Iso21496Format::JxlJhgm,
     );
 
     // 4. Build GainMapBundle and serialize

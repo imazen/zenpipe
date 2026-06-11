@@ -58,10 +58,10 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
     if let Some(ref xmp) = info.xmp
         && let Ok((metadata, _item_len)) = zenjpeg::ultrahdr::parse_xmp(xmp)
     {
-        let params = crate::gainmap::metadata_to_params(&metadata);
+        // `GainMapMetadata` is an alias for `GainMapParams` (ultrahdr-core 0.5).
         ii.supplements.gain_map = true;
         ii.gain_map = zencodec::gainmap::GainMapPresence::Available(alloc::boxed::Box::new(
-            zencodec::gainmap::GainMapInfo::new(params, 0, 0, 0),
+            zencodec::gainmap::GainMapInfo::new(metadata, 0, 0, 0),
         ));
     }
 

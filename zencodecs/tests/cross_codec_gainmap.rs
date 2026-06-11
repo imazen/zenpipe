@@ -19,7 +19,7 @@
 
 use imgref::ImgVec;
 use rgb::Rgb;
-use zencodecs::{DecodeRequest, EncodeRequest, GainMapSource, ImageFormat, PixelBufferConvertExt};
+use zencodecs::{DecodeRequest, EncodeRequest, GainMapSource, ImageFormat};
 
 // ─── Fixture ─────────────────────────────────────────────────────────────
 

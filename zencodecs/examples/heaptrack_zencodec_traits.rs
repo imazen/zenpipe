@@ -129,7 +129,7 @@ fn roundtrip_dyn(
         .unwrap_or_else(|e| panic!("{label} dyn_decoder: {e}"));
 
     let output = dec
-        .decode_full_frame()
+        .decode()
         .unwrap_or_else(|e| panic!("{label} dyn_decode: {e}"));
     eprintln!(
         "  decoded: {}x{} descriptor={:?}",
@@ -213,8 +213,8 @@ fn main() {
     // --- WebP ---
     #[cfg(feature = "webp")]
     {
-        let enc = zenwebp::WebpEncoderConfig::lossy().with_generic_quality(75.0);
-        let dec = zenwebp::WebpDecoderConfig::new();
+        let enc = zenwebp::zencodec::WebpEncoderConfig::lossy().with_generic_quality(75.0);
+        let dec = zenwebp::zencodec::WebpDecoderConfig::new();
         roundtrip_dyn(&enc, &dec, &rgb_buf, &limits, "WebP");
     }
 

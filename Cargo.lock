@@ -1785,6 +1785,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 
 [[package]]
+name = "lz4_flex"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
+
+[[package]]
 name = "macro-attr"
 version = "0.2.1"
 source = "git+https://github.com/DanielKeep/rust-custom-derive.git#1252f258cdb9b7c9867f937c52c2f5c0e69a9c03"
@@ -4378,7 +4384,7 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.11"
+version = "0.2.13"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -4388,12 +4394,13 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "archmage",
  "bytemuck",
  "garb",
  "linear-srgb",
+ "lz4_flex 0.13.1",
  "magetypes",
  "moxcms 0.8.1",
  "once_cell",
@@ -4456,7 +4463,7 @@ source = "git+https://github.com/imazen/zenanalyze?rev=9a9be8200f26f643b45338711
 dependencies = [
  "bytemuck",
  "libm",
- "lz4_flex",
+ "lz4_flex 0.11.6",
 ]
 
 [[package]]

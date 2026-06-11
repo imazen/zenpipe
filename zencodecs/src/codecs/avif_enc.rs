@@ -83,7 +83,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     stop: Option<&zencodec::StopToken>,
 ) -> crate::error::Result<crate::EncodeOutput> {
     use crate::{CodecError, ImageFormat};
-    use whereat::{ResultAtExt, at, at_crate};
+    use whereat::{ResultAtExt, at_crate};
 
     // Step 1: Encode gain map pixels as a small AVIF to get AV1 bytes
     let gm_enc = zenavif::EncoderConfig::new(); // Default quality for gain map

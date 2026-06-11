@@ -212,9 +212,13 @@ fn apple_proraw_dng_second_fixture_round_trips_gain_map_metadata() {
         .expect("decode_gain_map on second Apple ProRAW must not error");
     let gm = gm.expect("second Apple ProRAW must yield a gain map");
 
-    // Shape assertions (per ISO 21496-1).
-    assert_eq!(gm.metadata.gain_map_min.len(), 3);
-    assert_eq!(gm.metadata.gain_map_max.len(), 3);
-    assert_eq!(gm.metadata.gamma.len(), 3);
+    // Shape assertions (per ISO 21496-1): per-channel R/G/B params, finite values.
+    assert_eq!(gm.metadata.channels.len(), 3);
+    assert!(
+        gm.metadata
+            .channels
+            .iter()
+            .all(|c| c.min.is_finite() && c.max.is_finite() && c.gamma.is_finite())
+    );
     assert!(gm.metadata.alternate_hdr_headroom > 0.0);
 }

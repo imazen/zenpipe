@@ -50,7 +50,7 @@ fn zenavif_trait_path_with_metadata_writes_exif_item() {
     let cfg = zenavif::AvifEncoderConfig::new();
     let mut job = cfg.job();
     let meta = zencodec::Metadata::none().with_exif(exif);
-    job = job.with_metadata(meta);
+    job = job.with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact);
     let encoder = job.encoder().expect("build encoder");
 
     let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
@@ -268,11 +268,13 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
         channels: 3,
     };
     let mut metadata = zencodecs::gainmap::GainMapMetadata::default();
-    metadata.gain_map_min = [-2.0, -2.0, -2.0];
-    metadata.gain_map_max = [2.0, 2.0, 2.0];
-    metadata.gamma = [1.0, 1.0, 1.0];
-    metadata.base_offset = [0.015625, 0.015625, 0.015625];
-    metadata.alternate_offset = [0.015625, 0.015625, 0.015625];
+    metadata.channels = [zencodecs::gainmap::GainMapChannel {
+        min: -2.0,
+        max: 2.0,
+        gamma: 1.0,
+        base_offset: 0.015625,
+        alternate_offset: 0.015625,
+    }; 3];
     metadata.alternate_hdr_headroom = 2.5;
 
     // SDR base.

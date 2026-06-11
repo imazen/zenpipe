@@ -41,8 +41,8 @@ fn jpeg_ultrahdr_seine_gainmap() {
     // Verify metadata is sane (log2 domain: 0.0 = no boost)
     let meta = &gm.metadata;
     assert!(
-        meta.gain_map_max[0] >= 0.0,
-        "gain_map_max should be >= 0.0 (log2)"
+        meta.channels[0].max >= 0.0,
+        "channel max gain should be >= 0.0 (log2)"
     );
     assert!(
         meta.alternate_hdr_headroom >= 0.0,
@@ -82,9 +82,9 @@ fn avif_seine_gainmap() {
     // Verify metadata is in log2 domain (ultrahdr-core 0.3 convention)
     let meta = &gm.metadata;
     assert!(
-        meta.gain_map_max[0] >= 0.0,
-        "gain_map_max should be >= 0.0 (log2), got {}",
-        meta.gain_map_max[0],
+        meta.channels[0].max >= 0.0,
+        "channel max gain should be >= 0.0 (log2), got {}",
+        meta.channels[0].max,
     );
     assert!(
         meta.alternate_hdr_headroom >= 0.0,

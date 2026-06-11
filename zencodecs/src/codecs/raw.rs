@@ -118,7 +118,7 @@ pub(crate) fn read_raw_metadata(data: &[u8]) -> Option<zenraw::exif::ExifMetadat
 /// - The `raw-decode-gainmap` feature is not enabled
 #[cfg(feature = "raw-decode-gainmap")]
 pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
-    use crate::gainmap::{DecodedGainMap, GainMap, GainMapMetadata};
+    use crate::gainmap::{DecodedGainMap, GainMap, GainMapChannel, GainMapMetadata};
 
     let gm_info = zenraw::apple::extract_gain_map(data)?;
 
@@ -152,7 +152,8 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
     // If HDRToneMap fields are present, use them directly.
     // Otherwise, synthesize from Apple's headroom value.
     let metadata = if gm_info.gain_map_max.is_some() || gm_info.alternate_headroom.is_some() {
-        // ISO 21496-1 style metadata present — convert to GainMapMetadata.
+        // ISO 21496-1 style metadata present — convert to GainMapMetadata
+        // (= zencodec::GainMapParams, channels-based, since ultrahdr-core 0.5).
         // XMP gain/headroom values are already in log2 domain.
         let gain_max = gm_info
             .gain_map_max
@@ -169,12 +170,14 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
             .unwrap_or(1.0);
 
         {
-            let mut m = GainMapMetadata::new();
-            m.gain_map_max = [gain_max; 3];
-            m.gain_map_min = [gain_min; 3];
-            m.gamma = [gamma; 3];
-            m.base_offset = [offset_sdr; 3];
-            m.alternate_offset = [offset_hdr; 3];
+            let mut m = GainMapMetadata::default();
+            m.channels = [GainMapChannel {
+                min: gain_min,
+                max: gain_max,
+                gamma,
+                base_offset: offset_sdr,
+                alternate_offset: offset_hdr,
+            }; 3];
             m.base_hdr_headroom = base_headroom;
             m.alternate_hdr_headroom = alt_headroom;
             m.use_base_color_space = true;
@@ -184,8 +187,11 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
         // Apple HDRGainMap style — synthesize ISO 21496-1 metadata from headroom.
         // headroom is max brightness in stops (log2 domain), e.g., 2.89 = ~7.4x boost.
         {
-            let mut m = GainMapMetadata::new();
-            m.gain_map_max = [headroom; 3];
+            let mut m = GainMapMetadata::default();
+            m.channels = [GainMapChannel {
+                max: headroom,
+                ..GainMapChannel::default()
+            }; 3];
             m.alternate_hdr_headroom = headroom;
             m
         }

@@ -292,14 +292,16 @@ fn ultrahdr_gain_map_metadata_has_iso21496_fields() {
     let gm = gm.expect("UltraHDR gain map");
     let meta = &gm.metadata;
 
-    // ISO 21496-1: GainMapMetadata always carries [3] arrays — per-channel even
-    // for single-channel maps (channels are equal then). All three arrays must
-    // exist and be the same length by construction.
-    assert_eq!(meta.gain_map_min.len(), 3);
-    assert_eq!(meta.gain_map_max.len(), 3);
-    assert_eq!(meta.gamma.len(), 3);
-    assert_eq!(meta.base_offset.len(), 3);
-    assert_eq!(meta.alternate_offset.len(), 3);
+    // ISO 21496-1: GainMapMetadata always carries 3 channel entries — per-channel
+    // even for single-channel maps (channels are equal then), with finite values.
+    assert_eq!(meta.channels.len(), 3);
+    assert!(meta.channels.iter().all(|c| {
+        c.min.is_finite()
+            && c.max.is_finite()
+            && c.gamma.is_finite()
+            && c.base_offset.is_finite()
+            && c.alternate_offset.is_finite()
+    }));
 
     // alternate_hdr_headroom is the log2 of the HDR target's peak luminance ratio.
     // For encoded HDR content, it should be strictly greater than the base headroom.
@@ -321,15 +323,15 @@ fn ultrahdr_gain_map_metadata_has_iso21496_fields() {
         "JPEG UltraHDR encode should yield forward-direction metadata"
     );
 
-    // params_to_metadata round-trip (log ↔ linear domain).
+    // params() returns the stored metadata verbatim (`GainMapMetadata` is an
+    // alias for `GainMapParams` since ultrahdr-core 0.5).
     let params = gm.params();
-    let round_tripped = zencodecs::gainmap::params_to_metadata(&params);
     for i in 0..3 {
-        let a = meta.gain_map_min[i];
-        let b = round_tripped.gain_map_min[i];
+        let a = meta.channels[i].min;
+        let b = params.channels[i].min;
         assert!(
             (a - b).abs() < 1e-3,
-            "gain_map_min[{i}] should round-trip: {a} vs {b}"
+            "channel min gain [{i}] should round-trip: {a} vs {b}"
         );
     }
 }
