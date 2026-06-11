@@ -22,8 +22,6 @@
 //! degrade the image and never clobber the original.
 
 #![allow(clippy::needless_range_loop)]
-// collapsing these would need let-chains (Rust 1.88+); workspace MSRV is older
-#![allow(clippy::collapsible_if)]
 
 use std::path::Path;
 
@@ -400,12 +398,12 @@ fn process_image(path: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
         .to_string();
     let orig_path = parent.join(format!("_orig_{name}"));
 
-    if !orig_path.exists() {
-        if let Err(e) = std::fs::copy(path, &orig_path) {
-            eprintln!("error  backup {}: {e}", orig_path.display());
-            stats.errors += 1;
-            return;
-        }
+    if !orig_path.exists()
+        && let Err(e) = std::fs::copy(path, &orig_path)
+    {
+        eprintln!("error  backup {}: {e}", orig_path.display());
+        stats.errors += 1;
+        return;
     }
     let img = match image::open(&orig_path) {
         Ok(im) => im.to_rgb8(),
@@ -474,10 +472,11 @@ fn walk(dir: &Path, mode: Mode, cfg: &Cfg, stats: &mut Stats) {
             walk(&path, mode, cfg, stats);
             continue;
         }
-        if let Some(n) = path.file_name().and_then(|s| s.to_str()) {
-            if is_image(n) && !is_output(n) {
-                process_image(&path, mode, cfg, stats);
-            }
+        if let Some(n) = path.file_name().and_then(|s| s.to_str())
+            && is_image(n)
+            && !is_output(n)
+        {
+            process_image(&path, mode, cfg, stats);
         }
     }
 }
