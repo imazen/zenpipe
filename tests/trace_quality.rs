@@ -131,6 +131,7 @@ fn webp_trace_includes_zenwebp_and_boundaries() {
 }
 
 /// zenavif is instrumented.
+#[cfg(feature = "nodes-avif")]
 #[test]
 fn avif_trace_includes_zenavif_and_boundaries() {
     assert_trace(

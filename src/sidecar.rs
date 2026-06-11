@@ -238,6 +238,134 @@ mod tests {
         }
     }
 
+    /// A test source emitting caller-provided gray bytes with a chosen
+    /// transfer tag (mirrors `SolidSource`, but with controlled values).
+    struct GrayBytesSource {
+        width: u32,
+        height: u32,
+        format: PixelFormat,
+        data: alloc::vec::Vec<u8>,
+        done: bool,
+    }
+
+    impl Source for GrayBytesSource {
+        fn next(&mut self) -> crate::PipeResult<Option<Strip<'_>>> {
+            use crate::strip::BufferResultExt as _;
+            if self.done {
+                return Ok(None);
+            }
+            self.done = true;
+            let stride = self.format.aligned_stride(self.width);
+            let mut padded = alloc::vec![0u8; stride * self.height as usize];
+            for y in 0..self.height as usize {
+                let row = &self.data[y * self.width as usize..(y + 1) * self.width as usize];
+                padded[y * stride..y * stride + self.width as usize].copy_from_slice(row);
+            }
+            let leaked: &'static [u8] = alloc::vec::Vec::leak(padded);
+            Ok(Some(
+                Strip::new(leaked, self.width, self.height, stride, self.format).pipe_err()?,
+            ))
+        }
+
+        fn width(&self) -> u32 {
+            self.width
+        }
+
+        fn height(&self) -> u32 {
+            self.height
+        }
+
+        fn format(&self) -> PixelFormat {
+            self.format
+        }
+    }
+
+    /// zenpipe#41: gain-map sidecars must be resampled in **encoded space**
+    /// (the stored values are log2-quantized gain, not color), matching how
+    /// Skia's SkGainmapShader and libultrahdr sample gain maps. With the
+    /// `TransferFunction::Linear` label the transfer-aware layout pipeline
+    /// interpolates the raw values; an sRGB label would run them through the
+    /// EOTF→resample→OETF round-trip, dragging boundary mixes of (10, 200)
+    /// from the encoded-space ~105 up to the sRGB-space ~147 — a gap far
+    /// beyond any filter's ringing.
+    #[test]
+    fn gainmap_sidecar_resamples_in_encoded_space() {
+        let (w, h) = (8u32, 8u32);
+        let mut data = alloc::vec::Vec::with_capacity((w * h) as usize);
+        for _y in 0..h {
+            for x in 0..w {
+                data.push(if x < w / 2 { 10u8 } else { 200u8 });
+            }
+        }
+        // The label decode_source_with_gainmap applies since #41.
+        let gm_format = PixelFormat::new(
+            crate::ChannelType::U8,
+            crate::ChannelLayout::Gray,
+            None,
+            crate::TransferFunction::Linear,
+        );
+        let source = GrayBytesSource {
+            width: w,
+            height: h,
+            format: gm_format,
+            data,
+            done: false,
+        };
+
+        // Primary 16x16 fit to 8x8 → sidecar 8x8 scales to 4x4.
+        let (primary_ideal, _) = Pipeline::new(16, 16).fit(8, 8).plan().unwrap();
+        let plan = SidecarPlan::derive(
+            &primary_ideal,
+            Size::new(16, 16),
+            Size::new(w, h),
+            None,
+            Filter::Robidoux,
+        );
+        assert!(!plan.is_identity(), "test requires a real resample");
+
+        let compiled = plan.compile(Box::new(source)).unwrap();
+        let mat = MaterializedSource::from_source(compiled).unwrap();
+        assert_eq!((mat.width(), mat.height()), (4, 4));
+        assert_eq!(
+            mat.format().transfer,
+            crate::TransferFunction::Linear,
+            "gain-map sidecar must keep its Linear (encoded-domain) label through layout"
+        );
+
+        // Read per-pixel values regardless of what layout the pipeline
+        // emitted (channel 0 is the gain value in both Gray and RGB).
+        let ch = mat.format().channels() as usize;
+        let values: alloc::vec::Vec<u8> = mat
+            .data()
+            .chunks_exact(mat.format().aligned_stride(mat.width()))
+            .take(mat.height() as usize)
+            .flat_map(|row| {
+                row[..mat.width() as usize * ch]
+                    .chunks_exact(ch)
+                    .map(|px| px[0])
+                    .collect::<alloc::vec::Vec<u8>>()
+            })
+            .collect();
+        assert_eq!(values.len(), 16);
+
+        // Flat halves survive near-verbatim…
+        assert!(
+            values.iter().any(|&v| v < 30),
+            "left flat half lost: {values:?}"
+        );
+        assert!(
+            values.iter().any(|&v| v > 180),
+            "right flat half lost: {values:?}"
+        );
+        // …and every boundary mix stays in the encoded-space band. A value
+        // in the sRGB-averaging signature band means the resampler
+        // linearized the gain values (the #41 corruption).
+        assert!(
+            values.iter().all(|&v| !(135..=165).contains(&v)),
+            "sRGB-space averaging signature detected: {values:?}"
+        );
+    }
+
     #[test]
     fn derive_no_commands_preserves_ratio() {
         // Primary: 4000x3000, sidecar: 1000x750 (1:4 ratio)

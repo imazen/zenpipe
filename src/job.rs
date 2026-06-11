@@ -837,16 +837,30 @@ impl<'a> ImageJob<'a> {
             let gm_channels = gm.gain_map.channels;
             let params = gm.params(); // extract before moving data
 
-            // Determine pixel format from channel count.
+            // Determine pixel format from channel count. The transfer is
+            // **Linear**, not Srgb (#41): gain-map bytes are log2-quantized
+            // gain, not color samples (ultrahdr-core's own GainMap doc), and
+            // the layout pipeline is transfer-aware — an Srgb tag would run
+            // the sidecar resize through the sRGB EOTF/OETF round-trip,
+            // resampling gain values in the wrong space and corrupting them
+            // on every resized Preserve job. Linear means the resampler
+            // interpolates the encoded values directly, matching how the
+            // reference implementations (Skia SkGainmapShader, libultrahdr)
+            // sample gain maps.
             let gm_format = if gm_channels == 1 {
                 crate::format::PixelFormat::new(
                     crate::ChannelType::U8,
                     crate::ChannelLayout::Gray,
                     None,
-                    crate::TransferFunction::Srgb,
+                    crate::TransferFunction::Linear,
                 )
             } else {
-                crate::format::RGB8_SRGB
+                crate::format::PixelFormat::new(
+                    crate::ChannelType::U8,
+                    crate::ChannelLayout::Rgb,
+                    None,
+                    crate::TransferFunction::Linear,
+                )
             };
 
             let gm_source = crate::sources::MaterializedSource::from_data(
@@ -1021,16 +1035,33 @@ impl<'a> ImageJob<'a> {
         #[cfg(feature = "job-ultrahdr")]
         let gain_map_data = output.sidecar.and_then(|sidecar| {
             if let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind {
-                let metadata = zencodecs::gainmap::params_to_metadata(params);
+                // GainMapMetadata is a type alias for zencodec::GainMapParams
+                // since ultrahdr-core 0.5 — the sidecar params ARE the metadata.
+                let metadata = params.clone();
+                // Repack to the tight 1- or 3-channel layout GainMap consumers
+                // expect. The channel count follows the ISO 21496-1 metadata,
+                // not pixel inspection; a resized sidecar comes out of the
+                // layout pipeline expanded to RGBA with stride padding.
+                let (width, height) = (sidecar.width(), sidecar.height());
+                let src_ch = sidecar.format().channels() as usize;
+                let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
+                let out_ch = channels as usize;
+                let mut data =
+                    alloc::vec::Vec::with_capacity(width as usize * height as usize * out_ch);
+                for y in 0..height as usize {
+                    let row_start = y * sidecar.stride();
+                    let row = &sidecar.data()[row_start..row_start + width as usize * src_ch];
+                    for px in row.chunks_exact(src_ch) {
+                        for c in 0..out_ch {
+                            data.push(px[c.min(src_ch - 1)]);
+                        }
+                    }
+                }
                 let gain_map = zencodecs::GainMap {
-                    data: sidecar.data().to_vec(),
-                    width: sidecar.width(),
-                    height: sidecar.height(),
-                    channels: if sidecar.format().layout() == crate::ChannelLayout::Gray {
-                        1
-                    } else {
-                        3
-                    },
+                    data,
+                    width,
+                    height,
+                    channels,
                 };
                 Some((gain_map, metadata))
             } else {

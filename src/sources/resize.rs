@@ -19,8 +19,11 @@ use crate::strip::{Strip, StripBuf};
 ///
 /// # Format requirements
 ///
-/// Upstream must produce `RGBA8_SRGB`. The resizer handles sRGB→linear→premul
-/// conversion internally. Output is also `RGBA8_SRGB`.
+/// Upstream must produce `RGBA8_SRGB` or `RGBA8_LINEAR` (both 4 bytes/pixel;
+/// the format must match the descriptor the resizer was configured with).
+/// For sRGB the resizer handles sRGB→linear→premul conversion internally;
+/// for Linear it resamples the raw values (zenpipe#41 gain-map sidecars).
+/// Output carries the same format as the input.
 pub struct ResizeSource {
     upstream: Box<dyn Source>,
     resizer: zenresize::StreamingResize,
@@ -28,9 +31,17 @@ pub struct ResizeSource {
     out_height: u32,
     strip_height: u32,
     buf: StripBuf,
+    format: PixelFormat,
     y: u32,
     input_exhausted: bool,
     finished: bool,
+}
+
+/// Working formats [`ResizeSource`] accepts: 4-byte/pixel RGBA, sRGB or
+/// Linear transfer. The transfer tag tells zenresize whether to gamma-decode
+/// (sRGB) or pass values through raw (Linear).
+fn accepted_format(fmt: PixelFormat) -> bool {
+    fmt == format::RGBA8_SRGB || fmt == format::RGBA8_LINEAR
 }
 
 impl ResizeSource {
@@ -43,7 +54,7 @@ impl ResizeSource {
         config: &zenresize::ResizeConfig,
         strip_height: u32,
     ) -> crate::PipeResult<Self> {
-        if upstream.format() != format::RGBA8_SRGB {
+        if !accepted_format(upstream.format()) {
             return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBA8_SRGB,
                 got: upstream.format(),
@@ -67,13 +78,15 @@ impl ResizeSource {
         // must hold at least that many extra rows beyond the filter taps.
         let resizer = zenresize::StreamingResize::with_batch_hint(config, strip_height);
 
+        let fmt = upstream.format();
         Ok(Self {
             upstream,
             resizer,
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, format::RGBA8_SRGB),
+            buf: StripBuf::new(out_w, sh, fmt),
+            format: fmt,
             y: 0,
             input_exhausted: false,
             finished: false,
@@ -85,13 +98,14 @@ impl ResizeSource {
     /// Used by the Layout node to leverage zenresize's built-in crop,
     /// padding, and orientation — all in one streaming pass.
     ///
-    /// Upstream must produce `RGBA8_SRGB`.
+    /// Upstream must produce `RGBA8_SRGB` or `RGBA8_LINEAR`, matching the
+    /// descriptor the resizer was configured with.
     pub fn from_streaming(
         upstream: Box<dyn Source>,
         resizer: zenresize::StreamingResize,
         strip_height: u32,
     ) -> crate::PipeResult<Self> {
-        if upstream.format() != format::RGBA8_SRGB {
+        if !accepted_format(upstream.format()) {
             return Err(at!(PipeError::FormatMismatch {
                 expected: format::RGBA8_SRGB,
                 got: upstream.format(),
@@ -101,13 +115,15 @@ impl ResizeSource {
         let out_w = (resizer.output_row_len() / 4) as u32;
         let out_h = resizer.total_output_height();
         let sh = strip_height.min(out_h);
+        let fmt = upstream.format();
         Ok(Self {
             upstream,
             resizer,
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, format::RGBA8_SRGB),
+            buf: StripBuf::new(out_w, sh, fmt),
+            format: fmt,
             y: 0,
             input_exhausted: false,
             finished: false,
@@ -157,7 +173,7 @@ impl Source for ResizeSource {
 
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
-            .reconfigure(self.out_width, rows_wanted, format::RGBA8_SRGB);
+            .reconfigure(self.out_width, rows_wanted, self.format);
         self.buf.reset();
 
         // Feed input rows and drain output until we have enough
@@ -205,7 +221,7 @@ impl Source for ResizeSource {
         self.out_height
     }
     fn format(&self) -> PixelFormat {
-        format::RGBA8_SRGB
+        self.format
     }
 }
 

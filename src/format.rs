@@ -34,6 +34,17 @@ pub const RGBAF32_LINEAR: PixelFormat = PixelDescriptor::RGBAF32_LINEAR;
 /// 3 bytes/pixel, sRGB transfer, no alpha. Standard JPEG format.
 pub const RGB8_SRGB: PixelFormat = PixelDescriptor::RGB8_SRGB;
 
+/// 4 bytes/pixel, linear transfer, straight alpha. Working format for
+/// sources whose bytes must be resampled in their own encoded domain —
+/// gain-map sidecars (zenpipe#41) and genuinely linear-light u8 data.
+/// zenresize maps the Linear transfer to raw u8↔f32 (no gamma round-trip).
+pub const RGBA8_LINEAR: PixelFormat = PixelDescriptor::new(
+    ChannelType::U8,
+    ChannelLayout::Rgba,
+    Some(AlphaMode::Straight),
+    TransferFunction::Linear,
+);
+
 /// 16 bytes/pixel (4×f32), sRGB transfer, straight alpha.
 /// Identity mode — no gamma conversion, just normalized to 0..1.
 pub const RGBAF32_SRGB: PixelFormat = PixelDescriptor::new(
