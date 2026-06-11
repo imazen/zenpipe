@@ -22,6 +22,15 @@ See `/home/lilith/work/zendiff/API_COMPARISON.md` for per-codec convergence stat
   only `--no-default-features` for zencodecs; nothing compiles
   `--features all,cms,std --all-targets`, which is how the ultrahdr-core 0.5
   drift rotted unseen. Add such a job.
+- **main CI fully red from sibling-checkout drift (pre-existing, observed
+  2026-06-11 on runs 27314610489 and 27325239034 — identical job set)**:
+  every build job fails compiling the `zenquant` sibling checkout with
+  E0308 `expected linear_srgb::tokens::X64V3Token, found archmage::X64V3Token`
+  (two archmage versions resolved in CI's graph), and the Format job dies on
+  `cargo metadata` for the checked-out zenmetrics workspace
+  (`benchmarks/heaptrack/drivers/cpu_profile` manifest missing). Local
+  zenpipe builds (fmt, no-default-features, all,cms,std) are clean — fixes
+  belong in the sibling repos / CI checkout strategy, not zenpipe code.
 - `codecs/jpeg::encode_ultrahdr_rgb_f32`/`_rgba_f32` ignore `_metadata` and
   hardcode `UhdrColorGamut::Bt709` — P3/BT.2020 HDR input is mistagged on the
   UltraHDR encode path.
