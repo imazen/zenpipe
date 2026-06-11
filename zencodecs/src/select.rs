@@ -336,6 +336,15 @@ fn build_preference_order<'a>(
 }
 
 #[cfg(test)]
+// Selection tests exercise the full auto-pick corpus; with codecs
+// compiled out the picker legitimately returns NoSuitableEncoder.
+#[cfg(all(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "png",
+    feature = "gif",
+    feature = "jxl-decode"
+))]
 mod tests {
     use alloc::string::ToString;
 

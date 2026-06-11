@@ -324,6 +324,10 @@ fn png_cicp_chunk_round_trips() {
         .expect("CICP must round-trip on PNG via the cICP chunk");
     assert_eq!(extracted.color_primaries, 9);
     assert_eq!(extracted.transfer_characteristics, 16);
-    assert_eq!(extracted.matrix_coefficients, 9);
+    // PNG-3 §11.3.2.6: cICP matrix_coefficients SHALL be 0 — PNG stores
+    // RGB, not YCbCr. The color-emit resolver normalizes BT2100_PQ's
+    // matrix 9 to 0 on the way into the chunk (echoing 9 verbatim, as
+    // this test originally expected, was a spec violation).
+    assert_eq!(extracted.matrix_coefficients, 0);
     assert!(extracted.full_range);
 }

@@ -6,6 +6,17 @@ test:
     cargo test --all-targets
     cargo test --all-targets --no-default-features
 
+# Tests reading dev-workstation-only fixtures (sibling jpegli-cpp ICC
+# profiles, /mnt/v corpora) — gated behind zencodecs `local-fixtures`.
+test-local-fixtures:
+    cargo test -p zencodecs --features local-fixtures --test icc_srgb
+
+# zencodecs gain-map / UltraHDR / raw surface — the avif-less feature set
+# mirrored by CI (zenpipe#38); widen to `all,cms,std` once the
+# zencodec<->zenavif drift settles.
+test-gainmap-surface:
+    cargo test -p zencodecs --no-default-features --features "std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap" --all-targets
+
 # Run clippy
 clippy:
     cargo clippy --all-targets -- -D warnings

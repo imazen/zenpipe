@@ -108,6 +108,7 @@ fn stop_decode_gif() {
     );
 }
 
+#[cfg(feature = "avif-encode")]
 #[test]
 fn stop_decode_avif() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
@@ -211,6 +212,7 @@ fn stop_encode_gif_rgba8() {
     );
 }
 
+#[cfg(feature = "avif-encode")]
 #[test]
 fn stop_encode_avif() {
     let img = rgb8_image(64, 64);
@@ -330,6 +332,7 @@ fn limits_decode_webp_width() {
 }
 
 /// zenavif returns a generic decode error instead of a clean limit error message.
+#[cfg(feature = "avif-encode")]
 #[test]
 fn limits_decode_avif_pixels() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
@@ -501,6 +504,7 @@ fn limits_encode_gif_memory() {
     );
 }
 
+#[cfg(feature = "avif-encode")]
 #[test]
 fn limits_encode_avif_memory() {
     let img = rgb8_image(64, 64);
@@ -572,12 +576,15 @@ fn generous_limits_still_work() {
 #[test]
 fn roundtrip_all_codecs_no_stop() {
     // Verify every codec can roundtrip without stop/limits interference
-    for format in [
+    #[allow(unused_mut)]
+    let mut formats = vec![
         ImageFormat::Jpeg,
         ImageFormat::WebP,
         // ImageFormat::Png,  // PNG codec adapter not yet wired into zencodecs
-        ImageFormat::Avif,
-    ] {
+    ];
+    #[cfg(feature = "avif-encode")]
+    formats.push(ImageFormat::Avif);
+    for format in formats {
         let img = rgb8_image(64, 64);
         let encoded = EncodeRequest::new(format)
             .with_quality(50.0)

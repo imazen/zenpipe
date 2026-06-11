@@ -248,7 +248,9 @@ fn codecs() -> Vec<Support> {
         needs_rgba: false,
         icc: Icc::ByteEqual,
         exif_blob: V::Ok, // eXIf chunk
-        orient_from_exif: V::Gap(G_ORIENT_EXIF_NORM),
+        // Promoted Gap → Ok 2026-06-11: zenpng now normalizes the eXIf
+        // orientation tag into info.orientation on decode.
+        orient_from_exif: V::Ok,
         orient_from_field: V::Gap(G_ORIENT_FIELD),
         xmp: V::Ok,
         cicp: V::Ok, // cICP chunk

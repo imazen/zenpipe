@@ -27,6 +27,34 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+
+- **CI now compiles and tests the gain-map/UltraHDR/raw surface** (#38):
+  new workflow run + `just test-gainmap-surface` covering
+  `jpeg-ultrahdr`/`raw-decode-gainmap` and the avif-less codec set —
+  these targets sat uncompilable for weeks with nothing on CI building
+  them. Widen to `all,cms,std` once the zencodec↔zenavif drift settles.
+- `local-fixtures` feature: caller-controlled gate for tests reading
+  dev-workstation-only fixtures (`icc_srgb` reads sibling jpegli-cpp ICC
+  profile trees); CI never enables it, `just test-local-fixtures` does.
+
+#### Changed
+
+- Feature-conditional test hygiene so every CI feature combination runs
+  green instead of failing on tests for codecs that are compiled out:
+  `regress` requires `all` (its checksum baselines are recorded under the
+  full set per its docs), `stop_and_limits` requires `jpeg,webp,gif` with
+  avif legs cfg-gated, selection/encode unit tests gate on the codec
+  corpus they exercise, and the avif trace test gates on `nodes-avif`.
+- `metadata_conformance`: PNG `orient_from_exif` promoted Gap → Ok —
+  zenpng now normalizes the eXIf orientation tag into `info.orientation`
+  on decode (stricter pin; regression-guarded both directions).
+- `png_capability::png_cicp_chunk_round_trips`: expect
+  `matrix_coefficients = 0` after the cICP round-trip — PNG-3 §11.3.2.6
+  requires matrix 0 (RGB storage); echoing the source's matrix 9
+  verbatim, as the test originally pinned, was a spec violation. The
+  encoded chunk is `[9, 16, 0, 1]` (verified at the byte level).
+
 #### Fixed
 
 - **UltraHDR encode derives the color gamut from CICP metadata** (#40):

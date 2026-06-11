@@ -847,6 +847,7 @@ mod tests {
         assert!(!request.lossless);
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn lossless_with_jpeg_error() {
         let img = imgref::ImgVec::new(
@@ -887,6 +888,7 @@ mod tests {
         let _request = EncodeRequest::new(ImageFormat::Jpeg).with_metadata(meta);
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn encode_srgba8_imgref_opaque() {
         let img = imgref::ImgVec::new(
@@ -973,6 +975,7 @@ mod tests {
         assert!(!webp_out.data().is_empty());
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn quality_profile_encode() {
         let img = imgref::ImgVec::new(
@@ -995,6 +998,7 @@ mod tests {
         assert!(!output.data().is_empty());
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn quality_profile_with_dpr_encode() {
         let img = imgref::ImgVec::new(
@@ -1042,6 +1046,7 @@ mod tests {
         assert!(!intent.lossless);
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn auto_with_policy() {
         let img = imgref::ImgVec::new(
@@ -1066,6 +1071,7 @@ mod tests {
         assert_eq!(output.format(), ImageFormat::Jpeg);
     }
 
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
     #[test]
     fn auto_with_image_facts() {
         let img = imgref::ImgVec::new(

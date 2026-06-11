@@ -1287,12 +1287,7 @@ impl PipelineGraph {
                 let in_w = source.width();
                 let in_h = source.height();
                 let resizer = crate::execute_layout::streaming_from_plan_batched(
-                    in_w,
-                    in_h,
-                    &plan,
-                    working,
-                    filter,
-                    16,
+                    in_w, in_h, &plan, working, filter, 16,
                 );
                 source = Box::new(ResizeSource::from_streaming(source, resizer, 16)?);
 

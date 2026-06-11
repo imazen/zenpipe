@@ -127,6 +127,11 @@ all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "
 # Calibration harness (all lossy encoders)
 calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
 
+# Tests that read fixtures only present on the dev workstation (sibling
+# jpegli-cpp profile trees, /mnt/v corpora). The skip decision is the
+# caller's: CI never enables this; `just test-local-fixtures` does.
+local-fixtures = []
+
 [[example]]
 name = "metadata_roundtrip"
 required-features = ["all", "std"]
@@ -158,6 +163,27 @@ required-features = ["std"]
 [[example]]
 name = "quality_calibrate"
 required-features = ["calibrate"]
+
+# icc_srgb reads real ICC profiles from the sibling zenjpeg jpegli-cpp
+# tree (dev-workstation only) — see the `local-fixtures` feature.
+[[test]]
+name = "icc_srgb"
+required-features = ["local-fixtures"]
+
+# Checksum regression baselines are recorded under the full feature set
+# (`UPDATE_CHECKSUMS=1 cargo test --features all --test regress` per the
+# module docs); running under a different set produces different encoder
+# output and false drift. Encode that contract here.
+[[test]]
+name = "regress"
+required-features = ["all"]
+
+# Every test in this binary forwards stop tokens / limits through real
+# codec encode+decode; with no codecs compiled in there is nothing to
+# test. avif legs are additionally cfg-gated on `avif-encode` inside.
+[[test]]
+name = "stop_and_limits"
+required-features = ["jpeg", "webp", "gif"]
 
 # [patch.crates-io] moved to workspace root Cargo.toml
 
