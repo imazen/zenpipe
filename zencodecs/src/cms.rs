@@ -149,7 +149,7 @@ fn trc_matches_srgb(trc: &Option<moxcms::ToneReprCurve>) -> bool {
 
 /// Determine whether an ICC profile should be treated as sRGB based on CMS mode.
 ///
-/// - `Compat`: hash lookup (fast, covers 22 known profiles) + description match.
+/// - `Compat`: normalized-hash lookup of known sRGB profiles (fast).
 /// - `SceneReferred`: structural comparison of primaries + TRC curves.
 pub fn is_srgb_for_mode(icc_bytes: &[u8], mode: CmsMode) -> bool {
     match mode {
@@ -159,19 +159,6 @@ pub fn is_srgb_for_mode(icc_bytes: &[u8], mode: CmsMode) -> bool {
 }
 
 // ─── PNG color chunk parsing ───
-
-/// Parsed cICP (Coding-Independent Code Points) values from a PNG chunk.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CicpValues {
-    /// Colour primaries: 1=BT.709/sRGB, 9=BT.2020, 12=Display P3.
-    pub colour_primaries: u8,
-    /// Transfer characteristics: 1=BT.709, 13=sRGB, 16=PQ, 18=HLG.
-    pub transfer_characteristics: u8,
-    /// Matrix coefficients: 0=identity for RGB.
-    pub matrix_coefficients: u8,
-    /// Full range flag: 1=full range, 0=video range.
-    pub full_range: u8,
-}
 
 /// Color metadata extracted from PNG chunks.
 #[derive(Clone, Debug, Default)]
@@ -184,7 +171,7 @@ pub struct PngColorInfo {
     /// Whether an sRGB chunk is present.
     pub has_srgb_chunk: bool,
     /// cICP chunk values, if present.
-    pub cicp: Option<CicpValues>,
+    pub cicp: Option<zencodec::Cicp>,
     /// Whether an iCCP chunk is present (ICC profile handled separately).
     pub has_iccp_chunk: bool,
 }
@@ -232,12 +219,12 @@ pub fn parse_png_color_chunks(data: &[u8]) -> PngColorInfo {
                 info.has_iccp_chunk = true;
             }
             b"cICP" if len == 4 => {
-                info.cicp = Some(CicpValues {
-                    colour_primaries: data[chunk_data_start],
-                    transfer_characteristics: data[chunk_data_start + 1],
-                    matrix_coefficients: data[chunk_data_start + 2],
-                    full_range: data[chunk_data_start + 3],
-                });
+                info.cicp = Some(zencodec::Cicp::new(
+                    data[chunk_data_start],
+                    data[chunk_data_start + 1],
+                    data[chunk_data_start + 2],
+                    data[chunk_data_start + 3] != 0,
+                ));
             }
             b"IDAT" | b"IEND" => break,
             _ => {}
@@ -311,66 +298,28 @@ pub fn synthesize_icc_from_gama(
     profile.encode().ok()
 }
 
-/// Synthesize an ICC profile from cICP (Coding-Independent Code Points) values.
+/// Synthesize an ICC profile for CICP code points.
 ///
-/// Supports:
-/// - Primaries: BT.709 (1), BT.2020 (9), Display P3 (12)
-/// - Transfer: BT.709 (1/6), sRGB (13)
+/// Delegates to [`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp`] —
+/// the bundled, transfer-aware profile set covering the full assigned H.273
+/// grid with no CMS (byte-equality-tested against moxcms synthesis).
 ///
-/// Returns `None` for unrecognized primaries/transfer combinations (e.g., PQ, HLG)
-/// which require scene-referred handling, not simple ICC profile synthesis.
-pub fn synthesize_icc_from_cicp(cicp: &CicpValues) -> Option<Vec<u8>> {
-    let mut profile = moxcms::ColorProfile::new_srgb();
-
-    match cicp.colour_primaries {
-        1 => {
-            // BT.709 / sRGB primaries -- already default from new_srgb()
-        }
-        9 => {
-            // BT.2020
-            let white = moxcms::XyY::new(0.3127, 0.3290, 1.0);
-            let primaries = moxcms::ColorPrimaries {
-                red: moxcms::Chromaticity { x: 0.708, y: 0.292 },
-                green: moxcms::Chromaticity { x: 0.170, y: 0.797 },
-                blue: moxcms::Chromaticity { x: 0.131, y: 0.046 },
-            };
-            profile.update_rgb_colorimetry(white, primaries);
-        }
-        12 => {
-            // Display P3
-            let white = moxcms::XyY::new(0.3127, 0.3290, 1.0);
-            let primaries = moxcms::ColorPrimaries {
-                red: moxcms::Chromaticity { x: 0.680, y: 0.320 },
-                green: moxcms::Chromaticity { x: 0.265, y: 0.690 },
-                blue: moxcms::Chromaticity { x: 0.150, y: 0.060 },
-            };
-            profile.update_rgb_colorimetry(white, primaries);
-        }
-        _ => return None,
+/// Returns `None` when no source profile should be used for an ICC→sRGB
+/// transform:
+/// - PQ (16) / HLG (18) transfers — HDR needs scene-referred handling
+///   (tone-mapping), not a naive ICC-to-ICC transform to SDR sRGB, even
+///   though the bundle carries PQ/HLG profiles for *tagging* output.
+/// - The sRGB/BT.709 default family (primaries 1/2 × transfer 1/2/13) —
+///   already sRGB for transform purposes, no profile needed.
+/// - Code points outside the assigned H.273 grid.
+pub fn synthesize_icc_from_cicp(cicp: zencodec::Cicp) -> Option<Vec<u8>> {
+    if matches!(cicp.transfer_characteristics, 16 | 18) {
+        return None;
     }
-
-    match cicp.transfer_characteristics {
-        1 | 6 => {
-            // BT.709 / BT.601 transfer
-            let trc = moxcms::ToneReprCurve::Parametric(vec![
-                0.45_f32, // gamma
-                1.099,    // a
-                -0.099,   // b (offset)
-                4.5,      // c (linear slope)
-                0.018,    // d (linear cutoff)
-            ]);
-            profile.red_trc = Some(trc.clone());
-            profile.green_trc = Some(trc.clone());
-            profile.blue_trc = Some(trc);
-        }
-        13 => {
-            // sRGB transfer -- leave TRC from new_srgb() as-is.
-        }
-        _ => return None,
+    match zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp) {
+        zenpixels_convert::icc_profiles::SynthesizedIcc::Profile(bytes) => Some(bytes.into_owned()),
+        _ => None,
     }
-
-    profile.cicp = None;
-    profile.encode().ok()
 }
 
 // ─── Transform decision helpers ───
@@ -404,13 +353,7 @@ pub fn srgb_transform_icc(
         if cicp_val.color_primaries == 1 && cicp_val.transfer_characteristics == 13 {
             return None; // sRGB via CICP
         }
-        let cicp = CicpValues {
-            colour_primaries: cicp_val.color_primaries,
-            transfer_characteristics: cicp_val.transfer_characteristics,
-            matrix_coefficients: cicp_val.matrix_coefficients,
-            full_range: if cicp_val.full_range { 1 } else { 0 },
-        };
-        if let Some(src_icc) = synthesize_icc_from_cicp(&cicp) {
+        if let Some(src_icc) = synthesize_icc_from_cicp(cicp_val) {
             return Some((src_icc, dst_icc));
         }
     }
@@ -443,10 +386,10 @@ pub fn png_srgb_transform_icc_ex(data: &[u8], honor_gama_only: bool) -> Option<(
 
     // cICP takes highest precedence.
     if let Some(cicp) = info.cicp {
-        if cicp.transfer_characteristics == 13 && cicp.colour_primaries == 1 {
+        if cicp.transfer_characteristics == 13 && cicp.color_primaries == 1 {
             return None; // sRGB
         }
-        if let Some(src_icc) = synthesize_icc_from_cicp(&cicp) {
+        if let Some(src_icc) = synthesize_icc_from_cicp(cicp) {
             return Some((src_icc, dst_icc));
         }
         return None; // Unrecognized CICP -- skip
@@ -527,39 +470,24 @@ mod tests {
     }
 
     #[test]
-    fn cicp_srgb_returns_profile() {
-        let cicp = CicpValues {
-            colour_primaries: 1,
-            transfer_characteristics: 13,
-            matrix_coefficients: 0,
-            full_range: 1,
-        };
-        // sRGB CICP -- synthesize should still work (caller decides to skip)
-        let result = synthesize_icc_from_cicp(&cicp);
-        assert!(result.is_some());
+    fn cicp_srgb_synthesizes_nothing() {
+        // The bundled synthesis never fabricates an sRGB profile (the
+        // sRGB/BT.709 default family answers NotNeeded) — callers treat
+        // None as "no transform needed".
+        let result = synthesize_icc_from_cicp(zencodec::Cicp::new(1, 13, 0, true));
+        assert!(result.is_none());
     }
 
     #[test]
     fn cicp_bt2020_returns_profile() {
-        let cicp = CicpValues {
-            colour_primaries: 9,
-            transfer_characteristics: 1,
-            matrix_coefficients: 0,
-            full_range: 1,
-        };
-        let result = synthesize_icc_from_cicp(&cicp);
+        let result = synthesize_icc_from_cicp(zencodec::Cicp::new(9, 1, 0, true));
         assert!(result.is_some());
     }
 
     #[test]
     fn cicp_pq_returns_none() {
-        let cicp = CicpValues {
-            colour_primaries: 9,
-            transfer_characteristics: 16, // PQ
-            matrix_coefficients: 0,
-            full_range: 1,
-        };
-        let result = synthesize_icc_from_cicp(&cicp);
+        // PQ needs scene-referred handling, never a naive ICC transform.
+        let result = synthesize_icc_from_cicp(zencodec::Cicp::new(9, 16, 0, true));
         assert!(result.is_none());
     }
 

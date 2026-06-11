@@ -156,7 +156,7 @@ pub use zencodec::{ColorEmitPolicy, MetadataPolicy};
 
 // Color / ICC profile classification
 #[cfg(feature = "cms")]
-pub use cms::{CicpValues, CmsMode, PngColorInfo};
+pub use cms::{CmsMode, PngColorInfo};
 pub use color::{SourceColorExt, icc_profile_is_srgb};
 
 // Gain map types (format-agnostic)

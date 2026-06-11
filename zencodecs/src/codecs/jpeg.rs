@@ -42,8 +42,8 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
         ii = ii.with_icc_profile(icc.clone());
     }
     if let Some(ref exif) = info.exif {
-        if let Some(orient) = zenjpeg::lossless::parse_exif_orientation(exif) {
-            ii = ii.with_orientation(zencodec::Orientation::from_exif(orient).unwrap_or_default());
+        if let Some(orient) = zencodec::helpers::parse_exif_orientation(exif) {
+            ii = ii.with_orientation(orient);
         }
         ii = ii.with_exif(exif.clone());
     }
