@@ -5,6 +5,13 @@ on:
     branches: [main, master]
   pull_request:
 
+# Superseded runs only waste runner queue — particularly the macOS
+# jobs, which wait on GitHub's scarcest pool. Only the newest
+# commit's run matters per ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Public-API snapshot freshness gate (docs/public-api/, tests/public_api_doc.rs).
   # The reusable rust-ci.yml below has no env passthrough, so its matrix jobs
