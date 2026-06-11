@@ -413,3 +413,38 @@ fn gain_map_source_precomputed_builder() {
         .with_quality(85.0)
         .with_gain_map(source);
 }
+
+/// zenpipe#40: the encoder derives the UltraHDR gamut from CICP color
+/// primaries instead of hardcoding BT.709. Display P3 and BT.2100 content
+/// encode successfully; the output is still a valid UltraHDR JPEG.
+#[test]
+fn encode_ultrahdr_honors_wide_gamut_cicp() {
+    for primaries in [12u8, 9] {
+        let img = hdr_rgb_f32_image(64, 64);
+        let mut meta = zencodecs::Metadata::default();
+        meta.cicp = Some(zencodec::Cicp::new(primaries, 16, 0, true));
+
+        let output = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality(85.0)
+            .with_metadata(meta)
+            .encode_ultrahdr_rgb_f32(img.as_ref())
+            .unwrap_or_else(|e| panic!("CICP primaries {primaries} encode failed: {e}"));
+        assert_eq!(&output.data()[..2], &[0xFF, 0xD8]);
+    }
+}
+
+/// zenpipe#40: explicit CICP primaries outside the three UltraHDR gamuts
+/// are an encode error — BT.709 gain math over other primaries would bake
+/// wrong gain values into the file.
+#[test]
+fn encode_ultrahdr_rejects_unsupported_primaries() {
+    let img = hdr_rgb_f32_image(64, 64);
+    let mut meta = zencodecs::Metadata::default();
+    meta.cicp = Some(zencodec::Cicp::new(4, 16, 0, true)); // BT.470M
+
+    let err = EncodeRequest::new(ImageFormat::Jpeg)
+        .with_quality(85.0)
+        .with_metadata(meta)
+        .encode_ultrahdr_rgb_f32(img.as_ref());
+    assert!(err.is_err(), "BT.470M primaries must be rejected");
+}

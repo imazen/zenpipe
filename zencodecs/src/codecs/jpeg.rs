@@ -160,6 +160,35 @@ pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<
     )
 }
 
+/// Derive the UltraHDR color gamut from CICP color primaries (zenpipe#40).
+///
+/// ultrahdr-core's gain-map math supports exactly the three UltraHDR
+/// gamuts (BT.709, Display P3, BT.2100). An explicit CICP primaries code
+/// outside that set is an encode **error** — silently computing BT.709
+/// luma over, say, BT.470 pixels would bake wrong gain values into the
+/// file. Absent CICP, or the explicit "unspecified" code 2, defaults to
+/// BT.709 (the historical behavior).
+#[cfg(feature = "jpeg-ultrahdr")]
+fn uhdr_gamut_from_metadata(
+    metadata: Option<&Metadata>,
+) -> Result<zenjpeg::ultrahdr::UhdrColorGamut> {
+    use zenjpeg::ultrahdr::UhdrColorGamut;
+    let Some(cicp) = metadata.and_then(|m| m.cicp) else {
+        return Ok(UhdrColorGamut::Bt709);
+    };
+    match cicp.color_primaries {
+        1 | 2 => Ok(UhdrColorGamut::Bt709),
+        9 => Ok(UhdrColorGamut::Bt2020),
+        12 => Ok(UhdrColorGamut::DisplayP3),
+        _ => Err(at!(CodecError::UnsupportedOperation {
+            format: ImageFormat::Jpeg,
+            detail: "UltraHDR encode supports BT.709 (CICP 1), Display P3 (CICP 12), \
+                     and BT.2100 (CICP 9) color primaries; convert pixels to one of \
+                     these gamuts before encoding",
+        })),
+    }
+}
+
 /// Decode UltraHDR JPEG to linear f32 RGBA HDR pixels.
 ///
 /// Encode linear f32 RGB pixels to UltraHDR JPEG.
@@ -171,15 +200,14 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     img: ImgRef<Rgb<f32>>,
     quality: Option<f32>,
     gainmap_quality: Option<f32>,
-    _metadata: Option<&Metadata>,
+    metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
-        GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
-        encode_ultrahdr,
+        GainMapConfig, ToneMapConfig, UhdrColorTransfer, UhdrPixelFormat, encode_ultrahdr,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -212,7 +240,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
         width,
         height,
         UhdrPixelFormat::RgbaF32,
-        UhdrColorGamut::Bt709,
+        uhdr_gamut_from_metadata(metadata)?,
         UhdrColorTransfer::Linear,
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
@@ -242,15 +270,14 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     img: ImgRef<Rgba<f32>>,
     quality: Option<f32>,
     gainmap_quality: Option<f32>,
-    _metadata: Option<&Metadata>,
+    metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
-        GainMapConfig, ToneMapConfig, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat,
-        encode_ultrahdr,
+        GainMapConfig, ToneMapConfig, UhdrColorTransfer, UhdrPixelFormat, encode_ultrahdr,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -273,7 +300,7 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
         width,
         height,
         UhdrPixelFormat::RgbaF32,
-        UhdrColorGamut::Bt709,
+        uhdr_gamut_from_metadata(metadata)?,
         UhdrColorTransfer::Linear,
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
@@ -347,4 +374,60 @@ pub(crate) fn encode_with_precomputed_gainmap(
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
     Ok(EncodeOutput::new(out, ImageFormat::Jpeg))
+}
+
+#[cfg(all(test, feature = "jpeg-ultrahdr"))]
+mod ultrahdr_gamut_tests {
+    use super::*;
+    use zenjpeg::ultrahdr::UhdrColorGamut;
+
+    fn meta_with_primaries(code: u8) -> Metadata {
+        let mut m = Metadata::default();
+        // PQ transfer + identity matrix; only color_primaries matters here.
+        m.cicp = Some(zencodec::Cicp::new(code, 16, 0, true));
+        m
+    }
+
+    /// zenpipe#40: the UltraHDR gamut follows CICP color primaries instead
+    /// of a hardcoded BT.709.
+    #[test]
+    fn gamut_follows_cicp_primaries() {
+        assert_eq!(
+            uhdr_gamut_from_metadata(None).unwrap(),
+            UhdrColorGamut::Bt709
+        );
+        assert_eq!(
+            uhdr_gamut_from_metadata(Some(&Metadata::default())).unwrap(),
+            UhdrColorGamut::Bt709,
+            "no CICP defaults to BT.709"
+        );
+        assert_eq!(
+            uhdr_gamut_from_metadata(Some(&meta_with_primaries(1))).unwrap(),
+            UhdrColorGamut::Bt709
+        );
+        assert_eq!(
+            uhdr_gamut_from_metadata(Some(&meta_with_primaries(2))).unwrap(),
+            UhdrColorGamut::Bt709,
+            "explicit 'unspecified' defaults to BT.709"
+        );
+        assert_eq!(
+            uhdr_gamut_from_metadata(Some(&meta_with_primaries(9))).unwrap(),
+            UhdrColorGamut::Bt2020
+        );
+        assert_eq!(
+            uhdr_gamut_from_metadata(Some(&meta_with_primaries(12))).unwrap(),
+            UhdrColorGamut::DisplayP3
+        );
+    }
+
+    /// Explicit primaries outside the three UltraHDR gamuts must be an
+    /// encode error, not a silent BT.709 fallback — BT.709 luma over other
+    /// primaries computes wrong gain values.
+    #[test]
+    fn unsupported_primaries_is_an_error() {
+        for code in [4u8, 5, 6, 7, 8, 10, 11, 22] {
+            let err = uhdr_gamut_from_metadata(Some(&meta_with_primaries(code)));
+            assert!(err.is_err(), "CICP primaries {code} must be rejected");
+        }
+    }
 }
