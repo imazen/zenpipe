@@ -44,7 +44,9 @@ imgref = "1.12"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 enough = "0.4"
-zensim = { version = "0.2.5", default-features = false }
+# Local path: 0.3.0 is unpublished (crates.io tops out at 0.2.7); CI resolves
+# via the superwork git patch, same shape as zencodecs' zensim dep.
+zensim = { version = "0.3.0", path = "../../zensim/zensim", default-features = false }
 zenpixels = { version = "0.2.10", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.2.10", features = ["planar"] }
 
