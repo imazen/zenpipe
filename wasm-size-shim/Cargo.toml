@@ -17,8 +17,12 @@ crate-type = ["cdylib"]
 
 [dependencies]
 zenpipe = { path = "..", features = ["std"] }
-zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
-zenblend = { path = "../../zenblend" }
+# zenresize/zenblend must match zenpipe's own registry deps exactly —
+# a path copy here creates a second crate instance and NodeOp field
+# types (Filter, BlendMode) stop unifying.
+zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
+zenlayout = { path = "../zenlayout" }
+zenblend = { version = "0.1.2", default-features = false }
 zenfilters = { path = "../zenfilters" }
 zencodec = { version = "0.1.12" }
 zenpixels = { path = "../../zenpixels/zenpixels" }

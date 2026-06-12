@@ -9,6 +9,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`wasm-size-shim` builds again; "WASM Benchmark" workflow un-redded**
+  (red since 2026-06-01): excluded the shim from the root workspace (it
+  keeps its own lockfile, same rationale as `demo/crate`), ported it off
+  the removed zenresize `layout` feature to `zenlayout::ConstraintMode`,
+  aligned zenresize/zenblend to zenpipe's registry specs (path copies made
+  a second crate instance whose `Filter`/`BlendMode` no longer unified),
+  adapted `Constrain{w,h}` to `Option<u32>`, dropped the removed zenjpeg
+  `yuv` feature, and refreshed its Cargo.lock. Verified locally on both
+  workflow targets (wasm32-unknown-unknown cdylib + wasm32-wasip1
+  wasm-demo). The fuzz/ manifest got the same treatment (zencodecs path,
+  stale local-path patch table → root-mirroring git patches, lock refresh).
+
 - **Resolves from a bare `git clone` / as a git dependency** (#37): every
   cross-repo dependency in the workspace manifests (root, zencodecs,
   zenfilters) is now a plain registry spec — the `path = "../…"` keys that
