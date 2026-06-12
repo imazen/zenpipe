@@ -26,14 +26,49 @@ rayon = { version = "1.10", optional = true }
 wasm-bindgen-rayon = { version = "1.3", features = ["no-bundler"], optional = true }
 
 # WASM-specific deps (optional for native testing)
-wasm-bindgen = { version = "0.2", optional = true }
+# Pinned exactly: the Pages workflow installs wasm-bindgen-cli at this same
+# version, and the bindgen schema requires crate == CLI. Bump both together.
+wasm-bindgen = { version = "=0.2.123", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 
+# Mirror of the workspace root's git-form [patch.crates-io] (zenpipe#37) so
+# the standalone demo resolves without sibling checkouts (zencodecs needs
+# zenjpeg `recompress`, which the published 0.8.4 predates). The Pages deploy
+# regenerates this section via ci-prep at build time; local sibling lockstep
+# is opt-in via `cargo superwork patch`.
 [patch.crates-io]
-zennode = { path = "../../../zennode/zennode" }
-zennode-derive = { path = "../../../zennode/zennode-derive" }
-zencodec = { path = "../../../zencodec" }
+# zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
+# crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
+zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+# zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
+# transcode); the published 0.2.1 predates it.
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+# jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+# zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
+# uses; 0.3.10 on crates.io predates it (same version number, older content).
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+# zenwebp main (0.4.5) checks Stop tokens at decode entry; 0.4.4 predates it.
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+# zenpng main decodes EXIF orientation (the conformance verdict table was
+# promoted to match it); the published 0.1.4 predates that sweep.
+zenpng = { git = "https://github.com/imazen/zenpng" }
+# zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
+# 0.1.1 predates (same version number, older content).
+zennode = { git = "https://github.com/imazen/zennode" }
+zennode-derive = { git = "https://github.com/imazen/zennode" }
+# zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
+zensim = { git = "https://github.com/imazen/zensim" }
+zensim-regress = { git = "https://github.com/imazen/zensim" }
+# imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
+imageflow_types = { git = "https://github.com/imazen/imageflow" }
+imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
+# zensally / zensally-zentract are not published (nodes-faces feature).
+zensally = { git = "https://github.com/imazen/zensally" }
+zensally-zentract = { git = "https://github.com/imazen/zensally" }
+
+# Override zenresize's git dep on zenlayout to use our workspace copy
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

@@ -43,7 +43,7 @@
 ## 1. Build / test commands (the workspace needs the jxl-encoder patch)
 
 The zenpipe workspace only resolves because `e5de220` added to `zenpipe/Cargo.toml`
-`[patch.crates-io]`: `jxl-encoder = { path = "../jxl-encoder/jxl-encoder" }`.
+`[patch.crates-io]`: `jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }  # (was a local path until zenpipe#37)`.
 That's on main already; don't remove it. Build/test from the workspace root:
 
 ```

@@ -37,7 +37,10 @@ jobs:
           workspaces: demo/crate
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli --version 0.2.117
+        # Must equal the exact `wasm-bindgen = "=…"` pin in demo/crate/Cargo.toml
+        # (bindgen schema versions must match; the build deletes Cargo.lock, so
+        # the crate side is pinned rather than floating). Bump both together.
+        run: cargo install wasm-bindgen-cli --version 0.2.123
 
       - uses: actions/checkout@v4
         with:
@@ -78,7 +81,7 @@ jobs:
           # One `-C link-arg=` per linker flag: with a single `-C link-args=`
           # only the first flag binds; the rest hit rustc bare
           # ("Unrecognized option: 'import-memory'").
-          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base" \
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--export=__heap_base" \
             cargo +nightly build --target wasm32-unknown-unknown --release \
             --features "wasm,parallel" -Z build-std=panic_abort,std
           wasm-bindgen --target web --out-dir ../pkg \

@@ -29,6 +29,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **Pages demo WASM packaging** (#43): the threaded build now exports
+  `__heap_base` (wasm-bindgen's threading transform needs it to inject
+  thread ids), and wasm-bindgen-cli is installed at the exact version the
+  crate pins (`=0.2.123`) — the bindgen schema requires crate == CLI and
+  the deploy deletes Cargo.lock, so a floating crate version drifted past
+  the pinned CLI.
+
 - **`decode` builds again** (#43): the feature list dropped the zencodecs
   stubs (`heic-decode`, `bitmaps-qoi`/`-tga`/`-hdr`) that have never
   compiled — `zeneditor/decode` was uncompilable since April and blocked
