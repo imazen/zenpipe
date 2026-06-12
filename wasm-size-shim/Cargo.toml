@@ -19,7 +19,7 @@ crate-type = ["cdylib"]
 zenpipe = { path = "..", features = ["std"] }
 zenresize = { path = "../../zenresize", default-features = false, features = ["layout", "std"] }
 zenblend = { path = "../../zenblend" }
-zenfilters = { path = "../../zenfilters" }
+zenfilters = { path = "../zenfilters" }
 zencodec = { version = "0.1.12" }
 zenpixels = { path = "../../zenpixels/zenpixels" }
 hashbrown = "0.16"
@@ -28,7 +28,7 @@ bytemuck = { version = "1", features = ["derive"] }
 imgref = "1"
 
 # Codecs
-zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["yuv", "trellis", "zencodec"] }
+zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["trellis", "zencodec"] }
 zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr", "zencodec"] }
 zenpng = { path = "../../zenpng" }
 zenwebp = { path = "../../zenwebp", features = ["zencodec"] }

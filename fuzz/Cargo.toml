@@ -16,19 +16,30 @@ members = ["."]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 zenpipe = { path = "..", features = ["job", "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif"] }
-zencodecs = { path = "../../zencodecs", default-features = false }
+zencodecs = { path = "../zencodecs", default-features = false }
 
-# Replicate [patch.crates-io] so transitive deps resolve to local crates.
+# Replicate the parent workspace's [patch.crates-io] so transitive deps
+# resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
-zenpixels = { path = "../../zenpixels/zenpixels" }
-zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
-zencodec = { path = "../../zencodec" }
-zenjpeg = { path = "../../zenjpeg/zenjpeg" }
-moxcms = { path = "../../../moxcms" }
-zenlayout = { path = "../../zenlayout" }
-ultrahdr-core = { path = "../../ultrahdr/ultrahdr-core" }
-zenavif-parse = { path = "../../zenavif-parse" }
-zennode = { path = "../../zennode/zennode" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenpng = { git = "https://github.com/imazen/zenpng" }
+zennode = { git = "https://github.com/imazen/zennode" }
+zennode-derive = { git = "https://github.com/imazen/zennode" }
+zensim = { git = "https://github.com/imazen/zensim" }
+zensim-regress = { git = "https://github.com/imazen/zensim" }
+imageflow_types = { git = "https://github.com/imazen/imageflow" }
+imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
+zensally = { git = "https://github.com/imazen/zensally" }
+zensally-zentract = { git = "https://github.com/imazen/zensally" }
+
+# Override zenresize's git dep on zenlayout to use the workspace copy
+# (mirrors the root manifest's source-replacement patch).
+[patch."https://github.com/imazen/zenlayout.git"]
+zenlayout = { path = "../zenlayout" }
 
 [[bin]]
 name = "fuzz_job_decode"
