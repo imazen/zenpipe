@@ -8,32 +8,10 @@ See `/home/lilith/work/zendiff/API_COMPARISON.md` for per-codec convergence stat
 
 ## Known Bugs
 
-- **zenjpeg `parse_xmp` zeroes per-channel hdrgm fields for element-form XMP**
-  (sibling repo — fix belongs in `zenjpeg/zenjpeg/src/container/xmp.rs:255+`):
-  `extract_attribute` only handles `hdrgm:GainMapMax="…"` attribute syntax;
-  files writing `GainMapMin`/`GainMapMax`/`Gamma` as XMP *elements* (rdf:Seq
-  form — e.g. `/mnt/v/input/gainmap-samples/jpeg/seine_sdr_gainmap_srgb.jpg`,
-  whose scalar HDRCapacity* attributes parse fine) come back with
-  min=max=gamma=0. Caught by
-  `tests/gainmap_integration.rs::jpeg_ultrahdr_seine_gainmap`
-  (`params.validate()` rejects gamma=0) — failing as of 2026-06-11, exposed
-  when the long-uncompilable `jpeg-ultrahdr` targets were repaired (4a0b261).
-- **CI never builds the gain-map surface**: `.github/workflows/ci.yml` tests
-  only `--no-default-features` for zencodecs; nothing compiles
-  `--features all,cms,std --all-targets`, which is how the ultrahdr-core 0.5
-  drift rotted unseen. Add such a job.
-- **main CI fully red from sibling-checkout drift (pre-existing, observed
-  2026-06-11 on runs 27314610489 and 27325239034 — identical job set)**:
-  every build job fails compiling the `zenquant` sibling checkout with
-  E0308 `expected linear_srgb::tokens::X64V3Token, found archmage::X64V3Token`
-  (two archmage versions resolved in CI's graph), and the Format job dies on
-  `cargo metadata` for the checked-out zenmetrics workspace
-  (`benchmarks/heaptrack/drivers/cpu_profile` manifest missing). Local
-  zenpipe builds (fmt, no-default-features, all,cms,std) are clean — fixes
-  belong in the sibling repos / CI checkout strategy, not zenpipe code.
-- `codecs/jpeg::encode_ultrahdr_rgb_f32`/`_rgba_f32` ignore `_metadata` and
-  hardcode `UhdrColorGamut::Bt709` — P3/BT.2020 HDR input is mistagged on the
-  UltraHDR encode path.
+(none currently — last cleared 2026-06-11: parse_xmp element-form hdrgm
+fields fixed in zenjpeg; the gain-map-surface CI job exists (zenpipe#38);
+the sibling-checkout CI drift is fixed in cargo-superwork/zen-workspace
+(zenpipe#39); UltraHDR gamut now derives from CICP (zenpipe#40))
 
 ## Purpose
 
