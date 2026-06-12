@@ -220,9 +220,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "cc"
-version = "1.2.63"
+version = "1.2.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "556e016178bb5662a08681bbe0f00f8e17631781a4dfc8c45e466e4b185ec27f"
+checksum = "dad887fd958be91b5098c0248def011f4523ab786cd411be668777e55063501f"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -472,7 +472,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder"
 version = "0.3.2"
-source = "git+https://github.com/imazen/jxl-encoder#a9585c4e622c0aa0fb0708c985f47ac5bcd893d3"
+source = "git+https://github.com/imazen/jxl-encoder#8a185c2dc8f5fa764ba5c5365ff28484a4b8ab7a"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -490,7 +490,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.3.2"
-source = "git+https://github.com/imazen/jxl-encoder#a9585c4e622c0aa0fb0708c985f47ac5bcd893d3"
+source = "git+https://github.com/imazen/jxl-encoder#8a185c2dc8f5fa764ba5c5365ff28484a4b8ab7a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -500,7 +500,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.3.2"
-source = "git+https://github.com/imazen/jxl-encoder#a9585c4e622c0aa0fb0708c985f47ac5bcd893d3"
+source = "git+https://github.com/imazen/jxl-encoder#8a185c2dc8f5fa764ba5c5365ff28484a4b8ab7a"
 dependencies = [
  "archmage",
  "libm",
@@ -1127,9 +1127,9 @@ dependencies = [
 
 [[package]]
 name = "wasip2"
-version = "1.0.3+wasi-0.2.9"
+version = "1.0.4+wasi-0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
+checksum = "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487"
 dependencies = [
  "wit-bindgen",
 ]
@@ -1451,7 +1451,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.8.7"
-source = "git+https://github.com/imazen/zenjpeg#258643b121e66bde3a8d95e53e5f26842923e850"
+source = "git+https://github.com/imazen/zenjpeg#9835cf5ec8ee65e4d4c2eae55969599ef3878267"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -1478,7 +1478,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.2.1"
-source = "git+https://github.com/imazen/zenjxl#4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df"
+source = "git+https://github.com/imazen/zenjxl#0180bdc61480572491db3e0ef5a376392fe5816c"
 dependencies = [
  "enough",
  "imgref",
@@ -1496,7 +1496,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.3.10"
-source = "git+https://github.com/imazen/zenjxl-decoder#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder#e7e077d8346f273cb5705ee3d1a5da5da3262fb4"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -1516,7 +1516,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder#e7e077d8346f273cb5705ee3d1a5da5da3262fb4"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -1527,7 +1527,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder#e7e077d8346f273cb5705ee3d1a5da5da3262fb4"
 dependencies = [
  "archmage",
  "paste",
@@ -1544,7 +1544,7 @@ dependencies = [
 [[package]]
 name = "zennode"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zennode#ad6e5030e433b09846f90e729154868e48f353a9"
+source = "git+https://github.com/imazen/zennode#3ed1181c28829595170dcaaa1f4d57dc016a43b8"
 dependencies = [
  "serde",
  "serde_json",
@@ -1554,7 +1554,7 @@ dependencies = [
 [[package]]
 name = "zennode-derive"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zennode#ad6e5030e433b09846f90e729154868e48f353a9"
+source = "git+https://github.com/imazen/zennode#3ed1181c28829595170dcaaa1f4d57dc016a43b8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1737,7 +1737,7 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.4.5"
-source = "git+https://github.com/imazen/zenwebp#eba794e86583ece845f231aaba38dae7bdefb66b"
+source = "git+https://github.com/imazen/zenwebp#700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1774,7 +1774,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg#258643b121e66bde3a8d95e53e5f26842923e850"
+source = "git+https://github.com/imazen/zenjpeg#9835cf5ec8ee65e4d4c2eae55969599ef3878267"
 dependencies = [
  "archmage",
  "libm",
