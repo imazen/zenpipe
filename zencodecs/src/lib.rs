@@ -112,6 +112,40 @@
     )
 )]
 
+// ── Stub features fail loudly (zenpipe#43) ──
+// These features gate adapter code whose backing decoder crate/API is not
+// wired yet; enabling one can only produce a flood of unresolved-item
+// errors. Surface the configuration error as one clear message instead.
+// Delete the guard (and wire the dependency) when a backend lands.
+#[cfg(feature = "heic-decode")]
+compile_error!(
+    "zencodecs feature `heic-decode` is a stub: no heic decoder dependency is wired yet (zenpipe#43)"
+);
+#[cfg(feature = "bitmaps-qoi")]
+compile_error!(
+    "zencodecs feature `bitmaps-qoi` is a stub: zenbitmaps QOI configs are not wired yet (zenpipe#43)"
+);
+#[cfg(feature = "bitmaps-tga")]
+compile_error!(
+    "zencodecs feature `bitmaps-tga` is a stub: zenbitmaps TGA configs are not wired yet (zenpipe#43)"
+);
+#[cfg(feature = "bitmaps-hdr")]
+compile_error!(
+    "zencodecs feature `bitmaps-hdr` is a stub: zenbitmaps HDR configs are not wired yet (zenpipe#43)"
+);
+#[cfg(feature = "tiff")]
+compile_error!(
+    "zencodecs feature `tiff` is a stub: the zentiff integration is not wired yet (zenpipe#43)"
+);
+#[cfg(feature = "svg")]
+compile_error!(
+    "zencodecs feature `svg` is a stub: no SVG renderer dependency is wired yet (zenpipe#43)"
+);
+#[cfg(feature = "jp2-decode")]
+compile_error!(
+    "zencodecs feature `jp2-decode` is a stub: no JPEG 2000 decoder dependency is wired yet (zenpipe#43)"
+);
+
 extern crate alloc;
 
 whereat::define_at_crate_info!();

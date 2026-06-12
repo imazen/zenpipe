@@ -26,13 +26,14 @@ encode = [
     "zencodecs/gif", "zencodecs/gif-quantizr",
     "zencodecs/jxl-encode", "zencodecs/avif-encode",
 ]
-# Native decoding via zencodecs (JXL, AVIF, HEIC, BMP, QOI, TGA, HDR + browser-native formats).
+# Native decoding via zencodecs (JXL, AVIF, BMP + browser-native formats).
+# heic-decode / bitmaps-qoi / bitmaps-tga / bitmaps-hdr are zencodecs stubs
+# (compile errors) — re-add them here when the backends land (zenpipe#43).
 decode = [
     "dep:zencodecs",
     "zencodecs/jpeg", "zencodecs/png", "zencodecs/webp", "zencodecs/gif",
-    "zencodecs/jxl-decode", "zencodecs/avif-decode", "zencodecs/heic-decode",
+    "zencodecs/jxl-decode", "zencodecs/avif-decode",
     "zencodecs/bitmaps", "zencodecs/bitmaps-bmp",
-    "zencodecs/bitmaps-qoi", "zencodecs/bitmaps-tga", "zencodecs/bitmaps-hdr",
 ]
 
 [dependencies]
@@ -64,6 +65,6 @@ zenfilters = { workspace = true, features = ["zennode"] }
 zencodecs = { workspace = true, features = [
     "jpeg", "png", "webp", "gif", "gif-quantizr",
     "jxl-encode", "avif-encode",
-    "jxl-decode", "avif-decode", "heic-decode",
-    "bitmaps", "bitmaps-bmp", "bitmaps-qoi", "bitmaps-tga", "bitmaps-hdr",
+    "jxl-decode", "avif-decode",
+    "bitmaps", "bitmaps-bmp",
 ] }

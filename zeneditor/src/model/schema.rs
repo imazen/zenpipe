@@ -188,13 +188,7 @@ impl SchemaModel {
                             default: 0.0,
                             identity: param_schema
                                 .get("x-zennode-identity")
-                                .and_then(|v| {
-                                    if v.as_bool() == Some(true) {
-                                        Some(1.0)
-                                    } else {
-                                        Some(0.0)
-                                    }
-                                })
+                                .map(|v| if v.as_bool() == Some(true) { 1.0 } else { 0.0 })
                                 .unwrap_or(0.0),
                             step: 1.0,
                             slider: SliderType::Linear,

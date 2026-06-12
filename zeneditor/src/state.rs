@@ -1102,19 +1102,18 @@ impl EditorState {
     ) -> Result<RenderOutput, String> {
         let source = self.source_box()?;
 
-        let mut nodes: Vec<Box<dyn zennode::NodeInstance>> = Vec::new();
-
-        nodes.push(Box::new(zenpipe::zennode_defs::Constrain {
-            w: Some(thumb_size),
-            h: Some(thumb_size),
-            mode: "within".into(),
-            ..Default::default()
-        }));
-
-        nodes.push(Box::new(zenfilters::zennode_defs::FilmLook {
-            preset: preset_id.to_string(),
-            strength: 1.0,
-        }));
+        let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![
+            Box::new(zenpipe::zennode_defs::Constrain {
+                w: Some(thumb_size),
+                h: Some(thumb_size),
+                mode: "within".into(),
+                ..Default::default()
+            }),
+            Box::new(zenfilters::zennode_defs::FilmLook {
+                preset: preset_id.to_string(),
+                strength: 1.0,
+            }),
+        ];
 
         let info = make_source_info(self.source_width, self.source_height);
         let converters: &[&dyn zenpipe::bridge::NodeConverter] =

@@ -23,6 +23,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   `cargo superwork patch`/`unpatch`. Full CI test matrix verified green
   under the registry+git resolution.
 
+## zeneditor
+
+### [Unreleased]
+
+#### Fixed
+
+- **`decode` builds again** (#43): the feature list dropped the zencodecs
+  stubs (`heic-decode`, `bitmaps-qoi`/`-tga`/`-hdr`) that have never
+  compiled — `zeneditor/decode` was uncompilable since April and blocked
+  the Pages demo deploy. Native WASM decode formats are now jxl/avif/bmp
+  (plus browser-native); the stubs return when their backends land. CI now
+  tests and lints zeneditor on every push (it was previously built by no
+  job), including new clippy fixes in zeneditor and zenpipe's
+  `json-schema`-gated codegen.
+
 ## zenpipe
 
 ### [Unreleased]
@@ -48,6 +63,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Added
+
+- **Stub features fail loudly** (#43): enabling `heic-decode`,
+  `bitmaps-qoi`/`-tga`/`-hdr`, `tiff`, `svg`, or `jp2-decode` now produces
+  one clear `compile_error!` naming the missing backend instead of a flood
+  of unresolved-item errors. Delete the guard when the backend lands.
 
 - **CI now compiles and tests the gain-map/UltraHDR/raw surface** (#38):
   new workflow run + `just test-gainmap-surface` covering

@@ -36,13 +36,13 @@ pub fn generate() -> CSharpOutput {
     }
 
     // 2. Generate node parameter classes.
-    if let Some(defs) = schemas.node_schemas.get("$defs") {
-        if let Some(defs_obj) = defs.as_object() {
-            for (node_id, node_schema) in defs_obj {
-                let class_name = node_id_to_class_name(node_id);
-                let cs = generate_node_class(node_id, &class_name, node_schema);
-                files.push((format!("{class_name}.g.cs"), cs));
-            }
+    if let Some(defs) = schemas.node_schemas.get("$defs")
+        && let Some(defs_obj) = defs.as_object()
+    {
+        for (node_id, node_schema) in defs_obj {
+            let class_name = node_id_to_class_name(node_id);
+            let cs = generate_node_class(node_id, &class_name, node_schema);
+            files.push((format!("{class_name}.g.cs"), cs));
         }
     }
 
@@ -179,14 +179,12 @@ fn generate_enums(node_schemas: &Value) -> String {
                 let cs_name = pascal_case(name);
 
                 // Look up description from labels.
-                if let Some(labels) = labels {
-                    if let Some(label_obj) = labels.get(i) {
-                        if let Some(desc) = label_obj.get("description").and_then(|d| d.as_str()) {
-                            if !desc.is_empty() {
-                                let _ = writeln!(out, "    /// <summary>{desc}</summary>");
-                            }
-                        }
-                    }
+                if let Some(labels) = labels
+                    && let Some(label_obj) = labels.get(i)
+                    && let Some(desc) = label_obj.get("description").and_then(|d| d.as_str())
+                    && !desc.is_empty()
+                {
+                    let _ = writeln!(out, "    /// <summary>{desc}</summary>");
                 }
 
                 let _ = writeln!(out, "    {cs_name},");
@@ -236,10 +234,10 @@ fn generate_node_class(node_id: &str, class_name: &str, schema: &Value) -> Strin
         if let Some(title) = param_schema.get("title").and_then(|t| t.as_str()) {
             let _ = writeln!(out, "    /// <summary>{title}</summary>");
         }
-        if let Some(unit) = param_schema.get("x-zennode-unit").and_then(|u| u.as_str()) {
-            if !unit.is_empty() {
-                let _ = writeln!(out, "    /// <remarks>Unit: {unit}</remarks>");
-            }
+        if let Some(unit) = param_schema.get("x-zennode-unit").and_then(|u| u.as_str())
+            && !unit.is_empty()
+        {
+            let _ = writeln!(out, "    /// <remarks>Unit: {unit}</remarks>");
         }
 
         // Property with default.
@@ -410,7 +408,7 @@ fn key_to_method_name(key: &str) -> String {
     // "accept.webp" → "AcceptWebp"
     // "f.sharpen" → "FSharpen"
     // "s.roundcorners" → "SRoundcorners"
-    key.split(|c: char| c == '.' || c == '_')
+    key.split(['.', '_'])
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {

@@ -183,8 +183,10 @@ mod tests {
 
     #[test]
     fn recipe_json_round_trip() {
-        let mut r = Recipe::default();
-        r.name = Some("sunset".into());
+        let mut r = Recipe {
+            name: Some("sunset".into()),
+            ..Default::default()
+        };
         r.adjustments
             .insert("zenfilters.exposure.stops".into(), ParamValue::Number(0.5));
         r.film_preset = Some("portra".into());
@@ -207,10 +209,12 @@ mod tests {
 
     #[test]
     fn apply_export_overrides() {
-        let mut r = Recipe::default();
-        r.format = Some("jxl".into());
-        r.quality = Some(90.0);
-        r.hdr_mode = Some(HdrMode::Tonemap);
+        let r = Recipe {
+            format: Some("jxl".into()),
+            quality: Some(90.0),
+            hdr_mode: Some(HdrMode::Tonemap),
+            ..Default::default()
+        };
 
         let mut export = ExportModel::default();
         assert_eq!(export.format, "jpeg");

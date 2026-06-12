@@ -31,11 +31,12 @@ pub struct GeometryModel {
 ///
 /// SPEC.md §11.2: freeform crop with handles, aspect ratio presets.
 /// Normalized coordinates for recipe portability (§12.1).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum CropMode {
     /// No crop.
     #[serde(rename = "none")]
+    #[default]
     None,
     /// Absolute pixel coordinates.
     #[serde(rename = "pixels")]
@@ -47,12 +48,6 @@ pub enum CropMode {
     /// §11.2: "Crop to content: auto whitespace detection via zenpipe.crop_whitespace node"
     #[serde(rename = "auto")]
     Auto,
-}
-
-impl Default for CropMode {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Aspect ratio constraint for cropping (§11.2).
@@ -101,11 +96,12 @@ pub enum CropAnchor {
 /// How to rotate the image.
 ///
 /// SPEC.md §11.3: 90° buttons, arbitrary slider, straighten wheel (§20.5).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum RotationMode {
     /// No rotation.
     #[serde(rename = "none")]
+    #[default]
     None,
     /// Cardinal rotation (90, 180, 270). Pixel-perfect, no interpolation.
     /// §13.1: `Warp::rotate_90/180/270()` — pixel-perfect copy.
@@ -124,12 +120,6 @@ pub enum RotationMode {
     /// §13.1: zenfilters `Warp::deskew()` via rotate.
     #[serde(rename = "auto_deskew")]
     AutoDeskew,
-}
-
-impl Default for RotationMode {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// How to handle edges during arbitrary rotation.
@@ -239,12 +229,14 @@ mod tests {
 
     #[test]
     fn crop_pixels_not_identity() {
-        let mut g = GeometryModel::default();
-        g.crop = CropMode::Pixels {
-            x: 10,
-            y: 10,
-            w: 100,
-            h: 100,
+        let g = GeometryModel {
+            crop: CropMode::Pixels {
+                x: 10,
+                y: 10,
+                w: 100,
+                h: 100,
+            },
+            ..Default::default()
         };
         assert!(!g.is_identity());
     }

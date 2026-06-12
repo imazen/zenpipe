@@ -99,15 +99,15 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 # LosslessConfig::encode_jpeg_transcode (jxl-encoder `jpeg-reencoding`, pulled by
 # zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
-heic-decode = []  # stub — heic-decoder not cloned locally
-tiff = []  # stub — zentiff integration pending
-svg = []  # stub — zensvg crate not cloned locally
-jp2-decode = []  # stub — zenjp2 crate not cloned locally
+heic-decode = []  # stub — compile_error until a heic decoder is wired (zenpipe#43)
+tiff = []  # stub — compile_error until zentiff integration lands (zenpipe#43)
+svg = []  # stub — compile_error until an SVG renderer is wired (zenpipe#43)
+jp2-decode = []  # stub — compile_error until a JPEG 2000 decoder is wired (zenpipe#43)
 bitmaps = ["dep:zenbitmaps"]
 bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]
-bitmaps-hdr = ["bitmaps"]  # stub — HDR bitmap support pending
-bitmaps-qoi = ["bitmaps"]  # stub — QOI support pending
-bitmaps-tga = ["bitmaps"]  # stub — TGA support pending
+bitmaps-hdr = ["bitmaps"]  # stub — compile_error until zenbitmaps HDR configs land (zenpipe#43)
+bitmaps-qoi = ["bitmaps"]  # stub — compile_error until zenbitmaps QOI configs land (zenpipe#43)
+bitmaps-tga = ["bitmaps"]  # stub — compile_error until zenbitmaps TGA configs land (zenpipe#43)
 raw-decode = ["dep:zenraw"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
