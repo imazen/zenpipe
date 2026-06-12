@@ -59,7 +59,10 @@ jobs:
       - name: Build WASM (threaded, nightly)
         run: |
           cd demo/crate
-          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-args=--shared-memory --import-memory --max-memory=1073741824 --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base" \
+          # One `-C link-arg=` per linker flag: with a single `-C link-args=`
+          # only the first flag binds; the rest hit rustc bare
+          # ("Unrecognized option: 'import-memory'").
+          RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base" \
             cargo +nightly build --target wasm32-unknown-unknown --release \
             --features "wasm,parallel" -Z build-std=panic_abort,std
           wasm-bindgen --target web --out-dir ../pkg \
