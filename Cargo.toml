@@ -91,11 +91,11 @@ nodes-all = [
 
 [dependencies]
 # Streaming resize (V-first, row push/pull, ring buffer)
-zenresize = { path = "../zenresize", default-features = false , version = "0.3.1" }
+zenresize = { version = "0.3.1", default-features = false }
 # Image layout: constraint modes, orientation, smart crop
 zenlayout = { workspace = true, features = ["smart-crop"] }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
-zenblend = { path = "../zenblend", default-features = false , version = "0.1.2" }
+zenblend = { version = "0.1.2", default-features = false }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
 zenpixels-convert.workspace = true
 # Pixel buffer types, ColorContext, ICC/CICP metadata
@@ -124,36 +124,36 @@ zencodecs = { workspace = true, optional = true }
 # ── Optional codec crates for node registry ──
 # Note: default-features enabled because zenjpeg's codec.rs unconditionally
 # references search::ExpertConfig which requires the `trellis` default feature.
-zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"], optional = true , version = "0.8.2" }
-zenpng = { path = "../zenpng", default-features = false, features = ["zencodec"], optional = true , version = "0.1.0" }
-zenwebp = { path = "../zenwebp", default-features = false, features = ["zencodec"], optional = true , version = "0.4.2" }
-zengif = { path = "../zengif", default-features = false, features = ["zencodec"], optional = true , version = "0.7.1" }
-zenavif = { path = "../zenavif", default-features = false, features = ["zencodec"], optional = true , version = "0.1.3" }
-zenjxl = { path = "../zenjxl", default-features = false, features = ["zencodec"], optional = true , version = "0.2.0" }
-zentiff = { path = "../zenextras/zentiff", default-features = false, optional = true , version = "0.1.0" }
-zenbitmaps = { path = "../zenbitmaps", default-features = false, optional = true , version = "0.1.3" }
-zenquant = { path = "../zenquant", default-features = false, optional = true , version = "0.1.2" }
+zenjpeg = { version = "0.8.2", features = ["zencodec"], optional = true }
+zenpng = { version = "0.1.0", default-features = false, features = ["zencodec"], optional = true }
+zenwebp = { version = "0.4.2", default-features = false, features = ["zencodec"], optional = true }
+zengif = { version = "0.7.1", default-features = false, features = ["zencodec"], optional = true }
+zenavif = { version = "0.1.3", default-features = false, features = ["zencodec"], optional = true }
+zenjxl = { version = "0.2.0", default-features = false, features = ["zencodec"], optional = true }
+zentiff = { version = "0.1.0", default-features = false, optional = true }
+zenbitmaps = { version = "0.1.3", default-features = false, optional = true }
+zenquant = { version = "0.1.2", default-features = false, optional = true }
 # JSON serialization (optional — for schema export)
 serde_json = { workspace = true, optional = true }
 # Imageflow v2 compatibility (optional — for running legacy imageflow pipelines)
-imageflow_types = { path = "../../imageflow/imageflow_types", optional = true , version = "0.1.0" }
-imageflow_riapi = { path = "../../imageflow/imageflow_riapi", optional = true , version = "0.1.0" }
+imageflow_types = { version = "0.1.0", optional = true }
+imageflow_riapi = { version = "0.1.0", optional = true }
 # Face detection + saliency via zentract plugin (optional)
-zensally = { path = "../zensally/crates/zensally", default-features = false, features = ["zenlayout", "serde"], optional = true , version = "0.1.0" }
-zensally-zentract = { path = "../zensally/crates/zensally-zentract", default-features = false, features = ["analyzer"], optional = true , version = "0.1.0" }
+zensally = { version = "0.1.0", default-features = false, features = ["zenlayout", "serde"], optional = true }
+zensally-zentract = { version = "0.1.0", default-features = false, features = ["analyzer"], optional = true }
 
 [dev-dependencies]
 # Dev-deps enable extra features on the optional codec crates above.
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
-zenjpeg = { path = "../zenjpeg/zenjpeg", features = ["zencodec"] , version = "0.8.2" }
-zengif = { path = "../zengif", features = ["zencodec", "quantizr"] , version = "0.7.1" }
+zenjpeg = { version = "0.8.2", features = ["zencodec"] }
+zengif = { version = "0.7.1", features = ["zencodec", "quantizr"] }
 zennode = { workspace = true }
 serde_json.workspace = true
 codec-corpus = "1"
 imgref = "1.12"
 rgb = { version = "0.8", features = ["as-bytes"] }
 zenbench = "0.1.3"
-zenbitmaps = { path = "../zenbitmaps", features = ["bmp"] , version = "0.1.3" }
+zenbitmaps = { version = "0.1.3", features = ["bmp"] }
 
 [[example]]
 name = "bench_windowed"
@@ -195,27 +195,50 @@ zenfilters = { path = "zenfilters", version = "0.1.0" }
 zencodecs = { path = "zencodecs", version = "0.1.0", default-features = false }
 zenlayout = { path = "zenlayout", version = "0.2.1", default-features = false }
 # ── External path deps ──
-zennode = { path = "../zennode/zennode", version = "0.1.1", default-features = false, features = ["derive"] }
+zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 
+# ── Git consumability (zenpipe#37) ──
+# Every dependency above is a plain registry spec (`version = …`, no `path`),
+# so this repo resolves from a bare `git clone` and as a
+# `zenpipe = { git = … }` dependency. Crates whose required versions are NOT
+# yet on crates.io are supplied below as git patches (same repos CI builds
+# against). Local sibling-lockstep development is opt-in:
+# `cargo superwork patch` adds path overrides, `unpatch` removes them — do not
+# commit pathed manifests. CI (superwork ci-clone --add-paths) deletes this
+# section (see delete_sections below) and paths every dep to its sibling
+# clone; the Pages deploy regenerates it via ci-prep. NOTE: [patch] only
+# applies from the top-level workspace — git consumers of zenpipe that enable
+# features needing these crates must mirror the relevant entries.
 [patch.crates-io]
-# Consolidated from workspace members — all path deps for local development
-zenpixels = { path = "../zenpixels/zenpixels" }
-zenpixels-convert = { path = "../zenpixels/zenpixels-convert" }
-zennode = { path = "../zennode/zennode" }
-zennode-derive = { path = "../zennode/zennode-derive" }
-zencodec = { path = "../zencodec" }
-# Unpublished: zenjxl's encoder (0.3.2 not yet on crates.io). Required for the
-# `jxl-encode` feature; stripped at release time like the other path patches.
-jxl-encoder = { path = "../jxl-encoder/jxl-encoder" }
-# Local zenjpeg is 0.8.7; crates.io tops out at 0.8.4. zenjxl's `jpeg-lossy`
-# feature requires ^0.8.7 transitively, so patch it to the workspace copy (used
-# by the JPEG→JXL transcode route; stripped at release like the others).
-zenjpeg = { path = "../zenjpeg/zenjpeg" }
-# zenjxl-decoder 0.3.8 (local) adds reconstruct_jpeg (lossless JXL→JPEG, JBRD /
-# brunsli-parity); crates.io tops out at 0.3.7. Patch so the lossless JPEG↔JXL
-# transcode pair resolves to one copy across zenjxl (decode) and zencodecs
-# (reconstruct + the `jpeg` feature). Stripped at release like the others.
-zenjxl-decoder = { path = "../zenjxl-decoder/zenjxl-decoder" }
+# zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
+# crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
+zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+# zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
+# transcode); the published 0.2.1 predates it.
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+# jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+# zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
+# uses; 0.3.10 on crates.io predates it (same version number, older content).
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+# zenwebp main (0.4.5) checks Stop tokens at decode entry; 0.4.4 predates it.
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+# zenpng main decodes EXIF orientation (the conformance verdict table was
+# promoted to match it); the published 0.1.4 predates that sweep.
+zenpng = { git = "https://github.com/imazen/zenpng" }
+# zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
+# 0.1.1 predates (same version number, older content).
+zennode = { git = "https://github.com/imazen/zennode" }
+zennode-derive = { git = "https://github.com/imazen/zennode" }
+# zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
+zensim = { git = "https://github.com/imazen/zensim" }
+zensim-regress = { git = "https://github.com/imazen/zensim" }
+# imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
+imageflow_types = { git = "https://github.com/imazen/imageflow" }
+imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
+# zensally / zensally-zentract are not published (nodes-faces feature).
+zensally = { git = "https://github.com/imazen/zensally" }
+zensally-zentract = { git = "https://github.com/imazen/zensally" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]
@@ -224,3 +247,7 @@ zenlayout = { path = "zenlayout" }
 [package.metadata.superwork.ci]
 strategy = "strip_path"
 delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]
+# CI resolves every internal dep to its ci-clone sibling checkout; the git
+# patches above exist for bare-clone/registry resolution and would only make
+# every CI job fetch those repos redundantly (ci-lint convention).
+delete_sections = ["patch.crates-io"]

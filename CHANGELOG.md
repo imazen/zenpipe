@@ -3,6 +3,26 @@
 All notable changes to the zenpipe workspace are documented here, per crate.
 (Started 2026-06-11; earlier history lives in git log.)
 
+## Workspace
+
+### [Unreleased]
+
+#### Fixed
+
+- **Resolves from a bare `git clone` / as a git dependency** (#37): every
+  cross-repo dependency in the workspace manifests (root, zencodecs,
+  zenfilters) is now a plain registry spec — the `path = "../…"` keys that
+  only resolved inside the local superworkspace are gone. Crates whose
+  required versions/content are not yet on crates.io (zenjpeg 0.8.7, zenjxl
+  `jpeg-lossy`, jxl-encoder 0.3.2, zenjxl-decoder/zennode/zenpng/zenwebp
+  mains, zensim 0.3.0, zensim-regress 0.4.0, imageflow_types/_riapi,
+  zensally/-zentract) resolve via `[patch.crates-io]` git entries at the
+  workspace root. CI is unchanged (superwork ci-clone deletes the patch
+  section per the new `delete_sections` and paths every dep to its sibling
+  clone); local sibling-lockstep development is opt-in via
+  `cargo superwork patch`/`unpatch`. Full CI test matrix verified green
+  under the registry+git resolution.
+
 ## zenpipe
 
 ### [Unreleased]

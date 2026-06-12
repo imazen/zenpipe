@@ -37,16 +37,16 @@ zenpixels = { version = "0.2.10", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
 zenpixels-convert = { version = "0.2.10" }
-zenquant = { path = "../../zenquant", version = "0.1.2", default-features = false, optional = true }
+zenquant = { version = "0.1.2", default-features = false, optional = true }
 
 [dev-dependencies]
 imgref = "1.12"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 enough = "0.4"
-# Local path: 0.3.0 is unpublished (crates.io tops out at 0.2.7); CI resolves
-# via the superwork git patch, same shape as zencodecs' zensim dep.
-zensim = { version = "0.3.0", path = "../../zensim/zensim", default-features = false }
+# 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
+# git patch, same shape as zencodecs' zensim dep. CI paths it to the sibling clone.
+zensim = { version = "0.3.0", default-features = false }
 zenpixels = { version = "0.2.10", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.2.10", features = ["planar"] }
 
