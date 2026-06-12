@@ -55,6 +55,21 @@ jobs:
           # and produced a duplicate-key manifest once patch_repos gained them.)
           cargo superwork ci-prep --config zen-workspace/Superwork.toml
           rm -f Cargo.lock
+          # demo/crate builds standalone (workspace-excluded), and cargo only
+          # honors [patch.crates-io] from the build's OWN workspace root — the
+          # regenerated patches in the repo-root manifest are invisible to it.
+          # Mirror the generated section verbatim (no hardcoded crate list).
+          python3 - <<'EOF'
+          import re
+          root = open('Cargo.toml').read()
+          m = re.search(r'^\[patch\.crates-io\]\n(?:.*\n)*?(?=^\[|\Z)', root, re.M)
+          assert m, "ci-prep left no [patch.crates-io] in the root manifest"
+          demo = open('demo/crate/Cargo.toml').read().rstrip('\n')
+          assert '[patch.crates-io]' not in demo
+          open('demo/crate/Cargo.toml', 'w').write(demo + '\n\n' + m.group(0))
+          print(f"mirrored {m.group(0).count(chr(10))} patch lines into demo/crate")
+          EOF
+          rm -f demo/crate/Cargo.lock
 
       - name: Build WASM (threaded, nightly)
         run: |
