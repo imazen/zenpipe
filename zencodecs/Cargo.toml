@@ -42,6 +42,9 @@ zenjxl-decoder = { version = "0.3.8", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { version = "0.1.5", optional = true, features = ["zencodec"] }
 zenraw = { version = "0.2.0", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
+# PDF page rendering via the hayro engine (decode-only; renders pages to RGBA8).
+# Optional and out of default — hayro is a heavy dependency.
+zenpdf = { version = "0.2.0", optional = true, default-features = false, features = ["zencodec"] }
 
 # Node definitions (optional)
 zennode = { version = "0.1.1", default-features = false, features = ["derive"], optional = true }
@@ -112,6 +115,11 @@ raw-decode = ["dep:zenraw"]
 raw-decode-exif = ["raw-decode", "zenraw/exif"]
 raw-decode-xmp = ["raw-decode", "zenraw/xmp"]
 raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
+
+# PDF page rendering (decode-only) via zenpdf + the hayro engine. Renders the
+# first page to RGBA8; the page count is reported via the probe `ImageInfo`.
+# Opt-in — hayro is a heavy dependency, so it stays out of `default` and `all`.
+pdf-decode = ["dep:zenpdf"]
 
 # RIAPI codec key parsing
 riapi = []

@@ -18,6 +18,12 @@ pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
     if let Some(fmt) = crate::codecs::raw::detect_raw_format(data) {
         return Some(fmt);
     }
+    // PDF (`%PDF-`) is an unambiguous signature and is not in the common
+    // registry, so check it before the common formats.
+    #[cfg(feature = "pdf-decode")]
+    if crate::codecs::pdf::detect_pdf(data) {
+        return Some(crate::codecs::pdf::pdf_format());
+    }
     // Try common formats (JPEG, PNG, GIF, WebP, TIFF, JP2, etc.)
     if let Some(fmt) = zencodec::ImageFormatRegistry::common().detect(data) {
         return Some(fmt);
@@ -276,6 +282,10 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
         // SVG/SVGZ: Custom format from zensvg
         #[cfg(feature = "svg")]
         ImageFormat::Custom(def) if def.name == "svg" => crate::codecs::svg::probe(data)?,
+
+        // PDF: Custom format from zenpdf
+        #[cfg(feature = "pdf-decode")]
+        ImageFormat::Custom(def) if def.name == "pdf" => crate::codecs::pdf::probe(data)?,
 
         _ => return Err(at!(CodecError::UnsupportedFormat(format))),
     };

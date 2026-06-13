@@ -637,6 +637,12 @@ impl<'a> DecodeRequest<'a> {
                 crate::codecs::svg::decode(self.data, self.limits, self.stop, dp)
             }
 
+            // PDF: Custom format from zenpdf (renders page 0)
+            #[cfg(feature = "pdf-decode")]
+            ImageFormat::Custom(def) if def.name == "pdf" => {
+                crate::codecs::pdf::decode(self.data, self.limits, self.stop, dp)
+            }
+
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }
     }

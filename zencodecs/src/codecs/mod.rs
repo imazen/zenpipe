@@ -59,3 +59,6 @@ pub(crate) mod jp2;
 
 #[cfg(feature = "svg")]
 pub(crate) mod svg;
+
+#[cfg(feature = "pdf-decode")]
+pub(crate) mod pdf;
