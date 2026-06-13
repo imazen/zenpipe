@@ -168,12 +168,15 @@ and some carry **correctness fixes the registry currently lacks**:
 
 ## 7. New capabilities the registry could wire — additive, future 🔒
 
-- **HDR reconstruction is real now** across JPEG (`0e7b46f8`), AVIF (`c02dd6e`), HEIC (`c0d4fa2`): `ReconstructHdr` *applies* (SDR base + gain map → linear f32/f16, MaxCLL/MaxFALL measured), `reconstructs_hdr()` honest. The registry can offer true HDR output instead of components-only.
-- **zenjpeg `supplements.gain_map`** (`94fb6ec6`) — cheap XMP presence flag to gate a ReconstructHdr pass without a trial decode.
-- **AVIF native Gray8/Gray16 decode** (`d01cca6`) — registry can advertise gray descriptors (luma synthesis never satisfies a gray request on color input — safe).
-- **zengif `quantizer_preference(series)` + `QuantizerBackend`** (`853574a`) — additive encode knob.
-- **zencodec Fidelity API** (`f0f9527`, unreleased) — once a 0.1.23 ships, route Distance/Metric/TargetBytes/NearLossless through `try_target_fidelity` + `EncodeCapabilities::{near_lossless, supports_distance, supports_metric_target, supports_size_target}`.
-- **zenpdf** (0.2.0, has a zencodec decode adapter) — candidate future `pdf-decode` feature (decode-only first page, `ImageFormat::Custom` like raw). Out of scope this round (its zencodec floor is 0.1.13 — needs a bump first).
+**Status (2026-06-13):** the user asked to "do the future stuff, skip the fidelity api." Outcome below — ✅ landed / ⏳ verified-but-publish-blocked / ⏭️ skipped.
+
+- ✅ **HDR reconstruction (JPEG)** — **landed** (commit `025ffb01`). `DecodeRequest::reconstruct_hdr(target_headroom)` / `with_gain_map_render(GainMapRender)` drive zencodec's `ReconstructHdr` through the decode trait; JPEG UltraHDR (`0e7b46f8`) emits linear-float HDR + CLL/mastering. Non-supporting formats return `UnsupportedOperation` (honesty guard) rather than a silent SDR buffer. Also repaired a pre-existing `ultrahdr-core` workspace-patch drift that was breaking clean `jpeg-ultrahdr` builds.
+  - ⏳ **AVIF/JXL/HEIC HDR reconstruction** — publish-blocked. Their *locked* decoders report `reconstructs_hdr() = false` (the applying-`ReconstructHdr` work is in unpublished zenavif 0.1.8 `c02dd6e` / newer zenjxl / heic 0.2.0). The honesty guard correctly errors for them today. **Wire-when-published**: unify the avif/jxl/heic adapters' `extract_gain_map` bool into a `GainMapRender` arg + extend the guard to a per-codec `reconstructs_hdr()` capability check — deferred deliberately so it's written and tested against the real dep, not blind.
+- ✅ **zenjpeg `supplements.gain_map`** (`94fb6ec6`) — already wired in the JPEG probe path (`codecs/jpeg.rs:62`); no work needed.
+- ⏳ **AVIF native Gray8/Gray16 decode** (`d01cca6`) — **verified: zencodecs needs NO code change.** The avif adapter (`codecs/avif_dec.rs:48`) already passes empty preferred-descriptors (`&[]`) and returns zenavif's native output, so gray surfaces automatically. Purely publish-blocked on zenavif 0.1.8 (see §6).
+- ✅ **pdf-decode** — **landed** (commit `ec08e5e9`). zenpdf 0.2.0 (hayro) wired as a decode-only `ImageFormat::Custom`; opt-in `pdf-decode` feature; `%PDF-` detection; renders page 0; 3 tests.
+- ⏳ **zengif `quantizer_preference(series)` + `QuantizerBackend`** (`853574a`) — additive encode knob; publish-blocked on zengif 0.7.4.
+- ⏭️ **zencodec Fidelity API** (`f0f9527`, unreleased) — **skipped per user.** When a 0.1.23 ships, route Distance/Metric/TargetBytes/NearLossless through `try_target_fidelity` + `EncodeCapabilities::{near_lossless, supports_distance, supports_metric_target, supports_size_target}`.
 
 > Gain-map *encode* embedding is still deferred upstream — no `with_gain_map` encode carrier in zencodec (the registry's `with_gain_map` builder remains decode-extract only).
 
@@ -219,6 +222,6 @@ and some carry **correctness fixes the registry currently lacks**:
 | zentiff | 7 | 0.1.2 | (stub) | ✅ un-stub tiff |
 | zenraw | 8 | 0.2.0 | 0.2.0 | ✅ (0.2.1 later) |
 | ultrahdr-core | 17 | 0.5.0 | 0.5.0 | ✅ (0.5.1 later) |
-| zenpdf | 7 | 0.2.0 | — | future `pdf-decode` |
+| zenpdf | 7 | 0.2.0 | ✅ wired | `pdf-decode` landed (ec08e5e9) |
 | zentone | 4 | 0.1.0 | — | not consumed |
 | fax | 0 | — | — | dormant |
