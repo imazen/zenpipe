@@ -75,6 +75,7 @@ pub(crate) fn decode(
     limits: Option<&Limits>,
     stop: Option<StopToken>,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
+    gain_map_render: zencodec::GainMapRender,
 ) -> Result<DecodeOutput> {
     let mut dec = zenjpeg::JpegDecoderConfig::new();
     if let Some(cfg) = codec_config.and_then(|c| c.jpeg_decoder.as_ref()) {
@@ -90,6 +91,9 @@ pub(crate) fn decode(
     if let Some(dp) = decode_policy {
         job = job.with_policy(dp);
     }
+    // BaseOnly (default) is a no-op; ReconstructHdr makes zenjpeg apply the
+    // UltraHDR gain map and emit linear-float HDR pixels (needs `jpeg-ultrahdr`).
+    job = job.with_gain_map_render(gain_map_render);
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?
         .decode()

@@ -7,6 +7,7 @@ use crate::error::Result;
 use crate::policy::CodecPolicy;
 use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
+use zencodec::GainMapRender;
 use zencodec::decode::DecodePolicy;
 
 /// Image decode request builder.
@@ -33,6 +34,10 @@ pub struct DecodeRequest<'a> {
     /// When true, codecs that support gain maps will extract and attach
     /// gain map data to the `DecodeOutput` extras. Default: false.
     extract_gain_map: bool,
+    /// How a gain-map (HDR) image is rendered: SDR base (default),
+    /// reconstructed HDR pixels, or surfaced components. See
+    /// [`with_gain_map_render`](Self::with_gain_map_render).
+    gain_map_render: GainMapRender,
 }
 
 impl<'a> DecodeRequest<'a> {
@@ -51,6 +56,7 @@ impl<'a> DecodeRequest<'a> {
             policy: None,
             decode_policy: None,
             extract_gain_map: false,
+            gain_map_render: GainMapRender::BaseOnly,
         }
     }
 
@@ -128,6 +134,40 @@ impl<'a> DecodeRequest<'a> {
     /// [`decode_gain_map()`](Self::decode_gain_map) sets this automatically.
     pub fn with_gain_map_extraction(mut self, extract: bool) -> Self {
         self.extract_gain_map = extract;
+        self
+    }
+
+    /// Select how a gain-map (HDR) image is rendered by [`decode_full_frame`](Self::decode_full_frame).
+    ///
+    /// - [`GainMapRender::BaseOnly`] (default): decode the SDR base image only.
+    /// - [`GainMapRender::ReconstructHdr`]: apply the gain map and return
+    ///   reconstructed HDR pixels (a float pixel format) plus a content-light-level
+    ///   / mastering-display envelope on the output [`ImageInfo`]. Honored only by
+    ///   decoders that advertise HDR reconstruction — currently JPEG UltraHDR; other
+    ///   formats return [`CodecError::UnsupportedOperation`] rather than silently
+    ///   handing back an SDR buffer. Prefer the [`reconstruct_hdr`](Self::reconstruct_hdr)
+    ///   shorthand.
+    /// - [`GainMapRender::Components`]: surface the gain map alongside the SDR base —
+    ///   equivalent to [`with_gain_map_extraction(true)`](Self::with_gain_map_extraction).
+    pub fn with_gain_map_render(mut self, render: GainMapRender) -> Self {
+        self.gain_map_render = render;
+        self
+    }
+
+    /// Reconstruct HDR from an embedded gain map and return HDR pixels.
+    ///
+    /// Shorthand for [`with_gain_map_render`](Self::with_gain_map_render) with
+    /// [`GainMapRender::ReconstructHdr`]. `target_headroom` of `None` reconstructs
+    /// at the gain map's encoded maximum (full reconstruction, the right choice for
+    /// transcoding to native HDR); `Some(h)` renders for a display with `h`× SDR-white
+    /// headroom. The decoded [`DecodeOutput`] carries HDR pixels and a
+    /// content-light-level / mastering-display envelope on its [`ImageInfo`].
+    ///
+    /// Currently honored by JPEG UltraHDR (requires the `jpeg-ultrahdr` feature);
+    /// other formats return [`CodecError::UnsupportedOperation`] until their
+    /// decoders advertise HDR reconstruction.
+    pub fn reconstruct_hdr(mut self, target_headroom: Option<f32>) -> Self {
+        self.gain_map_render = GainMapRender::ReconstructHdr { target_headroom };
         self
     }
 
@@ -464,6 +504,18 @@ impl<'a> DecodeRequest<'a> {
     /// Dispatch to format-specific decoder.
     fn decode_format(self, format: ImageFormat) -> Result<DecodeOutput> {
         let dp = self.decode_policy;
+        // ReconstructHdr returns HDR pixels only from decoders that advertise the
+        // capability. Today that is JPEG UltraHDR; every other format errors here
+        // rather than silently returning an SDR buffer mislabeled as HDR.
+        if matches!(self.gain_map_render, GainMapRender::ReconstructHdr { .. })
+            && !matches!(format, ImageFormat::Jpeg)
+        {
+            return Err(at!(CodecError::UnsupportedOperation {
+                format,
+                detail: "HDR reconstruction (GainMapRender::ReconstructHdr) is not \
+                         supported for this format",
+            }));
+        }
         match format {
             #[cfg(feature = "jpeg")]
             ImageFormat::Jpeg => crate::codecs::jpeg::decode(
@@ -472,6 +524,7 @@ impl<'a> DecodeRequest<'a> {
                 self.limits,
                 self.stop,
                 dp,
+                self.gain_map_render,
             ),
             #[cfg(not(feature = "jpeg"))]
             ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
@@ -747,7 +800,8 @@ fn extract_jpeg_depth(
 
     // Decode the depth image bytes (JPEG or PNG) to get grayscale pixels
     let depth_output =
-        crate::codecs::jpeg::decode(&depth_data.data, None, None, None, None).ok()?;
+        crate::codecs::jpeg::decode(&depth_data.data, None, None, None, None, GainMapRender::BaseOnly)
+            .ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gray = depth_output.into_buffer().to_gray8();
     let gray_ref = gray.as_imgref();
@@ -798,7 +852,9 @@ fn extract_jpeg_depth(
 
     // Decode confidence map if present
     let confidence = depth_data.confidence.and_then(|conf_bytes| {
-        let conf_output = crate::codecs::jpeg::decode(&conf_bytes, None, None, None, None).ok()?;
+        let conf_output =
+            crate::codecs::jpeg::decode(&conf_bytes, None, None, None, None, GainMapRender::BaseOnly)
+                .ok()?;
         let conf_gray = conf_output.into_buffer().to_gray8();
         let conf_ref = conf_gray.as_imgref();
         let conf_w = conf_ref.width() as u32;

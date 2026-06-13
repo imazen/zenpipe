@@ -448,3 +448,83 @@ fn encode_ultrahdr_rejects_unsupported_primaries() {
         .encode_ultrahdr_rgb_f32(img.as_ref());
     assert!(err.is_err(), "BT.470M primaries must be rejected");
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Registry-driven HDR reconstruction: DecodeRequest::reconstruct_hdr()
+// ═══════════════════════════════════════════════════════════════════════
+
+/// `reconstruct_hdr()` drives `GainMapRender::ReconstructHdr` through the codec
+/// trait so zencodecs returns reconstructed HDR pixels directly — no manual
+/// `ultrahdr_core::apply_gainmap` call by the caller (contrast
+/// `decode_gain_map_roundtrip_reconstruct_hdr`, which reconstructs by hand).
+#[test]
+fn reconstruct_hdr_returns_hdr_pixels() {
+    let img = hdr_rgb_f32_image(64, 64);
+    let encoded = EncodeRequest::new(ImageFormat::Jpeg)
+        .with_quality(90.0)
+        .encode_ultrahdr_rgb_f32(img.as_ref())
+        .expect("encode failed");
+
+    // Baseline SDR decode (GainMapRender::BaseOnly — the default).
+    let sdr = DecodeRequest::new(encoded.data())
+        .decode_full_frame()
+        .expect("SDR decode failed");
+    let (w, h) = (sdr.width(), sdr.height());
+    let sdr_bytes = sdr.into_buffer().as_slice().as_strided_bytes().len();
+
+    // Registry-driven reconstruction at the gain map's encoded maximum.
+    let hdr = DecodeRequest::new(encoded.data())
+        .reconstruct_hdr(None)
+        .decode_full_frame()
+        .expect("HDR reconstruction failed");
+
+    assert_eq!(hdr.width(), w, "reconstruction must preserve dimensions");
+    assert_eq!(hdr.height(), h);
+
+    // Reconstructed HDR is a float pixel format — strictly wider than the SDR
+    // u8 base. (If reconstruction had silently fallen back to the SDR base the
+    // byte counts would match — so `>` is the load-bearing signal.)
+    let hdr_bytes = hdr.into_buffer().as_slice().as_strided_bytes().len();
+    assert!(
+        hdr_bytes > sdr_bytes,
+        "HDR reconstruction should yield wider float pixels: hdr={hdr_bytes} sdr={sdr_bytes}"
+    );
+}
+
+/// HDR reconstruction is honored only by decoders that advertise it. A
+/// non-JPEG format must return `UnsupportedOperation` rather than silently
+/// handing back an SDR buffer mislabeled as HDR.
+#[cfg(feature = "png")]
+#[test]
+fn reconstruct_hdr_unsupported_for_non_jpeg() {
+    let img = imgref::ImgVec::new(
+        vec![
+            Rgba {
+                r: 10u8,
+                g: 20,
+                b: 30,
+                a: 255
+            };
+            16 * 16
+        ],
+        16,
+        16,
+    );
+    let encoded = EncodeRequest::new(ImageFormat::Png)
+        .encode_full_frame_rgba8(img.as_ref())
+        .expect("png encode failed");
+
+    let result = DecodeRequest::new(encoded.data())
+        .reconstruct_hdr(None)
+        .decode_full_frame();
+    assert!(
+        matches!(
+            result.as_ref().map_err(|e| e.error()),
+            Err(zencodecs::CodecError::UnsupportedOperation {
+                format: ImageFormat::Png,
+                ..
+            })
+        ),
+        "non-JPEG ReconstructHdr must error with UnsupportedOperation"
+    );
+}

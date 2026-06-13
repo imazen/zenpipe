@@ -123,7 +123,15 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
     let gm_info = zenraw::apple::extract_gain_map(data)?;
 
     // Decode the gain map JPEG to pixels using zencodecs' own JPEG decoder.
-    let gm_output = crate::codecs::jpeg::decode(&gm_info.jpeg_data, None, None, None, None).ok()?;
+    let gm_output = crate::codecs::jpeg::decode(
+        &gm_info.jpeg_data,
+        None,
+        None,
+        None,
+        None,
+        zencodec::GainMapRender::BaseOnly,
+    )
+    .ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gm_rgb8 = gm_output.into_buffer().to_rgb8();
     let gm_ref = gm_rgb8.as_imgref();

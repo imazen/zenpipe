@@ -227,7 +227,9 @@ pub use color::{SourceColorExt, icc_profile_is_srgb};
 pub use gainmap::decode_gain_map_source;
 #[cfg(feature = "jpeg-ultrahdr")]
 pub use gainmap::{DecodedGainMap, GainMap, GainMapMetadata, GainMapSource};
-pub use zencodec::gainmap::{GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence};
+pub use zencodec::gainmap::{
+    GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
+};
 
 // Depth map types (format-agnostic)
 pub use depthmap::{
