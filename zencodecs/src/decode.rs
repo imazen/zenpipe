@@ -805,9 +805,15 @@ fn extract_jpeg_depth(
     let depth_data = extras.extract_depth_map(Some(file_data))?;
 
     // Decode the depth image bytes (JPEG or PNG) to get grayscale pixels
-    let depth_output =
-        crate::codecs::jpeg::decode(&depth_data.data, None, None, None, None, GainMapRender::BaseOnly)
-            .ok()?;
+    let depth_output = crate::codecs::jpeg::decode(
+        &depth_data.data,
+        None,
+        None,
+        None,
+        None,
+        GainMapRender::BaseOnly,
+    )
+    .ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gray = depth_output.into_buffer().to_gray8();
     let gray_ref = gray.as_imgref();
@@ -858,9 +864,15 @@ fn extract_jpeg_depth(
 
     // Decode confidence map if present
     let confidence = depth_data.confidence.and_then(|conf_bytes| {
-        let conf_output =
-            crate::codecs::jpeg::decode(&conf_bytes, None, None, None, None, GainMapRender::BaseOnly)
-                .ok()?;
+        let conf_output = crate::codecs::jpeg::decode(
+            &conf_bytes,
+            None,
+            None,
+            None,
+            None,
+            GainMapRender::BaseOnly,
+        )
+        .ok()?;
         let conf_gray = conf_output.into_buffer().to_gray8();
         let conf_ref = conf_gray.as_imgref();
         let conf_w = conf_ref.width() as u32;
