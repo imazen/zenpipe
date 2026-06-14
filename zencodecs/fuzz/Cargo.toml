@@ -35,10 +35,10 @@ features = [
 members = ["."]
 
 [patch.crates-io]
-zencodec = { path = "../../zencodec" }
-zenavif-parse = { path = "../../zenavif-parse" }
-ultrahdr-core = { path = "../../ultrahdr/ultrahdr-core" }
-zenjpeg = { path = "../../zenjpeg/zenjpeg" }
+zencodec = { path = "../../../zencodec" }
+zenavif-parse = { path = "../../../zenavif-parse" }
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
+zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
 
 [profile.release]
 debug = 1

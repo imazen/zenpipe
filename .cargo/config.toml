@@ -1,0 +1,6 @@
+# Local dogfood override (gitignored). Builds zenpipe/zencodecs against the
+# in-tree zenpixels 0.2.14 (S1a/S2) + zencodec (S1b) before they publish, so S4
+# (the transcode HDR step) can be implemented + verified against real code.
+# zenjxl stays git-patched (see [patch.crates-io]); it picks up the local
+# zenpixels too via this override. Drop once zenpixels 0.2.14 / zencodec ship.
+paths = ["../zenpixels/zenpixels", "../zenpixels/zenpixels-convert", "../zencodec"]
