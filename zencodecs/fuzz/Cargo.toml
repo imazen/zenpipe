@@ -21,27 +21,42 @@ path = ".."
 # Use all decodable codecs + encoders that build.
 # Excluded: avif-encode (zenrav1e build error), jxl-encode (jxl-encoder build error)
 # Excluded: raw-decode-gainmap (requires jpeg-ultrahdr which needs std features)
+# Excluded: heic-decode, bitmaps-qoi, bitmaps-tga, bitmaps-hdr — these are
+# `compile_error!` stubs in zencodecs (no backend wired yet, zenpipe#43);
+# enabling them only floods unresolved-item errors. Re-add each when its
+# backend lands.
 features = [
     "jpeg", "webp", "gif", "gif-zenquant",
     "png", "png-zenquant", "avif-decode", "jxl-decode",
-    "heic-decode", "bitmaps", "bitmaps-bmp", "bitmaps-qoi",
-    "bitmaps-tga", "bitmaps-hdr",
+    "bitmaps", "bitmaps-bmp",
     "raw-decode", "raw-decode-exif",
     "cms", "riapi",
+    "jpeg-ultrahdr",
 ]
 
 # Prevent workspace interference
 [workspace]
 members = ["."]
 
+# The repo-root `.cargo/config.toml` carries a transient dogfood `paths`
+# override for zencodec / zenpixels / zenpixels-convert (the concurrent HDR
+# work). A crate listed in BOTH that `paths` override and this `[patch]` block
+# errors with "found patches and a path override", so zencodec is NOT patched
+# here — it comes from the `paths` override. zenavif-parse / zenjpeg / zenrav1e
+# are not in `paths`, so they stay here.
 [patch.crates-io]
-zencodec = { path = "../../../zencodec" }
 zenavif-parse = { path = "../../../zenavif-parse" }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
-# NOTE: jpeg-ultrahdr (and its fuzz_gainmap target) is disabled here: it pulls
-# ultrahdr-core, whose `zencodec = { workspace = true }` dep can't resolve its
-# workspace inheritance under standalone cargo-fuzz. Re-enable the feature +
-# fuzz_gainmap [[bin]] once ultrahdr-core builds outside its workspace.
+# Needed by the jpeg-ultrahdr feature (gain-map decode). As a real path-patch
+# its `zencodec = { workspace = true }` resolves against its own workspace root
+# (~/work/zen/ultrahdr/Cargo.toml).
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
+# cargo-fuzz sets a global `--cfg fuzzing`, which compiles zenrav1e's
+# `#[cfg(fuzzing)]` module. Registry zenrav1e 0.1.4's fuzzing module is
+# inconsistent with its own EncoderConfig (missing fields → E0063). The local
+# 0.1.4 fuzzing module is consistent, so patch to it. zenrav1e is pulled
+# transitively via zenavif.
+zenrav1e = { path = "../../../zenrav1e" }
 
 [profile.release]
 debug = 1
@@ -92,6 +107,13 @@ bench = false
 [[bin]]
 name = "fuzz_exif"
 path = "fuzz_targets/fuzz_exif.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_gainmap"
+path = "fuzz_targets/fuzz_gainmap.rs"
 test = false
 doc = false
 bench = false

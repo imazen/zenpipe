@@ -1,4 +1,8 @@
 Cargo.lock
+# Commit the fuzz crate's lockfile (standalone cargo-fuzz needs a pre-existing
+# lock; it does not auto-generate one on `cargo fuzz build`). Matches the
+# convention in sibling fuzz crates (e.g. zenwebp) and the global fuzzing rule.
+!fuzz/Cargo.lock
 .claude/worktrees/
 
 # === Standard exclusions (do not depend on user ~/.gitignore) ===
