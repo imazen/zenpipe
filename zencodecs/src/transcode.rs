@@ -207,11 +207,29 @@ pub fn transcode(
         SupplementPolicy::Strip => false,
     };
 
-    // Step 1: Decode the source image (full materialization for now)
-    let decoded = crate::DecodeRequest::new(data)
-        .with_registry(registry)
-        .with_gain_map_extraction(wants_gain_map)
-        .decode_full_frame()?;
+    // Step 1: Decode the source image (full materialization for now). When the
+    // caller preserves supplements and the build has gain-map support, also
+    // recover the decoded gain map so it can be re-embedded (passthrough) below.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    let (decoded, gain_map) = if wants_gain_map {
+        crate::DecodeRequest::new(data)
+            .with_registry(registry)
+            .decode_gain_map()?
+    } else {
+        (
+            crate::DecodeRequest::new(data)
+                .with_registry(registry)
+                .decode_full_frame()?,
+            None,
+        )
+    };
+    #[cfg(not(feature = "jpeg-ultrahdr"))]
+    let decoded = {
+        let _ = wants_gain_map;
+        crate::DecodeRequest::new(data)
+            .with_registry(registry)
+            .decode_full_frame()?
+    };
 
     // Step 2: Determine metadata to embed
     let metadata = match opts.metadata.clone() {
@@ -249,6 +267,20 @@ pub fn transcode(
     }
 
     let buffer = decoded.into_buffer();
+
+    // Passthrough re-embed: carry the source gain map into the target container
+    // unchanged. `DecodedGainMap.gain_map` / `.metadata` are already exactly the
+    // types `GainMapSource::Precomputed` borrows (`ultrahdr_core::GainMap` and
+    // the `zencodec::GainMapParams` alias) — no conversion, no recomputation.
+    // A target encoder without gain-map support ignores it.
+    #[cfg(feature = "jpeg-ultrahdr")]
+    if let Some(ref dgm) = gain_map {
+        request = request.with_gain_map(crate::gainmap::GainMapSource::Precomputed {
+            gain_map: &dgm.gain_map,
+            metadata: &dgm.metadata,
+        });
+    }
+
     let encode_output = request.encode(buffer.as_slice(), buffer.descriptor().has_alpha())?;
 
     Ok(TranscodeOutput {
