@@ -17,7 +17,7 @@ use zencodecs::pixel::{ImgVec, Rgba};
 
 // Detect format from magic bytes and decode
 let data: &[u8] = todo!(); // your image bytes
-let decoded = DecodeRequest::new(data).decode()?;
+let decoded = DecodeRequest::new(data).decode_full_frame()?;
 println!("{}x{}", decoded.width(), decoded.height());
 
 // Convert to RGBA8 for processing
@@ -29,7 +29,7 @@ let webp = EncodeRequest::new(ImageFormat::WebP)
     .with_quality(85.0)
     .encode_rgba8(pixels.as_ref())?;
 println!("Encoded {} bytes", webp.len());
-# Ok::<(), zencodecs::CodecError>(())
+# Ok::<(), whereat::At<zencodecs::CodecError>>(())
 ```
 
 ### Typed Encode Methods
@@ -56,22 +56,22 @@ use zencodecs::from_bytes;
 
 let info = from_bytes(data)?;
 println!("{:?} {}x{}", info.format, info.width, info.height);
-# Ok::<(), zencodecs::CodecError>(())
+# Ok::<(), whereat::At<zencodecs::CodecError>>(())
 ```
 
 ### Runtime Codec Control
 
 ```rust
-use zencodecs::{CodecRegistry, ImageFormat, DecodeRequest};
+use zencodecs::{AllowedFormats, ImageFormat, DecodeRequest};
 
-let registry = CodecRegistry::none()
+let registry = AllowedFormats::none()
     .with_decode(ImageFormat::Jpeg, true)
     .with_decode(ImageFormat::WebP, true);
 
 let decoded = DecodeRequest::new(data)
     .with_registry(&registry)
-    .decode()?;
-# Ok::<(), zencodecs::CodecError>(())
+    .decode_full_frame()?;
+# Ok::<(), whereat::At<zencodecs::CodecError>>(())
 ```
 
 ### Format-Specific Config
@@ -105,8 +105,8 @@ let limits = Limits {
 
 let decoded = DecodeRequest::new(data)
     .with_limits(&limits)
-    .decode()?;
-# Ok::<(), zencodecs::CodecError>(())
+    .decode_full_frame()?;
+# Ok::<(), whereat::At<zencodecs::CodecError>>(())
 ```
 
 Stop tokens (`enough::Stop`) are forwarded to codecs that support cooperative cancellation.
