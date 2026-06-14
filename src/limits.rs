@@ -33,7 +33,7 @@ use crate::format::PixelFormat;
 /// use zenpipe::Limits;
 ///
 /// let limits = Limits::default()
-///     .with_max_pixels(100_000_000)   // 100 megapixels
+///     .with_max_pixels(120_000_000)   // 120 megapixels
 ///     .with_max_width(16384)
 ///     .with_max_height(16384)
 ///     .with_max_frames(10000);
@@ -75,10 +75,13 @@ impl Limits {
         max_duration: None,
     };
 
-    /// Server-safe defaults: 100 megapixels, 16384 max dimension, 4 GB memory,
+    /// Server-safe defaults: 120 megapixels, 16384 max dimension, 4 GB memory,
     /// 10 000 animation frames, 1 billion total pixels across all frames.
+    ///
+    /// 120 MP admits 108 MP phone-camera photos (a common real-world size)
+    /// while still rejecting decode-bomb dimensions.
     pub const SERVER: Self = Self {
-        max_pixels: Some(100_000_000),
+        max_pixels: Some(120_000_000),
         max_memory_bytes: Some(4 * 1024 * 1024 * 1024),
         max_width: Some(16384),
         max_height: Some(16384),

@@ -1067,8 +1067,8 @@ fn collect_decode_infos(
     infos
 }
 
-/// Maximum pixel count for a canvas (100 megapixels).
-const MAX_CANVAS_PIXELS: u64 = 100_000_000;
+/// Maximum pixel count for a canvas (120 megapixels — admits 108 MP phone photos).
+const MAX_CANVAS_PIXELS: u64 = 120_000_000;
 
 /// Check dimensions against a security FrameSizeLimit.
 fn check_security_limit(
