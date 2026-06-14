@@ -176,6 +176,8 @@ mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
 pub mod select;
+#[cfg(feature = "tonemap")]
+mod tonemap;
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]

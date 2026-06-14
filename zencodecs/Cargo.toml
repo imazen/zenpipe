@@ -57,6 +57,10 @@ moxcms = { version = "0.7", optional = true, default-features = false }
 # threads/avx512 forced; SIMD still dispatches at runtime.
 zensim = { version = "0.3.0", optional = true, default-features = false, features = ["imgref"] }
 
+# HDR→SDR tone-mapping curves (BT.2408 EETF, BT.2446, …) for the transcode
+# HDR→SDR path. Optional — pulled only by the `tonemap` feature.
+zentone = { version = "0.1.0", optional = true }
+
 [dev-dependencies]
 png = "0.18"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
@@ -77,6 +81,12 @@ std = []
 # JPEG→JPEG recompress route is wired. `zenjxl?/jpeg-lossy` only fires when a
 # jxl feature has already pulled in zenjxl.
 transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
+
+# Tone-map HDR (PQ/HLG) sources to sRGB on transcode to an SDR-only target
+# (JPEG/WebP/GIF), instead of handing HDR samples to an SDR encoder that would
+# reinterpret them as sRGB. Uses zentone's BT.2408 EETF (203-nit anchor).
+# Opt-in for now; promote to default after validation on real HDR corpora.
+tonemap = ["dep:zentone"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
@@ -132,7 +142,7 @@ cms = ["dep:moxcms"]
 moxcms = ["dep:moxcms"]  # alias for back-compat
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap", "tonemap"]
 
 # Calibration harness (all lossy encoders)
 calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
