@@ -59,6 +59,41 @@ let mut dst = vec![0.0f32; w * h * 3];
 pipeline.apply(&src, &mut dst, w as u32, h as u32, 3, &mut ctx)?;
 ```
 
+`apply`'s f32 `src`/`dst` are interleaved **linear** RGB f32 in `[0, 1]` — *not*
+sRGB-encoded. Convert sRGB8 input first with
+[`linear-srgb`](https://lib.rs/crates/linear-srgb)'s `srgb_u8_to_linear_slice`,
+and re-encode the output with `linear_to_srgb_u8_slice`. (`WorkingSpace` — default
+`Oklab` — only controls the *internal* processing space; the f32 input/output
+contract is linear RGB regardless. There is also a `*_u8` entry that takes
+sRGB bytes directly.)
+
+### Errors
+
+`Pipeline::new` and `apply` return `Result<_, whereat::At<PipelineError>>` — the
+error plus the source location it was raised at, which is what a server wants in
+structured logs. Pull both with the `whereat::At` accessors (`PipelineError` is
+`#[non_exhaustive]`, so keep a wildcard arm):
+
+```rust
+use zenfilters::PipelineError;
+
+match pipeline.apply(&src, &mut dst, w, h, 3, &mut ctx) {
+    Ok(()) => {}
+    Err(e) => {
+        let loc = e.location();   // Option<&core::panic::Location> — file:line
+        match e.error() {         // &PipelineError
+            PipelineError::BufferSize { expected, actual } => { /* wrong buffer length */ }
+            PipelineError::UnsupportedPrimaries(_) => { /* unsupported color primaries */ }
+            _ => {}
+        }
+        eprintln!("filter pipeline failed at {loc:?}: {e}");
+    }
+}
+```
+
+The crate exposes no cooperative-cancellation token; a server bounding a long
+filter stack must run it on a worker and enforce a deadline at that layer.
+
 ## Presets
 
 19 built-in presets with intensity blending:
