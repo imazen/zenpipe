@@ -243,11 +243,50 @@ println!("peak: {} bytes", estimate.peak_memory_bytes());
 
 // Enforce limits before execution
 estimate.check(&Limits {
-    max_megapixels: Some(100),
+    max_megapixels: Some(120), // admits 108 MP phone photos
     max_memory_bytes: Some(512 * 1024 * 1024),
     ..Default::default()
 })?;
 ```
+
+## Errors and cancellation
+
+`execute*` and the graph methods return `PipeResult<T> = Result<T, whereat::At<PipeError>>`.
+Read the capture site with `e.location()` and the inner error with `e.error()`; `PipeError`
+is `#[non_exhaustive]`, so keep a wildcard arm:
+
+```rust
+use zenpipe::PipeError;
+
+match zenpipe::execute(pipeline.as_mut(), &mut sink) {
+    Ok(()) => { /* sink.take_output() */ }
+    Err(e) => {
+        if let Some(loc) = e.location() {
+            eprintln!("at {}:{}", loc.file(), loc.line());
+        }
+        match e.error() {
+            PipeError::Cancelled => { /* a Stop token fired — HTTP 499 */ }
+            PipeError::LimitExceeded(msg) => eprintln!("limit: {msg}"), // HTTP 413
+            PipeError::Codec(inner) => eprintln!("decode/encode failed: {inner}"), // HTTP 400/415
+            other => eprintln!("pipeline error: {other}"),
+        }
+    }
+}
+```
+
+For a cancellable run, use `execute_with_stop(source, sink, &stop)` with a real token from
+the `almost-enough` crate (`cargo add almost-enough`); a tripped token surfaces as
+`PipeError::Cancelled`:
+
+```rust
+let stopper = almost_enough::Stopper::new();
+let watcher = stopper.clone(); // Stopper is Clone
+std::thread::spawn(move || watcher.cancel()); // e.g. on a deadline / client disconnect
+zenpipe::execute_with_stop(source, sink, &stopper)?; // &Stopper coerces to &dyn enough::Stop
+```
+
+(The decoder/encoder `Source`/`Sink` themselves are built from the `zencodecs` registry —
+see its docs for `DecoderSource`/`EncoderSink` construction from `&[u8]` + a target format.)
 
 ## Smart crop (`c.focus`)
 
