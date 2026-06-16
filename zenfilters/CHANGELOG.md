@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- `Pipeline::apply_with_stop` — cooperative cancellation via `&dyn enough::Stop`,
+  checked at scatter/gather strip and between-filter boundaries (outer loops only,
+  never per-pixel); `apply()` delegates with `enough::Unstoppable` so the
+  uncancellable path is byte-identical. Companion `Pipeline::apply_planar_with_stop`
+  for the manual scatter/gather path. New `PipelineError::Cancelled(enough::StopReason)`
+  variant (non-breaking — the enum is already `#[non_exhaustive]`). `enough` promoted
+  to a normal dependency.
 - `ClipartFlatten` filter: flattens AI-clipart "waviness" / bubble-noise inside
   nominally-flat colour regions while keeping crisp edges and intentional shading
   (complement to `BackgroundFlatten`, which only touches the background).

@@ -27,6 +27,7 @@ zenquant = ["dep:zenquant", "dep:rgb"]
 
 [dependencies]
 archmage = { version = "0.9.17", features = ["avx512"] }
+enough = "0.4.4"
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
@@ -43,7 +44,7 @@ zenquant = { version = "0.1.2", default-features = false, optional = true }
 imgref = "1.12"
 palette = { version = "0.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
-enough = "0.4"
+almost-enough = "0.4.4"
 # 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
 # git patch, same shape as zencodecs' zensim dep. CI paths it to the sibling clone.
 zensim = { version = "0.3.0", default-features = false }
