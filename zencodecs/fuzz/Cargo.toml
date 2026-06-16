@@ -25,11 +25,19 @@ path = ".."
 # `compile_error!` stubs in zencodecs (no backend wired yet, zenpipe#43);
 # enabling them only floods unresolved-item errors. Re-add each when its
 # backend lands.
+# Excluded: raw-decode, raw-decode-exif — RAW/DNG decode is a thin wrapper over
+# the third-party `rawler`/`rawloader` crates, which are NOT panic-safe on
+# untrusted input (bit-reader OOB at rawler-0.7.2 bits.rs:205) and allocate from
+# attacker-controlled header dimensions before our limits apply (decode bombs).
+# Format detection routes any TIFF-magic input straight into rawler, so fuzzing
+# through zencodecs just rediscovers rawler-internal bugs we cannot fix here.
+# Production hardening / the rawler dep decision is tracked separately. Re-add
+# (ideally as a dedicated fuzz target whose findings file against rawler) once
+# RAW is panic-safe for untrusted input.
 features = [
     "jpeg", "webp", "gif", "gif-zenquant",
     "png", "png-zenquant", "avif-decode", "jxl-decode",
     "bitmaps", "bitmaps-bmp",
-    "raw-decode", "raw-decode-exif",
     "cms", "riapi",
     "jpeg-ultrahdr",
 ]
