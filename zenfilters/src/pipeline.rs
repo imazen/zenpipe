@@ -155,6 +155,8 @@ pub enum PipelineError {
     UnsupportedPrimaries(ColorPrimaries),
     /// Input buffer has wrong size.
     BufferSize { expected: usize, actual: usize },
+    /// The operation was cancelled via the cooperative-cancellation token.
+    Cancelled(enough::StopReason),
 }
 
 impl core::fmt::Display for PipelineError {
@@ -164,6 +166,7 @@ impl core::fmt::Display for PipelineError {
             Self::BufferSize { expected, actual } => {
                 write!(f, "buffer size mismatch: expected {expected}, got {actual}")
             }
+            Self::Cancelled(r) => write!(f, "operation cancelled: {r}"),
         }
     }
 }
@@ -415,6 +418,32 @@ impl Pipeline {
         channels: u32,
         ctx: &mut FilterContext,
     ) -> Result<(), At<PipelineError>> {
+        self.apply_with_stop(src, dst, width, height, channels, ctx, &enough::Unstoppable)
+    }
+
+    /// Apply the full pipeline with cooperative cancellation.
+    ///
+    /// Identical to [`apply()`](Pipeline::apply) but takes a
+    /// [`enough::Stop`] token as the final parameter. The token's
+    /// [`check()`](enough::Stop::check) is polled only at outer loop
+    /// boundaries — between scatter/gather strips and between filters —
+    /// never inside the per-pixel inner loops, so cancellation costs
+    /// nothing in the hot path. On cancellation this returns
+    /// [`PipelineError::Cancelled`] carrying the [`enough::StopReason`].
+    ///
+    /// `apply()` delegates here passing [`enough::Unstoppable`], so the
+    /// uncancellable path is byte-identical to calling this directly.
+    #[track_caller]
+    pub fn apply_with_stop(
+        &self,
+        src: &[f32],
+        dst: &mut [f32],
+        width: u32,
+        height: u32,
+        channels: u32,
+        ctx: &mut FilterContext,
+        stop: &dyn enough::Stop,
+    ) -> Result<(), At<PipelineError>> {
         let n = (width as usize) * (height as usize) * (channels as usize);
         if src.len() < n {
             return Err(at!(PipelineError::BufferSize {
@@ -435,10 +464,10 @@ impl Pipeline {
         // benchmarks show 4x slower than full-frame due to redundant
         // re-filtering of overlapping rows.
         if self.has_neighborhood_filter() {
-            return self.apply_full_frame(src, dst, width, height, channels, ctx);
+            return self.apply_full_frame(src, dst, width, height, channels, ctx, stop);
         }
 
-        self.apply_stripped(src, dst, width, height, channels, ctx)
+        self.apply_stripped(src, dst, width, height, channels, ctx, stop)
     }
 
     /// Full-frame Oklab planes with streamed color conversions.
@@ -455,6 +484,7 @@ impl Pipeline {
         height: u32,
         channels: u32,
         ctx: &mut FilterContext,
+        stop: &dyn enough::Stop,
     ) -> Result<(), At<PipelineError>> {
         let ch = channels as usize;
         let w = width as usize;
@@ -474,6 +504,7 @@ impl Pipeline {
         // Scatter in strips for cache locality
         let scatter_strip = strip_height(width, ch == 4, 0);
         for y in (0..height as usize).step_by(scatter_strip) {
+            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
             let rows = scatter_strip.min(height as usize - y);
             let src_off = y * w * ch;
             let src_len = rows * w * ch;
@@ -508,10 +539,11 @@ impl Pipeline {
         }
 
         // Apply all filters on full-frame planes
-        self.apply_planar(&mut planes, ctx);
+        self.apply_planar_with_stop(&mut planes, ctx, stop)?;
 
         // Gather in strips for cache locality
         for y in (0..height as usize).step_by(scatter_strip) {
+            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
             let rows = scatter_strip.min(height as usize - y);
             let dst_off = y * w * ch;
             let dst_len = rows * w * ch;
@@ -561,6 +593,7 @@ impl Pipeline {
         height: u32,
         channels: u32,
         ctx: &mut FilterContext,
+        stop: &dyn enough::Stop,
     ) -> Result<(), At<PipelineError>> {
         let ch = channels as usize;
         let w = width as usize;
@@ -569,6 +602,7 @@ impl Pipeline {
         let strip_h = strip_height(width, has_alpha, halo);
 
         for y_start in (0..height as usize).step_by(strip_h) {
+            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
             let y_end = (y_start + strip_h).min(height as usize);
             let core_rows = y_end - y_start;
 
@@ -606,7 +640,7 @@ impl Pipeline {
                     self.config.reference_white,
                 );
             }
-            self.apply_planar(&mut planes, ctx);
+            self.apply_planar_with_stop(&mut planes, ctx, stop)?;
 
             // Gather only the core rows from the filtered extended strip
             let dst_offset = y_start * w * ch;
@@ -656,7 +690,27 @@ impl Pipeline {
     /// Use this when you want to manage scatter/gather yourself,
     /// or when chaining multiple pipelines on the same planar data.
     pub fn apply_planar(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
+        // Delegate to the cancellable variant with a no-op token; this path
+        // is byte-identical and cannot fail (`Unstoppable::check` is `Ok`).
+        let _ = self.apply_planar_with_stop(planes, ctx, &enough::Unstoppable);
+    }
+
+    /// Apply filters to already-scattered planar Oklab data, with
+    /// cooperative cancellation.
+    ///
+    /// Identical to [`apply_planar()`](Pipeline::apply_planar) but takes a
+    /// [`enough::Stop`] token. The token is polled once before each filter
+    /// runs (between filters — never per-pixel). On cancellation this
+    /// returns [`PipelineError::Cancelled`] and leaves `planes` holding the
+    /// partially-filtered result.
+    pub fn apply_planar_with_stop(
+        &self,
+        planes: &mut OklabPlanes,
+        ctx: &mut FilterContext,
+        stop: &dyn enough::Stop,
+    ) -> Result<(), At<PipelineError>> {
         for filter in &self.filters {
+            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
             filter.apply(planes, ctx);
         }
 
@@ -666,6 +720,7 @@ impl Pipeline {
         {
             lut.compress_planes(&planes.l, &mut planes.a, &mut planes.b, knee);
         }
+        Ok(())
     }
 }
 
@@ -813,5 +868,105 @@ mod tests {
         pipeline.push(Box::new(sharpen));
 
         assert_eq!(pipeline.total_halo(64, 64), clarity_radius + sharpen_radius);
+    }
+
+    /// `apply_with_stop` runs to completion under an unstoppable token and
+    /// returns `Err(PipelineError::Cancelled)` under a cancelled token, on
+    /// both the per-pixel (stripped) and neighborhood (full-frame) paths.
+    #[test]
+    fn apply_with_stop_cancellation() {
+        use crate::filters;
+
+        let (w, h) = (64u32, 64u32);
+        let src = vec![0.5f32; (w as usize) * (h as usize) * 3];
+        let mut dst = vec![0.0f32; src.len()];
+        let mut ctx = FilterContext::new();
+
+        // --- Per-pixel path (no neighborhood filter → apply_stripped) ---
+        let mut per_pixel = Pipeline::new(PipelineConfig::default()).unwrap();
+        per_pixel.push(Box::new(filters::Exposure { stops: 0.3 }));
+        assert!(!per_pixel.has_neighborhood_filter());
+
+        // Unstoppable token: must succeed.
+        per_pixel
+            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &enough::Unstoppable)
+            .expect("unstoppable per-pixel apply should succeed");
+
+        // Cancelled token: must report Cancelled.
+        let s = almost_enough::Stopper::new();
+        s.cancel();
+        let err = per_pixel
+            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &s)
+            .expect_err("cancelled per-pixel apply should fail");
+        assert!(
+            matches!(err.error(), PipelineError::Cancelled(_)),
+            "expected Cancelled, got {:?}",
+            err.error()
+        );
+
+        // --- Neighborhood path (apply_full_frame) ---
+        let mut neighborhood = Pipeline::new(PipelineConfig::default()).unwrap();
+        neighborhood.push(Box::new(filters::Sharpen {
+            sigma: 1.0,
+            amount: 0.5,
+        }));
+        assert!(neighborhood.has_neighborhood_filter());
+
+        // Unstoppable token: must succeed.
+        neighborhood
+            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &enough::Unstoppable)
+            .expect("unstoppable neighborhood apply should succeed");
+
+        // Pre-cancelled token: must report Cancelled (fires at first scatter strip).
+        let s2 = almost_enough::Stopper::cancelled();
+        let err2 = neighborhood
+            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &s2)
+            .expect_err("cancelled neighborhood apply should fail");
+        assert!(
+            matches!(err2.error(), PipelineError::Cancelled(_)),
+            "expected Cancelled, got {:?}",
+            err2.error()
+        );
+
+        // `apply()` (no stop arg) must still work — delegates to Unstoppable.
+        per_pixel
+            .apply(&src, &mut dst, w, h, 3, &mut ctx)
+            .expect("plain apply should still succeed");
+    }
+
+    /// `apply_planar_with_stop` checks between filters and `apply_planar`
+    /// delegates with a no-op token (stays infallible).
+    #[test]
+    fn apply_planar_with_stop_cancellation() {
+        use crate::filters;
+
+        let (w, h) = (32u32, 32u32);
+        let mut ctx = FilterContext::new();
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+        pipeline.push(Box::new(filters::Exposure { stops: 0.2 }));
+        pipeline.push(Box::new(filters::Contrast { amount: 0.1 }));
+
+        // Build planes from a flat source.
+        let mut planes = OklabPlanes::from_ctx(&mut ctx, w, h);
+        for v in planes.l.iter_mut() {
+            *v = 0.5;
+        }
+
+        // Cancelled token: between-filters check trips → Cancelled.
+        let s = almost_enough::Stopper::cancelled();
+        let err = pipeline
+            .apply_planar_with_stop(&mut planes, &mut ctx, &s)
+            .expect_err("cancelled apply_planar should fail");
+        assert!(matches!(err.error(), PipelineError::Cancelled(_)));
+
+        // Unstoppable: succeeds.
+        pipeline
+            .apply_planar_with_stop(&mut planes, &mut ctx, &enough::Unstoppable)
+            .expect("unstoppable apply_planar should succeed");
+
+        // Plain apply_planar still compiles + runs (infallible delegation).
+        pipeline.apply_planar(&mut planes, &mut ctx);
+
+        planes.return_to_ctx(&mut ctx);
     }
 }

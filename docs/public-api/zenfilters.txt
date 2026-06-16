@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenfilters.txt 963 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 49 lines (57 hidden + 0 excluded-feature)
+# files: zenfilters.txt 966 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 49 lines (57 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,16 +14,16 @@
 #   pub types (struct/enum/trait/alias)       120
 #   pub consts/statics                         24
 #   free functions                             30
-#   inherent methods                          158
+#   inherent methods                          160
 #   struct fields                             360
-#   enum variants                             140
+#   enum variants                             141
 #   trait roster entries (type × trait)       471
 #   conditional trait impls (verbatim)          1
 #   auto-trait-complete types                 112
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                          146
+#   (root)                          149
 #   analysis                         37
 #   filter_compat                    45
 #   filters                         435
@@ -35,7 +35,7 @@
 #   resize_pipeline                   2
 #   slider                           14
 
-## items (844 lines)
+## items (847 lines)
 
 pub mod zenfilters
 pub mod analysis
@@ -754,6 +754,7 @@ pub GamutMapping::SoftCompress::knee: f32
 pub PipelineError::BufferSize
 pub PipelineError::BufferSize::actual: usize
 pub PipelineError::BufferSize::expected: usize
+pub PipelineError::Cancelled(enough::reason::StopReason)
 pub PipelineError::UnsupportedPrimaries(zenpixels::descriptor::ColorPrimaries)
 pub enum PlaneSemantics
 pub PlaneSemantics::Any
@@ -847,6 +848,8 @@ pub fn OklabPlanes::with_alpha(u32, u32) -> Self
 pub struct Pipeline
 pub fn Pipeline::apply(&self, &[f32], &mut [f32], u32, u32, u32, &mut FilterContext) -> core::result::Result<(), whereat::at::At<PipelineError>>
 pub fn Pipeline::apply_planar(&self, &mut OklabPlanes, &mut FilterContext)
+pub fn Pipeline::apply_planar_with_stop(&self, &mut OklabPlanes, &mut FilterContext, &dyn enough::Stop) -> core::result::Result<(), whereat::at::At<PipelineError>>
+pub fn Pipeline::apply_with_stop(&self, &[f32], &mut [f32], u32, u32, u32, &mut FilterContext, &dyn enough::Stop) -> core::result::Result<(), whereat::at::At<PipelineError>>
 pub fn Pipeline::config(&self) -> &PipelineConfig
 pub fn Pipeline::has_neighborhood_filter(&self) -> bool
 pub fn Pipeline::is_empty(&self) -> bool
