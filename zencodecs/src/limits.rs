@@ -52,13 +52,16 @@ impl Limits {
 
     /// Production-safe limits for real-time image proxies processing untrusted input.
     ///
-    /// 16384x16384 max dimensions, 100 megapixels, 512 MB memory, 100 MB input,
+    /// 16384x16384 max dimensions, 120 megapixels, 512 MB memory, 100 MB input,
     /// 1000 frames, 60 seconds duration.
+    ///
+    /// 120 MP admits 108 MP phone-camera photos (a common real-world size)
+    /// while still bounding decode work for untrusted input.
     pub fn for_proxy() -> Self {
         Self {
             max_width: Some(16_384),
             max_height: Some(16_384),
-            max_pixels: Some(100_000_000),
+            max_pixels: Some(120_000_000),
             max_memory_bytes: Some(512 * 1024 * 1024),
             max_input_bytes: Some(100 * 1024 * 1024),
             max_output_bytes: Some(100 * 1024 * 1024),

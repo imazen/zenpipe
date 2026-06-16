@@ -243,7 +243,7 @@ println!("peak: {} bytes", estimate.peak_memory_bytes());
 
 // Enforce limits before execution
 estimate.check(&Limits {
-    max_megapixels: Some(100),
+    max_pixels: Some(120_000_000), // 120 MP — admits 108 MP phone photos
     max_memory_bytes: Some(512 * 1024 * 1024),
     ..Default::default()
 })?;
