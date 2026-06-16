@@ -59,13 +59,49 @@ let mut dst = vec![0.0f32; w * h * 3];
 pipeline.apply(&src, &mut dst, w as u32, h as u32, 3, &mut ctx)?;
 ```
 
-`apply`'s f32 `src`/`dst` are interleaved **linear** RGB f32 in `[0, 1]` — *not*
-sRGB-encoded. Convert sRGB8 input first with
-[`linear-srgb`](https://lib.rs/crates/linear-srgb)'s `srgb_u8_to_linear_slice`,
-and re-encode the output with `linear_to_srgb_u8_slice`. (`WorkingSpace` — default
-`Oklab` — only controls the *internal* processing space; the f32 input/output
-contract is linear RGB regardless. There is also a `*_u8` entry that takes
-sRGB bytes directly.)
+### `apply` data contract (read this before feeding it a decoded image)
+
+`Pipeline::apply(src, dst, width, height, channels, ctx)`:
+
+- **Layout: interleaved, not planar.** Despite the crate's planar-Oklab internals,
+  `src`/`dst` are *interleaved* (`R,G,B,R,G,B,…`, or `R,G,B,A,…`). `apply` scatters
+  to planar Oklab and gathers back internally — the planar layout never reaches the
+  caller.
+- **Colorspace: linear RGB, *not* sRGB-encoded.** Values are linear-light f32,
+  nominally `[0, 1]`. Feeding sRGB-encoded f32 (mid-grey `128/255 ≈ 0.502`) where
+  linear is expected (mid-grey ≈ `0.216`) silently wrecks every tone/contrast/gamut
+  computation — there is no runtime check, so get this right. `WorkingSpace`
+  (default `Oklab`) selects only the *internal* processing space; the f32
+  input/output contract is linear RGB regardless of it.
+- **`channels`: `3` (RGB) or `4` (RGBA).** With `4`, the alpha plane is carried
+  through unmodified except by alpha-aware filters.
+- **No stride.** Buffers must be tightly packed: `src.len()` and `dst.len()` must be
+  `≥ width * height * channels`. There is no row-stride / row-padding parameter; a
+  shorter buffer returns `PipelineError::BufferSize`.
+- **`dst` comes back in the same space and layout as `src`** — interleaved linear
+  RGB(A) f32. `dst` may alias nothing of `src` (pass a separate buffer).
+
+#### Getting from a decoded RGB8 image to `apply` and back
+
+`apply` itself takes only linear f32, so a decoded sRGB-u8 image needs a conversion
+on each side. Three supported on-ramps, lowest-effort first:
+
+1. **`apply_to_buffer(&pipeline, &input, convert_back, &mut ctx)`** (re-exported at
+   the crate root) is the high-level path: hand it a `zenpixels::PixelBuffer` (which
+   carries the descriptor — layout, transfer function, channel type) and it does
+   linearization, HDR normalization, scatter, filter, gather, and re-encode for you.
+   With `convert_back = false` it returns linear f32 RGB(A) for further processing.
+2. **Manual linear-f32 path:** decode to sRGB-u8, convert to linear f32 with
+   [`linear-srgb`](https://lib.rs/crates/linear-srgb)'s
+   `default::srgb_u8_to_linear_slice`, run `apply`, then re-encode with
+   `default::linear_to_srgb_u8_slice`. (`linear-srgb` is already a dependency.)
+3. **In-crate scatter/gather:** the crate re-exports `scatter_srgb_u8_to_oklab` and
+   `gather_oklab_to_srgb_u8` (a fused sRGB-u8 ⇄ Oklab path that skips the
+   intermediate linear-f32 buffer) for callers driving the planar API directly via
+   `apply_planar`.
+
+(For ImageMagick-style math directly on sRGB-encoded values — no linearization, no
+Oklab — see the `srgb-compat` and `srgb-filters` features below.)
 
 ### Errors
 
@@ -91,8 +127,17 @@ match pipeline.apply(&src, &mut dst, w, h, 3, &mut ctx) {
 }
 ```
 
-The crate exposes no cooperative-cancellation token; a server bounding a long
-filter stack must run it on a worker and enforce a deadline at that layer.
+### Cancellation
+
+A server bounding a long filter stack can cancel cooperatively.
+`apply_with_stop(src, dst, width, height, channels, ctx, stop)` takes a
+[`&dyn enough::Stop`](https://lib.rs/crates/enough) as the final argument
+(`apply` delegates to it with `enough::Unstoppable`, so the uncancellable path
+is byte-identical). The token is polled only at outer-loop boundaries — between
+scatter/gather strips and between filters, never inside the per-pixel inner
+loops — so cancellation costs nothing in the hot path. On cancellation it
+returns `PipelineError::Cancelled(enough::StopReason)`. There is a matching
+`apply_planar_with_stop` for the planar entry point.
 
 ## Presets
 
@@ -167,9 +212,33 @@ filter.set_param("amount", ParamValue::Float(0.5));
 let val = filter.get_param("amount"); // Some(Float(0.5))
 ```
 
+`Filter::schema()` (or `<FilterType>::schema()`) is the authoritative,
+machine-readable source for every field, range, default, and identity point — the
+table below is a hand reference for the most common filters. Each struct is
+`#[non_exhaustive]`, so construct via `Default::default()` then set fields.
+
+### Common filter fields
+
+| Filter | Field | Type | Identity / default | Notes |
+|--------|-------|------|--------------------|-------|
+| `Exposure` | `stops` | `f32` | `0.0` | Linear-light stops; ±. |
+| `Contrast` | `amount` | `f32` | `0.0` | `1.0` = strong, `-1.0` = flatten. Pivots at Oklab middle grey. (**`amount`, not `factor`.**) |
+| `Saturation` | `factor` | `f32` | `1.0` | `0.0` = grayscale, `2.0` = double. (**`factor`, not `amount`.**) |
+| `Vibrance` | `amount` | `f32` | `0.0` | `1.0` = full boost. |
+| `Vibrance` | `protection` | `f32` | `2.0` | Higher = more protection for already-saturated colors. |
+| `Clarity` | `sigma` | `f32` | `4.0` | Fine-scale blur σ; coarse blur is `4× sigma`. |
+| `Clarity` | `amount` | `f32` | `0.0` | `+` enhances texture, `-` softens; `0.3`–`1.0` natural. |
+| `Clarity` | `adaptive` | `bool` | `false` | Variance-gated: more clarity in flat regions, less in textured. |
+
 ### Slider mappings
 
-Some parameters have non-linear perceptual response. The `slider` module provides mapping functions so equal slider increments produce equal perceived changes:
+Some parameters have non-linear perceptual response. The `slider` module provides
+free-function pairs (`*_from_slider` maps a UI slider value → internal parameter,
+`*_to_slider` inverts it) so equal slider increments produce equal perceived
+changes. Available pairs: `contrast_*`, `saturation_*`, `dehaze_*`,
+`ltm_compression_*`, `nr_strength_*`, `bilateral_range_*`, `sharpen_noise_floor_*`.
+(`Contrast::from_slider` and `Saturation::from_slider` are convenience constructors
+wrapping `contrast_from_slider` / `saturation_from_slider`.)
 
 | Mapping | Parameters | Effect |
 |---------|-----------|--------|
@@ -382,7 +451,8 @@ All LUTs use 1024 entries (10-bit, 4 KB each) — balances curve fidelity agains
 | Feature | Description |
 |---------|-------------|
 | `serde` | Serialize/deserialize all filter structs, schemas, presets, compat types |
-| `srgb-filters` | Direct sRGB u8 per-pixel filters (no Oklab roundtrip) |
+| `srgb-compat` | ImageMagick-style `WorkingSpace::Srgb` / `WorkingSpace::LinearRgb` configs + sRGB-math filter types (`LinearContrast`, `HslSaturate`, `LumaGrayscale`, …) that operate directly on encoded values, bypassing the Oklab roundtrip |
+| `srgb-filters` | Standalone sRGB u8 per-pixel filter functions (`color_adjust`, `color_matrix`, `sharpen`, `blur`) on `PixelBuffer` / `PixelSliceMut`, no Oklab roundtrip |
 | `experimental` | Auto-tuning, fused interleaved path, film look gallery tool |
 | `zennode` | Node graph definitions for zenpipe integration |
 

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Documentation
+- README: state the `Pipeline::apply` data contract explicitly — interleaved
+  (not planar) **linear** RGB(A) f32 in `[0,1]` (not sRGB-encoded), `channels`
+  3/4, tightly-packed with no row stride — plus a decoded-RGB8 on-ramp (`apply_to_buffer`,
+  `linear-srgb` slice helpers, in-crate `scatter_srgb_u8_to_oklab`), a common-filter
+  field reference (`Contrast::amount`, `Saturation::factor`, `Exposure::stops`,
+  `Clarity`, `Vibrance`), the full `slider` function list, and `srgb-compat`/`srgb-filters`
+  feature docs. Corrected the stale "no cooperative-cancellation token" note to
+  document `apply_with_stop`. Found via an insulated external-developer usability test.
+
 ### Added
 - `Pipeline::apply_with_stop` — cooperative cancellation via `&dyn enough::Stop`,
   checked at scatter/gather strip and between-filter boundaries (outer loops only,
