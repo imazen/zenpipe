@@ -115,7 +115,7 @@ hashbrown = "0.16.1"
 # Photo filters on planar Oklab f32 (SIMD-accelerated) — requires std
 zenfilters = { workspace = true, optional = true }
 # ICC color management (SIMD-accelerated, pure Rust) — requires std
-moxcms = { version = "*", optional = true }
+moxcms = { version = ">=0.8.1, <0.10", optional = true }
 # Self-documenting node definitions — bridges zennode types into PipelineGraph
 zennode = { workspace = true, optional = true }
 # Unified codec dispatch — node definitions for codec/quantize/quality-intent

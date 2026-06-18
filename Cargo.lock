@@ -4445,7 +4445,7 @@ dependencies = [
  "fast-ssim2",
  "imgref",
  "linear-srgb",
- "moxcms 0.7.11",
+ "moxcms 0.8.1",
  "png 0.18.1",
  "rayon",
  "rgb",
