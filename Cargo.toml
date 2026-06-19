@@ -169,7 +169,7 @@ harness = false
 required-features = ["zennode", "std"]
 
 [workspace]
-members = ["zencodecs", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
+members = ["zencodecs", "zencodecs-cli", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.

@@ -4473,6 +4473,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zencodecs-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "zencodecs",
+]
+
+[[package]]
 name = "zeneditor"
 version = "0.1.0"
 dependencies = [

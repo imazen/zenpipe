@@ -1,0 +1,21 @@
+[package]
+name = "zencodecs-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal, capable image transcoding CLI over zencodecs (MxN, lossless / minimally-lossless)."
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "zencodecs"
+path = "src/main.rs"
+
+[dependencies]
+# Full default codec set (jpeg/webp/gif/png/avif/jxl-decode/bmp) + the JXL
+# encoder, lossless JPEG↔JXL, and the zensim IQA-driven minimally-lossless path.
+zencodecs = { path = "../zencodecs", features = [
+    "jxl-encode",
+    "jpeg-jxl-transcode",
+    "transcode-iqa",
+] }
+clap = { version = "4.6.0", features = ["derive"] }
