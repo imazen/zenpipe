@@ -829,8 +829,8 @@ impl Filter for Clahe {
         }
 
         // Number of tiles (round up)
-        let nx = (w + tw - 1) / tw;
-        let ny = (h + th - 1) / th;
+        let nx = w.div_ceil(tw);
+        let ny = h.div_ceil(th);
 
         // Compute CDF for each tile
         // cdfs[ty][tx][bin] = cumulative fraction

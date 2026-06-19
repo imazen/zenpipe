@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- Convenience encode path (`convenience.rs`) now PRESERVES the `whereat` trace from
+  `zenpixels-convert` conversion errors: replaced the trace-dropping
+  `at!(e).map_error(|e| ConvenienceError::Convert(e.decompose().0))` with
+  `.map_err_at(ConvenienceError::Convert).at_crate(...)` at both the buffer-convert and
+  `RowConverter::new` boundaries, so the originating conversion site survives in the
+  error. Drive-by: two manual `div_ceil` reimplementations in `srgb_compat.rs` flagged
+  by clippy 1.96.
+
 ### Documentation
 - README: state the `Pipeline::apply` data contract explicitly — interleaved
   (not planar) **linear** RGB(A) f32 in `[0,1]` (not sRGB-encoded), `channels`

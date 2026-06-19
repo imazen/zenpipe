@@ -217,7 +217,8 @@ pub fn apply_to_buffer(
         ctx.return_u8(input_bytes);
     } else {
         let linear_bytes = convert_buffer_bytes_pooled(input, linear_desc, ctx)
-            .map_err(|e| at!(e).map_error(|e| ConvenienceError::Convert(e.decompose().0)))?;
+            .map_err_at(ConvenienceError::Convert)
+            .at_crate(crate::at_crate_info())?;
         let linear_f32 = as_f32_slice(&linear_bytes);
         scatter_to_oklab(&linear_f32, &mut planes, channels, &m1, reference_white);
         ctx.return_u8(linear_bytes);
@@ -249,7 +250,8 @@ pub fn apply_to_buffer(
 
         if convert_back && desc != linear_desc {
             let mut converter = RowConverter::new(linear_desc, desc)
-                .map_err(|e| at!(e).map_error(|e| ConvenienceError::Convert(e.decompose().0)))?;
+                .map_err_at(ConvenienceError::Convert)
+                .at_crate(crate::at_crate_info())?;
             let dst_bpp = desc.bytes_per_pixel();
             let dst_stride = (width as usize) * dst_bpp;
             let total = dst_stride * height as usize;
@@ -785,5 +787,40 @@ mod tests {
         assert_eq!(output.descriptor(), PixelDescriptor::RGB8_SRGB);
         assert_eq!(output.width(), 32);
         assert_eq!(output.height(), 32);
+    }
+
+    /// A `ConvertError` raised inside the convenience layer must surface as an
+    /// `At<ConvenienceError>` that still carries the original whereat trace
+    /// (regression guard for the trace-dropping `at!(e).map_error(|e|
+    /// ...decompose().0)` pattern that discarded the inner trace).
+    #[test]
+    fn convert_error_preserves_whereat_trace() {
+        use zenpixels::SignalRange;
+
+        // f32 linear input forces the non-fused convert path. Marking it
+        // `Narrow` while the working space is `Full` makes the RowConverter
+        // refuse the signal-range crossing (`ConvertError::NoPath`), so the
+        // error originates in `zenpixels_convert` and propagates through the
+        // convenience layer's conversion call.
+        let data = vec![0u8; 4 * 4 * 3 * 4]; // 4x4 RGB f32
+        let desc = PixelDescriptor::RGBF32_LINEAR.with_signal_range(SignalRange::Narrow);
+        let input = PixelBuffer::from_vec(data, 4, 4, desc).unwrap();
+        let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+
+        let err = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new())
+            .expect_err("Narrow→Full signal-range crossing must fail to convert");
+
+        // The inner error type was converted to ConvenienceError::Convert...
+        assert!(
+            matches!(err.error(), ConvenienceError::Convert(_)),
+            "expected ConvenienceError::Convert, got {:?}",
+            err.error()
+        );
+        // ...and the whereat trace survived the conversion (the bug dropped it).
+        assert!(
+            err.frame_count() >= 1,
+            "expected a preserved whereat trace (frame_count >= 1), got {}",
+            err.frame_count()
+        );
     }
 }
