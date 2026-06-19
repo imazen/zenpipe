@@ -5,7 +5,8 @@ use alloc::borrow::Cow;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{
-    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, StopToken,
+    CodecError, DecodeJob, DecodeOutput, DecoderConfig, GainMapRender, ImageFormat, ImageInfo,
+    Limits, StopToken,
 };
 use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::Decode;
@@ -23,6 +24,7 @@ pub(crate) fn decode(
     limits: Option<&Limits>,
     stop: Option<StopToken>,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
+    gain_map_render: GainMapRender,
     extract_gain_map: bool,
 ) -> Result<DecodeOutput> {
     let mut dec = heic::HeicDecoderConfig::new();
@@ -39,6 +41,9 @@ pub(crate) fn decode(
     if let Some(dp) = decode_policy {
         job = job.with_policy(dp);
     }
+    // BaseOnly (default) is a no-op; ReconstructHdr makes heic apply the gain map
+    // and emit linear-float HDR pixels (via ultrahdr-core's reconstruction).
+    job = job.with_gain_map_render(gain_map_render);
     let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))?;
     at_crate!(decoder.decode()).map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))

@@ -505,10 +505,11 @@ impl<'a> DecodeRequest<'a> {
     fn decode_format(self, format: ImageFormat) -> Result<DecodeOutput> {
         let dp = self.decode_policy;
         // ReconstructHdr returns HDR pixels only from decoders that advertise the
-        // capability. Today that is JPEG UltraHDR; every other format errors here
-        // rather than silently returning an SDR buffer mislabeled as HDR.
+        // capability — JPEG UltraHDR and HEIC (Apple/Samsung gain maps); every
+        // other format errors here rather than silently returning an SDR buffer
+        // mislabeled as HDR.
         if matches!(self.gain_map_render, GainMapRender::ReconstructHdr { .. })
-            && !matches!(format, ImageFormat::Jpeg)
+            && !matches!(format, ImageFormat::Jpeg | ImageFormat::Heic)
         {
             return Err(at!(CodecError::UnsupportedOperation {
                 format,
@@ -579,6 +580,7 @@ impl<'a> DecodeRequest<'a> {
                 self.limits,
                 self.stop,
                 dp,
+                self.gain_map_render,
                 self.extract_gain_map,
             ),
             #[cfg(not(feature = "heic-decode"))]

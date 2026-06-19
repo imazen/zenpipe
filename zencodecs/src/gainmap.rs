@@ -42,6 +42,83 @@ pub use zenjpeg::ultrahdr::GainMap;
 // Re-export zencodec gain map types.
 pub use zencodec::gainmap::{GainMapChannel, GainMapParams, GainMapPresence};
 
+/// Transcode a gain-map source (HEIC / Ultra-HDR JPEG) to a BT.2100 **PQ**
+/// (ST 2084) PNG carrying `cICP` + `cLLI`.
+///
+/// Decodes the source's HDR reconstruction (linear float — full reconstruction
+/// at the gain map's encoded maximum unless `target_headroom` caps it),
+/// quantizes to `RGB16_BT2100_PQ` (the absolute-luminance anchor — BT.2408,
+/// 203 nits — travels with the pixels via the buffer `ColorContext`), then
+/// PNG-encodes with the resolved primaries, the PQ transfer, and the measured
+/// content light level.
+///
+/// Returns `Ok(None)` when the source carries no gain map (nothing to
+/// reconstruct — the caller should fall back to a plain SDR transcode).
+///
+/// Requires `png` plus a gain-map-capable decoder (`jpeg-ultrahdr` and/or
+/// `heic-decode`). This is the rendition step `hdr-corpus-convert` needs from
+/// the library so the tool can collapse to a CLI invocation (zenpipe#68).
+#[cfg(all(
+    feature = "png",
+    any(feature = "jpeg-ultrahdr", feature = "heic-decode")
+))]
+pub fn transcode_to_hdr_pq_png(
+    data: &[u8],
+    registry: &crate::AllowedFormats,
+    target_headroom: Option<f32>,
+) -> crate::error::Result<Option<alloc::vec::Vec<u8>>> {
+    use crate::CodecError;
+    use whereat::{ResultAtExt, at};
+    use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+    use zencodec::{Cicp, ContentLightLevel};
+    use zenpixels::PixelDescriptor;
+
+    // Decode the SDR base first: gates on gain-map presence (avoids a wasted
+    // reconstruct on non-HDR input) and resolves the container primaries.
+    let base = crate::DecodeRequest::new(data)
+        .with_registry(registry)
+        .decode()?;
+    if !base.info().supplements.gain_map {
+        return Ok(None);
+    }
+    // Resolved CICP primaries (1 BT.709/sRGB, 9 BT.2020, 12 Display P3),
+    // defaulting to sRGB when unsignaled.
+    let primaries = match base.info().source_color.cicp.map(|c| c.color_primaries) {
+        Some(9) => 9,
+        Some(12) => 12,
+        _ => 1,
+    };
+
+    // Reconstruct HDR (linear float).
+    let hdr = crate::DecodeRequest::new(data)
+        .with_registry(registry)
+        .reconstruct_hdr(target_headroom)
+        .decode()?;
+
+    // PQ (ST 2084) quantize. The diffuse-white anchor travels with the pixels
+    // (`ColorContext.diffuse_white`), set by the reconstruction.
+    let pq = zenpixels_convert::hdr::quantize_to(hdr.pixels(), PixelDescriptor::RGB16_BT2100_PQ)
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("PQ quantize: {e}"))))?;
+
+    // Content light level: per-pixel literal max (CTA-861.3-A stills). `measure`
+    // returns None for non-float buffers (already filtered above by reconstruct).
+    #[allow(deprecated)]
+    let cll = ContentLightLevel::measure(hdr.pixels(), zenpixels::hdr::DiffuseWhite::BT2408);
+
+    // PNG with cICP (resolved primaries + PQ transfer 16) and cLLI.
+    let png = zenpng::PngEncoderConfig::new()
+        .with_cicp(Some(Cicp::new(primaries, 16, 0, true)))
+        .with_content_light_level(cll)
+        .job()
+        .encoder()
+        .map_err_at(|e| CodecError::from_codec(crate::ImageFormat::Png, e))?
+        .encode(pq.as_slice())
+        .map_err_at(|e| CodecError::from_codec(crate::ImageFormat::Png, e))?
+        .data()
+        .to_vec();
+    Ok(Some(png))
+}
+
 /// Gain map extracted from a decoded image.
 ///
 /// Format-agnostic: works for JPEG (UltraHDR), AVIF (tmap), and JXL (jhgm).

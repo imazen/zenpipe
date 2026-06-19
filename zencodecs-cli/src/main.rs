@@ -59,6 +59,10 @@ struct ConvertArgs {
     /// Matte color "R,G,B" for alpha→opaque (e.g. RGBA→JPEG). Default white.
     #[arg(long)]
     matte: Option<String>,
+    /// Reconstruct the HDR rendition (gain-map HEIC / Ultra-HDR JPEG only) to a
+    /// BT.2100 PQ PNG with cICP+cLLI, instead of the SDR base. Output is PNG.
+    #[arg(long, conflicts_with_all = ["quality", "lossless", "target_quality", "format"])]
+    hdr: bool,
     /// Quiet: suppress the per-file summary on stderr.
     #[arg(short, long)]
     quiet: bool,
@@ -123,6 +127,27 @@ fn run(cli: Cli) -> Result<(), String> {
 
 fn convert(a: ConvertArgs) -> Result<(), String> {
     let data = std::fs::read(&a.input).map_err(|e| format!("read {}: {e}", a.input.display()))?;
+
+    // HDR rendition: reconstruct the gain-map source to a PQ PNG. One file in,
+    // one file out — a bash script pairs this with a plain `convert` for SDR.
+    if a.hdr {
+        let registry = AllowedFormats::all();
+        let png = zencodecs::transcode_to_hdr_pq_png(&data, &registry, None)
+            .map_err(|e| format!("hdr reconstruct: {e}"))?
+            .ok_or_else(|| format!("{}: no gain map to reconstruct", a.input.display()))?;
+        std::fs::write(&a.output, &png)
+            .map_err(|e| format!("write {}: {e}", a.output.display()))?;
+        if !a.quiet {
+            eprintln!(
+                "{} -> {} (PNG, BT.2100 PQ HDR, {} KiB)",
+                a.input.display(),
+                a.output.display(),
+                png.len() / 1024
+            );
+        }
+        return Ok(());
+    }
+
     let fmt = match &a.format {
         Some(f) => parse_format(f).ok_or_else(|| format!("unknown --format '{f}'"))?,
         None => a

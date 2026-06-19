@@ -221,6 +221,11 @@ pub use color::{SourceColorExt, icc_profile_is_srgb};
 
 // Gain map types (format-agnostic)
 pub use gainmap::decode_gain_map_source;
+#[cfg(all(
+    feature = "png",
+    any(feature = "jpeg-ultrahdr", feature = "heic-decode")
+))]
+pub use gainmap::transcode_to_hdr_pq_png;
 #[cfg(feature = "jpeg-ultrahdr")]
 pub use gainmap::{DecodedGainMap, GainMap, GainMapMetadata, GainMapSource};
 pub use zencodec::gainmap::{
