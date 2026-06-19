@@ -70,7 +70,7 @@ pub fn transcode_to_hdr_pq_png(
     use crate::CodecError;
     use whereat::{ResultAtExt, at};
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-    use zencodec::{Cicp, ContentLightLevel};
+    use zencodec::{Cicp, ContentLightLevel, OrientationHint};
     use zenpixels::PixelDescriptor;
 
     // Decode the SDR base first: gates on gain-map presence (avoids a wasted
@@ -89,9 +89,11 @@ pub fn transcode_to_hdr_pq_png(
         _ => 1,
     };
 
-    // Reconstruct HDR (linear float).
+    // Reconstruct HDR (linear float), display-oriented — PNG can't carry an
+    // orientation tag, so the rotation must be baked into the pixels.
     let hdr = crate::DecodeRequest::new(data)
         .with_registry(registry)
+        .with_orientation(OrientationHint::Correct)
         .reconstruct_hdr(target_headroom)
         .decode()?;
 

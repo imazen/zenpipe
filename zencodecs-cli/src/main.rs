@@ -12,7 +12,7 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand};
 use zencodecs::{
     transcode, transcode_to_quality, AllowedFormats, FormatDecision, ImageFormat, MetadataPolicy,
-    QualityIntent, QualityTarget, TranscodeOptions,
+    OrientationHint, QualityIntent, QualityTarget, TranscodeOptions,
 };
 
 #[derive(Parser)]
@@ -63,6 +63,10 @@ struct ConvertArgs {
     /// BT.2100 PQ PNG with cICP+cLLI, instead of the SDR base. Output is PNG.
     #[arg(long, conflicts_with_all = ["quality", "lossless", "target_quality", "format"])]
     hdr: bool,
+    /// Keep the source EXIF orientation tag instead of baking it into the pixels
+    /// (default: auto-orient, i.e. bake — display-ready, correct for PNG output).
+    #[arg(long)]
+    keep_orientation: bool,
     /// Quiet: suppress the per-file summary on stderr.
     #[arg(short, long)]
     quiet: bool,
@@ -165,6 +169,12 @@ fn convert(a: ConvertArgs) -> Result<(), String> {
 
     let registry = AllowedFormats::all();
     let mut opts = TranscodeOptions::default();
+    // Auto-orient by default: bake EXIF orientation into the pixels so output is
+    // display-ready (and correct for tag-less targets like PNG). --keep-orientation
+    // leaves the tag authoritative instead.
+    if !a.keep_orientation {
+        opts.orientation = OrientationHint::Correct;
+    }
     if let Some(m) = &a.metadata {
         opts.metadata_policy =
             parse_metadata_policy(m).ok_or_else(|| format!("unknown --metadata '{m}'"))?;

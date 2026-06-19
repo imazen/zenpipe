@@ -64,6 +64,15 @@ pub struct TranscodeOptions {
     ///
     /// `None` defaults to white `[255, 255, 255]`.
     pub matte: Option<[u8; 3]>,
+
+    /// Whether to bake EXIF/container orientation into the output pixels.
+    ///
+    /// Defaults to [`OrientationHint::Preserve`] (the orientation stays in the
+    /// metadata tag). Set [`OrientationHint::Correct`] to bake it — required for
+    /// targets that can't carry an orientation tag (e.g. PNG) and the right
+    /// choice for display-ready output. Only affects the pixel-decode path
+    /// (JPEG/HEIC sources); coefficient-domain transcodes are unaffected.
+    pub orientation: zencodec::OrientationHint,
 }
 
 impl Default for TranscodeOptions {
@@ -75,6 +84,9 @@ impl Default for TranscodeOptions {
             metadata_policy: MetadataPolicy::PreserveExact,
             supplements: SupplementPolicy::default(),
             matte: None,
+            // No implicit pixel rewrite: preserve the tag by default. Callers
+            // targeting PNG or wanting display-ready output set `Correct`.
+            orientation: zencodec::OrientationHint::Preserve,
         }
     }
 }
@@ -214,11 +226,13 @@ pub fn transcode(
     let (decoded, gain_map) = if wants_gain_map {
         crate::DecodeRequest::new(data)
             .with_registry(registry)
+            .with_orientation(opts.orientation)
             .decode_gain_map()?
     } else {
         (
             crate::DecodeRequest::new(data)
                 .with_registry(registry)
+                .with_orientation(opts.orientation)
                 .decode_full_frame()?,
             None,
         )
@@ -228,6 +242,7 @@ pub fn transcode(
         let _ = wants_gain_map;
         crate::DecodeRequest::new(data)
             .with_registry(registry)
+            .with_orientation(opts.orientation)
             .decode_full_frame()?
     };
 

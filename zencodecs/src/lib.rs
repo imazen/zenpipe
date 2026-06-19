@@ -213,6 +213,9 @@ pub use zencodec::decode::SourceColor;
 /// [`EncodeRequest::with_color_emit_policy`], or on a [`transcode`] via
 /// [`TranscodeOptions`].
 pub use zencodec::{ColorEmitPolicy, MetadataPolicy};
+/// EXIF/container orientation: the resolved value ([`Orientation`]) and the
+/// decode-time policy ([`OrientationHint`]) for [`DecodeRequest::with_orientation`].
+pub use zencodec::{Orientation, OrientationHint};
 
 // Color / ICC profile classification
 #[cfg(feature = "cms")]

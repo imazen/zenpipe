@@ -7,8 +7,8 @@ use crate::error::Result;
 use crate::policy::CodecPolicy;
 use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
-use zencodec::GainMapRender;
 use zencodec::decode::DecodePolicy;
+use zencodec::{GainMapRender, OrientationHint};
 
 /// Image decode request builder.
 ///
@@ -38,6 +38,10 @@ pub struct DecodeRequest<'a> {
     /// reconstructed HDR pixels, or surfaced components. See
     /// [`with_gain_map_render`](Self::with_gain_map_render).
     gain_map_render: GainMapRender,
+    /// Whether the decoder bakes EXIF/container orientation into the pixels.
+    /// Default: [`OrientationHint::Preserve`]. See
+    /// [`with_orientation`](Self::with_orientation).
+    orientation: OrientationHint,
 }
 
 impl<'a> DecodeRequest<'a> {
@@ -57,6 +61,7 @@ impl<'a> DecodeRequest<'a> {
             decode_policy: None,
             extract_gain_map: false,
             gain_map_render: GainMapRender::BaseOnly,
+            orientation: OrientationHint::Preserve,
         }
     }
 
@@ -151,6 +156,23 @@ impl<'a> DecodeRequest<'a> {
     ///   equivalent to [`with_gain_map_extraction(true)`](Self::with_gain_map_extraction).
     pub fn with_gain_map_render(mut self, render: GainMapRender) -> Self {
         self.gain_map_render = render;
+        self
+    }
+
+    /// Control whether the decoder bakes EXIF/container orientation into the
+    /// returned pixels.
+    ///
+    /// - [`OrientationHint::Preserve`] (default): return pixels as stored; the
+    ///   orientation lives in the metadata tag (right for tag-carrying targets).
+    /// - [`OrientationHint::Correct`]: bake orientation into the pixels and
+    ///   report [`Orientation::Identity`](zencodec::Orientation::Identity) — the
+    ///   right choice for targets that can't carry an orientation tag (PNG) or
+    ///   for display-ready output.
+    ///
+    /// Currently honored by the JPEG and HEIC decoders (the EXIF-orientation
+    /// formats); other adapters ignore it (no stored orientation to bake).
+    pub fn with_orientation(mut self, hint: OrientationHint) -> Self {
+        self.orientation = hint;
         self
     }
 
@@ -526,6 +548,7 @@ impl<'a> DecodeRequest<'a> {
                 self.stop,
                 dp,
                 self.gain_map_render,
+                self.orientation,
             ),
             #[cfg(not(feature = "jpeg"))]
             ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
@@ -582,6 +605,7 @@ impl<'a> DecodeRequest<'a> {
                 dp,
                 self.gain_map_render,
                 self.extract_gain_map,
+                self.orientation,
             ),
             #[cfg(not(feature = "heic-decode"))]
             ImageFormat::Heic => Err(at!(CodecError::UnsupportedFormat(format))),
@@ -814,6 +838,7 @@ fn extract_jpeg_depth(
         None,
         None,
         GainMapRender::BaseOnly,
+        OrientationHint::Preserve,
     )
     .ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
@@ -873,6 +898,7 @@ fn extract_jpeg_depth(
             None,
             None,
             GainMapRender::BaseOnly,
+            OrientationHint::Preserve,
         )
         .ok()?;
         let conf_gray = conf_output.into_buffer().to_gray8();

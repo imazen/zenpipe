@@ -130,6 +130,7 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
         None,
         None,
         zencodec::GainMapRender::BaseOnly,
+        zencodec::OrientationHint::Preserve,
     )
     .ok()?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;

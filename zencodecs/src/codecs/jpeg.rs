@@ -76,6 +76,7 @@ pub(crate) fn decode(
     stop: Option<StopToken>,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
     gain_map_render: zencodec::GainMapRender,
+    orientation: zencodec::OrientationHint,
 ) -> Result<DecodeOutput> {
     let mut dec = zenjpeg::JpegDecoderConfig::new();
     if let Some(cfg) = codec_config.and_then(|c| c.jpeg_decoder.as_ref()) {
@@ -94,6 +95,8 @@ pub(crate) fn decode(
     // BaseOnly (default) is a no-op; ReconstructHdr makes zenjpeg apply the
     // UltraHDR gain map and emit linear-float HDR pixels (needs `jpeg-ultrahdr`).
     job = job.with_gain_map_render(gain_map_render);
+    // Preserve (default) leaves the EXIF tag authoritative; Correct bakes it.
+    job = job.with_orientation(orientation);
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?
         .decode()

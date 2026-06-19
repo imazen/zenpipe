@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{
     CodecError, DecodeJob, DecodeOutput, DecoderConfig, GainMapRender, ImageFormat, ImageInfo,
-    Limits, StopToken,
+    Limits, OrientationHint, StopToken,
 };
 use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::Decode;
@@ -26,6 +26,7 @@ pub(crate) fn decode(
     decode_policy: Option<zencodec::decode::DecodePolicy>,
     gain_map_render: GainMapRender,
     extract_gain_map: bool,
+    orientation: OrientationHint,
 ) -> Result<DecodeOutput> {
     let mut dec = heic::HeicDecoderConfig::new();
     if extract_gain_map {
@@ -44,6 +45,8 @@ pub(crate) fn decode(
     // BaseOnly (default) is a no-op; ReconstructHdr makes heic apply the gain map
     // and emit linear-float HDR pixels (via ultrahdr-core's reconstruction).
     job = job.with_gain_map_render(gain_map_render);
+    // Preserve (default) leaves the EXIF tag authoritative; Correct bakes it.
+    job = job.with_orientation(orientation);
     let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))?;
     at_crate!(decoder.decode()).map_err_at(|e| CodecError::from_codec(ImageFormat::Heic, e))
