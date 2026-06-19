@@ -185,3 +185,46 @@ fn probe_cmd(input: &Path) -> Result<(), String> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_parses_names_and_extensions() {
+        assert!(matches!(parse_format("png"), Some(ImageFormat::Png)));
+        assert!(matches!(parse_format(".JPG"), Some(ImageFormat::Jpeg)));
+        assert!(matches!(parse_format("jpeg"), Some(ImageFormat::Jpeg)));
+        assert!(matches!(parse_format("WebP"), Some(ImageFormat::WebP)));
+        assert!(matches!(parse_format("avif"), Some(ImageFormat::Avif)));
+        assert!(matches!(parse_format("jxl"), Some(ImageFormat::Jxl)));
+        assert!(parse_format("heic").is_none()); // decode tracked in #68, not an encode target
+        assert!(parse_format("tiff").is_none());
+    }
+
+    #[test]
+    fn matte_parses_rgb_triples() {
+        assert_eq!(parse_matte("0,0,0"), Some([0, 0, 0]));
+        assert_eq!(parse_matte(" 255, 128 ,0 "), Some([255, 128, 0]));
+        assert!(parse_matte("1,2").is_none()); // too few
+        assert!(parse_matte("1,2,3,4").is_none()); // too many
+        assert!(parse_matte("1,2,300").is_none()); // out of u8 range
+    }
+
+    #[test]
+    fn metadata_policy_parses_keywords() {
+        assert!(matches!(
+            parse_metadata_policy("exact"),
+            Some(MetadataPolicy::PreserveExact)
+        ));
+        assert!(matches!(
+            parse_metadata_policy("web"),
+            Some(MetadataPolicy::Web)
+        ));
+        assert!(matches!(
+            parse_metadata_policy("color"),
+            Some(MetadataPolicy::ColorAndRotation)
+        ));
+        assert!(parse_metadata_policy("bogus").is_none());
+    }
+}
