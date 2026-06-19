@@ -279,7 +279,10 @@ impl<'a> DecodeRequest<'a> {
         mut self,
     ) -> Result<(DecodeOutput, Option<crate::gainmap::DecodedGainMap>)> {
         let format = self.resolve_format()?;
-        let data = self.data; // Save reference before consuming self
+        // Borrowed before `self` is consumed below; only the raw-decode-gainmap
+        // match arms read it, so it's unused when that feature is off.
+        #[cfg_attr(not(feature = "raw-decode-gainmap"), allow(unused_variables))]
+        let data = self.data;
         // Enable gain map extraction so codecs attach gain map data to extras.
         self.extract_gain_map = true;
         let output = self.decode_format(format)?;

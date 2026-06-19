@@ -794,20 +794,18 @@ mod tests {
         // rejects (outside the JBRD boundary) or reconstructs the ORIGINAL JPEG
         // byte-for-byte. Never silent corruption.
         let jpeg: &[u8] = include_bytes!("../tests/images/ultrahdr_sample.jpg");
-        match transcode_jpeg_to_jxl_lossless(jpeg, 7) {
-            Ok(out) => {
-                assert_eq!(out.format, ImageFormat::Jxl);
-                let recon = reconstruct_jpeg_from_jxl(&out.data)
-                    .expect("reconstruct must not error on our own transcode")
-                    .expect("our lossless transcode embeds a JBRD reconstruction box");
-                assert_eq!(
-                    recon, jpeg,
-                    "lossless JPEG→JXL→JPEG must reconstruct byte-for-byte"
-                );
-            }
-            // Outside the JBRD boundary (multi-image / unsupported sampling, etc.):
-            // a clean rejection is contract-correct — never a corrupt result.
-            Err(_) => {}
+        // Outside the JBRD boundary (multi-image / unsupported sampling, etc.) a
+        // clean rejection is contract-correct — never a corrupt result — so only
+        // the Ok arm carries assertions.
+        if let Ok(out) = transcode_jpeg_to_jxl_lossless(jpeg, 7) {
+            assert_eq!(out.format, ImageFormat::Jxl);
+            let recon = reconstruct_jpeg_from_jxl(&out.data)
+                .expect("reconstruct must not error on our own transcode")
+                .expect("our lossless transcode embeds a JBRD reconstruction box");
+            assert_eq!(
+                recon, jpeg,
+                "lossless JPEG→JXL→JPEG must reconstruct byte-for-byte"
+            );
         }
     }
 

@@ -77,7 +77,7 @@ pub fn transcode_to_hdr_pq_png(
     // reconstruct on non-HDR input) and resolves the container primaries.
     let base = crate::DecodeRequest::new(data)
         .with_registry(registry)
-        .decode()?;
+        .decode_full_frame()?;
     if !base.info().supplements.gain_map {
         return Ok(None);
     }
@@ -95,7 +95,7 @@ pub fn transcode_to_hdr_pq_png(
         .with_registry(registry)
         .with_orientation(OrientationHint::Correct)
         .reconstruct_hdr(target_headroom)
-        .decode()?;
+        .decode_full_frame()?;
 
     // PQ (ST 2084) quantize. The diffuse-white anchor travels with the pixels
     // (`ColorContext.diffuse_white`), set by the reconstruction.

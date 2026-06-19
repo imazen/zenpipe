@@ -1592,9 +1592,8 @@ fn corpus_ultrahdr_decode_valid() {
             }
         }
         // Try gain map extraction
-        match DecodeRequest::new(&data).decode_gain_map() {
-            Ok((_output, Some(_gm))) => with_gainmap += 1,
-            _ => {}
+        if let Ok((_output, Some(_gm))) = DecodeRequest::new(&data).decode_gain_map() {
+            with_gainmap += 1;
         }
     }
     eprintln!(

@@ -48,6 +48,7 @@ impl DelayedStop {
     }
 
     /// Get the exact instant the flag was set.
+    #[allow(dead_code)] // diagnostic helper, kept for latency-debugging tests
     fn cancel_instant(&self) -> Option<Instant> {
         *self.cancel_time.lock().unwrap()
     }
