@@ -252,6 +252,18 @@ pub fn transcode(
         return Err(at!(CodecError::DisabledFormat(format)));
     }
 
+    // Materialize the decoded buffer first. If the source is HDR (PQ/HLG) and
+    // the target can't carry HDR, tone-map to sRGB here — while `metadata` is
+    // still in hand (it moves into the request below). Fires only for HDR-tagged
+    // f32 buffers targeting an SDR-only format (see `maybe_tonemap_hdr_to_sdr`),
+    // so SDR sources and HDR-capable targets pass through untouched.
+    let buffer = decoded.into_buffer();
+    #[cfg(feature = "tonemap")]
+    let buffer = match crate::tonemap::maybe_tonemap_hdr_to_sdr(&buffer, format, &metadata) {
+        Some(result) => result?,
+        None => buffer,
+    };
+
     // Build the encode request from the decision
     let mut request = crate::EncodeRequest::new(format)
         .with_quality(decision.quality.quality)
@@ -265,8 +277,6 @@ pub fn transcode(
     if let Some(effort) = decision.quality.effort {
         request = request.with_effort(effort);
     }
-
-    let buffer = decoded.into_buffer();
 
     // Passthrough re-embed: carry the source gain map into the target container
     // unchanged. `DecodedGainMap.gain_map` / `.metadata` are already exactly the
