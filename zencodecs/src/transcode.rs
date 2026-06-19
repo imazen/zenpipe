@@ -246,6 +246,14 @@ pub fn transcode(
             .decode_full_frame()?
     };
 
+    // Carry the resolved source color through to the encoder so it emits the right
+    // cICP. Apple HEIC's "unspecified nclx + ICC ⇒ Display P3" resolves into
+    // `source_color`, NOT the EXIF/ICC metadata roundtripped below, and the pixel
+    // descriptor's color-space enum can't represent an arbitrary ICC-resolved primary
+    // set — so without this explicit carrier a wide-gamut HEIC→PNG is silently
+    // mislabeled sRGB. `None` for sRGB-class sources (the encoder's default).
+    let src_cicp = decoded.info().source_color.cicp;
+
     // Step 2: Determine metadata to embed
     let metadata = match opts.metadata.clone() {
         Some(m) => m,
@@ -272,6 +280,7 @@ pub fn transcode(
         .with_quality(decision.quality.quality)
         .with_metadata(metadata)
         .with_metadata_policy(opts.metadata_policy)
+        .with_cicp(src_cicp)
         .with_registry(registry);
 
     if decision.lossless {

@@ -52,6 +52,10 @@ pub struct EncodeRequest<'a> {
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
     image_facts: Option<ImageFacts>,
+    /// Explicit color signal to emit when the pixel descriptor can't carry it
+    /// (e.g. an ICC-resolved source primary set). PNG-only today. See
+    /// [`with_cicp`](Self::with_cicp).
+    cicp: Option<zencodec::Cicp>,
     /// Quality for UltraHDR gain map JPEG (0-100). Only used by `encode_ultrahdr_*`.
     #[cfg(feature = "jpeg-ultrahdr")]
     gainmap_quality: Option<f32>,
@@ -79,6 +83,7 @@ impl<'a> EncodeRequest<'a> {
             policy: None,
             encode_policy: None,
             image_facts: None,
+            cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -104,6 +109,7 @@ impl<'a> EncodeRequest<'a> {
             policy: None,
             encode_policy: None,
             image_facts: None,
+            cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
             gainmap_quality: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -240,6 +246,19 @@ impl<'a> EncodeRequest<'a> {
     pub fn with_color_emit_policy(mut self, policy: ColorEmitPolicy) -> Self {
         let ep = self.encode_policy.unwrap_or_else(EncodePolicy::none);
         self.encode_policy = Some(ep.with_color(policy));
+        self
+    }
+
+    /// Emit an explicit color signal (cICP) that the pixel descriptor's
+    /// color-space enum can't represent — e.g. a source color resolved from an
+    /// ICC profile (Apple HEIC's "unspecified nclx + ICC ⇒ Display P3"), which
+    /// lives in `ImageInfo::source_color`, not the descriptor. Without this the
+    /// encoder falls back to the descriptor's color space and a wide-gamut image
+    /// re-encoded to PNG is silently mislabeled sRGB.
+    ///
+    /// Currently honored by the PNG encoder (writes the `cICP` chunk).
+    pub fn with_cicp(mut self, cicp: Option<zencodec::Cicp>) -> Self {
+        self.cicp = cicp;
         self
     }
 
@@ -500,6 +519,7 @@ impl<'a> EncodeRequest<'a> {
             limits: self.limits,
             stop: self.stop,
             encode_policy: self.encode_policy,
+            cicp: self.cicp,
         };
 
         crate::dispatch::build_streaming_encoder(format, params)
@@ -733,6 +753,7 @@ impl<'a> EncodeRequest<'a> {
             limits: self.limits,
             stop: self.stop.clone(),
             encode_policy: self.encode_policy,
+            cicp: self.cicp,
         };
 
         let built = crate::dispatch::build_encoder(format, params)?;

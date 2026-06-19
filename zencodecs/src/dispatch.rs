@@ -25,6 +25,11 @@ pub(crate) struct EncodeParams<'a> {
     pub limits: Option<&'a Limits>,
     pub stop: Option<StopToken>,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
+    /// Explicit color signal to emit (e.g. a source `source_color` resolved from
+    /// an ICC profile that the pixel descriptor's color-space enum can't carry).
+    /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
+    /// derive color from the pixel descriptor as before.
+    pub cicp: Option<zencodec::Cicp>,
 }
 
 /// Type-erased one-shot encode closure.

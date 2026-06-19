@@ -48,8 +48,14 @@ pub(crate) fn build_encoding(
     effort: Option<u32>,
     lossless: bool,
     codec_config: Option<&CodecConfig>,
+    cicp: Option<zencodec::Cicp>,
 ) -> zenpng::PngEncoderConfig {
     let mut enc = zenpng::PngEncoderConfig::new();
+    // Explicit color signal (e.g. an ICC-resolved source primary set the pixel
+    // descriptor's color-space enum can't carry) → emit it as the PNG cICP chunk.
+    if cicp.is_some() {
+        enc = enc.with_cicp(cicp);
+    }
     if let Some(cfg) = codec_config {
         if let Some(compression) = cfg.png_compression {
             enc = enc.with_compression(compression);
@@ -79,14 +85,14 @@ use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_c
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(
-        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config, p.cicp),
         params,
     )
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
-        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config, p.cicp),
         params,
     )
 }

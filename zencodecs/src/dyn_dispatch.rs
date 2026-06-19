@@ -586,6 +586,7 @@ pub(crate) fn dyn_animation_frame_encoder(
                 params.effort,
                 params.lossless,
                 params.codec_config,
+                None, // explicit cICP not threaded through the animation path yet
             ))
         }
 
