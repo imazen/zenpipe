@@ -11,8 +11,8 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use zencodecs::{
-    transcode, transcode_to_quality, AllowedFormats, FormatDecision, ImageFormat, QualityIntent,
-    QualityTarget, TranscodeOptions,
+    transcode, transcode_to_quality, AllowedFormats, FormatDecision, ImageFormat, MetadataPolicy,
+    QualityIntent, QualityTarget, TranscodeOptions,
 };
 
 #[derive(Parser)]
@@ -52,9 +52,35 @@ struct ConvertArgs {
     /// Minimally-lossless: smallest size meeting this zensim-A score (0–100) vs the original.
     #[arg(long, conflicts_with = "quality")]
     target_quality: Option<f32>,
+    /// Metadata retention: exact (verbatim) | preserve | web (strip GPS/camera/
+    /// timestamps, keep orientation+color) | color (color+rotation only). Default: exact.
+    #[arg(long)]
+    metadata: Option<String>,
+    /// Matte color "R,G,B" for alpha→opaque (e.g. RGBA→JPEG). Default white.
+    #[arg(long)]
+    matte: Option<String>,
     /// Quiet: suppress the per-file summary on stderr.
     #[arg(short, long)]
     quiet: bool,
+}
+
+fn parse_metadata_policy(s: &str) -> Option<MetadataPolicy> {
+    Some(match s.trim().to_ascii_lowercase().as_str() {
+        "exact" | "preserve-exact" => MetadataPolicy::PreserveExact,
+        "preserve" => MetadataPolicy::Preserve,
+        "web" => MetadataPolicy::Web,
+        "color" | "color-and-rotation" => MetadataPolicy::ColorAndRotation,
+        _ => return None,
+    })
+}
+
+fn parse_matte(s: &str) -> Option<[u8; 3]> {
+    let mut it = s.split(',').map(|c| c.trim().parse::<u8>().ok());
+    let rgb = [it.next()??, it.next()??, it.next()??];
+    if it.next().is_some() {
+        return None; // more than 3 components
+    }
+    Some(rgb)
 }
 
 /// Map a format name or extension to an [`ImageFormat`] the encoder supports.
@@ -113,7 +139,14 @@ fn convert(a: ConvertArgs) -> Result<(), String> {
     };
 
     let registry = AllowedFormats::all();
-    let opts = TranscodeOptions::default();
+    let mut opts = TranscodeOptions::default();
+    if let Some(m) = &a.metadata {
+        opts.metadata_policy =
+            parse_metadata_policy(m).ok_or_else(|| format!("unknown --metadata '{m}'"))?;
+    }
+    if let Some(m) = &a.matte {
+        opts.matte = Some(parse_matte(m).ok_or_else(|| format!("bad --matte '{m}' (want R,G,B)"))?);
+    }
     let out = if let Some(tq) = a.target_quality {
         // Minimally-lossless: smallest byte size meeting the zensim-A target.
         transcode_to_quality(&data, fmt, QualityTarget::Absolute(tq), &opts, &registry)
