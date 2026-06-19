@@ -1,6 +1,11 @@
-# Local dogfood override (gitignored). Builds zenpipe/zencodecs against the
-# in-tree zenpixels 0.2.14 (S1a/S2) + zencodec (S1b) before they publish, so S4
-# (the transcode HDR step) can be implemented + verified against real code.
-# zenjxl stays git-patched (see [patch.crates-io]); it picks up the local
-# zenpixels too via this override. Drop once zenpixels 0.2.14 / zencodec ship.
-paths = ["../zenpixels/zenpixels", "../zenpixels/zenpixels-convert", "../zencodec"]
+# Local dogfood override (gitignored) — NOW SUPERSEDED.
+#
+# The former `paths = [...]` override (zencodec / zenpixels / zenpixels-convert →
+# local checkouts) was moved into `[patch.crates-io]` in Cargo.toml. Reason: a
+# `paths` override cannot lock a crate that becomes a *new* dependency of a git
+# dep — adding `heic` (which pulls `zencodec`) made cargo bail with "found an
+# override with a non-locked list". `[patch]` handles that case. The patch tracks
+# the same imazen git mains the override pointed at (zencodec 0.1.23 / zenpixels
+# 0.2.15), so the dogfood intent is preserved; it just locks cleanly now.
+#
+# (Intentionally empty — no active override here.)

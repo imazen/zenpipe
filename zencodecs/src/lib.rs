@@ -117,10 +117,6 @@
 // wired yet; enabling one can only produce a flood of unresolved-item
 // errors. Surface the configuration error as one clear message instead.
 // Delete the guard (and wire the dependency) when a backend lands.
-#[cfg(feature = "heic-decode")]
-compile_error!(
-    "zencodecs feature `heic-decode` is a stub: no heic decoder dependency is wired yet (zenpipe#43)"
-);
 #[cfg(feature = "bitmaps-qoi")]
 compile_error!(
     "zencodecs feature `bitmaps-qoi` is a stub: zenbitmaps QOI configs are not wired yet (zenpipe#43)"

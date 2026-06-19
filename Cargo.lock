@@ -1246,6 +1246,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "heic"
+version = "0.2.0"
+source = "git+https://github.com/imazen/heic#3fe1110ce51b05f40580724f2c0beb7e5f043911"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "enough",
+ "garb",
+ "heic-core",
+ "imgref",
+ "magetypes",
+ "memchr",
+ "rgb",
+ "safe_unaligned_simd",
+ "ultrahdr-core",
+ "whereat",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "heic-core"
+version = "0.2.0"
+source = "git+https://github.com/imazen/heic#3fe1110ce51b05f40580724f2c0beb7e5f043911"
+dependencies = [
+ "archmage",
+ "enough",
+ "magetypes",
+ "safe_unaligned_simd",
+ "whereat",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4425,9 +4458,8 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7caa71c10074d2ab050aa1e0e9aa519822c4e5f282a8e4cdfe970b96fb3d5da"
+version = "0.1.23"
+source = "git+https://github.com/imazen/zencodec#41fabfbb54d36588a5a4156f1e5c4bc0e5cb74ef"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4443,6 +4475,7 @@ dependencies = [
  "codec-corpus",
  "enough",
  "fast-ssim2",
+ "heic",
  "imgref",
  "linear-srgb",
  "moxcms 0.8.1",
@@ -4760,9 +4793,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7337f9cebf33aabd9bf27b8bd87f883a18d276b64a36b139c53eb077e1089b7f"
+version = "0.2.15"
+source = "git+https://github.com/imazen/zenpixels#799d4ee0fd867d45eb681937d5d23d815dfb0971"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -4772,9 +4804,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab45d752d4211a62c95c3e8bf3a6959ccab1fa8c3ae47ea4ee6584d93614332f"
+version = "0.2.15"
+source = "git+https://github.com/imazen/zenpixels#799d4ee0fd867d45eb681937d5d23d815dfb0971"
 dependencies = [
  "archmage",
  "bytemuck",

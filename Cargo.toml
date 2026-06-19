@@ -215,6 +215,16 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+# heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
+# resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
+heic = { git = "https://github.com/imazen/heic" }
+# zencodec 0.1.23 / zenpixels(-convert) 0.2.15 — formerly a local `paths` override
+# in .cargo/config.toml, moved here so the `heic` edge (which pulls zencodec) can be
+# locked. `paths` overrides can't lock a crate newly depended-on by a git dep
+# ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
+zencodec = { git = "https://github.com/imazen/zencodec" }
+zenpixels = { git = "https://github.com/imazen/zenpixels" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # ultrahdr-core main adds `full_reconstruction_boost` (the canonical f32 boost
 # route the zenjpeg / zenavif / heic ReconstructHdr paths call); crates.io 0.5.0
 # predates it, so the git-patched zenjpeg main above fails to compile against the

@@ -17,5 +17,7 @@ zencodecs = { path = "../zencodecs", features = [
     "jxl-encode",
     "jpeg-jxl-transcode",
     "transcode-iqa",
+    "heic-decode",
+    "jpeg-ultrahdr",
 ] }
 clap = { version = "4.6.0", features = ["derive"] }
