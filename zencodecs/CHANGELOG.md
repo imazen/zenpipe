@@ -6,6 +6,17 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **`parse_exif` now returns `Result<ExifData, whereat::At<ExifError>>`** (was bare
+  `ExifError`): the EXIF/TIFF parse-failure site — including deep failures in
+  `parse_ifd` (chained IFD offsets) — now survives in the whereat trace. Header
+  checks and the deep IFD call are wrapped with `at!`. `.ok()` / `.unwrap_err()`
+  callers are unaffected; pattern-matching callers read the variant via `.error()`
+  / `.decompose()`. Breaking (inner variant unchanged; only the `At<>` wrapper is
+  added). Regression test: `exif::tests::parse_exif_error_carries_whereat_trace`.
+  `DepthImageInfo::validate` intentionally stays bare `CodecError` (self-describing,
+  single-origin — fine per the whereat doctrine).
+
 ### Added
 - **Metadata retention policy** (zencodec 0.1.21 adoption):
   `EncodeRequest::with_metadata_policy(MetadataPolicy)` and

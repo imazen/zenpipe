@@ -28,6 +28,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::DecodeOutput;
+use whereat::{At, at};
 
 // =========================================================================
 // Public types
@@ -765,7 +766,7 @@ fn parse_gps_ifd(reader: &Reader<'_>, ifd: &ParsedIfd, exif: &mut ExifData) {
 ///
 /// Returns structured EXIF data with all recognized fields populated.
 /// Unrecognized or malformed tags are silently skipped.
-pub fn parse_exif(data: &[u8]) -> Result<ExifData, ExifError> {
+pub fn parse_exif(data: &[u8]) -> Result<ExifData, At<ExifError>> {
     // Strip JPEG-style "Exif\0\0" prefix if present.
     let data = if data.len() >= 6 && &data[..6] == b"Exif\0\0" {
         &data[6..]
@@ -775,34 +776,34 @@ pub fn parse_exif(data: &[u8]) -> Result<ExifData, ExifError> {
 
     // Need at least 8 bytes for the TIFF header.
     if data.len() < 8 {
-        return Err(ExifError::TooShort);
+        return Err(at!(ExifError::TooShort));
     }
 
     // Parse byte order.
     let little_endian = match &data[..2] {
         b"II" => true,
         b"MM" => false,
-        _ => return Err(ExifError::InvalidByteOrder),
+        _ => return Err(at!(ExifError::InvalidByteOrder)),
     };
 
     let reader = Reader::new(data, little_endian);
 
     // Check TIFF magic number (42).
-    let magic = reader.u16_at(2).ok_or(ExifError::TooShort)?;
+    let magic = reader.u16_at(2).ok_or_else(|| at!(ExifError::TooShort))?;
     if magic != 42 {
-        return Err(ExifError::InvalidTiffMagic);
+        return Err(at!(ExifError::InvalidTiffMagic));
     }
 
     // Get IFD0 offset.
-    let ifd0_offset = reader.u32_at(4).ok_or(ExifError::TooShort)? as usize;
+    let ifd0_offset = reader.u32_at(4).ok_or_else(|| at!(ExifError::TooShort))? as usize;
     if ifd0_offset >= data.len() {
-        return Err(ExifError::OffsetOutOfBounds);
+        return Err(at!(ExifError::OffsetOutOfBounds));
     }
 
     let mut exif = ExifData::default();
 
     // Parse IFD0.
-    let ifd0 = parse_ifd(&reader, ifd0_offset)?;
+    let ifd0 = parse_ifd(&reader, ifd0_offset).map_err(|e| at!(e))?;
     parse_ifd0_tags(&reader, &ifd0, &mut exif);
 
     // Follow EXIF IFD pointer.
@@ -1837,13 +1838,16 @@ mod tests {
 
     #[test]
     fn error_empty_data() {
-        assert!(matches!(parse_exif(&[]), Err(ExifError::TooShort)));
+        assert!(matches!(
+            parse_exif(&[]).map_err(|e| e.decompose().0),
+            Err(ExifError::TooShort)
+        ));
     }
 
     #[test]
     fn error_too_short() {
         assert!(matches!(
-            parse_exif(&[0x49, 0x49, 0x2A]),
+            parse_exif(&[0x49, 0x49, 0x2A]).map_err(|e| e.decompose().0),
             Err(ExifError::TooShort)
         ));
     }
@@ -1852,7 +1856,7 @@ mod tests {
     fn error_invalid_byte_order() {
         let data = [b'X', b'X', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x08];
         assert!(matches!(
-            parse_exif(&data),
+            parse_exif(&data).map_err(|e| e.decompose().0),
             Err(ExifError::InvalidByteOrder)
         ));
     }
@@ -1862,7 +1866,7 @@ mod tests {
         // II header but magic=99 instead of 42
         let data = [b'I', b'I', 0x63, 0x00, 0x08, 0x00, 0x00, 0x00];
         assert!(matches!(
-            parse_exif(&data),
+            parse_exif(&data).map_err(|e| e.decompose().0),
             Err(ExifError::InvalidTiffMagic)
         ));
     }
@@ -1872,9 +1876,22 @@ mod tests {
         // Valid header but IFD offset points past end
         let data = [b'I', b'I', 0x2A, 0x00, 0xFF, 0xFF, 0x00, 0x00];
         assert!(matches!(
-            parse_exif(&data),
+            parse_exif(&data).map_err(|e| e.decompose().0),
             Err(ExifError::OffsetOutOfBounds)
         ));
+    }
+
+    #[test]
+    fn parse_exif_error_carries_whereat_trace() {
+        // Regression: parse_exif returns At<ExifError> so the parse-failure
+        // site (possibly deep, via parse_ifd) survives in the whereat trace.
+        let Err(err) = parse_exif(&[]) else {
+            panic!("expected parse error on empty input");
+        };
+        assert!(
+            err.frame_count() >= 1,
+            "whereat trace lost on parse_exif error"
+        );
     }
 
     #[test]
