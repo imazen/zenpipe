@@ -54,6 +54,9 @@ members = ["."]
 # are not in `paths`, so they stay here.
 [patch.crates-io]
 zenavif-parse = { path = "../../../zenavif-parse" }
+# zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
+# bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
+zenbitmaps = { path = "../../../zenbitmaps" }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
 # Needed by the jpeg-ultrahdr feature (gain-map decode). As a real path-patch
 # its `zencodec = { workspace = true }` resolves against its own workspace root

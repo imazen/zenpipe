@@ -43,7 +43,7 @@ zenjxl = { version = "0.2.1", optional = true, default-features = false, feature
 # git patch tracks zenjxl-decoder main (mode-aware orientation API, post-0.3.10).
 zenjxl-decoder = { version = "0.3.8", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
-zenbitmaps = { version = "0.1.5", optional = true, features = ["zencodec"] }
+zenbitmaps = { version = "0.2.0", optional = true, features = ["zencodec"] }
 zenraw = { version = "0.2.0", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
 # PDF page rendering via the hayro engine (decode-only; renders pages to RGBA8).
 # Optional and out of default — hayro is a heavy dependency.

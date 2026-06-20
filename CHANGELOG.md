@@ -9,6 +9,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **PNM decode-bomb OOM in `zencodecs::fuzz_push_decode` bounded (zenpipe#50).**
+  Bumped the `zenbitmaps` dependency `0.1.3`/`0.1.5` → `0.2.0` (the
+  `At<BitmapError>` error wrapper + a 120 MP default pixel cap + the 16-bit
+  ASCII PNM roundtrip fix, fuzz zenbitmaps#7/#10) and added a git
+  `[patch.crates-io]` entry for it (path patch in `zencodecs/fuzz`) since 0.2.0
+  is unpublished. zencodecs' PNM adapter now rejects oversized headers at the
+  pre-allocation dimension check: a crafted `P2`/`P3`/`P5` bomb returns
+  `LimitExceeded` instead of allocating gigabytes — verified end-to-end through
+  `DecodeRequest` (a 2 000 000-wide header → `Err`, 0.76 GiB peak RSS, no
+  OOM/panic). The bump also lets the fuzz farm's superwork sibling-clone of
+  `zenbitmaps`-main satisfy the requirement (was pinned `^0.1.5`, which 0.2.0
+  couldn't match). The RAW/TIFF facet of #50 was already gated (961acad1).
+  Follow-up: publish `zenbitmaps` 0.2.0 to crates.io before any zencodecs
+  crates.io release (the git patch covers bare-clone / farm builds until then).
+
 - **`wasm-size-shim` builds again; "WASM Benchmark" workflow un-redded**
   (red since 2026-06-01): excluded the shim from the root workspace (it
   keeps its own lockfile, same rationale as `demo/crate`), ported it off
