@@ -50,6 +50,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   `cargo superwork patch`/`unpatch`. Full CI test matrix verified green
   under the registry+git resolution.
 
+#### Changed
+
+- **deps: migrate to published `zencodec 0.1.24`; drop the git-rev patch.**
+  Bumped the workspace `zencodec` dependency `0.1.16` → `0.1.24` and removed the
+  `[patch.crates-io] zencodec = { git = … }` entry now that `zencodec 0.1.24` is
+  on crates.io. Every edge — including the `heic` → zencodec one the patch was
+  added to lock — now resolves zencodec from the registry (`source =
+  registry+…` in `Cargo.lock`). `zenpixels` / `zenpixels-convert` stay
+  git-patched (their mains aren't published yet) and the rest of the patch
+  table is unchanged. No code changes: zenpipe's own `ResourceEstimate`
+  (`src/graph.rs`) is an independent local type, and nothing in the workspace
+  reads zencodec's `estimate` / `ResourceEstimate` API. `cargo test
+  --all-targets`, the broad `zencodecs` member test, and the `job-ultrahdr`
+  gain-map round-trip suite all pass.
+
 ## zeneditor
 
 ### [Unreleased]

@@ -188,7 +188,7 @@ bytemuck = { version = "1.25", default-features = false, features = ["extern_cra
 linear-srgb = { version = "0.6.8", default-features = false }
 zenpixels = { version = "0.2.10", default-features = false }
 zenpixels-convert = { version = "0.2.10", default-features = false }
-zencodec = { version = "0.1.16", default-features = false }
+zencodec = { version = "0.1.24", default-features = false }
 # ── Serialization ──
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -218,11 +218,13 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
 heic = { git = "https://github.com/imazen/heic" }
-# zencodec 0.1.23 / zenpixels(-convert) 0.2.15 — formerly a local `paths` override
-# in .cargo/config.toml, moved here so the `heic` edge (which pulls zencodec) can be
+# zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
+# .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-zencodec = { git = "https://github.com/imazen/zencodec" }
+# `zencodec` is NOT patched: 0.1.24 is on crates.io now (workspace dep bumped to
+# match), so every edge — including the `heic` → zencodec one — resolves it from
+# the registry.
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # ultrahdr-core main adds `full_reconstruction_boost` (the canonical f32 boost
