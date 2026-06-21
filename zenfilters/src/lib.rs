@@ -92,7 +92,6 @@ mod filter;
 pub mod filter_compat;
 pub mod filters;
 mod fused_params;
-mod gamut_lut;
 mod gamut_map;
 pub mod masked;
 pub mod metric_gate;

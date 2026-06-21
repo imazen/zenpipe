@@ -4795,7 +4795,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.15"
-source = "git+https://github.com/imazen/zenpixels#799d4ee0fd867d45eb681937d5d23d815dfb0971"
+source = "git+https://github.com/imazen/zenpixels#52fd949811b04855e26d2b6b6841c787d493ad66"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -4806,11 +4806,12 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.15"
-source = "git+https://github.com/imazen/zenpixels#799d4ee0fd867d45eb681937d5d23d815dfb0971"
+source = "git+https://github.com/imazen/zenpixels#52fd949811b04855e26d2b6b6841c787d493ad66"
 dependencies = [
  "archmage",
  "bytemuck",
  "garb",
+ "libm",
  "linear-srgb",
  "lz4_flex 0.13.1",
  "magetypes",

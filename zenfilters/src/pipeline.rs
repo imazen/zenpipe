@@ -6,10 +6,10 @@ use zenpixels_convert::oklab;
 
 use crate::context::FilterContext;
 use crate::filter::Filter;
-use crate::gamut_lut::GamutBoundaryLut;
 use crate::gamut_map::GamutMapping;
 use crate::planes::OklabPlanes;
 use crate::scatter_gather::scatter_to_oklab;
+use zenpixels_convert::hdr::GamutBoundaryLut;
 
 /// Compute the number of core rows per strip for L3-friendly processing.
 ///

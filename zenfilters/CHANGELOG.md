@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- **`GamutBoundaryLut` (and its rational soft-compress kernel) moved to
+  `zenpixels_convert::hdr::{GamutBoundaryLut, SoftCompress}`** behind the
+  `hdr-experimental` feature on `zenpixels-convert`. zenfilters now consumes
+  that crate's copy through the `Pipeline` `SoftCompress` mapping path — the
+  in-crate `gamut_lut.rs` module is deleted and the `zenpixels-convert`
+  dependency picked up the `hdr-experimental` feature. No public-API change
+  on zenfilters: `GamutMapping::SoftCompress { knee }` still does the same
+  thing for the same callers.
+
 ### Fixed
 - Convenience encode path (`convenience.rs`) now PRESERVES the `whereat` trace from
   `zenpixels-convert` conversion errors: replaced the trace-dropping

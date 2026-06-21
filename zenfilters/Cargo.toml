@@ -37,7 +37,7 @@ rgb = { version = "0.8", default-features = false, features = ["bytemuck"], opti
 zenpixels = { version = "0.2.10", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
-zenpixels-convert = { version = "0.2.10" }
+zenpixels-convert = { version = "0.2.15", features = ["hdr-experimental"] }
 zenquant = { version = "0.1.2", default-features = false, optional = true }
 
 [dev-dependencies]
