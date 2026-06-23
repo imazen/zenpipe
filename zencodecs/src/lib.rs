@@ -155,6 +155,8 @@ pub mod config;
 pub mod decision;
 mod decode;
 pub mod estimate;
+#[cfg(feature = "picker")]
+pub mod picker;
 pub mod depthmap;
 mod dispatch;
 mod dyn_dispatch;
@@ -205,6 +207,8 @@ pub use estimate::{
 pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 pub use select::ImageFacts;
 pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
+#[cfg(feature = "picker")]
+pub use picker::MlpFormatPicker;
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,

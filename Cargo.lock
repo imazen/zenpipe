@@ -4498,9 +4498,11 @@ dependencies = [
  "zenjxl-decoder",
  "zennode",
  "zenpdf",
+ "zenpicker",
  "zenpixels",
  "zenpixels-convert",
  "zenpng",
+ "zenpredict 0.2.0",
  "zenraw",
  "zensim",
  "zensim-regress",
@@ -4742,6 +4744,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenpicker"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenanalyze#46543597d3de000a2870ed1ff54c21be6dd5f9ee"
+dependencies = [
+ "zenpredict 0.2.0",
+]
+
+[[package]]
 name = "zenpipe"
 version = "0.1.0"
 dependencies = [
@@ -4846,6 +4856,16 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenquant",
+]
+
+[[package]]
+name = "zenpredict"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze#46543597d3de000a2870ed1ff54c21be6dd5f9ee"
+dependencies = [
+ "bytemuck",
+ "libm",
+ "lz4_flex 0.11.6",
 ]
 
 [[package]]
@@ -5012,7 +5032,7 @@ dependencies = [
  "rayon",
  "rgb",
  "thiserror 2.0.18",
- "zenpredict",
+ "zenpredict 0.2.1",
 ]
 
 [[package]]
