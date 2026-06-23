@@ -114,9 +114,16 @@ pub fn estimate_decode(
         ImageFormat::Bmp => {
             zenbitmaps::BmpDecoderConfig::new().estimate_decode_resources(image, compute)
         }
-        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43);
-        // RAW is ImageFormat::Custom(DNG/RAW), needing a Custom-matching arm — both
-        // fall through to unknown() until wired.
+        #[cfg(feature = "pdf-decode")]
+        ImageFormat::Pdf => {
+            zenpdf::PdfDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
+        #[cfg(feature = "raw-decode")]
+        ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
+            zenraw::RawDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
+        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43) —
+        // it falls through to unknown() until that integration lands.
         _ => ResourceEstimate::unknown(),
     }
 }
