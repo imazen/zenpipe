@@ -77,6 +77,29 @@ pub struct FormatSelection {
     pub trace: SelectionTrace,
 }
 
+/// Pluggable, content-aware output-format chooser.
+///
+/// Given a per-image `features` vector (e.g. a zenanalyze feature extraction) and
+/// the set of `candidates` that have **already passed every hard constraint**
+/// (registered + compiled, allowed by policy, and lossless-capable when lossless
+/// is required), return the one to use — or `None` to defer to the built-in
+/// heuristic preference order.
+///
+/// The picker can only ever *re-rank* already-valid candidates; it can never
+/// widen the allowed set, so alpha/animation/lossless correctness and the codec
+/// policy are enforced by the caller regardless of what the picker returns.
+///
+/// The actual ML picker (zenpicker + an MLP over zenanalyze features) lives
+/// outside this crate so the publishable core takes no model or analysis
+/// dependency — a consumer injects an implementation here. An empty/absent
+/// `features` slice or a `None` return both fall back to the heuristic.
+pub trait FormatPicker {
+    /// Choose one of `candidates` for content described by `features`, or `None`
+    /// to use the heuristic order. A returned format not in `candidates` is
+    /// ignored (treated as `None`).
+    fn pick(&self, features: &[f32], candidates: &[ImageFormat]) -> Option<ImageFormat>;
+}
+
 /// Select the best output format for encoding.
 ///
 /// Considers image facts, encoding intent, policy restrictions, and
@@ -97,6 +120,33 @@ pub fn select_format(
     intent: &QualityIntent,
     registry: &AllowedFormats,
     policy: &CodecPolicy,
+) -> crate::Result<FormatSelection> {
+    select_format_inner(facts, intent, registry, policy, None, None)
+}
+
+/// Like [`select_format`], but an injected content-aware [`FormatPicker`] chooses
+/// among the candidates that pass every hard constraint (registry, policy,
+/// lossless). The picker only re-ranks already-valid formats — it cannot widen
+/// the allowed set. A `None` from the picker, an out-of-set answer, or absent
+/// `features` all fall back to the built-in heuristic preference order.
+pub fn select_format_with_picker(
+    facts: &ImageFacts,
+    intent: &QualityIntent,
+    registry: &AllowedFormats,
+    policy: &CodecPolicy,
+    picker: Option<&dyn FormatPicker>,
+    features: Option<&[f32]>,
+) -> crate::Result<FormatSelection> {
+    select_format_inner(facts, intent, registry, policy, picker, features)
+}
+
+fn select_format_inner(
+    facts: &ImageFacts,
+    intent: &QualityIntent,
+    registry: &AllowedFormats,
+    policy: &CodecPolicy,
+    picker: Option<&dyn FormatPicker>,
+    features: Option<&[f32]>,
 ) -> crate::Result<FormatSelection> {
     let mut trace = SelectionTrace::new();
 
@@ -128,23 +178,46 @@ pub fn select_format(
 
     let preference_order = build_preference_order(facts, intent);
 
+    // Candidates that pass every hard constraint, kept in heuristic order so the
+    // first is the heuristic's choice and the whole list is what the picker sees.
+    let mut valid: alloc::vec::Vec<(ImageFormat, &'static str)> = alloc::vec::Vec::new();
     for (format, reason) in &preference_order {
         if try_format(*format, &mut trace) {
-            trace.push(SelectionStep::FormatChosen {
-                format: *format,
-                reason,
-            });
-            return Ok(FormatSelection {
-                format: *format,
-                trace,
+            valid.push((*format, *reason));
+        }
+    }
+
+    if valid.is_empty() {
+        trace.push(SelectionStep::Info {
+            message: "no suitable format found in preference order",
+        });
+        return Err(whereat::at!(CodecError::NoSuitableEncoder));
+    }
+
+    // Let an injected content-aware picker re-rank among the valid candidates.
+    // It can only choose one that already passed every constraint; an absent
+    // picker/features, a `None`, or an out-of-set answer uses the heuristic head.
+    if let (Some(picker), Some(features)) = (picker, features)
+        && !features.is_empty()
+    {
+        let candidates: alloc::vec::Vec<ImageFormat> = valid.iter().map(|(f, _)| *f).collect();
+        if let Some(chosen) = picker.pick(features, &candidates) {
+            if candidates.contains(&chosen) {
+                trace.push(SelectionStep::FormatChosen {
+                    format: chosen,
+                    reason: "content-aware picker",
+                });
+                return Ok(FormatSelection { format: chosen, trace });
+            }
+            trace.push(SelectionStep::Info {
+                message: "picker returned a non-candidate format; using heuristic order",
             });
         }
     }
 
-    trace.push(SelectionStep::Info {
-        message: "no suitable format found in preference order",
-    });
-    Err(whereat::at!(CodecError::NoSuitableEncoder))
+    let (format, reason) = valid[0];
+    trace.push(SelectionStep::FormatChosen { format, reason });
+    Ok(FormatSelection { format, trace })
 }
 
 /// Select the best output format from a [`CodecIntent`] and image facts.
@@ -159,11 +232,31 @@ pub fn select_format(
 ///
 /// For `FormatChoice::Keep`, the `source_format` from ImageFacts is used.
 /// If `source_format` is `None` and format is `Keep`, falls back to auto-selection.
+///
+/// This is the picker-less entry; see [`select_format_from_intent_with_picker`]
+/// to inject a content-aware [`FormatPicker`] for the auto-selection path.
 pub fn select_format_from_intent(
     intent: &CodecIntent,
     facts: &ImageFacts,
     registry: &AllowedFormats,
     policy: &CodecPolicy,
+) -> crate::Result<FormatDecision> {
+    select_format_from_intent_with_picker(intent, facts, registry, policy, None, None)
+}
+
+/// Like [`select_format_from_intent`], but an injected content-aware
+/// [`FormatPicker`] (over a per-image `features` vector) chooses among the valid
+/// candidates whenever the format resolves via auto-selection (`FormatChoice::Auto`,
+/// or a `Keep` whose source format isn't encodable). An explicit
+/// `FormatChoice::Specific` request ignores the picker. A `None`/empty `features`
+/// slice or a `None` pick falls back to the heuristic preference order.
+pub fn select_format_from_intent_with_picker(
+    intent: &CodecIntent,
+    facts: &ImageFacts,
+    registry: &AllowedFormats,
+    policy: &CodecPolicy,
+    picker: Option<&dyn FormatPicker>,
+    features: Option<&[f32]>,
 ) -> crate::Result<FormatDecision> {
     let lossless = intent.resolve_lossless(facts.is_lossless_source);
     let quality_value = intent.effective_quality();
@@ -208,6 +301,8 @@ pub fn select_format_from_intent(
                         registry,
                         policy,
                         &intent.allowed,
+                        picker,
+                        features,
                     )?;
                     trace_steps.extend(sel.trace.steps().iter().cloned());
                     sel.format
@@ -223,6 +318,8 @@ pub fn select_format_from_intent(
                     registry,
                     policy,
                     &intent.allowed,
+                    picker,
+                    features,
                 )?;
                 trace_steps.extend(sel.trace.steps().iter().cloned());
                 sel.format
@@ -235,6 +332,8 @@ pub fn select_format_from_intent(
                 registry,
                 policy,
                 &intent.allowed,
+                picker,
+                features,
             )?;
             trace_steps.extend(sel.trace.steps().iter().cloned());
             sel.format
@@ -261,6 +360,8 @@ fn select_format_with_allowed(
     registry: &AllowedFormats,
     policy: &CodecPolicy,
     allowed: &FormatSet,
+    picker: Option<&dyn FormatPicker>,
+    features: Option<&[f32]>,
 ) -> crate::Result<FormatSelection> {
     // Create a merged policy that intersects with the allowed set
     let effective_policy = if *allowed != FormatSet::all() {
@@ -274,7 +375,7 @@ fn select_format_with_allowed(
         policy.clone()
     };
 
-    select_format(facts, intent, registry, &effective_policy)
+    select_format_inner(facts, intent, registry, &effective_policy, picker, features)
 }
 
 /// Available output formats, filtered by registry and policy.
@@ -358,6 +459,83 @@ mod tests {
         select_format(facts, intent, &registry, &policy)
             .unwrap()
             .format
+    }
+
+    /// A `FormatPicker` returning a fixed answer regardless of features — used to
+    /// prove the seam honors a valid pick and defends against invalid ones.
+    struct FixedPicker(Option<ImageFormat>);
+    impl FormatPicker for FixedPicker {
+        fn pick(&self, _features: &[f32], _candidates: &[ImageFormat]) -> Option<ImageFormat> {
+            self.0
+        }
+    }
+
+    #[test]
+    fn format_picker_reranks_only_valid_candidates() {
+        let facts = ImageFacts {
+            pixel_count: 1_000_000,
+            ..Default::default()
+        };
+        let intent = QualityIntent::from_quality(73.0); // lossy opaque
+        let registry = AllowedFormats::all();
+        let policy = CodecPolicy::new();
+        let features = [0.5_f32, 0.5, 0.5, 0.5];
+
+        // Heuristic head with no picker. JPEG/WebP/PNG are always compiled here.
+        let head = select_format(&facts, &intent, &registry, &policy)
+            .unwrap()
+            .format;
+        // A different, definitely-valid candidate for a lossy opaque still.
+        let target = if head == ImageFormat::Jpeg {
+            ImageFormat::WebP
+        } else {
+            ImageFormat::Jpeg
+        };
+
+        // 1) The picker's valid choice overrides the heuristic head, attributed.
+        let p = FixedPicker(Some(target));
+        let sel =
+            select_format_with_picker(&facts, &intent, &registry, &policy, Some(&p), Some(&features))
+                .unwrap();
+        assert_eq!(sel.format, target, "picker's valid choice should win");
+        assert!(
+            sel.trace.steps().iter().any(|s| matches!(
+                s,
+                SelectionStep::FormatChosen { reason: "content-aware picker", .. }
+            )),
+            "picker decision should be recorded in the trace"
+        );
+
+        // 2) `None` falls back to the heuristic head.
+        let sel = select_format_with_picker(
+            &facts,
+            &intent,
+            &registry,
+            &policy,
+            Some(&FixedPicker(None)),
+            Some(&features),
+        )
+        .unwrap();
+        assert_eq!(sel.format, head);
+
+        // 3) An out-of-candidate pick (Gif is never valid for a lossy opaque
+        //    still) is ignored — the picker cannot widen the allowed set.
+        let sel = select_format_with_picker(
+            &facts,
+            &intent,
+            &registry,
+            &policy,
+            Some(&FixedPicker(Some(ImageFormat::Gif))),
+            Some(&features),
+        )
+        .unwrap();
+        assert_eq!(sel.format, head, "out-of-candidate pick must be ignored");
+
+        // 4) Empty features bypass the picker entirely.
+        let sel =
+            select_format_with_picker(&facts, &intent, &registry, &policy, Some(&p), Some(&[]))
+                .unwrap();
+        assert_eq!(sel.format, head);
     }
 
     #[test]

@@ -198,7 +198,7 @@ pub use registry::AllowedFormats;
 #[cfg(feature = "riapi")]
 pub use riapi_parse::{CodecEngine, parse_codec_keys};
 pub use select::ImageFacts;
-pub use select::select_format_from_intent;
+pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,
