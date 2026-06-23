@@ -106,10 +106,17 @@ pub fn estimate_decode(
         ImageFormat::Avif => {
             zenavif::AvifDecoderConfig::new().estimate_decode_resources(image, compute)
         }
-        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43).
-        // Heic/Bmp/RAW/PDF decoders impl DecoderConfig but don't override
-        // estimate_decode_resources yet, so they'd return the same `unknown()` as
-        // the fallback. Add arms here once those are wired / model their decode peak.
+        #[cfg(feature = "heic-decode")]
+        ImageFormat::Heic => {
+            heic::HeicDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
+        #[cfg(feature = "bitmaps-bmp")]
+        ImageFormat::Bmp => {
+            zenbitmaps::BmpDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
+        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43);
+        // RAW is ImageFormat::Custom(DNG/RAW), needing a Custom-matching arm — both
+        // fall through to unknown() until wired.
         _ => ResourceEstimate::unknown(),
     }
 }
