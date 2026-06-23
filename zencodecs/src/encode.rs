@@ -7,6 +7,10 @@
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
 use crate::error::Result;
+use crate::estimate::{
+    ComputeEnvironment, ImageCharacteristics, ResourceEstimate, check_estimate_against_limits,
+    estimate_encode,
+};
 #[cfg(feature = "jpeg-ultrahdr")]
 use crate::pixel::{ImgRef, Rgb, Rgba};
 use crate::policy::CodecPolicy;
@@ -701,17 +705,40 @@ impl<'a> EncodeRequest<'a> {
     // Core dispatch
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Internal: resolve format → validate → build encoder →
-    /// negotiate pixel format via zenpixels → encode.
-    fn encode_dispatch(
-        self,
-        data: &[u8],
-        descriptor: PixelDescriptor,
+    /// Estimate the resources this encode will consume for a frame of the given
+    /// dimensions and pixel descriptor, without encoding.
+    ///
+    /// Mirrors [`DecodeRequest::estimate`](crate::DecodeRequest::estimate) on the
+    /// encode side: callers use it for admission control or effort planning before
+    /// committing pixels. `peak_memory_bytes_est()` is the admission-gating value
+    /// (a conservative upper bound calibrated never to under-predict); it already
+    /// includes the input frame the encoder holds, so callers must not add it again.
+    pub fn estimate(
+        &self,
         width: u32,
         height: u32,
-        stride: usize,
+        descriptor: PixelDescriptor,
+    ) -> Result<ResourceEstimate> {
+        let format = self.resolve_encode_format(width, height, descriptor.has_alpha())?;
+        let image = ImageCharacteristics::new(width, height, descriptor);
+        estimate_encode(
+            format,
+            &self.quality_intent(),
+            self.codec_config,
+            &image,
+            &ComputeEnvironment::new(),
+        )
+    }
+
+    /// Resolve the output format for the given frame facts: honor an explicit
+    /// format, else run auto-selection, then validate it is enabled and (when
+    /// lossless was requested) supports lossless.
+    fn resolve_encode_format(
+        &self,
+        width: u32,
+        height: u32,
         has_alpha: bool,
-    ) -> Result<EncodeOutput> {
+    ) -> Result<ImageFormat> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let default_policy = CodecPolicy::new();
@@ -720,7 +747,7 @@ impl<'a> EncodeRequest<'a> {
         let format = match self.format {
             Some(f) => f,
             None => {
-                // Use the new format selection engine
+                // Use the format selection engine.
                 let facts = self.image_facts.clone().unwrap_or(ImageFacts {
                     has_alpha,
                     pixel_count: width as u64 * height as u64,
@@ -739,6 +766,39 @@ impl<'a> EncodeRequest<'a> {
                 format,
                 detail: "lossless encoding not supported",
             }));
+        }
+        Ok(format)
+    }
+
+    /// Internal: resolve format → validate → build encoder →
+    /// negotiate pixel format via zenpixels → encode.
+    fn encode_dispatch(
+        self,
+        data: &[u8],
+        descriptor: PixelDescriptor,
+        width: u32,
+        height: u32,
+        stride: usize,
+        has_alpha: bool,
+    ) -> Result<EncodeOutput> {
+        let format = self.resolve_encode_format(width, height, has_alpha)?;
+
+        // Pre-flight memory admission: when Limits::max_memory_bytes is set, reject
+        // before building the encoder if the calibrated encode estimate exceeds it.
+        // Gated on the est (the admission-safe upper bound), matching the decode path;
+        // the est already includes the input frame, so we do not add it on top.
+        if let Some(limits) = self.limits
+            && limits.max_memory_bytes.is_some()
+        {
+            let image = ImageCharacteristics::new(width, height, descriptor);
+            let est = estimate_encode(
+                format,
+                &self.quality_intent(),
+                self.codec_config,
+                &image,
+                &ComputeEnvironment::new(),
+            )?;
+            check_estimate_against_limits(&est, &image, limits)?;
         }
 
         let resolved_quality = self.resolve_quality();

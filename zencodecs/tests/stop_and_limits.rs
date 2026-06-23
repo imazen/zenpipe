@@ -433,6 +433,25 @@ fn limits_encode_jpeg_memory() {
 }
 
 #[test]
+fn limits_encode_memory_admission() {
+    // Complements the 1-byte reject above: a generous budget must admit the same
+    // encode. Guards against the pre-flight estimate falsely rejecting valid work.
+    let img = rgb8_image(256, 256);
+    let generous = Limits {
+        max_memory_bytes: Some(256 << 20),
+        ..Default::default()
+    };
+    let result = EncodeRequest::new(ImageFormat::Jpeg)
+        .with_quality(50.0)
+        .with_limits(&generous)
+        .encode_full_frame_rgb8(img.as_ref());
+    assert!(
+        result.is_ok(),
+        "encode must admit when the estimate fits max_memory_bytes: {result:?}"
+    );
+}
+
+#[test]
 fn limits_encode_jpeg_dimensions() {
     let img = rgb8_image(256, 256);
     let limits = Limits {
