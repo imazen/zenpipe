@@ -271,6 +271,38 @@ fn limits_decode_jpeg_width() {
 }
 
 #[test]
+fn limits_decode_memory_admission() {
+    let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
+    // The decoded RGBA8 frame alone is 256*256*4 = 256 KiB; a 1 KiB memory budget
+    // must be rejected pre-flight by the calibrated decode estimate (gated on est).
+    let tight = Limits {
+        max_memory_bytes: Some(1024),
+        ..Default::default()
+    };
+    let result = DecodeRequest::new(&data)
+        .with_limits(&tight)
+        .decode_full_frame();
+    assert!(
+        result.is_err() && is_limit_error(&result.unwrap_err()),
+        "decode must reject when the estimate exceeds max_memory_bytes"
+    );
+    // A generous budget admits the same image.
+    let generous = Limits {
+        max_memory_bytes: Some(64 << 20),
+        ..Default::default()
+    };
+    assert!(
+        DecodeRequest::new(&data)
+            .with_limits(&generous)
+            .decode_full_frame()
+            .is_ok(),
+        "decode must admit when the estimate fits max_memory_bytes"
+    );
+    // estimate() exposes the prediction without decoding.
+    let _ = DecodeRequest::new(&data).estimate().unwrap();
+}
+
+#[test]
 #[ignore = "PNG codec adapter not yet wired into zencodecs"]
 fn limits_decode_png_pixels() {
     let data = encode_test_data(ImageFormat::Png, 256, 256);

@@ -4,6 +4,7 @@ pub use zencodec::decode::DecodeOutput;
 
 use crate::config::CodecConfig;
 use crate::error::Result;
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::policy::CodecPolicy;
 use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
@@ -510,6 +511,49 @@ impl<'a> DecodeRequest<'a> {
         crate::info::probe_format(self.data, format)
     }
 
+    /// Estimate decode peak memory + wall time **without decoding**.
+    ///
+    /// Probes the header for dimensions, then queries the calibrated cross-codec
+    /// decode cost model. Returns [`ResourceEstimate::unknown`] only when the
+    /// format's decoder isn't compiled in. Use it for admission control: compare
+    /// the est against your budget before committing to the decode. The decode
+    /// path also enforces `Limits::max_memory_bytes` against this estimate
+    /// automatically (see [`with_limits`](Self::with_limits)).
+    pub fn estimate(&self) -> Result<ResourceEstimate> {
+        let format = self.resolve_format()?;
+        Ok(self.decode_estimate(format)?.1)
+    }
+
+    /// Probe dims + build the `(image, decode estimate)` pair for `format`.
+    fn decode_estimate(
+        &self,
+        format: ImageFormat,
+    ) -> Result<(ImageCharacteristics, ResourceEstimate)> {
+        let info = crate::info::probe_format(self.data, format)?;
+        // The pipeline decodes to a 4-byte RGBA8/BGRA8 frame; size the estimate to
+        // that intermediate (conservative for narrower native outputs).
+        let image = ImageCharacteristics::new(
+            info.width,
+            info.height,
+            zenpixels::PixelDescriptor::RGBA8_SRGB,
+        );
+        let est = crate::estimate::estimate_decode(format, &image, &ComputeEnvironment::new());
+        Ok((image, est))
+    }
+
+    /// Pre-flight memory admission: when `limits.max_memory_bytes` is set, reject
+    /// (before constructing any decoder) if the calibrated decode est exceeds it.
+    fn check_decode_admission(&self, format: ImageFormat) -> Result<()> {
+        let Some(limits) = self.limits else {
+            return Ok(());
+        };
+        if limits.max_memory_bytes.is_none() {
+            return Ok(());
+        }
+        let (image, est) = self.decode_estimate(format)?;
+        crate::estimate::check_estimate_against_limits(&est, &image, limits)
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Internal helpers
     // ═══════════════════════════════════════════════════════════════════
@@ -528,6 +572,8 @@ impl<'a> DecodeRequest<'a> {
 
     /// Dispatch to format-specific decoder.
     fn decode_format(self, format: ImageFormat) -> Result<DecodeOutput> {
+        // Pre-flight: reject over-budget decodes before constructing the decoder.
+        self.check_decode_admission(format)?;
         let dp = self.decode_policy;
         // ReconstructHdr returns HDR pixels only from decoders that advertise the
         // capability — JPEG UltraHDR and HEIC (Apple/Samsung gain maps); every

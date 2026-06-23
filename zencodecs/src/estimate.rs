@@ -150,22 +150,23 @@ pub fn peak_job_bytes(
     )
 }
 
-/// Reject before running if the estimated peak memory for `estimate` over
-/// `image` exceeds `limits.max_memory_bytes`. Uses the codec working-set
-/// estimate (0 until modeled) plus the exact frame buffer. Other `Limits` fields
-/// are unaffected; a no-op when `max_memory_bytes` is unset.
+/// Reject before running if the admission estimate for `estimate` over `image`
+/// exceeds `limits.max_memory_bytes`. Gates on the **est** (`peak_memory_bytes_est`)
+/// — the admission-safe upper bound the codecs are calibrated to never under-predict
+/// — which already includes the frame buffer the op holds (encode: the input frame;
+/// decode: the decoded output) per the zencodec convention (see
+/// [`ResourceEstimate::conservative`]). An unmodeled codec returns `unknown()`, so
+/// the exact frame buffer is the certain floor. Other `Limits` fields are unaffected;
+/// a no-op when `max_memory_bytes` is unset.
 pub fn check_estimate_against_limits(
     estimate: &ResourceEstimate,
     image: &ImageCharacteristics,
     limits: &Limits,
 ) -> Result<()> {
     if let Some(max) = limits.max_memory_bytes {
-        let buffer = frame_buffer_bytes(image);
-        let codec = estimate
-            .peak_memory_bytes_max()
-            .or_else(|| estimate.peak_memory_bytes_est())
-            .unwrap_or(0);
-        let peak = codec.saturating_add(buffer);
+        let peak = estimate
+            .peak_memory_bytes_est()
+            .unwrap_or_else(|| frame_buffer_bytes(image));
         if peak > max {
             return Err(whereat::at!(CodecError::LimitExceeded(alloc::format!(
                 "estimated peak memory {peak} bytes exceeds max_memory_bytes {max}"
@@ -231,15 +232,14 @@ fn estimate_fits(
         }
     }
     if let Some(limit) = budget.peak_mem_bytes {
-        // The frame buffer is exact + effort-independent; the codec working set
-        // is added when modeled. Memory is thus evaluable today.
+        // The est already includes the input frame (input + working, per the zencodec
+        // convention); for an unmodeled codec it's `unknown()`, so the exact frame
+        // buffer is the certain floor. Gate on the est (the admission value), not max.
         evaluated = true;
-        let buffer = frame_buffer_bytes(image);
-        let codec = est
-            .peak_memory_bytes_max()
-            .or_else(|| est.peak_memory_bytes_est())
-            .unwrap_or(0);
-        if codec.saturating_add(buffer) > limit {
+        let peak = est
+            .peak_memory_bytes_est()
+            .unwrap_or_else(|| frame_buffer_bytes(image));
+        if peak > limit {
             return BudgetFit::Exceeds;
         }
     }
