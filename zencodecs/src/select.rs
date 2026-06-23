@@ -207,7 +207,10 @@ fn select_format_inner(
                     format: chosen,
                     reason: "content-aware picker",
                 });
-                return Ok(FormatSelection { format: chosen, trace });
+                return Ok(FormatSelection {
+                    format: chosen,
+                    trace,
+                });
             }
             trace.push(SelectionStep::Info {
                 message: "picker returned a non-candidate format; using heuristic order",
@@ -494,14 +497,23 @@ mod tests {
 
         // 1) The picker's valid choice overrides the heuristic head, attributed.
         let p = FixedPicker(Some(target));
-        let sel =
-            select_format_with_picker(&facts, &intent, &registry, &policy, Some(&p), Some(&features))
-                .unwrap();
+        let sel = select_format_with_picker(
+            &facts,
+            &intent,
+            &registry,
+            &policy,
+            Some(&p),
+            Some(&features),
+        )
+        .unwrap();
         assert_eq!(sel.format, target, "picker's valid choice should win");
         assert!(
             sel.trace.steps().iter().any(|s| matches!(
                 s,
-                SelectionStep::FormatChosen { reason: "content-aware picker", .. }
+                SelectionStep::FormatChosen {
+                    reason: "content-aware picker",
+                    ..
+                }
             )),
             "picker decision should be recorded in the trace"
         );

@@ -48,8 +48,10 @@ pub fn estimate_encode(
         ImageFormat::Jpeg => crate::codecs::jpeg::build_encoding(q, codec_config)
             .estimate_encode_resources(image, compute),
         #[cfg(feature = "webp")]
-        ImageFormat::WebP => crate::codecs::webp::build_encoding(q, e, quality.lossless, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::WebP => {
+            crate::codecs::webp::build_encoding(q, e, quality.lossless, codec_config)
+                .estimate_encode_resources(image, compute)
+        }
         #[cfg(feature = "png")]
         ImageFormat::Png => {
             crate::codecs::png::build_encoding(q, e, quality.lossless, codec_config, None)
@@ -86,9 +88,8 @@ pub fn estimate_decode(
             zenjpeg::JpegDecoderConfig::default().estimate_decode_resources(image, compute)
         }
         #[cfg(feature = "webp")]
-        ImageFormat::WebP => {
-            zenwebp::zencodec::WebpDecoderConfig::default().estimate_decode_resources(image, compute)
-        }
+        ImageFormat::WebP => zenwebp::zencodec::WebpDecoderConfig::default()
+            .estimate_decode_resources(image, compute),
         #[cfg(feature = "png")]
         ImageFormat::Png => {
             zenpng::PngDecoderConfig::default().estimate_decode_resources(image, compute)
@@ -101,6 +102,14 @@ pub fn estimate_decode(
         ImageFormat::Gif => {
             zengif::GifDecoderConfig::default().estimate_decode_resources(image, compute)
         }
+        #[cfg(feature = "avif-decode")]
+        ImageFormat::Avif => {
+            zenavif::AvifDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
+        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43).
+        // Heic/Bmp/RAW/PDF decoders impl DecoderConfig but don't override
+        // estimate_decode_resources yet, so they'd return the same `unknown()` as
+        // the fallback. Add arms here once those are wired / model their decode peak.
         _ => ResourceEstimate::unknown(),
     }
 }
@@ -240,15 +249,18 @@ pub fn plan_encode_effort(
     image: &ImageCharacteristics,
     budget: &EncodeBudget,
 ) -> Result<EffortPlan> {
-    let compute =
-        ComputeEnvironment::new().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
+    let compute = ComputeEnvironment::new().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
 
     // 1) Estimate at the quality's own effort (codec default when None).
     let base = estimate_encode(format, quality, codec_config, image, &compute)?;
     match estimate_fits(&base, image, budget) {
         // Budget not binding, or no estimator to evaluate it → don't override.
         BudgetFit::Fits | BudgetFit::Unevaluable => {
-            return Ok(EffortPlan { effort: quality.effort, estimate: base, fits: true });
+            return Ok(EffortPlan {
+                effort: quality.effort,
+                estimate: base,
+                fits: true,
+            });
         }
         BudgetFit::Exceeds => {}
     }
@@ -261,7 +273,11 @@ pub fn plan_encode_effort(
         let q = quality.clone().with_effort(effort);
         let est = estimate_encode(format, &q, codec_config, image, &compute)?;
         if matches!(estimate_fits(&est, image, budget), BudgetFit::Fits) {
-            return Ok(EffortPlan { effort: Some(effort), estimate: est, fits: true });
+            return Ok(EffortPlan {
+                effort: Some(effort),
+                estimate: est,
+                fits: true,
+            });
         }
     }
 
@@ -269,7 +285,11 @@ pub fn plan_encode_effort(
     let lowest = *EFFORT_SWEEP.last().unwrap();
     let q = quality.clone().with_effort(lowest);
     let est = estimate_encode(format, &q, codec_config, image, &compute)?;
-    Ok(EffortPlan { effort: Some(lowest), estimate: est, fits: false })
+    Ok(EffortPlan {
+        effort: Some(lowest),
+        estimate: est,
+        fits: false,
+    })
 }
 
 #[cfg(test)]
@@ -303,8 +323,14 @@ mod tests {
         let env = ComputeEnvironment::new();
         // Pnm has no encoder wired → error.
         assert!(
-            estimate_encode(ImageFormat::Pnm, &QualityIntent::from_quality(75.0), None, &c, &env)
-                .is_err()
+            estimate_encode(
+                ImageFormat::Pnm,
+                &QualityIntent::from_quality(75.0),
+                None,
+                &c,
+                &env
+            )
+            .is_err()
         );
     }
 
@@ -312,12 +338,23 @@ mod tests {
     fn limits_gate_rejects_when_buffer_exceeds_else_passes() {
         let c = chars(2000, 2000); // 16 MB frame buffer
         let env = ComputeEnvironment::new();
-        let enc =
-            estimate_encode(ImageFormat::WebP, &QualityIntent::from_quality(75.0), None, &c, &env)
-                .unwrap();
-        let tight = Limits { max_memory_bytes: Some(1_000_000), ..Limits::none() };
+        let enc = estimate_encode(
+            ImageFormat::WebP,
+            &QualityIntent::from_quality(75.0),
+            None,
+            &c,
+            &env,
+        )
+        .unwrap();
+        let tight = Limits {
+            max_memory_bytes: Some(1_000_000),
+            ..Limits::none()
+        };
         assert!(check_estimate_against_limits(&enc, &c, &tight).is_err());
-        let loose = Limits { max_memory_bytes: Some(64_000_000), ..Limits::none() };
+        let loose = Limits {
+            max_memory_bytes: Some(64_000_000),
+            ..Limits::none()
+        };
         assert!(check_estimate_against_limits(&enc, &c, &loose).is_ok());
     }
 
@@ -335,7 +372,10 @@ mod tests {
     fn effort_loop_generous_memory_budget_keeps_default() {
         let q = QualityIntent::from_quality(75.0);
         let c = chars(500, 500); // 1 MB buffer
-        let budget = EncodeBudget { peak_mem_bytes: Some(64_000_000), ..Default::default() };
+        let budget = EncodeBudget {
+            peak_mem_bytes: Some(64_000_000),
+            ..Default::default()
+        };
         let plan = plan_encode_effort(ImageFormat::WebP, &q, None, &c, &budget).unwrap();
         assert_eq!(plan.effort, None); // default kept (buffer fits)
         assert!(plan.fits);
@@ -346,7 +386,10 @@ mod tests {
         let q = QualityIntent::from_quality(75.0);
         let c = chars(2000, 2000); // 16 MB buffer
         // Below the effort-independent frame buffer → no effort can fit.
-        let budget = EncodeBudget { peak_mem_bytes: Some(1_000_000), ..Default::default() };
+        let budget = EncodeBudget {
+            peak_mem_bytes: Some(1_000_000),
+            ..Default::default()
+        };
         let plan = plan_encode_effort(ImageFormat::WebP, &q, None, &c, &budget).unwrap();
         assert!(!plan.fits);
     }

@@ -154,20 +154,20 @@ pub mod color;
 pub mod config;
 pub mod decision;
 mod decode;
-pub mod estimate;
-#[cfg(feature = "picker")]
-pub mod picker;
 pub mod depthmap;
 mod dispatch;
 mod dyn_dispatch;
 mod encode;
 mod error;
+pub mod estimate;
 pub mod exif;
 mod format_set;
 pub mod gainmap;
 mod info;
 pub mod intent;
 mod limits;
+#[cfg(feature = "picker")]
+pub mod picker;
 pub mod pixel;
 pub mod policy;
 pub mod quality;
@@ -189,26 +189,26 @@ pub use decode::{DecodeOutput, DecodeRequest};
 pub use dispatch::{AnyEncoder, StreamingEncoder};
 pub use encode::{EncodeOutput, EncodeRequest};
 pub use error::{CodecError, Result};
+pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+pub use estimate::{
+    EffortPlan, EncodeBudget, check_estimate_against_limits, estimate_decode, estimate_encode,
+    peak_job_bytes, plan_encode_effort,
+};
 pub use format_set::FormatSet;
 pub use info::ImageInfo;
 pub use info::{decode_info, decode_info_with_config};
 pub use info::{from_bytes, from_bytes_format, from_bytes_with_registry};
 pub use intent::{BoolKeep, CodecIntent, FormatChoice, PerCodecHints};
 pub use limits::{Limits, Stop};
+#[cfg(feature = "picker")]
+pub use picker::MlpFormatPicker;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::AllowedFormats;
 #[cfg(feature = "riapi")]
 pub use riapi_parse::{CodecEngine, parse_codec_keys};
-pub use estimate::{
-    EffortPlan, EncodeBudget, check_estimate_against_limits, estimate_decode, estimate_encode,
-    peak_job_bytes, plan_encode_effort,
-};
-pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 pub use select::ImageFacts;
 pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
-#[cfg(feature = "picker")]
-pub use picker::MlpFormatPicker;
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,

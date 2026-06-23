@@ -64,9 +64,13 @@ impl MlpFormatPicker {
     /// [`validate_family_order`](Self::validate_family_order) to verify it).
     pub fn from_model_bytes(bytes: &[u8]) -> Result<Self> {
         let model = Model::from_bytes(bytes).map_err(|e| {
-            whereat::at!(CodecError::InvalidInput(alloc::format!("picker model parse: {e:?}")))
+            whereat::at!(CodecError::InvalidInput(alloc::format!(
+                "picker model parse: {e:?}"
+            )))
         })?;
-        Ok(Self { model: Box::new(model) })
+        Ok(Self {
+            model: Box::new(model),
+        })
     }
 
     /// Best-effort check that the model's declared family order matches the
@@ -76,9 +80,13 @@ impl MlpFormatPicker {
     /// `family_order` metadata convention; call this to verify once models are
     /// re-baked with it.
     pub fn validate_family_order(&self) -> Result<()> {
-        MetaPicker::new(&self.model).validate_family_order().map_err(|e| {
-            whereat::at!(CodecError::InvalidInput(alloc::format!("family order: {e:?}")))
-        })
+        MetaPicker::new(&self.model)
+            .validate_family_order()
+            .map_err(|e| {
+                whereat::at!(CodecError::InvalidInput(alloc::format!(
+                    "family order: {e:?}"
+                )))
+            })
     }
 }
 
@@ -117,8 +125,14 @@ mod tests {
         let features = [0.3f32; 20];
         let cands = [ImageFormat::Jpeg, ImageFormat::WebP, ImageFormat::Png];
         let pick = picker.pick(&features, &cands);
-        assert!(pick.is_some(), "the MLP should pick a family for valid features");
-        assert!(cands.contains(&pick.unwrap()), "the pick must be one of the candidates");
+        assert!(
+            pick.is_some(),
+            "the MLP should pick a family for valid features"
+        );
+        assert!(
+            cands.contains(&pick.unwrap()),
+            "the pick must be one of the candidates"
+        );
     }
 
     #[test]
@@ -127,6 +141,10 @@ mod tests {
         let features = [0.7f32; 20];
         // Only PNG offered → PNG or None, never another family.
         let cands = [ImageFormat::Png];
-        assert!(picker.pick(&features, &cands).map_or(true, |f| f == ImageFormat::Png));
+        assert!(
+            picker
+                .pick(&features, &cands)
+                .map_or(true, |f| f == ImageFormat::Png)
+        );
     }
 }
