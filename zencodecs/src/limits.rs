@@ -26,6 +26,16 @@ pub struct Limits {
     /// Defaults to [`ThreadingPolicy::Parallel`]. Use [`ThreadingPolicy::Sequential`]
     /// for deterministic output or constrained environments.
     pub threading: zencodec::ThreadingPolicy,
+    /// Allocation strategy preference forwarded to codec working buffers.
+    ///
+    /// Defaults to [`AllocPreference::CodecDefault`](zencodec::AllocPreference::CodecDefault)
+    /// — each codec decides per call site (large untrusted buffers fallible via
+    /// `try_reserve`, small scratch infallible). [`Fallible`](zencodec::AllocPreference::Fallible)
+    /// forces fallible everywhere (graceful `Err` on a refused alloc, for untrusted
+    /// input); [`Infallible`](zencodec::AllocPreference::Infallible) forces the fast
+    /// `vec!` path. Forwarded via
+    /// [`ResourceLimits::prefer_fallible_allocations`](zencodec::ResourceLimits::prefer_fallible_allocations).
+    pub prefer_fallible_allocations: zencodec::AllocPreference,
 }
 
 impl Default for Limits {
@@ -40,6 +50,7 @@ impl Default for Limits {
             max_frames: None,
             max_duration_ms: None,
             threading: zencodec::ThreadingPolicy::Parallel,
+            prefer_fallible_allocations: zencodec::AllocPreference::CodecDefault,
         }
     }
 }
@@ -68,6 +79,9 @@ impl Limits {
             max_frames: Some(1000),
             max_duration_ms: Some(60_000),
             threading: zencodec::ThreadingPolicy::Parallel,
+            // Untrusted input: prefer fallible allocations so a hostile size
+            // estimate yields a graceful Err instead of aborting on a refused alloc.
+            prefer_fallible_allocations: zencodec::AllocPreference::Fallible,
         }
     }
 
@@ -122,6 +136,14 @@ impl Limits {
     /// Set threading policy for codec operations.
     pub fn with_threading(mut self, policy: zencodec::ThreadingPolicy) -> Self {
         self.threading = policy;
+        self
+    }
+
+    /// Set the allocation strategy preference forwarded to codec working buffers.
+    ///
+    /// See [`prefer_fallible_allocations`](Self::prefer_fallible_allocations).
+    pub fn with_prefer_fallible_allocations(mut self, pref: zencodec::AllocPreference) -> Self {
+        self.prefer_fallible_allocations = pref;
         self
     }
 
@@ -199,6 +221,7 @@ pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec::ResourceLimits {
         rl = rl.with_max_animation_ms(max_dur);
     }
     rl = rl.with_threading(limits.threading);
+    rl = rl.with_prefer_fallible_allocations(limits.prefer_fallible_allocations);
     rl
 }
 
@@ -257,6 +280,7 @@ mod tests {
             max_frames: Some(100),
             max_duration_ms: Some(30_000),
             threading: zencodec::ThreadingPolicy::Sequential,
+            prefer_fallible_allocations: zencodec::AllocPreference::Fallible,
         };
 
         let rl = to_resource_limits(&limits);
@@ -270,6 +294,10 @@ mod tests {
         assert_eq!(rl.max_frames, Some(100));
         assert_eq!(rl.max_animation_ms, Some(30_000));
         assert_eq!(rl.threading, zencodec::ThreadingPolicy::Sequential);
+        assert_eq!(
+            rl.prefer_fallible_allocations,
+            zencodec::AllocPreference::Fallible
+        );
     }
 
     #[test]
