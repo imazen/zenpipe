@@ -129,10 +129,6 @@ compile_error!(
 compile_error!(
     "zencodecs feature `bitmaps-hdr` is a stub: zenbitmaps HDR configs are not wired yet (zenpipe#43)"
 );
-#[cfg(feature = "tiff")]
-compile_error!(
-    "zencodecs feature `tiff` is a stub: the zentiff integration is not wired yet (zenpipe#43)"
-);
 #[cfg(feature = "svg")]
 compile_error!(
     "zencodecs feature `svg` is a stub: no SVG renderer dependency is wired yet (zenpipe#43)"

@@ -41,6 +41,10 @@ zenavif = { version = "0.1.6", optional = true, features = ["zencodec"] }
 heic = { version = "0.2.0", optional = true, default-features = false, features = ["backend-rust", "zencodec"] }
 zenavif-parse = { version = "0.6.2", optional = true, features = ["eager"] }
 zenpng = { version = "0.1.4", optional = true, features = ["zencodec"] }
+# Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
+# crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
+# imazen/zenextras git main below. Powers `tiff` (zenpipe#43).
+zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 zenjxl = { version = "0.2.1", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -117,7 +121,7 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 # zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
 heic-decode = ["dep:heic"]  # pure-Rust HEIC/HEIF decode via the `heic` crate (zenpipe#43)
-tiff = []  # stub — compile_error until zentiff integration lands (zenpipe#43)
+tiff = ["dep:zentiff"]  # zentiff decode/encode adapter (git-patched main; zenpipe#43)
 svg = []  # stub — compile_error until an SVG renderer is wired (zenpipe#43)
 jp2-decode = []  # stub — compile_error until a JPEG 2000 decoder is wired (zenpipe#43)
 bitmaps = ["dep:zenbitmaps"]

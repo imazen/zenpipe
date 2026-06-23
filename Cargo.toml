@@ -218,6 +218,10 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
 heic = { git = "https://github.com/imazen/heic" }
+# zentiff main is 0.1.2 on zencodec 0.1.25 (the zencodec decode/encode adapter +
+# heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
+# (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
+zentiff = { git = "https://github.com/imazen/zenextras" }
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep

@@ -122,8 +122,10 @@ pub fn estimate_decode(
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
             zenraw::RawDecoderConfig::new().estimate_decode_resources(image, compute)
         }
-        // Tiff is a stub feature (zentiff not wired into zencodecs yet, zenpipe#43) —
-        // it falls through to unknown() until that integration lands.
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => {
+            zentiff::codec::TiffDecoderCodecConfig::new().estimate_decode_resources(image, compute)
+        }
         _ => ResourceEstimate::unknown(),
     }
 }
