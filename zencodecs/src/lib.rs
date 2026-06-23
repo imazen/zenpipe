@@ -154,6 +154,7 @@ pub mod color;
 pub mod config;
 pub mod decision;
 mod decode;
+pub mod estimate;
 pub mod depthmap;
 mod dispatch;
 mod dyn_dispatch;
@@ -197,6 +198,11 @@ pub use quality::{QualityIntent, QualityProfile};
 pub use registry::AllowedFormats;
 #[cfg(feature = "riapi")]
 pub use riapi_parse::{CodecEngine, parse_codec_keys};
+pub use estimate::{
+    EffortPlan, EncodeBudget, check_estimate_against_limits, estimate_decode, estimate_encode,
+    peak_job_bytes, plan_encode_effort,
+};
+pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 pub use select::ImageFacts;
 pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
 pub use trace::SelectionTrace;

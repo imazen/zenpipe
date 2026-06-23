@@ -39,7 +39,7 @@ pub(crate) fn decode(
 }
 
 /// Build a GifEncoderConfig from codec config.
-fn build_gif_encoding(codec_config: Option<&CodecConfig>) -> zengif::GifEncoderConfig {
+pub(crate) fn build_gif_encoding(codec_config: Option<&CodecConfig>) -> zengif::GifEncoderConfig {
     let mut enc = zengif::GifEncoderConfig::new();
     if let Some(cfg) = codec_config.and_then(|c| c.gif_encoder.as_ref()) {
         *enc.inner_mut() = cfg.as_ref().clone();

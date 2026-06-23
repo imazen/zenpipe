@@ -4,7 +4,7 @@ use crate::config::CodecConfig;
 use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
 
 /// Build a JxlEncoderConfig from encoding params.
-fn build_encoding(
+pub(crate) fn build_encoding(
     quality: Option<f32>,
     effort: Option<u32>,
     _codec_config: Option<&CodecConfig>,
