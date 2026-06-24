@@ -98,6 +98,22 @@ pub trait FormatPicker {
     /// to use the heuristic order. A returned format not in `candidates` is
     /// ignored (treated as `None`).
     fn pick(&self, features: &[f32], candidates: &[ImageFormat]) -> Option<ImageFormat>;
+
+    /// Choose among `candidates` with a per-candidate additive **penalty**
+    /// (aligned 1:1 with `candidates`, in the picker's own score space) — e.g. an
+    /// encode-budget *degradation* cost for a format only affordable at a cheaper
+    /// effort than it was trained at. The default ignores penalties and defers to
+    /// [`pick`](Self::pick); a budget-aware picker (the MLP) overrides it to fold
+    /// them into its ranking. Driven by [`select_format_with_budget_picker`].
+    fn pick_with_penalties(
+        &self,
+        features: &[f32],
+        candidates: &[ImageFormat],
+        penalties: &[f32],
+    ) -> Option<ImageFormat> {
+        let _ = penalties;
+        self.pick(features, candidates)
+    }
 }
 
 /// Select the best output format for encoding.
@@ -121,7 +137,7 @@ pub fn select_format(
     registry: &AllowedFormats,
     policy: &CodecPolicy,
 ) -> crate::Result<FormatSelection> {
-    select_format_inner(facts, intent, registry, policy, None, None)
+    select_format_inner(facts, intent, registry, policy, None, None, None)
 }
 
 /// Like [`select_format`], but an injected content-aware [`FormatPicker`] chooses
@@ -137,9 +153,36 @@ pub fn select_format_with_picker(
     picker: Option<&dyn FormatPicker>,
     features: Option<&[f32]>,
 ) -> crate::Result<FormatSelection> {
-    select_format_inner(facts, intent, registry, policy, picker, features)
+    select_format_inner(facts, intent, registry, policy, picker, features, None)
 }
 
+/// Like [`select_format_with_picker`], but honors an encode-resource **budget**.
+///
+/// `budget(format)` returns `None` for a format infeasible under the budget — it
+/// is dropped from the candidate set entirely, so neither the picker nor the
+/// heuristic head can choose it — or `Some(penalty)` for a feasible one, where
+/// `penalty` is a degradation cost in the picker's score space (e.g. the RD loss
+/// from running at a cheaper effort) folded into the ranking via
+/// [`FormatPicker::pick_with_penalties`]. This honors both format limits
+/// (registry / policy / lossless) and resource limits in one pass.
+///
+/// A `None` picker (or empty `features`) still applies the feasibility filter:
+/// the heuristic head becomes the first *feasible* format. A `None` budget is
+/// exactly [`select_format_with_picker`].
+#[allow(clippy::too_many_arguments)]
+pub fn select_format_with_budget_picker(
+    facts: &ImageFacts,
+    intent: &QualityIntent,
+    registry: &AllowedFormats,
+    policy: &CodecPolicy,
+    picker: Option<&dyn FormatPicker>,
+    features: Option<&[f32]>,
+    budget: Option<&dyn Fn(ImageFormat) -> Option<f32>>,
+) -> crate::Result<FormatSelection> {
+    select_format_inner(facts, intent, registry, policy, picker, features, budget)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn select_format_inner(
     facts: &ImageFacts,
     intent: &QualityIntent,
@@ -147,6 +190,7 @@ fn select_format_inner(
     policy: &CodecPolicy,
     picker: Option<&dyn FormatPicker>,
     features: Option<&[f32]>,
+    budget: Option<&dyn Fn(ImageFormat) -> Option<f32>>,
 ) -> crate::Result<FormatSelection> {
     let mut trace = SelectionTrace::new();
 
@@ -170,6 +214,18 @@ fn select_format_inner(
             trace.push(SelectionStep::FormatSkipped {
                 format,
                 reason: "no lossless support",
+            });
+            return false;
+        }
+        // Encode-budget feasibility: a `None` from the budget closure means this
+        // format can't be produced within the budget — drop it like any other
+        // hard constraint, so even the heuristic head is always feasible.
+        if let Some(b) = budget
+            && b(format).is_none()
+        {
+            trace.push(SelectionStep::FormatSkipped {
+                format,
+                reason: "infeasible under encode budget",
             });
             return false;
         }
@@ -201,7 +257,18 @@ fn select_format_inner(
         && !features.is_empty()
     {
         let candidates: alloc::vec::Vec<ImageFormat> = valid.iter().map(|(f, _)| *f).collect();
-        if let Some(chosen) = picker.pick(features, &candidates) {
+        // With a budget, fold each feasible candidate's degradation penalty into
+        // the ranking; without one, a plain re-rank. Every candidate here already
+        // passed the feasibility filter, so each `budget(c)` is `Some`.
+        let chosen = match budget {
+            Some(b) => {
+                let penalties: alloc::vec::Vec<f32> =
+                    candidates.iter().map(|&c| b(c).unwrap_or(0.0)).collect();
+                picker.pick_with_penalties(features, &candidates, &penalties)
+            }
+            None => picker.pick(features, &candidates),
+        };
+        if let Some(chosen) = chosen {
             if candidates.contains(&chosen) {
                 trace.push(SelectionStep::FormatChosen {
                     format: chosen,
@@ -378,7 +445,15 @@ fn select_format_with_allowed(
         policy.clone()
     };
 
-    select_format_inner(facts, intent, registry, &effective_policy, picker, features)
+    select_format_inner(
+        facts,
+        intent,
+        registry,
+        &effective_policy,
+        picker,
+        features,
+        None,
+    )
 }
 
 /// Available output formats, filtered by registry and policy.
@@ -548,6 +623,102 @@ mod tests {
             select_format_with_picker(&facts, &intent, &registry, &policy, Some(&p), Some(&[]))
                 .unwrap();
         assert_eq!(sel.format, head);
+    }
+
+    /// Picks the lowest-penalty candidate (ties: first) — proves the budget seam
+    /// threads per-candidate penalties into `pick_with_penalties`.
+    struct MinPenaltyPicker;
+    impl FormatPicker for MinPenaltyPicker {
+        fn pick(&self, _f: &[f32], candidates: &[ImageFormat]) -> Option<ImageFormat> {
+            candidates.first().copied()
+        }
+        fn pick_with_penalties(
+            &self,
+            _f: &[f32],
+            candidates: &[ImageFormat],
+            penalties: &[f32],
+        ) -> Option<ImageFormat> {
+            candidates
+                .iter()
+                .zip(penalties)
+                .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(core::cmp::Ordering::Equal))
+                .map(|(c, _)| *c)
+        }
+    }
+
+    #[test]
+    fn budget_drops_infeasible_format_from_heuristic_head() {
+        let facts = ImageFacts {
+            pixel_count: 1_000_000,
+            ..Default::default()
+        };
+        let intent = QualityIntent::from_quality(73.0);
+        let registry = AllowedFormats::all();
+        let policy = CodecPolicy::new();
+
+        // The no-budget head is the first encodable in preference order.
+        let head = select_format(&facts, &intent, &registry, &policy)
+            .unwrap()
+            .format;
+
+        // Mark that head infeasible; the next feasible candidate must replace it,
+        // even with no picker (the feasibility filter is picker-independent).
+        let budget = |f: ImageFormat| -> Option<f32> { if f == head { None } else { Some(0.0) } };
+        let sel = select_format_with_budget_picker(
+            &facts,
+            &intent,
+            &registry,
+            &policy,
+            None,
+            None,
+            Some(&budget),
+        )
+        .unwrap();
+        assert_ne!(
+            sel.format, head,
+            "an infeasible heuristic head must be dropped"
+        );
+        assert!(
+            budget(sel.format).is_some(),
+            "the chosen format must itself be feasible"
+        );
+    }
+
+    #[test]
+    fn budget_seam_threads_penalties_to_picker() {
+        let facts = ImageFacts {
+            pixel_count: 1_000_000,
+            ..Default::default()
+        };
+        let intent = QualityIntent::from_quality(73.0);
+        let registry = AllowedFormats::all();
+        let policy = CodecPolicy::new();
+        let features = [0.5_f32; 4];
+
+        // Among the feasible candidates, WebP (always encodable in this test cfg)
+        // is cheapest; a penalty-aware picker must choose it over the heuristic head.
+        let budget = |f: ImageFormat| -> Option<f32> {
+            if f == ImageFormat::WebP {
+                Some(0.0)
+            } else {
+                Some(100.0)
+            }
+        };
+        let sel = select_format_with_budget_picker(
+            &facts,
+            &intent,
+            &registry,
+            &policy,
+            Some(&MinPenaltyPicker),
+            Some(&features),
+            Some(&budget),
+        )
+        .unwrap();
+        assert_eq!(
+            sel.format,
+            ImageFormat::WebP,
+            "the min-penalty feasible candidate must win"
+        );
     }
 
     #[test]

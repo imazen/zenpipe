@@ -4370,6 +4370,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenanalyze-api"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenanalyze#cf6972e8cf01d5f8c7b7228dd575ea1f6dbd673b"
+
+[[package]]
 name = "zenavif"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4492,6 +4497,7 @@ dependencies = [
  "turbojpeg",
  "ultrahdr-core",
  "whereat",
+ "zenanalyze-api",
  "zenavif",
  "zenavif-parse",
  "zenbitmaps",
@@ -4751,8 +4757,9 @@ dependencies = [
 [[package]]
 name = "zenpicker"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenanalyze#46543597d3de000a2870ed1ff54c21be6dd5f9ee"
+source = "git+https://github.com/imazen/zenanalyze#cf6972e8cf01d5f8c7b7228dd575ea1f6dbd673b"
 dependencies = [
+ "zenanalyze-api",
  "zenpredict 0.2.0",
 ]
 
@@ -4866,7 +4873,7 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#46543597d3de000a2870ed1ff54c21be6dd5f9ee"
+source = "git+https://github.com/imazen/zenanalyze#cf6972e8cf01d5f8c7b7228dd575ea1f6dbd673b"
 dependencies = [
  "bytemuck",
  "libm",

@@ -18,6 +18,30 @@ All notable changes to `zencodecs` are documented here. Format follows
   single-origin — fine per the whereat doctrine).
 
 ### Added
+- **Content-aware format picker** (`picker` / `picker-api` features, both off by
+  default so the publishable core stays dependency-light):
+  - `MlpFormatPicker` — a [`FormatPicker`] backed by a zenpicker meta-model (an MLP
+    over zenanalyze features). It only re-ranks the already-valid candidates
+    auto-selection produced; it can never widen the allowed set (7e0e298, 7d889dc).
+  - `MlpFormatPicker::pick_with_budget` — budget-aware family selection: a
+    per-candidate additive penalty (the degradation cost of running a format at a
+    cheaper effort than the model was trained at) folds into the MLP's argmin via
+    zenpredict's `argmin_masked_with_scorer`, so a feasible-but-degraded format can
+    lose to a rival at full effort. Reduces exactly to `pick` at zero penalties.
+  - `select_format_with_budget_picker` + `FormatPicker::pick_with_penalties` (a
+    trait default method that `MlpFormatPicker` overrides) — thread budget through
+    the auto-selection seam with one `Fn(ImageFormat) -> Option<f32>` closure:
+    `None` drops an infeasible format (heuristic head included), `Some(p)` is its
+    degradation penalty. Honors format limits (registry/policy/lossless) and
+    encode-resource limits in one pass.
+  - `MlpFormatPicker::pick_from_offer` + `OfferPick` (`picker-api` feature) —
+    negotiate feature *reuse* against a `zenanalyze_api::Offer`, so one zenanalyze
+    pass feeds the meta-picker and every per-codec picker. Tri-state result:
+    `Picked` / `NoCandidate` / `NeedsAnalysis` (the last when the offer can't
+    satisfy the model — drift, a missing column, or a pre-`name@hash` bake).
+  - New optional deps `zenpicker` / `zenpredict` (with `advanced`) / `zenanalyze-api`,
+    all git-sourced from `imazen/zenanalyze` so the `zenanalyze_api` contract types
+    resolve to one crate instance across the graph.
 - **Metadata retention policy** (zencodec 0.1.21 adoption):
   `EncodeRequest::with_metadata_policy(MetadataPolicy)` and
   `TranscodeOptions::metadata_policy`. Defaults to `MetadataPolicy::PreserveExact`

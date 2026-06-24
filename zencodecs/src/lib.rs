@@ -198,6 +198,8 @@ pub use intent::{BoolKeep, CodecIntent, FormatChoice, PerCodecHints};
 pub use limits::{Limits, Stop};
 #[cfg(feature = "picker")]
 pub use picker::MlpFormatPicker;
+#[cfg(feature = "picker-api")]
+pub use picker::OfferPick;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
 pub use registry::AllowedFormats;

@@ -24,6 +24,12 @@ zencodec = { version = "0.1.22" }
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
 zenpicker = { git = "https://github.com/imazen/zenanalyze", optional = true }
 zenpredict = { git = "https://github.com/imazen/zenanalyze", optional = true }
+# Zero-dep version-unifying feature contract (Request / Offer / NamedFeature) for
+# the `picker-api` route. Same git source as zenpicker/zenpredict so the
+# `zenanalyze_api` types are ONE crate instance across the graph — a crates.io
+# copy would be a distinct instance and fail to typecheck against zenpicker's
+# `feature_request`. Published at 0.1.0.
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", optional = true, default-features = false }
 zenpixels = { version = "0.2.10", default-features = false, features = ["imgref"] }
 zenpixels-convert = { version = "0.2.10", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
@@ -86,8 +92,14 @@ std = []
 # Content-aware auto-format selection via an injected MLP (zenpicker over
 # zenanalyze features) — provides `MlpFormatPicker`, a `FormatPicker` impl.
 # Git-dep'd until zenpicker is published, then crates.io. Off by default so the
-# core stays dependency-light + publishable.
-picker = ["dep:zenpicker", "dep:zenpredict"]
+# core stays dependency-light + publishable. Enables zenpredict's `advanced`
+# methods for the scorer-driven `pick_with_budget`.
+picker = ["dep:zenpicker", "dep:zenpredict", "zenpredict/advanced"]
+
+# Adds `MlpFormatPicker::pick_from_offer` — feature-reuse negotiation against a
+# `zenanalyze_api::Offer` so one zenanalyze pass can feed many consumers. Pulls
+# the zero-dep `zenanalyze-api` contract crate + zenpicker's `api` surface.
+picker-api = ["picker", "zenpicker/api", "dep:zenanalyze-api"]
 
 # Quality-targeted transcode: wire the scorer-driven routes in
 # `transcode_to_quality` (the zensim Profile-A scorer + zenjxl's JPEG→JXL
