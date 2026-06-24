@@ -18,11 +18,12 @@
 //!   was trained at) can lose the argmin to a rival that runs at full effort.
 //!   Hard-infeasible formats are expressed by *omission* — drop them from
 //!   `candidates`.
-//! - [`MlpFormatPicker::pick_from_offer`] (the `picker-api` feature) — negotiate
-//!   feature *reuse* against a [`zenanalyze_api::Offer`] using the model's
-//!   declared feature columns, so one zenanalyze pass can feed this meta-picker
-//!   and every per-codec picker without re-extracting. Falls back to
-//!   [`OfferPick::NeedsAnalysis`] when the offer can't satisfy the model.
+//! - `MlpFormatPicker::pick_from_offer` (the `picker-api` feature) — negotiate
+//!   feature *reuse* against a `zenanalyze_api::Offer` using the model's declared
+//!   feature columns, so one zenanalyze pass can feed this meta-picker and every
+//!   per-codec picker without re-extracting. Falls back to `OfferPick::NeedsAnalysis`
+//!   when the offer can't satisfy the model. (Items linked from their own docs
+//!   under `picker-api`; spelled here so the base-`picker` module doc resolves.)
 //!
 //! The feature vector is the caller's to produce (e.g. via zenanalyze) — the base
 //! `picker` feature takes no analysis dependency; only `picker-api` pulls the
@@ -92,8 +93,8 @@ fn to_candidate(family: CodecFamily, candidates: &[ImageFormat]) -> Option<Image
 /// Construct once from baked model bytes, then either pass `&self` to
 /// [`select_format_from_intent_with_picker`](crate::select_format_from_intent_with_picker)
 /// (via the [`FormatPicker`] trait) or call the inherent
-/// [`pick_with_budget`](Self::pick_with_budget) /
-/// [`pick_from_offer`](Self::pick_from_offer) methods for the richer routes.
+/// [`pick_with_budget`](Self::pick_with_budget) / `pick_from_offer` (the latter
+/// under `picker-api`) methods for the richer routes.
 pub struct MlpFormatPicker {
     model: Box<Model>,
 }
@@ -277,7 +278,7 @@ impl FormatPicker for MlpFormatPicker {
 
     /// Budget-aware override: folds the per-candidate degradation penalties into
     /// the MLP's argmin via [`pick_with_budget`](Self::pick_with_budget), so the
-    /// budget seam ([`select_format_with_budget_picker`](crate::select_format_with_budget_picker))
+    /// budget seam ([`select_format_with_budget_picker`](crate::select::select_format_with_budget_picker))
     /// re-ranks with resource costs rather than ignoring them.
     fn pick_with_penalties(
         &self,
