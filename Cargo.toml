@@ -256,6 +256,15 @@ zennode-derive = { git = "https://github.com/imazen/zennode" }
 # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
 zensim = { git = "https://github.com/imazen/zensim" }
 zensim-regress = { git = "https://github.com/imazen/zensim" }
+# zenanalyze-api 0.1.0 IS on crates.io (zencodecs declares it from the registry),
+# but zenpicker/zenpredict (git mains, unpublished) pull THEIR copy from the
+# zenanalyze git checkout via an internal `{ version, path }` dep — so a bare
+# registry zenanalyze-api in zencodecs would be a SECOND instance and the
+# `zenanalyze_api::Offer`/`Request` contract wouldn't typecheck across the picker
+# boundary (verified: E0308). Patch the registry crate to the same git source to
+# unify to one instance. Drop this once zenpicker/zenpredict publish (then every
+# edge resolves zenanalyze-api from the registry).
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
