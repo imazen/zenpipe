@@ -17,6 +17,7 @@ use crate::codec_id::CodecId;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
+use crate::macros::dispatch_format;
 use crate::trace::{SelectionStep, SelectionTrace};
 use crate::{CodecError, ImageFormat, Limits, StopToken};
 use whereat::{ResultAtExt, at, at_crate};
@@ -57,93 +58,35 @@ fn build_dyn_decoder_config(
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
 ) -> Result<Box<dyn DynDecoderConfig>> {
-    match format {
-        #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => Ok(Box::new(build_jpeg_decoder(codec_config))),
-        #[cfg(not(feature = "jpeg"))]
-        ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "webp")]
-        ImageFormat::WebP => Ok(Box::new(build_webp_decoder(codec_config, limits))),
-        #[cfg(not(feature = "webp"))]
-        ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "gif")]
-        ImageFormat::Gif => Ok(Box::new(zengif::GifDecoderConfig::new())),
-        #[cfg(not(feature = "gif"))]
-        ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "png")]
-        ImageFormat::Png => Ok(Box::new(zenpng::PngDecoderConfig::new())),
-        #[cfg(not(feature = "png"))]
-        ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "avif-decode")]
-        ImageFormat::Avif => Ok(Box::new(build_avif_decoder(codec_config))),
-        #[cfg(not(feature = "avif-decode"))]
-        ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "jxl-decode")]
-        ImageFormat::Jxl => Ok(Box::new(zenjxl::JxlDecoderConfig::new())),
-        #[cfg(not(feature = "jxl-decode"))]
-        ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "heic-decode")]
-        ImageFormat::Heic => Ok(Box::new(heic::HeicDecoderConfig::new())),
-        #[cfg(not(feature = "heic-decode"))]
-        ImageFormat::Heic => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Pnm => Ok(Box::new(zenbitmaps::PnmDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Pnm => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-bmp")]
-        ImageFormat::Bmp => Ok(Box::new(zenbitmaps::BmpDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps-bmp"))]
-        ImageFormat::Bmp => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Farbfeld => Ok(Box::new(zenbitmaps::FarbfeldDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "tiff")]
-        ImageFormat::Tiff => Ok(Box::new(zentiff::codec::TiffDecoderCodecConfig::new())),
-        #[cfg(not(feature = "tiff"))]
-        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-qoi")]
-        ImageFormat::Qoi => Ok(Box::new(zenbitmaps::QoiDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps-qoi"))]
-        ImageFormat::Qoi => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-tga")]
-        ImageFormat::Tga => Ok(Box::new(zenbitmaps::TgaDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps-tga"))]
-        ImageFormat::Tga => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-hdr")]
-        ImageFormat::Hdr => Ok(Box::new(zenbitmaps::HdrDecoderConfig::new())),
-        #[cfg(not(feature = "bitmaps-hdr"))]
-        ImageFormat::Hdr => Err(at!(CodecError::UnsupportedFormat(format))),
-
+    dispatch_format! {
+        format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
+        Jpeg => "jpeg" => Ok(Box::new(build_jpeg_decoder(codec_config))),
+        WebP => "webp" => Ok(Box::new(build_webp_decoder(codec_config, limits))),
+        Gif => "gif" => Ok(Box::new(zengif::GifDecoderConfig::new())),
+        Png => "png" => Ok(Box::new(zenpng::PngDecoderConfig::new())),
+        Avif => "avif-decode" => Ok(Box::new(build_avif_decoder(codec_config))),
+        Jxl => "jxl-decode" => Ok(Box::new(zenjxl::JxlDecoderConfig::new())),
+        Heic => "heic-decode" => Ok(Box::new(heic::HeicDecoderConfig::new())),
+        Pnm => "bitmaps" => Ok(Box::new(zenbitmaps::PnmDecoderConfig::new())),
+        Bmp => "bitmaps-bmp" => Ok(Box::new(zenbitmaps::BmpDecoderConfig::new())),
+        Farbfeld => "bitmaps" => Ok(Box::new(zenbitmaps::FarbfeldDecoderConfig::new())),
+        Tiff => "tiff" => Ok(Box::new(zentiff::codec::TiffDecoderCodecConfig::new())),
+        Qoi => "bitmaps-qoi" => Ok(Box::new(zenbitmaps::QoiDecoderConfig::new())),
+        Tga => "bitmaps-tga" => Ok(Box::new(zenbitmaps::TgaDecoderConfig::new())),
+        Hdr => "bitmaps-hdr" => Ok(Box::new(zenbitmaps::HdrDecoderConfig::new()));
         // RAW/DNG: Custom format from zenraw
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
             Ok(Box::new(build_raw_decoder(codec_config)))
         }
-
         // JPEG 2000: Custom format from zenjp2
         #[cfg(feature = "jp2-decode")]
         ImageFormat::Jp2 => Ok(Box::new(zenjp2::Jp2DecoderConfig::new())),
-
         // SVG/SVGZ: Custom format from zensvg
         #[cfg(feature = "svg")]
         ImageFormat::Custom(def) if def.name == "svg" => {
             Ok(Box::new(zensvg::SvgDecoderConfig::new()))
         }
-
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
 }

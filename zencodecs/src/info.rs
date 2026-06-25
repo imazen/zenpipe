@@ -3,6 +3,7 @@
 pub use zencodec::ImageInfo;
 
 use crate::error::Result;
+use crate::macros::dispatch_format;
 use crate::{AllowedFormats, CodecError, ImageFormat};
 use whereat::at;
 
@@ -198,95 +199,36 @@ fn finalize_gain_map_presence(info: &mut ImageInfo) {
 
 /// Dispatch to the format-specific codec probe (requires codec feature).
 fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
-    let mut info = match format {
-        #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => crate::codecs::jpeg::probe(data)?,
-        #[cfg(not(feature = "jpeg"))]
-        ImageFormat::Jpeg => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "webp")]
-        ImageFormat::WebP => crate::codecs::webp::probe(data)?,
-        #[cfg(not(feature = "webp"))]
-        ImageFormat::WebP => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "gif")]
-        ImageFormat::Gif => crate::codecs::gif::probe(data)?,
-        #[cfg(not(feature = "gif"))]
-        ImageFormat::Gif => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "png")]
-        ImageFormat::Png => crate::codecs::png::probe(data)?,
-        #[cfg(not(feature = "png"))]
-        ImageFormat::Png => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "avif-decode")]
-        ImageFormat::Avif => crate::codecs::avif_dec::probe(data)?,
-        #[cfg(not(feature = "avif-decode"))]
-        ImageFormat::Avif => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "jxl-decode")]
-        ImageFormat::Jxl => crate::codecs::jxl_dec::probe(data)?,
-        #[cfg(not(feature = "jxl-decode"))]
-        ImageFormat::Jxl => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "heic-decode")]
-        ImageFormat::Heic => crate::codecs::heic::probe(data)?,
-        #[cfg(not(feature = "heic-decode"))]
-        ImageFormat::Heic => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Pnm => crate::codecs::pnm::probe(data)?,
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Pnm => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-bmp")]
-        ImageFormat::Bmp => crate::codecs::bmp::probe(data)?,
-        #[cfg(not(feature = "bitmaps-bmp"))]
-        ImageFormat::Bmp => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Farbfeld => crate::codecs::farbfeld::probe(data)?,
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Farbfeld => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "tiff")]
-        ImageFormat::Tiff => crate::codecs::tiff::probe(data)?,
-        #[cfg(not(feature = "tiff"))]
-        ImageFormat::Tiff => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-qoi")]
-        ImageFormat::Qoi => crate::codecs::qoi::probe(data)?,
-        #[cfg(not(feature = "bitmaps-qoi"))]
-        ImageFormat::Qoi => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-tga")]
-        ImageFormat::Tga => crate::codecs::tga::probe(data)?,
-        #[cfg(not(feature = "bitmaps-tga"))]
-        ImageFormat::Tga => return Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-hdr")]
-        ImageFormat::Hdr => crate::codecs::hdr::probe(data)?,
-        #[cfg(not(feature = "bitmaps-hdr"))]
-        ImageFormat::Hdr => return Err(at!(CodecError::UnsupportedFormat(format))),
-
+    let mut info = dispatch_format! {
+        format, unsupported = return Err(at!(CodecError::UnsupportedFormat(format)));
+        Jpeg => "jpeg" => crate::codecs::jpeg::probe(data)?,
+        WebP => "webp" => crate::codecs::webp::probe(data)?,
+        Gif => "gif" => crate::codecs::gif::probe(data)?,
+        Png => "png" => crate::codecs::png::probe(data)?,
+        Avif => "avif-decode" => crate::codecs::avif_dec::probe(data)?,
+        Jxl => "jxl-decode" => crate::codecs::jxl_dec::probe(data)?,
+        Heic => "heic-decode" => crate::codecs::heic::probe(data)?,
+        Pnm => "bitmaps" => crate::codecs::pnm::probe(data)?,
+        Bmp => "bitmaps-bmp" => crate::codecs::bmp::probe(data)?,
+        Farbfeld => "bitmaps" => crate::codecs::farbfeld::probe(data)?,
+        Tiff => "tiff" => crate::codecs::tiff::probe(data)?,
+        Qoi => "bitmaps-qoi" => crate::codecs::qoi::probe(data)?,
+        Tga => "bitmaps-tga" => crate::codecs::tga::probe(data)?,
+        Hdr => "bitmaps-hdr" => crate::codecs::hdr::probe(data)?;
         // RAW/DNG: Custom format from zenraw
         #[cfg(feature = "raw-decode")]
         ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
             crate::codecs::raw::probe(data)?
         }
-
         // JPEG 2000: Custom format from zenjp2
         #[cfg(feature = "jp2-decode")]
         ImageFormat::Jp2 => crate::codecs::jp2::probe(data)?,
-
         // SVG/SVGZ: Custom format from zensvg
         #[cfg(feature = "svg")]
         ImageFormat::Custom(def) if def.name == "svg" => crate::codecs::svg::probe(data)?,
-
         // PDF: Custom format from zenpdf
         #[cfg(feature = "pdf-decode")]
         ImageFormat::Custom(def) if def.name == "pdf" => crate::codecs::pdf::probe(data)?,
-
         _ => return Err(at!(CodecError::UnsupportedFormat(format))),
     };
     // For formats that conventionally assume sRGB when no color metadata is
