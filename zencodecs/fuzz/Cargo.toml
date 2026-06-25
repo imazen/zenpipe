@@ -116,13 +116,6 @@ doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_exif"
-path = "fuzz_targets/fuzz_exif.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "fuzz_gainmap"
 path = "fuzz_targets/fuzz_gainmap.rs"
 test = false

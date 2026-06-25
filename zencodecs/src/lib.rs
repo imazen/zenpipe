@@ -37,7 +37,7 @@
 //! use zencodecs::{EncodeRequest, ImageFormat};
 //! use zenpixels::{PixelBuffer, PixelDescriptor};
 //!
-//! let buf = PixelBuffer::new_fill(100, 100, PixelDescriptor::RGBA8_SRGB, &[0, 0, 0, 255]).unwrap();
+//! let buf = PixelBuffer::from_vec(vec![0u8; 100 * 100 * 4], 100, 100, PixelDescriptor::RGBA8_SRGB).unwrap();
 //! let webp = EncodeRequest::new(ImageFormat::WebP)
 //!     .with_quality(85.0)
 //!     .encode(buf.as_slice(), false)?;
@@ -156,7 +156,6 @@ mod dyn_dispatch;
 mod encode;
 mod error;
 pub mod estimate;
-pub mod exif;
 mod format_set;
 pub mod gainmap;
 mod info;

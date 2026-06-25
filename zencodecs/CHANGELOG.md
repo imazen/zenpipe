@@ -6,16 +6,21 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
-### Fixed
-- **`parse_exif` now returns `Result<ExifData, whereat::At<ExifError>>`** (was bare
-  `ExifError`): the EXIF/TIFF parse-failure site — including deep failures in
-  `parse_ifd` (chained IFD offsets) — now survives in the whereat trace. Header
-  checks and the deep IFD call are wrapped with `at!`. `.ok()` / `.unwrap_err()`
-  callers are unaffected; pattern-matching callers read the variant via `.error()`
-  / `.decompose()`. Breaking (inner variant unchanged; only the `At<>` wrapper is
-  added). Regression test: `exif::tests::parse_exif_error_carries_whereat_trace`.
-  `DepthImageInfo::validate` intentionally stays bare `CodecError` (self-describing,
-  single-origin — fine per the whereat doctrine).
+### Removed
+- **Hand-rolled `exif` module deleted** (`exif.rs`, 2,085 LOC incl. tests; ~1,000
+  production): the rich EXIF/TIFF extraction parser (`parse_exif` → `ExifData` with
+  GPS coordinates, exposure rationals, and DNG color-science tags) and its
+  `fuzz_exif` target are gone. It was consumed only by that fuzz target — never by
+  the decode/encode/transcode paths, which use `zencodec::helpers::parse_exif_orientation`
+  and the maintained no_std `zencodec::exif::Exif` parser. EXIF parsing now lives
+  entirely in `zencodec` (fuzzed there by `exif_parse`/`exif_filter`/`exif_author`/
+  `exif_roundtrip`). This aligns zencodecs with its transcoding/selection core;
+  rich field extraction, if wanted, belongs upstream as typed getters on
+  `zencodec::exif::Exif`. **BREAKING: the `zencodecs::exif` module is removed.**
+
+### Changed
+- Bumped the `zencodec` dependency floor `0.1.22` → `0.1.25` (the lockfile already
+  resolved 0.1.25; this formalizes relying on its surface).
 
 ### Added
 - **Content-aware format picker** (`picker` / `picker-api` features, both off by

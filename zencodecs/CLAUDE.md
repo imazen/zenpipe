@@ -63,7 +63,6 @@ zencodecs/
 │   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles, gain map)
 │   ├── intent.rs         # CodecIntent — parsed user intent for format selection and quality
 │   ├── decision.rs       # FormatDecision — resolved output of codec selection
-│   ├── exif.rs           # Lightweight EXIF/TIFF IFD parser
 │   ├── riapi_parse.rs    # RIAPI codec key parsing and engine detection
 │   ├── transcode.rs      # Transcode API and streaming decode→encode bridge
 │   ├── zennode_defs.rs   # QualityIntentNode for pipeline integration (feature: zennode)
@@ -219,9 +218,10 @@ that sweep lands.
 - **config::raw module**: Re-exports `RawDecodeConfig`, `DemosaicMethod`
 - **DecodeRequest::extract_raw_preview()**: Extract embedded JPEG preview from DNG/RAW (feature: raw-decode-exif)
 - **DecodeRequest::read_raw_metadata()**: Read structured EXIF+DNG metadata via zenraw's kamadak-exif (feature: raw-decode-exif)
-- **exif::from_raw_metadata()**: Convert `zenraw::exif::ExifMetadata` → `ExifData` (feature: raw-decode-exif)
-- **ExifData DNG fields**: `dng_version`, `unique_camera_model`, `color_matrix_1`/`_2`, `forward_matrix_1`/`_2`, `analog_balance`, `as_shot_neutral`, `as_shot_white_xy`, `baseline_exposure`, `calibration_illuminant_1`/`_2`
-- **EXIF parser**: IFD0 now parses all DNG tags (0xC612-0xC715) into ExifData
+- **DNG/EXIF extraction** (`exif::from_raw_metadata`, the `ExifData` struct, and the
+  hand-rolled IFD/DNG-tag parser): **removed 2026-06-25** (see CHANGELOG). `read_raw_metadata`
+  above still returns zenraw's native `zenraw::exif::ExifMetadata`; rich EXIF field
+  extraction now belongs to `zencodec::exif`.
 - Wired into: decode dispatch, info probe, dyn_dispatch (push_decode, animation_frame_decoder), codec_id mapping
 - Re-exports: `RawDecodeConfig`, `RawDecoderConfig` from lib.rs
 - 4 new DNG EXIF tests (dng_version, unique_camera_model, color_matrix+white_balance, as_shot_white_xy)

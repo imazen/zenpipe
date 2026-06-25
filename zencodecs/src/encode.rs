@@ -32,10 +32,10 @@ pub use zencodec::encode::EncodeOutput;
 /// use zencodecs::{EncodeRequest, ImageFormat};
 /// use zenpixels::{PixelBuffer, PixelDescriptor};
 ///
-/// let buf = PixelBuffer::new_fill(100, 100, PixelDescriptor::RGBA8_SRGB, &[0, 0, 0, 255]).unwrap();
+/// let buf = PixelBuffer::from_vec(vec![0u8; 100 * 100 * 4], 100, 100, PixelDescriptor::RGBA8_SRGB).unwrap();
 /// let output = EncodeRequest::new(ImageFormat::WebP)
 ///     .with_quality(85.0)
-///     .encode(ps, false)?;
+///     .encode(buf.as_slice(), false)?;
 /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 /// ```
 pub struct EncodeRequest<'a> {
