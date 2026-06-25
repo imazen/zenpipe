@@ -43,7 +43,7 @@ integration concern.
 | decode / encode (request builders) | ~2,000 | **KEEP core**, shrink dispatch (see below). |
 | dispatch / dyn_dispatch / info / registry | ~1,600 | **KEEP**, collapsible only via a zencodec codec-registry (deferred, design tradeoff). |
 | **exif.rs** | 1,001 | **SHED** — fuzz-only-consumed rich IFD extraction; duplicates zencodec's `Exif` walker. Biggest clean in-crate win. |
-| **depthmap.rs** | 703 | **UPSTREAM** — 100% format-agnostic; move to `zencodec::depthmap`, re-export. Needs upstream PR. |
+| **depthmap.rs** | 703 | **DELETED 2026-06-25** — unused; removed entirely (−1,978 LOC incl. tests) rather than moved upstream, per user directive. |
 | gain-map special-casing (jpeg/avif/jxl/raw adapters) | ~400–480 | **UPSTREAM** — route `with_gain_map` through `zencodec::EncodeJob`; deletes the 4× hand-assembly. Needs upstream + codec PRs. |
 | format_set.rs | 150 | **UPSTREAM** (optional) — `zencodec::FormatSet` over `ImageFormat` (non_exhaustive + Custom design cost). |
 | limits.rs | 235 | **DEFENSIBLE DUP** — `ResourceLimits` is `#[non_exhaustive]`, so the ergonomic struct-literal `Limits` is a justified shim. Adopting upstream = ~130 LOC delete + ~20 test-site builder conversions. Medium priority. |
@@ -69,7 +69,7 @@ Each chunk: land with green tests, commit, push, before the next.
   struct-literal sites to builders, drop `to_resource_limits` + conversion tests. ~130 LOC.
   Only if the ergonomic regression is acceptable.
 - [ ] **4. UPSTREAM PRs** (need zencodec/codec changes — file as zenpipe issues):
-  - `zencodec::depthmap` ← move depthmap.rs (~700 LOC).
+  - ~~`zencodec::depthmap` ← move depthmap.rs~~ — DELETED instead (unused; −1,978 LOC).
   - `EncodeJob::with_gain_map_source` ← collapse the 4× gain-map special-casing (~450 LOC).
   - `zencodec::FormatSet` ← format_set.rs (~120 LOC).
   - `SourceColor::is_srgb()` ← color.rs `SourceColorExt` (~30 LOC).

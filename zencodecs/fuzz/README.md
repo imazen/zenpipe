@@ -1,8 +1,8 @@
 # zencodecs fuzz testing
 
 Fuzz targets for the zencodecs unified codec dispatch layer, covering format
-detection, decode, encode, transcode, EXIF parsing, gain map / depth map
-extraction, and format auto-selection.
+detection, decode, encode, transcode, gain map extraction, and format
+auto-selection.
 
 ## Requirements
 
@@ -15,10 +15,8 @@ extraction, and format auto-selection.
 |--------|----------|-------------|
 | `fuzz_probe` | HIGH | Format detection + header-only metadata parse (all 15+ formats) |
 | `fuzz_decode` | HIGH | Full-frame decode through dispatch with tight limits |
-| `fuzz_exif` | HIGH | EXIF/TIFF IFD parser on untrusted binary data |
 | `fuzz_decode_limits` | HIGH | Structured: arbitrary limits + data, assert limits obeyed |
 | `fuzz_gainmap` | MEDIUM | UltraHDR MPF/XMP parse + gain map decode |
-| `fuzz_depthmap` | MEDIUM | Depth map extraction + resize (bilinear interpolation) |
 | `fuzz_push_decode` | MEDIUM | Streaming push decode with counting sink |
 | `fuzz_animation` | MEDIUM | Animation frame iteration (GIF, WebP, APNG) |
 | `fuzz_transcode` | MEDIUM | Structured: decode→encode with arbitrary target format |

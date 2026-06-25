@@ -123,13 +123,6 @@ doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_depthmap"
-path = "fuzz_targets/fuzz_depthmap.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "fuzz_roundtrip"
 path = "fuzz_targets/fuzz_roundtrip.rs"
 test = false

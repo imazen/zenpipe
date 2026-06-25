@@ -67,7 +67,6 @@ zencodecs/
 │   ├── transcode.rs      # Transcode API and streaming decode→encode bridge
 │   ├── zennode_defs.rs   # QualityIntentNode for pipeline integration (feature: zennode)
 │   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapSource)
-│   ├── depthmap.rs       # Format-agnostic depth map types (DecodedDepthMap, DepthImage, conversions)
 │   └── codecs/
 │       ├── mod.rs        # Codec adapter modules
 │       ├── jpeg.rs       # zenjpeg adapter
@@ -189,24 +188,11 @@ that sweep lands.
 - Feature-gated: `jpeg-ultrahdr` (JPEG/AVIF/JXL), `raw-decode-gainmap` (DNG/AMPF)
 - 14 unit tests + 7 integration tests + 2 doc-tests + 3 RAW gain map tests
 
-### Depth Map Support (2026-03-17)
-- **depthmap.rs**: Format-agnostic depth map types
-- **DepthImage**: Raw depth pixel data (Gray8/Gray16/Float32/Float16) with validation
-- **DecodedDepthMap**: Depth pixels + metadata + optional confidence map + source info
-  - `to_normalized_f32()`: Convert any representation to [0.0, 1.0] range
-  - `to_meters()`: Convert to metric depth (returns None for Normalized units)
-  - `resize()`: Bilinear interpolation for resolution matching
-- **DepthFormat**: RangeLinear, RangeInverse, Disparity, AbsoluteDepth
-- **DepthUnits**: Meters, Millimeters, Diopters, Normalized
-- **DepthSource**: AndroidGDepth, AndroidDdf, AppleMpf, AppleHeic, Unknown
-- **Integer vs float semantics**: Gray8/Gray16 store normalized position for Range formats;
-  Float32/Float16 store actual depth/disparity values
-- **DecodeRequest::decode_depth_map()**: Decode + extract depth map in one call
-  - JPEG: Extracts MPF Disparity secondary image via zenjpeg extras
-  - HEIC: Stub for future auxiliary depth image extraction
-  - Other formats: Returns None
-- Internal f16<->f32 conversion (pure math, no unsafe)
-- 30+ unit tests covering all formats, pixel types, f16 roundtrip, resize, edge cases
+### Depth Map Support — REMOVED 2026-06-25
+Depth-map support (`depthmap.rs`, `DecodeRequest::decode_depth_map`, the JPEG/HEIC/AVIF
+extractors, the `fuzz_depthmap` target) was deleted (−1,978 LOC) — unused by the
+transcoding/selection core. The generic `SupplementSet::DEPTH_MAP` transcode-inventory bit
+is retained (it references no depth types). See CHANGELOG.
 
 ### RAW/DNG Support (2026-03-18)
 - **Feature-gated**: `raw-decode`, `raw-decode-exif`, `raw-decode-xmp` (not in default features — rawloader is LGPL)

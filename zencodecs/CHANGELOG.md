@@ -17,6 +17,11 @@ All notable changes to `zencodecs` are documented here. Format follows
   `exif_roundtrip`). This aligns zencodecs with its transcoding/selection core;
   rich field extraction, if wanted, belongs upstream as typed getters on
   `zencodec::exif::Exif`. **BREAKING: the `zencodecs::exif` module is removed.**
+- **Depth-map support removed entirely** (`depthmap.rs` + `DecodeRequest::decode_depth_map`
+  + the JPEG/HEIC/AVIF depth extractors + the `fuzz_depthmap` target; −1,978 LOC): unused by
+  the transcoding/selection core. **BREAKING: `zencodecs::depthmap` and `decode_depth_map` are
+  gone.** The generic `SupplementSet::DEPTH_MAP` transcode-inventory bit is retained (it
+  references no depth types).
 
 ### Changed
 - Bumped the `zencodec` dependency floor `0.1.22` → `0.1.25` (the lockfile already

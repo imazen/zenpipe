@@ -150,7 +150,6 @@ pub mod color;
 pub mod config;
 pub mod decision;
 mod decode;
-pub mod depthmap;
 mod dispatch;
 mod dyn_dispatch;
 mod encode;
@@ -241,12 +240,6 @@ pub use gainmap::transcode_to_hdr_pq_png;
 pub use gainmap::{DecodedGainMap, GainMap, GainMapMetadata, GainMapSource};
 pub use zencodec::gainmap::{
     GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
-};
-
-// Depth map types (format-agnostic)
-pub use depthmap::{
-    DecodedDepthMap, DepthFormat, DepthImage, DepthMapMetadata, DepthMeasureType, DepthPixelFormat,
-    DepthSource, DepthUnits,
 };
 
 // zencodec trait re-exports
