@@ -161,6 +161,7 @@ pub mod gainmap;
 mod info;
 pub mod intent;
 mod limits;
+mod macros;
 #[cfg(feature = "picker")]
 pub mod picker;
 pub mod pixel;

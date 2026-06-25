@@ -6,6 +6,7 @@
 
 use crate::config::CodecConfig;
 use crate::error::Result;
+use crate::macros::dispatch_format;
 use crate::{CodecError, ImageFormat, Limits, Metadata, StopToken};
 use alloc::boxed::Box;
 use whereat::at;
@@ -288,72 +289,21 @@ pub(crate) fn build_streaming_encoder(
     format: ImageFormat,
     params: EncodeParams<'_>,
 ) -> Result<StreamingEncoder> {
-    match format {
-        #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => crate::codecs::jpeg::build_streaming(params),
-        #[cfg(not(feature = "jpeg"))]
-        ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "webp")]
-        ImageFormat::WebP => crate::codecs::webp::build_streaming(params),
-        #[cfg(not(feature = "webp"))]
-        ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "gif")]
-        ImageFormat::Gif => crate::codecs::gif::build_streaming(params),
-        #[cfg(not(feature = "gif"))]
-        ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "png")]
-        ImageFormat::Png => crate::codecs::png::build_streaming(params),
-        #[cfg(not(feature = "png"))]
-        ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "avif-encode")]
-        ImageFormat::Avif => crate::codecs::avif_enc::build_streaming(params),
-        #[cfg(not(feature = "avif-encode"))]
-        ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "jxl-encode")]
-        ImageFormat::Jxl => crate::codecs::jxl_enc::build_streaming(params),
-        #[cfg(not(feature = "jxl-encode"))]
-        ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Pnm => crate::codecs::pnm::build_streaming(params),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Pnm => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-bmp")]
-        ImageFormat::Bmp => crate::codecs::bmp::build_streaming(params),
-        #[cfg(not(feature = "bitmaps-bmp"))]
-        ImageFormat::Bmp => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Farbfeld => crate::codecs::farbfeld::build_streaming(params),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "tiff")]
-        ImageFormat::Tiff => crate::codecs::tiff::build_streaming(params),
-        #[cfg(not(feature = "tiff"))]
-        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-qoi")]
-        ImageFormat::Qoi => crate::codecs::qoi::build_streaming(params),
-        #[cfg(not(feature = "bitmaps-qoi"))]
-        ImageFormat::Qoi => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-tga")]
-        ImageFormat::Tga => crate::codecs::tga::build_streaming(params),
-        #[cfg(not(feature = "bitmaps-tga"))]
-        ImageFormat::Tga => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-hdr")]
-        ImageFormat::Hdr => crate::codecs::hdr::build_streaming(params),
-        #[cfg(not(feature = "bitmaps-hdr"))]
-        ImageFormat::Hdr => Err(at!(CodecError::UnsupportedFormat(format))),
-
+    dispatch_format! {
+        format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
+        Jpeg => "jpeg" => crate::codecs::jpeg::build_streaming(params),
+        WebP => "webp" => crate::codecs::webp::build_streaming(params),
+        Gif => "gif" => crate::codecs::gif::build_streaming(params),
+        Png => "png" => crate::codecs::png::build_streaming(params),
+        Avif => "avif-encode" => crate::codecs::avif_enc::build_streaming(params),
+        Jxl => "jxl-encode" => crate::codecs::jxl_enc::build_streaming(params),
+        Pnm => "bitmaps" => crate::codecs::pnm::build_streaming(params),
+        Bmp => "bitmaps-bmp" => crate::codecs::bmp::build_streaming(params),
+        Farbfeld => "bitmaps" => crate::codecs::farbfeld::build_streaming(params),
+        Tiff => "tiff" => crate::codecs::tiff::build_streaming(params),
+        Qoi => "bitmaps-qoi" => crate::codecs::qoi::build_streaming(params),
+        Tga => "bitmaps-tga" => crate::codecs::tga::build_streaming(params),
+        Hdr => "bitmaps-hdr" => crate::codecs::hdr::build_streaming(params);
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
 }
@@ -367,72 +317,21 @@ pub(crate) fn build_encoder<'a>(
     format: ImageFormat,
     params: EncodeParams<'a>,
 ) -> Result<BuiltEncoder<'a>> {
-    match format {
-        #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => Ok(crate::codecs::jpeg::build_trait_encoder(params)),
-        #[cfg(not(feature = "jpeg"))]
-        ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "webp")]
-        ImageFormat::WebP => Ok(crate::codecs::webp::build_trait_encoder(params)),
-        #[cfg(not(feature = "webp"))]
-        ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "gif")]
-        ImageFormat::Gif => Ok(crate::codecs::gif::build_trait_encoder(params)),
-        #[cfg(not(feature = "gif"))]
-        ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "png")]
-        ImageFormat::Png => Ok(crate::codecs::png::build_trait_encoder(params)),
-        #[cfg(not(feature = "png"))]
-        ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "avif-encode")]
-        ImageFormat::Avif => Ok(crate::codecs::avif_enc::build_trait_encoder(params)),
-        #[cfg(not(feature = "avif-encode"))]
-        ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "jxl-encode")]
-        ImageFormat::Jxl => Ok(crate::codecs::jxl_enc::build_trait_encoder(params)),
-        #[cfg(not(feature = "jxl-encode"))]
-        ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Pnm => Ok(crate::codecs::pnm::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Pnm => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-bmp")]
-        ImageFormat::Bmp => Ok(crate::codecs::bmp::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps-bmp"))]
-        ImageFormat::Bmp => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps")]
-        ImageFormat::Farbfeld => Ok(crate::codecs::farbfeld::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps"))]
-        ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "tiff")]
-        ImageFormat::Tiff => Ok(crate::codecs::tiff::build_trait_encoder(params)),
-        #[cfg(not(feature = "tiff"))]
-        ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-qoi")]
-        ImageFormat::Qoi => Ok(crate::codecs::qoi::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps-qoi"))]
-        ImageFormat::Qoi => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-tga")]
-        ImageFormat::Tga => Ok(crate::codecs::tga::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps-tga"))]
-        ImageFormat::Tga => Err(at!(CodecError::UnsupportedFormat(format))),
-
-        #[cfg(feature = "bitmaps-hdr")]
-        ImageFormat::Hdr => Ok(crate::codecs::hdr::build_trait_encoder(params)),
-        #[cfg(not(feature = "bitmaps-hdr"))]
-        ImageFormat::Hdr => Err(at!(CodecError::UnsupportedFormat(format))),
-
+    dispatch_format! {
+        format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
+        Jpeg => "jpeg" => Ok(crate::codecs::jpeg::build_trait_encoder(params)),
+        WebP => "webp" => Ok(crate::codecs::webp::build_trait_encoder(params)),
+        Gif => "gif" => Ok(crate::codecs::gif::build_trait_encoder(params)),
+        Png => "png" => Ok(crate::codecs::png::build_trait_encoder(params)),
+        Avif => "avif-encode" => Ok(crate::codecs::avif_enc::build_trait_encoder(params)),
+        Jxl => "jxl-encode" => Ok(crate::codecs::jxl_enc::build_trait_encoder(params)),
+        Pnm => "bitmaps" => Ok(crate::codecs::pnm::build_trait_encoder(params)),
+        Bmp => "bitmaps-bmp" => Ok(crate::codecs::bmp::build_trait_encoder(params)),
+        Farbfeld => "bitmaps" => Ok(crate::codecs::farbfeld::build_trait_encoder(params)),
+        Tiff => "tiff" => Ok(crate::codecs::tiff::build_trait_encoder(params)),
+        Qoi => "bitmaps-qoi" => Ok(crate::codecs::qoi::build_trait_encoder(params)),
+        Tga => "bitmaps-tga" => Ok(crate::codecs::tga::build_trait_encoder(params)),
+        Hdr => "bitmaps-hdr" => Ok(crate::codecs::hdr::build_trait_encoder(params));
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
 }
