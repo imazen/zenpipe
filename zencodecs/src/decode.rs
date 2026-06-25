@@ -5,6 +5,7 @@ pub use zencodec::decode::DecodeOutput;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::macros::dispatch_format;
 use crate::policy::CodecPolicy;
 use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
 use whereat::at;
@@ -536,9 +537,9 @@ impl<'a> DecodeRequest<'a> {
                          supported for this format",
             }));
         }
-        match format {
-            #[cfg(feature = "jpeg")]
-            ImageFormat::Jpeg => crate::codecs::jpeg::decode(
+        dispatch_format! {
+            format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
+            Jpeg => "jpeg" => crate::codecs::jpeg::decode(
                 self.data,
                 self.codec_config,
                 self.limits,
@@ -547,32 +548,16 @@ impl<'a> DecodeRequest<'a> {
                 self.gain_map_render,
                 self.orientation,
             ),
-            #[cfg(not(feature = "jpeg"))]
-            ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "webp")]
-            ImageFormat::WebP => crate::codecs::webp::decode(
+            WebP => "webp" => crate::codecs::webp::decode(
                 self.data,
                 self.codec_config,
                 self.limits,
                 self.stop,
                 dp,
             ),
-            #[cfg(not(feature = "webp"))]
-            ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "gif")]
-            ImageFormat::Gif => crate::codecs::gif::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "gif"))]
-            ImageFormat::Gif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "png")]
-            ImageFormat::Png => crate::codecs::png::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "png"))]
-            ImageFormat::Png => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "avif-decode")]
-            ImageFormat::Avif => crate::codecs::avif_dec::decode(
+            Gif => "gif" => crate::codecs::gif::decode(self.data, self.limits, self.stop, dp),
+            Png => "png" => crate::codecs::png::decode(self.data, self.limits, self.stop, dp),
+            Avif => "avif-decode" => crate::codecs::avif_dec::decode(
                 self.data,
                 self.codec_config,
                 self.limits,
@@ -580,22 +565,14 @@ impl<'a> DecodeRequest<'a> {
                 dp,
                 self.extract_gain_map,
             ),
-            #[cfg(not(feature = "avif-decode"))]
-            ImageFormat::Avif => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "jxl-decode")]
-            ImageFormat::Jxl => crate::codecs::jxl_dec::decode(
+            Jxl => "jxl-decode" => crate::codecs::jxl_dec::decode(
                 self.data,
                 self.limits,
                 self.stop,
                 dp,
                 self.extract_gain_map,
             ),
-            #[cfg(not(feature = "jxl-decode"))]
-            ImageFormat::Jxl => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "heic-decode")]
-            ImageFormat::Heic => crate::codecs::heic::decode(
+            Heic => "heic-decode" => crate::codecs::heic::decode(
                 self.data,
                 self.limits,
                 self.stop,
@@ -604,68 +581,31 @@ impl<'a> DecodeRequest<'a> {
                 self.extract_gain_map,
                 self.orientation,
             ),
-            #[cfg(not(feature = "heic-decode"))]
-            ImageFormat::Heic => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps")]
-            ImageFormat::Pnm => crate::codecs::pnm::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "bitmaps"))]
-            ImageFormat::Pnm => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps-bmp")]
-            ImageFormat::Bmp => crate::codecs::bmp::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "bitmaps-bmp"))]
-            ImageFormat::Bmp => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps")]
-            ImageFormat::Farbfeld => {
-                crate::codecs::farbfeld::decode(self.data, self.limits, self.stop, dp)
-            }
-            #[cfg(not(feature = "bitmaps"))]
-            ImageFormat::Farbfeld => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "tiff")]
-            ImageFormat::Tiff => crate::codecs::tiff::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "tiff"))]
-            ImageFormat::Tiff => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps-qoi")]
-            ImageFormat::Qoi => crate::codecs::qoi::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "bitmaps-qoi"))]
-            ImageFormat::Qoi => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps-tga")]
-            ImageFormat::Tga => crate::codecs::tga::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "bitmaps-tga"))]
-            ImageFormat::Tga => Err(at!(CodecError::UnsupportedFormat(format))),
-
-            #[cfg(feature = "bitmaps-hdr")]
-            ImageFormat::Hdr => crate::codecs::hdr::decode(self.data, self.limits, self.stop, dp),
-            #[cfg(not(feature = "bitmaps-hdr"))]
-            ImageFormat::Hdr => Err(at!(CodecError::UnsupportedFormat(format))),
-
+            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, self.limits, self.stop, dp),
+            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, self.limits, self.stop, dp),
+            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, self.limits, self.stop, dp),
+            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, self.limits, self.stop, dp),
+            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, self.limits, self.stop, dp),
+            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, self.limits, self.stop, dp),
+            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, self.limits, self.stop, dp);
             // RAW/DNG: Custom format from zenraw
             #[cfg(feature = "raw-decode")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
                 crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.stop)
             }
-
             // JPEG 2000
             #[cfg(feature = "jp2-decode")]
             ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.stop, dp),
-
             // SVG/SVGZ
             #[cfg(feature = "svg")]
             ImageFormat::Custom(def) if def.name == "svg" => {
                 crate::codecs::svg::decode(self.data, self.limits, self.stop, dp)
             }
-
             // PDF: Custom format from zenpdf (renders page 0)
             #[cfg(feature = "pdf-decode")]
             ImageFormat::Custom(def) if def.name == "pdf" => {
                 crate::codecs::pdf::decode(self.data, self.limits, self.stop, dp)
             }
-
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }
     }
