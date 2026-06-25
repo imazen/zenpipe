@@ -362,15 +362,9 @@ mod tests {
             &env,
         )
         .unwrap();
-        let tight = Limits {
-            max_memory_bytes: Some(1_000_000),
-            ..Limits::none()
-        };
+        let tight = Limits::none().with_max_memory(1_000_000);
         assert!(check_estimate_against_limits(&enc, &c, &tight).is_err());
-        let loose = Limits {
-            max_memory_bytes: Some(64_000_000),
-            ..Limits::none()
-        };
+        let loose = Limits::none().with_max_memory(64_000_000);
         assert!(check_estimate_against_limits(&enc, &c, &loose).is_ok());
     }
 

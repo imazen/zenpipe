@@ -253,10 +253,7 @@ fn stop_encode_png() {
 #[test]
 fn limits_decode_jpeg_width() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();
@@ -275,10 +272,7 @@ fn limits_decode_memory_admission() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
     // The decoded RGBA8 frame alone is 256*256*4 = 256 KiB; a 1 KiB memory budget
     // must be rejected pre-flight by the calibrated decode estimate (gated on est).
-    let tight = Limits {
-        max_memory_bytes: Some(1024),
-        ..Default::default()
-    };
+    let tight = Limits::none().with_max_memory(1024);
     let result = DecodeRequest::new(&data)
         .with_limits(&tight)
         .decode_full_frame();
@@ -287,10 +281,7 @@ fn limits_decode_memory_admission() {
         "decode must reject when the estimate exceeds max_memory_bytes"
     );
     // A generous budget admits the same image.
-    let generous = Limits {
-        max_memory_bytes: Some(64 << 20),
-        ..Default::default()
-    };
+    let generous = Limits::none().with_max_memory(64 << 20);
     assert!(
         DecodeRequest::new(&data)
             .with_limits(&generous)
@@ -306,10 +297,7 @@ fn limits_decode_memory_admission() {
 #[ignore = "PNG codec adapter not yet wired into zencodecs"]
 fn limits_decode_png_pixels() {
     let data = encode_test_data(ImageFormat::Png, 256, 256);
-    let limits = Limits {
-        max_pixels: Some(100),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_pixels(100);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();
@@ -326,10 +314,7 @@ fn limits_decode_png_pixels() {
 #[test]
 fn limits_decode_gif_width() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 128, 128);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();
@@ -346,10 +331,7 @@ fn limits_decode_gif_width() {
 #[test]
 fn limits_decode_webp_width() {
     let data = encode_test_data(ImageFormat::WebP, 256, 256);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();
@@ -368,10 +350,7 @@ fn limits_decode_webp_width() {
 #[test]
 fn limits_decode_avif_pixels() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
-    let limits = Limits {
-        max_pixels: Some(100),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_pixels(100);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();
@@ -394,10 +373,7 @@ fn limits_decode_avif_pixels() {
 #[test]
 fn limits_encode_gif_dimensions() {
     let img = rgba8_image(128, 128);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_limits(&limits)
         .encode_full_frame_rgba8(img.as_ref());
@@ -414,10 +390,7 @@ fn limits_encode_gif_dimensions() {
 #[test]
 fn limits_encode_jpeg_memory() {
     let img = rgb8_image(256, 256);
-    let limits = Limits {
-        max_memory_bytes: Some(1),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_limits(&limits)
@@ -437,10 +410,7 @@ fn limits_encode_memory_admission() {
     // Complements the 1-byte reject above: a generous budget must admit the same
     // encode. Guards against the pre-flight estimate falsely rejecting valid work.
     let img = rgb8_image(256, 256);
-    let generous = Limits {
-        max_memory_bytes: Some(256 << 20),
-        ..Default::default()
-    };
+    let generous = Limits::none().with_max_memory(256 << 20);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_limits(&generous)
@@ -454,10 +424,7 @@ fn limits_encode_memory_admission() {
 #[test]
 fn limits_encode_jpeg_dimensions() {
     let img = rgb8_image(256, 256);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
         .with_limits(&limits)
@@ -475,10 +442,7 @@ fn limits_encode_jpeg_dimensions() {
 #[test]
 fn limits_encode_webp_memory() {
     let img = rgb8_image(256, 256);
-    let limits = Limits {
-        max_memory_bytes: Some(1),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
         .with_limits(&limits)
@@ -496,10 +460,7 @@ fn limits_encode_webp_memory() {
 #[test]
 fn limits_encode_webp_dimensions() {
     let img = rgb8_image(256, 256);
-    let limits = Limits {
-        max_width: Some(10),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
         .with_limits(&limits)
@@ -518,10 +479,7 @@ fn limits_encode_webp_dimensions() {
 #[ignore = "PNG codec adapter not yet wired into zencodecs"]
 fn limits_encode_png_memory() {
     let img = rgb8_image(256, 256);
-    let limits = Limits {
-        max_memory_bytes: Some(1),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Png)
         .with_limits(&limits)
         .encode_full_frame_rgb8(img.as_ref());
@@ -538,10 +496,7 @@ fn limits_encode_png_memory() {
 #[test]
 fn limits_encode_gif_memory() {
     let img = rgba8_image(128, 128);
-    let limits = Limits {
-        max_memory_bytes: Some(1),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Gif)
         .with_limits(&limits)
         .encode_full_frame_rgba8(img.as_ref());
@@ -559,10 +514,7 @@ fn limits_encode_gif_memory() {
 #[test]
 fn limits_encode_avif_memory() {
     let img = rgb8_image(64, 64);
-    let limits = Limits {
-        max_memory_bytes: Some(1),
-        ..Default::default()
-    };
+    let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(50.0)
         .with_limits(&limits)
@@ -603,13 +555,11 @@ fn normal_encode_jpeg_succeeds() {
 #[test]
 fn generous_limits_still_work() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
-    let limits = Limits {
-        max_width: Some(10000),
-        max_height: Some(10000),
-        max_pixels: Some(100_000_000),
-        max_memory_bytes: Some(1_000_000_000),
-        ..Default::default()
-    };
+    let limits = Limits::none()
+        .with_max_width(10000)
+        .with_max_height(10000)
+        .with_max_pixels(100_000_000)
+        .with_max_memory(1_000_000_000);
     let result = DecodeRequest::new(&data)
         .with_limits(&limits)
         .decode_full_frame();

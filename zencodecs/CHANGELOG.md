@@ -21,6 +21,14 @@ All notable changes to `zencodecs` are documented here. Format follows
 ### Changed
 - Bumped the `zencodec` dependency floor `0.1.22` → `0.1.25` (the lockfile already
   resolved 0.1.25; this formalizes relying on its surface).
+- **`Limits` is now a re-export alias of [`zencodec::ResourceLimits`]** (was a
+  field-for-field duplicate struct + a manual `to_resource_limits` converter).
+  Construct with the builder methods — the upstream type is `#[non_exhaustive]`,
+  so `Limits { .. }` struct-literal syntax is gone; use
+  `Limits::none().with_max_width(..)` etc. Deletes the duplicate builders, the
+  `check_dimensions`/`check_memory` validators (the upstream ones are used now),
+  the unused `Limits::for_proxy()` preset, and the converter + its tests (−331 LOC).
+  `to_resource_limits` survives as a `pub(crate)` identity shim. **BREAKING.**
 
 ### Added
 - **Content-aware format picker** (`picker` / `picker-api` features, both off by

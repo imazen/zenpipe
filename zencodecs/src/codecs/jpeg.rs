@@ -224,8 +224,8 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     // Enforce limits if provided.
     if let Some(limits) = limits {
         limits
-            .check_dimensions(width as u64, height as u64)
-            .map_err(|msg| at!(CodecError::LimitExceeded(alloc::string::String::from(msg))))?;
+            .check_dimensions(width, height)
+            .map_err(|e| at!(CodecError::LimitExceeded(alloc::format!("{e}"))))?;
     }
 
     // Convert ImgRef<Rgb<f32>> to RawImage (RGBA f32)
@@ -294,8 +294,8 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     // Enforce limits if provided.
     if let Some(limits) = limits {
         limits
-            .check_dimensions(width as u64, height as u64)
-            .map_err(|msg| at!(CodecError::LimitExceeded(alloc::string::String::from(msg))))?;
+            .check_dimensions(width, height)
+            .map_err(|e| at!(CodecError::LimitExceeded(alloc::format!("{e}"))))?;
     }
 
     // Convert ImgRef<Rgba<f32>> to RawImage (RGBA f32)

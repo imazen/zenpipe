@@ -60,12 +60,12 @@ Each chunk: land with green tests, commit, push, before the next.
 - [x] **0. Plan doc** (this file).
 - [ ] **1. Bump `zencodec` 0.1.22 → 0.1.25** (Cargo.lock already resolves 0.1.25). Formalizes
   relying on the 0.1.25 surface. Trivial; verify build.
-- [ ] **2. exif.rs reduction** — delete the rich `ExifData` extraction parser (parse_exif +
+- [x] **2. exif.rs reduction** (DONE 85ecbb5, −2085 LOC) — delete the rich `ExifData` extraction parser (parse_exif +
   IFD walker + typed getters), keeping only what's actually consumed internally
   (orientation already via `zencodec::helpers::parse_exif_orientation`; the zenraw
   `from_raw_metadata` bridge if still needed). Retire the `fuzz_exif` target or repoint it at
   `zencodec::exif::Exif`. **~800–1000 LOC.** Biggest in-crate win.
-- [ ] **3. limits.rs** (medium) — alias `Limits = zencodec::ResourceLimits`, convert the ~20
+- [x] **3. limits.rs** (DONE, −331 LOC) — alias `Limits = zencodec::ResourceLimits`, convert the ~20
   struct-literal sites to builders, drop `to_resource_limits` + conversion tests. ~130 LOC.
   Only if the ergonomic regression is acceptable.
 - [ ] **4. UPSTREAM PRs** (need zencodec/codec changes — file as zenpipe issues):
