@@ -36,6 +36,13 @@ All notable changes to `zencodecs` are documented here. Format follows
   `to_resource_limits` survives as a `pub(crate)` identity shim. **BREAKING.**
 
 ### Added
+- **Measured JPEG quality ↔ SSIMULACRA2 ↔ bpp calibration** (`quality_calibration`
+  module): `LIBJPEG_TURBO` and `MOZJPEG_EVALCHROMA` anchor tables (24 quality points
+  each, median SSIMULACRA2 + median bpp) + `q_to_ssim2` / `ssim2_to_q` / `q_to_bpp`
+  piecewise-linear conversions. From an 81,552-cell sweep (codec-corpus 502 images ×
+  sizes × q × 2 encoders, fast-ssim2; 2026-06-26). Replaces guessing the libjpeg
+  quality→perceptual-quality relationship with measurement. Re-exported at the crate
+  root. Accuracy caveats (content spread; bpp is 5–8× content-bound) documented inline.
 - **Content-aware format picker** (`picker` / `picker-api` features, both off by
   default so the publishable core stays dependency-light):
   - `MlpFormatPicker` — a [`FormatPicker`] backed by a zenpicker meta-model (an MLP

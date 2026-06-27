@@ -166,6 +166,7 @@ pub mod picker;
 pub mod pixel;
 pub mod policy;
 pub mod quality;
+pub mod quality_calibration;
 mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
@@ -201,6 +202,9 @@ pub use picker::MlpFormatPicker;
 pub use picker::OfferPick;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
+pub use quality_calibration::{
+    LIBJPEG_TURBO, MOZJPEG_EVALCHROMA, QCalAnchor, q_to_bpp, q_to_ssim2, ssim2_to_q,
+};
 pub use registry::AllowedFormats;
 #[cfg(feature = "riapi")]
 pub use riapi_parse::{CodecEngine, parse_codec_keys};
