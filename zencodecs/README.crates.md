@@ -1,4 +1,6 @@
-# zencodecs [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zencodecs?style=flat-square)](https://crates.io/crates/zencodecs) [![lib.rs](https://img.shields.io/crates/v/zencodecs?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodecs) [![docs.rs](https://img.shields.io/docsrs/zencodecs?style=flat-square)](https://docs.rs/zencodecs) [![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zencodecs [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
 
 Unified image codec dispatch for Rust — one detect-decode-encode API over the
 format-specific zen codecs:

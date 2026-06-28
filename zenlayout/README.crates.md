@@ -1,4 +1,6 @@
-# zenlayout [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zenlayout?style=flat-square)](https://crates.io/crates/zenlayout) [![lib.rs](https://img.shields.io/crates/v/zenlayout?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zenlayout) [![docs.rs](https://img.shields.io/docsrs/zenlayout?style=flat-square)](https://docs.rs/zenlayout) [![MSRV](https://img.shields.io/badge/MSRV-1.89-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zenlayout [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
 
 zenlayout is a pure-geometry image layout engine for computing resize dimensions, crop regions, and canvas placement.
 

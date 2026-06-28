@@ -52,6 +52,23 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Changed
 
+- **README overhaul + crates.io README split (zenpipe + zencodecs/zenfilters/zenlayout).**
+  Standardized every published crate's badge row to the flat-square set (CI,
+  crates.io, lib.rs, docs.rs, MSRV, license), with the CI badge pointing at the
+  monorepo `ci.yml` and no `branch=` param — zenpipe was on `for-the-badge` and
+  missing the crates.io/lib.rs/docs.rs badges. Added `## Quick start` sections,
+  regenerated the shared crosslink footer from the crate registry, and split each
+  crate's crates.io README into a generated `README.crates.md` (CI-badge-only,
+  absolute links) wired via `readme = "README.crates.md"`. Repointed the
+  `repository` field of zencodecs/zenfilters/zenlayout from their archived
+  standalone repos to `https://github.com/imazen/zenpipe`, and aligned the
+  `zencodecs` license field (`AGPL-3.0-or-later` →
+  `AGPL-3.0-only OR LicenseRef-Imazen-Commercial`) with its siblings, the bundled
+  LICENSE-COMMERCIAL, and its own README. Fixed stale README claims:
+  `zenpipe::transcode` → `zenpipe::animation::transcode` (real signature),
+  `NodeOp::Resize`'s `filter`/`sharpen_percent` are `Option`s over
+  `zenresize::Filter`, the zenfilters film-look-gallery URL → imazen.github.io/zenpipe,
+  and the zencodecs default-feature list (drops the non-default `heic-decode`).
 - **deps: migrate to published `zencodec 0.1.24`; drop the git-rev patch.**
   Bumped the workspace `zencodec` dependency `0.1.16` → `0.1.24` and removed the
   `[patch.crates-io] zencodec = { git = … }` entry now that `zencodec 0.1.24` is

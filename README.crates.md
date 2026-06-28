@@ -1,4 +1,6 @@
-# zenpipe [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zenpipe?style=flat-square)](https://crates.io/crates/zenpipe) [![lib.rs](https://img.shields.io/crates/v/zenpipe?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zenpipe) [![docs.rs](https://img.shields.io/docsrs/zenpipe?style=flat-square)](https://docs.rs/zenpipe) [![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zenpipe [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
 
 Streaming pixel pipeline with zero-materialization execution. A pull-based DAG of
 image operations — decode, resize, filter, composite, encode — that keeps only the
@@ -46,82 +48,6 @@ with [`zenpipe::execute`](https://docs.rs/zenpipe/latest/zenpipe/fn.execute.html
 (or `execute_with_stop` for cooperative cancellation) over the `Source`/`Sink`
 traits — see below.
 
-<!-- crates.io:skip-start -->
-## Architecture
-
-```mermaid
-graph LR
-    subgraph Input
-        A[Compressed bytes] --> B[zencodec decoder]
-    end
-    subgraph Pipeline
-        B --> C[DecoderSource]
-        C --> D[Layout / Resize]
-        D --> E[Format convert]
-        E --> F[Filters]
-        F --> G[Composite]
-        G --> H[Output]
-    end
-    subgraph Output
-        H --> I[EncoderSink]
-        I --> J[zencodec encoder]
-        J --> K[Encoded bytes]
-    end
-```
-
-### Pull model
-
-The sink pulls strips from the output source. Each source pulls from its
-upstream source on demand. Only the rows currently needed exist in memory.
-
-```mermaid
-sequenceDiagram
-    participant Sink as EncoderSink
-    participant Resize as ResizeSource
-    participant Decode as DecoderSource
-    participant Codec as zencodec
-
-    loop for each output strip
-        Sink->>Resize: next()?
-        loop fill ring buffer
-            Resize->>Decode: next()?
-            Decode->>Codec: next_batch()
-            Codec-->>Decode: decoded rows
-            Decode-->>Resize: Strip (16 rows)
-        end
-        Resize-->>Sink: Strip (output rows)
-        Sink->>Sink: push rows to encoder
-    end
-    Sink->>Sink: finish()
-```
-
-### Memory model
-
-Most operations stream — only resize ring buffers and neighborhood
-filter windows allocate beyond the current strip.
-
-```mermaid
-graph TD
-    subgraph "Zero materialization (streaming)"
-        Crop[Crop]
-        Resize[Resize — ring buffer ≈21 rows]
-        Composite[Composite — synced strip pull]
-        PixelOps[Per-pixel transforms]
-        Filters[Per-pixel filters]
-        ICC[ICC transform]
-        Flip[Horizontal flip]
-    end
-    subgraph "Windowed materialization"
-        Blur[Neighborhood filters — strip + 2×overlap rows]
-    end
-    subgraph "Full materialization"
-        Orient[Axis-swap orientation]
-        Analyze[Content analysis]
-        CropWS[Whitespace crop]
-        Custom[Materialize barrier]
-    end
-```
-<!-- crates.io:skip-end -->
 
 ## Pipeline graph
 
@@ -169,21 +95,6 @@ for its domain; `full_registry()` aggregates them all.
 | **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP/HEIC encode+decode, Quantize, QualityIntentNode | 16 |
 | **zenfilters** | Photo adjustment filter nodes | 43 |
 
-<!-- crates.io:skip-start -->
-### zenpipe-owned nodes
-
-```mermaid
-graph TD
-    zenpipe[zenpipe nodes]
-
-    zenpipe --> Constrain["Constrain — 17-param fit/resize/sharpen"]
-    zenpipe --> ResizeN["Resize"]
-    zenpipe --> CropWS["CropWhitespace"]
-    zenpipe --> FillRect["FillRect"]
-    zenpipe --> RemoveAlpha["RemoveAlpha — composite on matte"]
-    zenpipe --> RoundCorners["RoundCorners"]
-```
-<!-- crates.io:skip-end -->
 
 ### Constrain node
 
@@ -199,30 +110,6 @@ The Constrain node is the primary geometry entry point with 17 parameters:
 
 ## Zen crate integration
 
-<!-- crates.io:skip-start -->
-```mermaid
-graph TB
-    zenpipe((zenpipe))
-
-    zencodec[zencodec — decode/encode]
-    zenresize[zenresize — streaming resize + layout]
-    zenblend[zenblend — Porter-Duff + artistic blend modes]
-    zenfilters[zenfilters — photo filters on Oklab f32]
-    zenpixels[zenpixels — pixel buffers + color context]
-    zenpixels_convert[zenpixels-convert — row format conversion]
-    zennode[zennode — declarative node definitions]
-    moxcms[moxcms — ICC color management]
-
-    zenpipe --> zencodec
-    zenpipe --> zenresize
-    zenpipe --> zenblend
-    zenpipe --> zenfilters
-    zenpipe --> zenpixels
-    zenpipe --> zenpixels_convert
-    zenpipe --> zennode
-    zenpipe --> moxcms
-```
-<!-- crates.io:skip-end -->
 
 | Crate | Role in pipeline |
 |-------|-----------------|
@@ -244,23 +131,6 @@ zenfilters owns 43 filter nodes, and zenpipe owns 6 geometry/resize/pipeline
 nodes (Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha,
 RoundCorners). Call `full_registry()` to aggregate all three.
 
-<!-- crates.io:skip-start -->
-```mermaid
-flowchart LR
-    A["zennode instances
-    (zencodecs: 16, zenfilters: 43, zenpipe: 6)"] --> B["separate by role
-    (decode / process / encode)"]
-    B --> C["coalesce adjacent
-    same-group nodes"]
-    C --> D["geometry fusion
-    (crop+orient+flip → LayoutPlan)"]
-    D --> E["filter fusion
-    (exposure+contrast+... → FusedAdjust)"]
-    E --> F["PipelineGraph"]
-    F --> G["compile()"]
-    G --> H["Box&lt;dyn Source&gt;"]
-```
-<!-- crates.io:skip-end -->
 
 ## Format conversion
 

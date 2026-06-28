@@ -1,4 +1,6 @@
-# zenfilters [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zenfilters?style=flat-square)](https://crates.io/crates/zenfilters) [![lib.rs](https://img.shields.io/crates/v/zenfilters?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zenfilters) [![docs.rs](https://img.shields.io/docsrs/zenfilters?style=flat-square)](https://docs.rs/zenfilters) [![MSRV](https://img.shields.io/badge/MSRV-1.93-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zenfilters [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
 
 Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via [archmage](https://github.com/imazen/archmage).
 
@@ -415,25 +417,6 @@ Three methods, composable: `scale_to_width()`, `split_for_resize()`, `split_scal
 
 Additionally, `dt_sigmoid` and `cat16` modules provide free functions for darktable-compatible sigmoid tone mapping and CAT16 chromatic adaptation.
 
-<!-- crates.io:skip-start -->
-## Performance
-
-All numbers single-threaded on x86-64 AVX2.
-
-| Pipeline | 2K (1920×1080) | 4K (3840×2160) | 8K (7680×4320) |
-|----------|---------------|----------------|----------------|
-| Per-pixel (FusedAdjust) | 9 ms | 37 ms | 147 ms |
-| Clarity (blur + unsharp) | 20 ms | 88 ms | 418 ms |
-| Realistic (adjust + clarity + sharpen) | 39 ms | 174 ms | 773 ms |
-| Heavy (clarity + texture + NR) | 87 ms | 413 ms | 1.6 s |
-
-Blur performance (σ=16, SIMD stackblur):
-| Resolution | Time | Throughput |
-|-----------|------|-----------|
-| 2K | 4.0 ms | 520 Mpx/s |
-| 4K | 28 ms | 295 Mpx/s |
-| 8K | 111 ms | 300 Mpx/s |
-<!-- crates.io:skip-end -->
 
 ## Algorithms
 
