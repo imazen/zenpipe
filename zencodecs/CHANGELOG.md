@@ -41,8 +41,9 @@ All notable changes to `zencodecs` are documented here. Format follows
   each, median SSIMULACRA2 + median bpp) + `q_to_ssim2` / `ssim2_to_q` / `q_to_bpp`
   piecewise-linear conversions. From an 81,552-cell sweep (codec-corpus 502 images ×
   sizes × q × 2 encoders, fast-ssim2; 2026-06-26). Replaces guessing the libjpeg
-  quality→perceptual-quality relationship with measurement. Re-exported at the crate
-  root. Accuracy caveats (content spread; bpp is 5–8× content-bound) documented inline.
+  quality→perceptual-quality relationship with measurement. Crate-internal
+  (`pub(crate)`) for now — staged until the public quality-conversion surface is
+  finalized. Accuracy caveats (content spread; bpp is 5–8× content-bound) documented inline.
 - **Content-aware format picker** (`picker` / `picker-api` features, both off by
   default so the publishable core stays dependency-light):
   - `MlpFormatPicker` — a [`FormatPicker`] backed by a zenpicker meta-model (an MLP

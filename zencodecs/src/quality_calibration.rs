@@ -43,15 +43,20 @@
 //! equal quality, with the largest edge at low bitrate (at 0.5 bpp, mozjpeg ≈ 40
 //! SSIMULACRA2 vs libjpeg-turbo's ≈ 18) — i.e. exactly the aggressive-web regime.
 
+// This module is `pub(crate)` and not yet wired into the encode path — the tables
+// and helpers are staged for an internal quality-conversion seam. Allow dead_code
+// until that seam lands; drop this once the helpers have crate-internal callers.
+#![allow(dead_code)]
+
 /// One measured anchor: `(quality, median SSIMULACRA2, median bits-per-pixel)`.
 ///
 /// `quality` is the libjpeg/mozjpeg 0–100 dial. `bpp` is content-bound — a planning
 /// median, not a per-image value (see the module accuracy note).
-pub type QCalAnchor = (f32, f32, f32);
+pub(crate) type QCalAnchor = (f32, f32, f32);
 
 /// Stock **libjpeg-turbo** (4:2:0, Annex-K, no trellis) — the human-mindshare dial.
 /// Fixed 4:2:0 caps achievable SSIMULACRA2 (~88 even at q100).
-pub const LIBJPEG_TURBO: &[QCalAnchor] = &[
+pub(crate) const LIBJPEG_TURBO: &[QCalAnchor] = &[
     (5.0, -26.4, 0.33),
     (10.0, 10.5, 0.46),
     (15.0, 28.6, 0.57),
@@ -81,7 +86,7 @@ pub const LIBJPEG_TURBO: &[QCalAnchor] = &[
 /// **imageflow-2 mozjpeg + evalchroma** (trellis + tuned tables + content-adaptive
 /// chroma). More byte-efficient than libjpeg-turbo at equal quality, and its chroma
 /// adaptation raises the q100 ceiling to ~91.9.
-pub const MOZJPEG_EVALCHROMA: &[QCalAnchor] = &[
+pub(crate) const MOZJPEG_EVALCHROMA: &[QCalAnchor] = &[
     (5.0, -37.3, 0.15),
     (10.0, 2.0, 0.25),
     (15.0, 22.0, 0.35),
@@ -111,21 +116,21 @@ pub const MOZJPEG_EVALCHROMA: &[QCalAnchor] = &[
 /// Quality dial → median SSIMULACRA2 (piecewise-linear over the anchors, clamped to
 /// the endpoints). See the module accuracy note: this is a central estimate.
 #[must_use]
-pub fn q_to_ssim2(table: &[QCalAnchor], q: f32) -> f32 {
+pub(crate) fn q_to_ssim2(table: &[QCalAnchor], q: f32) -> f32 {
     pwl(q, table, |a| a.0, |a| a.1)
 }
 
 /// Median SSIMULACRA2 → quality dial — inverts the monotone curve. Returns the dial
 /// whose median SSIMULACRA2 matches `ssim2`; clamps outside the measured range.
 #[must_use]
-pub fn ssim2_to_q(table: &[QCalAnchor], ssim2: f32) -> f32 {
+pub(crate) fn ssim2_to_q(table: &[QCalAnchor], ssim2: f32) -> f32 {
     pwl(ssim2, table, |a| a.1, |a| a.0)
 }
 
 /// Quality dial → median bits-per-pixel. ⚠ **content-bound** (5–8× spread at fixed
 /// quality) — a planning estimate, never a per-image prediction.
 #[must_use]
-pub fn q_to_bpp(table: &[QCalAnchor], q: f32) -> f32 {
+pub(crate) fn q_to_bpp(table: &[QCalAnchor], q: f32) -> f32 {
     pwl(q, table, |a| a.0, |a| a.2)
 }
 
