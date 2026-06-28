@@ -1,6 +1,6 @@
 <!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
 
-# zenlayout [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
+# zenlayout
 
 zenlayout is a pure-geometry image layout engine for computing resize dimensions, crop regions, and canvas placement.
 

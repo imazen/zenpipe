@@ -1,6 +1,6 @@
 <!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
 
-# zenpipe [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
+# zenpipe
 
 Streaming pixel pipeline with zero-materialization execution. A pull-based DAG of
 image operations — decode, resize, filter, composite, encode — that keeps only the

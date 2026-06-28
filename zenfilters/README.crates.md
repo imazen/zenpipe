@@ -1,6 +1,6 @@
 <!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
 
-# zenfilters [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenpipe/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenpipe/actions/workflows/ci.yml)
+# zenfilters
 
 Photo filter pipeline in Oklab perceptual color space with SIMD acceleration via [archmage](https://github.com/imazen/archmage).
 
