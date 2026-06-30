@@ -6,6 +6,16 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **`picker::route_format_from_offer` (the `picker-api` feature)** — a route-based format picker over
+  the **shipped cross-codec router** (`zenpicker::default_route`: the f32 6-pairwise-discriminant
+  lossy router + i8 auto-gate + lossless), masked to the candidate formats and **quality-aware**
+  (takes a `QualityTarget` + an encode-mode/latency budget). Maps the chosen `CodecFamily` back to a
+  candidate `ImageFormat` with the same `OfferPick` outcomes as `MlpFormatPicker::pick_from_offer`.
+  Use this for the shipped router; the single-model `MlpFormatPicker` path runs a raw argmin and
+  **cannot** read the pairwise lossy router (it would misread the per-pair margins). Bumps the
+  `zenpicker`/`zenpredict` git dep to the rev that ships `default_route`.
+
 ### Removed
 - **Hand-rolled `exif` module deleted** (`exif.rs`, 2,085 LOC incl. tests; ~1,000
   production): the rich EXIF/TIFF extraction parser (`parse_exif` → `ExifData` with

@@ -6,7 +6,7 @@
 //! family back to an [`ImageFormat`], so it plugs straight into
 //! [`select_format_from_intent_with_picker`](crate::select_format_from_intent_with_picker).
 //!
-//! Three entry points, in ascending capability:
+//! Four entry points, in ascending capability:
 //!
 //! - [`MlpFormatPicker::pick`] (the [`FormatPicker`] impl) — re-rank the
 //!   candidates zencodecs already proved valid, from a caller-supplied feature
@@ -24,6 +24,11 @@
 //!   per-codec picker without re-extracting. Falls back to `OfferPick::NeedsAnalysis`
 //!   when the offer can't satisfy the model. (Items linked from their own docs
 //!   under `picker-api`; spelled here so the base-`picker` module doc resolves.)
+//! - `route_format_from_offer` (the `picker-api` feature) — the **shipped cross-codec router**,
+//!   not a single injected model: `zenpicker::default_route` (the f32 pairwise lossy router + the
+//!   auto-gate + lossless routers) over a quality `target` + budget, masked to the candidates.
+//!   Quality-aware and the path for the shipped routers; the three above run a single family-score
+//!   model + a raw argmin, which can't read the pairwise router.
 //!
 //! The feature vector is the caller's to produce (e.g. via zenanalyze) — the base
 //! `picker` feature takes no analysis dependency; only `picker-api` pulls the
@@ -261,6 +266,53 @@ pub enum OfferPick {
     NeedsAnalysis,
 }
 
+/// Pick a format from an existing [`Offer`](zenanalyze_api::Offer) using the **shipped cross-codec
+/// router** ([`zenpicker::default_route`] — the f32 6-pairwise-discriminant lossy router + the i8
+/// auto-gate + lossless routers), masked to `candidates` and **quality-aware** (`target` is the
+/// router's primary axis). This is the path for the *shipped* router.
+///
+/// Contrast [`MlpFormatPicker`], which wraps a single injected **family-score** model and a raw
+/// argmin: it does NOT understand the pairwise lossy router (that model emits per-pair margins, so
+/// `MetaPicker::pick` refuses it) — route the shipped router through here instead.
+///
+/// `mode` / `latency_ms` / `per_family_est_ms` are the budget gate (see
+/// [`zenpicker::AllowedFamilies::viable`]): pass `EncodeMode::QueuedBalanced`, `None`,
+/// `&[0; CodecFamily::COUNT]` for no latency budget. Same [`OfferPick`] outcomes as
+/// [`MlpFormatPicker::pick_from_offer`] — `Picked` (a candidate won), `NoCandidate` (nothing
+/// offered mapped/won), or `NeedsAnalysis` (the offer couldn't satisfy the routers — run a pass).
+///
+/// Requires the `picker-api` feature.
+#[cfg(feature = "picker-api")]
+pub fn route_format_from_offer(
+    offer: &zenanalyze_api::Offer<'_>,
+    target: zenpicker::QualityTarget,
+    candidates: &[ImageFormat],
+    mode: zenpredict::EncodeMode,
+    latency_ms: Option<u32>,
+    per_family_est_ms: &[u32; CodecFamily::COUNT],
+) -> OfferPick {
+    // Candidates → the picker families the caller can emit; formats with no family are dropped.
+    let available: alloc::vec::Vec<CodecFamily> =
+        candidates.iter().copied().filter_map(family_of).collect();
+    if available.is_empty() {
+        return OfferPick::NoCandidate;
+    }
+    match zenpicker::default_route(
+        offer,
+        target,
+        &available,
+        mode,
+        latency_ms,
+        per_family_est_ms,
+    ) {
+        Ok(Some(decision)) => to_candidate(decision.family(), candidates)
+            .map_or(OfferPick::NoCandidate, OfferPick::Picked),
+        Ok(None) => OfferPick::NoCandidate,
+        // The offer couldn't satisfy the routers' columns (or a runtime error) — recover by a pass.
+        Err(_) => OfferPick::NeedsAnalysis,
+    }
+}
+
 impl FormatPicker for MlpFormatPicker {
     fn pick(&self, features: &[f32], candidates: &[ImageFormat]) -> Option<ImageFormat> {
         // Candidates → allowed-family mask. Formats with no picker family are
@@ -395,6 +447,37 @@ mod tests {
         assert_eq!(
             picker.pick_from_offer(&offer, &cands),
             OfferPick::NeedsAnalysis
+        );
+    }
+
+    #[cfg(feature = "picker-api")]
+    #[test]
+    fn route_format_from_offer_masks_and_handles_unsatisfiable() {
+        use zenanalyze_api::{Offer, Provenance};
+        let offer = Offer::new(&[], Provenance::new("test"));
+        // (a) no candidate maps to a picker family → NoCandidate, before touching the router.
+        assert_eq!(
+            route_format_from_offer(
+                &offer,
+                zenpicker::QualityTarget::Zq(80.0),
+                &[],
+                zenpredict::EncodeMode::QueuedBalanced,
+                None,
+                &[0; CodecFamily::COUNT],
+            ),
+            OfferPick::NoCandidate
+        );
+        // (b) candidates map, but an empty offer can't satisfy the routers → NoCandidate (Ok(None)).
+        assert_eq!(
+            route_format_from_offer(
+                &offer,
+                zenpicker::QualityTarget::Zq(80.0),
+                &[ImageFormat::Jpeg, ImageFormat::WebP, ImageFormat::Avif],
+                zenpredict::EncodeMode::QueuedBalanced,
+                None,
+                &[0; CodecFamily::COUNT],
+            ),
+            OfferPick::NoCandidate
         );
     }
 }
