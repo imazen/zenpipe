@@ -4443,7 +4443,7 @@ dependencies = [
 [[package]]
 name = "zenbitmaps"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenbitmaps#25ce4454a257771ec1c67febba4596a5e6aaf7d2"
+source = "git+https://github.com/imazen/zenbitmaps#7021f5d863e39ff793da4affcfe746a113f9dd67"
 dependencies = [
  "enough",
  "imgref",
