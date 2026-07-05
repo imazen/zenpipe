@@ -6,6 +6,37 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
+  correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
+  bypass the registry entirely for Custom formats (fail-open — `none()` still let
+  them through); `info.rs`'s registry check fell through `FormatSet`'s inability to
+  represent Custom at all (fail-closed — even `all()` rejected them). Added a
+  name-keyed `custom_decode` side-set; both call sites now use the same check.
+- **`transcode_to_quality`'s coefficient-domain fast paths** (JPEG↔JPEG recompress,
+  JPEG→JXL recompress, JXL→JPEG reconstruct) **now respect the `AllowedFormats`
+  registry** instead of bypassing it (b922108b).
+- **`estimate_decode`'s PDF arm keyed on the unreachable bare `ImageFormat::Pdf`
+  variant** instead of `Custom(def) if def.name == "pdf"` — was dead code, silently
+  fell through to `unknown()` (3335303a).
+- **`CodecPolicy`'s derived `Default` disagreed with `new()`** on
+  `fallback_on_error` (`false` vs `true`) — every `CodecPolicy::default()` call site
+  (4 in zenpipe's own `src/`, 1 in the fuzz target) silently got fallback-on-error
+  disabled. Hand-written `Default` now delegates to `new()` (61f3548d).
+- **Registry-disabled `Specific` format selection returned `UnsupportedFormat`
+  instead of `DisabledFormat`**, contradicting both call sites' doc comments and
+  decode.rs/info.rs's convention (faf1a6ca).
+- **zencodecs-cli's `probe` JSON hand-rolled `{:?}`-formatted `ImageFormat`** into a
+  string field — produces invalid JSON for any `Custom` format (embeds unescaped
+  quotes from the Debug output); now uses `.definition().name` (608f2446).
+- Removed stale "no CMS / no streaming / no animation" crate-doc claims (all three
+  are implemented) and corrected `decode()`'s `#[deprecated(since = "0.2.0", ...)]`
+  to `"0.1.0"` (the crate has never shipped 0.2.0) (608f2446).
+- Regenerated the stale `docs/public-api/zencodecs.txt`/`.internal.txt` (still
+  listed the depthmap/exif modules removed 2026-06-25 and the pre-alias `Limits`
+  struct) and wired `ZEN_API_DOC=check` into CI so this can't drift silently again
+  (ad2ab9e1).
+
 ### Added
 - **`picker::route_format_from_offer` (the `picker-api` feature)** — a route-based format picker over
   the **shipped cross-codec router** (`zenpicker::default_route`: the f32 6-pairwise-discriminant

@@ -9,6 +9,23 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **zengif and zenwebp both made `zencodec` a required, always-on dependency
+  (adopting the zencodec Pattern B `At<CodecError>` error boundary) and dropped
+  their `zencodec` cargo feature, which broke every dependency declaration in
+  this repo still requesting it** — "failed to select a version" on every CI
+  platform, twice in a row as each landed (zengif: imazen/zengif#13, d8610292;
+  zenwebp: zenwebp#69, 9a38d46e). Removed `zencodec` from every affected
+  feature list (root Cargo.toml ×2 each, `zencodecs/Cargo.toml`,
+  `wasm-size-shim/Cargo.toml`); added `std` back explicitly for zengif (its
+  std-only codec glue used to be gated behind the removed feature, which
+  always implied `std` — zenwebp's codec module isn't std-gated, so no
+  replacement was needed there). Both needed a `[patch.crates-io]` entry for
+  `zencodec` itself pointing at its own git main (zencodec#99's unreleased
+  `CodecError`/`CategorizedError`/`ErrorCategory` taxonomy, additive on top of
+  the published 0.1.25 — safe for every other zencodec consumer in this
+  graph). Bumped the zengif/zenwebp version requirement strings to match what
+  they now declare (0.7.3, 0.5.0) so the patch can actually resolve.
+
 - **PNM decode-bomb OOM in `zencodecs::fuzz_push_decode` bounded (zenpipe#50).**
   Bumped the `zenbitmaps` dependency `0.1.3`/`0.1.5` → `0.2.0` (the
   `At<BitmapError>` error wrapper + a 120 MP default pixel cap + the 16-bit
