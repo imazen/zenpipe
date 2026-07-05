@@ -74,10 +74,13 @@
 //!
 //! ## What This Crate Does NOT Do
 //!
-//! - **No image processing**: No resize, crop, rotate. Use `zenimage` or similar.
-//! - **No color management**: No ICC profile application (yet).
-//! - **No streaming**: One-shot decode/encode only (streaming planned).
-//! - **No animation**: First frame only for animated formats (animation planned).
+//! - **No image processing**: no resize, crop, or rotate. Use `zenpipe`/`zenresize`
+//!   or similar for that; zencodecs is decode/encode dispatch only.
+//!
+//! Color management (ICC/CICP, feature `cms`), streaming decode/encode
+//! (`push_decode`, `streaming_encoder`), and animation (GIF/WebP frame
+//! iteration via the `DynAnimationFrame{Decoder,Encoder}` traits) are all
+//! implemented — see the modules above, not a "not yet" list.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]

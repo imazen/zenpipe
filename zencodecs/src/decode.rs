@@ -231,7 +231,7 @@ impl<'a> DecodeRequest<'a> {
     /// The name `decode()` hides the fact that this materializes the entire image.
     /// `push_decode()` is the streaming alternative.
     #[deprecated(
-        since = "0.2.0",
+        since = "0.1.0",
         note = "renamed to decode_full_frame() to signal materialization; use push_decode() for streaming"
     )]
     pub fn decode(self) -> Result<DecodeOutput> {

@@ -214,9 +214,17 @@ fn probe_cmd(input: &Path) -> Result<(), String> {
     let data = std::fs::read(input).map_err(|e| format!("read {}: {e}", input.display()))?;
     let info =
         zencodecs::probe(&data, &AllowedFormats::all()).map_err(|e| format!("probe: {e}"))?;
+    // Bug #25: `{:?}` (Debug) on `ImageFormat` is not a stable string, and for
+    // `ImageFormat::Custom(&ImageFormatDefinition)` its Debug output embeds
+    // unescaped double quotes (`ImageFormatDefinition { name: "pdf", .. }`),
+    // which breaks this hand-built JSON literal outright. Use the format's own
+    // stable, lowercase `name` (from its `ImageFormatDefinition`) instead --
+    // the same identifier for both named variants ("jpeg", "png", ...) and
+    // Custom ones ("dng", "raw", "pdf", ...).
+    let format_name = info.format.definition().map_or("unknown", |d| d.name);
     println!(
-        "{{\"format\":\"{:?}\",\"width\":{},\"height\":{},\"gain_map\":{},\"depth_map\":{}}}",
-        info.format, info.width, info.height, info.supplements.gain_map, info.supplements.depth_map
+        "{{\"format\":\"{}\",\"width\":{},\"height\":{},\"gain_map\":{},\"depth_map\":{}}}",
+        format_name, info.width, info.height, info.supplements.gain_map, info.supplements.depth_map
     );
     Ok(())
 }
