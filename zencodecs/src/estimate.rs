@@ -115,7 +115,12 @@ pub fn estimate_decode(
             zenbitmaps::BmpDecoderConfig::new().estimate_decode_resources(image, compute)
         }
         #[cfg(feature = "pdf-decode")]
-        ImageFormat::Pdf => {
+        // PDF is a `Custom` format (`zenpdf::PDF_FORMAT` has `image_format: None`,
+        // so `ImageFormat::Custom(&PDF_FORMAT)` is what `detect_format`/
+        // `pdf_format()` actually produce) -- a bare `ImageFormat::Pdf` arm here
+        // is dead code, never matched by a real probe/decode. Match by name,
+        // mirroring the dng/raw arm below.
+        ImageFormat::Custom(def) if def.name == "pdf" => {
             zenpdf::PdfDecoderConfig::new().estimate_decode_resources(image, compute)
         }
         #[cfg(feature = "raw-decode")]
@@ -331,6 +336,45 @@ mod tests {
         if enc.peak_memory_bytes_est().is_none() && dec.peak_memory_bytes_est().is_none() {
             assert_eq!(avg, buffer);
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Bug #6 regression: `estimate_decode`'s PDF arm used to key on the
+    // bare `ImageFormat::Pdf` variant, which is dead code -- `pdf_format()`
+    // (and every real probe/decode) always produces
+    // `ImageFormat::Custom(&zenpdf::PDF_FORMAT)`, never the named variant,
+    // so PDF decode-estimates silently fell through to the `unknown()`
+    // floor even with `pdf-decode` compiled in.
+    // ═══════════════════════════════════════════════════════════════════
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn pdf_is_a_custom_format_not_the_named_variant() {
+        // Confirms *why* the old `ImageFormat::Pdf` arm was unreachable: the
+        // definition's `image_format` is `None`, so `to_image_format()`
+        // (what `pdf_format()` calls) always wraps as `Custom`, never `Pdf`.
+        assert_eq!(zenpdf::PDF_FORMAT.image_format, None);
+        assert_eq!(
+            zenpdf::PDF_FORMAT.to_image_format(),
+            ImageFormat::Custom(&zenpdf::PDF_FORMAT)
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn pdf_custom_format_reaches_zenpdf_estimator() {
+        // The fixed arm is `ImageFormat::Custom(def) if def.name == "pdf"`
+        // (mirroring the dng/raw arm), so this must dispatch into zenpdf's
+        // estimator rather than the `_ => unknown()` catch-all. zenpdf
+        // doesn't implement `estimate_decode_resources` yet (the trait
+        // default IS `unknown()`), so the *value* is unchanged today --
+        // this test exists so a future zenpdf estimator update is exercised
+        // automatically, and so the arm keeps compiling against a real
+        // `Custom` value instead of quietly reverting to dead code.
+        let c = chars(64, 64);
+        let env = ComputeEnvironment::new();
+        let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
+        assert_eq!(est, ResourceEstimate::unknown());
     }
 
     #[test]
