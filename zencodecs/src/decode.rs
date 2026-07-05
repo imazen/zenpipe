@@ -199,26 +199,19 @@ impl<'a> DecodeRequest<'a> {
     fn resolve_format(&self) -> Result<ImageFormat> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
-        let (format, explicit) = match self.format {
-            Some(f) => (f, true),
-            None => (
-                crate::info::detect_format(self.data)
-                    .ok_or_else(|| at!(CodecError::UnrecognizedFormat))?,
-                false,
-            ),
+        let format = match self.format {
+            Some(f) => f,
+            None => crate::info::detect_format(self.data)
+                .ok_or_else(|| at!(CodecError::UnrecognizedFormat))?,
         };
-        // Custom formats (e.g. RAW/DNG) are not tracked by the
-        // `AllowedFormats` bitset — see registry.rs. When the caller
-        // explicitly opts in via `with_format(Custom(...))`, treat that
-        // as authorization and skip the registry check.
-        let is_custom = matches!(format, ImageFormat::Custom(_));
-        if !is_custom && !registry.can_decode(format) {
+        // `AllowedFormats::can_decode` gates `ImageFormat::Custom` (RAW/DNG/
+        // PDF) by name, same as any named format — no bypass, whether the
+        // format came from an explicit `with_format(Custom(...))` or from
+        // auto-detection. `AllowedFormats::none()` denies Custom formats too;
+        // `all()` allows every compiled-in one (named or Custom).
+        if !registry.can_decode(format) {
             return Err(at!(CodecError::DisabledFormat(format)));
         }
-        // Detection-path Custom formats also pass through — the caller
-        // can't whitelist them via the registry, so the only way to
-        // refuse is via `with_format` to override.
-        let _ = explicit;
         Ok(format)
     }
 
@@ -757,6 +750,39 @@ mod tests {
             result.as_ref().map_err(|e| e.error()),
             Err(CodecError::DisabledFormat(_))
         ));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Custom-format (RAW/DNG) registry gating — decode side. `resolve_format`
+    // used to special-case `ImageFormat::Custom` as a fail-open bypass: even
+    // `AllowedFormats::none()` (nothing allowed) would still let a Custom
+    // format straight through to the decoder. Pin the deny direction here;
+    // the allow direction (registry.rs's `all_allows_compiled_custom_raw_dng`)
+    // already covers `can_decode` itself.
+    // ═══════════════════════════════════════════════════════════════════
+
+    #[test]
+    #[cfg(feature = "raw-decode")]
+    fn custom_format_none_denies_dng_decode_no_bypass() {
+        // Garbage bytes: if the old fail-open bypass were still in place,
+        // this would reach zenraw's decoder (and fail with a *different*
+        // error) instead of being rejected by the registry up front.
+        let not_really_dng = b"not a real DNG file at all";
+        let registry = AllowedFormats::none();
+
+        let result = DecodeRequest::new(not_really_dng)
+            .with_format(ImageFormat::Custom(&zenraw::DNG_FORMAT))
+            .with_registry(&registry)
+            .decode_full_frame();
+
+        assert!(
+            matches!(
+                result.as_ref().map_err(|e| e.error()),
+                Err(CodecError::DisabledFormat(_))
+            ),
+            "AllowedFormats::none() must reject an explicit Custom format before \
+             it ever reaches the codec: {result:?}"
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -62,6 +62,87 @@ const COMPILED_ENCODE: FormatSet = {
 };
 
 // =========================================================================
+// Custom-format identity tracking (decode-only)
+// =========================================================================
+//
+// `ImageFormat::Custom(&'static ImageFormatDefinition)` is open-ended --
+// downstream codec crates (zenraw, zenpdf, ...) define their own statics, so
+// `FormatSet`'s fixed bitflag (keyed on the *named* `ImageFormat` variants)
+// can't represent them. Custom-format identity is name-based (per
+// `ImageFormatDefinition`'s own `PartialEq` impl: "two definitions with the
+// same name are considered equal"), so track the small, closed set of
+// Custom decode formats this crate actually wires up (RAW/DNG/PDF) by name
+// in a side bitset. This is what both `decode.rs::resolve_format` and
+// `info.rs::from_bytes_with_registry` gate on -- there is exactly one
+// registry check for Custom formats, not a probe-only or decode-only one.
+//
+// Encode has no Custom format today, so there is no `custom_encode` side --
+// a `Custom` format is always considered disabled for encode (matches the
+// pre-existing "always disabled" behavior, now scoped to encode only).
+
+/// Compare two `&str` for equality in a `const fn` (no `const PartialEq` on
+/// stable yet -- manual byte comparison instead).
+const fn str_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Map a Custom format's `ImageFormatDefinition::name` to its tracking bit.
+/// Returns `None` for any name this crate doesn't wire up as a Custom
+/// decode format -- such a format is never trackable (can't be enabled or
+/// disabled) and `can_decode` treats it as unsupported.
+const fn custom_decode_bit(name: &str) -> Option<u16> {
+    if str_eq(name, "dng") {
+        Some(1 << 0)
+    } else if str_eq(name, "raw") {
+        Some(1 << 1)
+    } else if str_eq(name, "pdf") {
+        Some(1 << 2)
+    } else {
+        None
+    }
+}
+
+/// Custom decode formats compiled in, by the same name-keyed bits as
+/// [`custom_decode_bit`].
+///
+/// Uses `cfg!(feature = ...)` (a `bool` at const-eval time) rather than
+/// `#[cfg(feature = ...)]` attribute-stripping: with every custom-decode
+/// feature off, `#[cfg]` would strip both bodies entirely, leaving `bits`
+/// never mutated (a real `unused_mut` warning) -- `cfg!()` keeps the
+/// mutations syntactically present so `mut` is always genuinely used, with
+/// the dead branch folded away at const-eval time either way.
+const COMPILED_CUSTOM_DECODE: u16 = {
+    let mut bits = 0u16;
+    // Both DNG and generic RAW come from the same `raw-decode` feature (zenraw).
+    if cfg!(feature = "raw-decode") {
+        if let Some(b) = custom_decode_bit("dng") {
+            bits |= b;
+        }
+        if let Some(b) = custom_decode_bit("raw") {
+            bits |= b;
+        }
+    }
+    if cfg!(feature = "pdf-decode")
+        && let Some(b) = custom_decode_bit("pdf")
+    {
+        bits |= b;
+    }
+    bits
+};
+
+// =========================================================================
 // AllowedFormats
 // =========================================================================
 
@@ -71,7 +152,8 @@ const COMPILED_ENCODE: FormatSet = {
 /// Compile-time features determine which codecs are *linked in*; this struct
 /// controls which are *allowed* at runtime.
 ///
-/// `Copy` — 4 bytes (two `u16` bitflag sets). Pass by value.
+/// `Copy` — 6 bytes (two `u16` bitflag sets for the named formats, one `u16`
+/// side-set for name-identified Custom decode formats). Pass by value.
 ///
 /// # Format capabilities
 ///
@@ -85,13 +167,21 @@ const COMPILED_ENCODE: FormatSet = {
 ///
 /// # Custom formats
 ///
-/// Custom formats (e.g., RAW/DNG via `ImageFormat::Custom`) are not tracked
-/// by the bitflag sets and are always considered disabled. Use format-specific
-/// decode APIs for custom formats.
+/// `ImageFormat::Custom` decode formats (RAW/DNG via zenraw, PDF via zenpdf)
+/// *are* tracked, by name (`ImageFormatDefinition::name`) rather than by the
+/// bitflag sets — see [`can_decode`](Self::can_decode). A Custom format this
+/// crate doesn't wire up (an unrecognized name) is never trackable and
+/// [`can_decode`](Self::can_decode) always returns `false` for it. Custom
+/// *encode* formats are always disabled — there are none today.
 #[derive(Clone, Copy, Debug)]
 pub struct AllowedFormats {
     decode: FormatSet,
     encode: FormatSet,
+    /// Side bitset for name-identified `ImageFormat::Custom` decode formats
+    /// (RAW/DNG/PDF) — see the module-level "Custom-format identity tracking"
+    /// section above. `FormatSet` can't represent these: they're open-ended,
+    /// defined by downstream codec crates, not fixed enum variants.
+    custom_decode: u16,
 }
 
 impl AllowedFormats {
@@ -100,6 +190,7 @@ impl AllowedFormats {
         Self {
             decode: COMPILED_DECODE,
             encode: COMPILED_ENCODE,
+            custom_decode: COMPILED_CUSTOM_DECODE,
         }
     }
 
@@ -108,15 +199,33 @@ impl AllowedFormats {
         Self {
             decode: FormatSet::EMPTY,
             encode: FormatSet::EMPTY,
+            custom_decode: 0,
         }
     }
 
     /// Enable or disable decoding for a format.
+    ///
+    /// For `ImageFormat::Custom(def)`, toggles by `def.name` — only names
+    /// this crate wires up (`"dng"`, `"raw"`, `"pdf"`) are trackable; any
+    /// other Custom name is a no-op (it can never be enabled).
     pub fn with_decode(mut self, format: ImageFormat, enabled: bool) -> Self {
-        if enabled {
-            self.decode.insert(format);
-        } else {
-            self.decode.remove(format);
+        match format {
+            ImageFormat::Custom(def) => {
+                if let Some(bit) = custom_decode_bit(def.name) {
+                    if enabled {
+                        self.custom_decode |= bit;
+                    } else {
+                        self.custom_decode &= !bit;
+                    }
+                }
+            }
+            _ => {
+                if enabled {
+                    self.decode.insert(format);
+                } else {
+                    self.decode.remove(format);
+                }
+            }
         }
         self
     }
@@ -132,8 +241,29 @@ impl AllowedFormats {
     }
 
     /// Is this format compiled in AND enabled for decoding?
+    ///
+    /// `ImageFormat::Custom(def)` is gated by `def.name` against the
+    /// compiled-in + enabled Custom decode set (RAW/DNG/PDF) — same
+    /// authority as any named format, no bypass. An unrecognized Custom
+    /// name always returns `false`.
     pub fn can_decode(&self, format: ImageFormat) -> bool {
-        self.decode.contains(format) && COMPILED_DECODE.contains(format)
+        match format {
+            ImageFormat::Custom(def) => custom_decode_bit(def.name)
+                .is_some_and(|bit| (self.custom_decode & bit) != 0 && Self::custom_decode_compiled(bit)),
+            _ => self.decode.contains(format) && COMPILED_DECODE.contains(format),
+        }
+    }
+
+    /// Whether a `custom_decode_bit` value is in the compiled-in set.
+    ///
+    /// Split out so the `allow` below is scoped tightly: with both
+    /// `raw-decode` and `pdf-decode` off, `COMPILED_CUSTOM_DECODE` legitimately
+    /// resolves to `0` and clippy's `bad_bit_mask` (correctly) notices the
+    /// check can never be true in that configuration -- which is the right
+    /// behavior (nothing Custom is compiled in, so nothing can match), not a bug.
+    #[allow(clippy::bad_bit_mask)]
+    const fn custom_decode_compiled(bit: u16) -> bool {
+        (COMPILED_CUSTOM_DECODE & bit) != 0
     }
 
     /// Is this format compiled in AND enabled for encoding?
@@ -142,6 +272,10 @@ impl AllowedFormats {
     }
 
     /// Formats that are both compiled in and enabled for decoding.
+    ///
+    /// Does not enumerate Custom decode formats (RAW/DNG/PDF) — those are
+    /// name-identified, not values this crate can construct generically.
+    /// Use [`can_decode`](Self::can_decode) to check a specific Custom format.
     pub fn decodable_formats(&self) -> impl Iterator<Item = ImageFormat> {
         self.decode.intersection(&COMPILED_DECODE).iter()
     }
@@ -341,5 +475,110 @@ mod tests {
             assert!(af.can_decode(ImageFormat::Gif));
             assert!(af.can_encode(ImageFormat::Gif));
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Custom-format identity tracking (RAW/DNG/PDF) — both directions
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // Regression coverage for the two Custom-format registry bugs: `none()`
+    // used to fail *open* (decode.rs bypassed the registry check entirely
+    // for any `ImageFormat::Custom`), and `all()` used to fail *closed*
+    // (`FormatSet::contains` can't represent `Custom` at all, so
+    // `can_decode` always returned `false` even under `all()`).
+
+    #[test]
+    #[cfg(feature = "raw-decode")]
+    fn all_allows_compiled_custom_raw_dng() {
+        let af = AllowedFormats::all();
+        assert!(
+            af.can_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT)),
+            "AllowedFormats::all() must allow a compiled-in Custom format (DNG)"
+        );
+        assert!(
+            af.can_decode(ImageFormat::Custom(&zenraw::RAW_FORMAT)),
+            "AllowedFormats::all() must allow a compiled-in Custom format (RAW)"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "raw-decode")]
+    fn none_denies_custom_raw_dng() {
+        let af = AllowedFormats::none();
+        assert!(
+            !af.can_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT)),
+            "AllowedFormats::none() must deny Custom formats too (no fail-open bypass)"
+        );
+        assert!(
+            !af.can_decode(ImageFormat::Custom(&zenraw::RAW_FORMAT)),
+            "AllowedFormats::none() must deny Custom formats too (no fail-open bypass)"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "raw-decode")]
+    fn selective_enable_custom_decode() {
+        let af = AllowedFormats::none().with_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT), true);
+        assert!(af.can_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT)));
+        // RAW wasn't enabled — toggling DNG must not also enable RAW.
+        assert!(!af.can_decode(ImageFormat::Custom(&zenraw::RAW_FORMAT)));
+    }
+
+    #[test]
+    #[cfg(feature = "raw-decode")]
+    fn toggle_custom_decode_off() {
+        let af = AllowedFormats::all().with_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT), false);
+        assert!(!af.can_decode(ImageFormat::Custom(&zenraw::DNG_FORMAT)));
+        // Disabling DNG must not also disable RAW.
+        assert!(af.can_decode(ImageFormat::Custom(&zenraw::RAW_FORMAT)));
+    }
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn all_allows_compiled_custom_pdf() {
+        let af = AllowedFormats::all();
+        assert!(
+            af.can_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT)),
+            "AllowedFormats::all() must allow a compiled-in Custom format (PDF)"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn none_denies_custom_pdf() {
+        let af = AllowedFormats::none();
+        assert!(
+            !af.can_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT)),
+            "AllowedFormats::none() must deny Custom formats too (no fail-open bypass)"
+        );
+    }
+
+    #[test]
+    fn unrecognized_custom_name_never_trackable() {
+        // A Custom format this crate doesn't wire up (any name outside
+        // "dng"/"raw"/"pdf") must never be allowed — not even under `all()`
+        // — since it can't be enabled, and never bypassed.
+        static UNKNOWN: zencodec::ImageFormatDefinition = zencodec::ImageFormatDefinition::new(
+            "some-future-format",
+            None,
+            "Some Future Format",
+            "fut",
+            &["fut"],
+            "application/x-future",
+            &["application/x-future"],
+            false,
+            false,
+            false,
+            false,
+            4,
+            |_data| false,
+        );
+        let all = AllowedFormats::all();
+        assert!(!all.can_decode(ImageFormat::Custom(&UNKNOWN)));
+        let none = AllowedFormats::none();
+        assert!(!none.can_decode(ImageFormat::Custom(&UNKNOWN)));
+        // with_decode(..., true) is a documented no-op for an unrecognized name.
+        let enabled_attempt = AllowedFormats::none().with_decode(ImageFormat::Custom(&UNKNOWN), true);
+        assert!(!enabled_attempt.can_decode(ImageFormat::Custom(&UNKNOWN)));
     }
 }

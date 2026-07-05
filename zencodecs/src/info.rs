@@ -292,4 +292,44 @@ mod tests {
             Err(CodecError::DisabledFormat(_))
         ));
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Custom-format (PDF) registry gating — probe side of the same
+    // fail-open/fail-closed bug pinned in registry.rs and decode.rs.
+    // ═══════════════════════════════════════════════════════════════════
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn custom_format_none_denies_pdf_probe() {
+        // `AllowedFormats::none()` must deny a Custom format (PDF) exactly
+        // like any named format — no bypass.
+        let pdf_data = b"%PDF-1.4";
+        let registry = AllowedFormats::none();
+        let result = from_bytes_with_registry(pdf_data, &registry);
+        assert!(matches!(
+            result.as_ref().map_err(|e| e.error()),
+            Err(CodecError::DisabledFormat(_))
+        ));
+    }
+
+    #[test]
+    #[cfg(feature = "pdf-decode")]
+    fn custom_format_all_lets_pdf_probe_reach_codec() {
+        // Regression: `from_bytes` (registry = `all()`) used to reject PDF
+        // (and every other Custom format) with `DisabledFormat` unconditionally,
+        // because `AllowedFormats::can_decode` could never see past
+        // `FormatSet`'s inability to represent `ImageFormat::Custom`. Bytes
+        // past the `%PDF-` signature are garbage, so zenpdf's own probe fails
+        // — but with a `Codec` error, not `DisabledFormat`, proving the
+        // registry check passed the format through to the codec.
+        let pdf_data = b"%PDF-1.4\ngarbage, not a real PDF body";
+        let result = from_bytes(pdf_data);
+        assert!(
+            !matches!(
+                result.as_ref().map_err(|e| e.error()),
+                Err(CodecError::DisabledFormat(_))
+            ),
+            "PDF must not be rejected as DisabledFormat under AllowedFormats::all(): {result:?}"
+        );
+    }
 }
