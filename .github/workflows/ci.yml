@@ -31,3 +31,25 @@ jobs:
         cargo test -p zencodecs --no-default-features --all-targets
         cargo test -p zeneditor --all-targets
         cargo test -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets
+
+  # Public-API surface snapshots (docs/public-api/) — the CI-free `apidoc/`
+  # runner package (see its Cargo.toml), so this is the only job that ever
+  # compiles zenutils-apidoc's dependency tree or invokes rustdoc. Standalone
+  # (not routed through the reusable rust-ci.yml `test_extra_runs`) because it
+  # needs a nightly toolchain for rustdoc JSON, distinct from every other job's
+  # stable toolchain (zenpipe#bug-19: this gate was previously absent, so a
+  # stale committed snapshot — depthmap/exif removed 2026-06-25, Limits
+  # aliased to zencodec::ResourceLimits — never got caught).
+  api-doc:
+    name: Public API snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check committed API snapshots are current
+        run: cargo test --manifest-path apidoc/Cargo.toml
+        env:
+          ZEN_API_DOC: check

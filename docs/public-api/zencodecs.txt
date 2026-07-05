@@ -6,41 +6,40 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 856 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 29 lines (29 hidden + 0 excluded-feature)
+# files: zencodecs.txt 713 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 16 lines (16 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                21
-#   pub types (struct/enum/trait/alias)        69
-#   pub consts/statics                         10
-#   free functions                             25
-#   inherent methods                          263
-#   struct fields                             192
-#   enum variants                             153
-#   re-exports                                109
-#   trait roster entries (type × trait)       141
+#   pub modules                                20
+#   pub types (struct/enum/trait/alias)        53
+#   pub consts/statics                          8
+#   free functions                             37
+#   inherent methods                          242
+#   struct fields                             126
+#   enum variants                             107
+#   re-exports                                119
+#   trait roster entries (type × trait)        89
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                  34
+#   auto-trait-complete types                  22
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          358
+#   (root)                          320
 #   codec_id                         34
 #   color                             3
 #   config                           69
 #   decision                         31
-#   depthmap                         56
-#   exif                             59
+#   estimate                         16
 #   gainmap                           4
 #   intent                           32
 #   pixel                             8
 #   policy                           33
 #   quality                          54
-#   select                           15
+#   select                           21
 #   trace                            48
-#   transcode                        38
+#   transcode                        39
 
-## items (811 lines)
+## items (680 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -49,6 +48,7 @@ pub use BmpDecoderConfig
 pub use BmpEncodeJob
 pub use BmpEncoderConfig
 pub use ColorEmitPolicy
+pub use ComputeEnvironment
 pub use DecodeJob
 pub use DecodeOutput
 pub use DecodePolicy
@@ -70,10 +70,12 @@ pub use GainMapDirection
 pub use GainMapInfo
 pub use GainMapParams
 pub use GainMapPresence
+pub use GainMapRender
 pub use GifDecodeJob
 pub use GifDecoderConfig
 pub use GifEncodeJob
 pub use GifEncoderConfig
+pub use ImageCharacteristics
 pub use ImageFormat
 pub use ImageInfo
 pub use JpegDecodeJob
@@ -82,8 +84,11 @@ pub use JpegEncodeJob
 pub use JpegEncoderConfig
 pub use JxlDecodeJob
 pub use JxlDecoderConfig
+pub use Limits
 pub use Metadata
 pub use MetadataPolicy
+pub use Orientation
+pub use OrientationHint
 pub use OutputInfo
 pub use OwnedAnimationFrame
 pub use PixelBufferConvertExt
@@ -96,6 +101,7 @@ pub use PnmDecodeJob
 pub use PnmDecoderConfig
 pub use PnmEncodeJob
 pub use PnmEncoderConfig
+pub use ResourceEstimate
 pub use SourceColor
 pub use Stop
 pub use StopToken
@@ -224,110 +230,16 @@ pub fn decision::FormatDecision::jxl_distance(&self) -> f32
 pub fn decision::FormatDecision::jxl_effort(&self) -> u8
 pub fn decision::FormatDecision::png_quality_range(&self) -> (u8, u8)
 pub fn decision::FormatDecision::webp_quality(&self) -> f32
-pub mod depthmap
-pub depthmap::DepthFormat::AbsoluteDepth
-pub depthmap::DepthFormat::Disparity
-pub depthmap::DepthFormat::RangeInverse
-pub depthmap::DepthFormat::RangeLinear
-pub depthmap::DepthMeasureType::OpticRay
-pub depthmap::DepthMeasureType::OpticalAxis
-pub depthmap::DepthPixelFormat::Float16
-pub depthmap::DepthPixelFormat::Float32
-pub depthmap::DepthPixelFormat::Gray16
-pub depthmap::DepthPixelFormat::Gray8
-pub fn depthmap::DepthPixelFormat::bytes_per_pixel(self) -> usize
-pub depthmap::DepthSource::AndroidDdf
-pub depthmap::DepthSource::AndroidGDepth
-pub depthmap::DepthSource::AppleHeic
-pub depthmap::DepthSource::AppleMpf
-pub depthmap::DepthSource::Avif
-pub depthmap::DepthSource::Unknown
-pub depthmap::DepthUnits::Diopters
-pub depthmap::DepthUnits::Meters
-pub depthmap::DepthUnits::Millimeters
-pub depthmap::DepthUnits::Normalized
-pub depthmap::DecodedDepthMap::confidence: core::option::Option<depthmap::DepthImage>
-pub depthmap::DecodedDepthMap::depth: depthmap::DepthImage
-pub depthmap::DecodedDepthMap::metadata: depthmap::DepthMapMetadata
-pub depthmap::DecodedDepthMap::source_device: depthmap::DepthSource
-pub depthmap::DecodedDepthMap::source_format: zencodec::format::ImageFormat
-pub fn depthmap::DecodedDepthMap::resize(&self, u32, u32) -> depthmap::DepthImage
-pub fn depthmap::DecodedDepthMap::to_meters(&self) -> core::option::Option<alloc::vec::Vec<f32>>
-pub fn depthmap::DecodedDepthMap::to_normalized_f32(&self) -> alloc::vec::Vec<f32>
-pub depthmap::DepthImage::data: alloc::vec::Vec<u8>
-pub depthmap::DepthImage::height: u32
-pub depthmap::DepthImage::pixel_format: depthmap::DepthPixelFormat
-pub depthmap::DepthImage::width: u32
-pub fn depthmap::DepthImage::expected_len(&self) -> u64
-pub fn depthmap::DepthImage::pixel_count(&self) -> u64
-pub fn depthmap::DepthImage::validate(&self) -> core::result::Result<(), CodecError>
-pub depthmap::DepthMapMetadata::far: f32
-pub depthmap::DepthMapMetadata::format: depthmap::DepthFormat
-pub depthmap::DepthMapMetadata::measure_type: depthmap::DepthMeasureType
-pub depthmap::DepthMapMetadata::near: f32
-pub depthmap::DepthMapMetadata::units: depthmap::DepthUnits
-pub mod exif
-#[non_exhaustive] pub enum exif::ExifError
-pub exif::ExifError::InvalidByteOrder
-pub exif::ExifError::InvalidTiffMagic
-pub exif::ExifError::OffsetOutOfBounds
-pub exif::ExifError::TooManyEntries
-pub exif::ExifError::TooShort
-pub exif::ExifError::ValueOutOfBounds
-#[non_exhaustive] pub struct exif::ExifData
-pub exif::ExifData::analog_balance: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::as_shot_neutral: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::as_shot_white_xy: core::option::Option<(f64, f64)>
-pub exif::ExifData::baseline_exposure: core::option::Option<f64>
-pub exif::ExifData::calibration_illuminant_1: core::option::Option<u16>
-pub exif::ExifData::calibration_illuminant_2: core::option::Option<u16>
-pub exif::ExifData::color_matrix_1: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::color_matrix_2: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::color_space: core::option::Option<u16>
-pub exif::ExifData::date_time: core::option::Option<alloc::string::String>
-pub exif::ExifData::date_time_original: core::option::Option<alloc::string::String>
-pub exif::ExifData::dng_version: core::option::Option<[u8; 4]>
-pub exif::ExifData::exposure_compensation: core::option::Option<exif::SRational>
-pub exif::ExifData::exposure_program: core::option::Option<u16>
-pub exif::ExifData::exposure_time: core::option::Option<exif::Rational>
-pub exif::ExifData::f_number: core::option::Option<exif::Rational>
-pub exif::ExifData::flash: core::option::Option<u16>
-pub exif::ExifData::focal_length: core::option::Option<exif::Rational>
-pub exif::ExifData::focal_length_35mm: core::option::Option<u16>
-pub exif::ExifData::forward_matrix_1: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::forward_matrix_2: core::option::Option<alloc::vec::Vec<f64>>
-pub exif::ExifData::gps_altitude: core::option::Option<f64>
-pub exif::ExifData::gps_latitude: core::option::Option<exif::GpsCoordinate>
-pub exif::ExifData::gps_longitude: core::option::Option<exif::GpsCoordinate>
-pub exif::ExifData::height: core::option::Option<u32>
-pub exif::ExifData::iso: core::option::Option<u32>
-pub exif::ExifData::lens_model: core::option::Option<alloc::string::String>
-pub exif::ExifData::make: core::option::Option<alloc::string::String>
-pub exif::ExifData::metering_mode: core::option::Option<u16>
-pub exif::ExifData::model: core::option::Option<alloc::string::String>
-pub exif::ExifData::orientation: core::option::Option<u16>
-pub exif::ExifData::software: core::option::Option<alloc::string::String>
-pub exif::ExifData::unique_camera_model: core::option::Option<alloc::string::String>
-pub exif::ExifData::white_balance: core::option::Option<u16>
-pub exif::ExifData::width: core::option::Option<u32>
-pub struct exif::GpsCoordinate
-pub exif::GpsCoordinate::degrees: f64
-pub exif::GpsCoordinate::minutes: f64
-pub exif::GpsCoordinate::reference: char
-pub exif::GpsCoordinate::seconds: f64
-pub fn exif::GpsCoordinate::to_decimal(&self) -> f64
-pub struct exif::Rational
-pub exif::Rational::denominator: u32
-pub exif::Rational::numerator: u32
-pub const fn exif::Rational::new(u32, u32) -> Self
-pub fn exif::Rational::to_f64(self) -> f64
-pub struct exif::SRational
-pub exif::SRational::denominator: i32
-pub exif::SRational::numerator: i32
-pub const fn exif::SRational::new(i32, i32) -> Self
-pub fn exif::SRational::to_f64(self) -> f64
-pub fn exif::parse_exif(&[u8]) -> core::result::Result<exif::ExifData, exif::ExifError>
-pub fn exif::parse_exif_from_output(&zencodec::output::DecodeOutput) -> core::option::Option<exif::ExifData>
+pub mod estimate
+pub use estimate::ComputeEnvironment
+pub use estimate::ImageCharacteristics
+pub use estimate::ResourceEstimate
+pub estimate::EffortPlan::effort: core::option::Option<u32>
+pub estimate::EffortPlan::estimate: zencodec::estimate::ResourceEstimate
+pub estimate::EffortPlan::fits: bool
+pub estimate::EncodeBudget::cores: core::option::Option<u32>
+pub estimate::EncodeBudget::peak_mem_bytes: core::option::Option<u64>
+pub estimate::EncodeBudget::wall_ms: core::option::Option<u64>
 pub mod gainmap
 pub use gainmap::GainMapChannel
 pub use gainmap::GainMapParams
@@ -427,8 +339,12 @@ pub select::ImageFacts::is_lossless_source: bool
 pub select::ImageFacts::pixel_count: u64
 pub select::ImageFacts::source_format: core::option::Option<zencodec::format::ImageFormat>
 pub fn select::ImageFacts::from_image_info(&zencodec::info::ImageInfo) -> Self
+pub fn select::FormatPicker::pick(&self, &[f32], &[zencodec::format::ImageFormat]) -> core::option::Option<zencodec::format::ImageFormat>
+pub fn select::FormatPicker::pick_with_penalties(&self, &[f32], &[zencodec::format::ImageFormat], &[f32]) -> core::option::Option<zencodec::format::ImageFormat>
 pub fn select::available_encode_formats(&AllowedFormats, &policy::CodecPolicy) -> FormatSet
 pub fn select::select_format(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy) -> Result<select::FormatSelection>
+pub fn select::select_format_with_budget_picker(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy, core::option::Option<&dyn select::FormatPicker>, core::option::Option<&[f32]>, core::option::Option<&dyn core::ops::function::Fn(zencodec::format::ImageFormat) -> core::option::Option<f32>>) -> Result<select::FormatSelection>
+pub fn select::select_format_with_picker(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy, core::option::Option<&dyn select::FormatPicker>, core::option::Option<&[f32]>) -> Result<select::FormatSelection>
 pub mod trace
 pub enum trace::SelectionStep
 pub trace::SelectionStep::DecoderChosen
@@ -484,6 +400,7 @@ pub fn transcode::SupplementSet::union(self, Self) -> Self
 pub transcode::TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub transcode::TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub transcode::TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
+pub transcode::TranscodeOptions::orientation: zencodec::orientation::OrientationHint
 pub transcode::TranscodeOptions::supplements: transcode::SupplementPolicy
 pub transcode::TranscodeOutput::data: alloc::vec::Vec<u8>
 pub transcode::TranscodeOutput::format: zencodec::format::ImageFormat
@@ -541,32 +458,6 @@ pub fn codec_id::CodecId::format(&self) -> zencodec::format::ImageFormat
 pub fn codec_id::CodecId::is_decoder(&self) -> bool
 pub fn codec_id::CodecId::is_encoder(&self) -> bool
 pub fn codec_id::CodecId::name(&self) -> &'static str
-#[non_exhaustive] pub enum DepthFormat [also: depthmap]
-pub DepthFormat::AbsoluteDepth
-pub DepthFormat::Disparity
-pub DepthFormat::RangeInverse
-pub DepthFormat::RangeLinear
-#[non_exhaustive] pub enum DepthMeasureType [also: depthmap]
-pub DepthMeasureType::OpticRay
-pub DepthMeasureType::OpticalAxis
-#[non_exhaustive] pub enum DepthPixelFormat [also: depthmap]
-pub DepthPixelFormat::Float16
-pub DepthPixelFormat::Float32
-pub DepthPixelFormat::Gray16
-pub DepthPixelFormat::Gray8
-pub fn depthmap::DepthPixelFormat::bytes_per_pixel(self) -> usize
-#[non_exhaustive] pub enum DepthSource [also: depthmap]
-pub DepthSource::AndroidDdf
-pub DepthSource::AndroidGDepth
-pub DepthSource::AppleHeic
-pub DepthSource::AppleMpf
-pub DepthSource::Avif
-pub DepthSource::Unknown
-#[non_exhaustive] pub enum DepthUnits [also: depthmap]
-pub DepthUnits::Diopters
-pub DepthUnits::Meters
-pub DepthUnits::Millimeters
-pub DepthUnits::Normalized
 pub enum FormatChoice [also: intent]
 pub FormatChoice::Auto
 pub FormatChoice::Keep
@@ -636,42 +527,30 @@ pub struct DecodeRequest<'a>
 pub fn DecodeRequest<'a>::animation_frame_decoder(self) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>>
 pub fn DecodeRequest<'a>::build_streaming_decoder(self) -> Result<alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'static)>>
 pub fn DecodeRequest<'a>::decode(self) -> Result<zencodec::output::DecodeOutput>
-pub fn DecodeRequest<'a>::decode_depth_map(self) -> Result<(zencodec::output::DecodeOutput, core::option::Option<depthmap::DecodedDepthMap>)>
 pub fn DecodeRequest<'a>::decode_full_frame(self) -> Result<zencodec::output::DecodeOutput>
+pub fn DecodeRequest<'a>::estimate(&self) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn DecodeRequest<'a>::new(&'a [u8]) -> Self
 pub fn DecodeRequest<'a>::probe(&self) -> Result<zencodec::info::ImageInfo>
 pub fn DecodeRequest<'a>::push_decode(self, &mut dyn zencodec::sink::DecodeRowSink) -> Result<zencodec::cost::OutputInfo>
+pub fn DecodeRequest<'a>::reconstruct_hdr(self, core::option::Option<f32>) -> Self
 pub fn DecodeRequest<'a>::with_codec_config(self, &'a config::CodecConfig) -> Self
 pub fn DecodeRequest<'a>::with_decode_policy(self, zencodec::policy::DecodePolicy) -> Self
 pub fn DecodeRequest<'a>::with_format(self, zencodec::format::ImageFormat) -> Self
 pub fn DecodeRequest<'a>::with_gain_map_extraction(self, bool) -> Self
-pub fn DecodeRequest<'a>::with_limits(self, &'a Limits) -> Self
+pub fn DecodeRequest<'a>::with_gain_map_render(self, zencodec::gainmap::GainMapRender) -> Self
+pub fn DecodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits) -> Self
+pub fn DecodeRequest<'a>::with_orientation(self, zencodec::orientation::OrientationHint) -> Self
 pub fn DecodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
 pub fn DecodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
 pub fn DecodeRequest<'a>::with_stop(self, almost_enough::stop_token::StopToken) -> Self
-pub struct DecodedDepthMap [also: depthmap]
-pub DecodedDepthMap::confidence: core::option::Option<depthmap::DepthImage>
-pub DecodedDepthMap::depth: depthmap::DepthImage
-pub DecodedDepthMap::metadata: depthmap::DepthMapMetadata
-pub DecodedDepthMap::source_device: depthmap::DepthSource
-pub DecodedDepthMap::source_format: zencodec::format::ImageFormat
-pub fn depthmap::DecodedDepthMap::resize(&self, u32, u32) -> depthmap::DepthImage
-pub fn depthmap::DecodedDepthMap::to_meters(&self) -> core::option::Option<alloc::vec::Vec<f32>>
-pub fn depthmap::DecodedDepthMap::to_normalized_f32(&self) -> alloc::vec::Vec<f32>
-pub struct DepthImage [also: depthmap]
-pub DepthImage::data: alloc::vec::Vec<u8>
-pub DepthImage::height: u32
-pub DepthImage::pixel_format: depthmap::DepthPixelFormat
-pub DepthImage::width: u32
-pub fn depthmap::DepthImage::expected_len(&self) -> u64
-pub fn depthmap::DepthImage::pixel_count(&self) -> u64
-pub fn depthmap::DepthImage::validate(&self) -> core::result::Result<(), CodecError>
-pub struct DepthMapMetadata [also: depthmap]
-pub DepthMapMetadata::far: f32
-pub DepthMapMetadata::format: depthmap::DepthFormat
-pub DepthMapMetadata::measure_type: depthmap::DepthMeasureType
-pub DepthMapMetadata::near: f32
-pub DepthMapMetadata::units: depthmap::DepthUnits
+pub struct EffortPlan [also: estimate]
+pub EffortPlan::effort: core::option::Option<u32>
+pub EffortPlan::estimate: zencodec::estimate::ResourceEstimate
+pub EffortPlan::fits: bool
+#[non_exhaustive] pub struct EncodeBudget [also: estimate]
+pub EncodeBudget::cores: core::option::Option<u32>
+pub EncodeBudget::peak_mem_bytes: core::option::Option<u64>
+pub EncodeBudget::wall_ms: core::option::Option<u64>
 pub struct EncodeRequest<'a>
 pub fn EncodeRequest<'a>::animation_frame_encoder(self, u32, u32) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>>
 pub fn EncodeRequest<'a>::auto() -> Self
@@ -686,15 +565,17 @@ pub fn EncodeRequest<'a>::encode_full_frame_rgb_f32(self, imgref::ImgRef<'_, rgb
 pub fn EncodeRequest<'a>::encode_full_frame_rgba8(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_srgba8_imgref(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
+pub fn EncodeRequest<'a>::estimate(&self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn EncodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn EncodeRequest<'a>::quality_intent(&self) -> quality::QualityIntent
+pub fn EncodeRequest<'a>::with_cicp(self, core::option::Option<zenpixels::cicp::Cicp>) -> Self
 pub fn EncodeRequest<'a>::with_codec_config(self, &'a config::CodecConfig) -> Self
 pub fn EncodeRequest<'a>::with_color_emit_policy(self, zencodec::color::ColorEmitPolicy) -> Self
 pub fn EncodeRequest<'a>::with_dpr(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_effort(self, u32) -> Self
 pub fn EncodeRequest<'a>::with_encode_policy(self, zencodec::policy::EncodePolicy) -> Self
 pub fn EncodeRequest<'a>::with_image_facts(self, select::ImageFacts) -> Self
-pub fn EncodeRequest<'a>::with_limits(self, &'a Limits) -> Self
+pub fn EncodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits) -> Self
 pub fn EncodeRequest<'a>::with_lossless(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_metadata(self, zencodec::metadata::Metadata) -> Self
 pub fn EncodeRequest<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
@@ -746,29 +627,6 @@ pub ImageFacts::is_lossless_source: bool
 pub ImageFacts::pixel_count: u64
 pub ImageFacts::source_format: core::option::Option<zencodec::format::ImageFormat>
 pub fn select::ImageFacts::from_image_info(&zencodec::info::ImageInfo) -> Self
-pub struct Limits
-pub Limits::max_duration_ms: core::option::Option<u64>
-pub Limits::max_frames: core::option::Option<u32>
-pub Limits::max_height: core::option::Option<u64>
-pub Limits::max_input_bytes: core::option::Option<u64>
-pub Limits::max_memory_bytes: core::option::Option<u64>
-pub Limits::max_output_bytes: core::option::Option<u64>
-pub Limits::max_pixels: core::option::Option<u64>
-pub Limits::max_width: core::option::Option<u64>
-pub Limits::threading: zencodec::limits::ThreadingPolicy
-pub fn Limits::check_dimensions(&self, u64, u64) -> core::result::Result<(), &'static str>
-pub fn Limits::check_memory(&self, u64) -> core::result::Result<(), &'static str>
-pub fn Limits::for_proxy() -> Self
-pub fn Limits::none() -> Self
-pub fn Limits::with_max_duration_ms(self, u64) -> Self
-pub fn Limits::with_max_frames(self, u32) -> Self
-pub fn Limits::with_max_height(self, u64) -> Self
-pub fn Limits::with_max_input_bytes(self, u64) -> Self
-pub fn Limits::with_max_memory_bytes(self, u64) -> Self
-pub fn Limits::with_max_output_bytes(self, u64) -> Self
-pub fn Limits::with_max_pixels(self, u64) -> Self
-pub fn Limits::with_max_width(self, u64) -> Self
-pub fn Limits::with_threading(self, zencodec::limits::ThreadingPolicy) -> Self
 pub struct PerCodecHints [also: intent]
 pub PerCodecHints::avif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::gif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
@@ -822,6 +680,7 @@ pub struct TranscodeOptions [also: transcode]
 pub TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
+pub TranscodeOptions::orientation: zencodec::orientation::OrientationHint
 pub TranscodeOptions::supplements: transcode::SupplementPolicy
 pub struct TranscodeOutput [also: transcode]
 pub TranscodeOutput::data: alloc::vec::Vec<u8>
@@ -831,51 +690,48 @@ pub struct TranscodeSink<'a> [also: transcode]
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
 pub trait AnyEncoder: core::marker::Send + core::marker::Sync
-pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&Limits>, core::option::Option<almost_enough::stop_token::StopToken>) -> Result<zencodec::output::EncodeOutput>
+pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, core::option::Option<almost_enough::stop_token::StopToken>) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::encode_srgba8_imgref(&self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::format(&self) -> zencodec::format::ImageFormat
 pub fn AnyEncoder::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait FormatPicker [also: select]
+pub fn FormatPicker::pick(&self, &[f32], &[zencodec::format::ImageFormat]) -> core::option::Option<zencodec::format::ImageFormat>
+pub fn FormatPicker::pick_with_penalties(&self, &[f32], &[zencodec::format::ImageFormat], &[f32]) -> core::option::Option<zencodec::format::ImageFormat>
 pub trait SourceColorExt [also: color]
 pub fn SourceColorExt::is_srgb(&self) -> bool
+pub fn check_estimate_against_limits(&zencodec::estimate::ResourceEstimate, &zencodec::estimate::ImageCharacteristics, &zencodec::limits::ResourceLimits) -> Result<()> [also: estimate]
 pub fn decode_full_frame(&[u8], &AllowedFormats) -> Result<zencodec::output::DecodeOutput>
-pub fn decode_gain_map_source(&zencodec::gainmap::GainMapSource, core::option::Option<&Limits>, core::option::Option<almost_enough::stop_token::StopToken>, &AllowedFormats) -> Result<zencodec::gainmap::DecodedGainMap> [also: gainmap]
+pub fn decode_gain_map_source(&zencodec::gainmap::GainMapSource, core::option::Option<&zencodec::limits::ResourceLimits>, core::option::Option<almost_enough::stop_token::StopToken>, &AllowedFormats) -> Result<zencodec::gainmap::DecodedGainMap> [also: gainmap]
 pub fn decode_info(&[u8]) -> Result<zencodec::info::ImageInfo>
 pub fn decode_info_with_config(&[u8], core::option::Option<&config::CodecConfig>) -> Result<zencodec::info::ImageInfo>
+pub fn estimate_decode(zencodec::format::ImageFormat, &zencodec::estimate::ImageCharacteristics, &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate [also: estimate]
+pub fn estimate_encode(zencodec::format::ImageFormat, &quality::QualityIntent, core::option::Option<&config::CodecConfig>, &zencodec::estimate::ImageCharacteristics, &zencodec::estimate::ComputeEnvironment) -> Result<zencodec::estimate::ResourceEstimate> [also: estimate]
 pub fn from_bytes(&[u8]) -> Result<zencodec::info::ImageInfo>
 pub fn from_bytes_format(&[u8], zencodec::format::ImageFormat) -> Result<zencodec::info::ImageInfo>
 pub fn from_bytes_with_registry(&[u8], &AllowedFormats) -> Result<zencodec::info::ImageInfo>
 pub fn icc_profile_is_srgb(&[u8]) -> bool [also: color]
 pub fn jpeg_codec_config_for_preset(&str, f32) -> core::option::Option<config::CodecConfig>
+pub fn peak_job_bytes(&zencodec::estimate::ResourceEstimate, &zencodec::estimate::ResourceEstimate, &zencodec::estimate::ImageCharacteristics) -> (u64, u64) [also: estimate]
+pub fn plan_encode_effort(zencodec::format::ImageFormat, &quality::QualityIntent, core::option::Option<&config::CodecConfig>, &zencodec::estimate::ImageCharacteristics, &estimate::EncodeBudget) -> Result<estimate::EffortPlan> [also: estimate]
 pub fn probe(&[u8], &AllowedFormats) -> Result<zencodec::info::ImageInfo>
 pub fn push_decode(&[u8], &mut dyn zencodec::sink::DecodeRowSink, &AllowedFormats) -> Result<zencodec::cost::OutputInfo>
 pub fn select_format_from_intent(&intent::CodecIntent, &select::ImageFacts, &AllowedFormats, &policy::CodecPolicy) -> Result<decision::FormatDecision> [also: select]
+pub fn select_format_from_intent_with_picker(&intent::CodecIntent, &select::ImageFacts, &AllowedFormats, &policy::CodecPolicy, core::option::Option<&dyn select::FormatPicker>, core::option::Option<&[f32]>) -> Result<decision::FormatDecision> [also: select]
 pub fn streaming_encoder(zencodec::format::ImageFormat, &decision::FormatDecision, u32, u32, core::option::Option<zencodec::metadata::Metadata>, &AllowedFormats) -> Result<StreamingEncoder>
 pub fn transcode(&[u8], &decision::FormatDecision, &transcode::TranscodeOptions, &AllowedFormats) -> Result<transcode::TranscodeOutput> [also: transcode]
 pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::QualityTarget, &transcode::TranscodeOptions, &AllowedFormats) -> Result<transcode::TranscodeOutput> [also: transcode]
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
 
-## trait impls (37 types)
+## trait impls (25 types)
 
 AllowedFormats: Clone, Copy, Debug, Default
 CodecError: Debug, Display, Error
 FormatSet: Clone, Copy, Debug, Default, Eq, PartialEq
-Limits: Clone, Debug, Default
 codec_id::CodecId: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 config::CodecConfig: Debug, Default
 decision::FormatDecision: Clone, Debug, Default
-depthmap::DecodedDepthMap: Clone, Debug
-depthmap::DepthFormat: Clone, Copy, Debug, PartialEq
-depthmap::DepthImage: Clone, Debug
-depthmap::DepthMapMetadata: Clone, Debug, Default, PartialEq
-depthmap::DepthMeasureType: Clone, Copy, Debug, Default, Eq, PartialEq
-depthmap::DepthPixelFormat: Clone, Copy, Debug, Eq, PartialEq
-depthmap::DepthSource: Clone, Copy, Debug, Default, Eq, PartialEq
-depthmap::DepthUnits: Clone, Copy, Debug, Eq, PartialEq
-exif::ExifData: Clone, Debug, Default
-exif::ExifError: Clone, Debug, Display, Error
-exif::GpsCoordinate: Clone, Debug
-exif::Rational: Clone, Copy, Debug, Display, Eq, PartialEq
-exif::SRational: Clone, Copy, Debug, Display, Eq, PartialEq
+estimate::EffortPlan: Clone, Debug
+estimate::EncodeBudget: Clone, Debug, Default, PartialEq
 intent::BoolKeep: Clone, Copy, Debug, Eq, PartialEq
 intent::CodecIntent: Clone, Debug, Default
 intent::FormatChoice: Clone, Copy, Debug, Eq, PartialEq
@@ -897,7 +753,7 @@ impl<C> AnyEncoder for C where C: zencodec::traits::encoding::EncoderConfig, <<C
 
 ## auto traits
 
-34 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+22 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 EncodeRequest<'a>: !RefUnwindSafe !UnwindSafe
