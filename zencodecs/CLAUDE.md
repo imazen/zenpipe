@@ -8,10 +8,49 @@ See `/home/lilith/work/zendiff/API_COMPARISON.md` for per-codec convergence stat
 
 ## Known Bugs
 
-(none currently — last cleared 2026-06-11: parse_xmp element-form hdrgm
-fields fixed in zenjpeg; the gain-map-surface CI job exists (zenpipe#38);
-the sibling-checkout CI drift is fixed in cargo-superwork/zen-workspace
-(zenpipe#39); UltraHDR gamut now derives from CICP (zenpipe#40))
+(none currently — cleared 2026-07-05, one bugfix wave:
+- Custom-format registry gating fixed both directions: `decode.rs`'s
+  `resolve_format` bypassed `AllowedFormats` entirely for
+  `ImageFormat::Custom` (fail-open — even `none()` let RAW/DNG/PDF
+  through), while `info.rs`'s registry check fell through `FormatSet`'s
+  inability to represent `Custom` at all (fail-closed — even `all()`
+  rejected them). Both now gate through a new name-keyed
+  `AllowedFormats::custom_decode` side-set (a4000797).
+- `transcode_to_quality`'s coefficient-domain fast paths
+  (`recompress_jpeg_to_jpeg`/`_to_jxl`, `reconstruct_jpeg_from_jxl`)
+  bypassed the registry entirely (no `DecodeRequest`/`EncodeRequest` in
+  the loop to enforce it for free) — now checked explicitly (b922108b).
+- `estimate_decode`'s PDF arm keyed on the unreachable bare
+  `ImageFormat::Pdf` variant instead of `Custom(def) if def.name ==
+  "pdf"` — was silent dead code, always fell through to `unknown()`
+  (3335303a).
+- `CodecPolicy`'s derived `Default` disagreed with `new()` on
+  `fallback_on_error` (`false` vs `true`) — every `CodecPolicy::default()`
+  call site (4 in zenpipe's own `src/`, 1 in the fuzz target) silently
+  got fallback-on-error disabled (61f3548d).
+- `select_format_from_intent`'s registry-disabled `Specific` format
+  returned `UnsupportedFormat` instead of `DisabledFormat`, contradicting
+  both its own doc comments and decode.rs/info.rs's convention
+  (faf1a6ca).
+- zencodecs-cli's `probe` JSON hand-rolled `{:?}`-formatted `ImageFormat`
+  into a string field — produces invalid JSON for any `Custom` format
+  (embeds unescaped quotes from the Debug output); now uses the format's
+  stable `.definition().name` (608f2446).
+- `docs/public-api/zencodecs.txt` had drifted (depthmap/exif modules
+  removed 2026-06-25, `Limits` aliased to `zencodec::ResourceLimits`,
+  neither ever regenerated) because the `ZEN_API_DOC=check` gate was
+  never wired into CI — regenerated + gate added (ad2ab9e1).
+- The zengif dependency (Pattern-B `At<zencodec::CodecError>` error
+  boundary + `zencodec` promoted from optional feature to required dep,
+  imazen/zengif#13) broke every zengif Cargo.toml declaration
+  requesting the now-nonexistent `zencodec` feature — fixed + zengif/
+  zencodec git-patched at the workspace root for the "bare clone"
+  resolution path (d8610292).
+
+Deferred (not a bug, scope decision): the pre-publish API-shape batch
+(`EncodeRequest` lifetime removal, `#[non_exhaustive]` markers,
+`SelectionRequest` builder, `AnyEncoder` fold) — tracked separately, not
+correctness-blocking.)
 
 ## Purpose
 
