@@ -35,7 +35,7 @@ use alloc::vec::Vec;
 /// // Only allow pure-Rust codecs
 /// let policy = CodecPolicy::pure_rust();
 /// ```
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct CodecPolicy {
     /// Explicitly disabled codec IDs. Checked first.
     disabled: Vec<CodecId>,
@@ -47,6 +47,20 @@ pub struct CodecPolicy {
     fallback_on_error: bool,
     /// Allowed output formats for auto-selection. None = all registered.
     allowed_formats: Option<FormatSet>,
+}
+
+// Bug #18: `#[derive(Default)]` gives `fallback_on_error: false` (bool's
+// derived default), disagreeing with `new()`'s `true` -- every
+// `CodecPolicy::default()` call site (zenpipe's `src/job.rs`,
+// `src/imageflow_compat/execute.rs` x3, `zencodecs/fuzz/fuzz_targets/fuzz_select.rs`)
+// silently got fallback-on-error DISABLED instead of the intended neutral/default
+// policy. Hand-write `Default` to delegate to `new()` so the two can never
+// diverge again; every existing call site now gets the behavior it always
+// looked like it was asking for, with no call-site change.
+impl Default for CodecPolicy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CodecPolicy {
@@ -252,6 +266,26 @@ mod tests {
         assert!(policy.is_codec_allowed(CodecId::ZenwebpEncode));
         assert!(policy.is_format_allowed(ImageFormat::Jpeg));
         assert!(policy.fallback_enabled());
+    }
+
+    /// Bug #18 regression: `CodecPolicy::default()` must agree with `new()` --
+    /// a derived `Default` disagreed on `fallback_on_error` (bool's derived
+    /// default is `false`, `new()`'s is `true`), silently disabling fallback
+    /// for every `CodecPolicy::default()` call site.
+    #[test]
+    fn default_matches_new() {
+        let default = CodecPolicy::default();
+        let new = CodecPolicy::new();
+        assert_eq!(default.fallback_enabled(), new.fallback_enabled());
+        assert!(default.fallback_enabled(), "default() must have fallback enabled, like new()");
+        assert_eq!(
+            default.is_codec_allowed(CodecId::ZenjpegDecode),
+            new.is_codec_allowed(CodecId::ZenjpegDecode)
+        );
+        assert_eq!(
+            default.is_format_allowed(ImageFormat::Jpeg),
+            new.is_format_allowed(ImageFormat::Jpeg)
+        );
     }
 
     #[test]
