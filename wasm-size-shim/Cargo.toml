@@ -36,7 +36,8 @@ zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features =
 # zengif main made `zencodec` a required dep (no longer a feature; imazen/zengif#13).
 zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr"] }
 zenpng = { path = "../../zenpng" }
-zenwebp = { path = "../../zenwebp", features = ["zencodec"] }
+# zenwebp main made `zencodec` a required dep (no longer a feature; zenwebp#69).
+zenwebp = { path = "../../zenwebp" }
 # zenavif: rav1d API change (lossless/base_q_idx fields removed from AV1Metadata)
 # zenavif = { path = "../../zenavif", features = ["zencodec"] }
 # zenjxl: API mismatch with published zencodec (parse_iso21496_jpeg renamed)

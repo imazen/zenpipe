@@ -127,7 +127,11 @@ zencodecs = { workspace = true, optional = true }
 # references search::ExpertConfig which requires the `trellis` default feature.
 zenjpeg = { version = "0.8.2", features = ["zencodec"], optional = true }
 zenpng = { version = "0.1.0", default-features = false, features = ["zencodec"], optional = true }
-zenwebp = { version = "0.4.2", default-features = false, features = ["zencodec"], optional = true }
+# zenwebp main made `zencodec` a required, always-on dependency (no cargo
+# feature) as part of its Pattern B error boundary migration (zenwebp#69);
+# its codec adapter module isn't std-gated, so no replacement feature is
+# needed (unlike zengif below).
+zenwebp = { version = "0.5.0", default-features = false, optional = true }
 # zengif main made `zencodec` a required, always-on dependency (no longer an
 # optional cargo feature) — the std-only codec glue it used to gate under the
 # `zencodec` feature is now gated on plain `std` (which that feature always
@@ -251,7 +255,10 @@ jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
 # uses; 0.3.10 on crates.io predates it (same version number, older content).
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
-# zenwebp main (0.4.5) checks Stop tokens at decode entry; 0.4.4 predates it.
+# zenwebp main is 0.5.0 (unreleased pre-bump; last unyanked crates.io release
+# is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
+# (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
+# optional feature to a required dep (zenwebp#69).
 zenwebp = { git = "https://github.com/imazen/zenwebp" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.

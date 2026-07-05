@@ -5111,8 +5111,8 @@ source = "git+https://github.com/imazen/zentract#556d02933666bf7a4daf1f8491719e5
 
 [[package]]
 name = "zenwebp"
-version = "0.4.5"
-source = "git+https://github.com/imazen/zenwebp#700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20"
+version = "0.5.0"
+source = "git+https://github.com/imazen/zenwebp#017c1414f883d63cc72dbe90eb4a5fe17199d42b"
 dependencies = [
  "archmage",
  "bytemuck",

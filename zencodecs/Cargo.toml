@@ -39,7 +39,11 @@ zenjpeg = { version = "0.8.4", optional = true, features = ["decoder", "zencodec
 # UltraHDR gain-map math + the `pixel_buffer_from_vec` constructor (unifies with
 # the copy zenjpeg pulls in). Gated with jpeg-ultrahdr.
 ultrahdr-core = { version = "0.5.0", optional = true, default-features = false }
-zenwebp = { version = "0.4.4", optional = true, features = ["zencodec"] }
+# zenwebp main made `zencodec` a required, always-on dependency (no cargo
+# feature) as part of its Pattern B error boundary migration (#69); its
+# `zencodec` feature no longer exists. The codec adapter module isn't
+# std-gated, so no replacement feature is needed (unlike zengif above).
+zenwebp = { version = "0.5.0", optional = true }
 # zengif main made `zencodec` a required, always-on dependency (no cargo
 # feature); its `zencodec` feature no longer exists (imazen/zengif#13). Default
 # features (`std` + `zenquant`) already cover what the old `zencodec` feature
