@@ -4469,8 +4469,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f9328427935f563e3cc12aaab76ad4afe946d1a60611a74047184682afc20ed"
+source = "git+https://github.com/imazen/zencodec#bea2f94c1a25fe86a88c3619fa2338615ff5179b"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4595,8 +4594,7 @@ dependencies = [
 [[package]]
 name = "zengif"
 version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ee7e85b931bb9930b5ba8e65c240127813410e4af5eeb285f8a651152d674e"
+source = "git+https://github.com/imazen/zengif#935304caa1834ad8cf01e2c782606a49d72bdf9d"
 dependencies = [
  "bytemuck",
  "enough",

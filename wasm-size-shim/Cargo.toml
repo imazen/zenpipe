@@ -33,7 +33,8 @@ imgref = "1"
 
 # Codecs
 zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["trellis", "zencodec"] }
-zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr", "zencodec"] }
+# zengif main made `zencodec` a required dep (no longer a feature; imazen/zengif#13).
+zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr"] }
 zenpng = { path = "../../zenpng" }
 zenwebp = { path = "../../zenwebp", features = ["zencodec"] }
 # zenavif: rav1d API change (lossless/base_q_idx fields removed from AV1Metadata)

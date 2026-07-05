@@ -40,7 +40,11 @@ zenjpeg = { version = "0.8.4", optional = true, features = ["decoder", "zencodec
 # the copy zenjpeg pulls in). Gated with jpeg-ultrahdr.
 ultrahdr-core = { version = "0.5.0", optional = true, default-features = false }
 zenwebp = { version = "0.4.4", optional = true, features = ["zencodec"] }
-zengif = { version = "0.7.3", optional = true, features = ["zencodec"] }
+# zengif main made `zencodec` a required, always-on dependency (no cargo
+# feature); its `zencodec` feature no longer exists (imazen/zengif#13). Default
+# features (`std` + `zenquant`) already cover what the old `zencodec` feature
+# implied.
+zengif = { version = "0.7.3", optional = true }
 zenavif = { version = "0.1.6", optional = true, features = ["zencodec"] }
 # Pure-Rust HEIC/HEIF decode (base SDR + gain-map HDR reconstruct via ultrahdr-core).
 # crates.io tops out at 0.1.6 (pre-adapter); patched to imazen/heic git main below.

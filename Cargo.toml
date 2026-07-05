@@ -128,7 +128,11 @@ zencodecs = { workspace = true, optional = true }
 zenjpeg = { version = "0.8.2", features = ["zencodec"], optional = true }
 zenpng = { version = "0.1.0", default-features = false, features = ["zencodec"], optional = true }
 zenwebp = { version = "0.4.2", default-features = false, features = ["zencodec"], optional = true }
-zengif = { version = "0.7.1", default-features = false, features = ["zencodec"], optional = true }
+# zengif main made `zencodec` a required, always-on dependency (no longer an
+# optional cargo feature) — the std-only codec glue it used to gate under the
+# `zencodec` feature is now gated on plain `std` (which that feature always
+# implied). Request `std` directly; `zencodec` is no longer a valid feature name.
+zengif = { version = "0.7.3", default-features = false, features = ["std"], optional = true }
 zenavif = { version = "0.1.3", default-features = false, features = ["zencodec"], optional = true }
 zenjxl = { version = "0.2.0", default-features = false, features = ["zencodec"], optional = true }
 zentiff = { version = "0.1.0", default-features = false, optional = true }
@@ -147,7 +151,10 @@ zensally-zentract = { version = "0.1.0", default-features = false, features = ["
 # Dev-deps enable extra features on the optional codec crates above.
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
 zenjpeg = { version = "0.8.2", features = ["zencodec"] }
-zengif = { version = "0.7.1", features = ["zencodec", "quantizr"] }
+# `zencodec` is no longer a zengif feature (now a required dep) — see the
+# comment on the main zengif dependency above. `std` is on by default here
+# (default-features not disabled), so no explicit `std` needed.
+zengif = { version = "0.7.3", features = ["quantizr"] }
 zennode = { workspace = true }
 serde_json.workspace = true
 codec-corpus = "1"
@@ -227,9 +234,8 @@ zentiff = { git = "https://github.com/imazen/zenextras" }
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-# `zencodec` is NOT patched: 0.1.24 is on crates.io now (workspace dep bumped to
-# match), so every edge — including the `heic` → zencodec one — resolves it from
-# the registry.
+# `zencodec` IS now patched (see the zengif entry below) — the zengif Pattern B
+# boundary needs zencodec main's unreleased CodecError/CategorizedError taxonomy.
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # ultrahdr-core main adds `full_reconstruction_boost` (the canonical f32 boost
@@ -276,6 +282,19 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # + 16-bit ASCII PNM roundtrip fix, fuzz zenbitmaps#7/#10); crates.io tops out at 0.1.5.
 # Powers the bitmaps-* (BMP / PNM / farbfeld) decode path (zenpipe#50).
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+# zengif main (0.7.3, unreleased-beyond-tag content) adopted the zencodec
+# Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
+# `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
+# predates both changes.
+zengif = { git = "https://github.com/imazen/zengif" }
+# zengif main's Pattern B boundary needs `zencodec::CodecError` /
+# `CategorizedError` / `ErrorCategory` (the unified error taxonomy, zencodec#99)
+# — already merged to zencodec main but not yet republished past 0.1.25 on
+# crates.io. Purely additive on top of the published 0.1.25 (new types/methods,
+# nothing removed or changed), so this is safe for every other zencodec
+# consumer (heic / zenjpeg / zentiff / …) in this same graph. Drop once
+# zencodec republishes with the taxonomy.
+zencodec = { git = "https://github.com/imazen/zencodec" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]
