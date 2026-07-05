@@ -277,7 +277,10 @@ mod tests {
         let default = CodecPolicy::default();
         let new = CodecPolicy::new();
         assert_eq!(default.fallback_enabled(), new.fallback_enabled());
-        assert!(default.fallback_enabled(), "default() must have fallback enabled, like new()");
+        assert!(
+            default.fallback_enabled(),
+            "default() must have fallback enabled, like new()"
+        );
         assert_eq!(
             default.is_codec_allowed(CodecId::ZenjpegDecode),
             new.is_codec_allowed(CodecId::ZenjpegDecode)

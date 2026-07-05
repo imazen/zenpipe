@@ -1094,7 +1094,8 @@ mod tests {
         };
         let facts = ImageFacts::default();
         let registry = AllowedFormats::all();
-        let policy = CodecPolicy::new().with_allowed_formats(FormatSet::EMPTY.with(ImageFormat::Jpeg));
+        let policy =
+            CodecPolicy::new().with_allowed_formats(FormatSet::EMPTY.with(ImageFormat::Jpeg));
         let result = select_format_from_intent(&intent, &facts, &registry, &policy);
         assert!(matches!(
             result.as_ref().map_err(|e| e.error()),

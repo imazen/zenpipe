@@ -248,8 +248,9 @@ impl AllowedFormats {
     /// name always returns `false`.
     pub fn can_decode(&self, format: ImageFormat) -> bool {
         match format {
-            ImageFormat::Custom(def) => custom_decode_bit(def.name)
-                .is_some_and(|bit| (self.custom_decode & bit) != 0 && Self::custom_decode_compiled(bit)),
+            ImageFormat::Custom(def) => custom_decode_bit(def.name).is_some_and(|bit| {
+                (self.custom_decode & bit) != 0 && Self::custom_decode_compiled(bit)
+            }),
             _ => self.decode.contains(format) && COMPILED_DECODE.contains(format),
         }
     }
@@ -578,7 +579,8 @@ mod tests {
         let none = AllowedFormats::none();
         assert!(!none.can_decode(ImageFormat::Custom(&UNKNOWN)));
         // with_decode(..., true) is a documented no-op for an unrecognized name.
-        let enabled_attempt = AllowedFormats::none().with_decode(ImageFormat::Custom(&UNKNOWN), true);
+        let enabled_attempt =
+            AllowedFormats::none().with_decode(ImageFormat::Custom(&UNKNOWN), true);
         assert!(!enabled_attempt.can_decode(ImageFormat::Custom(&UNKNOWN)));
     }
 }
