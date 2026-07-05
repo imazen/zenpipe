@@ -337,9 +337,13 @@ pub fn select_format_from_intent_with_picker(
     // Resolve format choice
     let format = match intent.format {
         Some(FormatChoice::Specific(fmt)) => {
-            // Validate format is available
+            // Registry-disabled is DisabledFormat (the codec IS compiled in,
+            // just turned off for this request), not UnsupportedFormat (which
+            // means the codec isn't compiled in at all) -- aligning with
+            // decode.rs/info.rs's registry checks and the CodecError doc
+            // comments (bug #26).
             if !registry.can_encode(fmt) {
-                return Err(whereat::at!(CodecError::UnsupportedFormat(fmt)));
+                return Err(whereat::at!(CodecError::DisabledFormat(fmt)));
             }
             if !policy.is_format_allowed(fmt) {
                 return Err(whereat::at!(CodecError::UnsupportedFormat(fmt)));
@@ -1060,7 +1064,11 @@ mod tests {
     }
 
     #[test]
-    fn intent_specific_unsupported_format_errors() {
+    fn intent_specific_registry_disabled_format_errors() {
+        // Bug #26 regression: a registry-disabled Specific format is
+        // DisabledFormat (the codec IS compiled in, just off for this
+        // request via AllowedFormats::none()), not UnsupportedFormat (which
+        // means the codec isn't compiled in at all).
         let intent = CodecIntent {
             format: Some(FormatChoice::Specific(ImageFormat::Jpeg)),
             ..Default::default()
@@ -1069,7 +1077,29 @@ mod tests {
         let registry = AllowedFormats::none();
         let policy = CodecPolicy::new();
         let result = select_format_from_intent(&intent, &facts, &registry, &policy);
-        assert!(result.is_err());
+        assert!(matches!(
+            result.as_ref().map_err(|e| e.error()),
+            Err(CodecError::DisabledFormat(ImageFormat::Jpeg))
+        ));
+    }
+
+    #[test]
+    fn intent_specific_policy_disallowed_format_errors() {
+        // The *policy* (not the registry) rejecting a Specific format is
+        // still UnsupportedFormat -- only the registry-disabled case
+        // (above) changed for bug #26.
+        let intent = CodecIntent {
+            format: Some(FormatChoice::Specific(ImageFormat::WebP)),
+            ..Default::default()
+        };
+        let facts = ImageFacts::default();
+        let registry = AllowedFormats::all();
+        let policy = CodecPolicy::new().with_allowed_formats(FormatSet::EMPTY.with(ImageFormat::Jpeg));
+        let result = select_format_from_intent(&intent, &facts, &registry, &policy);
+        assert!(matches!(
+            result.as_ref().map_err(|e| e.error()),
+            Err(CodecError::UnsupportedFormat(ImageFormat::WebP))
+        ));
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -17,7 +17,10 @@ pub enum CodecError {
     /// Format not recognized from magic bytes.
     #[error("unrecognized image format")]
     UnrecognizedFormat,
-    /// Format recognized but codec not compiled in or not enabled in registry.
+    /// Format recognized but the codec isn't compiled in (feature not enabled
+    /// at build time). For a codec that IS compiled in but disabled at
+    /// runtime via [`AllowedFormats`](crate::AllowedFormats), see
+    /// [`DisabledFormat`](Self::DisabledFormat) instead.
     #[error("format {0:?} not supported (codec not compiled in)")]
     UnsupportedFormat(ImageFormat),
     /// Format doesn't support requested operation.
@@ -26,7 +29,10 @@ pub enum CodecError {
         format: ImageFormat,
         detail: &'static str,
     },
-    /// Codec not enabled in the provided registry.
+    /// Format's codec IS compiled in, but disabled at runtime by the
+    /// [`AllowedFormats`](crate::AllowedFormats) registry for this request.
+    /// For a codec that isn't compiled in at all, see
+    /// [`UnsupportedFormat`](Self::UnsupportedFormat) instead.
     #[error("format {0:?} is disabled in the codec registry")]
     DisabledFormat(ImageFormat),
     /// Input validation failed.
