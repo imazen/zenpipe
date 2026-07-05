@@ -370,14 +370,57 @@ pub fn transcode_to_quality(
     let source =
         crate::info::detect_format(data).ok_or_else(|| at!(CodecError::UnrecognizedFormat))?;
 
-    // 1. Coefficient-domain native paths — no pixel round-trip.
+    // 1. Coefficient-domain native paths — no pixel round-trip. These bypass
+    // `DecodeRequest`/`EncodeRequest` entirely (raw byte-level recompression),
+    // so — unlike the generic `transcode()` above, which gets registry
+    // enforcement for free through those types — each arm must check the
+    // registry itself. Same authority as the generic path: `DisabledFormat`
+    // on the offending side, not a silent fall-through to the (stub)
+    // one-shot picker below.
     match (source, target) {
         #[cfg(feature = "jpeg")]
-        (ImageFormat::Jpeg, ImageFormat::Jpeg) => return recompress_jpeg_to_jpeg(data, quality),
+        (ImageFormat::Jpeg, ImageFormat::Jpeg) => {
+            if !registry.can_decode(source) {
+                return Err(at!(CodecError::DisabledFormat(source)));
+            }
+            if !registry.can_encode(target) {
+                return Err(at!(CodecError::DisabledFormat(target)));
+            }
+            return recompress_jpeg_to_jpeg(data, quality);
+        }
         #[cfg(all(feature = "jpeg", feature = "transcode-iqa", feature = "jxl-decode"))]
-        (ImageFormat::Jpeg, ImageFormat::Jxl) => return recompress_jpeg_to_jxl(data, quality),
+        (ImageFormat::Jpeg, ImageFormat::Jxl) => {
+            if !registry.can_decode(source) {
+                return Err(at!(CodecError::DisabledFormat(source)));
+            }
+            // This path produces JXL via the coefficient-domain recompressor
+            // (`transcode-iqa` + `jxl-decode`), independent of the `jxl-encode`
+            // feature that gates the *generic* pixel-level JXL encoder (and
+            // thus `COMPILED_ENCODE`'s Jxl bit, which `can_encode` checks).
+            // Only enforce the registry's Jxl-encode toggle when `jxl-encode`
+            // is *also* compiled — i.e. when `can_encode(Jxl)` is tracking a
+            // real, caller-disableable capability, not an untracked one that
+            // would always read `false` here regardless of the registry.
+            if cfg!(feature = "jxl-encode") && !registry.can_encode(target) {
+                return Err(at!(CodecError::DisabledFormat(target)));
+            }
+            return recompress_jpeg_to_jxl(data, quality);
+        }
         #[cfg(feature = "jxl-jpeg-reconstruct")]
         (ImageFormat::Jxl, ImageFormat::Jpeg) => {
+            // `jxl-jpeg-reconstruct` reads the JBRD box directly via
+            // zenjxl-decoder, independent of the generic `jxl-decode`
+            // pixel-decode path (and thus `COMPILED_DECODE`'s Jxl bit) — same
+            // "only enforce when meaningfully tracked" reasoning as above.
+            if cfg!(feature = "jxl-decode") && !registry.can_decode(source) {
+                return Err(at!(CodecError::DisabledFormat(source)));
+            }
+            // Reconstruction returns the ORIGINAL JPEG bytes verbatim (no
+            // zenjpeg encode involved), so only enforce when the generic
+            // `jpeg` feature is also compiled.
+            if cfg!(feature = "jpeg") && !registry.can_encode(target) {
+                return Err(at!(CodecError::DisabledFormat(target)));
+            }
             // Byte-exact iff the JXL is a JBRD JPEG transcode; otherwise fall
             // through to the one-shot JPEG picker on the decoded pixels.
             if let Some(jpeg) = reconstruct_jpeg_from_jxl(data)? {
@@ -907,6 +950,49 @@ mod tests {
             .unwrap();
         assert_eq!(decoded.width() as usize, w);
         assert_eq!(decoded.height() as usize, h);
+    }
+
+    /// Bug #7 regression: the coefficient-domain fast paths in
+    /// `transcode_to_quality` used to bypass `AllowedFormats` entirely (no
+    /// `DecodeRequest`/`EncodeRequest` in the loop to enforce it for free).
+    /// A registry that disables JPEG must reject the JPEG→JPEG recompress
+    /// fast path, not silently recompress anyway.
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn transcode_to_quality_respects_disabled_registry() {
+        let img = imgref::ImgVec::new(
+            alloc::vec![
+                rgb::Rgb {
+                    r: 200u8,
+                    g: 100,
+                    b: 50
+                };
+                8 * 8
+            ],
+            8,
+            8,
+        );
+        let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality(90.0)
+            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .unwrap();
+
+        let result = transcode_to_quality(
+            jpeg.data(),
+            ImageFormat::Jpeg,
+            QualityTarget::Absolute(70.0),
+            &TranscodeOptions::default(),
+            &AllowedFormats::none(),
+        );
+
+        assert!(
+            matches!(
+                result.as_ref().map_err(|e| e.error()),
+                Err(CodecError::DisabledFormat(_))
+            ),
+            "AllowedFormats::none() must reject the JPEG->JPEG coefficient-domain \
+             fast path, not silently recompress: {result:?}"
+        );
     }
 
     /// Round-trip: encode a tiny image, transcode keeping the same format.
