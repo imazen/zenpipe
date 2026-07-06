@@ -367,7 +367,7 @@ fn zensim_score(a: &RgbImage, b: &RgbImage) -> f64 {
     assert_eq!(a.dimensions(), b.dimensions());
     let a_pixels: &[[u8; 3]] = bytemuck::cast_slice(a.as_raw());
     let b_pixels: &[[u8; 3]] = bytemuck::cast_slice(b.as_raw());
-    let z = Zensim::new(ZensimProfile::codec_target()).with_parallel(false);
+    let z = Zensim::new(ZensimProfile::PreviewV0_2).with_parallel(false);
     let src = RgbSlice::new(a_pixels, w as usize, h as usize);
     let dst = RgbSlice::new(b_pixels, w as usize, h as usize);
     z.compute(&src, &dst).unwrap().score()

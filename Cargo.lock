@@ -5033,7 +5033,7 @@ dependencies = [
 [[package]]
 name = "zensim"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zensim#062bb3cedfbb6e723235044fb0818efaaa493d93"
+source = "git+https://github.com/imazen/zensim#3eb5331d6e68e1be9997e7a2a61f65d6cdb7988a"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5049,7 +5049,7 @@ dependencies = [
 [[package]]
 name = "zensim-regress"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zensim#062bb3cedfbb6e723235044fb0818efaaa493d93"
+source = "git+https://github.com/imazen/zensim#3eb5331d6e68e1be9997e7a2a61f65d6cdb7988a"
 dependencies = [
  "base64",
  "bytemuck",
