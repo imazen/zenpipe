@@ -7,6 +7,51 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (RIAPI parity wave, 2026-07-11)
+
+- **Native querystring path now matches ImageResizer/imageflow geometry
+  semantics** (f378fe02): crop units default to source pixels with
+  negative-coordinate + inverted-window handling (was percent, and the
+  bridge silently no-opped ALL percent crops due to an x1/y1-vs-x/y/w/h
+  param mismatch); `srotate` is degrees again (was misbound to the EXIF
+  flag); `rotate`/`flip` are post-resize ops via new PostRotate/PostFlip
+  nodes; `mode=max/stretch/aspectcrop/none/carve` parse; mode×scale
+  composes per the imageflow 4×4 matrix with dimension gating; bare
+  `crop`/`pad` resolve downscale-only (the old aliases upscaled);
+  `w=&h=` without mode letterboxes (IR4 pad default, max for
+  maxwidth/maxheight); srcset expansion is wired; Constrain
+  gravity/anchor (incl. IR4 spellings + `x,y`), bgcolor, zoom/dpr,
+  up-vs-down filter selection, unsharp/sharpen_when/scaling colorspace/
+  kernel shaping now actually reach execution in fused runs.
+- **`?quality=` was dead and flipped `?format=` to auto-selection**
+  whenever any quality key appeared — the quality_intent profile default
+  ("high") always outranked the fallback (44020afa).
+- **s.roundcorners percentage semantics + 4-value form; ignoreicc /
+  ignore_icc_errors; CSS named colors + bare hex for bgcolor;
+  f.sharpen_when; webp.lossless** (44020afa).
+- **`imageflow-compat` did not compile** against either the locked or
+  current imageflow_types (`CmsMode` added-then-removed upstream); the
+  compat path now owns `CompatCmsMode` and v2_json_jobs' 3-arg callers
+  were repaired (009c7938).
+
+#### Added (RIAPI parity wave, 2026-07-11)
+
+- **Limits enforcement end-to-end** (9cb07998): `Limits::to_codec_limits()`
+  feeds every decode/encode request; orchestrate runs the compiled graph's
+  resource estimate against limits BEFORE execution; new
+  `Limits::max_output_bytes` caps encoded output; `max_duration` drives the
+  pipeline through `execute_with_stop`; compat enforces
+  `ExecutionSecurity::max_input_file_bytes`.
+- **HDR / gain-map querystring surface** (f7d1900d): `hdr=preserve|strip|
+  reconstruct` (+ `hdr.headroom`, `gainmap=` alias) via the new
+  HdrDirectives node — preserve rides the existing resize-safe sidecar
+  path, strip drops the gain map, reconstruct produces HDR pixels at
+  decode (job-ultrahdr; JPEG UltraHDR today; loud errors otherwise).
+- **`zenpipe::riapi` module** (f378fe02): `preprocess_querystring` (srcset,
+  legacy pairs, value coercions, IR4 default-mode rule, same-axis maxwidth
+  reconciliation) + `riapi_order` (IR4 phase ordering — querystring keys
+  have no inherent order).
+
 #### Added
 
 - **`IMAGEFLOW-PARITY.md`** — verified imageflow gap analysis (imageflow @

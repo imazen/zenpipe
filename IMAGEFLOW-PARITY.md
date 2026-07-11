@@ -182,6 +182,16 @@ migration-debugging difference).
 
 ## 4. Confirmed semantic divergences (native path) — fix before 0.1
 
+> **STATUS 2026-07-11:** items 1–6 below (plus the crop no-op from §1) were
+> **fixed** in the 2026-07-11 wave (`f378fe02` geometry core, `44020afa`
+> remaining keys, `9cb07998` limits, `f7d1900d` hdr), with regression tests in
+> `tests/riapi_keys.rs`, `src/bridge/geometry.rs`, and `src/riapi.rs`. The §3
+> matrix retains the pre-fix status cells as the historical survey; consult
+> `CLAUDE.md` Known Bugs for what remains open (animation W8, decode hints W6,
+> matte, AllocationTracker, encode-config audit W10, and the documented
+> mode×scale approximations). The W9 two-engine behavioral suite is still the
+> missing verification layer.
+
 Ranked by blast radius; all verified at source level, each needs a regression
 test in the W9 suite. These are wrong-pixels or wrong-acceptance bugs under this
 repo's zero-tolerance rule, not cosmetics.

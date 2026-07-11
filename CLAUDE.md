@@ -24,47 +24,52 @@ claiming `zenlayout::riapi` is used are wrong.
 
 ## Known Bugs
 
-Confirmed at source level 2026-07-11 (details + citations in
-`IMAGEFLOW-PARITY.md` §4–§6; all pre-0.1 blockers, workstreams W1/W7/W8):
+Confirmed at source level 2026-07-11; the 2026-07-11 fix wave (commits
+009c7938..f7d1900d) closed most of the original list. Remaining:
 
-- **`mode=max` / `mode=stretch` / `mode=none` rejected** by
-  `parse_constraint_mode` (`src/bridge/parse.rs:56-75`) while the Constrain
-  node doc (`src/zennode_defs.rs:521-529`) and `docs/querystring.md` promise
-  them. The two most common legacy mode values error out on the native path.
-- **Constrain default mode is `within`; imageflow RIAPI defaults to `pad`**
-  when w+h are given (`imageflow_riapi/src/ir4/layout.rs:164-168`). Same URL,
-  different canvas.
-- **RIAPI `crop` units default to percent (100)** in the adapter
-  (`src/zennode_defs.rs:1493,1499`); imageflow defaults to source-pixel units,
-  supports negative (bottom-right-relative) coords, inverted-rect reset, and
-  lenient parsing. Same URL, wildly different crop.
-- **`srotate` kv is bound to the Orient node's EXIF-flag (1–8) param**
-  (`src/zennode_defs.rs:153-157`); RIAPI `srotate` means degrees. `srotate=90`
-  is an out-of-range orientation, not a rotation.
-- **`s.roundcorners` is a pixel radius** (`zenpipe.round_corners`); imageflow
-  treats it as percentage (`ir4/layout.rs:536-553`).
-- **`sflip` is consumed as a synonym of post-`flip`**
-  (`src/zennode_defs.rs:1133-1135`) — source-flip (pre-crop) placement lost;
-  when both keys are present only one is consumed.
-- **`f.sharpen_when` not accepted** — the kv is `sharpen_when`
-  (`src/zennode_defs.rs:709`).
-- **`expand_srcset` is unwired** (`src/srcset.rs:206` — no non-test caller):
-  `srcset=`/`short=` URLs silently warn as unrecognized on the native path.
-- **`ImageJob` limits under-enforced**: `Limits` gate only pre-decode checks
-  (`src/job.rs:652-658`), are not threaded into `orchestrate::stream`
-  (`ProcessConfig` has no limits field, `src/orchestrate.rs:63`);
-  `AllocationTracker` has no call sites; no output-byte cap exists.
 - **Animated input + processing steps → still image**: compat's animation
-  passthrough correctly fires only for no-op jobs (`execute.rs:369`), but jobs
+  passthrough correctly fires only for no-op jobs (`execute.rs`), but jobs
   *with* steps fall through to single-frame processing; `animation::transcode`
   (per-frame pipelines) is called only from tests. "Resize this GIF" loses the
-  animation.
+  animation. (Parity workstream W8.)
 - **JPEG alpha flatten ignores the configured matte color** — hardcodes white
-  (`src/job.rs:1012` TODO).
+  (`src/job.rs` `needs_alpha_removal` TODO); pending zenresize matte support.
+  The fused geometry path drops `matte_color` for the same reason.
 - **JPEG/WebP decoder downscale hints dropped**: `jpeg_downscale_hints` /
   `webp_decoder_hints` / `decoder.min_precise_scaling_ratio` have zero
-  handling in `src/imageflow_compat/` (grep-verified); zenjpeg exposes no
-  public scaled-IDCT knob yet.
+  handling in `src/imageflow_compat/`; zenjpeg exposes no public scaled-IDCT
+  knob yet; the generic decode node's `min_size` hint is unwired. (W6.)
+- **`AllocationTracker` still has no call sites** (the estimate-gate +
+  codec-limit enforcement added 2026-07-11 covers the practical budget; the
+  tracker itself remains API-only — wire or delete, W7 remainder).
+- **compat `ExecutionSecurity`**: `max_total_file_pixels`, `max_threads`,
+  `max_json_bytes`, `mem_budget_policy` still unenforced
+  (`max_input_file_bytes` and the three size limits are enforced).
+- **`png.quantization_speed` / `jpeg.turbo` / `jpeg.li`** remain
+  compat-engine-only: the zen node→encoder config path has no consumer for
+  them (W10 encode-config audit).
+- **`larger_than` constraint mode unsupported** (`zenlayout` has no
+  equivalent; the bridge errors on it).
+- **mode×scale approximations**: `(crop, scale=canvas)` maps to WithinCrop
+  (imageflow does a partwise crop + virtual canvas), `(stretch, canvas)` maps
+  to plain Distort. Cross-axis `width`+`maxheight` bounding still needs
+  source aspect at the preprocess layer. (Documented in
+  `src/bridge/geometry.rs` comments; W9 behavioral suite should quantify.)
+
+Fixed 2026-07-11 (regression tests in `tests/riapi_keys.rs`,
+`src/bridge/geometry.rs`, `src/riapi.rs`, `tests/gainmap_roundtrip.rs`):
+mode aliases + pad default + mode×scale composition; crop units/negative
+coords/no-op; srotate/sflip semantics + PostRotate/PostFlip ordering;
+s.roundcorners percentage + 4-value; f.sharpen_when; named/bare-hex bgcolor;
+anchor=x,y + IR4 anchor spellings; srcset wiring + legacy pairs + IR4
+default-mode rule; Constrain gravity/canvas_color/zoom/up_filter/sharpen
+actually reaching execution; quality_intent profile-default bug (dead
+`quality=`, format flipped to auto); ignoreicc/ignore_icc_errors;
+webp.lossless; Limits→codec-request threading + pre-flight estimate gate +
+max_output_bytes + deadline; hdr=/gainmap= directives (preserve/strip/
+reconstruct); imageflow-compat CmsMode drift (feature didn't compile).
 
 Stale-doc queue (do not fix piecemeal; batch per repo rules):
-`IMAGEFLOW-PARITY.md` §9.
+`IMAGEFLOW-PARITY.md` §9 — plus, after this wave: parity doc §3/§4 status
+cells for the fixed keys, and `docs/querystring.md` regeneration (new
+adapters aren't in the generated docs).
