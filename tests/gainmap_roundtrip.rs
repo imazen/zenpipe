@@ -239,3 +239,49 @@ fn jpeg_resize_and_crop_preserves_gainmap() {
     let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
     assert!(gm.is_some(), "gain map should survive crop + resize");
 }
+
+// ─── RIAPI hdr= directive (HdrDirectives node) ───
+
+/// Build an HdrDirectives node the way the querystring path does.
+fn hdr_node(qs: &str) -> Box<dyn zennode::NodeInstance> {
+    let registry = zenpipe::full_registry();
+    let mut result = registry.from_querystring(qs);
+    let idx = result
+        .instances
+        .iter()
+        .position(|n| n.schema().id == "zenpipe.riapi.hdr")
+        .expect("hdr key should produce HdrDirectives");
+    result.instances.swap_remove(idx)
+}
+
+#[test]
+fn riapi_hdr_strip_removes_gainmap() {
+    let input = make_ultrahdr_jpeg_16x16();
+    // Sanity: input carries a gain map.
+    let (_, gm_in) = zencodecs::DecodeRequest::new(&input)
+        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_gain_map_extraction(true)
+        .decode_gain_map()
+        .expect("decode input");
+    assert!(gm_in.is_some(), "fixture must carry a gain map");
+
+    let nodes = vec![hdr_node("hdr=strip")];
+    let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
+    assert!(gm.is_none(), "hdr=strip must drop the gain map");
+}
+
+#[test]
+fn riapi_hdr_preserve_keeps_gainmap() {
+    let input = make_ultrahdr_jpeg_16x16();
+    let nodes = vec![hdr_node("hdr=preserve")];
+    let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
+    assert!(gm.is_some(), "hdr=preserve must keep the gain map");
+}
+
+#[test]
+fn riapi_gainmap_discard_alias() {
+    let input = make_ultrahdr_jpeg_16x16();
+    let nodes = vec![hdr_node("gainmap=discard")];
+    let (_, gm) = transcode_with_gainmap(input, zencodec::ImageFormat::Jpeg, &nodes);
+    assert!(gm.is_none(), "gainmap=discard must drop the gain map");
+}

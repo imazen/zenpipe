@@ -1272,3 +1272,35 @@ fn quality_key_alone_does_not_flip_format_to_auto() {
     assert_eq!(get_str(q, "profile").as_deref(), Some(""));
     assert_eq!(get_f32(q, "quality_fallback"), Some(80.0));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  HDR / GAIN MAP DIRECTIVES
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn hdr_key_produces_directives() {
+    let r = parse("hdr=strip");
+    let h = find_node(&r.instances, "zenpipe.riapi.hdr").expect("HdrDirectives");
+    assert_eq!(get_str(h, "mode").as_deref(), Some("strip"));
+}
+
+#[test]
+fn hdr_reconstruct_with_headroom() {
+    let r = parse("hdr=reconstruct&hdr.headroom=2.5");
+    let h = find_node(&r.instances, "zenpipe.riapi.hdr").expect("HdrDirectives");
+    assert_eq!(get_str(h, "mode").as_deref(), Some("reconstruct"));
+    assert_eq!(get_f32(h, "headroom"), Some(2.5));
+}
+
+#[test]
+fn gainmap_alias_maps_to_hdr_directives() {
+    let r = parse("gainmap=preserve");
+    let h = find_node(&r.instances, "zenpipe.riapi.hdr").expect("HdrDirectives");
+    assert_eq!(get_str(h, "mode").as_deref(), Some("preserve"));
+}
+
+#[test]
+fn no_hdr_key_no_directives() {
+    let r = parse("w=100");
+    assert!(find_node(&r.instances, "zenpipe.riapi.hdr").is_none());
+}

@@ -693,14 +693,50 @@ impl<'a> ImageJob<'a> {
                 | zencodec::ImageFormat::Jxl
                 | zencodec::ImageFormat::Heic
         );
+
+        // RIAPI `hdr=` / `gainmap=` directives (the HdrDirectives node)
+        // override the builder-level gain-map mode.
+        let hdr_directive = self.nodes.iter().find_map(|n| {
+            if n.schema().id != "zenpipe.riapi.hdr" {
+                return None;
+            }
+            let mode = n
+                .get_param("mode")
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default();
+            let headroom = n
+                .get_param("headroom")
+                .and_then(|v| v.as_f32())
+                .unwrap_or(0.0);
+            Some((mode, headroom))
+        });
+        let effective_gain_map_mode = match hdr_directive.as_ref().map(|(m, _)| m.as_str()) {
+            Some("strip") => GainMapMode::Discard,
+            Some("preserve") => GainMapMode::Preserve,
+            _ => self.gain_map_mode,
+        };
+        let want_reconstruct = matches!(
+            hdr_directive.as_ref().map(|(m, _)| m.as_str()),
+            Some("reconstruct")
+        );
         let try_extract_gainmap =
-            self.gain_map_mode == GainMapMode::Preserve && format_may_have_gainmap;
+            effective_gain_map_mode == GainMapMode::Preserve && format_may_have_gainmap;
 
         // Gain-map extraction requires the `job-ultrahdr` feature (gain-map
         // encode/decode lives behind `zencodecs/jpeg-ultrahdr`). Without it we
-        // always take the plain decode path — gain maps are simply not carried.
+        // always take the plain decode path — gain maps are simply not carried,
+        // and hdr=reconstruct fails loudly rather than silently returning SDR.
         #[cfg(feature = "job-ultrahdr")]
-        let (source, gain_map_sidecar) = if try_extract_gainmap {
+        let (source, gain_map_sidecar) = if want_reconstruct {
+            let headroom = hdr_directive
+                .as_ref()
+                .map(|(_, h)| *h)
+                .filter(|h| *h > 0.0);
+            (
+                self.decode_source_reconstruct_hdr(input_bytes, headroom)?,
+                None,
+            )
+        } else if try_extract_gainmap {
             self.decode_source_with_gainmap(input_bytes)?
         } else {
             (self.decode_source(input_bytes, &image_info)?, None)
@@ -708,6 +744,11 @@ impl<'a> ImageJob<'a> {
         #[cfg(not(feature = "job-ultrahdr"))]
         let (source, gain_map_sidecar) = {
             let _ = try_extract_gainmap;
+            if want_reconstruct {
+                return Err(at!(PipeError::Op(
+                    "hdr=reconstruct requires the `job-ultrahdr` feature".into()
+                )));
+            }
             (self.decode_source(input_bytes, &image_info)?, None)
         };
 
@@ -833,6 +874,38 @@ impl<'a> ImageJob<'a> {
                 Ok(Box::new(source))
             }
         }
+    }
+
+    /// Decode with HDR reconstruction: apply the gain map at decode time to
+    /// produce HDR pixels (RIAPI `hdr=reconstruct`). `target_headroom` in
+    /// stops; `None` = full headroom. Supported where the decoder implements
+    /// reconstruction (JPEG UltraHDR today) — other formats error loudly.
+    #[cfg(feature = "job-ultrahdr")]
+    fn decode_source_reconstruct_hdr(
+        &self,
+        data: &[u8],
+        target_headroom: Option<f32>,
+    ) -> crate::PipeResult<Box<dyn Source>> {
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+        let mut request = zencodecs::DecodeRequest::new(data)
+            .with_registry(&self.registry)
+            .reconstruct_hdr(target_headroom);
+        if let Some(ref config) = self.codec_config {
+            request = request.with_codec_config(config);
+        }
+        if let Some(ref cl) = codec_limits {
+            request = request.with_limits(cl);
+        }
+        let decoded =
+            at_crate!(request.decode_full_frame()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let pixels = decoded.pixels();
+        let w = decoded.width();
+        let h = decoded.height();
+        let format: PixelFormat = pixels.descriptor();
+        let data = pixels.as_strided_bytes().to_vec();
+        Ok(Box::new(crate::sources::MaterializedSource::from_data(
+            data, w, h, format,
+        )))
     }
 
     /// Decode source AND extract gain map in one call.

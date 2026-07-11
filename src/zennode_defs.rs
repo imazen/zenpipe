@@ -2084,6 +2084,167 @@ impl NodeInstance for IccDirectives {
     }
 }
 
+// ─── hdr / gain-map directives adapter (decode-side) ───
+
+/// Decode-side HDR / gain-map policy from the querystring.
+///
+/// - `hdr=preserve` (default): keep the gain map; it rides through geometry
+///   as a sidecar and re-embeds on supporting formats (JPEG/AVIF/JXL).
+/// - `hdr=strip` (alias `sdr`): decode the SDR base image only and drop the
+///   gain map from the output.
+/// - `hdr=reconstruct`: apply the gain map at decode to produce HDR pixels
+///   (`hdr.headroom` limits the target headroom in stops; 0 = full).
+///   Requires the `job-ultrahdr` feature and a decoder that supports
+///   reconstruction (JPEG UltraHDR today) — otherwise the job errors.
+/// - `gainmap=preserve|discard` is accepted as a legacy alias.
+#[derive(Clone, Debug)]
+pub struct HdrDirectives {
+    /// "preserve" | "strip" | "reconstruct"
+    pub mode: alloc::string::String,
+    /// Target headroom in stops for reconstruct mode. 0.0 = full headroom.
+    pub headroom: f32,
+}
+
+static HDR_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.hdr",
+    label: "HDR / Gain Map (RIAPI)",
+    description: "Gain-map policy via querystring: preserve, strip, or reconstruct HDR",
+    group: zennode::NodeGroup::Hdr,
+    role: zennode::NodeRole::Decode,
+    params: &[],
+    tags: &["hdr", "gainmap", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Any,
+        alpha: zennode::AlphaHandling::Skip,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+impl NodeInstance for HdrDirectives {
+    fn schema(&self) -> &'static NodeSchema {
+        &HDR_RIAPI_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert(
+            "mode".into(),
+            zennode::ParamValue::Str(self.mode.clone()),
+        );
+        m.insert("headroom".into(), zennode::ParamValue::F32(self.headroom));
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "mode" => Some(zennode::ParamValue::Str(self.mode.clone())),
+            "headroom" => Some(zennode::ParamValue::F32(self.headroom)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        match name {
+            "mode" => {
+                if let Some(v) = value.as_str() {
+                    self.mode = v.into();
+                    return true;
+                }
+                false
+            }
+            "headroom" => {
+                if let Some(v) = value.as_f32() {
+                    self.headroom = v;
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+pub struct HdrRiapiDef;
+pub static HDR_RIAPI_DEF: HdrRiapiDef = HdrRiapiDef;
+
+impl NodeDef for HdrRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &HDR_RIAPI_SCHEMA
+    }
+
+    fn create(&self, params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Ok(Box::new(HdrDirectives {
+            mode: params
+                .get("mode")
+                .and_then(|v| v.as_str().map(alloc::string::String::from))
+                .unwrap_or_else(|| "preserve".into()),
+            headroom: params
+                .get("headroom")
+                .and_then(|v| v.as_f32())
+                .unwrap_or(0.0),
+        }))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.hdr";
+        let hdr_val = kv.take_owned("hdr", consumer);
+        let gainmap_val = kv.take_owned("gainmap", consumer);
+        let headroom = kv.take_f32("hdr.headroom", consumer).unwrap_or(0.0);
+
+        let mode = match (hdr_val, gainmap_val) {
+            (Some(v), _) => match v.to_ascii_lowercase().as_str() {
+                "preserve" | "keep" => "preserve",
+                "strip" | "sdr" | "discard" => "strip",
+                "reconstruct" | "hdr" => "reconstruct",
+                other => {
+                    kv.warn(
+                        "hdr",
+                        zennode::kv::KvWarningKind::InvalidValue,
+                        alloc::format!(
+                            "unknown hdr value '{other}', expected preserve/strip/reconstruct"
+                        ),
+                    );
+                    return Ok(None);
+                }
+            },
+            (None, Some(v)) => match v.to_ascii_lowercase().as_str() {
+                "preserve" | "keep" | "true" => "preserve",
+                "discard" | "strip" | "false" => "strip",
+                other => {
+                    kv.warn(
+                        "gainmap",
+                        zennode::kv::KvWarningKind::InvalidValue,
+                        alloc::format!("unknown gainmap value '{other}', expected preserve/discard"),
+                    );
+                    return Ok(None);
+                }
+            },
+            (None, None) => return Ok(None),
+        };
+
+        Ok(Some(Box::new(HdrDirectives {
+            mode: mode.into(),
+            headroom,
+        })))
+    }
+}
+
 pub struct IccRiapiDef;
 pub static ICC_RIAPI_DEF: IccRiapiDef = IccRiapiDef;
 
@@ -2178,4 +2339,5 @@ pub static ALL: &[&dyn NodeDef] = &[
     &CROP_RIAPI_DEF,
     &ROUNDCORNERS_RIAPI_DEF,
     &ICC_RIAPI_DEF,
+    &HDR_RIAPI_DEF,
 ];
