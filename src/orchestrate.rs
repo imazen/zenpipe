@@ -83,6 +83,11 @@ pub struct ProcessConfig<'a> {
     /// Optional tracing configuration. When `Some`, the pipeline records
     /// decisions at each layer and returns a trace alongside the output.
     pub trace_config: Option<&'a crate::trace::TraceConfig>,
+
+    /// Resource limits. When `Some`, the compiled graph's resource estimate
+    /// is checked (peak memory, output dimensions) BEFORE execution starts,
+    /// so over-budget pipelines are rejected without doing pixel work.
+    pub limits: Option<&'a crate::Limits>,
 }
 
 /// Probed source image information.
@@ -236,6 +241,22 @@ pub fn stream(
         config.source_info.height,
         config.trace_config,
     )?;
+
+    // Pre-flight resource gate: estimate the compiled graph against the
+    // caller's limits before any pixel work happens.
+    if let Some(limits) = config.limits {
+        let mut est_sources = hashbrown::HashMap::new();
+        est_sources.insert(
+            0,
+            crate::graph::SourceInfo {
+                width: config.source_info.width,
+                height: config.source_info.height,
+                format: config.source_info.format,
+            },
+        );
+        let estimate = graph.estimate(&est_sources)?;
+        estimate.check(limits)?;
+    }
 
     let mut sources = hashbrown::HashMap::new();
     sources.insert(0, source);
@@ -545,6 +566,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 200);
@@ -562,6 +584,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert!(!result.primary.data().is_empty());
@@ -577,6 +600,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.encode_config.quality_profile.is_none());
@@ -597,6 +621,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_some());
@@ -612,6 +637,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert!(result.metadata.is_none());
@@ -630,6 +656,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -656,6 +683,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "preserve",
             trace_config: None,
+            limits: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -682,6 +710,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "preserve",
             trace_config: None,
+            limits: None,
         };
         let result = process_with_sidecar(source, &config, None).unwrap();
         assert!(result.sidecar.is_none());
@@ -697,6 +726,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let result = process(source, &config).unwrap();
         assert_eq!(result.width(), 320);
@@ -716,6 +746,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let output = stream(source, &config, None).unwrap();
         // The source streams — pull strips without materializing
@@ -743,6 +774,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "preserve",
             trace_config: None,
+            limits: None,
         };
         let sidecar = SidecarStream {
             source: Box::new(SolidSource::new(100, 75)),
@@ -773,6 +805,7 @@ mod tests {
             source_info: &info,
             hdr_mode: "sdr_only",
             trace_config: None,
+            limits: None,
         };
         let output = stream(source, &config, None).unwrap();
         assert!(output.metadata.is_some());

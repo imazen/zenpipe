@@ -54,6 +54,9 @@ pub struct Limits {
     /// (width × height × frame_count). Bounds the total decode work
     /// for animated images independently of per-frame dimensions.
     pub max_total_pixels: Option<u64>,
+    /// Maximum encoded output size in bytes. Enforced by the codec layer
+    /// during encoding (zencodec `ResourceLimits::max_output_bytes`).
+    pub max_output_bytes: Option<u64>,
     /// Maximum job duration.
     ///
     /// Use [`to_deadline()`](Limits::to_deadline) to create a [`Deadline`]
@@ -71,6 +74,7 @@ impl Limits {
         max_height: None,
         max_frames: None,
         max_total_pixels: None,
+        max_output_bytes: None,
         #[cfg(feature = "std")]
         max_duration: None,
     };
@@ -87,6 +91,8 @@ impl Limits {
         max_height: Some(16384),
         max_frames: Some(10_000),
         max_total_pixels: Some(1_000_000_000),
+        // No output-byte cap by default — hosts opt in per deployment.
+        max_output_bytes: None,
         #[cfg(feature = "std")]
         max_duration: None,
     };
@@ -94,6 +100,38 @@ impl Limits {
     pub fn with_max_pixels(mut self, max: u64) -> Self {
         self.max_pixels = Some(max);
         self
+    }
+
+    pub fn with_max_output_bytes(mut self, max: u64) -> Self {
+        self.max_output_bytes = Some(max);
+        self
+    }
+
+    /// Convert to the codec layer's [`zencodec::ResourceLimits`] so decoders
+    /// and encoders enforce the same budget the pipeline does. Fields with
+    /// no codec-side equivalent (`max_memory_bytes` is per-allocation here,
+    /// a whole-operation budget there) map to the closest semantics.
+    pub fn to_codec_limits(&self) -> zencodec::ResourceLimits {
+        let mut rl = zencodec::ResourceLimits::none();
+        if let Some(v) = self.max_pixels {
+            rl = rl.with_max_pixels(v);
+        }
+        if let Some(v) = self.max_memory_bytes {
+            rl = rl.with_max_memory(v);
+        }
+        if let Some(v) = self.max_width {
+            rl = rl.with_max_width(v);
+        }
+        if let Some(v) = self.max_height {
+            rl = rl.with_max_height(v);
+        }
+        if let Some(v) = self.max_frames {
+            rl = rl.with_max_frames(v);
+        }
+        if let Some(v) = self.max_output_bytes {
+            rl = rl.with_max_output(v);
+        }
+        rl
     }
 
     pub fn with_max_memory_bytes(mut self, max: u64) -> Self {

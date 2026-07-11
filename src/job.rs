@@ -765,6 +765,7 @@ impl<'a> ImageJob<'a> {
             source_info: &source_info,
             hdr_mode,
             trace_config: self.trace_config,
+            limits: self.limits.as_ref(),
         };
 
         let output = crate::orchestrate::stream(source, &config, gain_map_sidecar)?;
@@ -778,6 +779,14 @@ impl<'a> ImageJob<'a> {
         })
     }
 
+    /// Wall-clock deadline from `limits.max_duration`, if configured.
+    ///
+    /// Created at use — the dominant cost (pipeline execute + encode) starts
+    /// right after, so the budget effectively covers the streaming phase.
+    fn deadline(&self) -> Option<crate::limits::Deadline> {
+        self.limits.as_ref().and_then(|l| l.to_deadline())
+    }
+
     /// Decode input bytes to a pixel [`Source`].
     fn decode_source(
         &self,
@@ -786,11 +795,18 @@ impl<'a> ImageJob<'a> {
     ) -> crate::PipeResult<Box<dyn Source>> {
         let _ = info; // may use for format negotiation later
 
+        // Codec-layer limits: decoders enforce the same budget the pipeline
+        // checks (dimension caps, memory, frame counts).
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+
         // Try streaming decode first, fall back to full-frame.
         let mut request = zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
 
         if let Some(ref config) = self.codec_config {
             request = request.with_codec_config(config);
+        }
+        if let Some(ref cl) = codec_limits {
+            request = request.with_limits(cl);
         }
 
         match request.build_streaming_decoder() {
@@ -800,12 +816,12 @@ impl<'a> ImageJob<'a> {
             }
             Err(_) => {
                 // Fall back to full-frame decode.
-                let decoded = at_crate!(
-                    zencodecs::DecodeRequest::new(data)
-                        .with_registry(&self.registry)
-                        .decode_full_frame()
-                )
-                .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+                let mut fallback = zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
+                if let Some(ref cl) = codec_limits {
+                    fallback = fallback.with_limits(cl);
+                }
+                let decoded = at_crate!(fallback.decode_full_frame())
+                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let pixels = decoded.pixels();
                 let w = decoded.width();
@@ -829,12 +845,16 @@ impl<'a> ImageJob<'a> {
         &self,
         data: &[u8],
     ) -> crate::PipeResult<(Box<dyn Source>, Option<crate::sidecar::SidecarStream>)> {
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
         let mut request = zencodecs::DecodeRequest::new(data)
             .with_registry(&self.registry)
             .with_gain_map_extraction(true);
 
         if let Some(ref config) = self.codec_config {
             request = request.with_codec_config(config);
+        }
+        if let Some(ref cl) = codec_limits {
+            request = request.with_limits(cl);
         }
 
         let (decoded, gain_map) =
@@ -1032,6 +1052,10 @@ impl<'a> ImageJob<'a> {
 
         let src_format = source.format();
 
+        // Codec-layer limits: encoders enforce output-byte caps and memory
+        // budgets (zencodec ResourceLimits::max_output_bytes et al.).
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+
         // Build streaming encoder via zencodecs.
         let mut encode_request = zencodecs::EncodeRequest::new(target_format)
             .with_quality(decision.quality.quality)
@@ -1045,6 +1069,9 @@ impl<'a> ImageJob<'a> {
         }
         if let Some(meta) = output.metadata {
             encode_request = encode_request.with_metadata(meta);
+        }
+        if let Some(ref cl) = codec_limits {
+            encode_request = encode_request.with_limits(cl);
         }
 
         // Prepare gain map data for re-embedding (if sidecar was preserved).
@@ -1123,7 +1150,12 @@ impl<'a> ImageJob<'a> {
         match streaming_result {
             Some(streaming_enc) => {
                 let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
-                crate::execute(source.as_mut(), &mut sink)?;
+                match self.deadline() {
+                    Some(deadline) => {
+                        crate::execute_with_stop(source.as_mut(), &mut sink, &deadline)?
+                    }
+                    None => crate::execute(source.as_mut(), &mut sink)?,
+                }
                 let encode_output = sink
                     .take_output()
                     .ok_or_else(|| at!(PipeError::Op("encoder produced no output".to_string())))?;
@@ -1152,6 +1184,9 @@ impl<'a> ImageJob<'a> {
                 let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
                     .with_quality(decision.quality.quality)
                     .with_registry(&self.registry);
+                if let Some(ref cl) = codec_limits {
+                    oneshot_request = oneshot_request.with_limits(cl);
+                }
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
                 #[cfg(feature = "job-ultrahdr")]
@@ -1642,6 +1677,47 @@ mod tests {
 
             assert_eq!(result.decode_infos[0].io_id, 10);
             assert_eq!(result.encode_results[0].io_id, 20);
+        }
+
+        #[test]
+        fn memory_limit_rejects_before_execution() {
+            // The orchestrate pre-flight estimate gate must reject a job whose
+            // budget can't cover even one strip — proving Limits now reach
+            // past the pre-decode dimension checks.
+            let jpeg_data = make_test_jpeg();
+            let err = ImageJob::new()
+                .add_input(0, jpeg_data)
+                .add_output(1)
+                .with_cms(CmsMode::None)
+                .with_limits(Limits {
+                    max_memory_bytes: Some(1),
+                    ..Limits::NONE
+                })
+                .run()
+                .expect_err("1-byte memory budget must fail");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("memory") || msg.contains("Limit"),
+                "unexpected error: {msg}"
+            );
+        }
+
+        #[test]
+        fn to_codec_limits_maps_fields() {
+            let l = Limits {
+                max_pixels: Some(1_000_000),
+                max_width: Some(2000),
+                max_height: Some(1500),
+                max_frames: Some(50),
+                max_output_bytes: Some(123_456),
+                ..Limits::NONE
+            };
+            let rl = l.to_codec_limits();
+            assert_eq!(rl.max_pixels, Some(1_000_000));
+            assert_eq!(rl.max_width, Some(2000));
+            assert_eq!(rl.max_height, Some(1500));
+            assert_eq!(rl.max_frames, Some(50));
+            assert_eq!(rl.max_output_bytes, Some(123_456));
         }
     }
 }

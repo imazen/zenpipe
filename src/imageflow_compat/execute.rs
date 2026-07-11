@@ -359,6 +359,18 @@ fn execute_steps(
         .get(&decode_io_id)
         .ok_or_else(|| ZenError::Io(format!("no input buffer for io_id {decode_io_id}")))?;
 
+    // ExecutionSecurity::max_input_file_bytes — bound the codec input stream
+    // before any parsing (imageflow_types docs: default 256 MB when the field
+    // deserializes to its default; None disables).
+    if let Some(max_bytes) = security.max_input_file_bytes {
+        if input_data.len() > max_bytes {
+            return Err(ZenError::SizeLimit(format!(
+                "input is {} bytes; security.max_input_file_bytes is {max_bytes}",
+                input_data.len()
+            )));
+        }
+    }
+
     // Check for animation: if input is animated and encode format supports animation,
     // do a multi-frame passthrough (decode all → encode all).
     // Skip when SelectFrame is set — that means single-frame extraction, not animation.
