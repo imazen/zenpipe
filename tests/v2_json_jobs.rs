@@ -57,7 +57,12 @@ fn run_framewise(framewise: &Framewise, input: &[u8]) -> ExecuteResult {
 
     let io_buffers = HashMap::from([(0, input.to_vec())]);
     let security = ExecutionSecurity::sane_defaults();
-    zenpipe::imageflow_compat::execute::execute_framewise(&parsed, &io_buffers, &security)
+    zenpipe::imageflow_compat::execute::execute_framewise(
+        &parsed,
+        &io_buffers,
+        &security,
+        &imageflow_types::JobOptions::default(),
+    )
         .expect("execute_framewise")
 }
 
@@ -875,7 +880,12 @@ fn graph_fanout_two_encodes() {
     let io_buffers = HashMap::from([(0, input)]);
     let security = ExecutionSecurity::sane_defaults();
     let result =
-        zenpipe::imageflow_compat::execute::execute_framewise(&parsed, &io_buffers, &security)
+        zenpipe::imageflow_compat::execute::execute_framewise(
+        &parsed,
+        &io_buffers,
+        &security,
+        &imageflow_types::JobOptions::default(),
+    )
             .expect("execute_framewise");
 
     assert_eq!(

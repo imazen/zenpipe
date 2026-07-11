@@ -399,11 +399,14 @@ fn execute_steps(
         }
     }
 
+    // `JobOptions` is an empty reserved struct upstream (cms_mode was removed
+    // from imageflow_types); the compat path defaults to v2 sRGB behavior.
+    let _ = job_options;
     let (decision, source, exif_flag) = probe_resolve_decode(
         input_data,
         &pipeline,
         &pipeline.decoder_commands,
-        job_options.cms_mode,
+        super::CompatCmsMode::default(),
     )?;
 
     // Auto-apply EXIF orientation unless the pipeline already has an explicit orient node.
@@ -616,7 +619,7 @@ fn probe_resolve_decode(
     input_data: &[u8],
     pipeline: &TranslatedPipeline,
     decoder_commands: &Option<Vec<imageflow_types::DecoderCommand>>,
-    cms_mode: imageflow_types::CmsMode,
+    cms_mode: super::CompatCmsMode,
 ) -> Result<(zencodecs::FormatDecision, Box<dyn crate::Source>, u8), ZenError> {
     let registry = AllowedFormats::all();
     let info =

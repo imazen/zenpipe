@@ -11,11 +11,11 @@ use super::execute::ZenError;
 pub(super) fn apply_icc_transform(
     source: Box<dyn crate::Source>,
     info: &zencodecs::ImageInfo,
-    cms_mode: imageflow_types::CmsMode,
+    cms_mode: super::CompatCmsMode,
 ) -> Result<Box<dyn crate::Source>, ZenError> {
     let zen_mode = match cms_mode {
-        imageflow_types::CmsMode::Imageflow2Compat => zencodecs::CmsMode::Compat,
-        imageflow_types::CmsMode::SceneReferred => zencodecs::CmsMode::SceneReferred,
+        super::CompatCmsMode::Imageflow2Compat => zencodecs::CmsMode::Compat,
+        super::CompatCmsMode::SceneReferred => zencodecs::CmsMode::SceneReferred,
     };
 
     let transform_icc = zencodecs::cms::srgb_transform_icc(&info.source_color, None, zen_mode);

@@ -27,3 +27,20 @@ pub mod watermark;
 pub use captured::CapturedBitmap;
 pub use execute::{ExecuteResult, ZenEncodeResult, ZenError, execute_framewise};
 pub use riapi::RiapiEngine;
+
+/// Color-management mode for the imageflow-compat execution path.
+///
+/// imageflow briefly carried this as `imageflow_types::CmsMode` on
+/// `JobOptions` (added upstream in 542276d2, moved in b9d53807, removed
+/// again — `JobOptions` is an empty reserved struct on current imageflow
+/// main, and the rev this workspace pins never had it). The compat path
+/// owns the policy now; the default reproduces imageflow v2 behavior
+/// (convert everything to sRGB at decode).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CompatCmsMode {
+    /// imageflow v2 behavior: convert to sRGB during decode (byte parity).
+    #[default]
+    Imageflow2Compat,
+    /// Strict scene-referred color management.
+    SceneReferred,
+}
