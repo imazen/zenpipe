@@ -610,12 +610,19 @@ use crate::quality::QualityProfile;
 #[node(id = "zencodecs.quality_intent", group = Encode, role = Encode)]
 #[node(tags("quality", "auto", "format", "encode"))]
 pub struct QualityIntentNode {
-    /// Quality profile: named preset or numeric 0-100.
+    /// Quality profile: named preset or numeric 0-100. Empty = unset.
     ///
     /// Named presets: "lowest", "low", "medium_low", "medium",
     /// "good", "high", "highest", "lossless".
     /// Numeric: "0" to "100" (codec-specific mapping).
-    #[param(default = "high")]
+    ///
+    /// When unset: `quality` (the legacy fallback) drives per-codec quality;
+    /// if neither is set and the format resolves to auto-selection, the
+    /// profile defaults to "high" (matching imageflow's Auto preset rule).
+    /// The previous default of "high" made the profile ALWAYS set, which
+    /// silently discarded `quality=` and flipped `format` to auto-selection
+    /// whenever any quality key appeared.
+    #[param(default = "")]
     #[param(section = "Main", label = "Quality Profile")]
     #[kv("qp")]
     pub profile: String,
@@ -678,12 +685,22 @@ pub struct QualityIntentNode {
     #[param(section = "Allowed Formats")]
     #[kv("accept.color_profiles")]
     pub allow_color_profiles: bool,
+
+    /// WebP lossless preference: "true", "false", or "keep". Empty = unset.
+    ///
+    /// RIAPI: `?webp.lossless=true`. Applies when WebP is the (chosen or
+    /// explicit) output format; also carried as a per-codec hint for the
+    /// selection engine.
+    #[param(default = "")]
+    #[param(section = "Allowed Formats", label = "WebP Lossless")]
+    #[kv("webp.lossless")]
+    pub webp_lossless: String,
 }
 
 impl Default for QualityIntentNode {
     fn default() -> Self {
         Self {
-            profile: String::from("high"),
+            profile: String::new(),
             quality_fallback: None,
             format: String::new(),
             dpr: 1.0,
@@ -692,6 +709,7 @@ impl Default for QualityIntentNode {
             allow_avif: false,
             allow_jxl: false,
             allow_color_profiles: false,
+            webp_lossless: String::new(),
         }
     }
 }
@@ -701,7 +719,14 @@ impl QualityIntentNode {
     /// format selection and encoding pipeline.
     pub fn to_codec_intent(&self) -> CodecIntent {
         let format = self.parse_format();
-        let quality_profile = QualityProfile::parse(&self.profile);
+        // Empty = unset. Parsing the default unconditionally used to make
+        // the profile ALWAYS Some(High), which discarded `quality=` (profile
+        // outranks the fallback) and flipped absent `format` to Auto.
+        let mut quality_profile = if self.profile.is_empty() {
+            None
+        } else {
+            QualityProfile::parse(&self.profile)
+        };
         let quality_dpr = if (self.dpr - 1.0).abs() < f32::EPSILON {
             None
         } else {
@@ -719,6 +744,36 @@ impl QualityIntentNode {
             }
         });
 
+        // imageflow's Auto-preset rule: when the format is auto-selected and
+        // neither qp nor quality was given, the profile defaults to High
+        // (imageflow_riapi encoder.rs: `qp.unwrap_or(quality% or High)`).
+        if matches!(format, Some(FormatChoice::Auto))
+            && quality_profile.is_none()
+            && self.quality_fallback.is_none()
+        {
+            quality_profile = Some(QualityProfile::High);
+        }
+
+        let mut hints: crate::intent::PerCodecHints = Default::default();
+        let mut lossless = lossless;
+        if !self.webp_lossless.is_empty() {
+            hints
+                .webp
+                .insert("lossless".into(), self.webp_lossless.clone());
+            // For an explicit WebP target the per-codec preference IS the
+            // lossless decision (unless the global `lossless=` key set one).
+            if matches!(format, Some(FormatChoice::Specific(ImageFormat::WebP)))
+                && lossless.is_none()
+            {
+                lossless = match self.webp_lossless.to_ascii_lowercase().as_str() {
+                    "true" | "1" | "yes" | "on" => Some(crate::intent::BoolKeep::True),
+                    "false" | "0" | "no" | "off" => Some(crate::intent::BoolKeep::False),
+                    "keep" | "preserve" => Some(crate::intent::BoolKeep::Keep),
+                    _ => None,
+                };
+            }
+        }
+
         CodecIntent {
             format,
             quality_profile,
@@ -726,7 +781,7 @@ impl QualityIntentNode {
             quality_dpr,
             lossless,
             allowed,
-            hints: Default::default(),
+            hints,
             matte: None,
         }
     }
@@ -855,9 +910,11 @@ mod tests {
     #[test]
     fn default_values() {
         let node = QUALITY_INTENT_NODE_NODE.create_default().unwrap();
+        // Empty = unset. A concrete default ("high") made the profile always
+        // win over `quality=` and flipped absent formats to auto-selection.
         assert_eq!(
             node.get_param("profile"),
-            Some(ParamValue::Str("high".into()))
+            Some(ParamValue::Str(String::new()))
         );
         assert_eq!(
             node.get_param("format"),
@@ -937,9 +994,9 @@ mod tests {
     fn to_codec_intent_default() {
         let node = QualityIntentNode::default();
         let intent = node.to_codec_intent();
-        // profile="high" -> qp triggers auto
-        assert_eq!(intent.format, Some(FormatChoice::Auto));
-        assert_eq!(intent.quality_profile, Some(QualityProfile::High));
+        // Nothing set → nothing forced: no format flip, no profile.
+        assert_eq!(intent.format, None);
+        assert_eq!(intent.quality_profile, None);
         assert!(intent.quality_dpr.is_none()); // dpr 1.0 -> None
         assert!(intent.lossless.is_none()); // empty string -> None
         // web_safe baseline
@@ -949,6 +1006,77 @@ mod tests {
         assert!(!intent.allowed.contains(ImageFormat::WebP));
         assert!(!intent.allowed.contains(ImageFormat::Avif));
         assert!(!intent.allowed.contains(ImageFormat::Jxl));
+    }
+
+    #[test]
+    fn to_codec_intent_quality_fallback_is_honored() {
+        // `?quality=80` alone: the fallback must drive effective quality
+        // (the old always-set profile silently outranked it), and the
+        // format must NOT flip to auto-selection.
+        let node = QualityIntentNode {
+            quality_fallback: Some(80.0),
+            ..Default::default()
+        };
+        let intent = node.to_codec_intent();
+        assert_eq!(intent.format, None);
+        assert_eq!(intent.quality_profile, None);
+        assert!((intent.effective_quality() - 80.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn to_codec_intent_auto_defaults_to_high_profile() {
+        // imageflow's Auto-preset rule: format=auto with neither qp nor
+        // quality → High profile.
+        let node = QualityIntentNode {
+            format: String::from("auto"),
+            ..Default::default()
+        };
+        let intent = node.to_codec_intent();
+        assert_eq!(intent.format, Some(FormatChoice::Auto));
+        assert_eq!(intent.quality_profile, Some(QualityProfile::High));
+    }
+
+    #[test]
+    fn to_codec_intent_auto_with_quality_uses_fallback_not_high() {
+        let node = QualityIntentNode {
+            format: String::from("auto"),
+            quality_fallback: Some(60.0),
+            ..Default::default()
+        };
+        let intent = node.to_codec_intent();
+        assert_eq!(intent.quality_profile, None);
+        assert!((intent.effective_quality() - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn to_codec_intent_webp_lossless_explicit_format() {
+        let node = QualityIntentNode {
+            format: String::from("webp"),
+            webp_lossless: String::from("true"),
+            ..Default::default()
+        };
+        let intent = node.to_codec_intent();
+        assert_eq!(
+            intent.format,
+            Some(FormatChoice::Specific(ImageFormat::WebP))
+        );
+        assert_eq!(intent.lossless, Some(crate::intent::BoolKeep::True));
+        assert_eq!(
+            intent.hints.webp.get("lossless").map(String::as_str),
+            Some("true")
+        );
+    }
+
+    #[test]
+    fn to_codec_intent_webp_lossless_does_not_override_global() {
+        let node = QualityIntentNode {
+            format: String::from("webp"),
+            lossless: String::from("false"),
+            webp_lossless: String::from("true"),
+            ..Default::default()
+        };
+        let intent = node.to_codec_intent();
+        assert_eq!(intent.lossless, Some(crate::intent::BoolKeep::False));
     }
 
     #[test]
@@ -1036,7 +1164,7 @@ mod tests {
     fn downcast() {
         let node = QUALITY_INTENT_NODE_NODE.create_default().unwrap();
         let qi = node.as_any().downcast_ref::<QualityIntentNode>().unwrap();
-        assert_eq!(qi.profile, "high");
+        assert_eq!(qi.profile, ""); // empty = unset (see profile param docs)
         assert!(!qi.allow_webp);
     }
 

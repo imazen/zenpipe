@@ -710,7 +710,7 @@ pub struct Constrain {
     /// - "always" — always sharpen, even at identity dimensions
     #[param(default = "downscaling")]
     #[param(section = "Advanced", label = "Sharpen When")]
-    #[kv("sharpen_when")]
+    #[kv("sharpen_when", "f.sharpen_when")]
     pub sharpen_when: Option<String>,
 }
 
@@ -948,13 +948,16 @@ impl RemoveAlpha {
 #[node(id = "zenpipe.round_corners", group = Canvas, role = Filter)]
 #[node(tags("corners", "rounded", "mask", "border-radius"))]
 pub struct RoundCorners {
-    /// Corner radius in pixels (uniform). Clamped to min(width, height) / 2.
-    /// Used when mode is "pixels" (default) or as fallback.
+    /// Corner radius (uniform). Interpreted per `mode`: pixels when
+    /// "pixels" (default), percent of min(width, height)/2 when
+    /// "percentage".
     ///
-    /// RIAPI: `?s.roundcorners=20` (single value) or `?s.roundcorners=10,20,30,40` (TL,TR,BR,BL)
+    /// RIAPI `s.roundcorners` is handled by the ROUNDCORNERS_RIAPI adapter
+    /// (1 or 4 comma-separated values, PERCENTAGE semantics like
+    /// ImageResizer/imageflow — a bare `#[kv]` here would read the value as
+    /// pixels and reject the 4-value form).
     #[param(range(0.0..=10000.0), default = 0.0, step = 1.0)]
-    #[param(unit = "px", section = "Main", label = "Radius")]
-    #[kv("s.roundcorners")]
+    #[param(section = "Main", label = "Radius")]
     pub radius: f32,
     /// Top-left corner radius (for per-corner modes).
     #[param(range(0.0..=10000.0), default = -1.0, step = 1.0)]
@@ -1906,6 +1909,220 @@ impl NodeDef for SflipRiapiDef {
     }
 }
 
+// ─── s.roundcorners adapter (percentage semantics, 1 or 4 values) ───
+
+/// RIAPI `s.roundcorners` → [`RoundCorners`] with PERCENTAGE semantics.
+///
+/// ImageResizer/imageflow treat the value as a percentage (100 = full
+/// rounding); one value applies to all corners, four values are
+/// TL,TR,BR,BL. See `imageflow_riapi` layout.rs (RoundCornersMode::
+/// Percentage / PercentageCustom).
+static ROUNDCORNERS_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.roundcorners",
+    label: "Round Corners (RIAPI)",
+    description: "Rounded corners via querystring (percentage semantics, 1 or 4 values)",
+    group: zennode::NodeGroup::Canvas,
+    role: zennode::NodeRole::Filter,
+    params: &[],
+    tags: &["corners", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::ModifyAlpha,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct RoundcornersRiapiDef;
+pub static ROUNDCORNERS_RIAPI_DEF: RoundcornersRiapiDef = RoundcornersRiapiDef;
+
+impl NodeDef for RoundcornersRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &ROUNDCORNERS_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other(
+            "use from_kv() for RIAPI s.roundcorners".into(),
+        ))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.roundcorners";
+        let Some(val) = kv.take_owned("s.roundcorners", consumer) else {
+            return Ok(None);
+        };
+
+        let parts: Vec<f32> = val
+            .split(',')
+            .map(|p| p.trim().parse::<f32>())
+            .collect::<Result<_, _>>()
+            .unwrap_or_default();
+
+        let clamp = |v: f32| v.clamp(0.0, 100.0);
+        match parts.as_slice() {
+            [v] if *v > 0.0 => {
+                let mut rc = RoundCorners::default();
+                rc.mode = "percentage".into();
+                rc.radius = clamp(*v);
+                Ok(Some(Box::new(rc)))
+            }
+            // IR4 order: top-left, top-right, bottom-right, bottom-left.
+            [tl, tr, br, bl] => {
+                let mut rc = RoundCorners::default();
+                rc.mode = "percentage_custom".into();
+                rc.radius_tl = clamp(*tl);
+                rc.radius_tr = clamp(*tr);
+                rc.radius_br = clamp(*br);
+                rc.radius_bl = clamp(*bl);
+                Ok(Some(Box::new(rc)))
+            }
+            [v] if *v <= 0.0 => Ok(None),
+            _ => {
+                kv.warn(
+                    "s.roundcorners",
+                    zennode::kv::KvWarningKind::InvalidValue,
+                    alloc::format!(
+                        "s.roundcorners expects 1 or 4 comma-separated numbers, got '{val}'"
+                    ),
+                );
+                Ok(None)
+            }
+        }
+    }
+}
+
+// ─── ignoreicc / ignore_icc_errors adapter (decode-side directives) ───
+
+/// Decode-side ICC directives from the querystring.
+///
+/// `ignoreicc=true` discards the embedded color profile (decode as sRGB,
+/// no CMS transform, no ICC in the output) — imageflow's
+/// `DecoderCommand::DiscardColorProfile`. `ignore_icc_errors=true` tolerates
+/// malformed profiles; the zen-native CMS path already degrades to
+/// passthrough on transform failure, so this is accepted for compatibility
+/// and recorded for hosts that want strictness.
+#[derive(Clone, Debug, Default)]
+pub struct IccDirectives {
+    pub discard_profile: bool,
+    pub ignore_errors: bool,
+}
+
+static ICC_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.icc",
+    label: "ICC Directives (RIAPI)",
+    description: "Discard or tolerate embedded ICC profiles via querystring",
+    group: zennode::NodeGroup::Decode,
+    role: zennode::NodeRole::Decode,
+    params: &[],
+    tags: &["icc", "cms", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Any,
+        alpha: zennode::AlphaHandling::Skip,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+impl NodeInstance for IccDirectives {
+    fn schema(&self) -> &'static NodeSchema {
+        &ICC_RIAPI_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert(
+            "discard_profile".into(),
+            zennode::ParamValue::Bool(self.discard_profile),
+        );
+        m.insert(
+            "ignore_errors".into(),
+            zennode::ParamValue::Bool(self.ignore_errors),
+        );
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "discard_profile" => Some(zennode::ParamValue::Bool(self.discard_profile)),
+            "ignore_errors" => Some(zennode::ParamValue::Bool(self.ignore_errors)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        let Some(v) = value.as_bool() else {
+            return false;
+        };
+        match name {
+            "discard_profile" => self.discard_profile = v,
+            "ignore_errors" => self.ignore_errors = v,
+            _ => return false,
+        }
+        true
+    }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+pub struct IccRiapiDef;
+pub static ICC_RIAPI_DEF: IccRiapiDef = IccRiapiDef;
+
+impl NodeDef for IccRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &ICC_RIAPI_SCHEMA
+    }
+
+    fn create(&self, params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Ok(Box::new(IccDirectives {
+            discard_profile: params
+                .get("discard_profile")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            ignore_errors: params
+                .get("ignore_errors")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.icc";
+        let discard = kv.take_bool("ignoreicc", consumer).unwrap_or(false);
+        let ignore_errors = kv.take_bool("ignore_icc_errors", consumer).unwrap_or(false);
+        if discard || ignore_errors {
+            Ok(Some(Box::new(IccDirectives {
+                discard_profile: discard,
+                ignore_errors,
+            })))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  REGISTRATION
 // ═══════════════════════════════════════════════════════════════════════
@@ -1959,4 +2176,6 @@ pub static ALL: &[&dyn NodeDef] = &[
     &AUTOROTATE_RIAPI_DEF,
     &FRAME_RIAPI_DEF,
     &CROP_RIAPI_DEF,
+    &ROUNDCORNERS_RIAPI_DEF,
+    &ICC_RIAPI_DEF,
 ];

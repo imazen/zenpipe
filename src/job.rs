@@ -716,7 +716,19 @@ impl<'a> ImageJob<'a> {
         // 6. Apply CMS transform if needed.
         // When CMS is None, preserve the source color space (P3, Rec.2020, etc.)
         // — don't force conversion to sRGB.
-        let source = self.apply_cms(source, &image_info, input_bytes)?;
+        // RIAPI `ignoreicc=true` (the IccDirectives node) discards the embedded
+        // profile entirely: no transform, and no ICC in the output metadata.
+        let discard_icc = self.nodes.iter().any(|n| {
+            n.schema().id == "zenpipe.riapi.icc"
+                && n.get_param("discard_profile")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+        });
+        let source = if discard_icc {
+            source
+        } else {
+            self.apply_cms(source, &image_info, input_bytes)?
+        };
 
         // 7. Ensure source is RGBA8 for pipeline compatibility.
         // Preserves the source color primaries — only converts channel layout
@@ -733,7 +745,13 @@ impl<'a> ImageJob<'a> {
             has_gain_map,
             is_hdr: false, // handled by CMS
             exif_orientation: image_info.orientation.to_exif(),
-            metadata: Some(self.apply_metadata_policy(image_info.metadata())),
+            metadata: Some({
+                let mut m = self.apply_metadata_policy(image_info.metadata());
+                if discard_icc {
+                    m.icc_profile = None;
+                }
+                m
+            }),
         };
 
         // 9. Run the pipeline via orchestrate::stream().

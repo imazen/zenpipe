@@ -1208,3 +1208,67 @@ fn preprocess_expands_srcset_into_constrain() {
     let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain");
     assert_eq!(get_u32(c, "w"), Some(300));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ROUND CORNERS / ICC DIRECTIVES / SHARPEN-WHEN / WEBP.LOSSLESS (chunk 2)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn roundcorners_single_value_is_percentage() {
+    let r = parse("s.roundcorners=30");
+    let rc = find_node(&r.instances, "zenpipe.round_corners").expect("RoundCorners");
+    assert_eq!(get_str(rc, "mode").as_deref(), Some("percentage"));
+    assert_eq!(get_f32(rc, "radius"), Some(30.0));
+}
+
+#[test]
+fn roundcorners_four_values_tl_tr_br_bl() {
+    let r = parse("s.roundcorners=10,20,30,40");
+    let rc = find_node(&r.instances, "zenpipe.round_corners").expect("RoundCorners");
+    assert_eq!(get_str(rc, "mode").as_deref(), Some("percentage_custom"));
+    assert_eq!(get_f32(rc, "radius_tl"), Some(10.0));
+    assert_eq!(get_f32(rc, "radius_tr"), Some(20.0));
+    assert_eq!(get_f32(rc, "radius_br"), Some(30.0));
+    assert_eq!(get_f32(rc, "radius_bl"), Some(40.0));
+}
+
+#[test]
+fn ignoreicc_produces_icc_directives() {
+    let r = parse("ignoreicc=true");
+    let icc = find_node(&r.instances, "zenpipe.riapi.icc").expect("IccDirectives");
+    assert_eq!(get_bool(icc, "discard_profile"), Some(true));
+    assert_eq!(get_bool(icc, "ignore_errors"), Some(false));
+}
+
+#[test]
+fn ignore_icc_errors_produces_icc_directives() {
+    let r = parse("ignore_icc_errors=true");
+    let icc = find_node(&r.instances, "zenpipe.riapi.icc").expect("IccDirectives");
+    assert_eq!(get_bool(icc, "discard_profile"), Some(false));
+    assert_eq!(get_bool(icc, "ignore_errors"), Some(true));
+}
+
+#[test]
+fn f_sharpen_when_alias_accepted() {
+    let r = parse("w=100&f.sharpen=20&f.sharpen_when=always");
+    let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain");
+    assert_eq!(get_str(c, "sharpen_when").as_deref(), Some("always"));
+}
+
+#[test]
+fn webp_lossless_kv_reaches_intent() {
+    let r = parse("format=webp&webp.lossless=true");
+    let q = find_node(&r.instances, "zencodecs.quality_intent").expect("QualityIntent");
+    assert_eq!(get_str(q, "webp_lossless").as_deref(), Some("true"));
+}
+
+#[test]
+fn quality_key_alone_does_not_flip_format_to_auto() {
+    // Regression: the quality_intent profile default used to be "high",
+    // which made `?quality=80` (a) dead — profile outranked it — and
+    // (b) flip absent `format` to auto-selection.
+    let r = parse("quality=80");
+    let q = find_node(&r.instances, "zencodecs.quality_intent").expect("QualityIntent");
+    assert_eq!(get_str(q, "profile").as_deref(), Some(""));
+    assert_eq!(get_f32(q, "quality_fallback"), Some(80.0));
+}
