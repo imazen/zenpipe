@@ -7,6 +7,25 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+
+- **`IMAGEFLOW-PARITY.md`** — verified imageflow gap analysis (imageflow @
+  0ba1c9ea vs zenpipe @ da8d8da): full RIAPI key parity matrix, six confirmed
+  semantic divergences on the native querystring path, imageflow JSON
+  node/preset/envelope coverage, limits+animation under-wiring, and
+  workstreams W1–W10 to full coverage (a8a7144d).
+- **`JSON-JOB-SPEC.md`** — the zenpipe-native JSON job envelope v1 design:
+  one-key zennode steps, checkpoint/resume branching, encode-intent step over
+  `CodecIntent`/`QualityProfile` with per-codec option objects, response/
+  warning/error envelope, capability discovery, and the additive-forever /
+  removals-are-loud lifecycle policy; includes the path-to-0.1 checklist
+  (b0b712cc).
+- **Root `CLAUDE.md`** with the Known Bugs log — twelve source-verified pre-0.1
+  defects (mode-alias rejection, crop-unit and srotate semantics, unwired
+  srcset, under-threaded limits, single-frame animation fallthrough, dropped
+  decoder downscale hints, …) and the four-RIAPI-parsers hazard note
+  (a8a7144d).
+
 #### Fixed
 
 - **zengif and zenwebp both made `zencodec` a required, always-on dependency
