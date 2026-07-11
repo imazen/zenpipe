@@ -149,7 +149,14 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<ConvertedOps, CliError> {
             warnings: Vec::new(),
         }
     } else {
-        registry.from_querystring(&qs)
+        // Normalize (srcset expansion, legacy pairs, IR4 default mode) and
+        // parse, then sort into IR4 phase order — querystring keys carry no
+        // ordering of their own.
+        let (preprocessed, pre_warnings) = zenpipe::riapi::preprocess_querystring(&qs);
+        for w in &pre_warnings {
+            eprintln!("warning: querystring: {w}");
+        }
+        registry.from_querystring(&preprocessed)
     };
 
     for w in &result.warnings {
@@ -157,6 +164,7 @@ pub fn ops_to_nodes(ops: &Operations) -> Result<ConvertedOps, CliError> {
     }
 
     let mut nodes = result.instances;
+    zenpipe::riapi::riapi_order(&mut nodes);
 
     // ── Filters without RIAPI keys — created directly via NodeDef::create() ──
     if let Some(v) = ops.brightness {

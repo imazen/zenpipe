@@ -137,42 +137,62 @@ fn anchor_key() {
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn srotate_90() {
-    // srotate takes an integer (90, 180, 270) — this works with the i32 field.
+fn srotate_90_is_degrees_source_rotate() {
+    // RIAPI `srotate` means DEGREES (source rotation before crop), matching
+    // imageflow_riapi — it was previously (wrongly) bound to the Orient
+    // node's EXIF-flag param. See IMAGEFLOW-PARITY.md §4.
+    let r = parse("srotate=90");
+    assert!(
+        find_node(&r.instances, "zenlayout.rotate_90").is_some(),
+        "srotate=90 → source Rotate90"
+    );
+    assert!(
+        find_node(&r.instances, "zenlayout.orient").is_none(),
+        "srotate must not produce an Orient node"
+    );
+}
+
+#[test]
+fn srotate_non_multiple_snaps_with_warning() {
+    // srotate=6 (a value that looked like an EXIF flag under the old bug)
+    // is 6 degrees → snaps to 0 with a warning, producing no node.
     let r = parse("srotate=6");
-    let o = find_node(&r.instances, "zenlayout.orient").expect("Orient node");
-    assert!(get_u32(o, "orientation").is_some() || get_str(o, "orientation").is_some());
+    assert!(find_node(&r.instances, "zenlayout.orient").is_none());
+    assert!(find_node(&r.instances, "zenlayout.rotate_90").is_none());
+    assert!(
+        r.warnings.iter().any(|w| w.key == "srotate"),
+        "snapping must warn"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  FLIP (RIAPI adapter)
+//  FLIP (RIAPI adapter) — `flip` is POST-resize, `sflip` is source-phase
 // ═══════════════════════════════════════════════════════════════════════
+
+fn post_flip_flags(r: &zennode::registry::KvResult) -> Option<(bool, bool)> {
+    let n = find_node(&r.instances, "zenpipe.post_flip")?;
+    Some((
+        get_bool(n, "horizontal").unwrap_or(false),
+        get_bool(n, "vertical").unwrap_or(false),
+    ))
+}
 
 #[test]
 fn flip_horizontal() {
     let r = parse("flip=h");
-    assert!(
-        find_node(&r.instances, "zenlayout.flip_h").is_some(),
-        "flip=h → FlipH"
-    );
+    assert_eq!(post_flip_flags(&r), Some((true, false)), "flip=h → PostFlip(h)");
 }
 
 #[test]
 fn flip_vertical() {
     let r = parse("flip=v");
-    assert!(
-        find_node(&r.instances, "zenlayout.flip_v").is_some(),
-        "flip=v → FlipV"
-    );
+    assert_eq!(post_flip_flags(&r), Some((false, true)), "flip=v → PostFlip(v)");
 }
 
 #[test]
 fn flip_both() {
     let r = parse("flip=both");
-    assert!(
-        find_node(&r.instances, "zenlayout.rotate_180").is_some(),
-        "flip=both → Rotate180"
-    );
+    assert_eq!(post_flip_flags(&r), Some((true, true)), "flip=both → PostFlip(h+v)");
 }
 
 #[test]
@@ -180,38 +200,50 @@ fn sflip_alias() {
     let r = parse("sflip=x");
     assert!(
         find_node(&r.instances, "zenlayout.flip_h").is_some(),
-        "sflip=x → FlipH"
+        "sflip=x → source FlipH"
     );
 }
 
+#[test]
+fn flip_and_sflip_are_independent() {
+    // imageflow applies sflip before crop and flip after resize; both keys
+    // in one URL must produce BOTH nodes (the old adapter consumed only one).
+    let r = parse("flip=v&sflip=h");
+    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "sflip=h");
+    assert_eq!(post_flip_flags(&r), Some((false, true)), "flip=v");
+}
+
 // ═══════════════════════════════════════════════════════════════════════
-//  ROTATE (RIAPI adapter)
+//  ROTATE (RIAPI adapter) — `rotate` is POST-resize, `srotate` is source
 // ═══════════════════════════════════════════════════════════════════════
+
+fn post_rotate_degrees(r: &zennode::registry::KvResult) -> Option<i32> {
+    let n = find_node(&r.instances, "zenpipe.post_rotate")?;
+    n.get_param("degrees")?.as_i32()
+}
 
 #[test]
 fn rotate_90() {
     let r = parse("rotate=90");
-    assert!(find_node(&r.instances, "zenlayout.rotate_90").is_some());
+    assert_eq!(post_rotate_degrees(&r), Some(90));
 }
 
 #[test]
 fn rotate_180() {
     let r = parse("rotate=180");
-    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_some());
+    assert_eq!(post_rotate_degrees(&r), Some(180));
 }
 
 #[test]
 fn rotate_270() {
     let r = parse("rotate=270");
-    assert!(find_node(&r.instances, "zenlayout.rotate_270").is_some());
+    assert_eq!(post_rotate_degrees(&r), Some(270));
 }
 
 #[test]
 fn rotate_0_no_node() {
     let r = parse("rotate=0");
-    assert!(find_node(&r.instances, "zenlayout.rotate_90").is_none());
-    assert!(find_node(&r.instances, "zenlayout.rotate_180").is_none());
-    assert!(find_node(&r.instances, "zenlayout.rotate_270").is_none());
+    assert!(find_node(&r.instances, "zenpipe.post_rotate").is_none());
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -545,49 +577,47 @@ fn complex_query() {
 //  CROP (RIAPI adapter)
 // ═══════════════════════════════════════════════════════════════════════
 
+// RIAPI crop parses into a RiapiCrop carrier holding RAW coordinates +
+// units; the geometry bridge resolves it against source dimensions
+// (imageflow semantics: absent units = source pixels, negative coords are
+// bottom/right-relative, inverted windows reset). The old adapter divided
+// by a default of 100 at parse time — percent where ImageResizer means
+// pixels. See IMAGEFLOW-PARITY.md §4 and the resolution tests in
+// src/bridge/geometry.rs.
+
+fn riapi_crop_params(r: &zennode::registry::KvResult) -> Option<[f32; 6]> {
+    let c = find_node(&r.instances, "zenpipe.riapi_crop")?;
+    Some([
+        get_f32(c, "x1")?,
+        get_f32(c, "y1")?,
+        get_f32(c, "x2")?,
+        get_f32(c, "y2")?,
+        get_f32(c, "xunits")?,
+        get_f32(c, "yunits")?,
+    ])
+}
+
 #[test]
-fn crop_default_units() {
-    // crop=10,10,90,90 with default cropxunits=100, cropyunits=100
+fn crop_default_units_are_source_pixels() {
+    // No cropxunits → units 0 = "source pixel" coordinate space.
     let r = parse("crop=10,10,90,90");
-    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
-    let x = get_f32(c, "x").unwrap();
-    let y = get_f32(c, "y").unwrap();
-    let w = get_f32(c, "w").unwrap();
-    let h = get_f32(c, "h").unwrap();
-    assert!((x - 0.1).abs() < 0.001, "x={x}, expected 0.1");
-    assert!((y - 0.1).abs() < 0.001, "y={y}, expected 0.1");
-    assert!((w - 0.8).abs() < 0.001, "w={w}, expected 0.8");
-    assert!((h - 0.8).abs() < 0.001, "h={h}, expected 0.8");
+    let p = riapi_crop_params(&r).expect("RiapiCrop node");
+    assert_eq!(p, [10.0, 10.0, 90.0, 90.0, 0.0, 0.0]);
 }
 
 #[test]
 fn crop_c_shorthand() {
-    // c=25,25,75,75 → auto units=100
+    // c= shorthand forces percent units (100).
     let r = parse("c=25,25,75,75");
-    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
-    let x = get_f32(c, "x").unwrap();
-    let y = get_f32(c, "y").unwrap();
-    let w = get_f32(c, "w").unwrap();
-    let h = get_f32(c, "h").unwrap();
-    assert!((x - 0.25).abs() < 0.001, "x={x}, expected 0.25");
-    assert!((y - 0.25).abs() < 0.001, "y={y}, expected 0.25");
-    assert!((w - 0.5).abs() < 0.001, "w={w}, expected 0.5");
-    assert!((h - 0.5).abs() < 0.001, "h={h}, expected 0.5");
+    let p = riapi_crop_params(&r).expect("RiapiCrop node");
+    assert_eq!(p, [25.0, 25.0, 75.0, 75.0, 100.0, 100.0]);
 }
 
 #[test]
 fn crop_custom_units() {
-    // crop=0,0,200,200 with cropxunits=200, cropyunits=200 → full image
     let r = parse("crop=0,0,200,200&cropxunits=200&cropyunits=200");
-    let c = find_node(&r.instances, "zenlayout.crop_percent").expect("CropPercent node");
-    let x = get_f32(c, "x").unwrap();
-    let y = get_f32(c, "y").unwrap();
-    let w = get_f32(c, "w").unwrap();
-    let h = get_f32(c, "h").unwrap();
-    assert!((x - 0.0).abs() < 0.001, "x={x}, expected 0.0");
-    assert!((y - 0.0).abs() < 0.001, "y={y}, expected 0.0");
-    assert!((w - 1.0).abs() < 0.001, "w={w}, expected 1.0");
-    assert!((h - 1.0).abs() < 0.001, "h={h}, expected 1.0");
+    let p = riapi_crop_params(&r).expect("RiapiCrop node");
+    assert_eq!(p, [0.0, 0.0, 200.0, 200.0, 200.0, 200.0]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1123,4 +1153,58 @@ fn no_padding_keys_produces_no_expand_canvas() {
         ec.is_none(),
         "querystring without padding keys should not produce ExpandCanvas"
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  IR4 PHASE ORDERING (preprocess → parse → riapi_order)
+// ═══════════════════════════════════════════════════════════════════════
+
+fn ordered_ids(qs: &str) -> Vec<String> {
+    let (pre, _warnings) = zenpipe::riapi::preprocess_querystring(qs);
+    let mut r = registry().from_querystring(&pre);
+    zenpipe::riapi::riapi_order(&mut r.instances);
+    r.instances
+        .iter()
+        .map(|n| n.schema().id.to_string())
+        .collect()
+}
+
+fn pos(ids: &[String], id: &str) -> usize {
+    ids.iter()
+        .position(|i| i == id)
+        .unwrap_or_else(|| panic!("{id} missing from {ids:?}"))
+}
+
+#[test]
+fn riapi_order_source_flip_crop_constrain_post_rotate() {
+    // Querystring keys have no order; the parsed nodes must come out in
+    // IR4 emission order: sflip (source) → crop → constrain → rotate (post).
+    let ids = ordered_ids("rotate=90&crop=10,10,50,50&w=100&h=100&sflip=h");
+    assert!(pos(&ids, "zenlayout.flip_h") < pos(&ids, "zenpipe.riapi_crop"));
+    assert!(pos(&ids, "zenpipe.riapi_crop") < pos(&ids, "zenresize.constrain"));
+    assert!(pos(&ids, "zenresize.constrain") < pos(&ids, "zenpipe.post_rotate"));
+}
+
+#[cfg(feature = "nodes-filters")]
+#[test]
+fn riapi_order_filters_between_constrain_and_post_ops() {
+    let ids = ordered_ids("rotate=180&s.sepia=0.5&w=100");
+    assert!(pos(&ids, "zenresize.constrain") < pos(&ids, "zenfilters.sepia"));
+    assert!(pos(&ids, "zenfilters.sepia") < pos(&ids, "zenpipe.post_rotate"));
+}
+
+#[test]
+fn preprocess_injects_pad_mode_for_exact_dims() {
+    let (pre, _) = zenpipe::riapi::preprocess_querystring("w=800&h=600");
+    let r = registry().from_querystring(&pre);
+    let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain");
+    assert_eq!(get_str(c, "mode").as_deref(), Some("pad"));
+}
+
+#[test]
+fn preprocess_expands_srcset_into_constrain() {
+    let (pre, _) = zenpipe::riapi::preprocess_querystring("srcset=300w");
+    let r = registry().from_querystring(&pre);
+    let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain");
+    assert_eq!(get_u32(c, "w"), Some(300));
 }

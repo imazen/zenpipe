@@ -56,6 +56,9 @@ pub use node_registry::full_registry;
 pub mod srcset;
 
 #[cfg(feature = "zennode")]
+pub mod riapi;
+
+#[cfg(feature = "zennode")]
 pub mod zennode_defs;
 
 // Re-export bridge config types at crate root for convenience.

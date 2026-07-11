@@ -109,17 +109,23 @@ pub fn expand_legacy(
 
 /// Expand a RIAPI querystring using the zen-native parser.
 ///
-/// Uses `zenlayout::riapi::parse()` for geometry, then feeds remaining
-/// keys through zennode registry for filter/codec nodes.
-///
-/// This is the modular path — each crate only handles its own keys.
-/// Currently handles fewer keys than `expand_legacy` but is more extensible.
+/// The querystring is first normalized by
+/// [`crate::riapi::preprocess_querystring`] (srcset expansion, legacy
+/// shortcut pairs, value coercions, the IR4 default-mode rule), then parsed
+/// through the zennode registry — each node claims its own keys via
+/// `#[kv(...)]` annotations or a `from_kv` adapter — and finally the parsed
+/// instances are sorted into IR4 emission order by
+/// [`crate::riapi::riapi_order`].
 pub fn expand_zen(
     querystring: &str,
     source_w: u32,
     source_h: u32,
     exif_flag: Option<u8>,
 ) -> Result<ExpandedRiapi, TranslateError> {
+    // 0. Normalize the querystring (srcset, legacy pairs, default mode).
+    let (preprocessed, pre_warnings) = crate::riapi::preprocess_querystring(querystring);
+    let querystring: &str = &preprocessed;
+
     // 1. Build a registry with all zen-native nodes.
     let mut registry = NodeRegistry::new();
     crate::zennode_defs::register(&mut registry);
@@ -140,7 +146,7 @@ pub fn expand_zen(
 
     let mut nodes: Vec<Box<dyn NodeInstance>> = Vec::new();
     let mut preset = None;
-    let mut warnings: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = pre_warnings;
 
     // Keys we handle manually — suppress "unrecognized key" warnings for these.
     const MANUAL_KEYS: &[&str] = &["c.gravity", "c.focus", "c.zoom", "c.finalmode"];
@@ -195,7 +201,16 @@ pub fn expand_zen(
         }
     }
 
-    // 4. Inject SmartCropAnalyze before Constrain for c.focus rects.
+    // 4. Parse legacy IR4 padding/border/margin shorthand into an ExpandCanvas
+    //    node, then sort everything into IR4 emission order (querystring keys
+    //    have no inherent order; registration order is meaningless).
+    if let Some(expand) = parse_expand_shorthand(querystring) {
+        nodes.push(Box::new(expand));
+    }
+    crate::riapi::riapi_order(&mut nodes);
+
+    // 5. Inject SmartCropAnalyze before Constrain for c.focus rects
+    //    (after ordering, so the index is final).
     if let Some(CFocusParsed::Rects(ref rects)) = c_focus {
         // Find the Constrain node and extract target dimensions.
         let constrain_idx = nodes
@@ -241,15 +256,6 @@ pub fn expand_zen(
     if matches!(c_focus, Some(CFocusParsed::Faces | CFocusParsed::Auto)) {
         // TODO: Build ML Analyze closure when nodes-faces is available.
         // For now, silently ignored even with the feature.
-    }
-
-    // Parse legacy IR4 padding/border/margin shorthand into an ExpandCanvas node.
-    // Keys: paddingwidth, paddingheight, paddingcolor, borderwidth, bordercolor, margin.
-    // Semantics: `margin` adds to all sides; `padding*` adds uniform horizontal/vertical;
-    // `border*` is a styled border (rendered here as plain padding — true border rendering
-    // with a colored edge stripe is deferred).
-    if let Some(expand) = parse_expand_shorthand(querystring) {
-        nodes.push(Box::new(expand));
     }
 
     Ok(ExpandedRiapi {

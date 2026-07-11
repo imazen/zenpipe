@@ -1233,13 +1233,24 @@ mod core_tests {
 
     #[test]
     fn parse_constraint_mode_aliases() {
+        // RIAPI names resolve with the RIAPI default scale=down (never
+        // upscale) — see IMAGEFLOW-PARITY.md §4. The pre-2026-07 aliases
+        // (crop→FitCrop, pad→FitPad) upscaled where ImageResizer would not.
         assert_eq!(
             parse_constraint_mode("crop").unwrap(),
-            zenlayout::ConstraintMode::FitCrop
+            zenlayout::ConstraintMode::WithinCrop
         );
         assert_eq!(
             parse_constraint_mode("pad").unwrap(),
-            zenlayout::ConstraintMode::FitPad
+            zenlayout::ConstraintMode::WithinPad
+        );
+        assert_eq!(
+            parse_constraint_mode("max").unwrap(),
+            zenlayout::ConstraintMode::Within
+        );
+        assert_eq!(
+            parse_constraint_mode("stretch").unwrap(),
+            zenlayout::ConstraintMode::Distort
         );
         assert_eq!(
             parse_constraint_mode("within").unwrap(),
@@ -1459,13 +1470,24 @@ mod tests {
 
     #[test]
     fn parse_constraint_mode_aliases() {
+        // RIAPI names resolve with the RIAPI default scale=down (never
+        // upscale) — see IMAGEFLOW-PARITY.md §4. The pre-2026-07 aliases
+        // (crop→FitCrop, pad→FitPad) upscaled where ImageResizer would not.
         assert_eq!(
             parse_constraint_mode("crop").unwrap(),
-            zenlayout::ConstraintMode::FitCrop
+            zenlayout::ConstraintMode::WithinCrop
         );
         assert_eq!(
             parse_constraint_mode("pad").unwrap(),
-            zenlayout::ConstraintMode::FitPad
+            zenlayout::ConstraintMode::WithinPad
+        );
+        assert_eq!(
+            parse_constraint_mode("max").unwrap(),
+            zenlayout::ConstraintMode::Within
+        );
+        assert_eq!(
+            parse_constraint_mode("stretch").unwrap(),
+            zenlayout::ConstraintMode::Distort
         );
         assert_eq!(
             parse_constraint_mode("within").unwrap(),

@@ -151,9 +151,13 @@ pub struct CropMargins {
 #[node(tags("orient", "exif", "geometry"))]
 pub struct Orient {
     /// EXIF orientation value (1-8). 1 = no transformation.
-    #[param(range(1..=8), default = 1, step = 1)]
+    /// 0 is a sentinel meaning "apply the EXIF orientation found at decode".
+    ///
+    /// Note: the RIAPI `srotate` key is NOT bound here — `srotate` means
+    /// degrees (source rotation) and is handled by the srotate adapter.
+    /// `autorotate=true` maps to `Orient { orientation: 0 }`.
+    #[param(range(0..=8), default = 1, step = 1)]
     #[param(section = "Main", label = "Orientation")]
-    #[kv("srotate")]
     pub orientation: i32,
 }
 
@@ -1088,9 +1092,11 @@ impl Default for Overlay {
 
 use zennode::{KvPairs, NodeDef, NodeError, NodeInstance, ParamMap};
 
-/// RIAPI `flip` and `sflip` keys → FlipH / FlipV nodes.
+/// RIAPI `flip` key → [`PostFlip`] node (post-resize flip, applied last).
 ///
 /// Values: `h`/`x` (horizontal), `v`/`y` (vertical), `both`/`xy`, `none`.
+/// The pre-crop source flip (`sflip`) is handled by [`SFLIP_RIAPI_DEF`],
+/// which emits plain FlipH/FlipV nodes that sort into the source phase.
 static FLIP_RIAPI_SCHEMA: NodeSchema = NodeSchema {
     id: "zenpipe.riapi.flip",
     label: "Flip (RIAPI)",
@@ -1130,23 +1136,19 @@ impl NodeDef for FlipRiapiDef {
         kv: &mut KvPairs,
     ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
         let consumer = "zenpipe.riapi.flip";
-        let val = kv
-            .take_owned("flip", consumer)
-            .or_else(|| kv.take_owned("sflip", consumer));
+        let val = kv.take_owned("flip", consumer);
 
         let Some(val) = val else {
             return Ok(None);
         };
 
-        match val.to_ascii_lowercase().as_str() {
-            "h" | "x" => Ok(Some(Box::new(FlipH {}))),
-            "v" | "y" => Ok(Some(Box::new(FlipV {}))),
-            "both" | "xy" | "hv" => {
-                // flip-H + flip-V = rotate 180°
-                Ok(Some(Box::new(Rotate180 {})))
-            }
-            "none" | "" => Ok(None),
-            _ => {
+        match parse_flip_value(&val) {
+            Some((h, v)) if h || v => Ok(Some(Box::new(PostFlip {
+                horizontal: h,
+                vertical: v,
+            }))),
+            Some(_) => Ok(None), // "none"
+            None => {
                 kv.warn(
                     "flip",
                     zennode::kv::KvWarningKind::InvalidValue,
@@ -1158,9 +1160,49 @@ impl NodeDef for FlipRiapiDef {
     }
 }
 
-// FlipBoth is an alias: the bridge converts it to FlipH + FlipV at compile time.
-// (Or the bridge handles "flip_both" as Rotate180 equivalent.)
-// For now it maps to Rotate180 which is semantically identical to flip-H + flip-V.
+/// Parse a RIAPI flip value into (horizontal, vertical). `None` = invalid.
+fn parse_flip_value(val: &str) -> Option<(bool, bool)> {
+    match val.to_ascii_lowercase().as_str() {
+        "h" | "x" => Some((true, false)),
+        "v" | "y" => Some((false, true)),
+        "both" | "xy" | "hv" => Some((true, true)),
+        "none" | "" => Some((false, false)),
+        _ => None,
+    }
+}
+
+/// Parse a RIAPI rotate value: degrees snapped to the nearest multiple of 90.
+/// Returns 0/90/180/270; warns when snapping changed the requested angle.
+fn parse_rotate_degrees(kv: &mut KvPairs, key: &str, val: &str) -> i32 {
+    let degrees = val.parse::<f32>().unwrap_or_else(|_| {
+        kv.warn(
+            key,
+            zennode::kv::KvWarningKind::InvalidValue,
+            alloc::format!("cannot parse '{val}' as degrees"),
+        );
+        0.0
+    });
+    let normalized = ((degrees % 360.0 + 360.0) % 360.0).round() as i32;
+    let snapped = (((normalized + 45) / 90) * 90) % 360;
+    if (normalized % 90) != 0 {
+        kv.warn(
+            key,
+            zennode::kv::KvWarningKind::InvalidValue,
+            alloc::format!("{key}={val} is not a multiple of 90; snapping to {snapped}"),
+        );
+    }
+    snapped
+}
+
+/// Construct the source-phase rotate node for a snapped angle, if any.
+fn source_rotate_node(snapped: i32) -> Option<Box<dyn NodeInstance>> {
+    match snapped {
+        90 => Some(Box::new(Rotate90 {})),
+        180 => Some(Box::new(Rotate180 {})),
+        270 => Some(Box::new(Rotate270 {})),
+        _ => None,
+    }
+}
 
 /// RIAPI `rotate` key → Rotate90 / Rotate180 / Rotate270 nodes.
 ///
@@ -1210,33 +1252,12 @@ impl NodeDef for RotateRiapiDef {
             return Ok(None);
         };
 
-        // Parse as float, round to nearest 90.
-        let degrees = val.parse::<f32>().unwrap_or_else(|_| {
-            kv.warn(
-                "rotate",
-                zennode::kv::KvWarningKind::InvalidValue,
-                alloc::format!("cannot parse '{val}' as degrees"),
-            );
-            0.0
-        });
-
-        let normalized = ((degrees % 360.0 + 360.0) % 360.0).round() as i32;
-
-        match normalized {
-            0 | 360 => Ok(None),
-            90 => Ok(Some(Box::new(Rotate90 {}))),
-            180 => Ok(Some(Box::new(Rotate180 {}))),
-            270 => Ok(Some(Box::new(Rotate270 {}))),
-            _ => {
-                // Round to nearest 90.
-                let snapped = ((normalized + 45) / 90) * 90;
-                match snapped % 360 {
-                    90 => Ok(Some(Box::new(Rotate90 {}))),
-                    180 => Ok(Some(Box::new(Rotate180 {}))),
-                    270 => Ok(Some(Box::new(Rotate270 {}))),
-                    _ => Ok(None),
-                }
-            }
+        // RIAPI `rotate` is a POST-resize rotation (applied after filters and
+        // padding, unlike `srotate`). Emits the dedicated PostRotate node so
+        // riapi_order can place it at the end of the pipeline.
+        match parse_rotate_degrees(kv, "rotate", &val) {
+            0 => Ok(None),
+            snapped => Ok(Some(Box::new(PostRotate { degrees: snapped }))),
         }
     }
 }
@@ -1484,36 +1505,404 @@ impl NodeDef for CropRiapiDef {
         let x2 = parse_f(parts[2], 2)?;
         let y2 = parse_f(parts[3], 3)?;
 
-        // Read coordinate units (default 100). `c` always uses 100.
+        // Read coordinate units. `c` always uses 100 (percent).
+        //
+        // RIAPI semantics (matching imageflow_riapi layout.rs:729-775):
+        // units of 0 or absent mean SOURCE PIXELS — the coordinate space is
+        // the image dimensions, which are unknown at parse time. So the raw
+        // coordinates + units are carried in a RiapiCrop node and resolved
+        // at the geometry bridge, where source dimensions exist. That is
+        // also where negative (bottom-right-relative) coordinates, clamping,
+        // and inverted-rect reset are applied.
         let cropxunits = if force_100 {
             // Consume but ignore if present.
             let _ = kv.take_f32("cropxunits", consumer);
             100.0
         } else {
-            kv.take_f32("cropxunits", consumer).unwrap_or(100.0)
+            kv.take_f32("cropxunits", consumer).unwrap_or(0.0)
         };
         let cropyunits = if force_100 {
             let _ = kv.take_f32("cropyunits", consumer);
             100.0
         } else {
-            kv.take_f32("cropyunits", consumer).unwrap_or(100.0)
+            kv.take_f32("cropyunits", consumer).unwrap_or(0.0)
         };
 
-        if cropxunits == 0.0 || cropyunits == 0.0 {
+        if !cropxunits.is_finite() || !cropyunits.is_finite() || cropxunits < 0.0
+            || cropyunits < 0.0
+        {
             kv.warn(
                 "crop",
                 zennode::kv::KvWarningKind::InvalidValue,
-                "cropxunits and cropyunits must be non-zero",
+                "cropxunits and cropyunits must be finite and non-negative",
             );
             return Ok(None);
         }
 
-        let x = x1 / cropxunits;
-        let y = y1 / cropyunits;
-        let w = (x2 - x1) / cropxunits;
-        let h = (y2 - y1) / cropyunits;
+        Ok(Some(Box::new(RiapiCrop {
+            x1,
+            y1,
+            x2,
+            y2,
+            xunits: cropxunits,
+            yunits: cropyunits,
+        })))
+    }
+}
 
-        Ok(Some(Box::new(CropPercent { x, y, w, h })))
+// ─── RiapiCrop: deferred-units crop carrier ───
+
+/// Raw RIAPI crop coordinates awaiting source dimensions.
+///
+/// `xunits`/`yunits` of `0.0` mean "source pixels" (the IR4 default when
+/// `cropxunits`/`cropyunits` are absent). The geometry bridge resolves this
+/// into a pixel window using imageflow's rules: scale by `dim/units`,
+/// negative coordinates are bottom/right-relative, values clamp to the
+/// image, and an empty/inverted rectangle resets to the full image.
+#[derive(Clone, Debug)]
+pub struct RiapiCrop {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    /// Coordinate space width for x1/x2. 0.0 = source width (pixels).
+    pub xunits: f32,
+    /// Coordinate space height for y1/y2. 0.0 = source height (pixels).
+    pub yunits: f32,
+}
+
+static RIAPI_CROP_CARRIER_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi_crop",
+    label: "Crop (RIAPI, deferred units)",
+    description: "Raw RIAPI crop window; units resolved against source dimensions at the bridge",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["crop", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+impl NodeInstance for RiapiCrop {
+    fn schema(&self) -> &'static NodeSchema {
+        &RIAPI_CROP_CARRIER_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert("x1".into(), zennode::ParamValue::F32(self.x1));
+        m.insert("y1".into(), zennode::ParamValue::F32(self.y1));
+        m.insert("x2".into(), zennode::ParamValue::F32(self.x2));
+        m.insert("y2".into(), zennode::ParamValue::F32(self.y2));
+        m.insert("xunits".into(), zennode::ParamValue::F32(self.xunits));
+        m.insert("yunits".into(), zennode::ParamValue::F32(self.yunits));
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "x1" => Some(zennode::ParamValue::F32(self.x1)),
+            "y1" => Some(zennode::ParamValue::F32(self.y1)),
+            "x2" => Some(zennode::ParamValue::F32(self.x2)),
+            "y2" => Some(zennode::ParamValue::F32(self.y2)),
+            "xunits" => Some(zennode::ParamValue::F32(self.xunits)),
+            "yunits" => Some(zennode::ParamValue::F32(self.yunits)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        let Some(v) = value.as_f32() else {
+            return false;
+        };
+        match name {
+            "x1" => self.x1 = v,
+            "y1" => self.y1 = v,
+            "x2" => self.x2 = v,
+            "y2" => self.y2 = v,
+            "xunits" => self.xunits = v,
+            "yunits" => self.yunits = v,
+            _ => return false,
+        }
+        true
+    }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+// ─── PostRotate / PostFlip: post-resize orientation (RIAPI `rotate`/`flip`) ───
+
+/// Post-resize rotation in degrees (90/180/270). RIAPI `rotate=`.
+///
+/// Applied at the END of the pipeline (after filters and padding), unlike
+/// `srotate` which rotates the source before cropping.
+#[derive(Clone, Debug)]
+pub struct PostRotate {
+    /// Normalized to 90, 180, or 270.
+    pub degrees: i32,
+}
+
+static POST_ROTATE_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.post_rotate",
+    label: "Rotate (post-resize)",
+    description: "Rotate the final image by 90/180/270 degrees (RIAPI `rotate`)",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["rotate", "riapi", "post"],
+    coalesce: Some(zennode::CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+impl NodeInstance for PostRotate {
+    fn schema(&self) -> &'static NodeSchema {
+        &POST_ROTATE_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert("degrees".into(), zennode::ParamValue::I32(self.degrees));
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "degrees" => Some(zennode::ParamValue::I32(self.degrees)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        if name == "degrees" {
+            if let Some(v) = value.as_i32() {
+                self.degrees = v;
+                return true;
+            }
+        }
+        false
+    }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+/// Post-resize flip. RIAPI `flip=`.
+#[derive(Clone, Debug)]
+pub struct PostFlip {
+    pub horizontal: bool,
+    pub vertical: bool,
+}
+
+static POST_FLIP_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.post_flip",
+    label: "Flip (post-resize)",
+    description: "Flip the final image horizontally and/or vertically (RIAPI `flip`)",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["flip", "riapi", "post"],
+    coalesce: Some(zennode::CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+impl NodeInstance for PostFlip {
+    fn schema(&self) -> &'static NodeSchema {
+        &POST_FLIP_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        let mut m = ParamMap::new();
+        m.insert(
+            "horizontal".into(),
+            zennode::ParamValue::Bool(self.horizontal),
+        );
+        m.insert("vertical".into(), zennode::ParamValue::Bool(self.vertical));
+        m
+    }
+    fn get_param(&self, name: &str) -> Option<zennode::ParamValue> {
+        match name {
+            "horizontal" => Some(zennode::ParamValue::Bool(self.horizontal)),
+            "vertical" => Some(zennode::ParamValue::Bool(self.vertical)),
+            _ => None,
+        }
+    }
+    fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
+        let Some(v) = value.as_bool() else {
+            return false;
+        };
+        match name {
+            "horizontal" => self.horizontal = v,
+            "vertical" => self.vertical = v,
+            _ => return false,
+        }
+        true
+    }
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+// ─── srotate / sflip adapters (SOURCE rotate/flip, pre-crop) ───
+
+/// RIAPI `srotate` key → source-phase Rotate90/180/270 nodes.
+static SROTATE_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.srotate",
+    label: "Source Rotate (RIAPI)",
+    description: "Rotate the source by 90/180/270 degrees before cropping (RIAPI `srotate`)",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["rotate", "riapi", "adapter", "source"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct SrotateRiapiDef;
+pub static SROTATE_RIAPI_DEF: SrotateRiapiDef = SrotateRiapiDef;
+
+impl NodeDef for SrotateRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &SROTATE_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI srotate".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.srotate";
+        let val = kv.take_owned("srotate", consumer);
+        let Some(val) = val else {
+            return Ok(None);
+        };
+        Ok(source_rotate_node(parse_rotate_degrees(kv, "srotate", &val)))
+    }
+}
+
+/// RIAPI `sflip` key → source-phase FlipH/FlipV nodes (pre-crop).
+static SFLIP_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.sflip",
+    label: "Source Flip (RIAPI)",
+    description: "Flip the source before cropping (RIAPI `sflip`)",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["flip", "riapi", "adapter", "source"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct SflipRiapiDef;
+pub static SFLIP_RIAPI_DEF: SflipRiapiDef = SflipRiapiDef;
+
+impl NodeDef for SflipRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &SFLIP_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other("use from_kv() for RIAPI sflip".into()))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.sflip";
+        let val = kv
+            .take_owned("sflip", consumer)
+            .or_else(|| kv.take_owned("sourceflip", consumer));
+        let Some(val) = val else {
+            return Ok(None);
+        };
+        match parse_flip_value(&val) {
+            Some((true, false)) => Ok(Some(Box::new(FlipH {}))),
+            Some((false, true)) => Ok(Some(Box::new(FlipV {}))),
+            // flip-H + flip-V = rotate 180° (pixel-identical, one pass).
+            Some((true, true)) => Ok(Some(Box::new(Rotate180 {}))),
+            Some((false, false)) => Ok(None),
+            None => {
+                kv.warn(
+                    "sflip",
+                    zennode::kv::KvWarningKind::InvalidValue,
+                    alloc::format!("unknown sflip value '{val}', expected h/v/both/none"),
+                );
+                Ok(None)
+            }
+        }
     }
 }
 
@@ -1560,9 +1949,13 @@ pub static ALL: &[&dyn NodeDef] = &[
     // Compositing
     &COMPOSITE_NODE,
     &OVERLAY_NODE,
-    // RIAPI adapters (multi-value keys → specific node types)
+    // RIAPI adapters (multi-value keys → specific node types).
+    // Order here is NOT execution order — querystring-parsed instances are
+    // re-sorted into IR4 phase order by `crate::riapi::riapi_order`.
     &FLIP_RIAPI_DEF,
     &ROTATE_RIAPI_DEF,
+    &SROTATE_RIAPI_DEF,
+    &SFLIP_RIAPI_DEF,
     &AUTOROTATE_RIAPI_DEF,
     &FRAME_RIAPI_DEF,
     &CROP_RIAPI_DEF,

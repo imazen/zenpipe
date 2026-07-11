@@ -55,15 +55,28 @@ pub(crate) fn param_f32_opt(node: &dyn NodeInstance, name: &str) -> Option<f32> 
 
 pub(crate) fn parse_constraint_mode(s: &str) -> crate::PipeResult<zenlayout::ConstraintMode> {
     match s {
+        // ── zen-native names (scaling permission is encoded in the mode) ──
         "distort" => Ok(zenlayout::ConstraintMode::Distort),
         "fit" => Ok(zenlayout::ConstraintMode::Fit),
         "within" => Ok(zenlayout::ConstraintMode::Within),
-        "fit_crop" | "crop" => Ok(zenlayout::ConstraintMode::FitCrop),
+        "fit_crop" => Ok(zenlayout::ConstraintMode::FitCrop),
         "within_crop" => Ok(zenlayout::ConstraintMode::WithinCrop),
-        "fit_pad" | "pad" => Ok(zenlayout::ConstraintMode::FitPad),
+        "fit_pad" => Ok(zenlayout::ConstraintMode::FitPad),
         "within_pad" => Ok(zenlayout::ConstraintMode::WithinPad),
         "pad_within" => Ok(zenlayout::ConstraintMode::PadWithin),
-        "aspect_crop" => Ok(zenlayout::ConstraintMode::AspectCrop),
+        "aspect_crop" | "aspectcrop" => Ok(zenlayout::ConstraintMode::AspectCrop),
+        // ── RIAPI fit-mode names, resolved with the RIAPI default
+        // `scale=down` (never upscale). The geometry bridge intercepts these
+        // BEFORE this function when a `scale=` value is present and composes
+        // the full mode×scale matrix with dimension gating; this fallback
+        // covers callers without dimensions (and encodes the correct
+        // downscale-only default, unlike the pre-2026-07 aliases which
+        // mapped `crop`→fit_crop / `pad`→fit_pad and upscaled where
+        // ImageResizer/imageflow would not).
+        "max" | "none" => Ok(zenlayout::ConstraintMode::Within),
+        "crop" => Ok(zenlayout::ConstraintMode::WithinCrop),
+        "pad" => Ok(zenlayout::ConstraintMode::WithinPad),
+        "stretch" => Ok(zenlayout::ConstraintMode::Distort),
         // "larger_than" not yet in zenresize
         "larger_than" => Err(at!(PipeError::Op(
             "larger_than mode not yet supported".into(),
@@ -75,16 +88,27 @@ pub(crate) fn parse_constraint_mode(s: &str) -> crate::PipeResult<zenlayout::Con
 }
 
 pub(crate) fn parse_gravity_anchor(s: &str) -> Option<(f32, f32)> {
-    Some(match s {
-        "center" => (0.5, 0.5),
-        "top_left" => (0.0, 0.0),
-        "top" => (0.5, 0.0),
-        "top_right" => (1.0, 0.0),
-        "left" => (0.0, 0.5),
-        "right" => (1.0, 0.5),
-        "bottom_left" => (0.0, 1.0),
-        "bottom" => (0.5, 1.0),
-        "bottom_right" => (1.0, 1.0),
+    let lower = s.to_ascii_lowercase();
+    // RIAPI also accepts `anchor=x,y` as percentages (0–100).
+    if let Some((xs, ys)) = lower.split_once(',') {
+        let x = xs.trim().parse::<f32>().ok()?;
+        let y = ys.trim().parse::<f32>().ok()?;
+        if x.is_finite() && y.is_finite() {
+            return Some(((x / 100.0).clamp(0.0, 1.0), (y / 100.0).clamp(0.0, 1.0)));
+        }
+        return None;
+    }
+    Some(match lower.as_str() {
+        // zen spellings + ImageResizer 4 spellings.
+        "center" | "middlecenter" => (0.5, 0.5),
+        "top_left" | "topleft" => (0.0, 0.0),
+        "top" | "topcenter" => (0.5, 0.0),
+        "top_right" | "topright" => (1.0, 0.0),
+        "left" | "middleleft" => (0.0, 0.5),
+        "right" | "middleright" => (1.0, 0.5),
+        "bottom_left" | "bottomleft" => (0.0, 1.0),
+        "bottom" | "bottomcenter" => (0.5, 1.0),
+        "bottom_right" | "bottomright" => (1.0, 1.0),
         _ => return None,
     })
 }
