@@ -1429,15 +1429,19 @@ impl PipelineGraph {
                     pipeline = pipeline.auto_orient(exif);
                 }
 
-                // Build Constraint with gravity and canvas_color
-                let mut constraint = build_constraint(mode, w, h);
-                if let Some((gx, gy)) = gravity {
-                    constraint = constraint.gravity(zenlayout::Gravity::Percentage(gx, gy));
+                // Dimensionless Constrain = identity geometry (a carrier for
+                // matte/kernel params); zenlayout rejects 0×0 targets.
+                if w.is_some() || h.is_some() {
+                    // Build Constraint with gravity and canvas_color
+                    let mut constraint = build_constraint(mode, w, h);
+                    if let Some((gx, gy)) = gravity {
+                        constraint = constraint.gravity(zenlayout::Gravity::Percentage(gx, gy));
+                    }
+                    if let Some(cc) = canvas_color {
+                        constraint = constraint.canvas_color(cc);
+                    }
+                    pipeline = pipeline.constrain(constraint);
                 }
-                if let Some(cc) = canvas_color {
-                    constraint = constraint.canvas_color(cc);
-                }
-                pipeline = pipeline.constrain(constraint);
 
                 let (ideal, request) = pipeline
                     .plan()

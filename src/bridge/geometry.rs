@@ -381,60 +381,60 @@ pub(crate) fn compile_geometry_run(
                     .and_then(|v| v.as_str().map(|s| s.to_string()))
                     .filter(|s| !s.is_empty());
 
+                // Dimensionless Constrain nodes are carriers for matte /
+                // filter / kernel params — there is nothing to constrain
+                // (zenlayout rejects 0×0 targets). Fall through to the
+                // extras collection below.
+                let apply_constraint = w.is_some() || h.is_some();
+
                 // cur_w/cur_h: dimensions entering the constraint (after any
                 // crop or orientation already composed into the pipeline).
-                let Some(mode) = resolve_constraint_mode(
-                    &mode_str,
-                    scale_str.as_deref(),
-                    cur_w,
-                    cur_h,
-                    w,
-                    h,
-                )?
-                else {
-                    // Composition says "leave the image alone" for these
-                    // dimensions (e.g. scale=up on a larger source).
-                    continue;
+                let resolved = if apply_constraint {
+                    resolve_constraint_mode(&mode_str, scale_str.as_deref(), cur_w, cur_h, w, h)?
+                } else {
+                    None
                 };
 
-                let mut constraint = match (w, h) {
-                    (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
-                    (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
-                    (None, Some(h)) => zenlayout::Constraint::height_only(mode, h),
-                    (None, None) => zenlayout::Constraint::new(mode, 0, 0),
-                };
+                if let Some(mode) = resolved {
+                    let mut constraint = match (w, h) {
+                        (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
+                        (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
+                        (None, Some(h)) => zenlayout::Constraint::height_only(mode, h),
+                        (None, None) => unreachable!("gated by apply_constraint"),
+                    };
 
-                // ── gravity: explicit gravity_x/gravity_y beats the anchor ──
-                let gx = param_f32_opt(node, "gravity_x");
-                let gy = param_f32_opt(node, "gravity_y");
-                let gravity = match (gx, gy) {
-                    (Some(x), Some(y)) => {
-                        Some(zenlayout::Gravity::Percentage(x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)))
+                    // ── gravity: explicit gravity_x/gravity_y beats anchor ──
+                    let gx = param_f32_opt(node, "gravity_x");
+                    let gy = param_f32_opt(node, "gravity_y");
+                    let gravity = match (gx, gy) {
+                        (Some(x), Some(y)) => Some(zenlayout::Gravity::Percentage(
+                            x.clamp(0.0, 1.0),
+                            y.clamp(0.0, 1.0),
+                        )),
+                        _ => {
+                            let anchor = param_str(node, "gravity").unwrap_or_default();
+                            parse_gravity_anchor(&anchor)
+                                .map(|(x, y)| zenlayout::Gravity::Percentage(x, y))
+                        }
+                    };
+                    if let Some(g) = gravity {
+                        constraint = constraint.gravity(g);
                     }
-                    _ => {
-                        let anchor = param_str(node, "gravity").unwrap_or_default();
-                        parse_gravity_anchor(&anchor)
-                            .map(|(x, y)| zenlayout::Gravity::Percentage(x, y))
+
+                    // ── canvas color (bgcolor) for pad modes ──
+                    if let Some(cc) = node
+                        .get_param("canvas_color")
+                        .and_then(|v| v.as_str().map(|s| s.to_string()))
+                        .filter(|s| !s.is_empty())
+                        .and_then(|s| parse_canvas_color(&s))
+                    {
+                        constraint = constraint.canvas_color(cc);
                     }
-                };
-                if let Some(g) = gravity {
-                    constraint = constraint.gravity(g);
-                }
+                    // matte_color is resolved at the job layer (codec intent →
+                    // MatteFlattenOp during alpha removal), not here.
 
-                // ── canvas color (bgcolor) for pad modes ──
-                if let Some(cc) = node
-                    .get_param("canvas_color")
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .filter(|s| !s.is_empty())
-                    .and_then(|s| parse_canvas_color(&s))
-                {
-                    constraint = constraint.canvas_color(cc);
+                    pipeline = pipeline.constrain(constraint);
                 }
-                // matte_color is an encode/composite-time concern; the fused
-                // resize path cannot apply it yet (pending zenresize matte
-                // support — same status as NodeOp::Constrain's matte field).
-
-                pipeline = pipeline.constrain(constraint);
 
                 // ── filters & resize-time extras ──
                 if let Some(f) = node

@@ -130,6 +130,15 @@ pub(crate) fn parse_canvas_color(s: &str) -> Option<zenlayout::CanvasColor> {
     }
 }
 
+/// Parse a matte color string to opaque sRGB bytes (`[r, g, b]`).
+/// Transparent/unknown values yield `None` (no matte).
+pub(crate) fn parse_matte_rgb(s: &str) -> Option<[u8; 3]> {
+    match parse_canvas_color(s)? {
+        zenlayout::CanvasColor::Srgb { r, g, b, .. } => Some([r, g, b]),
+        _ => None,
+    }
+}
+
 /// Parse 3/4/6/8-digit hex (no `#`). Shorthand nibbles double (`f80` →
 /// `ff8800`); missing alpha = opaque. Matches imageflow_helpers colors.rs.
 fn parse_hex_color(hex: &str) -> Option<zenlayout::CanvasColor> {

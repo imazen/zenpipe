@@ -371,14 +371,14 @@ fn execute_steps(
         }
     }
 
-    // Check for animation: if input is animated and encode format supports animation,
-    // do a multi-frame passthrough (decode all → encode all).
-    // Skip when SelectFrame is set — that means single-frame extraction, not animation.
+    // Animated inputs run per-frame pipelines (empty node lists degenerate to
+    // a frame-for-frame re-encode). Skip when SelectFrame is set — that means
+    // single-frame extraction, not animation.
     let has_select_frame = pipeline.decoder_commands.as_ref().is_some_and(|cmds| {
         cmds.iter()
             .any(|c| matches!(c, imageflow_types::DecoderCommand::SelectFrame(_)))
     });
-    if has_encode && pipeline.nodes.is_empty() && !has_select_frame {
+    if has_encode && !has_select_frame {
         let registry = AllowedFormats::all();
         let info = zencodecs::from_bytes(input_data)
             .map_err(|e| ZenError::Codec(format!("probe: {e}")))?;
@@ -398,15 +398,41 @@ fn execute_steps(
             )
             .map_err(|e| ZenError::Codec(format!("format: {e}")))?;
 
-            if let Ok(result) =
-                encode_animation_passthrough(input_data, &registry, &decision, encode_io_id)
-            {
-                return Ok((
-                    result,
-                    CapturedBitmaps {
-                        captures: HashMap::new(),
-                    },
-                ));
+            let converters = super::converter::imageflow_converters();
+            let converters: &[&dyn crate::bridge::NodeConverter] = &converters;
+            match crate::job::transcode_animated_nodes(
+                input_data,
+                &registry,
+                None,
+                None,
+                &pipeline.nodes,
+                converters,
+                decision.format,
+                decision.quality.quality,
+                decision.lossless,
+                decision.quality.effort,
+                None,
+                None,
+            ) {
+                Ok(Some((bytes, out_w, out_h))) => {
+                    return Ok((
+                        vec![ZenEncodeResult {
+                            io_id: encode_io_id,
+                            bytes,
+                            width: out_w,
+                            height: out_h,
+                            mime_type: decision.format.mime_type(),
+                            extension: decision.format.extension(),
+                        }],
+                        CapturedBitmaps {
+                            captures: HashMap::new(),
+                        },
+                    ));
+                }
+                // Static target format: fall through — the standard path
+                // encodes the composited first frame (imageflow behavior).
+                Ok(None) => {}
+                Err(e) => return Err(ZenError::Pipeline(e)),
             }
         }
     }
@@ -708,62 +734,6 @@ fn probe_resolve_decode(
     Ok((decision, source, exif_flag))
 }
 
-/// Stream-encode an animated image via zencodecs: decode frame → push_frame → repeat → finish.
-/// Streaming: only one frame in memory at a time.
-fn encode_animation_passthrough(
-    input_data: &[u8],
-    registry: &AllowedFormats,
-    decision: &zencodecs::FormatDecision,
-    encode_io_id: i32,
-) -> Result<Vec<ZenEncodeResult>, ZenError> {
-    let mut decoder = zencodecs::DecodeRequest::new(input_data)
-        .with_registry(registry)
-        .animation_frame_decoder()
-        .map_err(|e| ZenError::Codec(format!("animation decoder: {e}")))?;
-
-    let info = decoder.info().clone();
-    let w = info.width;
-    let h = info.height;
-
-    // Create animation frame encoder via zencodecs.
-    let mut encoder = zencodecs::EncodeRequest::new(decision.format)
-        .with_quality(decision.quality.quality)
-        .with_lossless(decision.lossless)
-        .with_registry(registry)
-        .animation_frame_encoder(w, h)
-        .map_err(|e| ZenError::Codec(format!("animation encoder: {e}")))?;
-
-    // Stream: decode one frame, push to encoder, release frame memory.
-    while let Some(frame) = decoder
-        .render_next_frame_owned(None)
-        .map_err(|e| ZenError::Codec(format!("decode frame: {e}")))?
-    {
-        let duration = frame.duration_ms();
-        let pixels = frame.pixels();
-        encoder
-            .push_frame(pixels, duration, None)
-            .map_err(|e| ZenError::Codec(format!("push_frame: {e}")))?;
-    }
-
-    let output = encoder
-        .finish(None)
-        .map_err(|e| ZenError::Codec(format!("finish animation: {e}")))?;
-
-    let mut bytes = output.into_vec();
-    // Ensure GIF trailer.
-    if decision.format == zencodecs::ImageFormat::Gif && bytes.last() != Some(&0x3B) {
-        bytes.push(0x3B);
-    }
-
-    Ok(vec![ZenEncodeResult {
-        io_id: encode_io_id,
-        bytes,
-        width: w,
-        height: h,
-        mime_type: decision.format.mime_type(),
-        extension: decision.format.extension(),
-    }])
-}
 
 /// Decode a specific frame from an animated/multi-frame image.
 fn decode_to_source_frame(

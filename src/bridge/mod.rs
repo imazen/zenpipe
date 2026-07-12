@@ -63,6 +63,9 @@ use geometry::is_geometry_node;
 #[cfg(test)]
 use parse::{parse_constraint_mode, parse_filter_opt};
 
+// Crate-internal color helper (job-level matte resolution).
+pub(crate) use parse::parse_matte_rgb;
+
 // ─── CompileResult ───
 
 /// Result of compiling zennode nodes into a pipeline graph.

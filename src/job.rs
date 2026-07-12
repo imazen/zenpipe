@@ -672,13 +672,73 @@ impl<'a> ImageJob<'a> {
         let facts = zencodecs::ImageFacts::from_image_info(&image_info);
 
         // 4. Select output format.
+        // The Constrain node's matte_color (RIAPI `matte`/`s.matte`) feeds the
+        // codec intent so alpha-flattening composites on the requested color.
+        let mut intent = self.intent.clone();
+        if intent.matte.is_none() {
+            intent.matte = self.nodes.iter().find_map(|n| {
+                if !matches!(n.schema().id, "zenresize.constrain" | "zenlayout.constrain") {
+                    return None;
+                }
+                let s = n
+                    .get_param("matte_color")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .filter(|s| !s.is_empty())?;
+                match crate::bridge::parse_matte_rgb(&s) {
+                    Some(rgb) => Some(rgb),
+                    None => None,
+                }
+            });
+        }
+
         let decision = at_crate!(zencodecs::select_format_from_intent(
-            &self.intent,
+            &intent,
             &facts,
             &self.registry,
             &zencodecs::CodecPolicy::default(),
         ))
         .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+
+        // 4b. Animated inputs run per-frame pipelines so "resize this GIF"
+        // stays a GIF. Falls back to the single-frame path when frame
+        // selection was requested or the target format has no animation
+        // encoder (static targets take the composited first frame).
+        let wants_single_frame = self
+            .nodes
+            .iter()
+            .any(|n| n.schema().id == "zenpipe.riapi.frame");
+        if image_info.is_animation() && !wants_single_frame {
+            let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+            let deadline = self.deadline();
+            let stop: Option<&dyn enough::Stop> =
+                deadline.as_ref().map(|d| d as &dyn enough::Stop);
+            if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
+                input_bytes,
+                &self.registry,
+                codec_limits.as_ref(),
+                self.codec_config.as_ref(),
+                self.nodes,
+                self.converters,
+                decision.format,
+                decision.quality.quality,
+                decision.lossless,
+                decision.quality.effort,
+                stop,
+                self.limits.as_ref().and_then(|l| l.max_frames),
+            )? {
+                return Ok(JobResult {
+                    encode_results: vec![EncodeResult {
+                        io_id: self.encode_io_id,
+                        bytes,
+                        width: out_w,
+                        height: out_h,
+                        mime_type: decision.format.mime_type().to_string(),
+                        extension: decision.format.extension().to_string(),
+                    }],
+                    decode_infos: vec![decode_info],
+                });
+            }
+        }
 
         // 5. Decode the source to a pixel stream, optionally extracting gain map.
         //
@@ -827,6 +887,102 @@ impl<'a> ImageJob<'a> {
     fn deadline(&self) -> Option<crate::limits::Deadline> {
         self.limits.as_ref().and_then(|l| l.to_deadline())
     }
+}
+
+/// Transcode an animated input through a per-frame node pipeline.
+///
+/// Every frame is decoded (composited to full canvas by the decoder),
+/// pushed through a pipeline compiled from `nodes`, and fed to the target
+/// format's animation encoder — frame timing and loop count carry over.
+///
+/// Returns `Ok(None)` when the target format has no animation encoder
+/// (static formats like JPEG); callers fall back to single-frame behavior.
+/// Shared by [`ImageJob`] and the imageflow-compat executor.
+#[allow(clippy::too_many_arguments)] // crate-internal plumbing
+pub(crate) fn transcode_animated_nodes(
+    data: &[u8],
+    registry: &zencodecs::AllowedFormats,
+    codec_limits: Option<&zencodecs::Limits>,
+    codec_config: Option<&zencodecs::config::CodecConfig>,
+    nodes: &[Box<dyn zennode::NodeInstance>],
+    converters: &[&dyn NodeConverter],
+    target_format: zencodec::ImageFormat,
+    quality: f32,
+    lossless: bool,
+    effort: Option<u32>,
+    stop: Option<&dyn enough::Stop>,
+    max_frames: Option<u32>,
+) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
+    // Animation decoder (frames arrive composited at canvas size).
+    let mut decode_request = zencodecs::DecodeRequest::new(data).with_registry(registry);
+    if let Some(cfg) = codec_config {
+        decode_request = decode_request.with_codec_config(cfg);
+    }
+    if let Some(cl) = codec_limits {
+        decode_request = decode_request.with_limits(cl);
+    }
+    let decoder = at_crate!(decode_request.animation_frame_decoder())
+        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+    let info = decoder.info().clone();
+    let (in_w, in_h) = (info.width, info.height);
+
+    // Output dimensions come from the compiled pipeline's estimate, so the
+    // encoder canvas matches whatever geometry the nodes apply per frame.
+    let crate::bridge::CompileResult { graph, .. } = crate::bridge::compile_nodes(
+        nodes,
+        converters,
+        in_w,
+        in_h,
+        #[cfg(feature = "std")]
+        None,
+    )?;
+    let mut est_sources = hashbrown::HashMap::new();
+    est_sources.insert(
+        0,
+        crate::graph::SourceInfo {
+            width: in_w,
+            height: in_h,
+            format: crate::format::RGBA8_SRGB,
+        },
+    );
+    let estimate = graph.estimate(&est_sources)?;
+    let out_w = estimate.output_width.max(1);
+    let out_h = estimate.output_height.max(1);
+
+    // Animation encoder for the target — absent (static format) means the
+    // caller keeps its single-frame behavior.
+    let mut encode_request = zencodecs::EncodeRequest::new(target_format)
+        .with_quality(quality)
+        .with_registry(registry);
+    if lossless {
+        encode_request = encode_request.with_lossless(true);
+    }
+    if let Some(e) = effort {
+        encode_request = encode_request.with_effort(e);
+    }
+    if let Some(cl) = codec_limits {
+        encode_request = encode_request.with_limits(cl);
+    }
+    let encoder = match encode_request.animation_frame_encoder(out_w, out_h) {
+        Ok(enc) => enc,
+        Err(_) => return Ok(None),
+    };
+
+    let output = crate::animation::transcode_with_stop_and_limits(
+        decoder,
+        encoder,
+        out_w,
+        out_h,
+        crate::format::RGBA8_SRGB,
+        |frame_src, _idx| Ok(crate::bridge::build_pipeline(frame_src, nodes, converters)?.source),
+        stop.unwrap_or(&enough::Unstoppable),
+        max_frames,
+    )?;
+
+    Ok(Some((output.into_vec(), out_w, out_h)))
+}
+
+impl<'a> ImageJob<'a> {
 
     /// Decode input bytes to a pixel [`Source`].
     fn decode_source(
@@ -1113,14 +1269,28 @@ impl<'a> ImageJob<'a> {
 
         if needs_alpha_removal {
             let matte = decision.matte.unwrap_or([255, 255, 255]);
-            let remove_alpha_format = crate::format::RGB8_SRGB;
-            // Use RemoveAlpha via TransformSource: composite onto matte, drop alpha
-            if let Some(converter) = crate::ops::RowConverterOp::new(format, remove_alpha_format) {
-                let transform =
-                    crate::sources::TransformSource::new(source).push_boxed(Box::new(converter));
-                source = Box::new(transform);
+            if format.has_alpha() {
+                // Composite onto the requested matte color, then drop alpha
+                // (MatteFlattenOp: RGBA8 → RGB8). The old path was a bare
+                // RGBA→RGB conversion that ignored the configured matte.
+                if format != crate::format::RGBA8_SRGB {
+                    if let Some(conv) =
+                        crate::ops::RowConverterOp::new(format, crate::format::RGBA8_SRGB)
+                    {
+                        source = Box::new(
+                            crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
+                        );
+                    }
+                }
+                let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
+                source = Box::new(crate::sources::TransformSource::new(source).push(op));
+            } else if let Some(conv) =
+                crate::ops::RowConverterOp::new(format, crate::format::RGB8_SRGB)
+            {
+                source = Box::new(
+                    crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
+                );
             }
-            let _ = matte; // TODO: use matte color when RemoveAlpha supports it
         }
 
         let src_format = source.format();

@@ -365,3 +365,85 @@ fn make_solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source>
         },
     ))
 }
+
+// =========================================================================
+// ImageJob animated routing (W8): processing nodes apply per frame
+// =========================================================================
+
+#[cfg(feature = "job")]
+mod imagejob_animation {
+    use super::*;
+    use zenpipe::job::ImageJob;
+
+    fn resize_node(w: u32, h: u32) -> Box<dyn zennode::NodeInstance> {
+        let registry = zenpipe::full_registry();
+        let def = registry.get("zenresize.constrain").unwrap();
+        let mut params = zennode::ParamMap::new();
+        params.insert("w".into(), zennode::ParamValue::U32(w));
+        params.insert("h".into(), zennode::ParamValue::U32(h));
+        params.insert("mode".into(), zennode::ParamValue::Str("fit".into()));
+        def.create(&params).unwrap()
+    }
+
+    fn count_frames(gif: &[u8]) -> usize {
+        let dec = GifDecoderConfig::new();
+        let mut verify = dec
+            .job()
+            .animation_frame_decoder(
+                std::borrow::Cow::Owned(gif.to_vec()),
+                &[PixelDescriptor::RGBA8_SRGB],
+            )
+            .unwrap();
+        let mut n = 0;
+        while verify.render_next_frame_owned(None).unwrap().is_some() {
+            n += 1;
+        }
+        n
+    }
+
+    #[test]
+    fn resize_gif_preserves_all_frames() {
+        // "Resize this GIF" must stay an animated GIF — the former behavior
+        // silently returned a single-frame still (Known Bug W8).
+        let gif_data = build_test_gif(3, 8, 8);
+        let nodes = vec![resize_node(4, 4)];
+
+        let result = ImageJob::new()
+            .add_input(0, gif_data)
+            .add_output(1)
+            .with_nodes(&nodes)
+            .with_output_extension("gif")
+            .run()
+            .expect("animated resize job");
+
+        let er = &result.encode_results[0];
+        assert_eq!((er.width, er.height), (4, 4), "frames must be resized");
+        assert_eq!(count_frames(&er.bytes), 3, "all frames must survive");
+    }
+
+    #[test]
+    fn gif_no_nodes_still_reencodes_all_frames() {
+        let gif_data = build_test_gif(2, 8, 8);
+        let result = ImageJob::new()
+            .add_input(0, gif_data)
+            .add_output(1)
+            .with_output_extension("gif")
+            .run()
+            .expect("animated passthrough job");
+        assert_eq!(count_frames(&result.encode_results[0].bytes), 2);
+    }
+
+    #[test]
+    fn animated_to_static_target_takes_first_frame() {
+        // Static formats have no animation encoder — documented fallback.
+        let gif_data = build_test_gif(3, 8, 8);
+        let result = ImageJob::new()
+            .add_input(0, gif_data)
+            .add_output(1)
+            .with_output_extension("png")
+            .run()
+            .expect("animated→static job");
+        let er = &result.encode_results[0];
+        assert_eq!(&er.bytes[..4], b"\x89PNG");
+    }
+}
