@@ -675,6 +675,11 @@ impl<'a> ImageJob<'a> {
         // The Constrain node's matte_color (RIAPI `matte`/`s.matte`) feeds the
         // codec intent so alpha-flattening composites on the requested color.
         let mut intent = self.intent.clone();
+        // Explicit per-codec encode nodes (zenjpeg.encode, zenwebp.encode_*,
+        // …) force the format and feed their decision-level params
+        // (quality/effort/speed/distance/min_quality) into the intent hints —
+        // previously captured by the bridge and dropped.
+        apply_encode_node_intent(self.nodes, &mut intent);
         if intent.matte.is_none() {
             intent.matte = self.nodes.iter().find_map(|n| {
                 if !matches!(n.schema().id, "zenresize.constrain" | "zenlayout.constrain") {
@@ -712,6 +717,7 @@ impl<'a> ImageJob<'a> {
             let deadline = self.deadline();
             let stop: Option<&dyn enough::Stop> =
                 deadline.as_ref().map(|d| d as &dyn enough::Stop);
+            let (hint_q, hint_e) = decision_hint_overrides(&decision);
             if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
                 input_bytes,
                 &self.registry,
@@ -720,9 +726,9 @@ impl<'a> ImageJob<'a> {
                 self.nodes,
                 self.converters,
                 decision.format,
-                decision.quality.quality,
+                hint_q.unwrap_or(decision.quality.quality),
                 decision.lossless,
-                decision.quality.effort,
+                hint_e.or(decision.quality.effort),
                 stop,
                 self.limits.as_ref().and_then(|l| l.max_frames),
             )? {
@@ -887,6 +893,157 @@ impl<'a> ImageJob<'a> {
     fn deadline(&self) -> Option<crate::limits::Deadline> {
         self.limits.as_ref().and_then(|l| l.to_deadline())
     }
+}
+
+/// Fold explicit per-codec encode nodes into the codec intent.
+///
+/// The node's presence forces the output format (unless the caller already
+/// chose one), and its decision-level params flow into the per-codec hint
+/// map that `FormatDecision` consumes (`quality`, `effort`, `speed`,
+/// `distance`, `min_quality`). Params the decision layer cannot express yet
+/// (progressive, subsampling, quant tables, …) require native
+/// `CodecConfig` boxes — the W10 remainder tracked in IMAGEFLOW-PARITY.md.
+pub(crate) fn apply_encode_node_intent(
+    nodes: &[Box<dyn zennode::NodeInstance>],
+    intent: &mut zencodecs::CodecIntent,
+) {
+    use zencodec::ImageFormat as F;
+
+    // Pass 1: a QualityIntentNode in the node list (format=/qp=/quality=/
+    // accept.* keys) fills every intent field the builder left unset —
+    // previously the node was only honored when the CALLER extracted it.
+    for node in nodes {
+        if node.schema().id != "zencodecs.quality_intent" {
+            continue;
+        }
+        let Some(qin) = node
+            .as_any()
+            .downcast_ref::<zencodecs::zennode_defs::QualityIntentNode>()
+        else {
+            continue;
+        };
+        let ni = qin.to_codec_intent();
+        if intent.format.is_none() {
+            intent.format = ni.format;
+        }
+        if intent.quality_profile.is_none() {
+            intent.quality_profile = ni.quality_profile;
+        }
+        if intent.quality_fallback.is_none() {
+            intent.quality_fallback = ni.quality_fallback;
+        }
+        if intent.quality_dpr.is_none() {
+            intent.quality_dpr = ni.quality_dpr;
+        }
+        if intent.lossless.is_none() {
+            intent.lossless = ni.lossless;
+        }
+        if intent.allowed == zencodecs::CodecIntent::default().allowed {
+            intent.allowed = ni.allowed;
+        }
+        merge_hints(&mut intent.hints, &ni.hints);
+    }
+
+    // Pass 2: explicit per-codec encode nodes.
+    for node in nodes {
+        let (format, hint_params): (F, &[(&str, &str)]) = match node.schema().id {
+            "zenjpeg.encode" | "zenjpeg.encode_mozjpeg" => {
+                (F::Jpeg, &[("quality", "quality"), ("effort", "effort")])
+            }
+            "zenpng.encode" => (
+                F::Png,
+                &[
+                    ("png_quality", "quality"),
+                    ("min_quality", "min_quality"),
+                    ("effort", "effort"),
+                ],
+            ),
+            "zenwebp.encode_lossy" => {
+                (F::WebP, &[("quality", "quality"), ("effort", "effort")])
+            }
+            "zenwebp.encode_lossless" => (F::WebP, &[("effort", "effort")]),
+            "zengif.encode" => (F::Gif, &[("quality", "quality")]),
+            "zenavif.encode" => (
+                F::Avif,
+                &[
+                    ("quality", "quality"),
+                    ("speed", "speed"),
+                    ("effort", "effort"),
+                ],
+            ),
+            "zenjxl.encode" => (
+                F::Jxl,
+                &[
+                    ("jxl_quality", "quality"),
+                    ("distance", "distance"),
+                    ("effort", "effort"),
+                ],
+            ),
+            "zentiff.encode" => (F::Tiff, &[]),
+            "zenbitmaps.encode_bmp" => (F::Bmp, &[]),
+            _ => continue,
+        };
+
+        if intent.format.is_none() {
+            intent.format = Some(zencodecs::FormatChoice::Specific(format));
+        }
+        if node.schema().id == "zenwebp.encode_lossless" && intent.lossless.is_none() {
+            intent.lossless = Some(zencodecs::intent::BoolKeep::True);
+        }
+
+        let hints = match format {
+            F::Jpeg => &mut intent.hints.jpeg,
+            F::Png => &mut intent.hints.png,
+            F::WebP => &mut intent.hints.webp,
+            F::Avif => &mut intent.hints.avif,
+            F::Jxl => &mut intent.hints.jxl,
+            F::Gif => &mut intent.hints.gif,
+            _ => continue,
+        };
+        for (param, hint_key) in hint_params {
+            let Some(v) = node.get_param(param) else {
+                continue;
+            };
+            let text = match v {
+                zennode::ParamValue::F32(f) => alloc::format!("{f}"),
+                zennode::ParamValue::I32(i) => alloc::format!("{i}"),
+                zennode::ParamValue::U32(u) => alloc::format!("{u}"),
+                _ => continue,
+            };
+            hints.entry((*hint_key).into()).or_insert(text);
+        }
+    }
+}
+
+/// Fill unset entries of `dst` per-codec hint maps from `src`.
+fn merge_hints(dst: &mut zencodecs::intent::PerCodecHints, src: &zencodecs::intent::PerCodecHints) {
+    for (d, s) in [
+        (&mut dst.jpeg, &src.jpeg),
+        (&mut dst.png, &src.png),
+        (&mut dst.webp, &src.webp),
+        (&mut dst.avif, &src.avif),
+        (&mut dst.jxl, &src.jxl),
+        (&mut dst.gif, &src.gif),
+    ] {
+        for (k, v) in s {
+            d.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
+}
+
+/// Per-codec `quality`/`effort` hints from the resolved decision, parsed.
+///
+/// These override the generic calibrated values on the encode request. The
+/// per-codec keys apply on the encoder's generic quality scale for now —
+/// exact native-unit mapping needs the per-codec `CodecConfig` boxes (the
+/// W10 remainder tracked in IMAGEFLOW-PARITY.md).
+pub(crate) fn decision_hint_overrides(
+    decision: &zencodecs::FormatDecision,
+) -> (Option<f32>, Option<u32>) {
+    let hints = decision.hints_for_format();
+    let q = hints.get("quality").and_then(|s| s.parse::<f32>().ok());
+    let e = hints.get("effort").and_then(|s| s.parse::<u32>().ok());
+    (q, e)
 }
 
 /// Transcode an animated input through a per-frame node pipeline.
@@ -1313,6 +1470,14 @@ impl<'a> ImageJob<'a> {
         if let Some(meta) = output.metadata {
             encode_request = encode_request.with_metadata(meta);
         }
+        // Per-codec hint overrides (?jpeg.quality=, ?webp.effort=, …).
+        let (hint_q, hint_e) = decision_hint_overrides(decision);
+        if let Some(q) = hint_q {
+            encode_request = encode_request.with_quality(q);
+        }
+        if let Some(e) = hint_e {
+            encode_request = encode_request.with_effort(e);
+        }
         if let Some(ref cl) = codec_limits {
             encode_request = encode_request.with_limits(cl);
         }
@@ -1425,8 +1590,11 @@ impl<'a> ImageJob<'a> {
                 .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
-                    .with_quality(decision.quality.quality)
+                    .with_quality(hint_q.unwrap_or(decision.quality.quality))
                     .with_registry(&self.registry);
+                if let Some(e) = hint_e {
+                    oneshot_request = oneshot_request.with_effort(e);
+                }
                 if let Some(ref cl) = codec_limits {
                     oneshot_request = oneshot_request.with_limits(cl);
                 }
