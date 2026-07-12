@@ -1582,7 +1582,13 @@ static RIAPI_CROP_CARRIER_SCHEMA: NodeSchema = NodeSchema {
     role: zennode::NodeRole::Orient,
     params: &[],
     tags: &["crop", "riapi", "adapter"],
-    coalesce: None,
+    // Must join the layout_plan run — geometry fusion is the ONLY place
+    // that can resolve the deferred units (it has source dimensions).
+    coalesce: Some(zennode::CoalesceInfo {
+        group: "layout_plan",
+        fusable: true,
+        is_target: false,
+    }),
     format: zennode::FormatHint {
         preferred: zennode::PixelFormatPreference::Srgb8,
         alpha: zennode::AlphaHandling::Process,

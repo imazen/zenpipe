@@ -87,6 +87,22 @@ fn gating_box(src_w: u32, src_h: u32, w: Option<u32>, h: Option<u32>) -> (u32, u
 /// target — imageflow's `skip_unless(Cond::Either(Ordering::Greater))`).
 ///
 /// Reference: `imageflow_riapi/src/ir4/layout.rs:162-280` (`build_constraints`).
+/// Aspect-fit box of the source inside the target ("inner box"): the
+/// largest source-aspect rectangle fitting the target. imageflow's
+/// `scale=canvas` pads to THIS box, not to the raw target dimensions.
+fn inner_box(src_w: u32, src_h: u32, bw: u32, bh: u32) -> (u32, u32) {
+    let scale = ((bw as f64) / (src_w as f64)).min((bh as f64) / (src_h as f64));
+    (
+        ((src_w as f64) * scale).round().max(1.0) as u32,
+        ((src_h as f64) * scale).round().max(1.0) as u32,
+    )
+}
+
+/// Resolved constraint: the zenlayout mode plus (possibly adjusted) target
+/// dimensions — `scale=canvas` replaces the target with the aspect-correct
+/// inner box.
+type ResolvedConstraint = (zenlayout::ConstraintMode, Option<u32>, Option<u32>);
+
 fn resolve_constraint_mode(
     mode_str: &str,
     scale_str: Option<&str>,
@@ -94,7 +110,7 @@ fn resolve_constraint_mode(
     src_h: u32,
     w: Option<u32>,
     h: Option<u32>,
-) -> crate::PipeResult<Option<zenlayout::ConstraintMode>> {
+) -> crate::PipeResult<Option<ResolvedConstraint>> {
     use zenlayout::ConstraintMode as M;
 
     let scale = match scale_str {
@@ -112,42 +128,54 @@ fn resolve_constraint_mode(
     let src_larger = src_w > bw || src_h > bh;
     // "Neither(Greater)": source fits inside the box on both axes.
     let src_fits = src_w <= bw && src_h <= bh;
+    // scale=canvas pads to the aspect-correct inner box of the target
+    // (imageflow layout.rs Max+UpscaleCanvas: "Pad to the inner box").
+    let canvas_box = || {
+        let (iw, ih) = inner_box(src_w, src_h, bw, bh);
+        (Some(iw), Some(ih))
+    };
 
     let mode = mode_str.to_ascii_lowercase();
-    let composed = match mode.as_str() {
+    let composed: Option<ResolvedConstraint> = match mode.as_str() {
         // ── RIAPI fit modes: compose with `scale` ──
         "max" => match scale {
-            RiapiScale::Down => Some(M::Within),
-            RiapiScale::Both => Some(M::Fit),
-            RiapiScale::Up => src_fits.then_some(M::Fit),
-            RiapiScale::Canvas => Some(M::PadWithin),
+            RiapiScale::Down => Some((M::Within, w, h)),
+            RiapiScale::Both => Some((M::Fit, w, h)),
+            RiapiScale::Up => src_fits.then_some((M::Fit, w, h)),
+            RiapiScale::Canvas => {
+                let (cw, ch) = canvas_box();
+                Some((M::PadWithin, cw, ch))
+            }
         },
         "pad" => match scale {
-            RiapiScale::Down => Some(M::WithinPad),
-            RiapiScale::Both => Some(M::FitPad),
-            RiapiScale::Up => src_fits.then_some(M::FitPad),
-            RiapiScale::Canvas => Some(M::PadWithin),
+            RiapiScale::Down => Some((M::WithinPad, w, h)),
+            RiapiScale::Both => Some((M::FitPad, w, h)),
+            RiapiScale::Up => src_fits.then_some((M::FitPad, w, h)),
+            RiapiScale::Canvas => {
+                let (cw, ch) = canvas_box();
+                Some((M::PadWithin, cw, ch))
+            }
         },
         "crop" => match scale {
-            RiapiScale::Down => Some(M::WithinCrop),
-            RiapiScale::Both => Some(M::FitCrop),
-            RiapiScale::Up => src_fits.then_some(M::FitCrop),
+            RiapiScale::Down => Some((M::WithinCrop, w, h)),
+            RiapiScale::Both => Some((M::FitCrop, w, h)),
+            RiapiScale::Up => src_fits.then_some((M::FitCrop, w, h)),
             // imageflow does a partwise crop + virtual canvas here; zenlayout
             // has no direct equivalent. WithinCrop is the closest behavior
             // (documented divergence — see IMAGEFLOW-PARITY.md W1 notes).
-            RiapiScale::Canvas => Some(M::WithinCrop),
+            RiapiScale::Canvas => Some((M::WithinCrop, w, h)),
         },
         "stretch" => match scale {
-            RiapiScale::Both => Some(M::Distort),
-            RiapiScale::Down => src_larger.then_some(M::Distort),
-            RiapiScale::Up => src_fits.then_some(M::Distort),
+            RiapiScale::Both => Some((M::Distort, w, h)),
+            RiapiScale::Down => src_larger.then_some((M::Distort, w, h)),
+            RiapiScale::Up => src_fits.then_some((M::Distort, w, h)),
             // Rare combination; imageflow pads the distorted result's canvas.
-            RiapiScale::Canvas => Some(M::Distort),
+            RiapiScale::Canvas => Some((M::Distort, w, h)),
         },
         // AspectCrop ignores `scale` entirely (imageflow layout.rs:274-277).
-        "aspectcrop" => Some(M::AspectCrop),
+        "aspectcrop" => Some((M::AspectCrop, w, h)),
         // ── zen-native names: pass through (scale is encoded in the mode) ──
-        _ => return parse_constraint_mode(&mode).map(Some),
+        _ => return parse_constraint_mode(&mode).map(|m| Some((m, w, h))),
     };
     Ok(composed)
 }
@@ -395,7 +423,7 @@ pub(crate) fn compile_geometry_run(
                     None
                 };
 
-                if let Some(mode) = resolved {
+                if let Some((mode, w, h)) = resolved {
                     let mut constraint = match (w, h) {
                         (Some(w), Some(h)) => zenlayout::Constraint::new(mode, w, h),
                         (Some(w), None) => zenlayout::Constraint::width_only(mode, w),
@@ -637,7 +665,19 @@ mod tests {
     // ─── resolve_constraint_mode: RIAPI mode×scale composition ───
 
     fn resolve(mode: &str, scale: Option<&str>, sw: u32, sh: u32) -> Option<M> {
-        resolve_constraint_mode(mode, scale, sw, sh, Some(100), Some(100)).unwrap()
+        resolve_constraint_mode(mode, scale, sw, sh, Some(100), Some(100))
+            .unwrap()
+            .map(|(m, _, _)| m)
+    }
+
+    #[test]
+    fn scale_canvas_uses_aspect_inner_box() {
+        // 400×300 into a 100×100 canvas request → pad to the 100×75 inner
+        // box (imageflow "pad to the inner box of the target"), not 100×100.
+        let r = resolve_constraint_mode("max", Some("canvas"), 400, 300, Some(100), Some(100))
+            .unwrap()
+            .unwrap();
+        assert_eq!(r, (M::PadWithin, Some(100), Some(75)));
     }
 
     #[test]
