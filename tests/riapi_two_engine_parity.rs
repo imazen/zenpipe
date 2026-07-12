@@ -112,3 +112,26 @@ parity_case!(rotate_after_pad, "w=100&h=50&mode=pad&rotate=90");
 parity_case!(anchor_does_not_change_dims, "w=100&h=100&mode=crop&anchor=topleft");
 parity_case!(bgcolor_does_not_change_dims, "w=100&h=100&mode=pad&bgcolor=red");
 parity_case!(sharpen_does_not_change_dims, "w=100&f.sharpen=20");
+
+// ── maxwidth / maxheight bounding ──
+parity_case!(maxwidth_only, "maxwidth=100");
+parity_case!(w_with_same_axis_maxwidth, "w=200&maxwidth=100&h=150");
+parity_case!(w_with_cross_axis_maxheight, "w=200&maxheight=50");
+parity_case!(h_with_cross_axis_maxwidth, "h=200&maxwidth=100");
+
+// ── larger_than (zenlayout mode, now accepted by the bridge) ──
+#[test]
+fn larger_than_matches_imageflow_max_upscale_only() {
+    // imageflow defines larger_than as Max + UpscaleOnly
+    // (imageflow_riapi/src/ir4/layout.rs:307-310): sources that fit inside
+    // the box on both axes scale to the INNER fit; larger sources pass
+    // through. 400×300 into 800×800 → 800×600.
+    let expanded = expand_zen("w=800&h=800&mode=larger_than", SRC_W, SRC_H, None)
+        .expect("expand larger_than");
+    assert_eq!(output_dims(&expanded.nodes, SRC_W, SRC_H), (800, 600));
+
+    // Larger source passes through unchanged.
+    let expanded = expand_zen("w=100&h=100&mode=larger_than", SRC_W, SRC_H, None)
+        .expect("expand larger_than");
+    assert_eq!(output_dims(&expanded.nodes, SRC_W, SRC_H), (SRC_W, SRC_H));
+}

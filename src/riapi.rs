@@ -148,10 +148,9 @@ pub fn preprocess_querystring(qs: &str) -> (String, Vec<String>) {
     }
     pairs.retain(|p| !p.key.is_empty());
 
-    // 3. Same-axis max reconciliation: width+maxwidth → the smaller wins.
-    //    (Cross-axis bounding needs the source aspect ratio — bridge's job.)
-    reconcile_axis(&mut pairs, &["w", "width"], "maxwidth");
-    reconcile_axis(&mut pairs, &["h", "height"], "maxheight");
+    // 3. maxwidth/maxheight bounding happens at the geometry bridge (the
+    //    cross-axis rules need source dimensions); the keys bind to the
+    //    Constrain node's max_w/max_h params.
 
     // 4. Default fit mode (IR4 `FitModeStrings::None` rule): when no mode
     //    survives, width/height imply pad; maxwidth/maxheight alone imply max.
@@ -178,29 +177,6 @@ pub fn preprocess_querystring(qs: &str) -> (String, Vec<String>) {
     }
 
     (to_querystring(&pairs), warnings)
-}
-
-/// If both an exact key and its legacy max key are present on one axis,
-/// keep the smaller value under the exact key and drop the max key.
-fn reconcile_axis(pairs: &mut Vec<Pair>, exact_keys: &[&str], max_key: &str) {
-    let max_val: Option<u32> = pairs
-        .iter()
-        .find(|p| p.key == max_key)
-        .and_then(|p| p.value.trim().parse::<u32>().ok());
-    let Some(max_val) = max_val else { return };
-    let exact_val: Option<u32> = pairs
-        .iter()
-        .find(|p| exact_keys.contains(&p.key.as_str()))
-        .and_then(|p| p.value.trim().parse::<u32>().ok());
-    let Some(exact_val) = exact_val else { return };
-
-    let keep = exact_val.min(max_val);
-    for p in pairs.iter_mut() {
-        if exact_keys.contains(&p.key.as_str()) {
-            p.value = keep.to_string();
-        }
-    }
-    pairs.retain(|p| p.key != max_key);
 }
 
 /// Stable IR4 phase bucket for a parsed node instance, by schema id.
@@ -346,17 +322,6 @@ mod tests {
     fn dpr_trailing_x_stripped() {
         let (out, _) = preprocess_querystring("dpr=2x");
         assert!(qs_map(&out).contains(&("dpr".into(), "2".into())));
-    }
-
-    #[test]
-    fn same_axis_max_reconciled_smaller_wins() {
-        let (out, _) = preprocess_querystring("width=100&maxwidth=50");
-        let m = qs_map(&out);
-        assert!(m.contains(&("width".into(), "50".into())));
-        assert!(!m.iter().any(|(k, _)| k == "maxwidth"));
-
-        let (out2, _) = preprocess_querystring("w=40&maxwidth=90");
-        assert!(qs_map(&out2).contains(&("w".into(), "40".into())));
     }
 
     #[test]

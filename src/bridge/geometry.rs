@@ -141,7 +141,9 @@ fn resolve_constraint_mode(
         "max" => match scale {
             RiapiScale::Down => Some((M::Within, w, h)),
             RiapiScale::Both => Some((M::Fit, w, h)),
-            RiapiScale::Up => src_fits.then_some((M::Fit, w, h)),
+            // imageflow's larger_than IS Max+UpscaleOnly (ir4/layout.rs:307);
+            // zenlayout's LargerThan self-gates, no dimension check needed.
+            RiapiScale::Up => Some((M::LargerThan, w, h)),
             RiapiScale::Canvas => {
                 let (cw, ch) = canvas_box();
                 Some((M::PadWithin, cw, ch))
@@ -390,8 +392,41 @@ pub(crate) fn compile_geometry_run(
                 pipeline = pipeline.rotate_angle(degrees, mode);
             }
             "zenresize.constrain" | "zenlayout.constrain" => {
-                let raw_w = param_u32_opt(node, "w").filter(|&v| v > 0);
-                let raw_h = param_u32_opt(node, "h").filter(|&v| v > 0);
+                let mut raw_w = param_u32_opt(node, "w").filter(|&v| v > 0);
+                let mut raw_h = param_u32_opt(node, "h").filter(|&v| v > 0);
+                let max_w = param_u32_opt(node, "max_w").filter(|&v| v > 0);
+                let max_h = param_u32_opt(node, "max_h").filter(|&v| v > 0);
+
+                // ── maxwidth/maxheight bounding (imageflow get_wh_from_all) ──
+                // Same axis: the smaller wins. Cross axis: the resolved
+                // target box scales down (aspect-preserving) until it fits
+                // under every cap. Maxes alone act as the target (the
+                // preprocess layer injects mode=max for that case).
+                if raw_w.is_none() && raw_h.is_none() {
+                    raw_w = max_w;
+                    raw_h = max_h;
+                } else {
+                    if let (Some(w0), Some(mw)) = (raw_w, max_w) {
+                        raw_w = Some(w0.min(mw));
+                    }
+                    if let (Some(h0), Some(mh)) = (raw_h, max_h) {
+                        raw_h = Some(h0.min(mh));
+                    }
+                    // Cross axis: the max clamps only the DERIVED axis (the
+                    // exact value stays; pad modes fill the difference —
+                    // legacy `h=200&maxwidth=100` yields a 100×200 canvas).
+                    let cross_w = max_w.filter(|_| raw_w.is_none());
+                    let cross_h = max_h.filter(|_| raw_h.is_none());
+                    if cross_w.is_some() || cross_h.is_some() {
+                        let (bw, bh) = gating_box(cur_w, cur_h, raw_w, raw_h);
+                        if let Some(mw) = cross_w {
+                            raw_w = Some(bw.min(mw));
+                        }
+                        if let Some(mh) = cross_h {
+                            raw_h = Some(bh.min(mh));
+                        }
+                    }
+                }
 
                 // ── zoom / dpr multiplies the requested dimensions ──
                 let zoom = param_f32_opt(node, "zoom")
@@ -697,11 +732,11 @@ mod tests {
 
     #[test]
     fn scale_up_only_skips_larger_sources() {
-        // Source larger than the 100×100 box → upscale-only is a no-op.
-        assert_eq!(resolve("max", Some("up"), 400, 300), None);
+        // max+up == imageflow larger_than (self-gating in zenlayout).
+        assert_eq!(resolve("max", Some("up"), 400, 300), Some(M::LargerThan));
+        assert_eq!(resolve("max", Some("up"), 50, 50), Some(M::LargerThan));
+        // stretch+up still needs the dimension gate (no self-gating mode).
         assert_eq!(resolve("stretch", Some("up"), 400, 300), None);
-        // Source fits inside the box → upscale allowed.
-        assert_eq!(resolve("max", Some("up"), 50, 50), Some(M::Fit));
         assert_eq!(resolve("stretch", Some("up"), 50, 50), Some(M::Distort));
     }
 

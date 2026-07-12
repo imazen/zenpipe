@@ -64,10 +64,13 @@ fn sizing_width_height_aliases() {
 
 #[test]
 fn sizing_maxwidth_maxheight() {
+    // maxwidth/maxheight bind to dedicated cap params (imageflow bounding
+    // semantics live at the bridge) — they are no longer plain w/h aliases.
     let r = parse("maxwidth=500&maxheight=400");
     let c = find_node(&r.instances, "zenresize.constrain").expect("Constrain node");
-    assert_eq!(get_u32(c, "w"), Some(500));
-    assert_eq!(get_u32(c, "h"), Some(400));
+    assert_eq!(get_u32(c, "max_w"), Some(500));
+    assert_eq!(get_u32(c, "max_h"), Some(400));
+    assert_eq!(get_u32(c, "w"), None);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

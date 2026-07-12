@@ -262,8 +262,25 @@ pub(crate) fn convert_orient(node: &dyn NodeInstance) -> crate::PipeResult<NodeO
 
 /// Convert a `zenresize.constrain` node to `NodeOp::Constrain`.
 pub(crate) fn convert_zenresize_constrain(node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
-    let w = param_u32_opt(node, "w").filter(|&v| v > 0);
-    let h = param_u32_opt(node, "h").filter(|&v| v > 0);
+    let mut w = param_u32_opt(node, "w").filter(|&v| v > 0);
+    let mut h = param_u32_opt(node, "h").filter(|&v| v > 0);
+    // maxwidth/maxheight: same-axis "smaller wins"; maxes alone become the
+    // target. Cross-axis bounding needs source dimensions and is handled by
+    // the fused geometry path (bridge/geometry.rs) — this dims-unknown
+    // fallback applies what it can.
+    let max_w = param_u32_opt(node, "max_w").filter(|&v| v > 0);
+    let max_h = param_u32_opt(node, "max_h").filter(|&v| v > 0);
+    if w.is_none() && h.is_none() {
+        w = max_w;
+        h = max_h;
+    } else {
+        if let (Some(w0), Some(mw)) = (w, max_w) {
+            w = Some(w0.min(mw));
+        }
+        if let (Some(h0), Some(mh)) = (h, max_h) {
+            h = Some(h0.min(mh));
+        }
+    }
     let mode_str = param_str(node, "mode")?;
     // down_filter is Option<String> — absent means auto (Robidoux).
     let filter = node

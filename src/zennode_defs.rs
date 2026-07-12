@@ -505,19 +505,36 @@ pub struct Constrain {
     // ─── Dimensions ───
     /// Target width in pixels. None = unconstrained (derive from height + aspect ratio).
     ///
-    /// RIAPI: `?w=800` or `?width=800` or `?maxwidth=800` (legacy, implies mode=within).
+    /// RIAPI: `?w=800` or `?width=800`.
     #[param(range(0..=65535), default = 0, step = 1)]
     #[param(unit = "px", section = "Dimensions", label = "Width")]
-    #[kv("w", "width", "maxwidth")]
+    #[kv("w", "width")]
     pub w: Option<u32>,
 
     /// Target height in pixels. None = unconstrained (derive from width + aspect ratio).
     ///
-    /// RIAPI: `?h=600` or `?height=600` or `?maxheight=600` (legacy, implies mode=within).
+    /// RIAPI: `?h=600` or `?height=600`.
     #[param(range(0..=65535), default = 0, step = 1)]
     #[param(unit = "px", section = "Dimensions", label = "Height")]
-    #[kv("h", "height", "maxheight")]
+    #[kv("h", "height")]
     pub h: Option<u32>,
+
+    /// Upper bound on the resolved target width (RIAPI `maxwidth`).
+    ///
+    /// Caps the target aspect-preservingly: if the resolved target exceeds
+    /// a max on either axis, BOTH axes scale down together (imageflow
+    /// `get_wh_from_all` cross-term bounding). With no `w`/`h` at all,
+    /// maxes act as `mode=max` targets (never upscale).
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Dimensions", label = "Max Width")]
+    #[kv("maxwidth")]
+    pub max_w: Option<u32>,
+
+    /// Upper bound on the resolved target height (RIAPI `maxheight`).
+    #[param(range(0..=65535), default = 0, step = 1)]
+    #[param(unit = "px", section = "Dimensions", label = "Max Height")]
+    #[kv("maxheight")]
+    pub max_h: Option<u32>,
 
     // ─── Layout ───
     /// Constraint mode controlling how the image fits the target dimensions.
@@ -719,6 +736,8 @@ impl Default for Constrain {
         Self {
             w: None,
             h: None,
+            max_w: None,
+            max_h: None,
             mode: String::from("within"),
             scale: None,
             zoom: None,
