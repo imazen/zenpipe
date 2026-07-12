@@ -35,27 +35,34 @@ fn output_dims(nodes: &[Box<dyn zennode::NodeInstance>], w: u32, h: u32) -> (u32
     (result.source.width(), result.source.height())
 }
 
-fn legacy_dims(qs: &str) -> (u32, u32) {
-    let expanded = expand_legacy(qs, SRC_W as i32, SRC_H as i32, None, false, 1, Some(1))
+/// Source dimensions exercised by every case. Odd/prime-adjacent sizes
+/// stress rounding: exactness that only holds at 400×300 is not exactness.
+const SOURCE_DIMS: &[(u32, u32)] = &[(400, 300), (401, 299), (333, 251), (1023, 767), (99, 640)];
+
+fn legacy_dims(qs: &str, sw: u32, sh: u32) -> (u32, u32) {
+    let expanded = expand_legacy(qs, sw as i32, sh as i32, None, false, 1, Some(1))
         .unwrap_or_else(|e| panic!("expand_legacy({qs}) failed: {e:?}"));
-    output_dims(&expanded.nodes, SRC_W, SRC_H)
+    output_dims(&expanded.nodes, sw, sh)
 }
 
-fn zen_dims(qs: &str) -> (u32, u32) {
-    let expanded = expand_zen(qs, SRC_W, SRC_H, None)
+fn zen_dims(qs: &str, sw: u32, sh: u32) -> (u32, u32) {
+    let expanded = expand_zen(qs, sw, sh, None)
         .unwrap_or_else(|e| panic!("expand_zen({qs}) failed: {e:?}"));
-    output_dims(&expanded.nodes, SRC_W, SRC_H)
+    output_dims(&expanded.nodes, sw, sh)
 }
 
 fn assert_parity(qs: &str) {
-    let (lw, lh) = legacy_dims(qs);
-    let (zw, zh) = zen_dims(qs);
-    let dw = (lw as i64 - zw as i64).abs();
-    let dh = (lh as i64 - zh as i64).abs();
-    assert!(
-        dw <= 1 && dh <= 1,
-        "geometry divergence for '{qs}': legacy {lw}x{lh} vs zen {zw}x{zh} (source {SRC_W}x{SRC_H})"
-    );
+    // EXACT equality — RIAPI geometry must match the reference engine to
+    // the pixel; rounding-policy differences are divergences, not noise.
+    for &(sw, sh) in SOURCE_DIMS {
+        let (lw, lh) = legacy_dims(qs, sw, sh);
+        let (zw, zh) = zen_dims(qs, sw, sh);
+        assert_eq!(
+            (lw, lh),
+            (zw, zh),
+            "geometry divergence for '{qs}': legacy {lw}x{lh} vs zen {zw}x{zh} (source {sw}x{sh})"
+        );
+    }
 }
 
 macro_rules! parity_case {

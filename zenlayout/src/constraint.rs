@@ -531,6 +531,13 @@ impl Constraint {
                 (tw, th)
             };
             let (canvas, placement) = match self.mode {
+                // WithinPad is identity when the source fits (documented:
+                // "no scaling, no padding, no canvas expansion") — only
+                // FitPad (always scales to target) and PadWithin (always
+                // pads) force the target canvas in the single-axis case.
+                // Matches imageflow Pad+DownscaleOnly, which skips the whole
+                // step (padding included) unless the source is larger.
+                WithinPad if sw <= tw && sh <= th => ((rw, rh), (0, 0)),
                 FitPad | WithinPad | PadWithin => {
                     let (px, py) = gravity_offset(tw, th, rw, rh, &self.gravity);
                     ((tw, th), (px, py))
