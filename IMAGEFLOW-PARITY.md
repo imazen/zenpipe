@@ -182,15 +182,21 @@ migration-debugging difference).
 
 ## 4. Confirmed semantic divergences (native path) — fix before 0.1
 
-> **STATUS 2026-07-11:** items 1–6 below (plus the crop no-op from §1) were
-> **fixed** in the 2026-07-11 wave (`f378fe02` geometry core, `44020afa`
-> remaining keys, `9cb07998` limits, `f7d1900d` hdr), with regression tests in
-> `tests/riapi_keys.rs`, `src/bridge/geometry.rs`, and `src/riapi.rs`. The §3
-> matrix retains the pre-fix status cells as the historical survey; consult
-> `CLAUDE.md` Known Bugs for what remains open (animation W8, decode hints W6,
-> matte, AllocationTracker, encode-config audit W10, and the documented
-> mode×scale approximations). The W9 two-engine behavioral suite is still the
-> missing verification layer.
+> **STATUS 2026-07-11 (wave 2):** items 1–6 below (plus the crop no-op from
+> §1) were fixed in `f378fe02`/`44020afa`/`9cb07998`/`f7d1900d`; the second
+> wave (`c75ca304`..) closed W8 (per-frame animation), the matte flatten,
+> maxwidth/maxheight bounding, `larger_than`, the encode-node/quality-intent
+> folding (W10 decision subset), compat `max_total_file_pixels`, and — most
+> importantly — landed the **W9 two-engine parity suite**
+> (`tests/riapi_two_engine_parity.rs`, 43 cases, legacy-vs-zen geometry
+> within ±1 px), which caught and fixed three further divergences
+> (RiapiCrop coalesce grouping, `scale=canvas` inner-box padding, fused
+> srotate+crop+resize). The §3 matrix retains the pre-fix cells as the
+> historical survey; `CLAUDE.md` Known Bugs is the live list of what
+> remains (decoder scaled-decode hints blocked on sibling crates, exact
+> native-unit encode params, compat max_threads/mem_budget, the two
+> documented `scale=canvas` composition approximations, generated-doc
+> regeneration).
 
 Ranked by blast radius; all verified at source level, each needs a regression
 test in the W9 suite. These are wrong-pixels or wrong-acceptance bugs under this

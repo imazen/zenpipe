@@ -715,8 +715,7 @@ impl<'a> ImageJob<'a> {
         if image_info.is_animation() && !wants_single_frame {
             let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
             let deadline = self.deadline();
-            let stop: Option<&dyn enough::Stop> =
-                deadline.as_ref().map(|d| d as &dyn enough::Stop);
+            let stop: Option<&dyn enough::Stop> = deadline.as_ref().map(|d| d as &dyn enough::Stop);
             let (hint_q, hint_e) = decision_hint_overrides(&decision);
             if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
                 input_bytes,
@@ -794,10 +793,7 @@ impl<'a> ImageJob<'a> {
         // and hdr=reconstruct fails loudly rather than silently returning SDR.
         #[cfg(feature = "job-ultrahdr")]
         let (source, gain_map_sidecar) = if want_reconstruct {
-            let headroom = hdr_directive
-                .as_ref()
-                .map(|(_, h)| *h)
-                .filter(|h| *h > 0.0);
+            let headroom = hdr_directive.as_ref().map(|(_, h)| *h).filter(|h| *h > 0.0);
             (
                 self.decode_source_reconstruct_hdr(input_bytes, headroom)?,
                 None,
@@ -958,9 +954,7 @@ pub(crate) fn apply_encode_node_intent(
                     ("effort", "effort"),
                 ],
             ),
-            "zenwebp.encode_lossy" => {
-                (F::WebP, &[("quality", "quality"), ("effort", "effort")])
-            }
+            "zenwebp.encode_lossy" => (F::WebP, &[("quality", "quality"), ("effort", "effort")]),
             "zenwebp.encode_lossless" => (F::WebP, &[("effort", "effort")]),
             "zengif.encode" => (F::Gif, &[("quality", "quality")]),
             "zenavif.encode" => (
@@ -1140,7 +1134,6 @@ pub(crate) fn transcode_animated_nodes(
 }
 
 impl<'a> ImageJob<'a> {
-
     /// Decode input bytes to a pixel [`Source`].
     fn decode_source(
         &self,
@@ -1170,7 +1163,8 @@ impl<'a> ImageJob<'a> {
             }
             Err(_) => {
                 // Fall back to full-frame decode.
-                let mut fallback = zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
+                let mut fallback =
+                    zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
                 if let Some(ref cl) = codec_limits {
                     fallback = fallback.with_limits(cl);
                 }

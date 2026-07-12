@@ -184,8 +184,24 @@ pub fn execute_framewise(
     let decode_infos = collect_decode_infos(framewise, io_buffers);
 
     // Check decode dimensions against security limits.
-    for (io_id, info) in &decode_infos {
+    for (_io_id, info) in &decode_infos {
         check_security_limit(info.width, info.height, &security.max_decode_size, "decode")?;
+
+        // ExecutionSecurity::max_total_file_pixels — total decoded pixels
+        // across all frames (imageflow: frame_count × width × height).
+        if let Some(max_total) = security.max_total_file_pixels {
+            let frames = u64::from(info.frame_count().unwrap_or(1).max(1));
+            let total = (info.width as u64)
+                .saturating_mul(info.height as u64)
+                .saturating_mul(frames);
+            if total > max_total {
+                return Err(ZenError::SizeLimit(format!(
+                    "total decoded pixels {total} (w{} × h{} × {frames} frames) exceed \
+                     security.max_total_file_pixels {max_total}",
+                    info.width, info.height
+                )));
+            }
+        }
     }
 
     match framewise {
@@ -733,7 +749,6 @@ fn probe_resolve_decode(
     let exif_flag = info.orientation.to_exif();
     Ok((decision, source, exif_flag))
 }
-
 
 /// Decode a specific frame from an animated/multi-frame image.
 fn decode_to_source_frame(

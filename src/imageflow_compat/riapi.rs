@@ -6,9 +6,11 @@
 //!   the full IR4 querystring and produce v2 `Node` steps, then translates via `translate.rs`.
 //!   Battle-tested v2-compatible path with full 68-key coverage.
 //!
-//! - **Zen-native path** (`expand_zen`): Uses `zenlayout::riapi::parse()` for geometry,
-//!   then feeds non-geometry keys through `zennode::NodeRegistry::from_querystring()`
-//!   so each codec/filter crate handles its own keys. Modular and extensible.
+//! - **Zen-native path** (`expand_zen`): normalizes the querystring via
+//!   `zenpipe::riapi::preprocess_querystring`, parses ALL keys through
+//!   `zennode::NodeRegistry::from_querystring()` (each crate's `#[kv]`
+//!   params + the hand-written RIAPI adapters), then sorts the instances
+//!   into IR4 phase order with `zenpipe::riapi::riapi_order`.
 //!
 //! Both produce `Vec<Box<dyn NodeInstance>>` that zenpipe can execute.
 

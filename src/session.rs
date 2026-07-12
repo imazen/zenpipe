@@ -222,7 +222,7 @@ mod inner {
                     hdr_mode: config.hdr_mode,
                     source_info: &suffix_info,
                     trace_config: config.trace_config,
-                limits: None,
+                    limits: None,
                 };
 
                 // Drop the provided source — not needed for cache hit path.
@@ -540,7 +540,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let source = Box::new(SolidSource::new(200, 200));
         let _output = session.stream(source, &config, None, 0xDEAD).unwrap();
@@ -557,7 +557,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let source2 = Box::new(SolidSource::new(200, 200));
         let bytes_before = session.current_bytes();
@@ -580,7 +580,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xBEEF)
@@ -598,7 +598,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output2 = session
             .stream(Box::new(SolidSource::new(200, 200)), &config2, None, 0xBEEF)
@@ -619,7 +619,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xAAAA)
@@ -648,7 +648,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
 
         let _output = session
@@ -665,7 +665,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output2 = session
             .stream(Box::new(SolidSource::new(200, 200)), &config_b, None, 0xBB)
@@ -687,7 +687,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(100, 100)), &config, None, 0xCC)
@@ -708,7 +708,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xDD)
@@ -729,7 +729,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xEE)
@@ -754,7 +754,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let _output = session
             .stream(Box::new(SolidSource::new(200, 200)), &config, None, 0xFF)
@@ -793,7 +793,7 @@ mod tests {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
-                limits: None,
+            limits: None,
         };
         let source = Box::new(SolidSource::new(200, 200));
         let result = session.stream_stoppable(source, &config, None, 0xCC, &stop);

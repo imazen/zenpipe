@@ -198,14 +198,25 @@ fn riapi_bucket(schema_id: &str) -> u32 {
     }
     match schema_id {
         // Decode-side configuration.
-        "zennode.decode" | "zenjpeg.decode" | "zenwebp.decode" | "zenjxl.decode"
-        | "heic.decode" | "zenpipe.riapi.frame" | "zenpipe.riapi.icc" | "zenpipe.riapi.hdr" => 0,
+        "zennode.decode"
+        | "zenjpeg.decode"
+        | "zenwebp.decode"
+        | "zenjxl.decode"
+        | "heic.decode"
+        | "zenpipe.riapi.frame"
+        | "zenpipe.riapi.icc"
+        | "zenpipe.riapi.hdr" => 0,
         "zenlayout.orient" => 10,
         "zenpipe.crop_whitespace" => 15,
         // Source rotate/flip (srotate=/sflip=), pre-crop.
-        "zenlayout.rotate_90" | "zenlayout.rotate_180" | "zenlayout.rotate_270"
-        | "zenlayout.flip_h" | "zenlayout.flip_v" => 20,
-        "zenlayout.crop" | "zenlayout.crop_percent" | "zenlayout.crop_margins"
+        "zenlayout.rotate_90"
+        | "zenlayout.rotate_180"
+        | "zenlayout.rotate_270"
+        | "zenlayout.flip_h"
+        | "zenlayout.flip_v" => 20,
+        "zenlayout.crop"
+        | "zenlayout.crop_percent"
+        | "zenlayout.crop_margins"
         | "zenpipe.riapi_crop" => 30,
         "zenpipe.smart_crop_analyze" => 35,
         "zenresize.constrain" | "zenlayout.constrain" | "zenresize.resize" => 40,

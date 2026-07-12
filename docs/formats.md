@@ -6,8 +6,8 @@
 | **PNG** | `image/png` | png | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **GIF** | `image/gif` | gif | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **WEBP** | `image/webp` | webp | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **AVIF** | `image/avif` | avif | ✅ | ✅ | ✅ | ✅ | — |
-| **JXL** | `image/jxl` | jxl | ✅ | ✅ | ✅ | ✅ | — |
+| **AVIF** | `image/avif` | avif | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **JXL** | `image/jxl` | jxl | ✅ | ✅ | ✅ | ✅ | ✅¹ |
 | **HEIC** | `image/heif` | heic, heif, hif | ✅ | — | — | ✅ | — |
 | **BMP** | `image/bmp` | bmp | ✅ | ✅ | — | ✅ | ✅ |
 | **TIFF** | `image/tiff` | tiff, tif | ✅ | ✅ | — | ✅ | ✅ |
@@ -16,3 +16,5 @@
 | **QOI** | `image/x-qoi` | qoi | ✅ | ✅ | — | — | — |
 | **HDR** | `image/vnd.radiance` | hdr, rgbe, pic | — | — | — | — | — |
 | **TGA** | `image/x-tga` | tga, targa, icb, vda, vst | ✅ | ✅ | — | — | — |
+
+¹ JXL encode requires the non-default `jxl-encode` feature (zencodecs).

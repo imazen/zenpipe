@@ -147,7 +147,14 @@ fn parse_hex_color(hex: &str) -> Option<zenlayout::CanvasColor> {
     let (r, g, b, a) = match hex.len() {
         3 => (nibble(0)?, nibble(1)?, nibble(2)?, 15),
         4 => (nibble(0)?, nibble(1)?, nibble(2)?, nibble(3)?),
-        6 => return Some(zenlayout::CanvasColor::Srgb { r: byte(0)?, g: byte(2)?, b: byte(4)?, a: 255 }),
+        6 => {
+            return Some(zenlayout::CanvasColor::Srgb {
+                r: byte(0)?,
+                g: byte(2)?,
+                b: byte(4)?,
+                a: 255,
+            });
+        }
         8 => {
             return Some(zenlayout::CanvasColor::Srgb {
                 r: byte(0)?,

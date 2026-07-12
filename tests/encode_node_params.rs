@@ -11,12 +11,7 @@ fn small_png() -> Vec<u8> {
     let mut pixels = Vec::with_capacity(32 * 32 * 4);
     for y in 0..32u32 {
         for x in 0..32u32 {
-            pixels.extend_from_slice(&[
-                (x * 8) as u8,
-                (y * 8) as u8,
-                ((x * y) % 251) as u8,
-                255,
-            ]);
+            pixels.extend_from_slice(&[(x * 8) as u8, (y * 8) as u8, ((x * y) % 251) as u8, 255]);
         }
     }
     let slice =

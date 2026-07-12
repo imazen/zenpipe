@@ -24,52 +24,40 @@ claiming `zenlayout::riapi` is used are wrong.
 
 ## Known Bugs
 
-Confirmed at source level 2026-07-11; the 2026-07-11 fix wave (commits
-009c7938..f7d1900d) closed most of the original list. Remaining:
+Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
+original list — animation per-frame routing, matte flatten, the two-engine
+parity suite (43 cases), maxwidth/maxheight bounding, larger_than,
+scale=canvas inner-box, encode-node/quality-intent folding, limits
+threading, hdr directives, compat security. Verified remaining:
 
-- **Animated input + processing steps → still image**: compat's animation
-  passthrough correctly fires only for no-op jobs (`execute.rs`), but jobs
-  *with* steps fall through to single-frame processing; `animation::transcode`
-  (per-frame pipelines) is called only from tests. "Resize this GIF" loses the
-  animation. (Parity workstream W8.)
-- **JPEG alpha flatten ignores the configured matte color** — hardcodes white
-  (`src/job.rs` `needs_alpha_removal` TODO); pending zenresize matte support.
-  The fused geometry path drops `matte_color` for the same reason.
-- **JPEG/WebP decoder downscale hints dropped**: `jpeg_downscale_hints` /
-  `webp_decoder_hints` / `decoder.min_precise_scaling_ratio` have zero
-  handling in `src/imageflow_compat/`; zenjpeg exposes no public scaled-IDCT
-  knob yet; the generic decode node's `min_size` hint is unwired. (W6.)
-- **`AllocationTracker` still has no call sites** (the estimate-gate +
-  codec-limit enforcement added 2026-07-11 covers the practical budget; the
-  tracker itself remains API-only — wire or delete, W7 remainder).
-- **compat `ExecutionSecurity`**: `max_total_file_pixels`, `max_threads`,
-  `max_json_bytes`, `mem_budget_policy` still unenforced
-  (`max_input_file_bytes` and the three size limits are enforced).
-- **`png.quantization_speed` / `jpeg.turbo` / `jpeg.li`** remain
-  compat-engine-only: the zen node→encoder config path has no consumer for
-  them (W10 encode-config audit).
-- **`larger_than` constraint mode unsupported** (`zenlayout` has no
-  equivalent; the bridge errors on it).
-- **mode×scale approximations**: `(crop, scale=canvas)` maps to WithinCrop
-  (imageflow does a partwise crop + virtual canvas), `(stretch, canvas)` maps
-  to plain Distort. Cross-axis `width`+`maxheight` bounding still needs
-  source aspect at the preprocess layer. (Documented in
-  `src/bridge/geometry.rs` comments; W9 behavioral suite should quantify.)
-
-Fixed 2026-07-11 (regression tests in `tests/riapi_keys.rs`,
-`src/bridge/geometry.rs`, `src/riapi.rs`, `tests/gainmap_roundtrip.rs`):
-mode aliases + pad default + mode×scale composition; crop units/negative
-coords/no-op; srotate/sflip semantics + PostRotate/PostFlip ordering;
-s.roundcorners percentage + 4-value; f.sharpen_when; named/bare-hex bgcolor;
-anchor=x,y + IR4 anchor spellings; srcset wiring + legacy pairs + IR4
-default-mode rule; Constrain gravity/canvas_color/zoom/up_filter/sharpen
-actually reaching execution; quality_intent profile-default bug (dead
-`quality=`, format flipped to auto); ignoreicc/ignore_icc_errors;
-webp.lossless; Limits→codec-request threading + pre-flight estimate gate +
-max_output_bytes + deadline; hdr=/gainmap= directives (preserve/strip/
-reconstruct); imageflow-compat CmsMode drift (feature didn't compile).
-
-Stale-doc queue (do not fix piecemeal; batch per repo rules):
-`IMAGEFLOW-PARITY.md` §9 — plus, after this wave: parity doc §3/§4 status
-cells for the fixed keys, and `docs/querystring.md` regeneration (new
-adapters aren't in the generated docs).
+- **Decoder downscale hints (W6, blocked on siblings)**:
+  `jpeg_downscale_hints` / `webp_decoder_hints` /
+  `decoder.min_precise_scaling_ratio` are parsed but produce no scaled
+  decode — zenjpeg exposes no public scaled-IDCT knob and zencodec's
+  DecodeJob has no scale hint; the generic decode node's `min_size` is
+  unwired. Perf-only (output pixels are correct, just slower). Needs
+  sibling-crate API work (zenjpeg/zencodec).
+- **W10 remainder — exact native-unit per-codec encode params**: per-codec
+  `quality`/`effort` keys now apply via decision hints on the GENERIC
+  calibrated scale; exact native units plus the non-decision params
+  (progressive, subsampling, quant tables, sharp_yuv, …) need per-codec
+  `CodecConfig` boxes wired from encode nodes (zencodecs `config.rs` has
+  jpeg/webp/gif/png/avif boxes; JXL/TIFF/HEIC boxes don't exist yet).
+- **`AllocationTracker` is API-only by decision**: superseded by the
+  orchestrate estimate gate + codec-level `ResourceLimits`; scheduled for
+  removal in the pre-0.1 public-API sweep rather than wiring a duplicate
+  accounting path.
+- **compat `ExecutionSecurity` partial**: `max_threads` (zencodec
+  `ThreadingPolicy` can only express sequential-vs-parallel),
+  `max_json_bytes` (compat takes pre-parsed types — enforce where JSON
+  actually enters), and `mem_budget_policy` (needs an estimate hook on the
+  compat path) remain unenforced; sizes, input bytes, and total file
+  pixels are enforced.
+- **mode×scale approximations (documented, parity-suite-visible)**:
+  `(crop, scale=canvas)` → WithinCrop (imageflow: partwise crop + virtual
+  canvas); `(stretch, canvas)` → Distort without canvas pad.
+- **Generated docs regen pending**: `docs/querystring.md` / `docs/nodes/`
+  don't list the hand-written RIAPI adapter keys (crop/flip/rotate/
+  srotate/sflip/autorotate/frame/roundcorners/icc/hdr) — the generator
+  only walks `#[kv]` params. Give adapter schemas synthetic ParamDescs or
+  extend the generator, then regenerate.

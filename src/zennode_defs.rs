@@ -1550,7 +1550,9 @@ impl NodeDef for CropRiapiDef {
             kv.take_f32("cropyunits", consumer).unwrap_or(0.0)
         };
 
-        if !cropxunits.is_finite() || !cropyunits.is_finite() || cropxunits < 0.0
+        if !cropxunits.is_finite()
+            || !cropyunits.is_finite()
+            || cropxunits < 0.0
             || cropyunits < 0.0
         {
             kv.warn(
@@ -1866,7 +1868,9 @@ impl NodeDef for SrotateRiapiDef {
         let Some(val) = val else {
             return Ok(None);
         };
-        Ok(source_rotate_node(parse_rotate_degrees(kv, "srotate", &val)))
+        Ok(source_rotate_node(parse_rotate_degrees(
+            kv, "srotate", &val,
+        )))
     }
 }
 
@@ -2158,10 +2162,7 @@ impl NodeInstance for HdrDirectives {
     }
     fn to_params(&self) -> ParamMap {
         let mut m = ParamMap::new();
-        m.insert(
-            "mode".into(),
-            zennode::ParamValue::Str(self.mode.clone()),
-        );
+        m.insert("mode".into(), zennode::ParamValue::Str(self.mode.clone()));
         m.insert("headroom".into(), zennode::ParamValue::F32(self.headroom));
         m
     }
@@ -2255,7 +2256,9 @@ impl NodeDef for HdrRiapiDef {
                     kv.warn(
                         "gainmap",
                         zennode::kv::KvWarningKind::InvalidValue,
-                        alloc::format!("unknown gainmap value '{other}', expected preserve/discard"),
+                        alloc::format!(
+                            "unknown gainmap value '{other}', expected preserve/discard"
+                        ),
                     );
                     return Ok(None);
                 }

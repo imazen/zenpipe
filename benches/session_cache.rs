@@ -195,7 +195,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
                 let output = zenpipe::orchestrate::stream(source, &config, None).expect("stream");
                 black_box(drain(output.source))
@@ -217,7 +217,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
                 let source = decode_jpeg();
                 let output = session
@@ -245,7 +245,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
 
                 // Source not needed for cache hit, but API requires one.
@@ -279,7 +279,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
                 let output = zenpipe::orchestrate::stream(source, &config, None).expect("stream");
                 black_box(materialize_and_encode_bmp(output.source).len())
@@ -299,7 +299,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
                 let source = decode_jpeg();
                 let output = session
@@ -325,7 +325,7 @@ zenbench::main!(|suite| {
                     hdr_mode: "sdr_only",
                     source_info: &info,
                     trace_config: None,
-                limits: None,
+                    limits: None,
                 };
 
                 let source = decode_jpeg();
@@ -357,7 +357,7 @@ zenbench::main!(|suite| {
                         hdr_mode: "sdr_only",
                         source_info: &info,
                         trace_config: None,
-                limits: None,
+                        limits: None,
                     };
                     let source = decode_jpeg();
                     let output =
@@ -384,7 +384,7 @@ zenbench::main!(|suite| {
                         hdr_mode: "sdr_only",
                         source_info: &info,
                         trace_config: None,
-                limits: None,
+                        limits: None,
                     };
                     let source = decode_jpeg();
                     let output = session

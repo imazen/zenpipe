@@ -165,9 +165,9 @@ for its domain; `full_registry()` aggregates them all.
 
 | Owner | Nodes | Count |
 |-------|-------|------:|
-| **zenpipe** | Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha, RoundCorners | 6 |
+| **zenpipe** | Geometry + layout (crop/orient/flip/rotate/region/expand-canvas), Constrain, Resize, CropWhitespace, SmartCrop, FillRect, RemoveAlpha, RoundCorners, Composite, Overlay + RIAPI adapters | 26 |
 | **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP/HEIC encode+decode, Quantize, QualityIntentNode | 16 |
-| **zenfilters** | Photo adjustment filter nodes | 43 |
+| **zenfilters** | Photo adjustment filter nodes | 61 |
 
 <!-- crates.io:skip-start -->
 ### zenpipe-owned nodes
@@ -232,7 +232,7 @@ graph TB
 | zenfilters | Filter node — photo adjustments on Oklab f32 (per-pixel streams, neighborhood windows) |
 | zenpixels | Strip type, ColorContext (ICC/CICP), metadata propagation |
 | zenpixels-convert | Automatic row-level format conversion between nodes |
-| zennode | Bridge: declarative node instances → PipelineGraph; node definitions owned by zencodecs (16), zenfilters (43), and zenpipe (6); `full_registry()` aggregates all three |
+| zennode | Bridge: declarative node instances → PipelineGraph; node definitions owned by zencodecs (16), zenfilters (61), and zenpipe (26); `full_registry()` aggregates all three |
 | moxcms | IccTransform node — row-by-row ICC profile conversion (optional) |
 
 ## Bridge layer (zennode → PipelineGraph)
@@ -240,7 +240,7 @@ graph TB
 When the `zennode` feature is enabled, declarative node definitions compile
 into an executable pipeline graph with automatic fusion. Node definitions
 are distributed: zencodecs owns 16 codec/quantize/quality-intent nodes,
-zenfilters owns 43 filter nodes, and zenpipe owns 6 geometry/resize/pipeline
+zenfilters owns 61 filter nodes, and zenpipe owns 26 geometry/resize/pipeline/RIAPI-adapter
 nodes (Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha,
 RoundCorners). Call `full_registry()` to aggregate all three.
 
@@ -248,7 +248,7 @@ RoundCorners). Call `full_registry()` to aggregate all three.
 ```mermaid
 flowchart LR
     A["zennode instances
-    (zencodecs: 16, zenfilters: 43, zenpipe: 6)"] --> B["separate by role
+    (zencodecs: 16, zenfilters: 61, zenpipe: 26)"] --> B["separate by role
     (decode / process / encode)"]
     B --> C["coalesce adjacent
     same-group nodes"]

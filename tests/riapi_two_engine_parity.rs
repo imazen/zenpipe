@@ -78,9 +78,15 @@ parity_case!(mode_stretch, "w=100&h=100&mode=stretch");
 parity_case!(mode_max_scale_both, "w=800&h=800&mode=max&scale=both");
 parity_case!(mode_pad_scale_both, "w=800&h=800&mode=pad&scale=both");
 parity_case!(mode_crop_scale_both, "w=800&h=800&mode=crop&scale=both");
-parity_case!(mode_stretch_scale_both, "w=800&h=800&mode=stretch&scale=both");
+parity_case!(
+    mode_stretch_scale_both,
+    "w=800&h=800&mode=stretch&scale=both"
+);
 parity_case!(upscale_denied_by_default, "w=800&h=800");
-parity_case!(scale_up_smaller_source_upscales, "w=800&h=600&mode=max&scale=up");
+parity_case!(
+    scale_up_smaller_source_upscales,
+    "w=800&h=600&mode=max&scale=up"
+);
 parity_case!(scale_up_larger_source_noop, "w=100&h=75&mode=max&scale=up");
 parity_case!(scale_canvas_pads, "w=800&h=800&mode=max&scale=canvas");
 parity_case!(maxwidth_maxheight, "maxwidth=100&maxheight=100");
@@ -93,7 +99,10 @@ parity_case!(dpr_alias, "w=100&h=100&dpr=1.5");
 // ── manual crop ──
 parity_case!(crop_pixels_default_units, "crop=100,50,300,250");
 parity_case!(crop_then_resize, "crop=100,50,300,250&w=50&h=50&mode=max");
-parity_case!(crop_percent_units, "crop=10,10,90,90&cropxunits=100&cropyunits=100");
+parity_case!(
+    crop_percent_units,
+    "crop=10,10,90,90&cropxunits=100&cropyunits=100"
+);
 parity_case!(crop_c_shorthand, "c=25,25,75,75");
 parity_case!(crop_negative_coords, "crop=-100,-100,0,0");
 parity_case!(crop_inverted_resets, "crop=300,200,100,50");
@@ -109,8 +118,14 @@ parity_case!(srotate_crop_resize, "srotate=90&crop=10,10,200,200&w=50");
 parity_case!(rotate_after_pad, "w=100&h=50&mode=pad&rotate=90");
 
 // ── combinations ──
-parity_case!(anchor_does_not_change_dims, "w=100&h=100&mode=crop&anchor=topleft");
-parity_case!(bgcolor_does_not_change_dims, "w=100&h=100&mode=pad&bgcolor=red");
+parity_case!(
+    anchor_does_not_change_dims,
+    "w=100&h=100&mode=crop&anchor=topleft"
+);
+parity_case!(
+    bgcolor_does_not_change_dims,
+    "w=100&h=100&mode=pad&bgcolor=red"
+);
 parity_case!(sharpen_does_not_change_dims, "w=100&f.sharpen=20");
 
 // ── maxwidth / maxheight bounding ──
@@ -126,12 +141,12 @@ fn larger_than_matches_imageflow_max_upscale_only() {
     // (imageflow_riapi/src/ir4/layout.rs:307-310): sources that fit inside
     // the box on both axes scale to the INNER fit; larger sources pass
     // through. 400×300 into 800×800 → 800×600.
-    let expanded = expand_zen("w=800&h=800&mode=larger_than", SRC_W, SRC_H, None)
-        .expect("expand larger_than");
+    let expanded =
+        expand_zen("w=800&h=800&mode=larger_than", SRC_W, SRC_H, None).expect("expand larger_than");
     assert_eq!(output_dims(&expanded.nodes, SRC_W, SRC_H), (800, 600));
 
     // Larger source passes through unchanged.
-    let expanded = expand_zen("w=100&h=100&mode=larger_than", SRC_W, SRC_H, None)
-        .expect("expand larger_than");
+    let expanded =
+        expand_zen("w=100&h=100&mode=larger_than", SRC_W, SRC_H, None).expect("expand larger_than");
     assert_eq!(output_dims(&expanded.nodes, SRC_W, SRC_H), (SRC_W, SRC_H));
 }

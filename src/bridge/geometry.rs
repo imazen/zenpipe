@@ -11,8 +11,8 @@ use crate::error::PipeError;
 use crate::graph::NodeOp;
 
 use super::parse::{
-    param_f32_opt, param_i32, param_str, param_u32_opt, parse_canvas_color,
-    parse_constraint_mode, parse_filter_opt, parse_gravity_anchor,
+    param_f32_opt, param_i32, param_str, param_u32_opt, parse_canvas_color, parse_constraint_mode,
+    parse_filter_opt, parse_gravity_anchor,
 };
 
 /// Schema IDs that are geometry operations eligible for layout fusion.
@@ -433,7 +433,9 @@ pub(crate) fn compile_geometry_run(
                     .filter(|z| z.is_finite() && *z > 0.0)
                     .unwrap_or(1.0);
                 let apply_zoom = |d: u32| -> u32 {
-                    ((d as f64) * (zoom as f64)).round().clamp(1.0, i32::MAX as f64) as u32
+                    ((d as f64) * (zoom as f64))
+                        .round()
+                        .clamp(1.0, i32::MAX as f64) as u32
                 };
                 let w = raw_w.map(apply_zoom);
                 let h = raw_h.map(apply_zoom);
@@ -557,8 +559,7 @@ pub(crate) fn compile_geometry_run(
                 let y2 = param_f32_opt(node, "y2").unwrap_or(0.0);
                 let xu = param_f32_opt(node, "xunits").unwrap_or(0.0);
                 let yu = param_f32_opt(node, "yunits").unwrap_or(0.0);
-                let (px, py, pw, ph) =
-                    resolve_riapi_crop(x1, y1, x2, y2, xu, yu, cur_w, cur_h);
+                let (px, py, pw, ph) = resolve_riapi_crop(x1, y1, x2, y2, xu, yu, cur_w, cur_h);
                 if (px, py, pw, ph) != (0, 0, cur_w, cur_h) {
                     pipeline = pipeline.crop_pixels(px, py, pw, ph);
                     cur_w = pw;
@@ -755,7 +756,10 @@ mod tests {
 
     #[test]
     fn aspectcrop_ignores_scale() {
-        assert_eq!(resolve("aspectcrop", Some("up"), 400, 300), Some(M::AspectCrop));
+        assert_eq!(
+            resolve("aspectcrop", Some("up"), 400, 300),
+            Some(M::AspectCrop)
+        );
         assert_eq!(resolve("aspect_crop", None, 400, 300), Some(M::AspectCrop));
     }
 

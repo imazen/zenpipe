@@ -7,6 +7,41 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (RIAPI parity wave 2, 2026-07-11)
+
+- **"Resize this GIF" returned a still image** — animated inputs now run
+  their node pipeline per frame through a shared helper (timing/loop
+  carry over; limits + deadline enforced) in both ImageJob and the
+  imageflow-compat executor; static targets keep first-frame semantics
+  (c75ca304).
+- **Alpha flatten hardcoded white** — now composites onto the requested
+  matte via MatteFlattenOp, fed from RIAPI `matte=`/`s.matte=`; also
+  fixed dimensionless Constrain nodes erroring as 0×0 targets (c75ca304).
+- **`?jpeg.quality=` (and every per-codec encode key) was a silent no-op
+  on ImageJob** — encode nodes and QualityIntentNode now fold into the
+  codec intent (format forcing + decision-level hints; generic-scale
+  caveat documented) (b0e3a822).
+- **maxwidth/maxheight were plain w/h aliases** — now imageflow
+  `get_wh_from_all` bounding (same-axis min, cross-axis clamps the
+  derived axis, maxes-alone become mode=max targets) (5f26bbfc).
+- **`mode=larger_than` rejected** — zenlayout's LargerThan was already
+  implemented and imageflow-exact (larger_than IS Max+UpscaleOnly);
+  the bridge now accepts it and maps max+scale=up onto it (5f26bbfc).
+- **`scale=canvas` padded to the raw target** instead of imageflow's
+  aspect-correct inner box; RiapiCrop missed the layout_plan coalesce
+  group so crop+resize combinations silently dropped the crop —
+  both caught by the new suite (975fb69d).
+- **compat enforces `ExecutionSecurity::max_total_file_pixels`**
+  (frame_count × w × h at probe) (this commit).
+
+#### Added (RIAPI parity wave 2, 2026-07-11)
+
+- **Two-engine parity suite** (`tests/riapi_two_engine_parity.rs`,
+  975fb69d): 43 querystrings run through BOTH the legacy imageflow_riapi
+  engine and the zen-native path, asserting output geometry within ±1 px
+  — the W9 verification layer; it caught three real divergences on its
+  first run.
+
 #### Fixed (RIAPI parity wave, 2026-07-11)
 
 - **Native querystring path now matches ImageResizer/imageflow geometry

@@ -183,19 +183,31 @@ fn post_flip_flags(r: &zennode::registry::KvResult) -> Option<(bool, bool)> {
 #[test]
 fn flip_horizontal() {
     let r = parse("flip=h");
-    assert_eq!(post_flip_flags(&r), Some((true, false)), "flip=h → PostFlip(h)");
+    assert_eq!(
+        post_flip_flags(&r),
+        Some((true, false)),
+        "flip=h → PostFlip(h)"
+    );
 }
 
 #[test]
 fn flip_vertical() {
     let r = parse("flip=v");
-    assert_eq!(post_flip_flags(&r), Some((false, true)), "flip=v → PostFlip(v)");
+    assert_eq!(
+        post_flip_flags(&r),
+        Some((false, true)),
+        "flip=v → PostFlip(v)"
+    );
 }
 
 #[test]
 fn flip_both() {
     let r = parse("flip=both");
-    assert_eq!(post_flip_flags(&r), Some((true, true)), "flip=both → PostFlip(h+v)");
+    assert_eq!(
+        post_flip_flags(&r),
+        Some((true, true)),
+        "flip=both → PostFlip(h+v)"
+    );
 }
 
 #[test]
@@ -212,7 +224,10 @@ fn flip_and_sflip_are_independent() {
     // imageflow applies sflip before crop and flip after resize; both keys
     // in one URL must produce BOTH nodes (the old adapter consumed only one).
     let r = parse("flip=v&sflip=h");
-    assert!(find_node(&r.instances, "zenlayout.flip_h").is_some(), "sflip=h");
+    assert!(
+        find_node(&r.instances, "zenlayout.flip_h").is_some(),
+        "sflip=h"
+    );
     assert_eq!(post_flip_flags(&r), Some((false, true)), "flip=v");
 }
 
