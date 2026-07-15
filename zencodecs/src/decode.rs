@@ -691,15 +691,18 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     let gm_h = gm_ref.height() as u32;
     let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
 
-    // Collapse to single-channel when provably achromatic — the shared
-    // load-bearing analysis (R==G==B over every pixel) is the predicate.
+    // Collapse to single-channel when provably achromatic. `try_reduce_to_
+    // load_bearing_format` runs the same R==G==B analysis AND the bit-exact
+    // byte selection in one call, so the hand-rolled `chunks_exact(3).map(px[0])`
+    // is gone. The source is RGB8 — no alpha lane, already 8-bit — so chroma
+    // is the only axis of the report that can fire here.
     use zenpixels_convert::PixelSliceLoadBearingExt as _;
-    let is_gray = gm_rgb8.as_slice().determine_load_bearing().uses_chroma == Some(false);
-    let (data, channels) = if is_gray {
-        let gray: Vec<u8> = gm_bytes.chunks_exact(3).map(|px| px[0]).collect();
-        (gray, 1u8)
-    } else {
-        (gm_bytes, 3u8)
+    let (data, channels) = match gm_rgb8.as_slice().try_reduce_to_load_bearing_format() {
+        Some(reduced) => {
+            let channels = reduced.descriptor().channels() as u8;
+            (reduced.copy_to_contiguous_bytes(), channels)
+        }
+        None => (gm_bytes, 3u8),
     };
 
     Some(DecodedGainMap {

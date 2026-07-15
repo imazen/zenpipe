@@ -51,10 +51,19 @@ impl FormatSet {
             ImageFormat::Bmp => Some(1 << 8),
             ImageFormat::Farbfeld => Some(1 << 9),
             ImageFormat::Tiff => Some(1 << 10),
-            // Appended 2026-07-15: these are all wired codecs in this crate
-            // (codecs/{qoi,tga,hdr,pdf,svg,raw}.rs, dyn_dispatch.rs) that the
-            // u16 table silently dropped — `with(Qoi)` returned an EMPTY set
-            // and `all()` excluded them, so any explicit allowlist denied them.
+            // Appended 2026-07-15 — ImageFormat's remaining named variants,
+            // which the u16 table silently dropped: `with(Qoi)` returned an
+            // EMPTY set and `all()` excluded them, so any explicit allowlist
+            // denied them outright.
+            //
+            // The deny is LATENT today, not live: `bitmaps-{qoi,tga,hdr}`,
+            // `svg` and `jp2-decode` are compile_error stubs (zenpipe#43) so
+            // their adapters are unreachable, Ico/Exr/Dng have no adapter in
+            // this crate at all, and Pdf/Raw are decode-only while
+            // is_format_allowed gates encode-side selection. Fixed anyway
+            // because the silent drop is a live API footgun regardless of
+            // reachability, and because 20 named formats structurally do not
+            // fit in u16 — wiring any of these later would trip it instantly.
             ImageFormat::Ico => Some(1 << 11),
             ImageFormat::Qoi => Some(1 << 12),
             ImageFormat::Pdf => Some(1 << 13),
