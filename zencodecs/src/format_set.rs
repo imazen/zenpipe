@@ -7,15 +7,38 @@ use crate::ImageFormat;
 /// Used by [`CodecPolicy`](crate::CodecPolicy) to restrict which output formats
 /// are candidates for auto-selection, and internally by the registry to track
 /// which formats are compiled in.
+///
+/// # Representable formats
+///
+/// Every **named** [`ImageFormat`] variant has a bit here. Two inputs are not
+/// representable and are silently ignored by [`insert`](Self::insert) /
+/// [`with`](Self::with) (and therefore never [`contains`](Self::contains)):
+///
+/// * [`ImageFormat::Unknown`] — not a format.
+/// * [`ImageFormat::Custom`] — identified by a unique
+///   `ImageFormatDefinition::name` (`&'static str`), which a bitflag cannot
+///   hold. Policy over custom formats needs a name-keyed set instead; see
+///   `AllowedFormats`' `custom_decode` side-channel for the existing pattern.
+///
+/// `ImageFormat` is `#[non_exhaustive]`, so a future variant added upstream
+/// also lands in that bucket until [`bit`](Self::bit) and `ALL_FORMATS` learn
+/// it. `all_named_formats_are_representable` is the regression gate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FormatSet(u16);
+pub struct FormatSet(u32);
 
 impl FormatSet {
     /// Empty set — no formats.
     pub const EMPTY: Self = FormatSet(0);
 
     /// Map a format to its bit position.
-    pub(crate) const fn bit(format: ImageFormat) -> Option<u16> {
+    ///
+    /// `None` for the non-representable inputs documented on the type
+    /// ([`ImageFormat::Unknown`], [`ImageFormat::Custom`], and any future
+    /// upstream variant).
+    ///
+    /// Bit positions 0-10 are historical and deliberately unchanged; new
+    /// formats append from 11.
+    pub(crate) const fn bit(format: ImageFormat) -> Option<u32> {
         match format {
             ImageFormat::Jpeg => Some(1 << 0),
             ImageFormat::WebP => Some(1 << 1),
@@ -28,11 +51,30 @@ impl FormatSet {
             ImageFormat::Bmp => Some(1 << 8),
             ImageFormat::Farbfeld => Some(1 << 9),
             ImageFormat::Tiff => Some(1 << 10),
+            // Appended 2026-07-15: these are all wired codecs in this crate
+            // (codecs/{qoi,tga,hdr,pdf,svg,raw}.rs, dyn_dispatch.rs) that the
+            // u16 table silently dropped — `with(Qoi)` returned an EMPTY set
+            // and `all()` excluded them, so any explicit allowlist denied them.
+            ImageFormat::Ico => Some(1 << 11),
+            ImageFormat::Qoi => Some(1 << 12),
+            ImageFormat::Pdf => Some(1 << 13),
+            ImageFormat::Exr => Some(1 << 14),
+            ImageFormat::Hdr => Some(1 << 15),
+            ImageFormat::Tga => Some(1 << 16),
+            ImageFormat::Dng => Some(1 << 17),
+            ImageFormat::Raw => Some(1 << 18),
+            ImageFormat::Svg => Some(1 << 19),
+            // Not representable — see the type docs. `Unknown` and `Custom`
+            // are spelled out so adding an upstream variant is a visible gap
+            // in review rather than an invisible fall-through.
+            ImageFormat::Unknown | ImageFormat::Custom(_) => None,
             _ => None,
         }
     }
 
-    const ALL_FORMATS: [ImageFormat; 11] = [
+    /// Every named format, in bit order. Keep in sync with [`bit`](Self::bit) —
+    /// `all_named_formats_are_representable` fails if an entry has no bit.
+    const ALL_FORMATS: [ImageFormat; 20] = [
         ImageFormat::Jpeg,
         ImageFormat::WebP,
         ImageFormat::Gif,
@@ -44,14 +86,30 @@ impl FormatSet {
         ImageFormat::Bmp,
         ImageFormat::Farbfeld,
         ImageFormat::Tiff,
+        ImageFormat::Ico,
+        ImageFormat::Qoi,
+        ImageFormat::Pdf,
+        ImageFormat::Exr,
+        ImageFormat::Hdr,
+        ImageFormat::Tga,
+        ImageFormat::Dng,
+        ImageFormat::Raw,
+        ImageFormat::Svg,
     ];
 
-    /// All known formats.
+    /// All known (named) formats.
+    ///
+    /// Derived from `ALL_FORMATS` rather than a hand-written bit mask — the
+    /// hardcoded `(1 << 11) - 1` it replaces is exactly how nine wired formats
+    /// went missing.
     pub fn all() -> Self {
-        let mut bits = 0u16;
-        // All 11 formats: bits 0-10
-        bits |= (1 << 11) - 1;
-        FormatSet(bits)
+        let mut set = FormatSet::EMPTY;
+        let mut i = 0;
+        while i < Self::ALL_FORMATS.len() {
+            set = set.with_const(Self::ALL_FORMATS[i]);
+            i += 1;
+        }
+        set
     }
 
     /// Web-safe formats only (JPEG, PNG, GIF).
@@ -163,10 +221,91 @@ mod tests {
     fn all_set() {
         let set = FormatSet::all();
         assert!(!set.is_empty());
-        assert_eq!(set.len(), 11);
+        // Derived, not hardcoded: the old `assert_eq!(len, 11)` passed against
+        // a table that was missing nine wired formats.
+        assert_eq!(set.len(), FormatSet::ALL_FORMATS.len());
         assert!(set.contains(ImageFormat::Jpeg));
         assert!(set.contains(ImageFormat::Farbfeld));
         assert!(set.contains(ImageFormat::Tiff));
+    }
+
+    /// Every named format must round-trip through the set. This is the gate the
+    /// `u16` table lacked: `bit()` fell through to `_ => None` for nine formats
+    /// this crate actually wires, so `with()` silently no-op'd and `all()`
+    /// excluded them.
+    #[test]
+    fn all_named_formats_are_representable() {
+        for f in FormatSet::ALL_FORMATS {
+            assert!(
+                FormatSet::bit(f).is_some(),
+                "{f:?} has no bit — add it to bit() and ALL_FORMATS"
+            );
+            assert!(
+                FormatSet::EMPTY.with(f).contains(f),
+                "{f:?} was silently dropped by with()/insert()"
+            );
+            assert!(FormatSet::all().contains(f), "all() excludes {f:?}");
+            assert_eq!(FormatSet::EMPTY.with(f).len(), 1, "{f:?} bit collides");
+        }
+        // Bits must be distinct: 20 formats -> 20 set bits.
+        assert_eq!(FormatSet::all().len(), 20);
+    }
+
+    /// The formats that regressed: wired codecs (`codecs/{qoi,tga,hdr}.rs`)
+    /// that an explicit allowlist used to deny outright.
+    #[test]
+    fn previously_dropped_formats_survive_an_allowlist() {
+        for f in [
+            ImageFormat::Qoi,
+            ImageFormat::Tga,
+            ImageFormat::Hdr,
+            ImageFormat::Ico,
+            ImageFormat::Exr,
+            ImageFormat::Pdf,
+            ImageFormat::Dng,
+            ImageFormat::Raw,
+            ImageFormat::Svg,
+        ] {
+            let allowlist = FormatSet::EMPTY.with(f);
+            assert!(!allowlist.is_empty(), "{f:?} produced an EMPTY allowlist");
+            assert!(allowlist.contains(f));
+            assert!(!allowlist.contains(ImageFormat::Jpeg));
+            assert_eq!(allowlist.len(), 1);
+            let mut it = allowlist.iter();
+            assert_eq!(it.next(), Some(f));
+            assert_eq!(it.next(), None);
+        }
+    }
+
+    /// Documents the remaining known limitation (imazen/zencodec#121): a
+    /// bitflag cannot key on `ImageFormatDefinition::name`, so custom formats
+    /// stay unrepresentable. Asserted so the behavior is intentional, not a
+    /// silent surprise — flip this test when a name-keyed set lands.
+    #[test]
+    fn custom_and_unknown_are_not_representable() {
+        fn never(_: &[u8]) -> bool {
+            false
+        }
+        static DEF: zencodec::ImageFormatDefinition = zencodec::ImageFormatDefinition::new(
+            "test-custom",
+            None,
+            "Test Custom",
+            "tc",
+            &["tc"],
+            "image/x-test-custom",
+            &["image/x-test-custom"],
+            false,
+            false,
+            true,
+            false,
+            0,
+            never,
+        );
+        let custom = ImageFormat::Custom(&DEF);
+        assert!(FormatSet::bit(custom).is_none());
+        assert!(FormatSet::bit(ImageFormat::Unknown).is_none());
+        assert!(!FormatSet::all().contains(custom));
+        assert!(FormatSet::EMPTY.with(custom).is_empty());
     }
 
     #[test]
