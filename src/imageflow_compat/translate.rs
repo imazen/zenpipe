@@ -73,6 +73,21 @@ pub fn translate_nodes(
     nodes: &[Node],
     io_buffers: &HashMap<i32, Vec<u8>>,
 ) -> Result<TranslatedPipeline, TranslateError> {
+    translate_nodes_with_overrides(nodes, io_buffers, HashMap::new())
+}
+
+/// Like [`translate_nodes`], but positions listed in `overrides` are replaced
+/// by pre-built node instances instead of being translated.
+///
+/// Used by graph-mode execution: a two-input node (`DrawImageExact`,
+/// `CopyRectToCanvas`) whose `input`-edge subtree has already been executed
+/// to a bitmap is spliced in as an `imageflow.exact_overlay` instance at the
+/// position the original node held in the canvas-edge spine.
+pub fn translate_nodes_with_overrides(
+    nodes: &[Node],
+    io_buffers: &HashMap<i32, Vec<u8>>,
+    mut overrides: HashMap<usize, Box<dyn NodeInstance>>,
+) -> Result<TranslatedPipeline, TranslateError> {
     let mut result = TranslatedPipeline {
         nodes: Vec::new(),
         preset: None,
@@ -82,7 +97,11 @@ pub fn translate_nodes(
         create_canvas: None,
     };
 
-    for node in nodes {
+    for (i, node) in nodes.iter().enumerate() {
+        if let Some(instance) = overrides.remove(&i) {
+            result.nodes.push(instance);
+            continue;
+        }
         translate_one(node, &mut result, io_buffers)?;
     }
 

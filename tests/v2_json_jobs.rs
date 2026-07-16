@@ -1196,3 +1196,368 @@ fn json_roundtrip_graph_mode() {
     let parsed: Framewise = serde_json::from_value(json).expect("deserialize");
     assert_eq!(fw, parsed);
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Graph mode: multi-input compositing (W5 — canvas + input edges)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Encode a solid-color RGBA8 PNG fixture.
+fn solid_png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity((w * h * 4) as usize);
+    for _ in 0..w * h {
+        pixels.extend_from_slice(&rgba);
+    }
+    let slice =
+        zenpixels::PixelSlice::new(&pixels, w, h, (w * 4) as usize, zenpipe::format::RGBA8_SRGB)
+            .unwrap();
+    zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
+        .encode(slice, true)
+        .expect("fixture png")
+        .data()
+        .to_vec()
+}
+
+/// Decode PNG output and sample the pixel at (x, y) as RGBA.
+fn sample_png(data: &[u8], x: u32, y: u32) -> [u8; 4] {
+    let decoded = zencodecs::DecodeRequest::new(data)
+        .decode_full_frame()
+        .expect("decode output");
+    let px = decoded.pixels();
+    let bytes = px.as_strided_bytes();
+    let desc = px.descriptor();
+    let bpp = desc.bytes_per_pixel();
+    let stride = px.stride();
+    let off = y as usize * stride + x as usize * bpp;
+    let mut out = [0u8, 0, 0, 255];
+    out[..bpp.min(4)].copy_from_slice(&bytes[off..off + bpp.min(4)]);
+    out
+}
+
+fn png_encode_node(io_id: i32) -> Node {
+    Node::Encode {
+        io_id,
+        preset: EncoderPreset::Lodepng {
+            maximum_deflate: None,
+        },
+    }
+}
+
+#[test]
+fn graph_draw_image_exact_composites_input_edge() {
+    // 32×32 red base (canvas edge) + 8×8 blue logo (input edge), drawn at
+    // (4,4) scaled to 16×16, compose mode. imageflow graph shape verbatim.
+    let base = solid_png(32, 32, [255, 0, 0, 255]);
+    let logo = solid_png(8, 8, [0, 0, 255, 255]);
+
+    let fw = Framewise::Graph(imageflow_types::Graph {
+        nodes: HashMap::from([
+            (
+                "0".into(),
+                Node::Decode {
+                    io_id: 0,
+                    commands: None,
+                },
+            ),
+            (
+                "1".into(),
+                Node::Decode {
+                    io_id: 1,
+                    commands: None,
+                },
+            ),
+            (
+                "2".into(),
+                Node::DrawImageExact {
+                    x: 4,
+                    y: 4,
+                    w: 16,
+                    h: 16,
+                    blend: Some(imageflow_types::CompositingMode::Compose),
+                    hints: None,
+                },
+            ),
+            ("3".into(), png_encode_node(2)),
+        ]),
+        edges: vec![
+            imageflow_types::Edge {
+                from: 0,
+                to: 2,
+                kind: imageflow_types::EdgeKind::Canvas,
+            },
+            imageflow_types::Edge {
+                from: 1,
+                to: 2,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+            imageflow_types::Edge {
+                from: 2,
+                to: 3,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+        ],
+    });
+
+    // JSON round-trip first — this is the wire shape we guarantee.
+    let json = serde_json::to_value(&fw).expect("serialize");
+    let parsed: Framewise = serde_json::from_value(json).expect("deserialize");
+
+    let io_buffers = HashMap::from([(0, base), (1, logo)]);
+    let result = zenpipe::imageflow_compat::execute::execute_framewise(
+        &parsed,
+        &io_buffers,
+        &ExecutionSecurity::sane_defaults(),
+        &imageflow_types::JobOptions::default(),
+    )
+    .expect("multi-input graph must execute");
+
+    assert_eq!(result.encode_results.len(), 1);
+    let out = &result.encode_results[0];
+    assert_eq!(out.io_id, 2);
+    assert_eq!(
+        (out.width, out.height),
+        (32, 32),
+        "canvas defines output dims"
+    );
+
+    // Outside the drawn box: red. Inside: blue (opaque logo, compose = replace).
+    let corner = sample_png(&out.bytes, 0, 0);
+    assert!(
+        corner[0] > 200 && corner[2] < 60,
+        "corner must stay red, got {corner:?}"
+    );
+    let inside = sample_png(&out.bytes, 10, 10);
+    assert!(
+        inside[2] > 200 && inside[0] < 60,
+        "logo area must be blue, got {inside:?}"
+    );
+    // The logo was resized 8×8 → 16×16, so (18,18) is just inside its box.
+    let edge = sample_png(&out.bytes, 18, 18);
+    assert!(
+        edge[2] > 200,
+        "resized logo must cover (18,18), got {edge:?}"
+    );
+    let outside = sample_png(&out.bytes, 24, 24);
+    assert!(
+        outside[0] > 200,
+        "outside the 4..20 box must be red, got {outside:?}"
+    );
+}
+
+#[test]
+fn graph_copy_rect_to_canvas_onto_created_canvas() {
+    // CreateCanvas 32×32 white (canvas edge), decode 16×16 blue (input edge),
+    // copy the (0,0,8,8) window to (10,10). Overwrite semantics, no resize.
+    let blue = solid_png(16, 16, [0, 0, 255, 255]);
+
+    let fw = Framewise::Graph(imageflow_types::Graph {
+        nodes: HashMap::from([
+            (
+                "0".into(),
+                Node::CreateCanvas {
+                    format: imageflow_types::PixelFormat::Bgra32,
+                    w: 32,
+                    h: 32,
+                    color: imageflow_types::Color::Srgb(imageflow_types::ColorSrgb::Hex(
+                        "FFFFFFFF".into(),
+                    )),
+                },
+            ),
+            (
+                "1".into(),
+                Node::Decode {
+                    io_id: 0,
+                    commands: None,
+                },
+            ),
+            (
+                "2".into(),
+                Node::CopyRectToCanvas {
+                    from_x: 0,
+                    from_y: 0,
+                    w: 8,
+                    h: 8,
+                    x: 10,
+                    y: 10,
+                },
+            ),
+            ("3".into(), png_encode_node(1)),
+        ]),
+        edges: vec![
+            imageflow_types::Edge {
+                from: 0,
+                to: 2,
+                kind: imageflow_types::EdgeKind::Canvas,
+            },
+            imageflow_types::Edge {
+                from: 1,
+                to: 2,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+            imageflow_types::Edge {
+                from: 2,
+                to: 3,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+        ],
+    });
+
+    let json = serde_json::to_value(&fw).expect("serialize");
+    let parsed: Framewise = serde_json::from_value(json).expect("deserialize");
+
+    let io_buffers = HashMap::from([(0, blue)]);
+    let result = zenpipe::imageflow_compat::execute::execute_framewise(
+        &parsed,
+        &io_buffers,
+        &ExecutionSecurity::sane_defaults(),
+        &imageflow_types::JobOptions::default(),
+    )
+    .expect("copy_rect graph must execute");
+
+    let out = &result.encode_results[0];
+    assert_eq!((out.width, out.height), (32, 32));
+    let pasted = sample_png(&out.bytes, 11, 11);
+    assert!(
+        pasted[2] > 200 && pasted[0] < 60,
+        "pasted window must be blue, got {pasted:?}"
+    );
+    let white = sample_png(&out.bytes, 0, 0);
+    assert!(
+        white[0] > 200 && white[1] > 200 && white[2] > 200,
+        "canvas must stay white, got {white:?}"
+    );
+    let below = sample_png(&out.bytes, 19, 19);
+    assert!(
+        below[0] > 200 && below[1] > 200 && below[2] > 200,
+        "outside the 8×8 paste (10..18) must be white, got {below:?}"
+    );
+}
+
+#[test]
+fn graph_nested_composites_chain() {
+    // Two chained composites on one spine: logo onto base, then badge onto
+    // the result — the spine carries two input-edge resolutions.
+    let base = solid_png(32, 32, [255, 0, 0, 255]);
+    let logo = solid_png(8, 8, [0, 0, 255, 255]);
+    let badge = solid_png(4, 4, [0, 255, 0, 255]);
+
+    let fw = Framewise::Graph(imageflow_types::Graph {
+        nodes: HashMap::from([
+            (
+                "0".into(),
+                Node::Decode {
+                    io_id: 0,
+                    commands: None,
+                },
+            ),
+            (
+                "1".into(),
+                Node::Decode {
+                    io_id: 1,
+                    commands: None,
+                },
+            ),
+            (
+                "2".into(),
+                Node::Decode {
+                    io_id: 2,
+                    commands: None,
+                },
+            ),
+            (
+                "3".into(),
+                Node::DrawImageExact {
+                    x: 0,
+                    y: 0,
+                    w: 8,
+                    h: 8,
+                    blend: Some(imageflow_types::CompositingMode::Compose),
+                    hints: None,
+                },
+            ),
+            (
+                "4".into(),
+                Node::DrawImageExact {
+                    x: 24,
+                    y: 24,
+                    w: 4,
+                    h: 4,
+                    blend: Some(imageflow_types::CompositingMode::Compose),
+                    hints: None,
+                },
+            ),
+            ("5".into(), png_encode_node(3)),
+        ]),
+        edges: vec![
+            imageflow_types::Edge {
+                from: 0,
+                to: 3,
+                kind: imageflow_types::EdgeKind::Canvas,
+            },
+            imageflow_types::Edge {
+                from: 1,
+                to: 3,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+            imageflow_types::Edge {
+                from: 3,
+                to: 4,
+                kind: imageflow_types::EdgeKind::Canvas,
+            },
+            imageflow_types::Edge {
+                from: 2,
+                to: 4,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+            imageflow_types::Edge {
+                from: 4,
+                to: 5,
+                kind: imageflow_types::EdgeKind::Input,
+            },
+        ],
+    });
+
+    let io_buffers = HashMap::from([(0, base), (1, logo), (2, badge)]);
+    let result = zenpipe::imageflow_compat::execute::execute_framewise(
+        &fw,
+        &io_buffers,
+        &ExecutionSecurity::sane_defaults(),
+        &imageflow_types::JobOptions::default(),
+    )
+    .expect("nested composite graph must execute");
+
+    let out = &result.encode_results[0];
+    let logo_px = sample_png(&out.bytes, 3, 3);
+    assert!(logo_px[2] > 200, "logo at (3,3), got {logo_px:?}");
+    let badge_px = sample_png(&out.bytes, 26, 26);
+    assert!(
+        badge_px[1] > 200 && badge_px[2] < 60,
+        "badge at (26,26), got {badge_px:?}"
+    );
+    let base_px = sample_png(&out.bytes, 16, 16);
+    assert!(base_px[0] > 200, "base at (16,16), got {base_px:?}");
+}
+
+#[test]
+fn graph_imageflow_canonical_example_executes() {
+    // imageflow's own Framewise::example_graph() — decode, create_canvas,
+    // copy_rect_to_canvas, resample_2d, two encodes. THE canonical graph
+    // from the imageflow docs; compatibility means this runs.
+    let fw = Framewise::example_graph();
+    let input = make_test_jpeg();
+    let io_buffers = HashMap::from([(0, input)]);
+
+    let result = zenpipe::imageflow_compat::execute::execute_framewise(
+        &fw,
+        &io_buffers,
+        &ExecutionSecurity::sane_defaults(),
+        &imageflow_types::JobOptions::default(),
+    )
+    .expect("imageflow's canonical example graph must execute");
+    assert!(
+        !result.encode_results.is_empty(),
+        "example graph must produce encodes"
+    );
+    for er in &result.encode_results {
+        assert!(!er.bytes.is_empty());
+    }
+}

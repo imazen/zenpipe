@@ -7,6 +7,23 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (imageflow graph compatibility, 2026-07-16)
+
+- **Multi-input imageflow graphs execute (W5)** — the graph decomposer
+  rejected any node with >1 input edge, so `draw_image_exact` /
+  `copy_rect_to_canvas` compositing graphs (watermarks, canvas paste-ups)
+  failed outright. Canvas edges now form the executable spine and each
+  input edge is recursively executed to a bitmap spliced in as a new
+  `imageflow.exact_overlay` node (exact placement, optional resize,
+  compose or overwrite blend, linear-space source-over matching the
+  watermark path). Nested composites recurse (cap 16); >2 predecessors
+  or duplicate edge kinds error loudly. Conformance: the graph suite in
+  `tests/v2_json_jobs.rs` now executes imageflow's own canonical
+  `Framewise::example_graph()` plus pixel-asserted draw/copy/nested
+  cases. JSON-JOB-SPEC.md records the permanence commitment: the
+  imageflow graph dialect is supported forever, and any future native
+  `graph` form must reuse imageflow's nodes+edges shape.
+
 #### Fixed (RIAPI parity wave 2, 2026-07-11)
 
 - **"Resize this GIF" returned a still image** — animated inputs now run

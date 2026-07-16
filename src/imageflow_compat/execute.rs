@@ -241,7 +241,32 @@ fn execute_steps(
     security: &imageflow_types::ExecutionSecurity,
     job_options: &imageflow_types::JobOptions,
 ) -> Result<(Vec<ZenEncodeResult>, CapturedBitmaps), ZenError> {
+    execute_steps_with_overrides(steps, io_buffers, security, job_options, HashMap::new())
+}
+
+/// [`execute_steps`] with graph-mode overrides: node positions in `overrides`
+/// translate to the given pre-built instances (resolved `input`-edge subtrees
+/// as `imageflow.exact_overlay`) instead of their normal translation.
+fn execute_steps_with_overrides(
+    steps: &[Node],
+    io_buffers: &HashMap<i32, Vec<u8>>,
+    security: &imageflow_types::ExecutionSecurity,
+    job_options: &imageflow_types::JobOptions,
+    overrides: HashMap<usize, Box<dyn zennode::NodeInstance>>,
+) -> Result<(Vec<ZenEncodeResult>, CapturedBitmaps), ZenError> {
     // Pre-process: expand CommandString nodes using source dimensions from probe.
+    // Overrides are positional: they are only ever passed for graph branches,
+    // which cannot contain CommandString (imageflow rejects it in graphs), so
+    // expansion never shifts an overridden index. Enforced here.
+    if !overrides.is_empty()
+        && steps
+            .iter()
+            .any(|n| matches!(n, Node::CommandString { .. }))
+    {
+        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(
+            "graph overrides cannot be combined with CommandString steps".into()
+        ))));
+    }
     let expanded = expand_command_strings(steps, io_buffers)?;
     let mut steps = expanded.steps;
     let raw_querystring = expanded.raw_querystring;
@@ -251,7 +276,9 @@ fn execute_steps(
     // Passing source pixels through a resampling filter at 1:1 introduces rounding
     // errors (delta up to ~49 for Robidoux). V2's graph engine optimizes these away;
     // the zen pipeline must do the same.
-    remove_noop_resample(&mut steps, io_buffers);
+    if overrides.is_empty() {
+        remove_noop_resample(&mut steps, io_buffers);
+    }
 
     // Probe source once for alpha detection.
     let source_has_alpha = source_has_alpha(&steps, io_buffers);
@@ -271,7 +298,7 @@ fn execute_steps(
         })
         .collect();
 
-    let mut pipeline = translate::translate_nodes(&steps, io_buffers)?;
+    let mut pipeline = translate::translate_nodes_with_overrides(&steps, io_buffers, overrides)?;
 
     // Apply c.focus / c.zoom / c.finalmode from the raw RIAPI querystring.
     // This injects SmartCropAnalyze nodes and sets gravity on Constrain nodes.
@@ -574,75 +601,28 @@ fn execute_graph(
     graph: &s::Graph,
     io_buffers: &HashMap<i32, Vec<u8>>,
 ) -> Result<Vec<ZenEncodeResult>, ZenError> {
-    // Decompose the DAG into per-output linear pipelines.
+    // Decompose the DAG into per-output pipelines.
     //
-    // For each encode node, trace backwards through edges to find the
-    // processing path from source (decode) to that encode. Execute each
-    // path as a separate linear pipeline. Shared decode sources are
-    // re-decoded for each branch (cheap for streaming codecs).
-    //
-    // This handles the common fan-out case (one source → multiple encode
-    // outputs with different processing) without requiring multi-output
-    // DAG support in zenpipe.
+    // For each encode node, trace backwards along CANVAS edges (the spine —
+    // a compositing node's result is its canvas). Each INPUT edge into a
+    // two-input node (DrawImageExact, CopyRectToCanvas) is resolved by
+    // recursively executing that subtree to an RGBA8 bitmap, which is then
+    // spliced into the spine as an `imageflow.exact_overlay` instance at the
+    // compositing node's position. Shared subtrees are re-executed per use —
+    // correctness first; imageflow graph compatibility is a hard commitment
+    // (see JSON-JOB-SPEC.md §13).
 
-    // Build adjacency: for each node key, find its input edges.
-    let predecessors: HashMap<i32, Vec<i32>> = {
-        let mut preds: HashMap<i32, Vec<i32>> = HashMap::new();
-        for edge in &graph.edges {
-            preds.entry(edge.to).or_default().push(edge.from);
-        }
-        preds
-    };
-
-    // Find all encode nodes and their io_ids.
-    let mut encode_branches: Vec<(i32, Vec<s::Node>)> = Vec::new(); // (encode_io_id, node_path)
+    let preds = kinded_predecessors(graph);
+    let mut encode_branches: Vec<GraphBranch> = Vec::new();
 
     for (key, node) in &graph.nodes {
-        if let s::Node::Encode { io_id, .. } = node {
-            // Trace backwards from this encode node to the source.
+        if let s::Node::Encode { .. } = node {
             let key_i32: i32 = key.parse().map_err(|_| {
                 ZenError::Translate(translate::TranslateError::InvalidParam(format!(
                     "non-integer graph key: {key}"
                 )))
             })?;
-
-            let mut path = Vec::new();
-            let mut current = key_i32;
-            let mut visited = std::collections::HashSet::new();
-
-            loop {
-                if !visited.insert(current) {
-                    return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
-                        "cycle detected in graph at node {current}"
-                    )))));
-                }
-                let key_str = current.to_string();
-                let node = graph.nodes.get(&key_str).ok_or_else(|| {
-                    ZenError::Pipeline(at!(crate::PipeError::Op(format!(
-                        "graph references missing node {current}"
-                    ))))
-                })?;
-                path.push(node.clone());
-
-                // Walk to predecessor.
-                match predecessors.get(&current) {
-                    Some(preds) if preds.len() == 1 => {
-                        current = preds[0];
-                    }
-                    Some(preds) if preds.len() > 1 => {
-                        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
-                            "node {current} has {} input edges; zen DAG decomposition \
-                             only supports linear pipelines (no multi-input compositing)",
-                            preds.len()
-                        )))));
-                    }
-                    _ => break, // No predecessors — reached a source node.
-                }
-            }
-
-            // Reverse so it goes source → ... → encode.
-            path.reverse();
-            encode_branches.push((*io_id, path));
+            encode_branches.push(resolve_graph_branch(graph, &preds, key_i32, io_buffers, 0)?);
         }
     }
 
@@ -652,17 +632,305 @@ fn execute_graph(
         ))));
     }
 
-    // Execute each branch as a linear steps pipeline.
+    // Execute each branch as a linear steps pipeline with overlay overrides.
     let security = imageflow_types::ExecutionSecurity::sane_defaults();
     let job_options = imageflow_types::JobOptions::default();
     let mut all_results = Vec::new();
 
-    for (_encode_io_id, path) in &encode_branches {
-        let (results, _captures) = execute_steps(path, io_buffers, &security, &job_options)?;
+    for branch in encode_branches {
+        let (results, _captures) = execute_steps_with_overrides(
+            &branch.path,
+            io_buffers,
+            &security,
+            &job_options,
+            branch.overrides,
+        )?;
         all_results.extend(results);
     }
 
     Ok(all_results)
+}
+
+/// Predecessor map keyed by edge kind: `to → [(from, kind)]`.
+fn kinded_predecessors(graph: &s::Graph) -> HashMap<i32, Vec<(i32, s::EdgeKind)>> {
+    let mut preds: HashMap<i32, Vec<(i32, s::EdgeKind)>> = HashMap::new();
+    for edge in &graph.edges {
+        preds
+            .entry(edge.to)
+            .or_default()
+            .push((edge.from, edge.kind));
+    }
+    preds
+}
+
+/// One executable branch of a decomposed graph: the canvas-edge spine
+/// (source → … → encode) plus resolved input-edge overlays keyed by their
+/// position in the spine.
+struct GraphBranch {
+    path: Vec<s::Node>,
+    overrides: HashMap<usize, Box<dyn zennode::NodeInstance>>,
+}
+
+/// Maximum input-edge recursion depth (nested composites of composites).
+const MAX_GRAPH_COMPOSITE_DEPTH: u32 = 16;
+
+/// Trace the spine ending at `tail`, resolving input-edge subtrees.
+fn resolve_graph_branch(
+    graph: &s::Graph,
+    preds: &HashMap<i32, Vec<(i32, s::EdgeKind)>>,
+    tail: i32,
+    io_buffers: &HashMap<i32, Vec<u8>>,
+    depth: u32,
+) -> Result<GraphBranch, ZenError> {
+    if depth > MAX_GRAPH_COMPOSITE_DEPTH {
+        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+            "graph composite nesting exceeds {MAX_GRAPH_COMPOSITE_DEPTH} levels"
+        )))));
+    }
+
+    // Built back-to-front: (node, optional resolved overlay override).
+    let mut rev_path: Vec<(s::Node, Option<Box<dyn zennode::NodeInstance>>)> = Vec::new();
+    let mut current = tail;
+    let mut visited = std::collections::HashSet::new();
+
+    loop {
+        if !visited.insert(current) {
+            return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+                "cycle detected in graph at node {current}"
+            )))));
+        }
+        let node = graph.nodes.get(&current.to_string()).ok_or_else(|| {
+            ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+                "graph references missing node {current}"
+            ))))
+        })?;
+
+        let node_preds = preds.get(&current).map(Vec::as_slice).unwrap_or(&[]);
+        match node_preds {
+            [] => {
+                rev_path.push((node.clone(), None));
+                break; // Source node (Decode / CreateCanvas).
+            }
+            [(pred, _kind)] => {
+                rev_path.push((node.clone(), None));
+                current = *pred;
+            }
+            [a, b] => {
+                // Two-input compositing node: exactly one canvas + one input.
+                let (canvas_pred, input_pred) = match (a.1, b.1) {
+                    (s::EdgeKind::Canvas, s::EdgeKind::Input) => (a.0, b.0),
+                    (s::EdgeKind::Input, s::EdgeKind::Canvas) => (b.0, a.0),
+                    _ => {
+                        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+                            "node {current} has two edges of the same kind; expected \
+                             one canvas + one input"
+                        )))));
+                    }
+                };
+                let overlay =
+                    resolve_input_overlay(graph, preds, node, input_pred, io_buffers, depth)?;
+                rev_path.push((node.clone(), Some(overlay)));
+                current = canvas_pred;
+            }
+            more => {
+                return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+                    "node {current} has {} input edges; at most 2 (canvas + input) \
+                     are supported",
+                    more.len()
+                )))));
+            }
+        }
+    }
+
+    // Reverse to source-first order; map override positions to final indices.
+    let len = rev_path.len();
+    let mut path = Vec::with_capacity(len);
+    let mut overrides = HashMap::new();
+    for (rev_idx, (node, overlay)) in rev_path.into_iter().enumerate() {
+        let final_idx = len - 1 - rev_idx;
+        if let Some(ov) = overlay {
+            overrides.insert(final_idx, ov);
+        }
+        path.push(node);
+    }
+    path.reverse();
+
+    Ok(GraphBranch { path, overrides })
+}
+
+/// Execute the subtree feeding a compositing node's INPUT edge and wrap the
+/// resulting bitmap as an `imageflow.exact_overlay` instance carrying the
+/// node's placement semantics.
+fn resolve_input_overlay(
+    graph: &s::Graph,
+    preds: &HashMap<i32, Vec<(i32, s::EdgeKind)>>,
+    composite_node: &s::Node,
+    input_pred: i32,
+    io_buffers: &HashMap<i32, Vec<u8>>,
+    depth: u32,
+) -> Result<Box<dyn zennode::NodeInstance>, ZenError> {
+    let branch = resolve_graph_branch(graph, preds, input_pred, io_buffers, depth + 1)?;
+    let (mut pixels, mut width, mut height) = execute_branch_to_rgba8(&branch, io_buffers)?;
+
+    let overlay = match composite_node {
+        s::Node::DrawImageExact {
+            x,
+            y,
+            w,
+            h,
+            blend,
+            hints: _,
+        } => super::watermark::ExactOverlayNode {
+            pixels,
+            width,
+            height,
+            x: *x,
+            y: *y,
+            target_w: Some(*w),
+            target_h: Some(*h),
+            overwrite: matches!(blend, Some(s::CompositingMode::Overwrite)),
+        },
+        s::Node::CopyRectToCanvas {
+            from_x,
+            from_y,
+            w,
+            h,
+            x,
+            y,
+        } => {
+            // Crop the source window first (clipped to the bitmap), then
+            // overwrite at (x, y) — imageflow copies pixels, no blending.
+            (pixels, width, height) = crop_rgba8(&pixels, width, height, *from_x, *from_y, *w, *h);
+            super::watermark::ExactOverlayNode {
+                pixels,
+                width,
+                height,
+                x: *x,
+                y: *y,
+                target_w: None,
+                target_h: None,
+                overwrite: true,
+            }
+        }
+        other => {
+            return Err(ZenError::Pipeline(at!(crate::PipeError::Op(format!(
+                "graph node {other:?} has canvas+input edges but is not a \
+                 compositing node (DrawImageExact / CopyRectToCanvas)"
+            )))));
+        }
+    };
+    Ok(Box::new(overlay))
+}
+
+/// Execute a resolved branch (no encode required) to tightly-packed RGBA8.
+fn execute_branch_to_rgba8(
+    branch: &GraphBranch,
+    io_buffers: &HashMap<i32, Vec<u8>>,
+) -> Result<(Vec<u8>, u32, u32), ZenError> {
+    let pipeline = translate::translate_nodes_with_overrides(
+        &branch.path,
+        io_buffers,
+        branch
+            .overrides
+            .iter()
+            .map(|(k, v)| (*k, v.clone_boxed()))
+            .collect(),
+    )?;
+
+    // Build the source: solid canvas or decode.
+    let security = imageflow_types::ExecutionSecurity::sane_defaults();
+    let mut nodes = pipeline.nodes;
+    let source: Box<dyn crate::Source> = if let Some(ref canvas) = pipeline.create_canvas {
+        check_security_limit(
+            canvas.w,
+            canvas.h,
+            &security.max_frame_size,
+            "max_frame_size",
+        )?;
+        ensure_srgb_rgba8(create_canvas_source(canvas)?)?
+    } else if let Some(decode_io) = pipeline.decode_io_id {
+        let input_data = io_buffers
+            .get(&decode_io)
+            .ok_or_else(|| ZenError::Io(format!("no input buffer for io_id {decode_io}")))?;
+        // Preset is irrelevant for a subtree (never encoded) — format
+        // selection inside probe_resolve_decode falls back to defaults.
+        let translated_ref = TranslatedPipeline {
+            nodes: Vec::new(),
+            preset: None,
+            decode_io_id: Some(decode_io),
+            encode_io_id: None,
+            decoder_commands: pipeline.decoder_commands.clone(),
+            create_canvas: None,
+        };
+        let (_decision, source, exif_flag) = probe_resolve_decode(
+            input_data,
+            &translated_ref,
+            &pipeline.decoder_commands,
+            super::CompatCmsMode::default(),
+        )?;
+        // Auto-orient like the steps path.
+        let has_explicit_orient = nodes.iter().any(|n| n.schema().id == "zenlayout.orient");
+        if exif_flag > 1 && !has_explicit_orient {
+            let registry = super::translate::zen_registry();
+            if let Some(def) = registry.get("zenlayout.orient") {
+                if let Ok(mut node) = def.create_default() {
+                    node.set_param("orientation", zennode::ParamValue::I32(exif_flag as i32));
+                    nodes.insert(0, node);
+                }
+            }
+        }
+        source
+    } else {
+        return Err(ZenError::Pipeline(at!(crate::PipeError::Op(
+            "graph input subtree has neither a decode nor a create_canvas source".into()
+        ))));
+    };
+
+    let converters = super::converter::imageflow_converters();
+    let converters: &[&dyn crate::bridge::NodeConverter] = &converters;
+    let pipe_result = build_pipeline_maybe_traced(source, &nodes, converters)?;
+
+    // Materialize as tightly-packed RGBA8.
+    let rgba_source = ensure_srgb_rgba8(pipe_result.source)?;
+    let mat =
+        crate::sources::MaterializedSource::from_source(rgba_source).map_err(ZenError::Pipeline)?;
+    let (w, h, stride) = (mat.width(), mat.height(), mat.stride());
+    let data = mat.data();
+    let tight_stride = w as usize * 4;
+    let mut pixels = Vec::with_capacity(tight_stride * h as usize);
+    for y in 0..h as usize {
+        let row = &data[y * stride..y * stride + tight_stride];
+        pixels.extend_from_slice(row);
+    }
+    Ok((pixels, w, h))
+}
+
+/// Crop tightly-packed RGBA8 to a window, clipped to the image bounds.
+/// Empty windows collapse to a 1×1 transparent pixel.
+fn crop_rgba8(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    from_x: u32,
+    from_y: u32,
+    w: u32,
+    h: u32,
+) -> (Vec<u8>, u32, u32) {
+    let x0 = from_x.min(width);
+    let y0 = from_y.min(height);
+    let cw = w.min(width.saturating_sub(x0));
+    let ch = h.min(height.saturating_sub(y0));
+    if cw == 0 || ch == 0 {
+        return (vec![0, 0, 0, 0], 1, 1);
+    }
+    let src_stride = width as usize * 4;
+    let dst_stride = cw as usize * 4;
+    let mut out = Vec::with_capacity(dst_stride * ch as usize);
+    for y in 0..ch as usize {
+        let src_off = (y0 as usize + y) * src_stride + x0 as usize * 4;
+        out.extend_from_slice(&pixels[src_off..src_off + dst_stride]);
+    }
+    (out, cw, ch)
 }
 
 // ─── Decode ───

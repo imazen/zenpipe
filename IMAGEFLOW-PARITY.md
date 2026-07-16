@@ -248,12 +248,14 @@ check, `webp.lossless` kv.
 | `command_string` (ir4) | expanded via `Ir4Expand` then translated | ✅ (+ trim retry logic, `execute.rs:1331-1340`) |
 | any future variant | catch-all `Err(Unsupported)` (`translate.rs:498`) | ✅ fails loud |
 
-**Framewise handling** (`execute.rs`): `steps` ✅ linear; `graph` ⚠️ — DAGs are
-decomposed into per-encode linear branches by edge back-tracing (`:516`), and
-**any node with >1 input edge is rejected** ("no multi-input compositing",
-`:575-581`). imageflow graph jobs that composite via `canvas` edges
-(`copy_rect_to_canvas`, `draw_image_exact` fan-in) do not run. Cycles detected
-(`:557`).
+**Framewise handling** (`execute.rs`): `steps` ✅ linear; `graph` ✅ — DAGs
+decompose into per-encode branches where **canvas edges form the spine and
+each input edge is recursively executed to a bitmap** spliced in as an
+`imageflow.exact_overlay` (2026-07-16, W5): `draw_image_exact` (resize +
+compose/overwrite) and `copy_rect_to_canvas` (window copy) run, nested
+composites recurse (depth cap 16), and imageflow's canonical
+`Framewise::example_graph()` executes in the conformance suite. Cycles still
+detected; >2 predecessors or duplicate edge kinds error loudly.
 
 **Animation:** compat's `encode_animation_passthrough` (`execute.rs:698`) fires
 only for **no-op jobs** — `has_encode && pipeline.nodes.is_empty() &&
@@ -330,11 +332,11 @@ above maps to exactly one workstream.
   `tell_decoder`/`estimate` equivalents; `ErrorCategory` mapping; OpenAPI
   snapshot guard. Fixtures: imageflow's own doc examples
   (`docs/src/json/*.md`) and `Framewise::example_*`.
-- **W5 — Graph compositing in compat (M).** Support multi-input nodes in the
-  graph decomposer (canvas edges, `copy_rect_to_canvas`, `draw_image_exact`
-  with fg resize) — zenpipe's own graph executor already handles fan-in
-  (`tests/fanout.rs`, composite nodes); the gap is only in the imageflow-graph
-  → steps decomposition.
+- **W5 — Graph compositing in compat. ✅ DONE 2026-07-16.** Canvas-edge
+  spine + recursive input-edge resolution to `exact_overlay` instances;
+  `draw_image_exact` honors w/h resize + compose/overwrite,
+  `copy_rect_to_canvas` copies windows; conformance suite includes
+  imageflow's own `example_graph()`.
 - **W6 — Decode hints (M, cross-crate).** Public scaled-decode knob in zenjpeg
   (or wire `min_size` → internal DCT scaling), WebP size hints, honor
   `jpeg_downscale_hints`/`webp_decoder_hints`/`decoder.min_precise_scaling_ratio`

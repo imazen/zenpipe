@@ -103,6 +103,20 @@ minor revisions; clients discover them via capabilities (§11) before use.
 rejects it with a structured error; steps + named branches (§5) cover DAG-shaped
 jobs, including everything imageflow's `framewise.graph` expresses.
 
+Two commitments bound to that reservation (imageflow graph compatibility is a
+**hard requirement**, not a transition aid):
+
+1. **imageflow graphs execute, permanently.** The imageflow dialect (§13)
+   accepts `framewise.graph` — nodes map + `input`/`canvas` edges — forever,
+   including multi-input compositing (`draw_image_exact`,
+   `copy_rect_to_canvas`). Conformance is pinned by the graph suite in
+   `tests/v2_json_jobs.rs`, which executes imageflow's own canonical
+   `Framewise::example_graph()`.
+2. **If a native `graph` form ever lands, it reuses imageflow's shape** —
+   a nodes map with `input`/`canvas` edge kinds — so imageflow graphs
+   translate key-for-key. A second, incompatible topology dialect is off the
+   table.
+
 ## 3. Inputs and outputs (io slots)
 
 Slots are named with strings. Names are arbitrary (`"main"`, `"logo"`, `"web"`);
@@ -503,7 +517,12 @@ Both legacy surfaces are translations into this envelope:
   envelopes, `framewise.steps|graph`, `io` arrays, `security`, decoder commands,
   and `EncoderPreset`s translate node-by-node; the parity matrix in
   [`IMAGEFLOW-PARITY.md`](IMAGEFLOW-PARITY.md) is the authoritative coverage
-  statement.
+  statement. **This dialect is permanent** — imageflow graphs (including
+  multi-input canvas compositing) execute for as long as zenpipe exists, and
+  the executor decomposes them onto the same machinery as native jobs: canvas
+  edges form the linear spine, each input edge resolves to a materialized
+  overlay — i.e. exactly the checkpoint/resume shape, which is why steps +
+  checkpoints can express every imageflow graph.
 
 ## 14. Worked examples
 

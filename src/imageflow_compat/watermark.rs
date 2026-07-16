@@ -155,14 +155,185 @@ impl NodeInstance for WatermarkOverlayNode {
     }
 }
 
+// ─── Exact overlay (graph-mode composites: DrawImageExact / CopyRectToCanvas) ───
+
+static EXACT_OVERLAY_SCHEMA: NodeSchema = NodeSchema {
+    id: "imageflow.exact_overlay",
+    label: "Exact Overlay (graph compositing)",
+    description: "Draw a pre-materialized image at an exact position (graph input-edge resolved)",
+    group: zennode::NodeGroup::Composite,
+    role: zennode::NodeRole::Composite,
+    params: &[],
+    tags: &["composite", "imageflow", "graph"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: false,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+/// A resolved graph `input` edge: the subtree's materialized RGBA8 pixels
+/// plus exact placement on the canvas chain.
+///
+/// Carries the semantics of `DrawImageExact` (resize to `target_w`×`target_h`,
+/// then compose or overwrite at (`x`,`y`)) and `CopyRectToCanvas` (pre-cropped
+/// pixels, no resize, overwrite at (`x`,`y`)).
+#[derive(Clone)]
+pub struct ExactOverlayNode {
+    /// RGBA8 pixels of the resolved input subtree (tightly packed).
+    pub pixels: Vec<u8>,
+    /// Pixel width of `pixels`.
+    pub width: u32,
+    /// Pixel height of `pixels`.
+    pub height: u32,
+    /// Destination X on the canvas.
+    pub x: u32,
+    /// Destination Y on the canvas.
+    pub y: u32,
+    /// Resize the overlay to this width before drawing. None = native width.
+    pub target_w: Option<u32>,
+    /// Resize the overlay to this height before drawing. None = native height.
+    pub target_h: Option<u32>,
+    /// `true` = overwrite pixels (imageflow `CompositingMode::Overwrite` /
+    /// CopyRectToCanvas). `false` = Porter-Duff source-over in linear space.
+    pub overwrite: bool,
+}
+
+impl NodeInstance for ExactOverlayNode {
+    fn schema(&self) -> &'static NodeSchema {
+        &EXACT_OVERLAY_SCHEMA
+    }
+    fn to_params(&self) -> ParamMap {
+        ParamMap::new()
+    }
+    fn get_param(&self, _name: &str) -> Option<ParamValue> {
+        None
+    }
+    fn set_param(&mut self, _name: &str, _value: ParamValue) -> bool {
+        false
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+    fn clone_boxed(&self) -> Box<dyn NodeInstance> {
+        Box::new(self.clone())
+    }
+}
+
+/// Create a `NodeOp::Materialize` that draws an [`ExactOverlayNode`].
+fn make_exact_overlay_materialize(overlay: ExactOverlayNode) -> NodeOp {
+    NodeOp::Materialize {
+        label: "exact_overlay",
+        transform: Box::new(
+            move |data: &mut Vec<u8>, w: &mut u32, h: &mut u32, fmt: &mut crate::PixelFormat| {
+                let canvas_w = *w;
+                let canvas_h = *h;
+                let target_w = overlay.target_w.unwrap_or(overlay.width);
+                let target_h = overlay.target_h.unwrap_or(overlay.height);
+                if target_w == 0 || target_h == 0 {
+                    return;
+                }
+
+                let resized: alloc::borrow::Cow<'_, [u8]> =
+                    if target_w == overlay.width && target_h == overlay.height {
+                        alloc::borrow::Cow::Borrowed(&overlay.pixels)
+                    } else {
+                        alloc::borrow::Cow::Owned(resize_rgba8(
+                            &overlay.pixels,
+                            overlay.width,
+                            overlay.height,
+                            target_w,
+                            target_h,
+                        ))
+                    };
+
+                let bpp = fmt.bytes_per_pixel();
+                let canvas_stride = fmt.aligned_stride(canvas_w);
+                let ov_stride = target_w as usize * 4;
+
+                for oy in 0..target_h {
+                    let cy = overlay.y as i64 + oy as i64;
+                    if cy < 0 || cy >= canvas_h as i64 {
+                        continue;
+                    }
+                    for ox in 0..target_w {
+                        let cx = overlay.x as i64 + ox as i64;
+                        if cx < 0 || cx >= canvas_w as i64 {
+                            continue;
+                        }
+                        let ov_off = oy as usize * ov_stride + ox as usize * 4;
+                        let canvas_off = cy as usize * canvas_stride + cx as usize * bpp;
+                        if ov_off + 4 > resized.len() || canvas_off + bpp > data.len() {
+                            continue;
+                        }
+
+                        if overlay.overwrite {
+                            // Straight pixel copy (imageflow Overwrite): no
+                            // blending, alpha replaced where the format has it.
+                            for c in 0..bpp.min(4) {
+                                data[canvas_off + c] = resized[ov_off + c];
+                            }
+                            continue;
+                        }
+
+                        // Porter-Duff source-over in linear space (matches the
+                        // watermark path and imageflow v2 compositing).
+                        let sa = resized[ov_off + 3] as f32 / 255.0;
+                        let sr_lin = srgb_to_linear(resized[ov_off]) * sa;
+                        let sg_lin = srgb_to_linear(resized[ov_off + 1]) * sa;
+                        let sb_lin = srgb_to_linear(resized[ov_off + 2]) * sa;
+
+                        let da = if bpp >= 4 {
+                            data[canvas_off + 3] as f32 / 255.0
+                        } else {
+                            1.0
+                        };
+                        let dest_coeff = (1.0 - sa) * da;
+                        let dr_lin = srgb_to_linear(data[canvas_off]) * dest_coeff;
+                        let dg_lin = srgb_to_linear(data[canvas_off + 1]) * dest_coeff;
+                        let db_lin = srgb_to_linear(data[canvas_off + 2]) * dest_coeff;
+
+                        let out_a = sa + dest_coeff;
+                        if out_a > 0.0 {
+                            data[canvas_off] = linear_to_srgb((sr_lin + dr_lin) / out_a);
+                            data[canvas_off + 1] = linear_to_srgb((sg_lin + dg_lin) / out_a);
+                            data[canvas_off + 2] = linear_to_srgb((sb_lin + db_lin) / out_a);
+                        } else {
+                            data[canvas_off] = 0;
+                            data[canvas_off + 1] = 0;
+                            data[canvas_off + 2] = 0;
+                        }
+                        if bpp >= 4 {
+                            data[canvas_off + 3] = (out_a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                }
+            },
+        ),
+    }
+}
+
 // ─── NodeConverter ───
 
-/// Converter for `imageflow.watermark_red_dot` and `imageflow.watermark_overlay`.
+/// Converter for `imageflow.watermark_red_dot`, `imageflow.watermark_overlay`,
+/// and `imageflow.exact_overlay`.
 pub struct WatermarkConverter;
 
 impl NodeConverter for WatermarkConverter {
     fn can_convert(&self, schema_id: &str) -> bool {
-        schema_id == "imageflow.watermark_red_dot" || schema_id == "imageflow.watermark_overlay"
+        schema_id == "imageflow.watermark_red_dot"
+            || schema_id == "imageflow.watermark_overlay"
+            || schema_id == "imageflow.exact_overlay"
     }
 
     fn convert(&self, node: &dyn NodeInstance) -> crate::PipeResult<NodeOp> {
@@ -177,6 +348,15 @@ impl NodeConverter for WatermarkConverter {
                         PipeError::Op("watermark overlay: wrong NodeInstance type".into())
                     })?;
                 Ok(make_watermark_materialize(overlay.clone()))
+            }
+            "imageflow.exact_overlay" => {
+                let overlay = node
+                    .as_any()
+                    .downcast_ref::<ExactOverlayNode>()
+                    .ok_or_else(|| {
+                        PipeError::Op("exact overlay: wrong NodeInstance type".into())
+                    })?;
+                Ok(make_exact_overlay_materialize(overlay.clone()))
             }
             _ => Err(at!(PipeError::Op(format!(
                 "WatermarkConverter: unknown schema '{schema_id}'"

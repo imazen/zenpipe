@@ -4,8 +4,7 @@
 //! parser (`expand_legacy`, imageflow_riapi's own layout engine) and the
 //! zen-native registry path (`expand_zen`) — compiles each node list into a
 //! pipeline against the same source dimensions, and asserts the OUTPUT
-//! GEOMETRY matches within ±1 px (integer-rounding slack between the two
-//! layout engines).
+//! GEOMETRY matches EXACTLY, across five rounding-hostile source sizes.
 //!
 //! This is the verification layer for the 2026-07-11 divergence fixes
 //! (IMAGEFLOW-PARITY.md §4): a case that fails here is a real semantic
@@ -46,8 +45,8 @@ fn legacy_dims(qs: &str, sw: u32, sh: u32) -> (u32, u32) {
 }
 
 fn zen_dims(qs: &str, sw: u32, sh: u32) -> (u32, u32) {
-    let expanded = expand_zen(qs, sw, sh, None)
-        .unwrap_or_else(|e| panic!("expand_zen({qs}) failed: {e:?}"));
+    let expanded =
+        expand_zen(qs, sw, sh, None).unwrap_or_else(|e| panic!("expand_zen({qs}) failed: {e:?}"));
     output_dims(&expanded.nodes, sw, sh)
 }
 
