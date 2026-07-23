@@ -61,3 +61,11 @@ threading, hdr directives, compat security. Verified remaining:
   srotate/sflip/autorotate/frame/roundcorners/icc/hdr) — the generator
   only walks `#[kv]` params. Give adapter schemas synthetic ParamDescs or
   extend the generator, then regenerate.
+- **`job::tests::e2e_jpeg::roundtrip_jpeg_no_nodes` fails (found 2026-07-22,
+  pre-existing, unrelated to CMS/moxcms)**: minimal 8x8 JPEG in →
+  `ImageJob` with `CmsMode::None` → out; the encoded output's first two
+  bytes are `[0xFF, 0x0A]` instead of the JPEG SOI marker `[0xFF, 0xD8]`
+  (`src/job.rs:2058`). Reproduces identically on moxcms 0.8.1 and 0.9.0,
+  and `CmsMode::None` means color management isn't in the path at all —
+  this is a JPEG-encode-side bug, likely a tiny-image (8x8) edge case.
+  Not investigated further; needs its own session.
