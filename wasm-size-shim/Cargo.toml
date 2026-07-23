@@ -32,7 +32,8 @@ bytemuck = { version = "1", features = ["derive"] }
 imgref = "1"
 
 # Codecs
-zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["trellis", "zencodec"] }
+# zenjpeg 0.9.0 dropped the no-op `trellis` feature (trellis is always compiled now).
+zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
 # zengif main made `zencodec` a required dep (no longer a feature; imazen/zengif#13).
 zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr"] }
 zenpng = { path = "../../zenpng" }
