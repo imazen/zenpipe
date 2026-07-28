@@ -474,7 +474,7 @@ pub(super) fn brilliance_apply_simd(
     {
         let l = f32x8::load(token, sc);
         let avg = f32x8::load(token, ac).max(min_avg);
-        let ratio = l * avg.recip();
+        let ratio = l / avg;
 
         let st = (one - ratio).max(zero).min(one);
         let shadow_curve = st * st * (three - two * st);
@@ -1112,9 +1112,9 @@ pub(super) fn adaptive_sharpen_apply_simd(
         let d_val = f32x8::load(token, dv);
         let e_val = f32x8::load(token, ev).max(zero_v).sqrt();
 
-        let gate = e_val * (e_val + nf_v).recip();
+        let gate = e_val / (e_val + nf_v);
         let mask = if has_masking {
-            e_val * (e_val + mt_v).recip()
+            e_val / (e_val + mt_v)
         } else {
             one_v
         };

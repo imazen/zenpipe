@@ -53,12 +53,40 @@ a loss, but it is a change and is called out here rather than buried.
 **Blast radius is NEON and WASM only.** `wide_simd.rs` is `#[magetypes(neon, wasm128)]` and
 only `simd/neon.rs` and `simd/wasm128.rs` consume it; x86 has a separate path and is untouched.
 
-### Not applied elsewhere yet — deliberately
+### Then the other two sites were measured — and both were also losing
 
-Two other sites in `wide_simd.rs` have the identical `x * y.recip()` shape:
-`brilliance_apply` (:477) and the adaptive-sharpen/wavelet gate (:1115, :1117). The same
-reasoning probably applies, but neither is in this bench, so changing them would be shipping
-an unmeasured edit. They are recorded as candidates, to be measured first.
+`brilliance_apply` (:477) and the adaptive-sharpen gate (:1115/:1117) have the identical
+`x * y.recip()` shape. Added to this bench rather than changed on inference, and both turned
+out to be NEON regressions too:
+
+| kernel | NEON before | NEON after | vs scalar: before → after |
+|---|---|---|---|
+| adaptive_sharpen_apply | 559.7 µs | **317.1 µs** (1.77×) | 0.69× losing → **1.17× winning** |
+| brilliance_apply | 607.3 µs | **467.6 µs** (1.30×) | 0.98× losing → **1.31× winning** |
+| sigmoid_tone_map_plane | 2.3 ms | **1.4 ms** (1.64×) | 0.87× losing → **1.44× winning** |
+
+`adaptive_sharpen_apply` was the worst: forced-scalar was 28–34% faster than the hand-written
+NEON path.
+
+### The underlying fact, measured directly
+
+A standalone microbenchmark of the primitive (`~/tmp/recipbench`, raw NEON intrinsics,
+1 M elements) settles why:
+
+```
+divide         : 0.107 ms/Melem   exact
+recip 1-Newton : 0.125 ms/Melem   1.17x slower, 135 ULP error
+recip 2-Newton : 0.145 ms/Melem   1.35x slower,   2 ULP error
+```
+
+**On this core `vdivq_f32` beats `vrecpeq_f32` + Newton on BOTH speed and accuracy.** The
+reciprocal-estimate trick is a legacy x86/older-ARM optimization that is counterproductive
+here. Any `.recip()` in a NEON kernel is paying for the privilege of being wrong.
+
+Workspace scan for the same pattern (`.recip()` / `rcp_approx` outside tests): zenfilters 16,
+zenpipe 13, zenjxl-decoder 8, jxl-encoder 6, zensim 5, zenmetrics 3, zenanalyze 1. Only the
+zenfilters ones are fixed here — the others live in bodies that also generate x86 tiers, where
+the tradeoff is different (x86 divide latency is higher) and unmeasurable on this host.
 
 ## Reading the 1.00× rows — they are NOT a gap
 

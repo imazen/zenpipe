@@ -144,6 +144,29 @@ pub mod __bench_kernels {
     pub fn subtract_planes(a: &[f32], b: &[f32], dst: &mut [f32]) {
         crate::simd::subtract_planes(a, b, dst)
     }
+    pub fn brilliance_apply(
+        src_l: &[f32],
+        avg_l: &[f32],
+        dst_l: &mut [f32],
+        amount: f32,
+        shadow: f32,
+        highlight: f32,
+    ) {
+        crate::simd::brilliance_apply(src_l, avg_l, dst_l, amount, shadow, highlight)
+    }
+    pub fn adaptive_sharpen_apply(
+        l: &[f32],
+        detail: &[f32],
+        energy: &[f32],
+        dst: &mut [f32],
+        amount: f32,
+        noise_floor: f32,
+        masking_threshold: f32,
+    ) {
+        crate::simd::adaptive_sharpen_apply(
+            l, detail, energy, dst, amount, noise_floor, masking_threshold,
+        )
+    }
     pub fn scatter_srgb_u8_to_oklab(
         src: &[u8],
         l: &mut [f32],

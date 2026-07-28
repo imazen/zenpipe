@@ -33,7 +33,6 @@ const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(enabled: bool) -> bool {
-    use archmage::SimdToken;
     TierToken::dangerously_disable_token_process_wide(!enabled).is_ok()
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
@@ -148,6 +147,23 @@ fn bench_kernels(suite: &mut Suite) {
         b.iter(move || {
             set_simd(simd);
             k::subtract_planes(&x, &y, &mut d)
+        })
+    });
+
+    two_arms!(suite, "brilliance_apply", |b: &mut Bencher, simd| {
+        let (src, avg) = (planef(N, 79), planef(N, 83));
+        let mut dst = planef(N, 89);
+        b.iter(move || {
+            set_simd(simd);
+            k::brilliance_apply(&src, &avg, &mut dst, 0.5, 0.4, 0.3)
+        })
+    });
+    two_arms!(suite, "adaptive_sharpen_apply", |b: &mut Bencher, simd| {
+        let (l, d, e) = (planef(N, 97), planef(N, 101), planef(N, 103));
+        let mut dst = planef(N, 107);
+        b.iter(move || {
+            set_simd(simd);
+            k::adaptive_sharpen_apply(&l, &d, &e, &mut dst, 0.6, 0.02, 0.1)
         })
     });
 
