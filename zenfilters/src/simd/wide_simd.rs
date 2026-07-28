@@ -121,14 +121,14 @@ pub(super) fn sigmoid_tone_map_plane_simd(
 
         if has_bias {
             let denom = (one_v - x).mul_add(bias_a_v, one_v);
-            x *= denom.recip();
+            x = x / denom;
             x = x.max(zero_v).min(one_v);
         }
 
         let x_safe = x.max(f32x8::splat(token, 1e-7));
-        let ratio = (one_v - x_safe) * x_safe.recip();
+        let ratio = (one_v - x_safe) / x_safe;
         let powered = ratio.pow_lowp_unchecked(contrast);
-        let result = (one_v + powered).recip();
+        let result = one_v / (one_v + powered);
 
         let is_zero = x.simd_le(zero_v);
         let is_one = x.simd_ge(one_v);

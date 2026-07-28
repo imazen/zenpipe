@@ -104,6 +104,67 @@ pub mod regional;
 pub mod resize_pipeline;
 mod scatter_gather;
 mod simd;
+
+/// Dev-only per-kernel access for `benches/kernel_tiers.rs`.
+///
+/// NOT public API, NOT semver-covered. The existing benches measure whole
+/// filter pipelines, which cannot reveal a single kernel that is SLOWER than
+/// its own scalar fallback — the faster kernels average it away. That failure
+/// mode was found and fixed in garb, zensim, zentone, zenpng and zenresize
+/// during the 2026-07-28 aarch64 sweep. These are thin forwarders because the
+/// kernels are `pub(crate)`.
+#[doc(hidden)]
+pub mod __bench_kernels {
+    use zenpixels_convert::gamut::GamutMatrix;
+
+    pub fn scale_plane(p: &mut [f32], f: f32) {
+        crate::simd::scale_plane(p, f)
+    }
+    pub fn power_contrast_plane(p: &mut [f32], e: f32, s: f32) {
+        crate::simd::power_contrast_plane(p, e, s)
+    }
+    pub fn sigmoid_tone_map_plane(p: &mut [f32], c: f32, b: f32) {
+        crate::simd::sigmoid_tone_map_plane(p, c, b)
+    }
+    pub fn hue_rotate(a: &mut [f32], b: &mut [f32], c: f32, s: f32) {
+        crate::simd::hue_rotate(a, b, c, s)
+    }
+    pub fn vibrance(a: &mut [f32], b: &mut [f32], amt: f32, prot: f32) {
+        crate::simd::vibrance(a, b, amt, prot)
+    }
+    pub fn highlights_shadows(p: &mut [f32], s: f32, h: f32) {
+        crate::simd::highlights_shadows(p, s, h)
+    }
+    pub fn unsharp_fuse(src: &[f32], blur: &[f32], dst: &mut [f32], amt: f32) {
+        crate::simd::unsharp_fuse(src, blur, dst, amt)
+    }
+    pub fn square_plane(src: &[f32], dst: &mut [f32]) {
+        crate::simd::square_plane(src, dst)
+    }
+    pub fn subtract_planes(a: &[f32], b: &[f32], dst: &mut [f32]) {
+        crate::simd::subtract_planes(a, b, dst)
+    }
+    pub fn scatter_srgb_u8_to_oklab(
+        src: &[u8],
+        l: &mut [f32],
+        a: &mut [f32],
+        b: &mut [f32],
+        ch: u32,
+        m1: &GamutMatrix,
+    ) {
+        crate::simd::scatter_srgb_u8_to_oklab(src, l, a, b, ch, m1)
+    }
+    pub fn gather_oklab_to_srgb_u8(
+        l: &[f32],
+        a: &[f32],
+        b: &[f32],
+        dst: &mut [u8],
+        ch: u32,
+        m1i: &GamutMatrix,
+    ) {
+        crate::simd::gather_oklab_to_srgb_u8(l, a, b, dst, ch, m1i)
+    }
+}
 pub mod slider;
 
 #[cfg(feature = "experimental")]
