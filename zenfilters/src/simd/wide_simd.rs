@@ -67,6 +67,27 @@ pub(super) fn scale_plane_simd(token: Token, plane: &mut [f32], factor: f32) {
 }
 
 #[magetypes(neon, wasm128)]
+pub(super) fn scale_offset_plane_simd(token: Token, plane: &mut [f32], factor: f32, offset: f32) {
+    #[allow(non_camel_case_types)]
+    type f32x8 = GenericF32x8<Token>;
+    let factor_v = f32x8::splat(token, factor);
+    let offset_v = f32x8::splat(token, offset);
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let v = f32x8::load(token, chunk);
+        // Deliberately NOT an FMA. `scale_plane` then `offset_plane` performs
+        // two roundings (multiply, then add); a fused multiply-add performs
+        // one and would give different — more accurate, but DIFFERENT — bits.
+        // The whole point of this fusion is to remove a memory pass without
+        // changing a single output value.
+        ((v * factor_v) + offset_v).store(chunk);
+    }
+    for v in tail {
+        *v = (*v * factor) + offset;
+    }
+}
+
+#[magetypes(neon, wasm128)]
 pub(super) fn offset_plane_simd(token: Token, plane: &mut [f32], offset: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;

@@ -28,6 +28,19 @@ pub(crate) fn scale_plane(plane: &mut [f32], factor: f32) {
     archmage::incant!(scale_plane_impl(plane, factor), [v3, neon, wasm128, scalar]);
 }
 
+/// Dispatch: FUSED `p = p * factor + offset` over a plane, one pass.
+///
+/// `scale_plane` followed by `offset_plane` walks the plane TWICE, and each
+/// pass is a full read + write of the buffer. This does the same arithmetic in
+/// one pass. It is NOT an FMA — see the kernel — so every output bit matches
+/// the two-call sequence exactly.
+pub(crate) fn scale_offset_plane(plane: &mut [f32], factor: f32, offset: f32) {
+    archmage::incant!(
+        scale_offset_plane_impl(plane, factor, offset),
+        [v3, neon, wasm128, scalar]
+    );
+}
+
 /// Dispatch: add a constant to every element of a plane.
 pub(crate) fn offset_plane(plane: &mut [f32], offset: f32) {
     archmage::incant!(
@@ -330,4 +343,55 @@ pub(crate) fn fused_interleaved_adjust(
         ),
         [v3, neon, wasm128, scalar]
     );
+}
+
+#[cfg(test)]
+mod scale_offset_fusion_gate {
+    use alloc::vec::Vec;
+    /// The fused pass must equal `scale_plane` then `offset_plane`,
+    /// BIT-FOR-BIT.
+    ///
+    /// The risk is specifically FMA contraction. `(v*f)+o` as two roundings and
+    /// `v.mul_add(f, o)` as one give different bits for most inputs — the fused
+    /// form is *more* accurate, which is exactly why it is not acceptable here:
+    /// this fusion exists to remove a memory pass, not to change output. If a
+    /// future edit (or a compiler flag) contracts that expression, this fails.
+    #[test]
+    fn fused_scale_offset_matches_two_passes() {
+        let mut s = 0x5EED_1234u32;
+        // Lengths straddle the 8-wide chunking so the scalar tail runs at every
+        // remainder, including 0.
+        for n in [0usize, 1, 3, 7, 8, 9, 15, 16, 17, 31, 64, 1000] {
+            let base: Vec<f32> = (0..n)
+                .map(|i| {
+                    s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    match i % 6 {
+                        0 => 0.0,
+                        1 => -0.0,
+                        2 => f32::MIN_POSITIVE,
+                        _ => ((s >> 8) as f32 / 4_194_304.0) - 2.0,
+                    }
+                })
+                .collect();
+            for &(f, o) in &[
+                (1.0f32, 0.0f32),
+                (-1.0, 1.0),          // invert.rs
+                (0.5, 0.25),          // levels.rs shape
+                (1.3, -0.15),         // fused_adjust.rs shape
+                (1e-20, 1e20),
+                (3.0, 0.1),           // f and o chosen so v*f+o is inexact
+            ] {
+                let mut fused = base.clone();
+                super::scale_offset_plane(&mut fused, f, o);
+
+                let mut seq = base.clone();
+                super::scale_plane(&mut seq, f);
+                super::offset_plane(&mut seq, o);
+
+                let a: Vec<u32> = fused.iter().map(|v| v.to_bits()).collect();
+                let b: Vec<u32> = seq.iter().map(|v| v.to_bits()).collect();
+                assert_eq!(a, b, "fused scale+offset diverges at n={n} f={f} o={o}");
+            }
+        }
+    }
 }

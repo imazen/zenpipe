@@ -16,6 +16,16 @@ pub(super) fn scale_plane_impl_wasm128(token: Wasm128Token, plane: &mut [f32], f
 }
 
 #[arcane]
+pub(super) fn scale_offset_plane_impl_wasm128(
+    token: Wasm128Token,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+) {
+    super::wide_simd::scale_offset_plane_simd_wasm128(token, plane, factor, offset);
+}
+
+#[arcane]
 pub(super) fn offset_plane_impl_wasm128(token: Wasm128Token, plane: &mut [f32], offset: f32) {
     super::wide_simd::offset_plane_simd_wasm128(token, plane, offset);
 }

@@ -120,6 +120,12 @@ pub mod __bench_kernels {
     pub fn scale_plane(p: &mut [f32], f: f32) {
         crate::simd::scale_plane(p, f)
     }
+    pub fn offset_plane(p: &mut [f32], o: f32) {
+        crate::simd::offset_plane(p, o)
+    }
+    pub fn scale_offset_plane(p: &mut [f32], f: f32, o: f32) {
+        crate::simd::scale_offset_plane(p, f, o)
+    }
     pub fn power_contrast_plane(p: &mut [f32], e: f32, s: f32) {
         crate::simd::power_contrast_plane(p, e, s)
     }

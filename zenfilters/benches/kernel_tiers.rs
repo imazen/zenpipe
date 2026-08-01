@@ -191,4 +191,23 @@ fn bench_kernels(suite: &mut Suite) {
     set_simd(true);
 }
 
-zenbench::main!(bench_kernels);
+
+/// The scale+offset fusion, against the two-call sequence it replaces.
+/// Three filters ran `scale_plane` then `offset_plane` on the SAME plane —
+/// two full read+write passes for arithmetic that fits in one.
+fn bench_scale_offset_fusion(suite: &mut Suite) {
+    const N: usize = 1 << 20;
+    suite.compare("scale+offset plane", |g| {
+        g.throughput(Throughput::Bytes((N * 4) as u64));
+        g.bench("fused", |b| {
+            b.with_input(|| planef(N, 91))
+                .run(move |mut p| { k::scale_offset_plane(&mut p, 1.3, -0.15); p })
+        });
+        g.bench("sequence", |b| {
+            b.with_input(|| planef(N, 91))
+                .run(move |mut p| { k::scale_plane(&mut p, 1.3); k::offset_plane(&mut p, -0.15); p })
+        });
+    });
+}
+
+zenbench::main!(bench_scale_offset_fusion, bench_kernels);

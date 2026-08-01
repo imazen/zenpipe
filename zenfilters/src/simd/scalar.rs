@@ -11,6 +11,18 @@ pub(super) fn scale_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], fa
     }
 }
 
+pub(super) fn scale_offset_plane_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+) {
+    for v in plane.iter_mut() {
+        // Two roundings, matching scale_plane-then-offset_plane exactly.
+        *v = (*v * factor) + offset;
+    }
+}
+
 pub(super) fn offset_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], offset: f32) {
     for v in plane.iter_mut() {
         *v += offset;

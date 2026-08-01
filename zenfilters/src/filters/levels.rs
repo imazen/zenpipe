@@ -90,8 +90,8 @@ impl Filter for Levels {
             let bp = self.in_black;
             let combined_scale = out_range * inv_in_range;
             let combined_offset = self.out_black - bp * combined_scale;
-            simd::scale_plane(&mut planes.l, combined_scale);
-            simd::offset_plane(&mut planes.l, combined_offset);
+            // One pass instead of two: see simd::scale_offset_plane.
+            simd::scale_offset_plane(&mut planes.l, combined_scale, combined_offset);
             // Clamp
             for v in &mut planes.l {
                 *v = v.clamp(self.out_black, self.out_white);

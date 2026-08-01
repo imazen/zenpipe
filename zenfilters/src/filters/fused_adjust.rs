@@ -146,8 +146,8 @@ mod tests {
         if adj.dehaze.abs() > 1e-6 {
             let dc = 1.0 + adj.dehaze * 0.3;
             let dc_chroma = 1.0 + adj.dehaze * 0.2;
-            crate::simd::scale_plane(&mut planes.l, dc);
-            crate::simd::offset_plane(&mut planes.l, 0.5 * (1.0 - dc));
+            // One pass instead of two: see simd::scale_offset_plane.
+            crate::simd::scale_offset_plane(&mut planes.l, dc, 0.5 * (1.0 - dc));
             crate::simd::scale_plane(&mut planes.a, dc_chroma);
             crate::simd::scale_plane(&mut planes.b, dc_chroma);
         }

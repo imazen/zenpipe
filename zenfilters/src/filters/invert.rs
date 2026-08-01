@@ -25,8 +25,8 @@ impl Filter for Invert {
 
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         // L' = 1.0 - L = -1 * L + 1.0
-        simd::scale_plane(&mut planes.l, -1.0);
-        simd::offset_plane(&mut planes.l, 1.0);
+        // One pass instead of two: see simd::scale_offset_plane.
+        simd::scale_offset_plane(&mut planes.l, -1.0, 1.0);
         // a' = -a, b' = -b
         simd::scale_plane(&mut planes.a, -1.0);
         simd::scale_plane(&mut planes.b, -1.0);
