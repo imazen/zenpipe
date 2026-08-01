@@ -88,6 +88,50 @@ pub(super) fn scale_offset_plane_simd(token: Token, plane: &mut [f32], factor: f
 }
 
 #[magetypes(neon, wasm128)]
+pub(super) fn scale_offset_clamp_plane_simd(
+    token: Token,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+    lo: f32,
+    hi: f32,
+) {
+    #[allow(non_camel_case_types)]
+    type f32x8 = GenericF32x8<Token>;
+    let factor_v = f32x8::splat(token, factor);
+    let offset_v = f32x8::splat(token, offset);
+    let lo_v = f32x8::splat(token, lo);
+    let hi_v = f32x8::splat(token, hi);
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let v = f32x8::load(token, chunk);
+        // Not an FMA — see scale_offset_plane_simd.
+        let t = (v * factor_v) + offset_v;
+        // Clamp written as explicit comparisons, matching `f32::clamp` by
+        // construction: it is `if self < min { min } else if self > max { max }
+        // else { self }`, so NaN (both comparisons false) passes through. The
+        // blends do the same — comparisons against NaN are false, so `t`
+        // survives.
+        //
+        // MEASURED note: substituting `t.max(lo_v).min(hi_v)` also passes the
+        // NaN gate, i.e. magetypes' min/max preserve NaN on the backends tested
+        // here rather than following IEEE minNum/maxNum (which would return the
+        // non-NaN operand and turn a NaN pixel into lo/hi). That is a backend
+        // detail, not a documented contract, so the explicit form is kept — it
+        // cannot silently change if a backend's min/max semantics do.
+        let clamped = f32x8::blend(
+            t.simd_lt(lo_v),
+            lo_v,
+            f32x8::blend(t.simd_gt(hi_v), hi_v, t),
+        );
+        clamped.store(chunk);
+    }
+    for v in tail {
+        *v = ((*v * factor) + offset).clamp(lo, hi);
+    }
+}
+
+#[magetypes(neon, wasm128)]
 pub(super) fn offset_plane_simd(token: Token, plane: &mut [f32], offset: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;

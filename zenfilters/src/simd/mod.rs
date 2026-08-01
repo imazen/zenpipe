@@ -41,6 +41,18 @@ pub(crate) fn scale_offset_plane(plane: &mut [f32], factor: f32, offset: f32) {
     );
 }
 
+/// Dispatch: FUSED `p = clamp(p * factor + offset, lo, hi)`, one pass.
+///
+/// levels.rs ran `scale_offset_plane` and then a separate scalar clamp loop —
+/// two passes over the plane. The clamp is NaN-preserving to match
+/// `f32::clamp` bit-for-bit; see the kernel.
+pub(crate) fn scale_offset_clamp_plane(plane: &mut [f32], factor: f32, offset: f32, lo: f32, hi: f32) {
+    archmage::incant!(
+        scale_offset_clamp_plane_impl(plane, factor, offset, lo, hi),
+        [v3, neon, wasm128, scalar]
+    );
+}
+
 /// Dispatch: add a constant to every element of a plane.
 pub(crate) fn offset_plane(plane: &mut [f32], offset: f32) {
     archmage::incant!(
@@ -356,6 +368,53 @@ mod scale_offset_fusion_gate {
     /// form is *more* accurate, which is exactly why it is not acceptable here:
     /// this fusion exists to remove a memory pass, not to change output. If a
     /// future edit (or a compiler flag) contracts that expression, this fails.
+    /// The clamp-fused pass must equal `scale_offset_plane` then a scalar
+    /// `clamp` loop, BIT-FOR-BIT — INCLUDING for NaN.
+    ///
+    /// NaN is included because it is where a clamp can silently diverge:
+    /// `f32::clamp` returns NaN for NaN (both of its comparisons are false),
+    /// whereas an IEEE minNum/maxNum-based clamp returns `lo` or `hi`. On the
+    /// backends tested here magetypes' min/max happen to preserve NaN too — so
+    /// this test does NOT currently discriminate between the two forms — but
+    /// it pins the behaviour so a backend change cannot alter it unnoticed.
+    #[test]
+    fn fused_scale_offset_clamp_matches_two_passes() {
+        let mut s = 0xC0FF_EE11u32;
+        for n in [0usize, 1, 7, 8, 9, 17, 64, 1000] {
+            let base: Vec<f32> = (0..n)
+                .map(|i| {
+                    s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    match i % 7 {
+                        0 => f32::NAN,
+                        1 => f32::INFINITY,
+                        2 => f32::NEG_INFINITY,
+                        3 => -0.0,
+                        _ => ((s >> 8) as f32 / 4_194_304.0) - 2.0,
+                    }
+                })
+                .collect();
+            for &(f, o, lo, hi) in &[
+                (1.0f32, 0.0f32, 0.0f32, 1.0f32),
+                (0.5, 0.25, 0.1, 0.9),
+                (-1.0, 1.0, 0.0, 1.0),
+                (3.0, 0.1, -1.0, 2.0),
+            ] {
+                let mut fused = base.clone();
+                super::scale_offset_clamp_plane(&mut fused, f, o, lo, hi);
+
+                let mut seq = base.clone();
+                super::scale_offset_plane(&mut seq, f, o);
+                for v in seq.iter_mut() {
+                    *v = v.clamp(lo, hi);
+                }
+
+                let a: Vec<u32> = fused.iter().map(|v| v.to_bits()).collect();
+                let b: Vec<u32> = seq.iter().map(|v| v.to_bits()).collect();
+                assert_eq!(a, b, "clamp fusion diverges at n={n} f={f} o={o} lo={lo} hi={hi}");
+            }
+        }
+    }
+
     #[test]
     fn fused_scale_offset_matches_two_passes() {
         let mut s = 0x5EED_1234u32;

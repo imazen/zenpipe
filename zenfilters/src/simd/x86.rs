@@ -25,6 +25,31 @@ pub(super) fn scale_offset_plane_impl_v3(
     scale_offset_plane_simd(token, plane, factor, offset);
 }
 
+#[arcane]
+pub(super) fn scale_offset_clamp_plane_impl_v3(
+    token: X64V3Token,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+    lo: f32,
+    hi: f32,
+) {
+    let factor_v = f32x8::splat(token, factor);
+    let offset_v = f32x8::splat(token, offset);
+    let lo_v = f32x8::splat(token, lo);
+    let hi_v = f32x8::splat(token, hi);
+    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    for chunk in chunks {
+        let v = f32x8::load(token, chunk);
+        let t = (v * factor_v) + offset_v;
+        let clamped = f32x8::blend(t.simd_lt(lo_v), lo_v, f32x8::blend(t.simd_gt(hi_v), hi_v, t));
+        clamped.store(chunk);
+    }
+    for v in tail {
+        *v = ((*v * factor) + offset).clamp(lo, hi);
+    }
+}
+
 #[rite]
 fn scale_offset_plane_simd(token: X64V3Token, plane: &mut [f32], factor: f32, offset: f32) {
     let factor_v = f32x8::splat(token, factor);

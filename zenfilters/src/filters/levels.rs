@@ -90,12 +90,15 @@ impl Filter for Levels {
             let bp = self.in_black;
             let combined_scale = out_range * inv_in_range;
             let combined_offset = self.out_black - bp * combined_scale;
-            // One pass instead of two: see simd::scale_offset_plane.
-            simd::scale_offset_plane(&mut planes.l, combined_scale, combined_offset);
-            // Clamp
-            for v in &mut planes.l {
-                *v = v.clamp(self.out_black, self.out_white);
-            }
+            // Scale, offset and clamp in ONE pass — this was three passes
+            // over the plane (scale, offset, clamp) before 2026-08-01.
+            simd::scale_offset_clamp_plane(
+                &mut planes.l,
+                combined_scale,
+                combined_offset,
+                self.out_black,
+                self.out_white,
+            );
         } else {
             // Full gamma remap
             for v in &mut planes.l {

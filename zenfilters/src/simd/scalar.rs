@@ -23,6 +23,19 @@ pub(super) fn scale_offset_plane_impl_scalar(
     }
 }
 
+pub(super) fn scale_offset_clamp_plane_impl_scalar(
+    _token: ScalarToken,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+    lo: f32,
+    hi: f32,
+) {
+    for v in plane.iter_mut() {
+        *v = ((*v * factor) + offset).clamp(lo, hi);
+    }
+}
+
 pub(super) fn offset_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], offset: f32) {
     for v in plane.iter_mut() {
         *v += offset;

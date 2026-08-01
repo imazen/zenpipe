@@ -197,6 +197,21 @@ fn bench_kernels(suite: &mut Suite) {
 /// two full read+write passes for arithmetic that fits in one.
 fn bench_scale_offset_fusion(suite: &mut Suite) {
     const N: usize = 1 << 20;
+    suite.compare("scale+offset+clamp plane", |g| {
+        g.throughput(Throughput::Bytes((N * 4) as u64));
+        g.bench("fused", |b| {
+            b.with_input(|| planef(N, 93))
+                .run(move |mut p| { k::scale_offset_clamp_plane(&mut p, 1.3, -0.15, 0.0, 1.0); p })
+        });
+        g.bench("sequence", |b| {
+            b.with_input(|| planef(N, 93)).run(move |mut p| {
+                k::scale_plane(&mut p, 1.3);
+                k::offset_plane(&mut p, -0.15);
+                for v in p.iter_mut() { *v = v.clamp(0.0, 1.0); }
+                p
+            })
+        });
+    });
     suite.compare("scale+offset plane", |g| {
         g.throughput(Throughput::Bytes((N * 4) as u64));
         g.bench("fused", |b| {
