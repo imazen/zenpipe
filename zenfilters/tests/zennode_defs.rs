@@ -11,7 +11,7 @@ mod tests {
         assert_eq!(schema.id, "zenfilters.exposure");
         assert_eq!(schema.label, "Exposure");
         assert_eq!(schema.group, NodeGroup::Tone);
-        assert_eq!(schema.role, NodeRole::DisplayAdjust);
+        assert_eq!(schema.role, NodeRole::Filter);
         assert_eq!(schema.params.len(), 1);
         assert_eq!(schema.params[0].name, "stops");
         match &schema.params[0].kind {
@@ -59,7 +59,7 @@ mod tests {
         let schema = CLARITY_NODE.schema();
         assert_eq!(schema.id, "zenfilters.clarity");
         assert_eq!(schema.group, NodeGroup::Detail);
-        assert_eq!(schema.role, NodeRole::PreResize);
+        assert_eq!(schema.role, NodeRole::Filter);
         assert!(schema.format.is_neighborhood);
         assert_eq!(schema.params.len(), 2);
     }
@@ -69,7 +69,7 @@ mod tests {
         let schema = VIGNETTE_NODE.schema();
         assert_eq!(schema.id, "zenfilters.vignette");
         assert_eq!(schema.group, NodeGroup::Effects);
-        assert_eq!(schema.role, NodeRole::PostResize);
+        assert_eq!(schema.role, NodeRole::Filter);
         assert_eq!(schema.params.len(), 4);
     }
 
@@ -78,7 +78,7 @@ mod tests {
         let schema = DT_SIGMOID_NODE.schema();
         assert_eq!(schema.id, "zenfilters.dt_sigmoid");
         assert_eq!(schema.group, NodeGroup::ToneMap);
-        assert_eq!(schema.role, NodeRole::ToneMap);
+        assert_eq!(schema.role, NodeRole::Filter);
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         let schema = HSL_ADJUST_NODE.schema();
         assert_eq!(schema.id, "zenfilters.hsl_adjust");
         assert_eq!(schema.group, NodeGroup::Color);
-        assert_eq!(schema.role, NodeRole::DisplayAdjust);
+        assert_eq!(schema.role, NodeRole::Filter);
         assert_eq!(schema.params.len(), 3);
 
         // Check hue param
@@ -378,7 +378,7 @@ mod tests {
         let schema = BASECURVE_TONE_MAP_NODE.schema();
         assert_eq!(schema.id, "zenfilters.basecurve_tonemap");
         assert_eq!(schema.group, NodeGroup::ToneMap);
-        assert_eq!(schema.role, NodeRole::ToneMap);
+        assert_eq!(schema.role, NodeRole::Filter);
         assert_eq!(schema.params.len(), 2);
 
         // preset is a String param
