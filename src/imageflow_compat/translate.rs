@@ -571,7 +571,7 @@ fn translate_constrain(
     // Also check canvas_color as matte for pad modes.
     if let Some(ref canvas) = c.canvas_color {
         let rgba = color_to_rgba(canvas);
-        if rgba[3] >= 255 {
+        if rgba[3] == 255 {
             push_layout_node(
                 nodes,
                 "zenpipe.remove_alpha",
