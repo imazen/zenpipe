@@ -312,7 +312,7 @@ fn bench_row_converter_overhead(c: &mut Criterion) {
         );
 
         // Measure conversion of a single row
-        let converter = RowConverter::new(desc_src, desc_dst).unwrap();
+        let mut converter = RowConverter::new(desc_src, desc_dst).unwrap();
         let src_row = vec![128u8; w * 6]; // RGB16
         let mut dst_row = vec![0u8; w * 4]; // RGBA8
 

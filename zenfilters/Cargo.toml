@@ -51,6 +51,10 @@ almost-enough = "0.4.4"
 zensim = { version = "0.3.0", default-features = false }
 zenpixels = { version = "0.2.10", features = ["planar", "rgb"] }
 zenpixels-convert = { version = "0.2.10", features = ["planar"] }
+# examples/compare_autotune.rs decodes the corpus and re-encodes JPEG through
+# the dispatch layer. Dev-only, so this does not make zenfilters depend on
+# zencodecs (and zencodecs does not depend on zenfilters, so there is no cycle).
+zencodecs = { workspace = true, features = ["std", "jpeg", "png", "webp"] }
 
 # Native-only: deps that don't compile for wasm32
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

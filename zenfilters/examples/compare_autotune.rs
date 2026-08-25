@@ -259,7 +259,7 @@ fn main() {
             let img = ImgVec::new(rgb_pixels, w as usize, h as usize);
             let encoded = EncodeRequest::new(ImageFormat::Jpeg)
                 .with_quality(90.0)
-                .encode_rgb8(img.as_ref())
+                .encode_full_frame_rgb8(img.as_ref())
                 .expect("JPEG encode failed");
             fs::write(&path, encoded.data()).expect("failed to write JPEG");
             path

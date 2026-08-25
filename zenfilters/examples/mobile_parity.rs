@@ -1965,7 +1965,7 @@ fn save_rgb8_jpeg(data: &[u8], w: u32, h: u32, path: &str) {
     let img = ImgVec::new(pixels.to_vec(), w as usize, h as usize);
     match EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(90.0)
-        .encode_rgb8(img.as_ref())
+        .encode_full_frame_rgb8(img.as_ref())
     {
         Ok(encoded) => {
             let _ = fs::write(path, encoded.data());
