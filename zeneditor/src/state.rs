@@ -745,6 +745,7 @@ impl EditorState {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
+            limits: None,
         };
 
         self.overview_cancel.store(true, Ordering::Relaxed);
@@ -994,6 +995,7 @@ impl EditorState {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
+            limits: None,
         };
 
         self.overview_cancel.store(true, Ordering::Relaxed);
@@ -1061,6 +1063,7 @@ impl EditorState {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
+            limits: None,
         };
 
         let region_hash = {
@@ -1124,6 +1127,7 @@ impl EditorState {
             hdr_mode: "sdr_only",
             source_info: &info,
             trace_config: None,
+            limits: None,
         };
 
         let output = self
