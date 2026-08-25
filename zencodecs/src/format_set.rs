@@ -56,9 +56,9 @@ impl FormatSet {
             // EMPTY set and `all()` excluded them, so any explicit allowlist
             // denied them outright.
             //
-            // The deny is LATENT today, not live: `bitmaps-{qoi,tga,hdr}`,
-            // `svg` and `jp2-decode` are compile_error stubs (zenpipe#43) so
-            // their adapters are unreachable, Ico/Exr/Dng have no adapter in
+            // The deny was LATENT when written, not live: `svg` and
+            // `jp2-decode` are compile_error stubs (zenpipe#43) so their
+            // adapters are unreachable, Ico/Exr/Dng have no adapter in
             // this crate at all, and Pdf/Raw are decode-only while
             // is_format_allowed gates encode-side selection. Fixed anyway
             // because the silent drop is a live API footgun regardless of
