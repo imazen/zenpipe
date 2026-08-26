@@ -47,7 +47,6 @@ fn fast_sincos(x: f32) -> (f32, f32) {
 }
 
 #[inline]
-#[allow(clippy::approx_constant)]
 fn fast_powf(base: f32, exp: f32) -> f32 {
     if base <= 0.0 {
         return 0.0;

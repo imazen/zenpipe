@@ -175,7 +175,6 @@ pub(super) fn gather_oklab_impl_scalar(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn scatter_srgb_u8_to_oklab_impl_scalar(
     _token: ScalarToken,
     src: &[u8],
@@ -199,7 +198,6 @@ pub(super) fn scatter_srgb_u8_to_oklab_impl_scalar(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn gather_oklab_to_srgb_u8_impl_scalar(
     _token: ScalarToken,
     l: &[f32],

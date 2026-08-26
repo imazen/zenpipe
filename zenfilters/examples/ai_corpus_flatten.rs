@@ -21,8 +21,6 @@
 //! Every run reads the pristine `_orig_` as its source, so repeated runs never
 //! degrade the image and never clobber the original.
 
-#![allow(clippy::needless_range_loop)]
-
 use std::path::Path;
 
 use image::{ImageBuffer, Rgb, RgbImage};

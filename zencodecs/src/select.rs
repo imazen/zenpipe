@@ -169,7 +169,6 @@ pub fn select_format_with_picker(
 /// A `None` picker (or empty `features`) still applies the feasibility filter:
 /// the heuristic head becomes the first *feasible* format. A `None` budget is
 /// exactly [`select_format_with_picker`].
-#[allow(clippy::too_many_arguments)]
 pub fn select_format_with_budget_picker(
     facts: &ImageFacts,
     intent: &QualityIntent,
@@ -182,7 +181,6 @@ pub fn select_format_with_budget_picker(
     select_format_inner(facts, intent, registry, policy, picker, features, budget)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn select_format_inner(
     facts: &ImageFacts,
     intent: &QualityIntent,

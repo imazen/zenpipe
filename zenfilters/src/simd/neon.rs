@@ -143,7 +143,6 @@ pub(super) fn gather_oklab_impl_neon(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 #[arcane]
 pub(super) fn scatter_srgb_u8_to_oklab_impl_neon(
     token: NeonToken,
@@ -157,7 +156,6 @@ pub(super) fn scatter_srgb_u8_to_oklab_impl_neon(
     super::wide_simd::scatter_srgb_u8_to_oklab_simd_neon(token, src, l, a, b, channels, m1);
 }
 
-#[allow(clippy::too_many_arguments)]
 #[arcane]
 pub(super) fn gather_oklab_to_srgb_u8_impl_neon(
     token: NeonToken,

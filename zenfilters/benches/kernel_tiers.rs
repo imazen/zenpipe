@@ -68,7 +68,6 @@ macro_rules! two_arms {
         $suite.compare($name, |g| {
             g.throughput(Throughput::Elements(N as u64));
             for (arm, simd) in [(TIER_NAME, true), ("scalar", false)] {
-                #[allow(clippy::redundant_closure_call)]
                 g.bench(arm, move |b| ($setup)(b, simd));
             }
         });

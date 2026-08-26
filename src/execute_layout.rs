@@ -400,7 +400,6 @@ pub fn execute_with_offer(
 /// * `secondary_source` — Source dimensions of the secondary plane (before orientation).
 /// * `secondary_target` — Desired output dimensions, or `None` to auto-scale
 ///   proportionally (e.g., if gain map is 1/4 of SDR source, output is 1/4 of SDR output).
-#[allow(clippy::too_many_arguments)]
 pub fn execute_secondary(
     source_pixels: &[u8],
     primary_ideal: &IdealLayout,
@@ -435,7 +434,6 @@ pub fn execute_secondary(
 /// # Errors
 ///
 /// Returns [`CompositeError::PremultipliedInput`] if `desc` uses premultiplied alpha.
-#[allow(clippy::too_many_arguments)]
 pub fn execute_layout_with_background<B: Background + Clone>(
     decoder_output: &[u8],
     decoder_width: u32,
@@ -2099,7 +2097,6 @@ mod tests {
     // Test 23: streaming_from_plan with trim+pad combined
     // -----------------------------------------------------------------------
     #[test]
-    #[allow(clippy::needless_range_loop)]
     fn streaming_from_plan_trim_and_pad() {
         let src_w = 80u32;
         let src_h = 60u32;

@@ -78,7 +78,6 @@ pub(crate) fn fast_sincos(x: f32) -> (f32, f32) {
 /// Max relative error: ~1% (same as magetypes lowp tier).
 /// Only valid for `base > 0.0`. Returns 0.0 for `base <= 0.0`.
 #[inline]
-#[allow(clippy::approx_constant)]
 pub(crate) fn fast_powf(base: f32, exp: f32) -> f32 {
     if base <= 0.0 {
         return 0.0;
