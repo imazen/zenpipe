@@ -192,9 +192,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   CI paths zenavif to a sibling clone of main, where `zencodec` became a
   required dep (no feature). Both zenavif dep lines (root, zencodecs) now
   request 0.1.7 without the feature; zencodecs' `zenavif-parse` moves to
-  0.7.0 (parser results are `whereat::At<Error>`). Bare-clone resolution is
-  supplied by two new `[patch.crates-io]` entries from the imazen/zenavif
-  workspace (zenavif, zenavif-parse). The encode chain that used to block
+  0.7.0 (parser results are `whereat::At<Error>`) as a git dep on the
+  imazen/zenavif workspace itself — a registry spec plus root patch collided
+  in CI with zenavif's in-repo member ("package collision in the lockfile",
+  because superwork's crate map still sends `zenavif-parse` to the archived
+  standalone repo); zenavif is supplied by a new `[patch.crates-io]` entry
+  from the same repo. The encode chain that used to block
   this (zenavif → zenravif 0.2.0 → path-only zenrav1e, plus zenravif's
   registry requirement on the unpublished zenavif-serialize 0.2.0 that only
   cavif-rs's own `[patch]` supplied) is git-rev pinned end to end upstream as

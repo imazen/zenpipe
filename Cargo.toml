@@ -303,9 +303,10 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # adapter always-on — no `zencodec` feature any more); crates.io tops out at
 # 0.1.6 (pre-taxonomy). The imazen/zenavif repo is a workspace that also
 # carries zenavif-parse 0.7.0 (breaking: `At<Error>` parser results),
-# unpublished (registry: 0.6.2) — the same git source supplies both so
-# zenavif's in-repo path dep and zencodecs' registry spec unify to ONE copy.
-# The rest of the `encode` chain needs NO patch entries, because since
+# unpublished (registry: 0.6.2); zencodecs takes that one as a git dep on the
+# same repo directly (see its manifest for why a registry spec + patch here
+# collides with zenavif's member under CI's sibling pathing), so it needs no
+# entry here. The rest of the `encode` chain needs NO patch entries, because since
 # 2026-08-27 every unpublished link is a git-rev dep on its own dep line:
 # zenavif → zenravif 0.2.0 (imazen/cavif-rs; registry 0.1.3) → zenrav1e 0.2.0
 # (imazen/zenrav1e; registry 0.1.4) and zenavif-serialize 0.2.0 (the archived
@@ -317,7 +318,6 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # Cost to know: cargo fetches zenavif's corpus submodules (~600 MB) per rev
 # for bare-clone builds; CI is unaffected (shallow sibling clones).
 zenavif = { git = "https://github.com/imazen/zenavif" }
-zenavif-parse = { git = "https://github.com/imazen/zenavif" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }

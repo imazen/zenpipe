@@ -61,11 +61,17 @@ zenavif = { version = "0.1.7", optional = true }
 # Pure-Rust HEIC/HEIF decode (base SDR + gain-map HDR reconstruct via ultrahdr-core).
 # crates.io tops out at 0.1.6 (pre-adapter); patched to imazen/heic git main below.
 heic = { version = "0.2.0", optional = true, default-features = false, features = ["backend-rust", "zencodec"] }
-# 0.7.0 (unpublished; registry 0.6.2): the version zenavif main depends on —
-# the workspace-root git patch supplies it from the imazen/zenavif workspace so
-# there is one zenavif-parse in the graph. Parser entry points return
-# `whereat::At<Error>` from 0.7.0 on.
-zenavif-parse = { version = "0.7.0", optional = true, features = ["eager"] }
+# 0.7.0 (unpublished; registry 0.6.2): the version zenavif main depends on, as
+# its in-repo workspace member. A git dep on that SAME repo (not a registry
+# spec + root patch) on purpose: CI paths every dep to a sibling clone, and the
+# zen-workspace crate map still sends a registry `zenavif-parse` to the
+# archived standalone repo — a second, different 0.7.0 next to zenavif's
+# member, which cargo rejects ("package collision in the lockfile", run
+# 33094237504). A git dep is rewritten from its URL instead, straight into
+# `../zenavif/zenavif-parse`, so there is one zenavif-parse in the graph in
+# both CI and bare-clone mode. Parser entry points return `whereat::At<Error>`
+# from 0.7.0 on. Return to a registry spec at the 0.7.0 publish.
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
