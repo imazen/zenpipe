@@ -129,6 +129,7 @@ pub(crate) fn parse_canvas_color(s: &str) -> Option<zenlayout::CanvasColor> {
 
 /// Parse a matte color string to opaque sRGB bytes (`[r, g, b]`).
 /// Transparent/unknown values yield `None` (no matte).
+#[cfg(feature = "job")]
 pub(crate) fn parse_matte_rgb(s: &str) -> Option<[u8; 3]> {
     match parse_canvas_color(s)? {
         zenlayout::CanvasColor::Srgb { r, g, b, .. } => Some([r, g, b]),

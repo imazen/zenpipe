@@ -22,7 +22,7 @@ fn solid_rgba8(width: u32, height: u32, r: u8, g: u8, b: u8, a: u8) -> CallbackS
         if rows_produced >= height {
             return Ok(false);
         }
-        for px in buf[..row_bytes].chunks_exact_mut(4) {
+        for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&pixel);
         }
         rows_produced += 1;
@@ -45,8 +45,8 @@ fn callback_source_yields_all_rows() {
     // 8 pixels * 4 bytes * 32 rows = 1024 bytes
     assert_eq!(data.len(), 8 * 4 * 32);
     // Every pixel should be [128, 64, 32, 255]
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [128, 64, 32, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [128, 64, 32, 255]);
     }
 }
 
@@ -110,7 +110,7 @@ fn transform_roundtrip_srgb_linear() {
 
     let data = drain(&mut src);
     assert_eq!(data.len(), 4 * 4 * 2);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         // Allow ±1 for rounding
         assert!((px[0] as i16 - 200).unsigned_abs() <= 1, "R: {}", px[0]);
         assert!((px[1] as i16 - 100).unsigned_abs() <= 1, "G: {}", px[1]);
@@ -133,8 +133,8 @@ fn transform_normalize_quantize_roundtrip() {
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [128, 64, 32, 200]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [128, 64, 32, 200]);
     }
 }
 
@@ -143,8 +143,8 @@ fn transform_passthrough_no_ops() {
     let mut src = TransformSource::new(Box::new(solid_rgba8(4, 4, 42, 42, 42, 255)));
     let data = drain(&mut src);
     assert_eq!(data.len(), 4 * 4 * 4);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [42, 42, 42, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [42, 42, 42, 255]);
     }
 }
 
@@ -200,8 +200,8 @@ fn materialize_from_source() {
 
     let data = drain(&mut mat);
     assert_eq!(data.len(), 4 * 8 * 4);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [10, 20, 30, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [10, 20, 30, 255]);
     }
 }
 
@@ -260,8 +260,8 @@ fn execute_pipeline() {
 
     assert_eq!(sink.data.len(), 4 * 4 * 4);
     assert!(sink.finished);
-    for px in sink.data.chunks_exact(4) {
-        assert_eq!(px, [255, 0, 0, 255]);
+    for px in sink.data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [255, 0, 0, 255]);
     }
 }
 
@@ -397,7 +397,7 @@ fn transform_srgb_to_linear_roundtrip() {
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
     assert_eq!(data.len(), 4 * 4 * 2);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 200).unsigned_abs() <= 1, "R: {}", px[0]);
         assert!((px[1] as i16 - 100).unsigned_abs() <= 1, "G: {}", px[1]);
         assert!((px[2] as i16 - 50).unsigned_abs() <= 1, "B: {}", px[2]);
@@ -429,7 +429,7 @@ fn transform_linearize_delinearize_roundtrip() {
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 180).unsigned_abs() <= 1, "R: {}", px[0]);
         assert!((px[1] as i16 - 90).unsigned_abs() <= 1, "G: {}", px[1]);
         assert!((px[2] as i16 - 45).unsigned_abs() <= 1, "B: {}", px[2]);
@@ -457,7 +457,7 @@ fn transform_format_chain_linear_via_premul() {
 
     assert_eq!(src.format(), format::RGBA8_SRGB);
     let data = drain(&mut src);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 160).unsigned_abs() <= 2, "R: {}", px[0]);
         assert!((px[1] as i16 - 80).unsigned_abs() <= 2, "G: {}", px[1]);
         assert!((px[2] as i16 - 40).unsigned_abs() <= 2, "B: {}", px[2]);
@@ -525,7 +525,7 @@ fn edge_replicate_no_expansion() {
 
     let out = drain(&mut edge);
     assert_eq!(out.len(), 4 * 4 * 4);
-    for px in out.chunks_exact(4) {
-        assert_eq!(px, [100, 200, 50, 255]);
+    for px in out.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [100, 200, 50, 255]);
     }
 }

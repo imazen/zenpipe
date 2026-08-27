@@ -431,7 +431,7 @@ pub(crate) fn convert_smart_crop_analyze(node: &dyn NodeInstance) -> crate::Pipe
         .filter_map(|s| s.trim().parse::<f32>().ok())
         .collect();
     let mut focus_rects = Vec::new();
-    for chunk in floats.chunks_exact(4) {
+    for chunk in floats.as_chunks::<4>().0.iter() {
         focus_rects.push(zenlayout::smart_crop::FocusRect {
             x1: chunk[0],
             y1: chunk[1],

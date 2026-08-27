@@ -181,7 +181,7 @@ impl ExpandCanvasSource {
             .min(canvas_h.saturating_sub(dst_y));
 
         // Pre-build a full background row.
-        // Branch on bpp: chunks_exact_mut(4) is only correct for 4-byte
+        // Branch on bpp: as_chunks_mut::<4>() is only correct for 4-byte
         // pixels. For other bpp, replicate the appropriate prefix of the
         // 4-byte bg_pixel (or zero-fill for non-RGBA layouts).
         let bpp = fmt.bytes_per_pixel();
@@ -194,17 +194,17 @@ impl ExpandCanvasSource {
         let mut bg_row = vec![0u8; row_len];
         match bpp {
             4 => {
-                for chunk in bg_row.chunks_exact_mut(4) {
+                for chunk in bg_row.as_chunks_mut::<4>().0.iter_mut() {
                     chunk.copy_from_slice(&bg_pixel);
                 }
             }
             3 => {
-                for chunk in bg_row.chunks_exact_mut(3) {
+                for chunk in bg_row.as_chunks_mut::<3>().0.iter_mut() {
                     chunk.copy_from_slice(&bg_pixel[..3]);
                 }
             }
             2 => {
-                for chunk in bg_row.chunks_exact_mut(2) {
+                for chunk in bg_row.as_chunks_mut::<2>().0.iter_mut() {
                     chunk.copy_from_slice(&bg_pixel[..2]);
                 }
             }
@@ -265,15 +265,21 @@ impl ExpandCanvasSource {
             match bpp {
                 4 => self
                     .bg_row
-                    .chunks_exact_mut(4)
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
                     .for_each(|c| c.copy_from_slice(&px)),
                 3 => self
                     .bg_row
-                    .chunks_exact_mut(3)
+                    .as_chunks_mut::<3>()
+                    .0
+                    .iter_mut()
                     .for_each(|c| c.copy_from_slice(&px[..3])),
                 2 => self
                     .bg_row
-                    .chunks_exact_mut(2)
+                    .as_chunks_mut::<2>()
+                    .0
+                    .iter_mut()
                     .for_each(|c| c.copy_from_slice(&px[..2])),
                 1 => self.bg_row.fill(px[0]),
                 _ => {}

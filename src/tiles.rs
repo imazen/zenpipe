@@ -32,6 +32,7 @@
 //! covers columns `[col·T − o, (col+1)·T + o)` and the same for rows,
 //! clamped to the level — DZI's "overlap on every interior edge".
 
+#[cfg(feature = "std")]
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::vec;

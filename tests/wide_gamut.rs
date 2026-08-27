@@ -73,7 +73,7 @@ fn solid_f32_source(width: u32, height: u32, pixel: [f32; 4], fmt: PixelFormat) 
             return Ok(false);
         }
         let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-        for px in f32_row.chunks_exact_mut(4) {
+        for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&pixel);
         }
         rows_produced += 1;
@@ -88,7 +88,7 @@ fn solid_u8_source(width: u32, height: u32, pixel: [u8; 4], fmt: PixelFormat) ->
         if rows_produced >= height {
             return Ok(false);
         }
-        for px in buf[..row_bytes].chunks_exact_mut(4) {
+        for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&pixel);
         }
         rows_produced += 1;
@@ -113,8 +113,8 @@ fn p3_linear_passthrough_crop() {
 
     let data = drain(&mut crop);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
-        assert_eq!(px, pixel);
+    for px in f32_data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, pixel);
     }
 }
 
@@ -128,8 +128,8 @@ fn p3_linear_passthrough_materialize() {
     assert_eq!(mat.format(), P3_RGBAF32_LINEAR);
     let data = drain(&mut mat);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
-        assert_eq!(px, pixel);
+    for px in f32_data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, pixel);
     }
 }
 
@@ -146,8 +146,8 @@ fn bt2020_linear_passthrough_crop() {
     assert_eq!(crop.format(), BT2020_RGBAF32_LINEAR);
     let data = drain(&mut crop);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
-        assert_eq!(px, pixel);
+    for px in f32_data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, pixel);
     }
 }
 
@@ -169,7 +169,7 @@ fn srgb_to_p3_conversion() {
     let data = drain(&mut transform);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Neutral gray should map to neutral gray across gamuts.
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] - 0.5).abs() < 0.05,
             "R should be ~0.5, got {}",
@@ -223,7 +223,7 @@ fn srgb_to_p3_roundtrip() {
     assert_eq!(transform.format(), format::RGBAF32_LINEAR);
     let data = drain(&mut transform);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] - pixel[0]).abs() < 0.01,
             "R roundtrip: {} vs {}",
@@ -323,7 +323,7 @@ fn graph_composite_mixed_gamut() {
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Opaque fg over black bg = fg value (converted to BT.709 premul linear)
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         // P3 red (1,0,0) in BT.709 linear will have some green/blue due to gamut mapping
         // but R should still dominate
         assert!(px[0] > 0.5, "R should be significant, got {}", px[0]);
@@ -345,8 +345,8 @@ fn pq_format_passthrough() {
     assert_eq!(crop.format(), BT2020_RGBAF32_PQ);
     let data = drain(&mut crop);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
-        assert_eq!(px, pixel);
+    for px in f32_data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, pixel);
     }
 }
 
@@ -381,7 +381,7 @@ fn rgba16_source_through_pipeline() {
             return Ok(false);
         }
         // Fill with mid-gray: 32768 = 0x8000
-        for chunk in buf[..row_bytes].chunks_exact_mut(2) {
+        for chunk in buf[..row_bytes].as_chunks_mut::<2>().0.iter_mut() {
             chunk.copy_from_slice(&32768u16.to_ne_bytes());
         }
         rows_produced += 1;

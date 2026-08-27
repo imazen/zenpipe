@@ -387,6 +387,9 @@ pub struct ImageJob<'a> {
 
 impl<'a> ImageJob<'a> {
     /// Create a new empty job with default settings.
+    // A `Default` impl would be a public-API addition; deferred to the
+    // pre-0.1 public-API sweep rather than growing the surface for a lint.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             io: HashMap::new(),
@@ -689,10 +692,7 @@ impl<'a> ImageJob<'a> {
                     .get_param("matte_color")
                     .and_then(|v| v.as_str().map(String::from))
                     .filter(|s| !s.is_empty())?;
-                match crate::bridge::parse_matte_rgb(&s) {
-                    Some(rgb) => Some(rgb),
-                    None => None,
-                }
+                crate::bridge::parse_matte_rgb(&s)
             });
         }
 
@@ -1310,10 +1310,10 @@ impl<'a> ImageJob<'a> {
                 meta.xmp = None;
                 // Keep ICC (required for wide gamut), but strip known sRGB profiles
                 // (browsers assume sRGB — embedding it wastes 500B–150KB).
-                if let Some(ref icc) = meta.icc_profile {
-                    if zencodecs::icc_profile_is_srgb(icc) {
-                        meta.icc_profile = None;
-                    }
+                if let Some(ref icc) = meta.icc_profile
+                    && zencodecs::icc_profile_is_srgb(icc)
+                {
+                    meta.icc_profile = None;
                 }
                 // Keep CICP (4 bytes, required for correct wide gamut/HDR display)
                 // Keep content_light_level and mastering_display (HDR tone mapping)
@@ -1386,8 +1386,14 @@ impl<'a> ImageJob<'a> {
         let src_descriptor = source.format();
         let pf = src_descriptor.pixel_format();
 
-        use crate::ColorManagement as _;
-        let transform = crate::MoxCms.build_transform_for_format(&src_icc, &dst_icc, pf, pf);
+        // ColorManagement is deprecated upstream (PluggableCms yields RowTransformMut);
+        // IccTransformSource's public `from_transform` takes `Box<dyn RowTransform>`, so
+        // the old builder stays until zenpipe's CMS surface migrates (see lib.rs).
+        #[allow(deprecated)]
+        let transform = {
+            use crate::ColorManagement as _;
+            crate::MoxCms.build_transform_for_format(&src_icc, &dst_icc, pf, pf)
+        };
 
         match transform {
             Ok(row_transform) => {
@@ -1424,14 +1430,13 @@ impl<'a> ImageJob<'a> {
                 // Composite onto the requested matte color, then drop alpha
                 // (MatteFlattenOp: RGBA8 → RGB8). The old path was a bare
                 // RGBA→RGB conversion that ignored the configured matte.
-                if format != crate::format::RGBA8_SRGB {
-                    if let Some(conv) =
+                if format != crate::format::RGBA8_SRGB
+                    && let Some(conv) =
                         crate::ops::RowConverterOp::new(format, crate::format::RGBA8_SRGB)
-                    {
-                        source = Box::new(
-                            crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
-                        );
-                    }
+                {
+                    source = Box::new(
+                        crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
+                    );
                 }
                 let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
                 source = Box::new(crate::sources::TransformSource::new(source).push(op));
@@ -1651,7 +1656,7 @@ fn ensure_rgba8(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
 }
 
 /// Get raw bytes for an io_id from the IO map.
-pub fn get_io_bytes<'a>(io: &'a HashMap<i32, IoSlot>, io_id: i32) -> Option<&'a [u8]> {
+pub fn get_io_bytes(io: &HashMap<i32, IoSlot>, io_id: i32) -> Option<&[u8]> {
     match io.get(&io_id) {
         Some(IoSlot::Input(data)) => Some(data.as_slice()),
         _ => None,

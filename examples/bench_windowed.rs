@@ -25,7 +25,7 @@ impl SyntheticSource {
         let val: f32 = 0.5;
         let bytes = val.to_ne_bytes();
         let mut buf = vec![0u8; buf_size];
-        for chunk in buf.chunks_exact_mut(4) {
+        for chunk in buf.as_chunks_mut::<4>().0.iter_mut() {
             chunk.copy_from_slice(&bytes);
         }
         Self {

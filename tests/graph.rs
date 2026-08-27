@@ -27,7 +27,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -77,8 +77,8 @@ fn passthrough_graph() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 4);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [255, 0, 0, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [255, 0, 0, 255]);
     }
 }
 
@@ -136,7 +136,7 @@ fn pixel_op_fusion() {
     assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 200).unsigned_abs() <= 1);
         assert!((px[1] as i16 - 100).unsigned_abs() <= 1);
         assert!((px[2] as i16 - 50).unsigned_abs() <= 1);
@@ -272,8 +272,8 @@ fn orient_identity_passthrough() {
 
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [42, 42, 42, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [42, 42, 42, 255]);
     }
 }
 
@@ -320,7 +320,7 @@ fn layout_resize_via_zenresize() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), out_w as usize * out_h as usize * 4);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 2, "G: {}", px[1]);
         assert!((px[2] as i16 - 32).unsigned_abs() <= 2, "B: {}", px[2]);
@@ -352,7 +352,7 @@ fn streaming_resize_graph() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 2 * 2 * 4);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 2, "G: {}", px[1]);
         assert!((px[2] as i16 - 32).unsigned_abs() <= 2, "B: {}", px[2]);
@@ -448,8 +448,8 @@ fn materialize_custom_graph() {
 
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [155, 105, 55, 0]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [155, 105, 55, 0]);
     }
 }
 
@@ -503,7 +503,7 @@ fn auto_format_conversion_for_composite() {
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Transparent fg over black bg = black bg (0, 0, 0, 1) in premul linear
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(px[0].abs() < 0.01);
         assert!(px[1].abs() < 0.01);
         assert!(px[2].abs() < 0.01);
@@ -555,7 +555,7 @@ fn layout_composite_streaming() {
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Opaque red fg over opaque blue bg = red (fg is opaque, fully covers bg)
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(px[0] > 0.9, "R should be ~1.0 (red fg), got {}", px[0]);
         assert!(px[1] < 0.01, "G should be ~0, got {}", px[1]);
         assert!(px[2] < 0.01, "B should be ~0 (fg covers bg), got {}", px[2]);
@@ -590,7 +590,7 @@ fn auto_format_rgba8_to_linear_direct() {
     assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 200).unsigned_abs() <= 1, "R: {}", px[0]);
         assert!((px[1] as i16 - 100).unsigned_abs() <= 1, "G: {}", px[1]);
         assert!((px[2] as i16 - 50).unsigned_abs() <= 1, "B: {}", px[2]);

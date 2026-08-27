@@ -21,7 +21,12 @@ fn coord_source(w: u32, h: u32) -> Box<dyn Source> {
             if y >= h {
                 return Ok(false);
             }
-            for (x, px) in buf[..row_bytes].chunks_exact_mut(4).enumerate() {
+            for (x, px) in buf[..row_bytes]
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .enumerate()
+            {
                 px.copy_from_slice(&[x as u8, y as u8, 7, 255]);
             }
             y += 1;
@@ -86,7 +91,13 @@ fn check(w: u32, h: u32, l: u32, t: u32, r: u32, b: u32, fill: CanvasFill) {
     );
     if got != want {
         let cw = (w + l + r) as usize;
-        for (i, (g, e)) in got.chunks_exact(4).zip(want.chunks_exact(4)).enumerate() {
+        for (i, (g, e)) in got
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(want.as_chunks::<4>().0.iter())
+            .enumerate()
+        {
             assert_eq!(
                 g,
                 e,

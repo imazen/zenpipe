@@ -54,7 +54,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -79,8 +79,8 @@ fn tee_basic_single_cursor() {
     let mut cursor = tee.cursor();
     let data = drain(&mut cursor);
     assert_eq!(data.len(), 4 * 4 * 4);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [100, 200, 50, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [100, 200, 50, 255]);
     }
 }
 
@@ -232,12 +232,12 @@ fn tee_cursor_into_graph() {
     assert_eq!(data_b.len(), 2 * 2 * 4);
 
     // Both should be roughly the same color (solid input)
-    for px in data_a.chunks_exact(4) {
+    for px in data_a.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 2);
         assert!((px[2] as i16 - 32).unsigned_abs() <= 2);
     }
-    for px in data_b.chunks_exact(4) {
+    for px in data_b.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 2);
         assert!((px[2] as i16 - 32).unsigned_abs() <= 2);
@@ -290,7 +290,7 @@ fn tee_preserves_format() {
             return Ok(false);
         }
         let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-        for px in f32_row.chunks_exact_mut(4) {
+        for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&[0.5f32, 0.3, 0.1, 1.0]);
         }
         rows_produced += 1;
@@ -305,7 +305,7 @@ fn tee_preserves_format() {
 
     let data = drain(&mut cursor);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
-        assert_eq!(px, [0.5f32, 0.3, 0.1, 1.0]);
+    for px in f32_data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [0.5f32, 0.3, 0.1, 1.0]);
     }
 }

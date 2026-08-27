@@ -39,7 +39,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -86,7 +86,7 @@ fn solid_rgb8(width: u32, height: u32, pixel: [u8; 3]) -> Box<dyn Source> {
             if rows >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(3) {
+            for px in buf[..row_bytes].as_chunks_mut::<3>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows += 1;
@@ -151,8 +151,8 @@ fn expand_canvas_no_padding() {
 
     let data = drain(&mut canvas);
     assert_eq!(data.len(), 4 * 4 * 4);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [42, 42, 42, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [42, 42, 42, 255]);
     }
 }
 
@@ -247,8 +247,8 @@ fn flip_h_single_pixel_wide() {
     assert_eq!(flip.height(), 4);
 
     let data = drain(&mut flip);
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [100, 200, 50, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [100, 200, 50, 255]);
     }
 }
 
@@ -346,7 +346,7 @@ fn solid_premul_f32(width: u32, height: u32, pixel: [f32; 4]) -> Box<dyn Source>
                 return Ok(false);
             }
             let f32_buf: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_buf.chunks_exact_mut(4) {
+            for px in f32_buf.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -371,7 +371,7 @@ fn mask_transform_half_alpha() {
     let data = drain(&mut mt);
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
-    for px in floats.chunks_exact(4) {
+    for px in floats.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] - 0.5).abs() < 0.01,
             "R should be ~0.5, got {}",
@@ -406,7 +406,7 @@ fn mask_transform_transparent_mask_zeros_output() {
     let data = drain(&mut mt);
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
-    for px in floats.chunks_exact(4) {
+    for px in floats.as_chunks::<4>().0.iter() {
         assert!(px[0].abs() < 0.01, "R should be ~0, got {}", px[0]);
         assert!(px[1].abs() < 0.01, "G should be ~0, got {}", px[1]);
         assert!(px[2].abs() < 0.01, "B should be ~0, got {}", px[2]);
@@ -425,7 +425,7 @@ fn mask_transform_opaque_mask_preserves_pixels() {
     let data = drain(&mut mt);
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
-    for px in floats.chunks_exact(4) {
+    for px in floats.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] - 0.8).abs() < 0.01,
             "R should be ~0.8, got {}",
@@ -578,8 +578,8 @@ fn graph_auto_orient_exif_1_identity() {
     assert_eq!(pipeline.height(), 4);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [42, 42, 42, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [42, 42, 42, 255]);
     }
 }
 
@@ -602,8 +602,8 @@ fn graph_auto_orient_invalid_exif_is_identity() {
         assert_eq!(pipeline.height(), 4);
 
         let data = drain(pipeline.as_mut());
-        for px in data.chunks_exact(4) {
-            assert_eq!(px, [10, 20, 30, 255]);
+        for px in data.as_chunks::<4>().0.iter() {
+            assert_eq!(*px, [10, 20, 30, 255]);
         }
     }
 }
@@ -670,7 +670,7 @@ fn graph_overlay_watermark() {
     let overlay_fmt = format::RGBA8_SRGB;
     let mut overlay_data = vec![0u8; overlay_w as usize * overlay_h as usize * 4];
     // Fill with semi-transparent red
-    for px in overlay_data.chunks_exact_mut(4) {
+    for px in overlay_data.as_chunks_mut::<4>().0.iter_mut() {
         px.copy_from_slice(&[255, 0, 0, 128]);
     }
 
@@ -719,7 +719,7 @@ fn graph_overlay_with_reduced_opacity() {
     let overlay_w = 2u32;
     let overlay_h = 2u32;
     let mut overlay_data = vec![0u8; overlay_w as usize * overlay_h as usize * 4];
-    for px in overlay_data.chunks_exact_mut(4) {
+    for px in overlay_data.as_chunks_mut::<4>().0.iter_mut() {
         px.copy_from_slice(&[255, 255, 255, 255]); // opaque white
     }
 
@@ -780,7 +780,7 @@ fn graph_remove_alpha_semi_transparent() {
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 3);
     // Should be blended: some value between 0 and 255
-    for px in data.chunks_exact(3) {
+    for px in data.as_chunks::<3>().0.iter() {
         assert!(
             px[0] > 50 && px[0] < 200,
             "R should be mid-range, got {}",
@@ -810,7 +810,7 @@ fn graph_add_alpha_from_rgb() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 4);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 1, "R: {}", px[0]);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 1, "G: {}", px[1]);
         assert!((px[2] as i16 - 32).unsigned_abs() <= 1, "B: {}", px[2]);
@@ -834,8 +834,8 @@ fn graph_add_alpha_already_rgba_noop() {
     assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [128, 64, 32, 200]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [128, 64, 32, 200]);
     }
 }
 
@@ -867,8 +867,8 @@ fn graph_materialize_custom_transform() {
 
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [55, 155, 205, 0]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [55, 155, 205, 0]);
     }
 }
 
@@ -963,7 +963,7 @@ fn graph_crop_whitespace_removes_border() {
 
     let out_data = drain(pipeline.as_mut());
     // All pixels should be red
-    for px in out_data.chunks_exact(4) {
+    for px in out_data.as_chunks::<4>().0.iter() {
         assert_eq!(px[0], 255, "R");
         assert_eq!(px[1], 0, "G");
         assert_eq!(px[2], 0, "B");
@@ -1022,8 +1022,8 @@ fn graph_analyze_custom_analysis() {
     assert_eq!(pipeline.height(), 4);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [100, 200, 50, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [100, 200, 50, 255]);
     }
 }
 

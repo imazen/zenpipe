@@ -64,6 +64,7 @@ use geometry::is_geometry_node;
 use parse::{parse_constraint_mode, parse_filter_opt};
 
 // Crate-internal color helper (job-level matte resolution).
+#[cfg(feature = "job")]
 pub(crate) use parse::parse_matte_rgb;
 
 // ─── CompileResult ───

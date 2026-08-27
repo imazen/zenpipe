@@ -924,7 +924,12 @@ fn fill_canvas_from_background<B: Background>(
 /// Convert a row of premultiplied linear f32 pixels to sRGB u8.
 fn premul_f32_row_to_srgb_u8(src: &[f32], dst: &mut [u8], has_alpha: bool, ch: usize) {
     if has_alpha && ch == 4 {
-        for (pixel_f32, pixel_u8) in src.chunks_exact(4).zip(dst.chunks_exact_mut(4)) {
+        for (pixel_f32, pixel_u8) in src
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(dst.as_chunks_mut::<4>().0.iter_mut())
+        {
             let a = pixel_f32[3];
             let (r, g, b) = if a > 1.0 / 1024.0 {
                 let inv_a = 1.0 / a;

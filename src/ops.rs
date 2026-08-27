@@ -153,8 +153,8 @@ impl PixelOp for MatteFlattenOp {
         // Iterate by chunks_exact — let the slice length bound the loop
         // rather than computing `width * height` (which overflows on
         // 32-bit for large dims, audit M7).
-        let inputs = input.chunks_exact(4);
-        let outputs = output.chunks_exact_mut(3);
+        let inputs = input.as_chunks::<4>().0.iter();
+        let outputs = output.as_chunks_mut::<3>().0.iter_mut();
         for (p, o) in inputs.zip(outputs) {
             let a = p[3] as u32;
             let inv = 255 - a;

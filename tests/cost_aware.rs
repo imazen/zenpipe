@@ -36,7 +36,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -59,7 +59,7 @@ fn solid_f32_linear_source(width: u32, height: u32, pixel: [f32; 4]) -> Box<dyn 
                 return Ok(false);
             }
             let f32_slice: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_slice.chunks_exact_mut(4) {
+            for px in f32_slice.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -105,7 +105,7 @@ fn resize_f32_linear_source_stays_f32() {
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Verify we got valid f32 pixel data (not garbage)
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(px[0] >= 0.0 && px[0] <= 1.0, "R out of range: {}", px[0]);
         assert!(px[1] >= 0.0 && px[1] <= 1.0, "G out of range: {}", px[1]);
         assert!(px[2] >= 0.0 && px[2] <= 1.0, "B out of range: {}", px[2]);

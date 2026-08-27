@@ -32,7 +32,7 @@ fn build_test_gif(frame_count: usize, width: u16, height: u16) -> Vec<u8> {
     for i in 0..frame_count {
         let gray = ((i + 1) * 255 / frame_count).min(255) as u8;
         let mut pixels = vec![0u8; stride * height as usize];
-        for px in pixels.chunks_exact_mut(4) {
+        for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&[gray, gray, gray, 255]);
         }
         let slice = zenpixels::PixelSlice::new(
@@ -357,7 +357,7 @@ fn make_solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source>
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;

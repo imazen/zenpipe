@@ -542,7 +542,9 @@ fn parse_c_focus(querystring: &str) -> Option<CFocusParsed> {
             2 => return Some(CFocusParsed::Point(floats[0], floats[1])),
             n if n >= 4 && n % 4 == 0 => {
                 let rects: Vec<[f32; 4]> = floats
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .map(|c| [c[0], c[1], c[2], c[3]])
                     .collect();
                 return Some(CFocusParsed::Rects(rects));

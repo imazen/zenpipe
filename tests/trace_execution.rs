@@ -21,7 +21,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;

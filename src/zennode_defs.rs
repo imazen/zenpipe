@@ -1737,11 +1737,11 @@ impl NodeInstance for PostRotate {
         }
     }
     fn set_param(&mut self, name: &str, value: zennode::ParamValue) -> bool {
-        if name == "degrees" {
-            if let Some(v) = value.as_i32() {
-                self.degrees = v;
-                return true;
-            }
+        if name == "degrees"
+            && let Some(v) = value.as_i32()
+        {
+            self.degrees = v;
+            return true;
         }
         false
     }
@@ -2009,19 +2009,23 @@ impl NodeDef for RoundcornersRiapiDef {
         let clamp = |v: f32| v.clamp(0.0, 100.0);
         match parts.as_slice() {
             [v] if *v > 0.0 => {
-                let mut rc = RoundCorners::default();
-                rc.mode = "percentage".into();
-                rc.radius = clamp(*v);
+                let rc = RoundCorners {
+                    mode: "percentage".into(),
+                    radius: clamp(*v),
+                    ..RoundCorners::default()
+                };
                 Ok(Some(Box::new(rc)))
             }
             // IR4 order: top-left, top-right, bottom-right, bottom-left.
             [tl, tr, br, bl] => {
-                let mut rc = RoundCorners::default();
-                rc.mode = "percentage_custom".into();
-                rc.radius_tl = clamp(*tl);
-                rc.radius_tr = clamp(*tr);
-                rc.radius_br = clamp(*br);
-                rc.radius_bl = clamp(*bl);
+                let rc = RoundCorners {
+                    mode: "percentage_custom".into(),
+                    radius_tl: clamp(*tl),
+                    radius_tr: clamp(*tr),
+                    radius_br: clamp(*br),
+                    radius_bl: clamp(*bl),
+                    ..RoundCorners::default()
+                };
                 Ok(Some(Box::new(rc)))
             }
             [v] if *v <= 0.0 => Ok(None),

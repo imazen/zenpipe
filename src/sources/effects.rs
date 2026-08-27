@@ -45,7 +45,7 @@ fn luma_over_white(rgba: &[u8], stride: usize, w: u32, h: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity(w as usize * h as usize);
     for y in 0..h as usize {
         let row = &rgba[y * stride..y * stride + w as usize * 4];
-        for px in row.chunks_exact(4) {
+        for px in row.as_chunks::<4>().0.iter() {
             let a = u32::from(px[3]);
             // 0.2126 R + 0.7152 G + 0.0722 B, fixed point /256.
             let l = (54 * u32::from(px[0]) + 183 * u32::from(px[1]) + 19 * u32::from(px[2])) >> 8;
@@ -308,7 +308,7 @@ mod tests {
 
     fn solid_red_source(w: u32, h: u32) -> Box<dyn Source> {
         let mut data = vec![0u8; (w * h * 4) as usize];
-        for chunk in data.chunks_exact_mut(4) {
+        for chunk in data.as_chunks_mut::<4>().0.iter_mut() {
             chunk[0] = 255; // R
             chunk[3] = 255; // A
         }

@@ -137,10 +137,9 @@ pub fn preprocess_querystring(qs: &str) -> (String, Vec<String>) {
                     .value
                     .strip_suffix('x')
                     .or_else(|| p.value.strip_suffix('X'))
+                    && stripped.parse::<f32>().is_ok()
                 {
-                    if stripped.parse::<f32>().is_ok() {
-                        p.value = stripped.to_string();
-                    }
+                    p.value = stripped.to_string();
                 }
             }
             _ => {}

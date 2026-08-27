@@ -29,7 +29,7 @@ fn solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -52,7 +52,7 @@ fn solid_linear_source(width: u32, height: u32, pixel: [f32; 4]) -> Box<dyn Sour
                 return Ok(false);
             }
             let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_row.chunks_exact_mut(4) {
+            for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -79,7 +79,7 @@ fn filter_source_identity_pipeline() {
 
     let data = drain(&mut src);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!((px[0] - 0.5).abs() < 0.01, "R: {}", px[0]);
         assert!((px[1] - 0.3).abs() < 0.01, "G: {}", px[1]);
         assert!((px[2] - 0.1).abs() < 0.01, "B: {}", px[2]);
@@ -103,7 +103,7 @@ fn filter_source_exposure_per_pixel() {
     let data = drain(&mut src);
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Exposure +1 stop should roughly double values
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(px[0] > 0.35, "R should be ~0.4, got {}", px[0]);
         assert!(px[1] > 0.17, "G should be ~0.2, got {}", px[1]);
         assert!(px[2] > 0.08, "B should be ~0.1, got {}", px[2]);
@@ -144,7 +144,7 @@ fn filter_source_small_strips() {
                 return Ok(false);
             }
             let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-            for px in f32_row.chunks_exact_mut(4) {
+            for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&[0.5, 0.2, 0.1, 1.0]);
             }
             rows_produced += 1;
@@ -224,7 +224,7 @@ fn filter_graph_saturation_roundtrip() {
 
     let data = drain(compiled.as_mut());
     assert_eq!(data.len(), 8 * 4 * 4);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         // Saturation 1.0 should be near-identity, allow ±3 for oklab roundtrip
         assert!((px[0] as i16 - 128).unsigned_abs() <= 3, "R: {}", px[0]);
         assert!((px[1] as i16 - 64).unsigned_abs() <= 3, "G: {}", px[1]);

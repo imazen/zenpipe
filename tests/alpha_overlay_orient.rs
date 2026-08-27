@@ -27,7 +27,7 @@ fn solid_rgba8(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows += 1;
@@ -48,7 +48,7 @@ fn solid_rgb8(width: u32, height: u32, pixel: [u8; 3]) -> Box<dyn Source> {
             if rows >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(3) {
+            for px in buf[..row_bytes].as_chunks_mut::<3>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows += 1;
@@ -81,8 +81,8 @@ fn remove_alpha_opaque_pixels() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 3); // RGB = 3 bytes/pixel
-    for px in data.chunks_exact(3) {
-        assert_eq!(px, [255, 0, 0]);
+    for px in data.as_chunks::<3>().0.iter() {
+        assert_eq!(*px, [255, 0, 0]);
     }
 }
 
@@ -103,8 +103,8 @@ fn remove_alpha_transparent_white_matte() {
 
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(3) {
-        assert_eq!(px, [255, 255, 255]); // white matte shows through
+    for px in data.as_chunks::<3>().0.iter() {
+        assert_eq!(*px, [255, 255, 255]); // white matte shows through
     }
 }
 
@@ -125,7 +125,7 @@ fn remove_alpha_50_percent() {
 
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(3) {
+    for px in data.as_chunks::<3>().0.iter() {
         // 255*128/255 + 255*127/255 ≈ 128 + 127 = 255 for R
         assert!(px[0] > 250, "R: {}", px[0]);
         // 0*128/255 + 255*127/255 ≈ 127 for G
@@ -155,7 +155,7 @@ fn add_alpha_to_rgb() {
 
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 4); // RGBA = 4 bytes/pixel
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert_eq!(px[0], 100);
         assert_eq!(px[1], 200);
         assert_eq!(px[2], 50);
@@ -179,8 +179,8 @@ fn add_alpha_noop_when_already_rgba() {
     assert_eq!(pipeline.format(), format::RGBA8_SRGB);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [100, 200, 50, 200]); // alpha preserved
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [100, 200, 50, 200]); // alpha preserved
     }
 }
 
@@ -248,7 +248,7 @@ fn overlay_with_opacity() {
     let data = drain(pipeline.as_mut());
     let f32_data: &[f32] = bytemuck::cast_slice(&data);
     // Should be a blend of red and blue
-    for px in f32_data.chunks_exact(4) {
+    for px in f32_data.as_chunks::<4>().0.iter() {
         assert!(px[0] > 0.1, "R should have red contribution, got {}", px[0]);
         assert!(
             px[2] > 0.1,
@@ -298,8 +298,8 @@ fn auto_orient_identity() {
     assert_eq!(pipeline.height(), 4);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
-        assert_eq!(px, [42, 42, 42, 255]);
+    for px in data.as_chunks::<4>().0.iter() {
+        assert_eq!(*px, [42, 42, 42, 255]);
     }
 }
 
@@ -347,7 +347,7 @@ fn resize_with_filter() {
     assert_eq!(pipeline.height(), 4);
 
     let data = drain(pipeline.as_mut());
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2);
     }
 }

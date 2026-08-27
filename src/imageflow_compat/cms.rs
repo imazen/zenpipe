@@ -71,9 +71,14 @@ fn apply_icc_to_source(
     let src_format = source.format();
     let pixel_format = src_format.pixel_format();
 
-    use crate::ColorManagement as _;
-    let transform =
-        crate::MoxCms.build_transform_for_format(src_icc, dst_icc, pixel_format, pixel_format);
+    // ColorManagement is deprecated upstream (PluggableCms yields RowTransformMut);
+    // IccTransformSource's public `from_transform` takes `Box<dyn RowTransform>`, so
+    // the old builder stays until zenpipe's CMS surface migrates (see lib.rs).
+    #[allow(deprecated)]
+    let transform = {
+        use crate::ColorManagement as _;
+        crate::MoxCms.build_transform_for_format(src_icc, dst_icc, pixel_format, pixel_format)
+    };
 
     match transform {
         Ok(row_transform) => {

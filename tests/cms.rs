@@ -49,7 +49,7 @@ fn solid_rgba8(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source> {
             if rows_produced >= height {
                 return Ok(false);
             }
-            for px in buf[..row_bytes].chunks_exact_mut(4) {
+            for px in buf[..row_bytes].as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&pixel);
             }
             rows_produced += 1;
@@ -81,7 +81,7 @@ fn icc_srgb_to_p3_basic() {
 
     // Neutral gray (128,128,128) should remain near-neutral under gamut mapping.
     // sRGB and P3 share the D65 white point, so neutrals are stable.
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] as i16 - 128).unsigned_abs() <= 2,
             "R: {} (expected ~128)",
@@ -117,7 +117,7 @@ fn icc_p3_to_srgb_basic() {
     // P3 colors interpreted as sRGB should shift (P3 has wider gamut).
     // The exact values depend on moxcms's gamut mapping, but the transform
     // should produce valid u8 output without panicking.
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         // Just verify values are in valid range and alpha preserved
         assert_eq!(px[3], 255);
     }
@@ -142,7 +142,7 @@ fn icc_srgb_roundtrip() {
     .unwrap();
 
     let data = drain(&mut step2);
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!(
             (px[0] as i16 - 200).unsigned_abs() <= 3,
             "R roundtrip: {} vs 200",
@@ -217,7 +217,7 @@ fn graph_icc_transform_node() {
     assert_eq!(data.len(), 4 * 4 * 4);
 
     // Neutral gray should be stable.
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert!((px[0] as i16 - 128).unsigned_abs() <= 2, "R: {}", px[0]);
     }
 }
@@ -289,7 +289,7 @@ fn graph_crop_then_icc() {
     let data = drain(pipeline.as_mut());
     assert_eq!(data.len(), 4 * 4 * 4);
     // Alpha should be preserved.
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0.iter() {
         assert_eq!(px[3], 255);
     }
 }

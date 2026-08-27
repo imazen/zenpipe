@@ -182,6 +182,34 @@ fn resolve_constraint_mode(
     Ok(composed)
 }
 
+/// A raw RIAPI crop window (`crop=x1,y1,x2,y2` + `cropxunits`/`cropyunits`)
+/// before resolution against the source dimensions.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RiapiCropWindow {
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    /// `0` means the x coordinates are in source pixels.
+    xunits: f32,
+    /// `0` means the y coordinates are in source pixels.
+    yunits: f32,
+}
+
+#[cfg(test)]
+impl RiapiCropWindow {
+    fn new(x1: f32, y1: f32, x2: f32, y2: f32, xunits: f32, yunits: f32) -> Self {
+        Self {
+            x1,
+            y1,
+            x2,
+            y2,
+            xunits,
+            yunits,
+        }
+    }
+}
+
 /// Resolve a RIAPI crop window (raw coordinates + units) into a pixel
 /// rectangle, following imageflow's rules
 /// (`imageflow_riapi/src/ir4/layout.rs:700-775`):
@@ -191,16 +219,15 @@ fn resolve_constraint_mode(
 /// - negative `x1`/`y1` (or non-positive `x2`/`y2`) are bottom/right-relative
 /// - everything clamps to the image bounds
 /// - an empty or inverted window resets to the full image
-fn resolve_riapi_crop(
-    x1: f32,
-    y1: f32,
-    x2: f32,
-    y2: f32,
-    xunits: f32,
-    yunits: f32,
-    src_w: u32,
-    src_h: u32,
-) -> (u32, u32, u32, u32) {
+fn resolve_riapi_crop(window: RiapiCropWindow, src_w: u32, src_h: u32) -> (u32, u32, u32, u32) {
+    let RiapiCropWindow {
+        x1,
+        y1,
+        x2,
+        y2,
+        xunits,
+        yunits,
+    } = window;
     let wf = src_w as f64;
     let hf = src_h as f64;
     let xu = if xunits <= 0.0 { wf } else { xunits as f64 };
@@ -553,13 +580,15 @@ pub(crate) fn compile_geometry_run(
                 cur_h = ph;
             }
             "zenpipe.riapi_crop" => {
-                let x1 = param_f32_opt(node, "x1").unwrap_or(0.0);
-                let y1 = param_f32_opt(node, "y1").unwrap_or(0.0);
-                let x2 = param_f32_opt(node, "x2").unwrap_or(0.0);
-                let y2 = param_f32_opt(node, "y2").unwrap_or(0.0);
-                let xu = param_f32_opt(node, "xunits").unwrap_or(0.0);
-                let yu = param_f32_opt(node, "yunits").unwrap_or(0.0);
-                let (px, py, pw, ph) = resolve_riapi_crop(x1, y1, x2, y2, xu, yu, cur_w, cur_h);
+                let window = RiapiCropWindow {
+                    x1: param_f32_opt(node, "x1").unwrap_or(0.0),
+                    y1: param_f32_opt(node, "y1").unwrap_or(0.0),
+                    x2: param_f32_opt(node, "x2").unwrap_or(0.0),
+                    y2: param_f32_opt(node, "y2").unwrap_or(0.0),
+                    xunits: param_f32_opt(node, "xunits").unwrap_or(0.0),
+                    yunits: param_f32_opt(node, "yunits").unwrap_or(0.0),
+                };
+                let (px, py, pw, ph) = resolve_riapi_crop(window, cur_w, cur_h);
                 if (px, py, pw, ph) != (0, 0, cur_w, cur_h) {
                     pipeline = pipeline.crop_pixels(px, py, pw, ph);
                     cur_w = pw;
@@ -657,7 +686,11 @@ mod tests {
     fn crop_absent_units_are_source_pixels() {
         // ?crop=10,20,110,220 on a 400×300 source = a 100×200 pixel window.
         assert_eq!(
-            resolve_riapi_crop(10.0, 20.0, 110.0, 220.0, 0.0, 0.0, 400, 300),
+            resolve_riapi_crop(
+                RiapiCropWindow::new(10.0, 20.0, 110.0, 220.0, 0.0, 0.0),
+                400,
+                300
+            ),
             (10, 20, 100, 200)
         );
     }
@@ -666,7 +699,11 @@ mod tests {
     fn crop_percent_units() {
         // c=25,25,75,75 (units 100) on 400×200 → x 100..300, y 50..150.
         assert_eq!(
-            resolve_riapi_crop(25.0, 25.0, 75.0, 75.0, 100.0, 100.0, 400, 200),
+            resolve_riapi_crop(
+                RiapiCropWindow::new(25.0, 25.0, 75.0, 75.0, 100.0, 100.0),
+                400,
+                200
+            ),
             (100, 50, 200, 100)
         );
     }
@@ -676,7 +713,11 @@ mod tests {
         // crop=-100,-100,0,0 → the bottom-right 100×100 corner
         // (x2/y2 of 0 also wrap to the far edge, per IR4).
         assert_eq!(
-            resolve_riapi_crop(-100.0, -100.0, 0.0, 0.0, 0.0, 0.0, 400, 300),
+            resolve_riapi_crop(
+                RiapiCropWindow::new(-100.0, -100.0, 0.0, 0.0, 0.0, 0.0),
+                400,
+                300
+            ),
             (300, 200, 100, 100)
         );
     }
@@ -684,7 +725,11 @@ mod tests {
     #[test]
     fn crop_inverted_window_resets_to_full_image() {
         assert_eq!(
-            resolve_riapi_crop(300.0, 10.0, 100.0, 200.0, 0.0, 0.0, 400, 300),
+            resolve_riapi_crop(
+                RiapiCropWindow::new(300.0, 10.0, 100.0, 200.0, 0.0, 0.0),
+                400,
+                300
+            ),
             (0, 0, 400, 300)
         );
     }
@@ -692,7 +737,11 @@ mod tests {
     #[test]
     fn crop_clamps_to_image() {
         assert_eq!(
-            resolve_riapi_crop(-50.0, 0.0, 9999.0, 9999.0, 100.0, 100.0, 400, 300),
+            resolve_riapi_crop(
+                RiapiCropWindow::new(-50.0, 0.0, 9999.0, 9999.0, 100.0, 100.0),
+                400,
+                300
+            ),
             // -50% wraps to x=200 (=-200px +400); x2/y2 clamp to the edges.
             (200, 0, 200, 300)
         );
