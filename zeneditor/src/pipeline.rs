@@ -117,6 +117,9 @@ pub(crate) fn geometry_to_nodes(
             right: geo.padding.right,
             bottom: geo.padding.bottom,
             color: geo.padding.bg_color.clone(),
+            // The editor's padding model is a solid color; the mirror /
+            // replicate / repeat fills have no editor control yet.
+            fill: String::from("solid"),
         }));
     }
 }

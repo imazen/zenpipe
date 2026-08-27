@@ -65,7 +65,22 @@ threading, hdr directives, compat security. Verified remaining:
   pre-existing, unrelated to CMS/moxcms)**: minimal 8x8 JPEG in →
   `ImageJob` with `CmsMode::None` → out; the encoded output's first two
   bytes are `[0xFF, 0x0A]` instead of the JPEG SOI marker `[0xFF, 0xD8]`
-  (`src/job.rs:2058`). Reproduces identically on moxcms 0.8.1 and 0.9.0,
-  and `CmsMode::None` means color management isn't in the path at all —
-  this is a JPEG-encode-side bug, likely a tiny-image (8x8) edge case.
-  Not investigated further; needs its own session.
+  (`src/job.rs:2058`). Re-diagnosed 2026-08-27: `FF 0A` is the **JPEG XL
+  codestream signature** — not a JPEG-encoder bug. `ImageJob` leaves
+  `CodecIntent::format` as `None` when no output format/extension is
+  given, and `zencodecs::select_format_from_intent` treats `None` like
+  `FormatChoice::Auto` (`zencodecs/src/select.rs:400`), so the auto-selector
+  picks JXL. The test expects "no format" to mean "keep the source format"
+  (`FormatChoice::Keep`). Decide which default the job API wants, then fix
+  `src/job.rs` (default `Keep`) or the test — not the encoder.
+- **`export_querystring_keys_includes_kv_annotated_nodes` fails
+  (`tests/regression_bridge_codec.rs:398`, `--features
+  zennode,json-schema`)**: it expects `zenlayout.orient` in the querystring
+  key registry "because it has `#[kv("srotate")]`", but the `Orient` node
+  (`src/zennode_defs.rs:149`) carries no `#[kv]` attribute — `srotate` is
+  handled by the hand-written RIAPI adapter (`src/zennode_defs.rs:1876`),
+  which the `#[kv]`-only generator does not walk (same root cause as the
+  "Generated docs regen pending" item above). Pre-existing on main; CI has
+  not reached the test step since at least 2026-08-01 (it fails at
+  dependency resolution first — see the zenavif note in the root
+  `[patch.crates-io]`).

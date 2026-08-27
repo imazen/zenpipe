@@ -19,7 +19,7 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = "0.1.25" }
+zencodec = { version = "0.1.26" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -35,10 +35,12 @@ zenpixels-convert = { version = "0.2.10", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
-zenjpeg = { version = "0.8.4", optional = true, features = ["decoder", "zencodec", "trellis", "recompress"] }
+# zenjpeg 0.9.0 (git main) dropped the no-op `decoder`/`trellis` features —
+# both are always compiled now; `recompress` is still a real gate.
+zenjpeg = { version = "0.9.0", optional = true, features = ["zencodec", "recompress"] }
 # UltraHDR gain-map math + the `pixel_buffer_from_vec` constructor (unifies with
-# the copy zenjpeg pulls in). Gated with jpeg-ultrahdr.
-ultrahdr-core = { version = "0.5.0", optional = true, default-features = false }
+# the copy zenjpeg 0.9.0 pulls in — registry 0.6.0). Gated with jpeg-ultrahdr.
+ultrahdr-core = { version = "0.6.0", optional = true, default-features = false }
 # zenwebp main made `zencodec` a required, always-on dependency (no cargo
 # feature) as part of its Pattern B error boundary migration (#69); its
 # `zencodec` feature no longer exists. The codec adapter module isn't
@@ -48,25 +50,33 @@ zenwebp = { version = "0.5.0", optional = true }
 # feature); its `zencodec` feature no longer exists (imazen/zengif#13). Default
 # features (`std` + `zenquant`) already cover what the old `zencodec` feature
 # implied.
-zengif = { version = "0.7.3", optional = true }
+zengif = { version = "0.8.0", optional = true }
+# Registry 0.1.6 on purpose (pre-taxonomy but additive-compatible with zencodec
+# 0.1.26): zenavif main's `encode` chain (zenravif 0.2.0 → path-only zenrav1e)
+# is unpublished and cannot resolve from git — see the workspace-root
+# [patch.crates-io] note. Drop `features = ["zencodec"]` when moving to 0.1.7+.
 zenavif = { version = "0.1.6", optional = true, features = ["zencodec"] }
 # Pure-Rust HEIC/HEIF decode (base SDR + gain-map HDR reconstruct via ultrahdr-core).
 # crates.io tops out at 0.1.6 (pre-adapter); patched to imazen/heic git main below.
 heic = { version = "0.2.0", optional = true, default-features = false, features = ["backend-rust", "zencodec"] }
 zenavif-parse = { version = "0.6.2", optional = true, features = ["eager"] }
-zenpng = { version = "0.1.4", optional = true, features = ["zencodec"] }
+zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
-# imazen/zenextras git main below. Powers `tiff` (zenpipe#43).
+# imazen/zenextras git main at the workspace root. Powers `tiff` (zenpipe#43).
 zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
-zenjxl = { version = "0.2.1", optional = true, default-features = false, features = ["zencodec"] }
+zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
 # encoder, so the reconstruct direction builds independently. The workspace-root
-# git patch tracks zenjxl-decoder main (mode-aware orientation API, post-0.3.10).
-zenjxl-decoder = { version = "0.3.8", optional = true, features = ["jpeg"] }
+# git patch tracks zenjxl-decoder main (0.4.0 — the breaking API batch zenjxl
+# 0.3.0 requires; crates.io tops out at 0.3.10).
+zenjxl-decoder = { version = "0.4.0", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { version = "0.2.0", optional = true, features = ["zencodec"] }
+# Registry zenraw 0.2.0 / zenpdf 0.2.0 predate zencodec's CategorizedError
+# taxonomy; both are git-patched at the workspace root to their mains (zenraw /
+# zenextras), which are on zencodec 0.1.26.
 zenraw = { version = "0.2.0", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
 # PDF page rendering via the hayro engine (decode-only; renders pages to RGBA8).
 # Optional and out of default — hayro is a heavy dependency.

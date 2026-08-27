@@ -17,7 +17,7 @@ parallel = ["dep:rayon", "dep:wasm-bindgen-rayon"]
 zeneditor = { path = "../../zeneditor" }
 
 # Codec types for format detection in WASM glue
-zencodec = { version = "0.1.12", default-features = false }
+zencodec = { version = "0.1.26", default-features = false }
 
 serde_json = "1"
 
@@ -38,22 +38,42 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # regenerates this section via ci-prep at build time; local sibling lockstep
 # is opt-in via `cargo superwork patch`.
 [patch.crates-io]
-# zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
-# crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
+# One entry per git-form entry at the workspace root (see the rationale
+# comments there); keep the two tables in sync.
+# zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
-# zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
-# transcode); the published 0.2.1 predates it.
+# heic main is 0.2.0 (zencodec decode adapter); crates.io tops out at 0.1.6.
+heic = { git = "https://github.com/imazen/heic" }
+# zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenpixels = { git = "https://github.com/imazen/zenpixels" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
+# 0.5.0 + `full_reconstruction_boost` for heic's `^0.5` — the same rev the
+# workspace root's Cargo.lock holds (ultrahdr main is 0.6.0 and would no
+# longer satisfy heic). zenjpeg 0.9.0 / zencodecs use registry 0.6.0.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
+# zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
-# zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
-# uses; 0.3.10 on crates.io predates it (same version number, older content).
+# zenjxl-decoder main is 0.4.0 (the breaking API batch zenjxl 0.3.0 needs);
+# crates.io tops out at 0.3.10.
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
-# zenwebp main (0.4.5) checks Stop tokens at decode entry; 0.4.4 predates it.
+# zenwebp main is 0.5.0 (Pattern B error boundary, zencodec always-on);
+# the last unyanked crates.io release is 0.4.4.
 zenwebp = { git = "https://github.com/imazen/zenwebp" }
-# zenpng main decodes EXIF orientation (the conformance verdict table was
-# promoted to match it); the published 0.1.4 predates that sweep.
+# zenpng main is 0.2.0; the published 0.1.4 predates the orientation sweep.
 zenpng = { git = "https://github.com/imazen/zenpng" }
+# zenbitmaps main is 0.2.0 (At<BitmapError>); crates.io tops out at 0.1.5.
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+# zengif main is 0.8.0 (Pattern B error boundary, zencodec always-on).
+zengif = { git = "https://github.com/imazen/zengif" }
+# zenraw / zenpdf: registry 0.2.0 of both predates the CategorizedError
+# taxonomy; their mains are on zencodec 0.1.26.
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }
+# zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

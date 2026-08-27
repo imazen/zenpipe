@@ -185,6 +185,32 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Changed
 
+- **deps: zencodec 0.1.26 rollout — drop the `bea2f94c` flat-taxonomy git
+  patch, re-pin every codec to a generation built on 0.1.26.** Every `zencodec`
+  dependency in the workspace and the standalone manifests (zcimg, demo/crate,
+  wasm-size-shim, zencodecs/fuzz) now requires the published `0.1.26` (the
+  two-level `ErrorCategory` taxonomy); the `[patch.crates-io] zencodec = { git
+  … }` entry (locked to the 0.1.25-era flat taxonomy at `bea2f94c`) is gone and
+  `Cargo.lock` carries exactly one zencodec, from the registry. Codec git
+  patches re-locked to their post-migration mains: zenwebp `017c1414` →
+  `47c562b1` (0.5.0), zentiff `fe244fbb` → `f3b191a7` (zenextras), zenjpeg
+  `9835cf5e` → `e7c53d2e` (0.8.7 → **0.9.0**; the no-op `decoder`/`trellis`
+  features were dropped upstream, so the dep lines no longer request them),
+  zengif `935304ca` → `510e7a88` (0.7.3 → **0.8.0**), zenpng `a453d82b` →
+  `f7167b79` (0.1.4 → **0.2.0**), zenjxl `0180bdc6` → `9226d3a3` (0.2.1 →
+  **0.3.0**), zenjxl-decoder `e7e077d8` → `f1faec70` (0.3.10 → **0.4.0**),
+  jxl-encoder `8a185c2d` → `cd9a7325`, heic `3fe1110c` → `8d40c94e`,
+  zenbitmaps `7021f5d8` → `bedb3035`. New patches: `zenraw` (imazen/zenraw
+  `a6b78e93`) and `zenpdf` (imazen/zenextras `f3b191a7`) — registry 0.2.0 of
+  both predates `CategorizedError` entirely. `ultrahdr-core` stays pinned at
+  `031d4a20` (0.5.0 + `full_reconstruction_boost`) for heic's `^0.5`, while
+  zencodecs/zenjpeg 0.9.0 moved to registry `0.6.0` (documented in the patch
+  table). No source fallout from the taxonomy in zenpipe's own code (nothing
+  here matched the flat variants). **Not moved:** zenavif stays at registry
+  0.1.6 / zenavif-parse 0.6.2 — zenavif main's `encode` chain (zenravif 0.2.0
+  → path-only `zenrav1e`) is unpublished and cannot resolve from git; and
+  zensim-regress (dev-only) still wants `zenpng ^0.1.4`, so a registry zenpng
+  0.1.4 sits beside the git 0.2.0 in dev builds only.
 - **README overhaul + crates.io README split (zenpipe + zencodecs/zenfilters/zenlayout).**
   Standardized every published crate's badge row to the flat-square set (CI,
   crates.io, lib.rs, docs.rs, MSRV, license), with the CI badge pointing at the
@@ -220,6 +246,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Fixed
+
+- **zeneditor compiles again**: `pipeline.rs` built an
+  `zennode_defs::ExpandCanvas` without the `fill` field that the canvas
+  fill-mode work (16dd7a2) added, so `zeneditor` (and therefore
+  `cargo test --workspace`) failed with E0063. The editor's padding is a
+  solid color, so it passes `fill: "solid"`.
 
 - **Pages demo WASM packaging** (#43): the threaded build now exports
   `__heap_base` (wasm-bindgen's threading transform needs it to inject

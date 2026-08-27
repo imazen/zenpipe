@@ -24,7 +24,7 @@ zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
 zenlayout = { path = "../zenlayout" }
 zenblend = { version = "0.1.2", default-features = false }
 zenfilters = { path = "../zenfilters" }
-zencodec = { version = "0.1.12" }
+zencodec = { version = "0.1.26" }
 zenpixels = { path = "../../zenpixels/zenpixels" }
 hashbrown = "0.16"
 rgb = "0.8"

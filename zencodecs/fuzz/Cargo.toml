@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 enough = "0.4.3"
 
-zencodec = "0.1.11"
+zencodec = "0.1.26"
 zenpixels = { version = "0.2.10", default-features = false }
 codec-corpus = { path = "../../../../codec-corpus/crate" }
 
