@@ -28,6 +28,9 @@ pub struct TracingSource {
     /// Shared timing data (populated during execution, readable after).
     #[cfg(feature = "std")]
     timing: Option<alloc::sync::Arc<std::sync::Mutex<crate::trace::NodeTiming>>>,
+    /// Record a `StripEvent` per pull into `timing.strips` (zenpipe#8).
+    #[cfg(feature = "std")]
+    strip_events: bool,
     format: PixelFormat,
     width: u32,
     height: u32,
@@ -60,6 +63,8 @@ impl TracingSource {
             dump_path,
             #[cfg(feature = "std")]
             timing: None,
+            #[cfg(feature = "std")]
+            strip_events: false,
             format,
             width,
             height,
@@ -73,6 +78,13 @@ impl TracingSource {
         timing: alloc::sync::Arc<std::sync::Mutex<crate::trace::NodeTiming>>,
     ) -> Self {
         self.timing = Some(timing);
+        self
+    }
+
+    /// Record per-strip events into the timing handle (needs `with_timing`).
+    #[cfg(feature = "std")]
+    pub fn with_strip_events(mut self, enabled: bool) -> Self {
+        self.strip_events = enabled;
         self
     }
 }
@@ -94,11 +106,22 @@ impl Source for TracingSource {
                 // Record timing.
                 #[cfg(feature = "std")]
                 if let (Some(timing_arc), Some(start)) = (&self.timing, start) {
-                    let mut t = timing_arc.lock().unwrap();
-                    t.total_duration += start.elapsed();
-                    t.strip_count += 1;
-                    t.bytes_processed +=
+                    let elapsed = start.elapsed();
+                    let bytes =
                         self.width as u64 * rows as u64 * self.format.bytes_per_pixel() as u64;
+                    let mut t = timing_arc.lock().unwrap();
+                    t.total_duration += elapsed;
+                    if self.strip_events {
+                        let strip_num = t.strip_count;
+                        t.strips.push(crate::trace::StripEvent {
+                            strip_num,
+                            rows,
+                            duration: elapsed,
+                            bytes,
+                        });
+                    }
+                    t.strip_count += 1;
+                    t.bytes_processed += bytes;
                 }
 
                 // Accumulate for dump if active.

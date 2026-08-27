@@ -41,6 +41,12 @@ pub struct TraceConfig {
     #[cfg(feature = "std")]
     pub timing: bool,
 
+    /// Record a [`StripEvent`] per strip per node (implies `timing`). Opt-in:
+    /// one small allocation per strip per node, so keep it off in production
+    /// tracing and on for "which strip was slow?" investigations.
+    #[cfg(feature = "std")]
+    pub strip_events: bool,
+
     /// Directory to dump pixel snapshots per node.
     #[cfg(feature = "std")]
     pub pixel_dump_dir: Option<std::path::PathBuf>,
@@ -58,6 +64,8 @@ impl TraceConfig {
             #[cfg(feature = "std")]
             timing: false,
             #[cfg(feature = "std")]
+            strip_events: false,
+            #[cfg(feature = "std")]
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
@@ -70,9 +78,18 @@ impl TraceConfig {
             metadata: true,
             bridge: true,
             timing: true,
+            strip_events: true,
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
+    }
+
+    /// Enable per-strip event recording (also turns on `timing`).
+    #[cfg(feature = "std")]
+    pub fn with_strip_events(mut self) -> Self {
+        self.timing = true;
+        self.strip_events = true;
+        self
     }
 
     /// Trace all layers + dump pixel snapshots to a directory.
@@ -82,6 +99,7 @@ impl TraceConfig {
             metadata: true,
             bridge: true,
             timing: true,
+            strip_events: true,
             pixel_dump_dir: Some(dir.into()),
             dump_nodes: Vec::new(),
         }
@@ -353,16 +371,116 @@ pub struct NodeTiming {
     pub strip_count: u32,
     /// Bytes processed (strips * width * strip_height * bpp).
     pub bytes_processed: u64,
+    /// Per-strip events — only recorded when
+    /// [`TraceConfig::strip_events`] is set (zenpipe#8); empty otherwise.
+    pub strips: Vec<StripEvent>,
+}
+
+/// One strip pull through one node (zenpipe#8). Duration is cumulative
+/// like [`NodeTiming`] — it includes the upstream pull for that strip.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StripEvent {
+    /// 0-based strip index at this node.
+    pub strip_num: u32,
+    /// Rows in the strip.
+    pub rows: u32,
+    /// Wall-clock time of this pull (cumulative through upstream).
+    pub duration: std::time::Duration,
+    /// Bytes produced by this strip (width × rows × bpp).
+    pub bytes: u64,
+}
+
+/// Engine phase, for [`ExecutionTrace::phases`] (zenpipe#8).
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutionPhase {
+    /// Graph compilation (`compile_traced`), including content-adaptive
+    /// analysis that runs at compile time.
+    Compilation,
+    /// Strip execution — the drain from first pull to EOF at the output node.
+    Execution,
+}
+
+/// The slowest single strip observed across all nodes.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SlowestStrip {
+    /// `trace_order` of the node that recorded it.
+    pub trace_order: usize,
+    /// Node name.
+    pub node: String,
+    /// The event itself.
+    pub event: StripEvent,
 }
 
 /// Execution-level trace (populated after pipeline drains).
+///
+/// Build it from the drained graph trace with
+/// [`FullPipelineTrace::finish_execution`] (or [`ExecutionTrace::from_graph`]).
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, Default)]
 pub struct ExecutionTrace {
-    /// Total wall-clock time for the full pipeline execution.
+    /// Total wall-clock time for the full pipeline execution — the output
+    /// node's cumulative pull time.
     pub total_duration: std::time::Duration,
-    /// Total strips produced.
+    /// Total strips produced at the output node.
     pub total_strips: u32,
+    /// Phase durations (compilation, execution) when known.
+    pub phases: Vec<(ExecutionPhase, std::time::Duration)>,
+    /// Slowest single strip across all nodes (needs `strip_events`).
+    pub slowest_strip: Option<SlowestStrip>,
+}
+
+#[cfg(feature = "std")]
+impl ExecutionTrace {
+    /// Derive execution metrics from a drained graph trace.
+    ///
+    /// The last entry in compile order is the output node, so its cumulative
+    /// timing is the pipeline's total. Timing must have been enabled
+    /// ([`TraceConfig::timing`]) or everything stays zero/`None`.
+    pub fn from_graph(graph: &PipelineTrace) -> Self {
+        let mut exec = ExecutionTrace::default();
+        if let Some(d) = graph.compile_duration {
+            exec.phases.push((ExecutionPhase::Compilation, d));
+        }
+        // The output node is compiled last (highest trace_order); its
+        // cumulative timing is the pipeline total and its strip count is the
+        // number of strips the consumer pulled.
+        if let Some(out) = graph
+            .entries
+            .iter()
+            .filter(|e| e.timing.is_some())
+            .max_by_key(|e| e.trace_order)
+        {
+            let t = out.timing.as_ref().unwrap().lock().unwrap();
+            exec.total_duration = t.total_duration;
+            exec.total_strips = t.strip_count;
+        }
+        let mut slowest: Option<SlowestStrip> = None;
+        for e in &graph.entries {
+            let Some(t) = e.timing.as_ref() else { continue };
+            let t = t.lock().unwrap();
+            for ev in &t.strips {
+                if slowest
+                    .as_ref()
+                    .is_none_or(|s| ev.duration > s.event.duration)
+                {
+                    slowest = Some(SlowestStrip {
+                        trace_order: e.trace_order,
+                        node: e.name.clone(),
+                        event: ev.clone(),
+                    });
+                }
+            }
+        }
+        if exec.total_duration > std::time::Duration::ZERO {
+            exec.phases
+                .push((ExecutionPhase::Execution, exec.total_duration));
+        }
+        exec.slowest_strip = slowest;
+        exec
+    }
 }
 
 // ─── Trace appender (for runtime annotations) ───
@@ -447,6 +565,7 @@ impl TraceAppender {
 pub struct Tracer {
     inner: Option<alloc::sync::Arc<std::sync::Mutex<PipelineTrace>>>,
     timing: bool,
+    strip_events: bool,
 }
 
 #[cfg(feature = "std")]
@@ -456,6 +575,7 @@ impl Tracer {
         Self {
             inner: None,
             timing: false,
+            strip_events: false,
         }
     }
 
@@ -464,7 +584,18 @@ impl Tracer {
         Self {
             inner: Some(trace),
             timing,
+            strip_events: false,
         }
+    }
+
+    /// Also record per-strip events (implies timing). See
+    /// [`TraceConfig::strip_events`].
+    pub fn with_strip_events(mut self, enabled: bool) -> Self {
+        if enabled {
+            self.timing = true;
+        }
+        self.strip_events = enabled;
+        self
     }
 
     /// Whether tracing is active.
@@ -532,7 +663,9 @@ impl Tracer {
         trace_arc.lock().unwrap().push(entry.clone());
         let mut wrapped = crate::sources::TracingSource::new(source, &entry, None);
         if let Some(timing) = timing_arc {
-            wrapped = wrapped.with_timing(timing);
+            wrapped = wrapped
+                .with_timing(timing)
+                .with_strip_events(self.strip_events);
         }
         Box::new(wrapped)
     }
@@ -682,6 +815,10 @@ pub struct PipelineTrace {
     /// Graph edges capturing the DAG topology.
     /// Populated from `PipelineGraph.edges` during `compile_traced()`.
     pub edges: Vec<DagSnapshotEdge>,
+    /// Wall-clock time spent in `compile_traced()` (the
+    /// [`ExecutionPhase::Compilation`] phase). Set by the compiler.
+    #[cfg(feature = "std")]
+    pub compile_duration: Option<std::time::Duration>,
 }
 
 impl PipelineTrace {
@@ -689,6 +826,8 @@ impl PipelineTrace {
         Self {
             entries: Vec::new(),
             edges: Vec::new(),
+            #[cfg(feature = "std")]
+            compile_duration: None,
         }
     }
 
@@ -1157,6 +1296,15 @@ impl FullPipelineTrace {
                 "Total: {:?} | Strips: {}\n",
                 exec.total_duration, exec.total_strips
             ));
+            for (phase, d) in &exec.phases {
+                out.push_str(&format!("  phase {phase:?}: {d:?}\n"));
+            }
+            if let Some(s) = &exec.slowest_strip {
+                out.push_str(&format!(
+                    "  slowest strip: [{:2}] {} strip {} ({} rows) {:?}\n",
+                    s.trace_order, s.node, s.event.strip_num, s.event.rows, s.event.duration
+                ));
+            }
 
             // Per-node timing (differential)
             let timed: Vec<_> = self
@@ -1186,6 +1334,66 @@ impl FullPipelineTrace {
             }
         }
 
+        out
+    }
+
+    /// Populate [`execution`](Self::execution) from the drained graph trace.
+    ///
+    /// Call after the pipeline has been fully pulled (the `NodeTiming`
+    /// handles in `graph` are shared with the live `TracingSource`s, so the
+    /// numbers are final once the output node returned `None`).
+    pub fn finish_execution(&mut self) -> &ExecutionTrace {
+        self.execution = Some(ExecutionTrace::from_graph(&self.graph));
+        self.execution.as_ref().unwrap()
+    }
+
+    /// ASCII per-strip timing chart, one row per strip per node — needs
+    /// [`TraceConfig::strip_events`]. Empty string when nothing was recorded.
+    pub fn strip_timing(&self) -> String {
+        let mut out = String::new();
+        let max = self
+            .graph
+            .entries
+            .iter()
+            .filter_map(|e| e.timing.as_ref())
+            .flat_map(|t| {
+                t.lock()
+                    .unwrap()
+                    .strips
+                    .iter()
+                    .map(|s| s.duration)
+                    .collect::<Vec<_>>()
+            })
+            .max()
+            .unwrap_or_default();
+        if max.is_zero() {
+            return out;
+        }
+        const WIDTH: u32 = 40;
+        for e in &self.graph.entries {
+            let Some(t) = e.timing.as_ref() else { continue };
+            let t = t.lock().unwrap();
+            if t.strips.is_empty() {
+                continue;
+            }
+            out.push_str(&format!(
+                "[{:2}] {} ({} strips)\n",
+                e.trace_order,
+                e.name,
+                t.strips.len()
+            ));
+            for s in &t.strips {
+                let bar =
+                    ((s.duration.as_nanos() * u128::from(WIDTH)) / max.as_nanos().max(1)) as usize;
+                out.push_str(&format!(
+                    "  {:4} {:>4} rows {:>10?} |{}\n",
+                    s.strip_num,
+                    s.rows,
+                    s.duration,
+                    "#".repeat(bar)
+                ));
+            }
+        }
         out
     }
 
@@ -1255,9 +1463,67 @@ impl FullPipelineTrace {
                 s.push_str(",\"description\":");
                 json_string(&mut s, &e.description);
             }
+            if let Some(t) = e.timing.as_ref() {
+                let t = t.lock().unwrap();
+                let _ = write!(
+                    s,
+                    ",\"timing\":{{\"total_us\":{},\"strips\":{},\"bytes\":{}}}",
+                    t.total_duration.as_micros(),
+                    t.strip_count,
+                    t.bytes_processed
+                );
+                if !t.strips.is_empty() {
+                    s.push_str(",\"strip_events\":[");
+                    for (j, ev) in t.strips.iter().enumerate() {
+                        if j > 0 {
+                            s.push(',');
+                        }
+                        let _ = write!(
+                            s,
+                            "{{\"n\":{},\"rows\":{},\"us\":{},\"bytes\":{}}}",
+                            ev.strip_num,
+                            ev.rows,
+                            ev.duration.as_micros(),
+                            ev.bytes
+                        );
+                    }
+                    s.push(']');
+                }
+            }
             s.push('}');
         }
         s.push(']');
+
+        if let Some(exec) = &self.execution {
+            let _ = write!(
+                s,
+                ",\"execution\":{{\"total_us\":{},\"strips\":{},\"phases\":[",
+                exec.total_duration.as_micros(),
+                exec.total_strips
+            );
+            for (i, (phase, d)) in exec.phases.iter().enumerate() {
+                if i > 0 {
+                    s.push(',');
+                }
+                let _ = write!(s, "{{\"phase\":\"{phase:?}\",\"us\":{}}}", d.as_micros());
+            }
+            s.push(']');
+            if let Some(sl) = &exec.slowest_strip {
+                let _ = write!(
+                    s,
+                    ",\"slowest_strip\":{{\"order\":{},\"node\":",
+                    sl.trace_order
+                );
+                json_string(&mut s, &sl.node);
+                let _ = write!(
+                    s,
+                    ",\"n\":{},\"us\":{}}}",
+                    sl.event.strip_num,
+                    sl.event.duration.as_micros()
+                );
+            }
+            s.push('}');
+        }
 
         s.push('}');
         s

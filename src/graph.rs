@@ -1069,6 +1069,7 @@ impl PipelineGraph {
         mut sources: hashbrown::HashMap<NodeId, Box<dyn Source>>,
         config: &crate::trace::TraceConfig,
     ) -> TracedPipelineResult {
+        let compile_start = std::time::Instant::now();
         self.validate()?;
         let trace =
             alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
@@ -1090,7 +1091,8 @@ impl PipelineGraph {
             trace.lock().unwrap().edges = edge_traces;
         }
 
-        self.tracer = crate::trace::Tracer::active(trace.clone(), config.timing);
+        self.tracer = crate::trace::Tracer::active(trace.clone(), config.timing)
+            .with_strip_events(config.strip_events);
 
         let output_id = self
             .nodes
@@ -1099,6 +1101,7 @@ impl PipelineGraph {
             .unwrap();
 
         let source = self.compile_node(output_id, &mut sources, 0)?;
+        trace.lock().unwrap().compile_duration = Some(compile_start.elapsed());
         Ok((source, trace))
     }
 

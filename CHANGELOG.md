@@ -241,6 +241,24 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+
+- **Execution-layer tracing: per-strip events, execution finalization,
+  phase timing** (#8): `TraceConfig::strip_events` /
+  `with_strip_events()` (on in `full()`) makes every `TracingSource`
+  record a `StripEvent { strip_num, rows, duration, bytes }` into
+  `NodeTiming::strips`; `PipelineTrace::compile_duration` captures the
+  `compile_traced` phase; `FullPipelineTrace::finish_execution()` derives
+  the previously never-populated `ExecutionTrace` (output-node total /
+  strip count, `phases: [(ExecutionPhase, Duration)]`, `slowest_strip`)
+  from the drained graph; `strip_timing()` renders an ASCII per-strip
+  chart; `to_text()` prints phases + slowest strip; `to_json()` gains
+  per-node `timing` / `strip_events` and a top-level `execution` object.
+  Not included: the memory timeline / `MemorySnapshot` — there is no data
+  source until `AllocationTracker` is wired (see root CLAUDE.md), and
+  `ImageJob` still does not surface its trace (only `orchestrate::process_*`,
+  `build_pipeline_traced`, and `compile_traced` do).
+
 #### Fixed
 
 - **`Limits::to_codec_limits` forwards `max_total_pixels`** (#18): the
