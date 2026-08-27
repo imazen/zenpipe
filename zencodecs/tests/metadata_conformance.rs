@@ -210,8 +210,11 @@ struct Support {
 }
 
 // Recurring gap descriptions (each maps to a line item in GAP_TRACKING).
-const G_ORIENT_FIELD: &str = "Metadata::orientation not emitted to the format's carrier (only AVIF irot does); \
-     needs the exif write path + per-codec emission";
+// The orientation gaps now only apply to the cfg-gated JXL entry.
+#[cfg_attr(not(feature = "jxl-encode"), allow(dead_code))]
+const G_ORIENT_FIELD: &str = "Metadata::orientation not emitted to the format's carrier (AVIF irot does; \
+     JPEG/PNG/WebP fold it into EXIF since zenpipe#36 gap 1); JXL's codestream orientation is not written";
+#[cfg_attr(not(feature = "jxl-encode"), allow(dead_code))]
 const G_ORIENT_EXIF_NORM: &str = "carries the EXIF blob but does not normalize its orientation tag into info.orientation \
      (JPEG/WebP/AVIF do)";
 const G_CICP_NATIVE: &str =
@@ -236,7 +239,9 @@ fn codecs() -> Vec<Support> {
         icc: Icc::ByteEqual,
         exif_blob: V::Ok,
         orient_from_exif: V::Ok,
-        orient_from_field: V::Gap(G_ORIENT_FIELD),
+        // Promoted Gap → Ok (zenpipe#36 gap 1): zencodecs folds
+        // Metadata::orientation into the EXIF blob for EXIF-only carriers.
+        orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::NotCarried, // JFIF/EXIF JPEG has no standard CICP carrier; color via ICC
     });
@@ -251,7 +256,8 @@ fn codecs() -> Vec<Support> {
         // Promoted Gap → Ok 2026-06-11: zenpng now normalizes the eXIf
         // orientation tag into info.orientation on decode.
         orient_from_exif: V::Ok,
-        orient_from_field: V::Gap(G_ORIENT_FIELD),
+        // Promoted Gap → Ok (zenpipe#36 gap 1): orientation folded into eXIf.
+        orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::Ok, // cICP chunk
     });
@@ -264,7 +270,8 @@ fn codecs() -> Vec<Support> {
         icc: Icc::ByteEqual,
         exif_blob: V::Ok,
         orient_from_exif: V::Ok,
-        orient_from_field: V::Gap(G_ORIENT_FIELD),
+        // Promoted Gap → Ok (zenpipe#36 gap 1): orientation folded into EXIF.
+        orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::NotCarried, // VP8X has no CICP; color via ICC
     });
@@ -653,9 +660,10 @@ fn predict_orientation_transfer(src: &Support, dst: &Support) -> bool {
 /// Full orientation-transfer matrix. For every ordered codec pair, transcoding
 /// an EXIF-orientation=6 image must preserve orientation exactly when
 /// [`predict_orientation_transfer`] says it should. This pins the real
-/// cross-codec behavior — orientation transfers `jpeg→{webp,avif}` (blob/field
-/// routes) but is lost `jpeg→{png,jxl}` (carry the blob but don't normalize it,
-/// and don't emit the field — see `G_ORIENT_EXIF_NORM` / `G_ORIENT_FIELD`).
+/// cross-codec behavior — orientation transfers between jpeg/png/webp/avif
+/// (blob and/or field routes) but is lost into jxl (carries the blob but
+/// doesn't normalize it, and the codestream orientation isn't written — see
+/// `G_ORIENT_EXIF_NORM` / `G_ORIENT_FIELD`).
 #[test]
 fn transcode_orientation_transfer_matches_carrier_support() {
     let all = codecs();

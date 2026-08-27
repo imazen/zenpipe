@@ -465,7 +465,9 @@ impl<'a> EncodeRequest<'a> {
                 quality: Some(resolved_quality),
                 effort,
                 lossless: self.lossless,
-                metadata: self.metadata,
+                metadata: self
+                    .metadata
+                    .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: speed_limits.as_ref().or(self.limits),
@@ -559,7 +561,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self.metadata,
+            metadata: self
+                .metadata
+                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
@@ -854,7 +858,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self.metadata,
+            metadata: self
+                .metadata
+                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits,

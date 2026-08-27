@@ -33,6 +33,51 @@ pub(crate) struct EncodeParams<'a> {
     pub cicp: Option<zencodec::Cicp>,
 }
 
+/// Fold `Metadata::orientation` into the EXIF blob for formats whose only
+/// orientation carrier is EXIF (zenpipe#36, gap 1).
+///
+/// JPEG, PNG, and WebP have no native orientation field; their decoders
+/// normalize the EXIF Orientation tag into `info.orientation`, so a caller
+/// who sets `Metadata::with_orientation(..)` with no EXIF blob would see the
+/// field silently dropped. When the field is non-identity: no blob → author
+/// a minimal TIFF with just the Orientation tag; a blob without the tag →
+/// insert it; a blob that already carries the tag → untouched (the codec
+/// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
+/// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
+/// orientation is *not* authoritative) are left alone.
+pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
+    use zencodec::exif::{Exif, TextEncoding};
+    if meta.orientation == zencodec::Orientation::Identity
+        || !matches!(
+            format,
+            ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP
+        )
+    {
+        return meta;
+    }
+    let authored = match meta.exif.as_deref() {
+        None => {
+            let mut e = Exif::new(TextEncoding::Ascii);
+            e.set_orientation(meta.orientation);
+            Some(e.to_bytes())
+        }
+        Some(blob) => match Exif::parse(blob) {
+            // Tag present: the policy layer reconciles it to the field.
+            Some(e) if e.orientation().is_some() => None,
+            Some(mut e) => {
+                e.set_orientation(meta.orientation);
+                Some(e.to_bytes())
+            }
+            // Malformed blob: leave it to the codec's own handling.
+            None => None,
+        },
+    };
+    match authored {
+        Some(bytes) => meta.with_exif(bytes),
+        None => meta,
+    }
+}
+
 /// Type-erased one-shot encode closure.
 pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOutput> + 'a>;
 
@@ -190,6 +235,7 @@ where
         if let Some(m) = metadata {
             // Type-erased convenience path carries no policy; embed verbatim
             // (PreserveExact also reconciles a stale EXIF orientation tag).
+            let m = fold_orientation_into_exif(m, C::format());
             job = job.with_metadata_policy(m, zencodec::MetadataPolicy::PreserveExact);
         }
         if let Some(l) = limits {
@@ -324,5 +370,67 @@ pub(crate) fn build_encoder<'a>(
         Tga => "bitmaps-tga" => Ok(crate::codecs::tga::build_trait_encoder(params)),
         Hdr => "bitmaps-hdr" => Ok(crate::codecs::hdr::build_trait_encoder(params));
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
+    }
+}
+
+#[cfg(test)]
+mod fold_tests {
+    use super::*;
+    use zencodec::Orientation;
+    use zencodec::exif::Exif;
+
+    fn tag_of(meta: &Metadata) -> Option<Orientation> {
+        meta.exif
+            .as_deref()
+            .and_then(Exif::parse)
+            .and_then(|e| e.orientation())
+    }
+
+    #[test]
+    fn authors_a_blob_when_none_exists() {
+        let m = Metadata::none().with_orientation(Orientation::Rotate90);
+        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
+        assert_eq!(tag_of(&out), Some(Orientation::Rotate90));
+        assert_eq!(out.orientation, Orientation::Rotate90);
+    }
+
+    #[test]
+    fn inserts_the_tag_into_a_blob_that_lacks_it_and_keeps_other_fields() {
+        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
+        e.set_copyright("(c) test");
+        let m = Metadata::none()
+            .with_exif(e.to_bytes())
+            .with_orientation(Orientation::Rotate270);
+        let out = fold_orientation_into_exif(m, ImageFormat::Png);
+        assert_eq!(tag_of(&out), Some(Orientation::Rotate270));
+        let parsed = Exif::parse(out.exif.as_deref().unwrap()).unwrap();
+        assert_eq!(parsed.copyright().as_deref(), Some("(c) test"));
+    }
+
+    #[test]
+    fn leaves_identity_native_carriers_and_existing_tags_alone() {
+        // Identity: nothing to emit.
+        let m = Metadata::none();
+        assert!(
+            fold_orientation_into_exif(m, ImageFormat::WebP)
+                .exif
+                .is_none()
+        );
+        // AVIF carries orientation natively (irot/imir) — no EXIF authored.
+        let m = Metadata::none().with_orientation(Orientation::Rotate90);
+        assert!(
+            fold_orientation_into_exif(m, ImageFormat::Avif)
+                .exif
+                .is_none()
+        );
+        // Existing tag: blob byte-identical (reconciliation is the policy's job).
+        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
+        e.set_orientation(Orientation::Rotate180);
+        let blob = e.to_bytes();
+        let m = Metadata::none()
+            .with_exif(blob.clone())
+            .with_orientation(Orientation::Rotate90);
+        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
+        assert_eq!(out.exif.as_deref(), Some(blob.as_slice()));
     }
 }

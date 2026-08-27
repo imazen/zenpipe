@@ -417,6 +417,19 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`Metadata::orientation` reaches JPEG / PNG / WebP** (#36, gap 1): those
+  formats' only orientation carrier is EXIF, and a request that set the
+  field without an EXIF blob silently lost it. `EncodeRequest` now folds
+  the field into the blob at the codec boundary
+  (`dispatch::fold_orientation_into_exif`): authors a minimal TIFF with the
+  Orientation tag when there is no blob, inserts the tag into a blob that
+  lacks it, leaves a blob that already has one to the policy's
+  reconciliation. AVIF (irot/imir) and JXL (codestream orientation;
+  EXIF not authoritative) are untouched. Conformance table promotes
+  `orient_from_field` Gap→Ok for jpeg/png/webp; cross-codec orientation
+  transfer now holds between jpeg/png/webp/avif. Still open from #36:
+  JXL orientation (codestream write + EXIF normalization), AVIF/JXL
+  `Metadata::cicp`, AVIF raw EXIF blob — all in the codec crates.
 - **`stream_dec!` macro cfg-gated to gif / avif-decode / heic-decode**: a
   build enabling none of those (zenfilters' dev-dep set) failed
   `clippy -D warnings` with `unused macro definition`.
