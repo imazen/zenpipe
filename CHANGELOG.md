@@ -243,6 +243,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`zen_get_image_info` reports display-oriented dimensions** (#16):
+  EXIF/container orientation is applied before returning, so orientations
+  5–8 report swapped `width`/`height` (matching imageflow's
+  `v1/get_image_info` `swap_dimensions_by_exif`) and `orientation` is
+  `Identity`. Regression test: `tests/imageflow_compat_info.rs`.
 - **Gain-map sidecars resample in encoded space** (#41, b938a2b0): sidecar
   pixels are log2-quantized gain values, not color — Skia's SkGainmapShader
   and libultrahdr interpolate them raw. The decode path now labels sidecar

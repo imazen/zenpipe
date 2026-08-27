@@ -158,8 +158,21 @@ pub struct ZenEncodeResult {
 // ─── Public API ───
 
 /// Probe an image and return metadata without decoding pixels.
+///
+/// `width`/`height` are **display-oriented**: EXIF/container orientation is
+/// applied before returning, so a portrait JPEG stored landscape with EXIF
+/// orientation 6 reports the portrait dimensions — matching imageflow's
+/// `v1/get_image_info` (`swap_dimensions_by_exif`) so this can back that
+/// endpoint as a probe (zenpipe#16). `orientation` is reported as
+/// `Identity` because it has already been folded into the dimensions; the
+/// raw stored dimensions are available from `zencodecs::from_bytes`.
 pub fn zen_get_image_info(data: &[u8]) -> Result<zencodecs::ImageInfo, ZenError> {
-    zencodecs::from_bytes(data).map_err(|e| ZenError::Codec(format!("{e}")))
+    let mut info = zencodecs::from_bytes(data).map_err(|e| ZenError::Codec(format!("{e}")))?;
+    let (w, h) = (info.display_width(), info.display_height());
+    info.width = w;
+    info.height = h;
+    info.orientation = zencodec::Orientation::Identity;
+    Ok(info)
 }
 
 /// Result of executing a framewise pipeline.
