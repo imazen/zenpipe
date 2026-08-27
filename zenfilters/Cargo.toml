@@ -25,6 +25,13 @@ zennode = ["dep:zennode"]
 # Use zenquant (perceptual OKLab quantizer) for ClipartFlatten's region palette
 # instead of the built-in k-means. Opt-in (adds a dependency).
 zenquant = ["dep:zenquant", "dep:rgb"]
+# Dev-workstation-only fixtures for tests/quality_validation.rs (zenpipe#44):
+# `local-fixtures` needs the CID22 corpus on disk; `local-vips` /
+# `local-darktable` additionally need the `vips` / `darktable-cli` binaries.
+# Missing prerequisites fail loudly — there are no runtime skips.
+local-fixtures = []
+local-vips = ["local-fixtures"]
+local-darktable = ["local-fixtures"]
 
 [dependencies]
 archmage = { version = "0.9.17", features = ["avx512"] }
@@ -127,6 +134,7 @@ name = "reference_validation"
 
 [[test]]
 name = "quality_validation"
+required-features = ["local-fixtures"]
 
 [[test]]
 name = "imagemagick_comparison"

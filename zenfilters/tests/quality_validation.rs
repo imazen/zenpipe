@@ -13,11 +13,15 @@
 //! Also includes artifact detection tests: banding in gradients, hue shift
 //! from saturation boosts, and clipping analysis.
 //!
-//! Requires:
-//!   - libvips-tools (`apt install libvips-tools`)
-//!   - CID22 corpus at ../codec-corpus/CID22/CID22-512/training/
+//! Requires (all opt-in via cargo features — there are no runtime skips):
+//!   - `local-fixtures`: CID22 corpus at ../codec-corpus/CID22/CID22-512/training/
+//!     (override with `ZENFILTERS_CORPUS_DIR`)
+//!   - `local-vips`: libvips-tools (`apt install libvips-tools`) for the
+//!     `*_vs_vips` comparisons
+//!   - `local-darktable`: `darktable-cli` for the `dt_*` comparisons
 //!
-//! Run: cargo test --test quality_validation --features buffer
+//! Run: `just test-zenfilters-quality` (see the workspace justfile), or
+//! `cargo test -p zenfilters --features local-vips,local-darktable --test quality_validation`
 
 #![allow(dead_code)]
 
@@ -61,14 +65,20 @@ impl zenfilters::Filter for PerPixelDehaze {
 // ─── Configuration ──────────────────────────────────────────────────
 
 /// Path to the CID22 training corpus (512×512 PNGs).
-/// Falls back to common locations; override with ZENFILTERS_corpus_dir() env var.
+/// Falls back to common locations; override with ZENFILTERS_CORPUS_DIR env var.
 fn corpus_dir() -> &'static str {
     static DIR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     DIR.get_or_init(|| {
-        if let Ok(d) = std::env::var("ZENFILTERS_corpus_dir()") {
+        if let Ok(d) = std::env::var("ZENFILTERS_CORPUS_DIR") {
             return d;
         }
         let candidates = [
+            // Workspace sibling (`~/work/zen/codec-corpus` next to `zenpipe/`).
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../codec-corpus/CID22/CID22-512/training/"
+            ),
+            // zenfilters checked out standalone next to codec-corpus.
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../codec-corpus/CID22/CID22-512/training/"
@@ -112,9 +122,18 @@ const FAST_IMAGES: &[&str] = &[
 
 // ─── Prerequisites ──────────────────────────────────────────────────
 
-fn corpus_available() -> bool {
+// No graceful skips (zenpipe#44): this binary only builds under the
+// `local-fixtures` feature (and the vips / darktable groups under
+// `local-vips` / `local-darktable`), so the caller has explicitly opted in
+// — a missing prerequisite is a loud failure, never a silent pass.
+
+fn require_corpus() {
     let dir = corpus_dir();
-    Path::new(dir).exists()
+    assert!(
+        Path::new(dir).exists(),
+        "CID22 corpus not found at {dir} (set ZENFILTERS_CORPUS_DIR); \
+         this test binary requires the corpus — feature `local-fixtures` opted in"
+    );
 }
 
 fn vips_available() -> bool {
@@ -125,16 +144,12 @@ fn vips_available() -> bool {
         .unwrap_or(false)
 }
 
-fn skip_unless_available() -> bool {
-    if !corpus_available() {
-        eprintln!("SKIP: CID22 corpus not found at {}", corpus_dir());
-        return true;
-    }
-    if !vips_available() {
-        eprintln!("SKIP: vips CLI not available");
-        return true;
-    }
-    false
+fn require_vips() {
+    require_corpus();
+    assert!(
+        vips_available(),
+        "`vips` CLI not on PATH; feature `local-vips` requires libvips-tools"
+    );
 }
 
 // ─── Image I/O ──────────────────────────────────────────────────────
@@ -554,11 +569,10 @@ fn compare_across_images(
 
 // ─── Exposure comparison ────────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn exposure_plus1_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -580,11 +594,10 @@ fn exposure_plus1_vs_vips() {
     // (Score 0 can mean mean_diff > ~14.5 which is just "different operation")
 }
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn exposure_minus1_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -603,11 +616,10 @@ fn exposure_minus1_vs_vips() {
 
 // ─── Contrast comparison ────────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn contrast_increase_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -629,11 +641,10 @@ fn contrast_increase_vs_vips() {
 
 // ─── Blur comparison ────────────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn blur_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -655,11 +666,10 @@ fn blur_vs_vips() {
 
 // ─── Sharpen comparison ─────────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn sharpen_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -680,11 +690,10 @@ fn sharpen_vs_vips() {
 
 // ─── Saturation comparison ──────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn saturation_boost_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let (min, avg) = compare_across_images(
         FAST_IMAGES,
@@ -705,11 +714,10 @@ fn saturation_boost_vs_vips() {
 
 // ─── Grayscale comparison ───────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn grayscale_vs_vips() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let mut scores = Vec::new();
 
@@ -747,10 +755,7 @@ fn grayscale_vs_vips() {
 
 #[test]
 fn exposure_no_excessive_banding() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     // Bright sky image is the most banding-prone
     let img = load_corpus_image("pexels-photo-2908983.png");
@@ -771,10 +776,7 @@ fn exposure_no_excessive_banding() {
 
 #[test]
 fn contrast_no_excessive_banding() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     let img = load_corpus_image("pexels-photo-2908983.png");
     let mut c = Contrast::default();
@@ -794,10 +796,7 @@ fn contrast_no_excessive_banding() {
 
 #[test]
 fn saturation_boost_preserves_hue() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -822,10 +821,7 @@ fn saturation_boost_preserves_hue() {
 
 #[test]
 fn exposure_clipping_analysis() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -846,10 +842,7 @@ fn exposure_clipping_analysis() {
 
 #[test]
 fn soft_compress_reduces_clipping() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -883,10 +876,7 @@ fn soft_compress_reduces_clipping() {
 
 #[test]
 fn highlights_shadows_properties() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -939,10 +929,7 @@ fn highlights_shadows_properties() {
 
 #[test]
 fn temperature_properties() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -983,10 +970,7 @@ fn temperature_properties() {
 
 #[test]
 fn vibrance_properties() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -1032,10 +1016,7 @@ fn vibrance_properties() {
 
 #[test]
 fn dehaze_properties() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -1084,10 +1065,7 @@ fn dehaze_properties() {
 
 #[test]
 fn exposure_preserves_hue() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -1114,10 +1092,7 @@ fn exposure_preserves_hue() {
 
 #[test]
 fn contrast_preserves_hue() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     for &img_name in FAST_IMAGES {
         let img = load_corpus_image(img_name);
@@ -1143,10 +1118,7 @@ fn contrast_preserves_hue() {
 
 #[test]
 fn fused_adjust_matches_standalone_on_real_images() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     // Test that the fused path produces pixel-identical results to chaining
     // standalone filters on real images through the full pipeline (including
@@ -1266,10 +1238,7 @@ fn fused_adjust_matches_standalone_on_real_images() {
 
 #[test]
 fn no_filter_produces_nan_or_inf() {
-    if !corpus_available() {
-        eprintln!("SKIP: corpus not available");
-        return;
-    }
+    require_corpus();
 
     // Apply extreme parameter values and verify no NaN/Inf in output
     let img = load_corpus_image("1028637.png");
@@ -1345,11 +1314,10 @@ fn no_filter_produces_nan_or_inf() {
 
 // ─── Summary test ───────────────────────────────────────────────────
 
+#[cfg(feature = "local-vips")]
 #[test]
 fn full_comparison_summary() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let images = FAST_IMAGES;
 
@@ -1477,12 +1445,11 @@ fn full_comparison_summary() {
 /// Generate side-by-side comparison PNGs for visual inspection.
 /// Not a real test — run manually with:
 ///   cargo test --test quality_validation --features buffer -- generate_visual_comparison --nocapture --ignored
+#[cfg(feature = "local-vips")]
 #[test]
 #[ignore]
 fn generate_visual_comparison() {
-    if skip_unless_available() {
-        return;
-    }
+    require_vips();
 
     let output_dir = Path::new("/mnt/v/output/zenfilters/quality");
     std::fs::create_dir_all(output_dir).unwrap();
@@ -1569,16 +1536,12 @@ fn darktable_available() -> bool {
         .unwrap_or(false)
 }
 
-fn skip_unless_darktable() -> bool {
-    if !corpus_available() {
-        eprintln!("SKIP: CID22 corpus not found at {}", corpus_dir());
-        return true;
-    }
-    if !darktable_available() {
-        eprintln!("SKIP: darktable-cli not available");
-        return true;
-    }
-    false
+fn require_darktable() {
+    require_corpus();
+    assert!(
+        darktable_available(),
+        "`darktable-cli` not on PATH; feature `local-darktable` requires darktable"
+    );
 }
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
@@ -1766,11 +1729,10 @@ fn compare_with_darktable(
 
 // ─── darktable comparison tests ──────────────────────────────────
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_exposure_plus1() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1794,11 +1756,10 @@ fn dt_exposure_plus1() {
     // Both brighten correctly; differences arise from color-space choice.
 }
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_exposure_minus1() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1820,11 +1781,10 @@ fn dt_exposure_minus1() {
     eprintln!("dt exposure -1: min={min:.1} avg={avg:.1} diff={avg_diff:.1}");
 }
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_contrast_plus50() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1849,11 +1809,10 @@ fn dt_contrast_plus50() {
     // Fundamentally different contrast models — divergence expected.
 }
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_saturation_boost() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1879,11 +1838,10 @@ fn dt_saturation_boost() {
     // Different color spaces but similar intent.
 }
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_vibrance_boost() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1907,11 +1865,10 @@ fn dt_vibrance_boost() {
 }
 
 /// Combined exposure + contrast via darktable's exposure module + basicadj.
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_combined_exposure_contrast() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         FAST_IMAGES,
@@ -1967,11 +1924,10 @@ fn dt_combined_exposure_contrast() {
 }
 
 /// Full corpus darktable comparison on all 10 test images (exposure only).
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_exposure_full_corpus() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         TEST_IMAGES,
@@ -1998,11 +1954,10 @@ fn dt_exposure_full_corpus() {
 }
 
 /// Full corpus contrast comparison on all 10 test images.
+#[cfg(feature = "local-darktable")]
 #[test]
 fn dt_contrast_full_corpus() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let (min, avg, avg_diff) = compare_with_darktable(
         TEST_IMAGES,
@@ -2036,11 +1991,10 @@ fn dt_contrast_full_corpus() {
 
 // ─── darktable comparison summary ────────────────────────────────
 
+#[cfg(feature = "local-darktable")]
 #[test]
 fn darktable_comparison_summary() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let images = FAST_IMAGES;
 
@@ -2206,12 +2160,11 @@ fn darktable_comparison_summary() {
 /// Generate side-by-side comparison PNGs: zenfilters vs darktable.
 /// Run manually:
 ///   cargo test --test quality_validation --features buffer -- generate_dt_visual --nocapture --ignored
+#[cfg(feature = "local-darktable")]
 #[test]
 #[ignore]
 fn generate_dt_visual() {
-    if skip_unless_darktable() {
-        return;
-    }
+    require_darktable();
 
     let output_dir = Path::new("/mnt/v/output/zenfilters/dt_comparison");
     std::fs::create_dir_all(output_dir).unwrap();

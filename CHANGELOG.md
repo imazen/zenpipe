@@ -282,6 +282,22 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   (non-breaking — the enum is already `#[non_exhaustive]`). `enough` promoted
   to a normal dependency.
 
+#### Fixed
+
+- **`tests/quality_validation.rs` no longer self-skips** (#44): the binary
+  used to return early with `SKIP: …` when the CID22 corpus / `vips` /
+  `darktable-cli` were absent, so every one of its 32 tests passed on CI
+  without testing anything. It is now gated on `required-features =
+  ["local-fixtures"]` (corpus), with the vips and darktable groups behind
+  `local-vips` / `local-darktable`; a missing prerequisite panics with the
+  path/tool it needs. Run via `just test-zenfilters-quality`. Also adds
+  the workspace-sibling `../../codec-corpus` candidate (the old
+  `zenfilters/../codec-corpus` never matched the monorepo layout) and
+  fixes the env override name to `ZENFILTERS_CORPUS_DIR`. The two
+  threshold failures the skip was hiding (`saturation_boost_vs_vips`,
+  `dt_contrast_full_corpus`) remain open — they need a workstation with
+  vips/darktable to investigate.
+
 ## zencodecs
 
 ### [Unreleased]
@@ -328,6 +344,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`stream_dec!` macro cfg-gated to gif / avif-decode / heic-decode**: a
+  build enabling none of those (zenfilters' dev-dep set) failed
+  `clippy -D warnings` with `unused macro definition`.
 - **`max_total_pixels` enforced cumulatively while animation frames are
   produced** (#18): `DecodeRequest::animation_frame_decoder()` now wraps
   the codec decoder in a guard that charges every rendered frame (owned

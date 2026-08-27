@@ -11,6 +11,13 @@ test:
 test-local-fixtures:
     cargo test -p zencodecs --features local-fixtures --test icc_srgb
 
+# zenfilters quality validation against libvips / darktable references on the
+# CID22 corpus (zenpipe#44). Needs the corpus (`ZENFILTERS_CORPUS_DIR` or
+# ../codec-corpus) plus `vips` and `darktable-cli` on PATH; missing
+# prerequisites fail loudly. Never run on CI.
+test-zenfilters-quality:
+    cargo test -p zenfilters --features local-vips,local-darktable --test quality_validation
+
 # zencodecs gain-map / UltraHDR / raw surface — the avif-less feature set
 # mirrored by CI (zenpipe#38); widen to `all,cms,std` once the
 # zencodec<->zenavif drift settles.

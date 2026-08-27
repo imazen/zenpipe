@@ -18,12 +18,12 @@ jobs:
     with:
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
-      # imazen/zen-workspace's rust-ci.yml). zenfilters' quality_validation.rs
-      # has zensim-threshold comparisons against a `vips` reference that can
-      # fail independent of anything in this repo (upstream zensim/
-      # zenpixels-convert drift); put per-package checks that don't share that
-      # failure mode BEFORE it, so a zenfilters-only red doesn't also hide
-      # zenlayout/zencodecs/zeneditor's own results.
+      # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
+      # don't share a failure mode BEFORE the zenfilters run. zenfilters'
+      # quality_validation.rs (vips/darktable zensim-threshold comparisons on
+      # the CID22 corpus) is NOT built here: it requires the `local-fixtures`
+      # feature and runs via `just test-zenfilters-quality` on a workstation
+      # (zenpipe#44) — it used to self-skip on CI and pass without testing.
       clippy_extra_runs: |
         cargo clippy --all-targets --no-default-features -- -D warnings
         cargo clippy -p zenlayout --all-targets -- -D warnings
