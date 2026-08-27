@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           21
-#   trait roster entries (type × trait)        30
+#   trait roster entries (type × trait)        32
 #
 # per-module pub lines:
 #   constraint                        5
@@ -43,7 +43,7 @@ pub fn riapi::instructions::ScaleMode::assert_fields_are_eq(&self)
 pub fn smart_crop::AspectRatio::assert_fields_are_eq(&self)
 pub fn smart_crop::CropMode::assert_fields_are_eq(&self)
 
-## trait impls (30 types)
+## trait impls (32 types)
 
 constraint::CanvasColor: TrivialClone
 constraint::ConstraintMode: TrivialClone
@@ -52,6 +52,8 @@ constraint::LayoutError: TrivialClone
 constraint::Rect: TrivialClone
 constraint::Size: TrivialClone
 constraint::SourceCrop: TrivialClone
+dimension::AutoDeskewEffect: TrivialClone
+dimension::AutoDeskewMethod: TrivialClone
 dimension::ExpandEffect: TrivialClone
 dimension::PadEffect: TrivialClone
 dimension::ResolutionPolicy: TrivialClone

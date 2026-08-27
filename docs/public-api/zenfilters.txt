@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenfilters.txt 966 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 49 lines (57 hidden + 0 excluded-feature)
+# files: zenfilters.txt 966 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 66 lines (74 hidden + 0 excluded-feature)
 
 ## summary
 #

@@ -6,30 +6,31 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenlayout.txt 593 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 51 lines (51 hidden + 0 excluded-feature)
+# files: zenlayout.txt 620 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 53 lines (53 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 5
-#   pub types (struct/enum/trait/alias)        70
+#   pub modules                                 6
+#   pub types (struct/enum/trait/alias)        74
 #   pub consts/statics                         52
-#   free functions                             14
-#   inherent methods                          168
-#   struct fields                             196
-#   enum variants                             114
+#   free functions                             16
+#   inherent methods                          178
+#   struct fields                             202
+#   enum variants                             118
 #   re-exports                                  2
-#   trait roster entries (type × trait)       175
-#   auto-trait-complete types                  29
+#   trait roster entries (type × trait)       184
+#   auto-trait-complete types                  31
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          261
+#   (root)                          271
 #   constraint                       99
-#   dimension                        53
+#   deskew                            2
+#   dimension                        68
 #   orientation                      11
 #   plan                            197
 
-## items (553 lines)
+## items (578 lines)
 
 pub mod zenlayout
 pub use At
@@ -110,7 +111,12 @@ pub const fn constraint::Rect::new(u32, u32, u32, u32) -> Self [also: (root)]
 pub constraint::Size::height: u32
 pub constraint::Size::width: u32
 pub const fn constraint::Size::new(u32, u32) -> Self [also: (root)]
+pub mod deskew
+pub fn deskew::detect_skew_gradient_moment(&[u8], u32, u32, usize, f32) -> core::option::Option<f32>
+pub fn deskew::detect_skew_projection_variance(&[u8], u32, u32, usize, f32) -> core::option::Option<f32>
 pub mod dimension
+pub dimension::AutoDeskewMethod::GradientMoment
+pub dimension::AutoDeskewMethod::ProjectionVariance
 pub dimension::ResolutionPolicy::Custom(u32, u32)
 pub dimension::ResolutionPolicy::MatchArea
 pub dimension::ResolutionPolicy::MatchNarrow
@@ -120,6 +126,12 @@ pub dimension::RotateMode::CropToOriginal
 pub dimension::RotateMode::Expand
 pub dimension::RotateMode::Expand::color: constraint::CanvasColor
 pub dimension::RotateMode::InscribedCrop
+pub dimension::AutoDeskewEffect::max_angle_deg: f32
+pub dimension::AutoDeskewEffect::method: dimension::AutoDeskewMethod
+pub dimension::AutoDeskewEffect::mode: dimension::RotateMode
+pub fn dimension::AutoDeskewEffect::detect(&self, &[u8], u32, u32, usize) -> core::option::Option<f32>
+pub fn dimension::AutoDeskewEffect::new(dimension::RotateMode, f32) -> Self
+pub fn dimension::AutoDeskewEffect::with_method(self, dimension::AutoDeskewMethod) -> Self
 pub dimension::ExpandEffect::bottom: u32
 pub dimension::ExpandEffect::left: u32
 pub dimension::ExpandEffect::right: u32
@@ -140,11 +152,13 @@ pub dimension::WarpEffect::matrix: [f64; 9]
 pub dimension::WarpEffect::policy: dimension::ResolutionPolicy
 pub fn dimension::WarpEffect::new([f32; 9], dimension::ResolutionPolicy) -> Self
 pub fn dimension::WarpEffect::new_f64([f64; 9], dimension::ResolutionPolicy) -> Self
+pub fn dimension::DimensionEffect::analyze(&self, &[u8], u32, u32, usize) -> core::option::Option<alloc::boxed::Box<dyn dimension::DimensionEffect>>
 pub fn dimension::DimensionEffect::clone_boxed(&self) -> alloc::boxed::Box<dyn dimension::DimensionEffect>
 pub fn dimension::DimensionEffect::forward(&self, u32, u32) -> core::option::Option<(u32, u32)>
 pub fn dimension::DimensionEffect::forward_point(&self, f32, f32, u32, u32) -> core::option::Option<(f32, f32)>
 pub fn dimension::DimensionEffect::inverse(&self, u32, u32) -> core::option::Option<(u32, u32)>
 pub fn dimension::DimensionEffect::inverse_point(&self, f32, f32, u32, u32) -> core::option::Option<(f32, f32)>
+pub fn dimension::DimensionEffect::rotation_angle_rad(&self) -> core::option::Option<f32>
 pub mod orientation
 pub orientation::Orientation::FlipH
 pub orientation::Orientation::FlipV
@@ -307,6 +321,9 @@ pub plan::ResolvedEffect::output_dims: constraint::Size
 pub Align::Crop(u32, u32)
 pub Align::Distort(u32, u32)
 pub Align::Extend(u32, u32)
+#[non_exhaustive] pub enum AutoDeskewMethod [also: dimension]
+pub AutoDeskewMethod::GradientMoment
+pub AutoDeskewMethod::ProjectionVariance
 #[non_exhaustive] pub enum CanvasColor [also: constraint]
 pub CanvasColor::Linear
 pub CanvasColor::Linear::a: f32
@@ -393,6 +410,13 @@ pub fn constraint::SourceCrop::to_region(self) -> plan::Region
 pub Subsampling::S420
 pub Subsampling::S422
 pub Subsampling::S444
+pub struct AutoDeskewEffect [also: dimension]
+pub AutoDeskewEffect::max_angle_deg: f32
+pub AutoDeskewEffect::method: dimension::AutoDeskewMethod
+pub AutoDeskewEffect::mode: dimension::RotateMode
+pub fn dimension::AutoDeskewEffect::detect(&self, &[u8], u32, u32, usize) -> core::option::Option<f32>
+pub fn dimension::AutoDeskewEffect::new(dimension::RotateMode, f32) -> Self
+pub fn dimension::AutoDeskewEffect::with_method(self, dimension::AutoDeskewMethod) -> Self
 #[non_exhaustive] pub struct CodecLayout [also: plan]
 pub CodecLayout::chroma: plan::PlaneLayout
 pub CodecLayout::luma: plan::PlaneLayout
@@ -572,11 +596,13 @@ pub WarpEffect::policy: dimension::ResolutionPolicy
 pub fn dimension::WarpEffect::new([f32; 9], dimension::ResolutionPolicy) -> Self
 pub fn dimension::WarpEffect::new_f64([f64; 9], dimension::ResolutionPolicy) -> Self
 pub trait DimensionEffect: core::fmt::Debug + core::marker::Send + core::marker::Sync [also: dimension]
+pub fn DimensionEffect::analyze(&self, &[u8], u32, u32, usize) -> core::option::Option<alloc::boxed::Box<dyn dimension::DimensionEffect>>
 pub fn DimensionEffect::clone_boxed(&self) -> alloc::boxed::Box<dyn dimension::DimensionEffect>
 pub fn DimensionEffect::forward(&self, u32, u32) -> core::option::Option<(u32, u32)>
 pub fn DimensionEffect::forward_point(&self, f32, f32, u32, u32) -> core::option::Option<(f32, f32)>
 pub fn DimensionEffect::inverse(&self, u32, u32) -> core::option::Option<(u32, u32)>
 pub fn DimensionEffect::inverse_point(&self, f32, f32, u32, u32) -> core::option::Option<(f32, f32)>
+pub fn DimensionEffect::rotation_angle_rad(&self) -> core::option::Option<f32>
 pub fn compute_layout(&[plan::Command], u32, u32, core::option::Option<&plan::OutputLimits>) -> core::result::Result<(plan::IdealLayout, plan::DecoderRequest), whereat::at::At<constraint::LayoutError>> [also: plan]
 pub fn compute_layout_sequential(&[plan::Command], u32, u32, core::option::Option<&plan::OutputLimits>) -> core::result::Result<(plan::IdealLayout, plan::DecoderRequest), whereat::at::At<constraint::LayoutError>> [also: plan]
 pub fn expanded_canvas_dims(u32, u32, f32) -> (u32, u32) [also: dimension]
@@ -585,7 +611,7 @@ pub fn inscribed_crop_dims(u32, u32, f32) -> (u32, u32) [also: dimension]
 pub fn inscribed_crop_inverse(u32, u32, f32) -> (u32, u32) [also: dimension]
 pub fn warp_output_dims(u32, u32, &[f64; 9], dimension::ResolutionPolicy) -> (u32, u32) [also: dimension]
 
-## trait impls (34 types)
+## trait impls (36 types)
 
 constraint::CanvasColor: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 constraint::Constraint: Clone, Debug, PartialEq
@@ -596,6 +622,8 @@ constraint::LayoutError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 constraint::Rect: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 constraint::Size: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 constraint::SourceCrop: Clone, Copy, Debug, PartialEq
+dimension::AutoDeskewEffect: Clone, Copy, Debug, PartialEq, dimension::DimensionEffect
+dimension::AutoDeskewMethod: Clone, Copy, Debug, PartialEq
 dimension::ExpandEffect: Clone, Copy, Debug, PartialEq, dimension::DimensionEffect
 dimension::PadEffect: Clone, Copy, Debug, PartialEq, dimension::DimensionEffect
 dimension::ResolutionPolicy: Clone, Copy, Debug, PartialEq
@@ -624,7 +652,7 @@ plan::Subsampling: Clone, Copy, Debug, Eq, Hash, PartialEq
 
 ## auto traits
 
-29 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+31 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 plan::Command: !RefUnwindSafe !UnwindSafe
 plan::IdealLayout: !RefUnwindSafe !UnwindSafe
 plan::LayoutPlan: !RefUnwindSafe !UnwindSafe

@@ -1,5 +1,5 @@
 # zenfilters public API — additions from non-default features
-# features: experimental,serde,srgb-compat,srgb-filters,zennode,zenquant
+# features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per

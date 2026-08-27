@@ -6,44 +6,46 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1115 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 9 lines (9 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1257 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                20
-#   pub types (struct/enum/trait/alias)       161
-#   pub consts/statics                         38
-#   free functions                             54
-#   inherent methods                          253
-#   struct fields                             398
-#   enum variants                              51
+#   pub modules                                22
+#   pub types (struct/enum/trait/alias)       185
+#   pub consts/statics                         43
+#   free functions                             56
+#   inherent methods                          281
+#   struct fields                             449
+#   enum variants                              58
 #   re-exports                                 21
-#   trait roster entries (type × trait)       267
-#   auto-trait-complete types                  94
-#   auto-trait exceptions                      34
+#   trait roster entries (type × trait)       325
+#   auto-trait-complete types                 111
+#   auto-trait exceptions                      37
 #
 # per-module pub lines:
-#   (root)                          194
+#   (root)                          198
 #   animation                        18
 #   bridge                           55
 #   cache                            30
 #   codec                             7
 #   execute_layout                   15
 #   format                           12
-#   graph                           109
-#   limits                           74
+#   graph                           115
+#   limits                           79
 #   lossless                          5
 #   ops                              14
-#   orchestrate                      38
+#   orchestrate                      39
+#   riapi                             2
 #   session                           1
 #   sidecar                          25
-#   sources                          61
+#   sources                          71
 #   srcset                            2
-#   trace                           129
+#   tiles                            38
+#   trace                           151
 #   watermark                        35
-#   zennode_defs                    172
+#   zennode_defs                    203
 
-## items (967 lines)
+## items (1086 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -227,6 +229,12 @@ pub graph::NodeOp::ExpandCanvas::bottom: u32
 pub graph::NodeOp::ExpandCanvas::left: u32
 pub graph::NodeOp::ExpandCanvas::right: u32
 pub graph::NodeOp::ExpandCanvas::top: u32
+pub graph::NodeOp::ExtendCanvas
+pub graph::NodeOp::ExtendCanvas::bottom: u32
+pub graph::NodeOp::ExtendCanvas::fill: sources::CanvasFill
+pub graph::NodeOp::ExtendCanvas::left: u32
+pub graph::NodeOp::ExtendCanvas::right: u32
+pub graph::NodeOp::ExtendCanvas::top: u32
 pub graph::NodeOp::FillRect
 pub graph::NodeOp::FillRect::color: [u8; 4]
 pub graph::NodeOp::FillRect::x1: u32
@@ -310,6 +318,7 @@ pub limits::Limits::max_duration: core::option::Option<core::time::Duration>
 pub limits::Limits::max_frames: core::option::Option<u32>
 pub limits::Limits::max_height: core::option::Option<u32>
 pub limits::Limits::max_memory_bytes: core::option::Option<u64>
+pub limits::Limits::max_output_bytes: core::option::Option<u64>
 pub limits::Limits::max_pixels: core::option::Option<u64>
 pub limits::Limits::max_total_pixels: core::option::Option<u64>
 pub limits::Limits::max_width: core::option::Option<u32>
@@ -320,11 +329,13 @@ pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
 pub fn limits::Limits::to_allocation_tracker(self) -> alloc::sync::Arc<limits::AllocationTracker>
+pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
 pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
 pub fn limits::Limits::with_max_frames(self, u32) -> Self
 pub fn limits::Limits::with_max_height(self, u32) -> Self
 pub fn limits::Limits::with_max_memory_bytes(self, u64) -> Self
+pub fn limits::Limits::with_max_output_bytes(self, u64) -> Self
 pub fn limits::Limits::with_max_pixels(self, u64) -> Self
 pub fn limits::Limits::with_max_total_pixels(self, u64) -> Self
 pub fn limits::Limits::with_max_width(self, u32) -> Self
@@ -355,6 +366,7 @@ pub fn ops::PixelOp::output_format(&self) -> format::PixelFormat
 pub mod orchestrate
 pub orchestrate::ProcessConfig::converters: &'a [&'a dyn bridge::NodeConverter]
 pub orchestrate::ProcessConfig::hdr_mode: &'a str
+pub orchestrate::ProcessConfig::limits: core::option::Option<&'a limits::Limits>
 pub orchestrate::ProcessConfig::nodes: &'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]
 pub orchestrate::ProcessConfig::source_info: &'a orchestrate::SourceImageInfo
 pub orchestrate::ProcessConfig::trace_config: core::option::Option<&'a trace::TraceConfig>
@@ -384,6 +396,9 @@ pub orchestrate::StreamingOutput::trace: core::option::Option<trace::FullPipelin
 pub fn orchestrate::process(alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>) -> PipeResult<orchestrate::ProcessedImage>
 pub fn orchestrate::process_with_sidecar(alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>) -> PipeResult<orchestrate::ProcessedImage>
 pub fn orchestrate::stream(alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>) -> PipeResult<orchestrate::StreamingOutput>
+pub mod riapi
+pub fn riapi::preprocess_querystring(&str) -> (alloc::string::String, alloc::vec::Vec<alloc::string::String>)
+pub fn riapi::riapi_order(&mut [alloc::boxed::Box<dyn zennode::traits::NodeInstance>])
 pub mod session
 pub fn Session::cache_len(&self) -> usize
 pub fn Session::clear(&mut self)
@@ -419,6 +434,12 @@ pub sidecar::SidecarStream::kind: sidecar::SidecarKind
 pub sidecar::SidecarStream::source: alloc::boxed::Box<dyn Source>
 pub sidecar::SidecarStream::width: u32
 pub mod sources
+pub enum sources::CanvasFill
+pub sources::CanvasFill::Mirror
+pub sources::CanvasFill::Repeat
+pub sources::CanvasFill::Replicate
+pub sources::CanvasFill::Solid([u8; 4])
+pub fn sources::CanvasFill::from_name(&str, [u8; 4]) -> core::option::Option<Self>
 pub struct sources::CallbackSource
 pub fn sources::CallbackSource::from_data(&[u8], u32, u32, format::PixelFormat, u32) -> Self
 pub fn sources::CallbackSource::new(u32, u32, format::PixelFormat, u32, impl core::ops::function::FnMut(&mut [u8]) -> PipeResult<bool> + core::marker::Send + 'static) -> Self
@@ -431,9 +452,12 @@ pub fn sources::CropSource::new(alloc::boxed::Box<dyn Source>, u32, u32, u32, u3
 pub struct sources::EdgeReplicateSource
 pub fn sources::EdgeReplicateSource::new(alloc::boxed::Box<dyn Source>, u32, u32, u32, u32) -> PipeResult<Self>
 pub struct sources::EffectSource
+pub fn sources::EffectSource::effects(&self) -> &[zenlayout::plan::ResolvedEffect]
 pub fn sources::EffectSource::new(alloc::boxed::Box<dyn Source>, &[zenlayout::plan::ResolvedEffect], &limits::Limits) -> PipeResult<Self>
 pub struct sources::ExpandCanvasSource
+pub fn sources::ExpandCanvasSource::fill(&self) -> sources::CanvasFill
 pub fn sources::ExpandCanvasSource::new(alloc::boxed::Box<dyn Source>, u32, u32, i32, i32, [u8; 4]) -> PipeResult<Self>
+pub fn sources::ExpandCanvasSource::with_fill(self, sources::CanvasFill) -> Self
 pub struct sources::FilterSource
 pub fn sources::FilterSource::new(alloc::boxed::Box<dyn Source>, zenfilters::pipeline::Pipeline) -> PipeResult<Self>
 pub struct sources::FlipHSource
@@ -472,6 +496,7 @@ pub fn sources::TeeSource::new_checked(alloc::boxed::Box<dyn Source>, &limits::L
 pub fn sources::TeeSource::width(&self) -> u32
 pub struct sources::TracingSource
 pub fn sources::TracingSource::new(alloc::boxed::Box<dyn Source>, &trace::TraceEntry, core::option::Option<std::path::PathBuf>) -> Self
+pub fn sources::TracingSource::with_strip_events(self, bool) -> Self
 pub fn sources::TracingSource::with_timing(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>) -> Self
 pub struct sources::TransformSource
 pub fn sources::TransformSource::new(alloc::boxed::Box<dyn Source>) -> Self
@@ -483,7 +508,49 @@ pub const sources::DEFAULT_OVERLAP: u32
 pub mod srcset
 pub fn srcset::expand_srcset(&str) -> alloc::string::String
 pub fn srcset::parse_srcset(&str) -> alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub mod tiles
+pub struct tiles::DziFsWriter
+pub fn tiles::DziFsWriter::descriptor_path(&self) -> std::path::PathBuf
+pub fn tiles::DziFsWriter::new(impl core::convert::Into<std::path::PathBuf>, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, impl core::ops::function::FnMut(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + 'static) -> Self
+pub fn tiles::DziFsWriter::tiles_written(&self) -> u64
+pub struct tiles::LevelInfo
+pub tiles::LevelInfo::height: u32
+pub tiles::LevelInfo::level: u32
+pub tiles::LevelInfo::width: u32
+pub struct tiles::MemoryTileWriter
+pub tiles::MemoryTileWriter::levels: alloc::vec::Vec<tiles::LevelInfo>
+pub tiles::MemoryTileWriter::tiles: alloc::collections::btree::map::BTreeMap<tiles::TileKey, tiles::StoredTile>
+pub fn tiles::MemoryTileWriter::finished(&self) -> bool
+pub struct tiles::TilePyramidConfig
+pub tiles::TilePyramidConfig::overlap: u32
+pub tiles::TilePyramidConfig::tile_size: u32
+pub fn tiles::TilePyramidConfig::new(u32, u32) -> Self
+pub struct tiles::TilePyramidSink<W: tiles::TileWriter>
+pub fn tiles::TilePyramidSink<W>::buffer_bytes_estimate(&self) -> u64
+pub fn tiles::TilePyramidSink<W>::into_writer(self) -> W
+pub fn tiles::TilePyramidSink<W>::level_count(&self) -> u32
+pub fn tiles::TilePyramidSink<W>::level_infos(&self) -> alloc::vec::Vec<tiles::LevelInfo>
+pub fn tiles::TilePyramidSink<W>::new(u32, u32, format::PixelFormat, tiles::TilePyramidConfig, W) -> PipeResult<Self>
+pub fn tiles::TilePyramidSink<W>::writer(&self) -> &W
+pub struct tiles::TileRef<'a>
+pub tiles::TileRef::col: u32
+pub tiles::TileRef::data: &'a [u8]
+pub tiles::TileRef::format: format::PixelFormat
+pub tiles::TileRef::height: u32
+pub tiles::TileRef::level: u32
+pub tiles::TileRef::row: u32
+pub tiles::TileRef::width: u32
+pub trait tiles::TileWriter: core::marker::Send
+pub fn tiles::TileWriter::begin(&mut self, &[tiles::LevelInfo], tiles::TilePyramidConfig, format::PixelFormat) -> PipeResult<()>
+pub fn tiles::TileWriter::finish(&mut self) -> PipeResult<()>
+pub fn tiles::TileWriter::write_tile(&mut self, tiles::TileRef<'_>) -> PipeResult<()>
+pub type tiles::StoredTile = (u32, u32, alloc::vec::Vec<u8>)
+pub type tiles::TileEncoder = alloc::boxed::Box<(dyn core::ops::function::FnMut(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send)>
+pub type tiles::TileKey = (u32, u32, u32)
 pub mod trace
+pub enum trace::ExecutionPhase
+pub trace::ExecutionPhase::Compilation
+pub trace::ExecutionPhase::Execution
 pub struct trace::BridgeNodeInfo
 pub trace::BridgeNodeInfo::coalesce_group: core::option::Option<alloc::string::String>
 pub trace::BridgeNodeInfo::role: alloc::string::String
@@ -523,21 +590,28 @@ pub trace::DagSnapshotNode::position: usize
 pub trace::DagSnapshotNode::removed: bool
 pub trace::DagSnapshotNode::uid: u32
 pub struct trace::ExecutionTrace
+pub trace::ExecutionTrace::phases: alloc::vec::Vec<(trace::ExecutionPhase, core::time::Duration)>
+pub trace::ExecutionTrace::slowest_strip: core::option::Option<trace::SlowestStrip>
 pub trace::ExecutionTrace::total_duration: core::time::Duration
 pub trace::ExecutionTrace::total_strips: u32
+pub fn trace::ExecutionTrace::from_graph(&trace::PipelineTrace) -> Self
 pub struct trace::FullPipelineTrace
 pub trace::FullPipelineTrace::bridge: core::option::Option<trace::BridgeTrace>
 pub trace::FullPipelineTrace::execution: core::option::Option<trace::ExecutionTrace>
 pub trace::FullPipelineTrace::graph: trace::PipelineTrace
 pub trace::FullPipelineTrace::riapi: core::option::Option<trace::RiapiTrace>
-pub fn trace::FullPipelineTrace::to_animated_svg(&self) -> alloc::string::String
+pub fn trace::FullPipelineTrace::finish_execution(&mut self) -> &trace::ExecutionTrace
+pub fn trace::FullPipelineTrace::strip_timing(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::to_json(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::to_text(&self) -> alloc::string::String
+pub fn trace::FullPipelineTrace::to_animated_svg(&self) -> alloc::string::String
 pub struct trace::NodeTiming
 pub trace::NodeTiming::bytes_processed: u64
 pub trace::NodeTiming::strip_count: u32
+pub trace::NodeTiming::strips: alloc::vec::Vec<trace::StripEvent>
 pub trace::NodeTiming::total_duration: core::time::Duration
 pub struct trace::PipelineTrace
+pub trace::PipelineTrace::compile_duration: core::option::Option<core::time::Duration>
 pub trace::PipelineTrace::edges: alloc::vec::Vec<trace::DagSnapshotEdge>
 pub trace::PipelineTrace::entries: alloc::vec::Vec<trace::TraceEntry>
 pub fn trace::PipelineTrace::implicit_count(&self) -> usize
@@ -560,6 +634,15 @@ pub trace::RiapiTrace::created_nodes: alloc::vec::Vec<trace::RiapiNodeTrace>
 pub trace::RiapiTrace::keys: alloc::vec::Vec<trace::RiapiKeyTrace>
 pub trace::RiapiTrace::querystring: alloc::string::String
 pub trace::RiapiTrace::warnings: alloc::vec::Vec<alloc::string::String>
+pub struct trace::SlowestStrip
+pub trace::SlowestStrip::event: trace::StripEvent
+pub trace::SlowestStrip::node: alloc::string::String
+pub trace::SlowestStrip::trace_order: usize
+pub struct trace::StripEvent
+pub trace::StripEvent::bytes: u64
+pub trace::StripEvent::duration: core::time::Duration
+pub trace::StripEvent::rows: u32
+pub trace::StripEvent::strip_num: u32
 pub struct trace::TraceAppender
 pub fn trace::TraceAppender::add_note(&self, alloc::string::String)
 pub fn trace::TraceAppender::new(alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>) -> Self
@@ -570,11 +653,13 @@ pub trace::TraceConfig::bridge: bool
 pub trace::TraceConfig::dump_nodes: alloc::vec::Vec<usize>
 pub trace::TraceConfig::metadata: bool
 pub trace::TraceConfig::pixel_dump_dir: core::option::Option<std::path::PathBuf>
+pub trace::TraceConfig::strip_events: bool
 pub trace::TraceConfig::timing: bool
 pub fn trace::TraceConfig::full() -> Self
 pub fn trace::TraceConfig::metadata_only() -> Self
 pub fn trace::TraceConfig::should_dump(&self, usize) -> bool
 pub fn trace::TraceConfig::with_pixel_dump(impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn trace::TraceConfig::with_strip_events(self) -> Self
 pub struct trace::TraceEntry
 pub trace::TraceEntry::conversion_cost: core::option::Option<zenpixels_convert::negotiate::ConversionCost>
 pub trace::TraceEntry::description: alloc::string::String
@@ -603,6 +688,7 @@ pub fn trace::Tracer::ensure_format(&self, alloc::boxed::Box<dyn Source>, format
 pub fn trace::Tracer::inactive() -> Self
 pub fn trace::Tracer::is_active(&self) -> bool
 pub fn trace::Tracer::note_implicit(&self, &str, alloc::string::String, &str, format::PixelFormat, u32, u32, u32, u32, bool)
+pub fn trace::Tracer::with_strip_events(self, bool) -> Self
 pub fn trace::Tracer::wrap_compiled_node(&self, alloc::boxed::Box<dyn Source>, usize, &'static str, impl core::ops::function::FnOnce() -> alloc::string::String, bool, core::option::Option<&trace::UpstreamMeta>) -> alloc::boxed::Box<dyn Source>
 pub struct trace::UpstreamMeta
 pub trace::UpstreamMeta::format: format::PixelFormat
@@ -666,6 +752,8 @@ pub zennode_defs::Constrain::h: core::option::Option<u32>
 pub zennode_defs::Constrain::kernel_lobe_ratio: core::option::Option<f32>
 pub zennode_defs::Constrain::kernel_width_scale: core::option::Option<f32>
 pub zennode_defs::Constrain::matte_color: core::option::Option<alloc::string::String>
+pub zennode_defs::Constrain::max_h: core::option::Option<u32>
+pub zennode_defs::Constrain::max_w: core::option::Option<u32>
 pub zennode_defs::Constrain::mode: alloc::string::String
 pub zennode_defs::Constrain::post_blur: core::option::Option<f32>
 pub zennode_defs::Constrain::resample_when: core::option::Option<alloc::string::String>
@@ -703,6 +791,7 @@ pub struct zennode_defs::CropWhitespaceNodeDef
 pub struct zennode_defs::ExpandCanvas
 pub zennode_defs::ExpandCanvas::bottom: u32
 pub zennode_defs::ExpandCanvas::color: alloc::string::String
+pub zennode_defs::ExpandCanvas::fill: alloc::string::String
 pub zennode_defs::ExpandCanvas::left: u32
 pub zennode_defs::ExpandCanvas::right: u32
 pub zennode_defs::ExpandCanvas::top: u32
@@ -726,6 +815,14 @@ pub struct zennode_defs::FlipVNodeDef
 pub struct zennode_defs::FrameRiapiDef
 pub struct zennode_defs::FrameSelect
 pub zennode_defs::FrameSelect::frame: u32
+pub struct zennode_defs::HdrDirectives
+pub zennode_defs::HdrDirectives::headroom: f32
+pub zennode_defs::HdrDirectives::mode: alloc::string::String
+pub struct zennode_defs::HdrRiapiDef
+pub struct zennode_defs::IccDirectives
+pub zennode_defs::IccDirectives::discard_profile: bool
+pub zennode_defs::IccDirectives::ignore_errors: bool
+pub struct zennode_defs::IccRiapiDef
 pub struct zennode_defs::Orient
 pub zennode_defs::Orient::orientation: i32
 pub struct zennode_defs::OrientNodeDef
@@ -745,6 +842,11 @@ pub zennode_defs::Overlay::opacity: f32
 pub zennode_defs::Overlay::x: i32
 pub zennode_defs::Overlay::y: i32
 pub struct zennode_defs::OverlayNodeDef
+pub struct zennode_defs::PostFlip
+pub zennode_defs::PostFlip::horizontal: bool
+pub zennode_defs::PostFlip::vertical: bool
+pub struct zennode_defs::PostRotate
+pub zennode_defs::PostRotate::degrees: i32
 pub struct zennode_defs::RegionViewport
 pub zennode_defs::RegionViewport::bottom_pct: f32
 pub zennode_defs::RegionViewport::bottom_px: i32
@@ -768,6 +870,13 @@ pub zennode_defs::Resize::h: u32
 pub zennode_defs::Resize::sharpen: f32
 pub zennode_defs::Resize::w: u32
 pub struct zennode_defs::ResizeNodeDef
+pub struct zennode_defs::RiapiCrop
+pub zennode_defs::RiapiCrop::x1: f32
+pub zennode_defs::RiapiCrop::x2: f32
+pub zennode_defs::RiapiCrop::xunits: f32
+pub zennode_defs::RiapiCrop::y1: f32
+pub zennode_defs::RiapiCrop::y2: f32
+pub zennode_defs::RiapiCrop::yunits: f32
 pub struct zennode_defs::Rotate180
 pub struct zennode_defs::Rotate180NodeDef
 pub struct zennode_defs::Rotate270
@@ -788,12 +897,15 @@ pub zennode_defs::RoundCorners::radius_tl: f32
 pub zennode_defs::RoundCorners::radius_tr: f32
 pub fn zennode_defs::RoundCorners::bg_color(&self) -> [u8; 4]
 pub struct zennode_defs::RoundCornersNodeDef
+pub struct zennode_defs::RoundcornersRiapiDef
+pub struct zennode_defs::SflipRiapiDef
 pub struct zennode_defs::SmartCropAnalyze
 pub zennode_defs::SmartCropAnalyze::rects_csv: alloc::string::String
 pub zennode_defs::SmartCropAnalyze::target_h: u32
 pub zennode_defs::SmartCropAnalyze::target_w: u32
 pub zennode_defs::SmartCropAnalyze::zoom: bool
 pub struct zennode_defs::SmartCropAnalyzeNodeDef
+pub struct zennode_defs::SrotateRiapiDef
 pub static zennode_defs::ALL: &[&dyn zennode::traits::NodeDef]
 pub static zennode_defs::AUTOROTATE_RIAPI_DEF: zennode_defs::AutorotateRiapiDef
 pub static zennode_defs::COMPOSITE_NODE: zennode_defs::CompositeNodeDef
@@ -809,6 +921,8 @@ pub static zennode_defs::FLIP_H_NODE: zennode_defs::FlipHNodeDef
 pub static zennode_defs::FLIP_RIAPI_DEF: zennode_defs::FlipRiapiDef
 pub static zennode_defs::FLIP_V_NODE: zennode_defs::FlipVNodeDef
 pub static zennode_defs::FRAME_RIAPI_DEF: zennode_defs::FrameRiapiDef
+pub static zennode_defs::HDR_RIAPI_DEF: zennode_defs::HdrRiapiDef
+pub static zennode_defs::ICC_RIAPI_DEF: zennode_defs::IccRiapiDef
 pub static zennode_defs::ORIENT_NODE: zennode_defs::OrientNodeDef
 pub static zennode_defs::OUTPUT_LIMITS_NODE: zennode_defs::OutputLimitsNodeDef
 pub static zennode_defs::OVERLAY_NODE: zennode_defs::OverlayNodeDef
@@ -819,8 +933,11 @@ pub static zennode_defs::ROTATE180_NODE: zennode_defs::Rotate180NodeDef
 pub static zennode_defs::ROTATE270_NODE: zennode_defs::Rotate270NodeDef
 pub static zennode_defs::ROTATE90_NODE: zennode_defs::Rotate90NodeDef
 pub static zennode_defs::ROTATE_RIAPI_DEF: zennode_defs::RotateRiapiDef
+pub static zennode_defs::ROUNDCORNERS_RIAPI_DEF: zennode_defs::RoundcornersRiapiDef
 pub static zennode_defs::ROUND_CORNERS_NODE: zennode_defs::RoundCornersNodeDef
+pub static zennode_defs::SFLIP_RIAPI_DEF: zennode_defs::SflipRiapiDef
 pub static zennode_defs::SMART_CROP_ANALYZE_NODE: zennode_defs::SmartCropAnalyzeNodeDef
+pub static zennode_defs::SROTATE_RIAPI_DEF: zennode_defs::SrotateRiapiDef
 pub fn zennode_defs::register(&mut zennode::registry::NodeRegistry)
 pub enum OptimizationLevel [also: bridge, bridge::ordering]
 pub OptimizationLevel::Lossless
@@ -886,6 +1003,7 @@ pub Limits::max_duration: core::option::Option<core::time::Duration>
 pub Limits::max_frames: core::option::Option<u32>
 pub Limits::max_height: core::option::Option<u32>
 pub Limits::max_memory_bytes: core::option::Option<u64>
+pub Limits::max_output_bytes: core::option::Option<u64>
 pub Limits::max_pixels: core::option::Option<u64>
 pub Limits::max_total_pixels: core::option::Option<u64>
 pub Limits::max_width: core::option::Option<u32>
@@ -896,11 +1014,13 @@ pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
 pub fn limits::Limits::to_allocation_tracker(self) -> alloc::sync::Arc<limits::AllocationTracker>
+pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
 pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
 pub fn limits::Limits::with_max_frames(self, u32) -> Self
 pub fn limits::Limits::with_max_height(self, u32) -> Self
 pub fn limits::Limits::with_max_memory_bytes(self, u64) -> Self
+pub fn limits::Limits::with_max_output_bytes(self, u64) -> Self
 pub fn limits::Limits::with_max_pixels(self, u64) -> Self
 pub fn limits::Limits::with_max_total_pixels(self, u64) -> Self
 pub fn limits::Limits::with_max_width(self, u32) -> Self
@@ -927,6 +1047,7 @@ pub fn bridge::PipelineResult::materialize(self) -> PipeResult<bridge::Materiali
 pub struct ProcessConfig<'a> [also: orchestrate]
 pub ProcessConfig::converters: &'a [&'a dyn bridge::NodeConverter]
 pub ProcessConfig::hdr_mode: &'a str
+pub ProcessConfig::limits: core::option::Option<&'a limits::Limits>
 pub ProcessConfig::nodes: &'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]
 pub ProcessConfig::source_info: &'a orchestrate::SourceImageInfo
 pub ProcessConfig::trace_config: core::option::Option<&'a trace::TraceConfig>
@@ -1013,7 +1134,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (113 types)
+## trait impls (133 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1042,6 +1163,7 @@ orchestrate::SourceImageInfo: Clone, Debug
 sidecar::ProcessedSidecar: Clone
 sidecar::SidecarKind: Clone, Debug
 sources::CallbackSource: Source
+sources::CanvasFill: Clone, Copy, Debug, Eq, PartialEq
 sources::CompositeSource: Source
 sources::CropSource: Source
 sources::EdgeReplicateSource: Source
@@ -1058,12 +1180,19 @@ sources::TeeCursor: Source
 sources::TracingSource: Drop, Source
 sources::TransformSource: Source
 sources::WindowedFilterSource: Source
+tiles::DziFsWriter: tiles::TileWriter
+tiles::LevelInfo: Clone, Copy, Debug, Eq, PartialEq
+tiles::MemoryTileWriter: Default, tiles::TileWriter
+tiles::TilePyramidConfig: Clone, Copy, Debug, Default, Eq, PartialEq
+tiles::TilePyramidSink<W>: Sink
+tiles::TileRef<'a>: Clone, Copy, Debug
 trace::BridgeNodeInfo: Clone, Debug
 trace::BridgeStepTrace: Clone, Debug
 trace::BridgeTrace: Clone, Debug, Default
 trace::DagSnapshot: Clone, Debug
 trace::DagSnapshotEdge: Clone, Debug
 trace::DagSnapshotNode: Clone, Debug
+trace::ExecutionPhase: Clone, Copy, Debug, Eq, PartialEq
 trace::ExecutionTrace: Clone, Debug, Default
 trace::FullPipelineTrace: Clone, Debug, Default
 trace::NodeTiming: Clone, Debug, Default
@@ -1071,6 +1200,8 @@ trace::PipelineTrace: Clone, Debug, Default
 trace::RiapiKeyTrace: Clone, Debug
 trace::RiapiNodeTrace: Clone, Debug
 trace::RiapiTrace: Clone, Debug, Default
+trace::SlowestStrip: Clone, Debug, Eq, PartialEq
+trace::StripEvent: Clone, Debug, Default, Eq, PartialEq
 trace::TraceAppender: Clone
 trace::TraceConfig: Clone, Debug
 trace::TraceEntry: Clone, Debug
@@ -1105,18 +1236,25 @@ zennode_defs::FlipV: Clone, Debug, Default, zennode::schema::NodeParams, zennode
 zennode_defs::FlipVNodeDef: zennode::traits::NodeDef
 zennode_defs::FrameRiapiDef: zennode::traits::NodeDef
 zennode_defs::FrameSelect: Clone, zennode::traits::NodeInstance
+zennode_defs::HdrDirectives: Clone, Debug, zennode::traits::NodeInstance
+zennode_defs::HdrRiapiDef: zennode::traits::NodeDef
+zennode_defs::IccDirectives: Clone, Debug, Default, zennode::traits::NodeInstance
+zennode_defs::IccRiapiDef: zennode::traits::NodeDef
 zennode_defs::Orient: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::OrientNodeDef: zennode::traits::NodeDef
 zennode_defs::OutputLimits: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::OutputLimitsNodeDef: zennode::traits::NodeDef
 zennode_defs::Overlay: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::OverlayNodeDef: zennode::traits::NodeDef
+zennode_defs::PostFlip: Clone, Debug, zennode::traits::NodeInstance
+zennode_defs::PostRotate: Clone, Debug, zennode::traits::NodeInstance
 zennode_defs::RegionViewport: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::RegionViewportNodeDef: zennode::traits::NodeDef
 zennode_defs::RemoveAlpha: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::RemoveAlphaNodeDef: zennode::traits::NodeDef
 zennode_defs::Resize: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::ResizeNodeDef: zennode::traits::NodeDef
+zennode_defs::RiapiCrop: Clone, Debug, zennode::traits::NodeInstance
 zennode_defs::Rotate180: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::Rotate180NodeDef: zennode::traits::NodeDef
 zennode_defs::Rotate270: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
@@ -1126,12 +1264,15 @@ zennode_defs::Rotate90NodeDef: zennode::traits::NodeDef
 zennode_defs::RotateRiapiDef: zennode::traits::NodeDef
 zennode_defs::RoundCorners: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::RoundCornersNodeDef: zennode::traits::NodeDef
+zennode_defs::RoundcornersRiapiDef: zennode::traits::NodeDef
+zennode_defs::SflipRiapiDef: zennode::traits::NodeDef
 zennode_defs::SmartCropAnalyze: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::SmartCropAnalyzeNodeDef: zennode::traits::NodeDef
+zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-94 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+111 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe
@@ -1146,7 +1287,7 @@ codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
 limits::AllocationTracker: !Freeze
-ops::RowConverterOp: !RefUnwindSafe !Sync !UnwindSafe
+ops::RowConverterOp: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe
 orchestrate::StreamingOutput: !RefUnwindSafe !Sync !UnwindSafe
@@ -1156,6 +1297,7 @@ sources::CallbackSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::CompositeSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::CropSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::EdgeReplicateSource: !RefUnwindSafe !Sync !UnwindSafe
+sources::EffectSource: !RefUnwindSafe !UnwindSafe
 sources::ExpandCanvasSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::FilterSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::FlipHSource: !RefUnwindSafe !Sync !UnwindSafe
@@ -1166,3 +1308,5 @@ sources::ResizeSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::TracingSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::TransformSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::WindowedFilterSource: !RefUnwindSafe !Sync !UnwindSafe
+tiles::DziFsWriter: !RefUnwindSafe !Sync !UnwindSafe
+tiles::TilePyramidSink<W>: !Freeze !RefUnwindSafe !Sync !Unpin !UnwindSafe

@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 713 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 16 lines (16 hidden + 0 excluded-feature)
+# files: zencodecs.txt 738 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 18 lines (18 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                20
-#   pub types (struct/enum/trait/alias)        53
-#   pub consts/statics                          8
+#   pub modules                                21
+#   pub types (struct/enum/trait/alias)        55
+#   pub consts/statics                         10
 #   free functions                             37
-#   inherent methods                          242
+#   inherent methods                          254
 #   struct fields                             126
-#   enum variants                             107
+#   enum variants                             115
 #   re-exports                                119
-#   trait roster entries (type × trait)        89
+#   trait roster entries (type × trait)        96
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                  22
+#   auto-trait-complete types                  23
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          320
+#   (root)                          328
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -36,10 +36,11 @@
 #   policy                           33
 #   quality                          54
 #   select                           21
+#   speed                            17
 #   trace                            48
 #   transcode                        39
 
-## items (680 lines)
+## items (704 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -345,6 +346,17 @@ pub fn select::available_encode_formats(&AllowedFormats, &policy::CodecPolicy) -
 pub fn select::select_format(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy) -> Result<select::FormatSelection>
 pub fn select::select_format_with_budget_picker(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy, core::option::Option<&dyn select::FormatPicker>, core::option::Option<&[f32]>, core::option::Option<&dyn core::ops::function::Fn(zencodec::format::ImageFormat) -> core::option::Option<f32>>) -> Result<select::FormatSelection>
 pub fn select::select_format_with_picker(&select::ImageFacts, &quality::QualityIntent, &AllowedFormats, &policy::CodecPolicy, core::option::Option<&dyn select::FormatPicker>, core::option::Option<&[f32]>) -> Result<select::FormatSelection>
+pub mod speed
+pub speed::EncodeSpeed::Fastest
+pub speed::EncodeSpeed::Offline
+pub speed::EncodeSpeed::OfflineMax
+pub speed::EncodeSpeed::Realtime
+pub const speed::EncodeSpeed::ALL: [speed::EncodeSpeed; 4]
+pub fn speed::EncodeSpeed::apply_to_limits(self, zencodec::limits::ResourceLimits) -> zencodec::limits::ResourceLimits
+pub fn speed::EncodeSpeed::from_name(&str) -> core::option::Option<Self>
+pub fn speed::EncodeSpeed::generic_effort(self, zencodec::format::ImageFormat) -> u32
+pub fn speed::EncodeSpeed::name(self) -> &'static str
+pub fn speed::EncodeSpeed::threading(self) -> zencodec::limits::ThreadingPolicy
 pub mod trace
 pub enum trace::SelectionStep
 pub trace::SelectionStep::DecoderChosen
@@ -458,6 +470,17 @@ pub fn codec_id::CodecId::format(&self) -> zencodec::format::ImageFormat
 pub fn codec_id::CodecId::is_decoder(&self) -> bool
 pub fn codec_id::CodecId::is_encoder(&self) -> bool
 pub fn codec_id::CodecId::name(&self) -> &'static str
+pub enum EncodeSpeed [also: speed]
+pub EncodeSpeed::Fastest
+pub EncodeSpeed::Offline
+pub EncodeSpeed::OfflineMax
+pub EncodeSpeed::Realtime
+pub const speed::EncodeSpeed::ALL: [speed::EncodeSpeed; 4]
+pub fn speed::EncodeSpeed::apply_to_limits(self, zencodec::limits::ResourceLimits) -> zencodec::limits::ResourceLimits
+pub fn speed::EncodeSpeed::from_name(&str) -> core::option::Option<Self>
+pub fn speed::EncodeSpeed::generic_effort(self, zencodec::format::ImageFormat) -> u32
+pub fn speed::EncodeSpeed::name(self) -> &'static str
+pub fn speed::EncodeSpeed::threading(self) -> zencodec::limits::ThreadingPolicy
 pub enum FormatChoice [also: intent]
 pub FormatChoice::Auto
 pub FormatChoice::Keep
@@ -568,6 +591,7 @@ pub fn EncodeRequest<'a>::encode_full_frame_srgba8_imgref(self, imgref::ImgRef<'
 pub fn EncodeRequest<'a>::estimate(&self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn EncodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn EncodeRequest<'a>::quality_intent(&self) -> quality::QualityIntent
+pub fn EncodeRequest<'a>::speed(&self) -> core::option::Option<speed::EncodeSpeed>
 pub fn EncodeRequest<'a>::with_cicp(self, core::option::Option<zenpixels::cicp::Cicp>) -> Self
 pub fn EncodeRequest<'a>::with_codec_config(self, &'a config::CodecConfig) -> Self
 pub fn EncodeRequest<'a>::with_color_emit_policy(self, zencodec::color::ColorEmitPolicy) -> Self
@@ -583,6 +607,7 @@ pub fn EncodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
 pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_quality_profile(self, quality::QualityProfile) -> Self
 pub fn EncodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
+pub fn EncodeRequest<'a>::with_speed(self, speed::EncodeSpeed) -> Self
 pub fn EncodeRequest<'a>::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub struct FormatDecision [also: decision]
 pub FormatDecision::format: zencodec::format::ImageFormat
@@ -722,7 +747,7 @@ pub fn transcode(&[u8], &decision::FormatDecision, &transcode::TranscodeOptions,
 pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::QualityTarget, &transcode::TranscodeOptions, &AllowedFormats) -> Result<transcode::TranscodeOutput> [also: transcode]
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
 
-## trait impls (25 types)
+## trait impls (26 types)
 
 AllowedFormats: Clone, Copy, Debug, Default
 CodecError: Debug, Display, Error
@@ -740,6 +765,7 @@ policy::CodecPolicy: Clone, Debug, Default
 quality::QualityIntent: Clone, Debug, Default
 quality::QualityProfile: Clone, Copy, Debug, Default, PartialEq
 select::ImageFacts: Clone, Debug, Default
+speed::EncodeSpeed: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 trace::SelectionStep: Clone, Debug, Display
 trace::SelectionTrace: Clone, Debug, Default, Display
 transcode::QualityTarget: Clone, Copy, Debug, PartialEq
@@ -753,7 +779,7 @@ impl<C> AnyEncoder for C where C: zencodec::traits::encoding::EncoderConfig, <<C
 
 ## auto traits
 
-22 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+23 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 EncodeRequest<'a>: !RefUnwindSafe !UnwindSafe
