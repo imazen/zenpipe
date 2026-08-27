@@ -267,6 +267,25 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   inspection), fixing the latent corruption where a resized RGBA sidecar
   was re-embedded as raw RGBA bytes labeled `channels: 3`.
 
+## zencodecs-cli
+
+### [Unreleased]
+
+#### Added
+
+- **`--lossless-if-cheaper [FACTOR]`** (#68): the last unchecked CLI item —
+  encodes lossless and lossy, keeps lossless when it is at most FACTOR×
+  (default 1.5) the lossy size. Rejects non-positive factors and formats
+  without a lossless mode. Binary-level tests in `tests/cli.rs`.
+- **`--speed`** preset flag (#28).
+
+#### Fixed
+
+- **README synced with the shipped CLI** (#68): HEIC decode and `--hdr`
+  were still listed as "tracked"; the flag table now covers
+  `--lossless-if-cheaper`, `--speed`, `--hdr`, `--keep-orientation`, and
+  the `convert-hdr-corpus.sh` example; states the PQ-only HDR output.
+
 ## zenfilters
 
 ### [Unreleased]

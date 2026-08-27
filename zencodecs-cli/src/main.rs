@@ -49,6 +49,12 @@ struct ConvertArgs {
     /// Encode losslessly.
     #[arg(long, conflicts_with_all = ["quality", "target_quality"])]
     lossless: bool,
+    /// Minimally-lossless by size: encode lossless AND lossy (at --quality or the
+    /// codec default); keep the lossless output when it is at most FACTOR times
+    /// the lossy size (default 1.5), else fall back to the lossy encode.
+    #[arg(long, value_name = "FACTOR", num_args = 0..=1, default_missing_value = "1.5",
+          conflicts_with_all = ["lossless", "target_quality"])]
+    lossless_if_cheaper: Option<f32>,
     /// Speed preset: fastest | realtime | offline | offline-max. Maps to a
     /// per-codec effort (see zencodecs::EncodeSpeed); fastest is single-threaded.
     #[arg(long)]
@@ -186,24 +192,62 @@ fn convert(a: ConvertArgs) -> Result<(), String> {
     if let Some(m) = &a.matte {
         opts.matte = Some(parse_matte(m).ok_or_else(|| format!("bad --matte '{m}' (want R,G,B)"))?);
     }
-    let out = if let Some(tq) = a.target_quality {
-        // Minimally-lossless: smallest byte size meeting the zensim-A target.
-        transcode_to_quality(&data, fmt, QualityTarget::Absolute(tq), &opts, &registry)
-            .map_err(|e| format!("transcode: {e}"))?
-    } else {
+    let speed = match &a.speed {
+        Some(s) => Some(EncodeSpeed::from_name(s).ok_or_else(|| {
+            format!("unknown --speed '{s}' (fastest|realtime|offline|offline-max)")
+        })?),
+        None => None,
+    };
+    let decision_for = |lossless: bool| {
         let mut decision = FormatDecision::for_format(fmt);
-        if a.lossless {
+        if lossless {
             decision.lossless = true;
         } else if let Some(q) = a.quality {
             decision.quality = QualityIntent::from_quality(q);
         }
-        if let Some(s) = &a.speed {
-            let speed = EncodeSpeed::from_name(s).ok_or_else(|| {
-                format!("unknown --speed '{s}' (fastest|realtime|offline|offline-max)")
-            })?;
+        if let Some(speed) = speed {
             decision.quality = decision.quality.with_effort(speed.generic_effort(fmt));
         }
-        transcode(&data, &decision, &opts, &registry).map_err(|e| format!("transcode: {e}"))?
+        decision
+    };
+    let out = if let Some(tq) = a.target_quality {
+        // Minimally-lossless: smallest byte size meeting the zensim-A target.
+        transcode_to_quality(&data, fmt, QualityTarget::Absolute(tq), &opts, &registry)
+            .map_err(|e| format!("transcode: {e}"))?
+    } else if let Some(factor) = a.lossless_if_cheaper {
+        // Minimally-lossless by size: keep lossless when it costs at most
+        // `factor`× the lossy encode, else take the lossy bytes.
+        if !(factor.is_finite() && factor > 0.0) {
+            return Err(format!(
+                "--lossless-if-cheaper wants a positive factor, got {factor}"
+            ));
+        }
+        if !fmt.supports_lossless() {
+            return Err(format!(
+                "{fmt:?} has no lossless mode for --lossless-if-cheaper"
+            ));
+        }
+        let lossless = transcode(&data, &decision_for(true), &opts, &registry)
+            .map_err(|e| format!("transcode (lossless): {e}"))?;
+        let lossy = transcode(&data, &decision_for(false), &opts, &registry)
+            .map_err(|e| format!("transcode (lossy): {e}"))?;
+        let keep_lossless = lossless.data.len() as f64 <= factor as f64 * lossy.data.len() as f64;
+        if !a.quiet {
+            eprintln!(
+                "lossless {} B vs lossy {} B (factor {factor}): keeping {}",
+                lossless.data.len(),
+                lossy.data.len(),
+                if keep_lossless { "lossless" } else { "lossy" }
+            );
+        }
+        if keep_lossless {
+            lossless
+        } else {
+            lossy
+        }
+    } else {
+        transcode(&data, &decision_for(a.lossless), &opts, &registry)
+            .map_err(|e| format!("transcode: {e}"))?
     };
 
     std::fs::write(&a.output, &out.data)
@@ -251,7 +295,7 @@ mod tests {
         assert!(matches!(parse_format("WebP"), Some(ImageFormat::WebP)));
         assert!(matches!(parse_format("avif"), Some(ImageFormat::Avif)));
         assert!(matches!(parse_format("jxl"), Some(ImageFormat::Jxl)));
-        assert!(parse_format("heic").is_none()); // decode tracked in #68, not an encode target
+        assert!(parse_format("heic").is_none()); // decode-only (heic-decode); not an encode target
         assert!(parse_format("tiff").is_none());
     }
 
