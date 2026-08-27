@@ -20,6 +20,7 @@ whereat::define_at_crate_info!();
 mod float_math;
 
 pub mod constraint;
+pub mod deskew;
 pub mod dimension;
 pub mod orientation;
 pub mod plan;
@@ -37,9 +38,9 @@ pub use constraint::{
     CanvasColor, Constraint, ConstraintMode, Gravity, Layout, LayoutError, Rect, Size, SourceCrop,
 };
 pub use dimension::{
-    DimensionEffect, ExpandEffect, PadEffect, ResolutionPolicy, RotateEffect, RotateMode,
-    TrimEffect, WarpEffect, expanded_canvas_dims, expanded_canvas_inverse, inscribed_crop_dims,
-    inscribed_crop_inverse, warp_output_dims,
+    AutoDeskewEffect, AutoDeskewMethod, DimensionEffect, ExpandEffect, PadEffect, ResolutionPolicy,
+    RotateEffect, RotateMode, TrimEffect, WarpEffect, expanded_canvas_dims,
+    expanded_canvas_inverse, inscribed_crop_dims, inscribed_crop_inverse, warp_output_dims,
 };
 pub use orientation::Orientation;
 pub use plan::{

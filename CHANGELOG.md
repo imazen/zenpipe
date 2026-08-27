@@ -243,6 +243,17 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Added
 
+- **Auto-deskew, first chunk** (#27): `EffectSource` now resolves
+  content-adaptive effects (`DimensionEffect::forward() == None`) against
+  the materialized frame via the new `DimensionEffect::analyze` hook
+  (Rec.709 luma composited over white), recomputes their output dims,
+  and exposes what they resolved to through `EffectSource::effects()`.
+  With `zenlayout::AutoDeskewEffect` this straightens skewed scans/rules
+  end to end (`tests/auto_deskew.rs`: pipeline-rotated rulings at ±3–7.5°
+  come back within 0.2°). Not yet: planner integration (`Command::Effect`
+  with a barrier), the `autodeskew=` RIAPI key / zennode param, and a
+  timing budget measurement.
+
 - **Canvas extend fill modes: replicate / mirror / repeat** (#23):
   `sources::CanvasFill { Solid, Replicate, Mirror, Repeat }` (sharp
   `extendWith` / vips `embed` extend semantics; mirror repeats the edge
@@ -315,6 +326,25 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   were still listed as "tracked"; the flag table now covers
   `--lossless-if-cheaper`, `--speed`, `--hdr`, `--keep-orientation`, and
   the `convert-hdr-corpus.sh` example; states the PQ-only HDR output.
+
+## zenlayout
+
+### [Unreleased]
+
+#### Added
+
+- **`deskew` module + `AutoDeskewEffect`** (#27): `deskew::
+  detect_skew_projection_variance` (perpendicular-projection histogram
+  variance, 1° sweep + 0.1° refinement; within 0.2° of the ground-truth
+  angle on anti-aliased rulings, 9 angles tested) and
+  `detect_skew_gradient_moment` (structure tensor, `O(N)`, coarse — about
+  ±10–15% of the angle on thin rulings, documented and tested as such).
+  `AutoDeskewEffect { mode, max_angle_deg, method }` is an analysis-barrier
+  `DimensionEffect` (`forward`/`inverse` are `None`) that `analyze`s into a
+  `RotateEffect::from_degrees(-skew, mode)`. New defaulted trait methods
+  `DimensionEffect::analyze` and `rotation_angle_rad` (additive).
+  Angle convention matches `RotateEffect` (a horizontal line rotated by
+  `a` is detected as `a`).
 
 ## zenfilters
 

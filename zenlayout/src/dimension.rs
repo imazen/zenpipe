@@ -75,6 +75,28 @@ pub trait DimensionEffect: Debug + Send + Sync {
 
     /// Clone into a boxed trait object.
     fn clone_boxed(&self) -> Box<dyn DimensionEffect>;
+
+    /// Resolve a content-adaptive effect against the materialized frame.
+    ///
+    /// The execution engine calls this for effects whose [`forward`](Self::forward)
+    /// is `None`, passing 8-bit grayscale (`h` rows of `w` samples, `stride`
+    /// bytes apart). The returned effect is concrete (its `forward` is
+    /// `Some`) and replaces this one. Fixed effects keep the default `None`.
+    fn analyze(
+        &self,
+        _luma: &[u8],
+        _w: u32,
+        _h: u32,
+        _stride: usize,
+    ) -> Option<Box<dyn DimensionEffect>> {
+        None
+    }
+
+    /// The rotation this effect applies, in radians, if it is a pure rotation.
+    /// Lets callers read back what an analysis resolved to without downcasting.
+    fn rotation_angle_rad(&self) -> Option<f32> {
+        None
+    }
 }
 
 impl Clone for Box<dyn DimensionEffect> {
@@ -179,6 +201,111 @@ impl DimensionEffect for RotateEffect {
         let ry = dx * sin + dy * cos;
 
         Some((rx + cx_in, ry + cy_in))
+    }
+
+    fn rotation_angle_rad(&self) -> Option<f32> {
+        Some(self.angle_rad)
+    }
+
+    fn clone_boxed(&self) -> Box<dyn DimensionEffect> {
+        Box::new(*self)
+    }
+}
+
+/// How [`AutoDeskewEffect`] finds the skew angle.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AutoDeskewMethod {
+    /// Structure-tensor principal direction — one `O(N)` pass, see
+    /// [`deskew::detect_skew_gradient_moment`](crate::deskew::detect_skew_gradient_moment).
+    /// Fast but coarse (≈±10–15% of the angle on rulings); biased toward
+    /// high-contrast content.
+    GradientMoment,
+    /// Perpendicular-projection histogram variance, 1° sweep + 0.1°
+    /// refinement — see
+    /// [`deskew::detect_skew_projection_variance`](crate::deskew::detect_skew_projection_variance).
+    /// Accurate to the grid on documents and rulings; `O(N × angles)`.
+    ProjectionVariance,
+}
+
+/// Content-adaptive straightening (zenpipe#27): detect the dominant line
+/// angle at execution time and rotate by its negative.
+///
+/// An **analysis barrier** — [`forward`](DimensionEffect::forward) /
+/// [`inverse`](DimensionEffect::inverse) are `None` until
+/// [`analyze`](DimensionEffect::analyze) resolves it into a
+/// [`RotateEffect`]. Detection outside `max_angle_deg` (or no coherent
+/// structure) resolves to a 0° rotation, i.e. the image is left as-is.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct AutoDeskewEffect {
+    /// Canvas policy for the resolved rotation.
+    pub mode: RotateMode,
+    /// Largest correction to apply, degrees (clamped to `(0, 45]`).
+    pub max_angle_deg: f32,
+    /// Detection method.
+    pub method: AutoDeskewMethod,
+}
+
+impl AutoDeskewEffect {
+    /// Deskew up to `max_angle_deg` with the projection-variance detector.
+    pub fn new(mode: RotateMode, max_angle_deg: f32) -> Self {
+        Self {
+            mode,
+            max_angle_deg,
+            method: AutoDeskewMethod::ProjectionVariance,
+        }
+    }
+
+    /// Choose the detection method.
+    pub fn with_method(mut self, method: AutoDeskewMethod) -> Self {
+        self.method = method;
+        self
+    }
+
+    /// Detect the skew (degrees, `RotateEffect` convention) on grayscale
+    /// pixels; `None` when nothing coherent is found within the budget.
+    pub fn detect(&self, luma: &[u8], w: u32, h: u32, stride: usize) -> Option<f32> {
+        match self.method {
+            AutoDeskewMethod::GradientMoment => {
+                crate::deskew::detect_skew_gradient_moment(luma, w, h, stride, self.max_angle_deg)
+            }
+            AutoDeskewMethod::ProjectionVariance => crate::deskew::detect_skew_projection_variance(
+                luma,
+                w,
+                h,
+                stride,
+                self.max_angle_deg,
+            ),
+        }
+    }
+}
+
+impl DimensionEffect for AutoDeskewEffect {
+    fn forward(&self, _w: u32, _h: u32) -> Option<(u32, u32)> {
+        None
+    }
+
+    fn inverse(&self, _w: u32, _h: u32) -> Option<(u32, u32)> {
+        None
+    }
+
+    fn forward_point(&self, _x: f32, _y: f32, _in_w: u32, _in_h: u32) -> Option<(f32, f32)> {
+        None
+    }
+
+    fn inverse_point(&self, _x: f32, _y: f32, _in_w: u32, _in_h: u32) -> Option<(f32, f32)> {
+        None
+    }
+
+    fn analyze(
+        &self,
+        luma: &[u8],
+        w: u32,
+        h: u32,
+        stride: usize,
+    ) -> Option<Box<dyn DimensionEffect>> {
+        let skew = self.detect(luma, w, h, stride).unwrap_or(0.0);
+        Some(Box::new(RotateEffect::from_degrees(-skew, self.mode)))
     }
 
     fn clone_boxed(&self) -> Box<dyn DimensionEffect> {

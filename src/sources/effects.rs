@@ -14,6 +14,7 @@ use crate::Source;
 use crate::format::{self, PixelFormat};
 use crate::limits::Limits;
 use crate::strip::Strip;
+use alloc::vec::Vec;
 use whereat::at;
 use zenlayout::ResolvedEffect;
 
@@ -32,13 +33,45 @@ pub struct EffectSource {
     format: PixelFormat,
     strip_height: u32,
     y: u32,
+    /// The effects as applied — analysis barriers replaced by what they
+    /// resolved to (zenpipe#27).
+    resolved: Vec<ResolvedEffect>,
+}
+
+/// Rec.709 luma of an RGBA8 sRGB buffer, alpha composited over white, one
+/// byte per pixel (tightly packed) — the analysis input for content-adaptive
+/// effects.
+fn luma_over_white(rgba: &[u8], stride: usize, w: u32, h: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity(w as usize * h as usize);
+    for y in 0..h as usize {
+        let row = &rgba[y * stride..y * stride + w as usize * 4];
+        for px in row.chunks_exact(4) {
+            let a = u32::from(px[3]);
+            // 0.2126 R + 0.7152 G + 0.0722 B, fixed point /256.
+            let l = (54 * u32::from(px[0]) + 183 * u32::from(px[1]) + 19 * u32::from(px[2])) >> 8;
+            let v = (l * a + 255 * (255 - a)) / 255;
+            out.push(v.min(255) as u8);
+        }
+    }
+    out
 }
 
 impl EffectSource {
+    /// The effects that were applied, in order, with analysis barriers
+    /// (`forward() == None`, e.g. [`zenlayout::AutoDeskewEffect`]) replaced
+    /// by the concrete effect they resolved to.
+    pub fn effects(&self) -> &[ResolvedEffect] {
+        &self.resolved
+    }
+
     /// Drain `upstream`, apply each effect in order, yield strips from the result.
     ///
-    /// Effects with `None` `forward()` (content-adaptive) are skipped — those
-    /// require an analyze phase that isn't wired in yet.
+    /// Content-adaptive effects (`forward()` is `None`) are resolved against
+    /// the materialized frame through [`DimensionEffect::analyze`]
+    /// (grayscale over white); their `output_dims` are recomputed from the
+    /// resolved effect. An effect that analysis cannot resolve is skipped.
+    ///
+    /// [`DimensionEffect::analyze`]: zenlayout::DimensionEffect::analyze
     pub fn new(
         mut upstream: Box<dyn Source>,
         effects: &[ResolvedEffect],
@@ -88,8 +121,27 @@ impl EffectSource {
         let mut cur_w = width;
         let mut cur_h = height;
         let mut cur_data = data;
+        let mut resolved: Vec<ResolvedEffect> = Vec::with_capacity(effects.len());
 
         for effect in effects {
+            // Analysis barrier: resolve against the current frame (zenpipe#27).
+            let mut effect = effect.clone();
+            if effect.effect.forward(cur_w, cur_h).is_none() {
+                let stride = crate::limits::checked_buffer_size(cur_w, 1, 4)?;
+                let luma = luma_over_white(&cur_data, stride, cur_w, cur_h);
+                // `luma` is packed: one byte per pixel, stride == width.
+                let Some(concrete) = effect.effect.analyze(&luma, cur_w, cur_h, cur_w as usize)
+                else {
+                    // Nothing to resolve to — skip, keep dims as they are.
+                    continue;
+                };
+                let Some((rw, rh)) = concrete.forward(cur_w, cur_h) else {
+                    continue;
+                };
+                effect.effect = concrete;
+                effect.input_dims = zenlayout::Size::new(cur_w, cur_h);
+                effect.output_dims = zenlayout::Size::new(rw, rh);
+            }
             let (out_w, out_h) = (effect.output_dims.width, effect.output_dims.height);
             let in_w = effect.input_dims.width;
             let in_h = effect.input_dims.height;
@@ -144,6 +196,7 @@ impl EffectSource {
             cur_data = out;
             cur_w = out_w;
             cur_h = out_h;
+            resolved.push(effect);
         }
 
         Ok(Self {
@@ -153,6 +206,7 @@ impl EffectSource {
             format: fmt,
             strip_height: 16.min(cur_h),
             y: 0,
+            resolved,
         })
     }
 }
