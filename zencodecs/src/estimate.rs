@@ -131,6 +131,11 @@ pub fn estimate_decode(
         ImageFormat::Tiff => {
             zentiff::codec::TiffDecoderCodecConfig::new().estimate_decode_resources(image, compute)
         }
+        // SVG is a Custom format (zensvg's definition), matched by name like pdf.
+        #[cfg(feature = "svg")]
+        ImageFormat::Custom(def) if def.name == "svg" => {
+            zensvg::SvgDecoderConfig::new().estimate_decode_resources(image, compute)
+        }
         _ => ResourceEstimate::unknown(),
     }
 }

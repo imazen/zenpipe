@@ -65,6 +65,10 @@ zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
 # imazen/zenextras git main at the workspace root. Powers `tiff` (zenpipe#43).
 zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
+# SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
+# lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
+# rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
+zensvg = { git = "https://github.com/imazen/zenextras", optional = true }
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -152,15 +156,7 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
 heic-decode = ["dep:heic"]  # pure-Rust HEIC/HEIF decode via the `heic` crate (zenpipe#43)
 tiff = ["dep:zentiff"]  # zentiff decode/encode adapter (git-patched main; zenpipe#43)
-# Stub — compile_error until wired (zenpipe#1, #43). The renderer EXISTS:
-# `zensvg` in the imazen/zenextras workspace (unpublished; git dep like
-# `zentiff`), with a zencodec decode adapter this crate's codecs/svg.rs already
-# targets. What blocks it (2026-08-27): zensvg is on zencodec 0.1.26's two-level
-# `ErrorCategory`, while this workspace's [patch] pins zencodec git bea2f94c
-# (0.1.25, flat taxonomy) and every codec pin here (zenwebp@017c141 etc.) still
-# matches the flat one — `cargo update -p zencodec` breaks 20 sites in zenwebp
-# alone. Wire `svg = ["dep:zensvg"]` as part of the zencodec 0.1.26 rollout.
-svg = []
+svg = ["dep:zensvg"]  # SVG/SVGZ rasterization via zensvg (resvg); zenpipe#1
 jp2-decode = []  # stub — compile_error until a JPEG 2000 decoder is wired (zenpipe#43)
 bitmaps = ["dep:zenbitmaps"]
 bitmaps-bmp = ["bitmaps", "zenbitmaps/bmp"]

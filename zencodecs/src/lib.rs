@@ -120,10 +120,6 @@
 // wired yet; enabling one can only produce a flood of unresolved-item
 // errors. Surface the configuration error as one clear message instead.
 // Delete the guard (and wire the dependency) when a backend lands.
-#[cfg(feature = "svg")]
-compile_error!(
-    "zencodecs feature `svg` is a stub: zensvg (imazen/zenextras) needs zencodec 0.1.26, which this workspace has not rolled out yet — see the `svg` feature comment in zencodecs/Cargo.toml (zenpipe#1, #43)"
-);
 #[cfg(feature = "jp2-decode")]
 compile_error!(
     "zencodecs feature `jp2-decode` is a stub: no JPEG 2000 decoder dependency is wired yet (zenpipe#43)"

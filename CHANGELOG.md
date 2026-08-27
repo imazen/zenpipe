@@ -430,6 +430,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Added
 
+- **`svg` feature is live** (fixes zenpipe#1): the `compile_error!` stub is
+  gone and `svg = ["dep:zensvg"]` wires the zensvg rasterizer (resvg, a
+  zencodec decode adapter, unpublished — git dep on imazen/zenextras next to
+  zentiff). Detection, probe, one-shot/push decode, dyn dispatch, `CodecId`,
+  the resource estimator and the `AllowedFormats` custom-format registry
+  (`"svg"` bit, compiled in with the feature) all route SVG/SVGZ as zensvg's
+  `ImageFormat::Custom("svg")`. zencodec 0.1.26's common registry detects
+  SVG as the built-in `ImageFormat::Svg`; `detect_format` normalizes that to
+  zensvg's definition when the feature is on, so every svg arm sees one
+  representation. Integration test `tests/svg_decode.rs` pins detect → probe
+  (64×32) → rasterize (red top-left pixel) and that malformed SVG errors
+  instead of panicking.
 - **`EncodeSpeed` presets** (#28): `Fastest` / `Realtime` / `Offline` /
   `OfflineMax` map to a per-codec generic effort (`EncodeSpeed::
   generic_effort(format)`, a policy table on the 0–10 `with_generic_effort`
@@ -444,7 +456,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   `EncodeRequest::with_effort` was a silent no-op for JPEG; now forwarded
   (zenjpeg clamps to its 0–2 scale). Surfaced by #28.
 - **Stub features fail loudly** (#43): enabling `heic-decode`,
-  `bitmaps-qoi`/`-tga`/`-hdr`, `tiff`, `svg`, or `jp2-decode` now produces
+  `bitmaps-qoi`/`-tga`/`-hdr`, `tiff`, `svg` (since wired — see above), or `jp2-decode` now produces
   one clear `compile_error!` naming the missing backend instead of a flood
   of unresolved-item errors. Delete the guard when the backend lands.
 

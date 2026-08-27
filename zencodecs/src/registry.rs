@@ -109,6 +109,8 @@ const fn custom_decode_bit(name: &str) -> Option<u16> {
         Some(1 << 1)
     } else if str_eq(name, "pdf") {
         Some(1 << 2)
+    } else if str_eq(name, "svg") {
+        Some(1 << 3)
     } else {
         None
     }
@@ -136,6 +138,11 @@ const COMPILED_CUSTOM_DECODE: u16 = {
     }
     if cfg!(feature = "pdf-decode")
         && let Some(b) = custom_decode_bit("pdf")
+    {
+        bits |= b;
+    }
+    if cfg!(feature = "svg")
+        && let Some(b) = custom_decode_bit("svg")
     {
         bits |= b;
     }
@@ -206,7 +213,7 @@ impl AllowedFormats {
     /// Enable or disable decoding for a format.
     ///
     /// For `ImageFormat::Custom(def)`, toggles by `def.name` — only names
-    /// this crate wires up (`"dng"`, `"raw"`, `"pdf"`) are trackable; any
+    /// this crate wires up (`"dng"`, `"raw"`, `"pdf"`, `"svg"`) are trackable; any
     /// other Custom name is a no-op (it can never be enabled).
     pub fn with_decode(mut self, format: ImageFormat, enabled: bool) -> Self {
         match format {
@@ -258,7 +265,7 @@ impl AllowedFormats {
     /// Whether a `custom_decode_bit` value is in the compiled-in set.
     ///
     /// Split out so the `allow` below is scoped tightly: with both
-    /// `raw-decode` and `pdf-decode` off, `COMPILED_CUSTOM_DECODE` legitimately
+    /// `raw-decode`, `pdf-decode` and `svg` off, `COMPILED_CUSTOM_DECODE` legitimately
     /// resolves to `0` and clippy's `bad_bit_mask` (correctly) notices the
     /// check can never be true in that configuration -- which is the right
     /// behavior (nothing Custom is compiled in, so nothing can match), not a bug.
@@ -274,7 +281,7 @@ impl AllowedFormats {
 
     /// Formats that are both compiled in and enabled for decoding.
     ///
-    /// Does not enumerate Custom decode formats (RAW/DNG/PDF) — those are
+    /// Does not enumerate Custom decode formats (RAW/DNG/PDF/SVG) — those are
     /// name-identified, not values this crate can construct generically.
     /// Use [`can_decode`](Self::can_decode) to check a specific Custom format.
     pub fn decodable_formats(&self) -> impl Iterator<Item = ImageFormat> {
@@ -557,7 +564,7 @@ mod tests {
     #[test]
     fn unrecognized_custom_name_never_trackable() {
         // A Custom format this crate doesn't wire up (any name outside
-        // "dng"/"raw"/"pdf") must never be allowed — not even under `all()`
+        // "dng"/"raw"/"pdf"/"svg") must never be allowed — not even under `all()`
         // — since it can't be enabled, and never bypassed.
         static UNKNOWN: zencodec::ImageFormatDefinition = zencodec::ImageFormatDefinition::new(
             "some-future-format",

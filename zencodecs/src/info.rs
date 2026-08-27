@@ -27,6 +27,13 @@ pub(crate) fn detect_format(data: &[u8]) -> Option<ImageFormat> {
     }
     // Try common formats (JPEG, PNG, GIF, WebP, TIFF, JP2, etc.)
     if let Some(fmt) = zencodec::ImageFormatRegistry::common().detect(data) {
+        // zencodec's common registry detects SVG as the built-in
+        // `ImageFormat::Svg`; zensvg (and every svg arm in this crate) keys on
+        // zensvg's own Custom definition, so normalize to it once svg is wired.
+        #[cfg(feature = "svg")]
+        if fmt == ImageFormat::Svg {
+            return Some(zensvg::svg_format());
+        }
         return Some(fmt);
     }
     // SVG detection is last — it scans for `<svg` in up to 1024 bytes,
