@@ -162,6 +162,7 @@ mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
 pub mod select;
+pub mod speed;
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]
@@ -193,6 +194,7 @@ pub use picker::MlpFormatPicker;
 pub use picker::OfferPick;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
+pub use speed::EncodeSpeed;
 // quality_calibration is `pub(crate)` for now — the measured tables/helpers are
 // internal until the public quality-conversion surface is finalized. Reach them
 // via `crate::quality_calibration::...` inside the crate.

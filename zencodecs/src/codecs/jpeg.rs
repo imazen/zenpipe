@@ -133,6 +133,7 @@ pub fn codec_config_for_preset(preset_name: &str, quality: f32) -> Option<CodecC
 /// codec_config taking priority for format-specific overrides.
 pub(crate) fn build_encoding(
     quality: Option<f32>,
+    effort: Option<u32>,
     codec_config: Option<&CodecConfig>,
 ) -> zenjpeg::JpegEncoderConfig {
     use zencodec::encode::EncoderConfig;
@@ -146,6 +147,11 @@ pub(crate) fn build_encoding(
         if let Some(q) = quality {
             enc = enc.with_generic_quality(q);
         }
+        // Generic effort was silently dropped for JPEG before zenpipe#28;
+        // zenjpeg clamps it to its 0..=2 native scale.
+        if let Some(e) = effort {
+            enc = enc.with_generic_effort(e as i32);
+        }
         enc
     }
 }
@@ -157,12 +163,15 @@ pub(crate) fn build_encoding(
 use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
-    build_from_config(|p| build_encoding(p.quality, p.codec_config), params)
+    build_from_config(
+        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        params,
+    )
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
-        |p| build_encoding(p.quality, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.codec_config),
         params,
     )
 }
@@ -252,7 +261,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
-    let enc = build_encoding(quality, codec_config);
+    let enc = build_encoding(quality, None, codec_config);
     let gm_quality = gainmap_quality.unwrap_or(75.0);
 
     let jpeg_data = encode_ultrahdr(
@@ -312,7 +321,7 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
-    let enc = build_encoding(quality, codec_config);
+    let enc = build_encoding(quality, None, codec_config);
     let gm_quality = gainmap_quality.unwrap_or(75.0);
 
     let jpeg_data = encode_ultrahdr(
@@ -368,7 +377,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
-    let enc = build_encoding(quality, codec_config);
+    let enc = build_encoding(quality, None, codec_config);
 
     let out = encode_with_gainmap(
         &sdr,

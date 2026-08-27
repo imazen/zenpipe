@@ -304,6 +304,19 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Added
 
+- **`EncodeSpeed` presets** (#28): `Fastest` / `Realtime` / `Offline` /
+  `OfflineMax` map to a per-codec generic effort (`EncodeSpeed::
+  generic_effort(format)`, a policy table on the 0–10 `with_generic_effort`
+  scale — JPEG 0/1/2/2, WebP 0/4/7/10 (= method 0/2/4/6), JXL 1/3/7/9,
+  AVIF 0/2/6/10, PNG 0/3/6/10) and a threading policy (`Fastest` forces
+  `Sequential`; the others never widen a caller's explicit limit). Attach
+  with `EncodeRequest::with_speed`; explicit `with_effort` wins. Also
+  `EncodeSpeed::from_name`/`name` and the CLI's `--speed`. The table is
+  unmeasured — no timing sweep backs the specific numbers.
+- **JPEG honors generic effort**: `codecs::jpeg::build_encoding` dropped
+  `effort` entirely (never called `with_generic_effort`), so
+  `EncodeRequest::with_effort` was a silent no-op for JPEG; now forwarded
+  (zenjpeg clamps to its 0–2 scale). Surfaced by #28.
 - **Stub features fail loudly** (#43): enabling `heic-decode`,
   `bitmaps-qoi`/`-tga`/`-hdr`, `tiff`, `svg`, or `jp2-decode` now produces
   one clear `compile_error!` naming the missing backend instead of a flood

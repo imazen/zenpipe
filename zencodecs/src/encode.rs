@@ -16,6 +16,7 @@ use crate::pixel::{ImgRef, Rgb, Rgba};
 use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
 use crate::select::ImageFacts;
+use crate::speed::EncodeSpeed;
 use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, StopToken};
 use whereat::at;
 use zencodec::encode::EncodePolicy;
@@ -44,6 +45,9 @@ pub struct EncodeRequest<'a> {
     quality_profile: Option<QualityProfile>,
     dpr: Option<f32>,
     effort: Option<u32>,
+    /// Named speed preset; resolved to a per-format effort (and, for
+    /// `Fastest`, sequential threading) at build time. `effort` wins.
+    speed: Option<EncodeSpeed>,
     lossless: bool,
     limits: Option<&'a Limits>,
     stop: Option<StopToken>,
@@ -77,6 +81,7 @@ impl<'a> EncodeRequest<'a> {
             quality_profile: None,
             dpr: None,
             effort: None,
+            speed: None,
             lossless: false,
             limits: None,
             stop: None,
@@ -103,6 +108,7 @@ impl<'a> EncodeRequest<'a> {
             quality_profile: None,
             dpr: None,
             effort: None,
+            speed: None,
             lossless: false,
             limits: None,
             stop: None,
@@ -131,6 +137,41 @@ impl<'a> EncodeRequest<'a> {
     pub fn with_effort(mut self, effort: u32) -> Self {
         self.effort = Some(effort);
         self
+    }
+
+    /// Set a named encode-speed preset (zenpipe#28).
+    ///
+    /// Resolves to a per-codec generic effort once the output format is
+    /// known — see [`EncodeSpeed::generic_effort`] for the table — so the
+    /// same `Realtime` request gets a cheap AVIF speed and a mild JPEG
+    /// trellis setting. [`EncodeSpeed::Fastest`] additionally forces
+    /// [`ThreadingPolicy::Sequential`](zencodec::ThreadingPolicy::Sequential)
+    /// on the codec's limits. An explicit [`with_effort`](Self::with_effort)
+    /// always takes precedence over the preset's effort.
+    pub fn with_speed(mut self, speed: EncodeSpeed) -> Self {
+        self.speed = Some(speed);
+        self
+    }
+
+    /// The speed preset set via [`with_speed`](Self::with_speed), if any.
+    pub fn speed(&self) -> Option<EncodeSpeed> {
+        self.speed
+    }
+
+    /// Effort to hand the codec for `format`: explicit `effort`, else the
+    /// preset's per-format value, else `None` (codec default).
+    fn effort_for(&self, format: ImageFormat) -> Option<u32> {
+        self.effort
+            .or_else(|| self.speed.map(|s| s.generic_effort(format)))
+    }
+
+    /// Limits with the preset's threading applied, when that changes
+    /// anything (only `Fastest` does). `None` → use the caller's limits as-is.
+    fn speed_limits(&self) -> Option<Limits> {
+        let speed = self.speed?;
+        let base = self.limits.copied().unwrap_or_else(Limits::none);
+        let applied = speed.apply_to_limits(base);
+        (applied.threading != base.threading).then_some(applied)
     }
 
     /// Request lossless encoding.
@@ -415,17 +456,19 @@ impl<'a> EncodeRequest<'a> {
         }
 
         let resolved_quality = self.resolve_quality();
+        let effort = self.effort_for(format);
+        let speed_limits = self.speed_limits();
 
         crate::dyn_dispatch::dyn_animation_frame_encoder(
             format,
             crate::dyn_dispatch::AnimEncodeParams {
                 quality: Some(resolved_quality),
-                effort: self.effort,
+                effort,
                 lossless: self.lossless,
                 metadata: self.metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
-                limits: self.limits,
+                limits: speed_limits.as_ref().or(self.limits),
                 stop: self.stop,
                 encode_policy: self.encode_policy,
                 canvas_width: width,
@@ -512,15 +555,17 @@ impl<'a> EncodeRequest<'a> {
         }
 
         let resolved_quality = self.resolve_quality();
+        let effort = self.effort_for(format);
+        let speed_limits = self.speed_limits();
 
         let params = crate::dispatch::EncodeParams {
             quality: Some(resolved_quality),
-            effort: self.effort,
+            effort,
             lossless: self.lossless,
             metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
-            limits: self.limits,
+            limits: speed_limits.as_ref().or(self.limits),
             stop: self.stop,
             encode_policy: self.encode_policy,
             cicp: self.cicp,
@@ -694,6 +739,8 @@ impl<'a> EncodeRequest<'a> {
         };
         if let Some(e) = self.effort {
             intent = intent.with_effort(e);
+        } else if let (Some(speed), Some(format)) = (self.speed, self.format) {
+            intent = intent.with_effort(speed.generic_effort(format));
         }
         if self.lossless {
             intent = intent.with_lossless(true);
@@ -802,15 +849,18 @@ impl<'a> EncodeRequest<'a> {
         }
 
         let resolved_quality = self.resolve_quality();
+        let effort = self.effort_for(format);
+        let speed_limits = self.speed_limits();
+        let limits = speed_limits.as_ref().or(self.limits);
 
         let params = EncodeParams {
             quality: Some(resolved_quality),
-            effort: self.effort,
+            effort,
             lossless: self.lossless,
             metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
-            limits: self.limits,
+            limits,
             stop: self.stop.clone(),
             encode_policy: self.encode_policy,
             cicp: self.cicp,
@@ -893,11 +943,11 @@ impl<'a> EncodeRequest<'a> {
                     adapted.rows,
                     adapted.descriptor,
                     Some(resolved_quality),
-                    self.effort,
+                    effort,
                     self.codec_config,
                     gain_map,
                     metadata,
-                    self.limits,
+                    limits,
                     self.stop.as_ref(),
                 );
             }
@@ -1112,6 +1162,103 @@ mod tests {
             "DPR 1.0 ({} bytes) should be >= DPR 6.0 ({} bytes)",
             high.data().len(),
             low.data().len()
+        );
+    }
+
+    #[test]
+    fn speed_preset_resolves_per_format_effort() {
+        // Preset effort lands in the intent (format known) …
+        let jpeg = EncodeRequest::new(ImageFormat::Jpeg).with_speed(EncodeSpeed::Offline);
+        assert_eq!(jpeg.effort_for(ImageFormat::Jpeg), Some(2));
+        assert_eq!(jpeg.quality_intent().effort, Some(2));
+        // … differs per format for the same preset …
+        let webp = EncodeRequest::new(ImageFormat::WebP).with_speed(EncodeSpeed::Offline);
+        assert_eq!(webp.quality_intent().effort, Some(7));
+        // … and auto-select requests resolve it once the format is picked.
+        let auto = EncodeRequest::auto().with_speed(EncodeSpeed::Realtime);
+        assert_eq!(auto.quality_intent().effort, None);
+        assert_eq!(auto.effort_for(ImageFormat::Avif), Some(2));
+        assert_eq!(auto.effort_for(ImageFormat::Png), Some(3));
+    }
+
+    #[test]
+    fn explicit_effort_wins_over_speed_preset() {
+        let req = EncodeRequest::new(ImageFormat::Png)
+            .with_speed(EncodeSpeed::OfflineMax)
+            .with_effort(1);
+        assert_eq!(req.effort_for(ImageFormat::Png), Some(1));
+        assert_eq!(req.quality_intent().effort, Some(1));
+    }
+
+    #[test]
+    fn fastest_forces_sequential_threading_without_widening_others() {
+        use zencodec::ThreadingPolicy;
+        let fast = EncodeRequest::new(ImageFormat::Png).with_speed(EncodeSpeed::Fastest);
+        assert_eq!(
+            fast.speed_limits().map(|l| l.threading),
+            Some(ThreadingPolicy::Sequential)
+        );
+        // Other presets leave the caller's limits untouched.
+        assert!(
+            EncodeRequest::new(ImageFormat::Png)
+                .with_speed(EncodeSpeed::Offline)
+                .speed_limits()
+                .is_none()
+        );
+        // An explicit Sequential from the caller is never widened by a preset.
+        let seq = Limits::none().with_threading(ThreadingPolicy::Sequential);
+        let req = EncodeRequest::new(ImageFormat::Png)
+            .with_limits(&seq)
+            .with_speed(EncodeSpeed::OfflineMax);
+        assert!(req.speed_limits().is_none());
+        // No preset → nothing to apply.
+        assert!(
+            EncodeRequest::new(ImageFormat::Png)
+                .speed_limits()
+                .is_none()
+        );
+    }
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn png_speed_presets_reach_the_encoder() {
+        // Fastest → PNG effort 0 (stored / no compression search) must be
+        // larger than OfflineMax → effort 10 on compressible content. If the
+        // preset were dropped both encodes would be byte-identical.
+        let w = 64usize;
+        let h = 64usize;
+        let px: alloc::vec::Vec<u8> = (0..w * h)
+            .flat_map(|i| {
+                let x = (i % w) as u8;
+                let y = (i / w) as u8;
+                [
+                    x.wrapping_mul(3),
+                    y.wrapping_mul(5),
+                    (x ^ y).wrapping_mul(2),
+                ]
+            })
+            .collect();
+        let ps =
+            zenpixels::PixelSlice::new(&px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
+                .unwrap();
+        let fast = EncodeRequest::new(ImageFormat::Png)
+            .with_lossless(true)
+            .with_speed(EncodeSpeed::Fastest)
+            .encode(ps, false)
+            .unwrap();
+        let ps =
+            zenpixels::PixelSlice::new(&px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
+                .unwrap();
+        let max = EncodeRequest::new(ImageFormat::Png)
+            .with_lossless(true)
+            .with_speed(EncodeSpeed::OfflineMax)
+            .encode(ps, false)
+            .unwrap();
+        assert!(
+            fast.data().len() > max.data().len(),
+            "Fastest PNG ({}) should be larger than OfflineMax PNG ({})",
+            fast.data().len(),
+            max.data().len()
         );
     }
 

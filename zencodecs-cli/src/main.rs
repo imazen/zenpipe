@@ -11,8 +11,8 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use zencodecs::{
-    transcode, transcode_to_quality, AllowedFormats, FormatDecision, ImageFormat, MetadataPolicy,
-    OrientationHint, QualityIntent, QualityTarget, TranscodeOptions,
+    transcode, transcode_to_quality, AllowedFormats, EncodeSpeed, FormatDecision, ImageFormat,
+    MetadataPolicy, OrientationHint, QualityIntent, QualityTarget, TranscodeOptions,
 };
 
 #[derive(Parser)]
@@ -49,6 +49,10 @@ struct ConvertArgs {
     /// Encode losslessly.
     #[arg(long, conflicts_with_all = ["quality", "target_quality"])]
     lossless: bool,
+    /// Speed preset: fastest | realtime | offline | offline-max. Maps to a
+    /// per-codec effort (see zencodecs::EncodeSpeed); fastest is single-threaded.
+    #[arg(long)]
+    speed: Option<String>,
     /// Minimally-lossless: smallest size meeting this zensim-A score (0–100) vs the original.
     #[arg(long, conflicts_with = "quality")]
     target_quality: Option<f32>,
@@ -192,6 +196,12 @@ fn convert(a: ConvertArgs) -> Result<(), String> {
             decision.lossless = true;
         } else if let Some(q) = a.quality {
             decision.quality = QualityIntent::from_quality(q);
+        }
+        if let Some(s) = &a.speed {
+            let speed = EncodeSpeed::from_name(s).ok_or_else(|| {
+                format!("unknown --speed '{s}' (fastest|realtime|offline|offline-max)")
+            })?;
+            decision.quality = decision.quality.with_effort(speed.generic_effort(fmt));
         }
         transcode(&data, &decision, &opts, &registry).map_err(|e| format!("transcode: {e}"))?
     };

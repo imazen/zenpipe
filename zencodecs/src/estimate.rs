@@ -45,7 +45,7 @@ pub fn estimate_encode(
     let _ = (q, e, codec_config, image, compute);
     let est = match format {
         #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => crate::codecs::jpeg::build_encoding(q, codec_config)
+        ImageFormat::Jpeg => crate::codecs::jpeg::build_encoding(q, e, codec_config)
             .estimate_encode_resources(image, compute),
         #[cfg(feature = "webp")]
         ImageFormat::WebP => {
