@@ -137,9 +137,11 @@ zenwebp = { version = "0.5.0", default-features = false, optional = true }
 # `zencodec` feature is now gated on plain `std` (which that feature always
 # implied). Request `std` directly; `zencodec` is no longer a valid feature name.
 zengif = { version = "0.8.0", default-features = false, features = ["std"], optional = true }
-# Registry 0.1.x on purpose (see the zenavif note in [patch.crates-io]); the
-# `zencodec` feature still exists on the published crate.
-zenavif = { version = "0.1.3", default-features = false, features = ["zencodec"], optional = true }
+# zenavif main (0.1.7, git-patched below) made `zencodec` a required, always-on
+# dependency — its `zencodec` cargo feature no longer exists, so it must not be
+# requested here (CI resolves zenavif from the sibling clone of main, and
+# "zenavif does not have that feature" was the resolution failure since 2026-08-01).
+zenavif = { version = "0.1.7", default-features = false, optional = true }
 zenjxl = { version = "0.3.0", default-features = false, features = ["zencodec"], optional = true }
 zentiff = { version = "0.1.0", default-features = false, optional = true }
 zenbitmaps = { version = "0.2.0", default-features = false, optional = true }
@@ -297,15 +299,23 @@ zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
 # predates both changes.
 zengif = { git = "https://github.com/imazen/zengif" }
-# zenavif is deliberately NOT patched to git main (0.1.7 on zencodec 0.1.26,
-# `zencodec` adapter always-on): its `encode` feature reaches zenravif 0.2.0
-# (imazen/cavif-rs, unpublished — crates.io tops out at 0.1.3), which in turn
-# depends on `zenrav1e = { path = "../../zenrav1e" }` with no version, so the
-# chain cannot resolve from git checkouts at all. Registry zenavif 0.1.6 /
-# zenavif-parse 0.6.2 (pre-taxonomy, `zencodec` still a feature there) compile
-# against zencodec 0.1.26 because the taxonomy is additive. Move to git/registry
-# 0.1.7+ once zenravif 0.2.0 + zenrav1e publish (then drop the `zencodec`
-# feature request on both zenavif dep lines — main no longer has it).
+# zenavif main is 0.1.7 (zencodec 0.1.26 two-level taxonomy, `zencodec`
+# adapter always-on — no `zencodec` feature any more); crates.io tops out at
+# 0.1.6 (pre-taxonomy). The imazen/zenavif repo is a workspace that also
+# carries zenavif-parse 0.7.0 (breaking: `At<Error>` parser results) and
+# zenavif-serialize 0.2.0, both unpublished (registry: 0.6.2 / 0.1.4) — the
+# same git source supplies all three so zenavif's in-repo path deps and our
+# registry specs unify to ONE copy each. zenavif-serialize is not a direct dep:
+# zenravif (imazen/cavif-rs, git dep of zenavif's `encode`) requires it at
+# 0.2.0 from the registry, and [patch] only applies from this top level.
+# zenravif / zenrav1e need NO patch entries: zenavif main pins zenravif 0.2.0 as
+# a git-rev dep and zenravif pins zenrav1e 0.2.0 (unpublished; registry 0.1.4)
+# as a git-rev dep since cavif-rs 2026-08-27, so the encode chain resolves from
+# bare git checkouts. (A `[patch.crates-io]` entry for either would be unused —
+# no registry requirement exists for them in this graph.)
+zenavif = { git = "https://github.com/imazen/zenavif" }
+zenavif-parse = { git = "https://github.com/imazen/zenavif" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }

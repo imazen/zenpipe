@@ -219,8 +219,6 @@ const G_ORIENT_EXIF_NORM: &str = "carries the EXIF blob but does not normalize i
      (JPEG/WebP/AVIF do)";
 const G_CICP_NATIVE: &str =
     "format has a native color-signaling box but Metadata::cicp is not wired through encode/decode";
-const G_AVIF_EXIF_BLOB: &str =
-    "raw EXIF blob is dropped (orientation is absorbed into irot, but metadata().exif is None)";
 
 /// The set of codecs compiled into this build, each cfg-gated on the feature
 /// that also enables its encoder. Verdicts below are the *observed* behavior
@@ -295,7 +293,11 @@ fn codecs() -> Vec<Support> {
         name: "avif",
         needs_rgba: false,
         icc: Icc::ByteEqual,
-        exif_blob: V::Gap(G_AVIF_EXIF_BLOB),
+        // Promoted Gap → Ok 2026-08-27 with the zenavif git-main (0.1.7) re-pin:
+        // the raw EXIF blob now round-trips (registry 0.1.6 dropped it, keeping
+        // only the orientation absorbed into irot). The liveness canary in
+        // `check` flagged the fix.
+        exif_blob: V::Ok,
         orient_from_exif: V::Ok,
         orient_from_field: V::Ok, // irot/imir
         xmp: V::Ok,
