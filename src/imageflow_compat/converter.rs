@@ -115,12 +115,32 @@ impl NodeConverter for ExpandCanvasConverter {
             _ => [0u8, 0, 0, 0], // transparent (default)
         };
 
-        Ok(NodeOp::ExpandCanvas {
-            left,
-            top,
-            right,
-            bottom,
-            bg_color,
+        // `fill` (zenpipe#23): solid | replicate | mirror | repeat. Solid keeps
+        // the original ExpandCanvas op; the others route through ExtendCanvas.
+        let fill = match node.get_param("fill") {
+            Some(ParamValue::Str(ref s)) => crate::sources::CanvasFill::from_name(s, bg_color)
+                .ok_or_else(|| {
+                    at!(PipeError::Op(alloc::format!(
+                        "expand_canvas: unknown fill '{s}' (solid|replicate|mirror|repeat)"
+                    )))
+                })?,
+            _ => crate::sources::CanvasFill::Solid(bg_color),
+        };
+        Ok(match fill {
+            crate::sources::CanvasFill::Solid(bg_color) => NodeOp::ExpandCanvas {
+                left,
+                top,
+                right,
+                bottom,
+                bg_color,
+            },
+            fill => NodeOp::ExtendCanvas {
+                left,
+                top,
+                right,
+                bottom,
+                fill,
+            },
         })
     }
 

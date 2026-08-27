@@ -23,7 +23,7 @@ pub use composite::CompositeSource;
 pub use crop::CropSource;
 pub use edge_replicate::EdgeReplicateSource;
 pub use effects::EffectSource;
-pub use expand_canvas::ExpandCanvasSource;
+pub use expand_canvas::{CanvasFill, ExpandCanvasSource};
 #[cfg(feature = "std")]
 pub use filter::FilterSource;
 pub use flip::FlipHSource;

@@ -278,6 +278,14 @@ pub struct ExpandCanvas {
     #[param(default = "transparent")]
     #[param(section = "Main", label = "Color")]
     pub color: String,
+
+    /// How the expanded area is filled: `solid` (the color above),
+    /// `replicate` (clamp to the edge pixel), `mirror` (reflect), or
+    /// `repeat` (tile) — sharp's `extendWith`. See
+    /// [`CanvasFill`](crate::sources::CanvasFill).
+    #[param(default = "solid")]
+    #[param(section = "Main", label = "Fill")]
+    pub fill: String,
 }
 
 impl Default for ExpandCanvas {
@@ -288,6 +296,7 @@ impl Default for ExpandCanvas {
             right: 0,
             bottom: 0,
             color: String::from("transparent"),
+            fill: String::from("solid"),
         }
     }
 }

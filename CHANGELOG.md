@@ -243,6 +243,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Added
 
+- **Canvas extend fill modes: replicate / mirror / repeat** (#23):
+  `sources::CanvasFill { Solid, Replicate, Mirror, Repeat }` (sharp
+  `extendWith` / vips `embed` extend semantics; mirror repeats the edge
+  pixel, `abc|cba|abc`) via `ExpandCanvasSource::with_fill`, the new
+  additive `NodeOp::ExtendCanvas { .., fill }` graph op, and a `fill`
+  param on the `zenlayout.expand_canvas` node (`solid` default keeps the
+  old op). Streaming with bounded buffering: replicate 1 row each side,
+  mirror `min(top,H)` leading + `min(bottom,H)` trailing rows, repeat
+  buffers the whole visible content only when `top > 0`. The solid path
+  is untouched. Pixel-exact tests in `tests/canvas_fill.rs` (unique-pixel
+  fixture, 3-row strips, padding wider than the content).
+
 - **Execution-layer tracing: per-strip events, execution finalization,
   phase timing** (#8): `TraceConfig::strip_events` /
   `with_strip_events()` (on in `full()`) makes every `TracingSource`

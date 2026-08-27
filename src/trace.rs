@@ -1778,6 +1778,7 @@ pub fn node_op_name(op: &crate::graph::NodeOp) -> &'static str {
         NodeOp::Analyze(_) => "Analyze",
         NodeOp::CropWhitespace { .. } => "CropWhitespace",
         NodeOp::ExpandCanvas { .. } => "ExpandCanvas",
+        NodeOp::ExtendCanvas { .. } => "ExtendCanvas",
         NodeOp::FillRect { .. } => "FillRect",
         NodeOp::Materialize { .. } => "Materialize",
     }
@@ -1867,6 +1868,15 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
             ..
         } => {
             format!("L={left} T={top} R={right} B={bottom}")
+        }
+        NodeOp::ExtendCanvas {
+            left,
+            top,
+            right,
+            bottom,
+            fill,
+        } => {
+            format!("L={left} T={top} R={right} B={bottom} fill={fill:?}")
         }
         NodeOp::FillRect { x1, y1, x2, y2, .. } => {
             format!("({x1},{y1})-({x2},{y2})")

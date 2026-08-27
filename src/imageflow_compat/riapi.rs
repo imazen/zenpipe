@@ -355,6 +355,7 @@ fn parse_expand_shorthand(querystring: &str) -> Option<crate::zennode_defs::Expa
         right,
         bottom,
         color: fill,
+        fill: String::from("solid"),
     })
 }
 

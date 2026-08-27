@@ -57,8 +57,8 @@ use crate::ops::RowConverterOp;
 #[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource, MaterializedSource,
-    ResizeSource, TransformSource,
+    CanvasFill, CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource,
+    MaterializedSource, ResizeSource, TransformSource,
 };
 
 /// Node identifier (index into the graph's node list).
@@ -93,6 +93,44 @@ pub type AnalyzeBuilder =
 
 /// Return type of [`PipeGraph::compile_traced`]: the pipeline source plus the shared trace.
 #[cfg(feature = "std")]
+/// Build the [`ExpandCanvasSource`] for `ExpandCanvas` / `ExtendCanvas`:
+/// checked canvas arithmetic (audit H7) plus the fill mode.
+fn extend_canvas_source(
+    upstream: Box<dyn Source>,
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+    fill: CanvasFill,
+) -> crate::PipeResult<Box<dyn Source>> {
+    let src_w = upstream.width();
+    let src_h = upstream.height();
+    // Reject u32 wrap on canvas dim arithmetic (audit H7).
+    let canvas_w = src_w
+        .checked_add(left)
+        .and_then(|v| v.checked_add(right))
+        .ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "ExpandCanvas canvas width overflow: src_w={src_w} left={left} right={right}"
+            )))
+        })?;
+    let canvas_h = src_h
+        .checked_add(top)
+        .and_then(|v| v.checked_add(bottom))
+        .ok_or_else(|| {
+            at!(PipeError::LimitExceeded(alloc::format!(
+                "ExpandCanvas canvas height overflow: src_h={src_h} top={top} bottom={bottom}"
+            )))
+        })?;
+    let bg = match fill {
+        CanvasFill::Solid(px) => px,
+        _ => [0, 0, 0, 0],
+    };
+    let source =
+        ExpandCanvasSource::new(upstream, canvas_w, canvas_h, left as i32, top as i32, bg)?;
+    Ok(Box::new(source.with_fill(fill)))
+}
+
 pub type TracedPipelineResult = crate::PipeResult<(
     Box<dyn Source>,
     alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
@@ -435,6 +473,19 @@ pub enum NodeOp {
         bottom: u32,
         /// Background color as RGBA bytes.
         bg_color: [u8; 4],
+    },
+
+    /// Expand the canvas with a [`CanvasFill`] mode (zenpipe#23) —
+    /// solid / edge-replicate / mirror / repeat. [`ExpandCanvas`](Self::ExpandCanvas)
+    /// is the `CanvasFill::Solid` special case. Streaming; the non-solid
+    /// modes buffer only the rows the vertical padding needs (see
+    /// [`ExpandCanvasSource::with_fill`]).
+    ExtendCanvas {
+        left: u32,
+        top: u32,
+        right: u32,
+        bottom: u32,
+        fill: CanvasFill,
     },
 
     /// Fill a rectangle on the image with a solid color.
@@ -965,6 +1016,13 @@ impl PipelineGraph {
             }
 
             NodeOp::ExpandCanvas {
+                left,
+                top,
+                right,
+                bottom,
+                ..
+            }
+            | NodeOp::ExtendCanvas {
                 left,
                 top,
                 right,
@@ -1825,36 +1883,29 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
-                let src_w = upstream.width();
-                let src_h = upstream.height();
-                // Reject u32 wrap on canvas dim arithmetic (audit H7).
-                let canvas_w = src_w
-                    .checked_add(left)
-                    .and_then(|v| v.checked_add(right))
-                    .ok_or_else(|| {
-                        at!(PipeError::LimitExceeded(alloc::format!(
-                            "ExpandCanvas canvas width overflow: src_w={src_w} left={left} right={right}"
-                        )))
-                    })?;
-                let canvas_h = src_h
-                    .checked_add(top)
-                    .and_then(|v| v.checked_add(bottom))
-                    .ok_or_else(|| {
-                        at!(PipeError::LimitExceeded(alloc::format!(
-                            "ExpandCanvas canvas height overflow: src_h={src_h} top={top} bottom={bottom}"
-                        )))
-                    })?;
-                Ok((
-                    Box::new(ExpandCanvasSource::new(
-                        upstream,
-                        canvas_w,
-                        canvas_h,
-                        left as i32,
-                        top as i32,
-                        bg_color,
-                    )?),
-                    meta,
-                ))
+                let source = extend_canvas_source(
+                    upstream,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    CanvasFill::Solid(bg_color),
+                )?;
+                Ok((source, meta))
+            }
+
+            NodeOp::ExtendCanvas {
+                left,
+                top,
+                right,
+                bottom,
+                fill,
+            } => {
+                let input_id = self.find_input(node_id, EdgeKind::Input)?;
+                let upstream = self.compile_node(input_id, sources, depth + 1)?;
+                let meta = capture_meta!(upstream);
+                let source = extend_canvas_source(upstream, left, top, right, bottom, fill)?;
+                Ok((source, meta))
             }
 
             NodeOp::FillRect {
