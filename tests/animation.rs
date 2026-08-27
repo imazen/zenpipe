@@ -370,7 +370,10 @@ fn make_solid_source(width: u32, height: u32, pixel: [u8; 4]) -> Box<dyn Source>
 // ImageJob animated routing (W8): processing nodes apply per frame
 // =========================================================================
 
-#[cfg(feature = "job")]
+// Needs the GIF codec (decode + animated encode) and the PNG encoder for the
+// animated→static fallback; without them the probe fails with
+// `DisabledFormat(Gif)` before any routing happens.
+#[cfg(all(feature = "job", feature = "nodes-gif", feature = "nodes-png"))]
 mod imagejob_animation {
     use super::*;
     use zenpipe::job::ImageJob;
