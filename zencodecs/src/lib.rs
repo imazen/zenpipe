@@ -331,7 +331,7 @@ pub fn push_decode(
 /// rows via `push_rows()` and produces encoded bytes on `finish()`.
 ///
 /// The caller is responsible for pixel format conversion per-strip via
-/// [`zenpixels_convert::adapt::adapt_for_encode`]. The `StreamingEncoder`
+/// [`zenpixels_convert::adapt::adapt_for_encode_cow`]. The `StreamingEncoder`
 /// provides the encoder's `supported` pixel descriptors for negotiation.
 ///
 /// # Example

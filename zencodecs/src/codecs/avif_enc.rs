@@ -156,28 +156,17 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let encoder =
         at_crate!(job.encoder()).map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
 
-    let stride = width as usize * descriptor.bytes_per_pixel();
-    let adapted = at_crate!(zenpixels_convert::adapt::adapt_for_encode(
+    let adapted = at_crate!(zenpixels_convert::adapt::adapt_for_encode_cow(
         pixel_data,
         descriptor,
         width,
         height,
-        stride,
+        descriptor.aligned_stride(width),
         zenavif::AvifEncoderConfig::supported_descriptors(),
     ))
     .map_err_at(|e| CodecError::InvalidInput(alloc::format!("pixel format: {e}")))?;
 
-    let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-    let pixel_slice = at_crate!(zenpixels::PixelSlice::new(
-        &adapted.data,
-        adapted.width,
-        adapted.rows,
-        adapted_stride,
-        adapted.descriptor,
-    ))
-    .map_err_at(|e| CodecError::InvalidInput(alloc::format!("pixel slice: {e}")))?;
-
-    at_crate!(encoder.encode(pixel_slice))
+    at_crate!(encoder.encode(adapted.as_slice()))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))
 }
 

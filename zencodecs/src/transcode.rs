@@ -10,7 +10,7 @@
 //!
 //! [`TranscodeSink`] is the low-level streaming bridge. It implements
 //! [`DecodeRowSink`] and forwards decoded strips directly to an encoder's
-//! `push_rows()`, converting pixel formats per-strip via `adapt_for_encode`.
+//! `push_rows()`, converting pixel formats per-strip via `adapt_for_encode_cow`.
 //! No full-image buffer is ever allocated by the sink — only a strip-sized
 //! conversion buffer when the decoded pixel format doesn't match the
 //! encoder's native format.
@@ -697,13 +697,12 @@ impl<'a> TranscodeSink<'a> {
             .as_mut()
             .ok_or_else(|| -> SinkError { "encoder already finished".into() })?;
 
-        let bpp = pending.descriptor.bytes_per_pixel();
-        let stride = pending.width as usize * bpp;
+        let stride = pending.descriptor.aligned_stride(pending.width);
         let data_len = stride * pending.height as usize;
         let strip_data = &self.strip_buf[..data_len];
 
         // Adapt pixel format per-strip — zero-copy when format already matches
-        let adapted = zenpixels_convert::adapt::adapt_for_encode(
+        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
             strip_data,
             pending.descriptor,
             pending.width,
@@ -713,18 +712,8 @@ impl<'a> TranscodeSink<'a> {
         )
         .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
 
-        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-        let pixel_slice = zenpixels::PixelSlice::new(
-            &adapted.data,
-            adapted.width,
-            adapted.rows,
-            adapted_stride,
-            adapted.descriptor,
-        )
-        .map_err(|e| -> SinkError { alloc::format!("pixel slice: {e}").into() })?;
-
         encoder
-            .push_rows(pixel_slice)
+            .push_rows(adapted.as_slice())
             .map_err(|e| -> SinkError { alloc::format!("push_rows: {e}").into() })
     }
 }
@@ -752,8 +741,7 @@ impl DecodeRowSink for TranscodeSink<'_> {
         // Forward it to the encoder before providing the next buffer.
         self.flush_pending()?;
 
-        let bpp = descriptor.bytes_per_pixel();
-        let stride = width as usize * bpp;
+        let stride = descriptor.aligned_stride(width);
         let needed = stride * height as usize;
 
         // Resize strip_buf for this strip

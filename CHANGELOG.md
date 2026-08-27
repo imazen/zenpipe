@@ -352,6 +352,17 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Changed
 
+- **Encode-side pixel negotiation adopts zenpixels' `PixelCow` API** (#78):
+  the five `adapt_for_encode` sites (`encode.rs`, `dispatch.rs`,
+  `transcode.rs`, `avif_enc.rs`, `jxl_enc.rs`) and the doc example now call
+  `adapt_for_encode_cow` and hand the encoder `PixelCow::as_slice()`
+  directly — the recompute-stride + `PixelSlice::new` boilerplate is gone,
+  and hand-rolled `width * bpp` strides use the saturating
+  `PixelDescriptor::aligned_stride`. Requires the git-pinned zenpixels /
+  zenpixels-convert at `3dbf246` (0.2.16), where the non-`_cow` names and
+  the packed `Adapted` type are deprecated (the issue's `as_pixel_slice`
+  route was superseded upstream). The `Cicp::from_bytes` item is not
+  available at the pinned zencodec rev and was left as-is.
 - Feature-conditional test hygiene so every CI feature combination runs
   green instead of failing on tests for codecs that are compiled out:
   `regress` requires `all` (its checksum baselines are recorded under the

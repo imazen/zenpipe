@@ -124,10 +124,10 @@ pub(crate) fn encode_with_precomputed_gainmap(
         .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Jxl, e)))?;
 
     // Negotiate pixel format: adapt input to what JXL encoder supports
-    let stride = width as usize * descriptor.bytes_per_pixel();
+    let stride = descriptor.aligned_stride(width);
     let supported = zenjxl::JxlEncoderConfig::supported_descriptors();
 
-    let adapted = zenpixels_convert::adapt::adapt_for_encode(
+    let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
         pixel_data, descriptor, width, height, stride, supported,
     )
     .map_err(|e| {
@@ -136,22 +136,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
         )))
     })?;
 
-    let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-    let pixel_slice = zenpixels::PixelSlice::new(
-        &adapted.data,
-        adapted.width,
-        adapted.rows,
-        adapted_stride,
-        adapted.descriptor,
-    )
-    .map_err(|e| {
-        at!(crate::CodecError::InvalidInput(alloc::format!(
-            "pixel slice for JXL gain map encode: {e}"
-        )))
-    })?;
-
     let output = encoder
-        .encode(pixel_slice)
+        .encode(adapted.as_slice())
         .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Jxl, e)))?;
 
     Ok(output)

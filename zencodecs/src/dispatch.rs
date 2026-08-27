@@ -168,12 +168,12 @@ where
 
         // Negotiate pixel format -- convert input to something the encoder supports
         let pixel_data = pixels.contiguous_bytes();
-        let adapted = zenpixels_convert::adapt::adapt_for_encode(
+        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
             &pixel_data,
             pixels.descriptor(),
             pixels.width(),
             pixels.rows(),
-            pixels.width() as usize * pixels.descriptor().bytes_per_pixel(),
+            pixels.descriptor().aligned_stride(pixels.width()),
             C::supported_descriptors(),
         )
         .map_err(|e| {
@@ -181,16 +181,7 @@ where
                 "pixel format negotiation: {e}"
             )))
         })?;
-
-        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-        let adapted_pixels = PixelSlice::new(
-            &adapted.data,
-            adapted.width,
-            adapted.rows,
-            adapted_stride,
-            adapted.descriptor,
-        )
-        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
+        let adapted_pixels = adapted.as_slice();
 
         let mut job = self.clone().job();
         if let Some(s) = stop {
@@ -216,13 +207,13 @@ where
 /// A streaming encoder: a `DynEncoder` + its supported pixel descriptors.
 ///
 /// The caller pushes strips via [`DynEncoder::push_rows()`] and finalizes
-/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode`] per-strip
+/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode_cow`] per-strip
 /// to convert pixel formats without materializing the full image.
 ///
 /// All codec encoders are `'static` (they clone/Arc their config), so this
 /// type has no lifetime parameter.
 ///
-/// [`adapt_for_encode`]: zenpixels_convert::adapt::adapt_for_encode
+/// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
 pub struct StreamingEncoder {
     /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
     ///
@@ -230,7 +221,7 @@ pub struct StreamingEncoder {
     /// or used in `zenpipe::codec::EncoderSink`.
     pub encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
     /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
-    /// Pass to `adapt_for_encode` to pick the cheapest conversion.
+    /// Pass to `adapt_for_encode_cow` to pick the cheapest conversion.
     pub supported: &'static [PixelDescriptor],
     /// The resolved output format.
     pub format: ImageFormat,

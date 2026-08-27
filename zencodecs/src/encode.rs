@@ -2,7 +2,7 @@
 //!
 //! Uses [`dispatch::build_encoder`](crate::dispatch::build_encoder) for format dispatch.
 //! Each codec's `Encoder` trait impl handles pixel format dispatch internally;
-//! pixel format negotiation is handled by [`zenpixels::adapt::adapt_for_encode`].
+//! pixel format negotiation is handled by [`zenpixels_convert::adapt::adapt_for_encode_cow`].
 
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
@@ -486,38 +486,35 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// Returns a [`StreamingEncoder`] containing:
     /// - A `DynEncoder` that accepts rows via `push_rows()` / `finish()`
-    /// - The encoder's `supported` pixel descriptors (for `adapt_for_encode`)
+    /// - The encoder's `supported` pixel descriptors (for `adapt_for_encode_cow`)
     /// - The resolved output `format`
     ///
     /// The caller is responsible for pixel format conversion per-strip via
-    /// [`adapt_for_encode`]. This avoids materializing the full image for
+    /// [`adapt_for_encode_cow`]. This avoids materializing the full image for
     /// format conversion — only a strip-sized buffer is needed.
     ///
     /// Codecs that require the full image (WebP, AVIF) buffer internally
     /// inside their `push_rows()` implementation. That's the codec's
     /// decision — the pipeline never buffers.
     ///
-    /// [`adapt_for_encode`]: zenpixels_convert::adapt::adapt_for_encode
+    /// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// use zencodecs::{EncodeRequest, ImageFormat};
-    /// use zenpixels_convert::adapt::adapt_for_encode;
+    /// use zenpixels_convert::adapt::adapt_for_encode_cow;
     ///
     /// let se = EncodeRequest::new(ImageFormat::Jpeg)
     ///     .with_quality(85.0)
     ///     .build_streaming_encoder(1920, 1080)?;
     ///
     /// // Per strip:
-    /// let adapted = adapt_for_encode(
+    /// let adapted = adapt_for_encode_cow(
     ///     strip_bytes, descriptor, width, strip_rows, stride,
     ///     se.supported,
     /// )?;
-    /// let ps = PixelSlice::new(&adapted.data, adapted.width, adapted.rows,
-    ///     adapted.width as usize * adapted.descriptor.bytes_per_pixel(),
-    ///     adapted.descriptor)?;
-    /// se.encoder.push_rows(ps)?;
+    /// se.encoder.push_rows(adapted.as_slice())?;
     ///
     /// // Finalize:
     /// let output = se.encoder.finish()?;
@@ -871,7 +868,7 @@ impl<'a> EncodeRequest<'a> {
         // Use zenpixels to negotiate the cheapest pixel format conversion.
         // Returns Cow::Borrowed (zero-copy) when the input already matches
         // one of the encoder's supported formats.
-        let adapted = zenpixels_convert::adapt::adapt_for_encode(
+        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
             data,
             descriptor,
             width,
@@ -884,18 +881,7 @@ impl<'a> EncodeRequest<'a> {
                 "pixel format negotiation: {e}"
             )))
         })?;
-
-        // Adapted data is always packed (stride = width * bpp).
-        let adapted_stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-
-        let pixel_slice = zenpixels::PixelSlice::new(
-            &adapted.data,
-            adapted.width,
-            adapted.rows,
-            adapted_stride,
-            adapted.descriptor,
-        )
-        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("pixel slice: {e}"))))?;
+        let pixel_slice = adapted.as_slice();
 
         // Check if we should embed a precomputed gain map
         #[cfg(feature = "jpeg-ultrahdr")]
@@ -905,15 +891,16 @@ impl<'a> EncodeRequest<'a> {
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
-                let channels = if adapted.descriptor.layout() == zenpixels::ChannelLayout::Rgba {
-                    4u8
-                } else {
-                    3u8
-                };
+                let channels =
+                    if pixel_slice.descriptor().layout() == zenpixels::ChannelLayout::Rgba {
+                        4u8
+                    } else {
+                        3u8
+                    };
                 return crate::codecs::jpeg::encode_with_precomputed_gainmap(
-                    &adapted.data,
-                    adapted.width,
-                    adapted.rows,
+                    &pixel_slice.contiguous_bytes(),
+                    pixel_slice.width(),
+                    pixel_slice.rows(),
                     channels,
                     Some(resolved_quality),
                     self.codec_config,
@@ -925,10 +912,10 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
             if format == ImageFormat::Jxl {
                 return crate::codecs::jxl_enc::encode_with_precomputed_gainmap(
-                    &adapted.data,
-                    adapted.width,
-                    adapted.rows,
-                    adapted.descriptor,
+                    &pixel_slice.contiguous_bytes(),
+                    pixel_slice.width(),
+                    pixel_slice.rows(),
+                    pixel_slice.descriptor(),
                     Some(resolved_quality),
                     gain_map,
                     metadata,
@@ -938,10 +925,10 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
             if format == ImageFormat::Avif {
                 return crate::codecs::avif_enc::encode_with_precomputed_gainmap(
-                    &adapted.data,
-                    adapted.width,
-                    adapted.rows,
-                    adapted.descriptor,
+                    &pixel_slice.contiguous_bytes(),
+                    pixel_slice.width(),
+                    pixel_slice.rows(),
+                    pixel_slice.descriptor(),
                     Some(resolved_quality),
                     effort,
                     self.codec_config,
