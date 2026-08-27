@@ -7,6 +7,19 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (CI green on rustc 1.98, 2026-08-27)
+
+- **`cargo clippy -- -D warnings` on 1.98.0** — the new
+  `clippy::chunks_exact_to_as_chunks` and `manual_slice_fill` lints plus a
+  handful of `collapsible_if` / `too_many_arguments` /
+  `field_reassign_with_default` / unused-import sites had turned every
+  Clippy job red; fixed per crate (`ce1c1d10` zenfilters, `1a475127`
+  zenlayout, `2fc057ec` zencodecs, `88e3654b` zenpipe). `zeneditor` and
+  `zcimg` keep `chunks_exact` on purpose — their MSRV (1.85) predates
+  `as_chunks`, and clippy's msrv gate does not fire there.
+- **`Public API snapshots` job** — `docs/public-api/*.txt` were stale
+  against a long run of API growth; regenerated (`2ec122aa`).
+
 #### Fixed (imageflow graph compatibility, 2026-07-16)
 
 - **Multi-input imageflow graphs execute (W5)** — the graph decomposer
@@ -297,6 +310,29 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (2026-08-27)
+
+- **`ImageJob` with no output format re-encoded JPEG as JPEG XL**
+  (`986a0b37`): `CodecIntent::format == None` reached the selector, which
+  treats it as `Auto`. The job now applies the JSON-JOB-SPEC contract
+  before selection — default `keep` (match source), `auto` only when a
+  `quality_profile` is set. Regression: `job::tests::default_format_*` +
+  `e2e_jpeg::roundtrip_jpeg_no_nodes`.
+- **`zenlayout.orient` had no querystring key** (`d944e51c`): the EXIF
+  value is now `?orientation=1..8` (`#[kv("orientation")]`); `srotate`
+  (degrees) and `autorotate` stay with their adapters. Restores
+  `export_querystring_keys_includes_kv_annotated_nodes`
+  (`--features zennode,json-schema`).
+- rustc 1.98 clippy wall (`88e3654b`) — see Workspace. `resolve_riapi_crop`
+  takes a `RiapiCropWindow`; `get_io_bytes` lifetimes elided (no signature
+  change). `job` feature: `ColorManagement` deprecation and
+  `new_without_default` kept behind targeted allows (both real fixes are
+  public-API changes: `IccTransformSource::from_transform` takes
+  `Box<dyn RowTransform>`; a `Default` impl is new surface).
+- `tests/animation.rs::imagejob_animation` gated on `nodes-gif` +
+  `nodes-png` (`9bb3c160`) — it needs those codecs and failed at probe
+  time under `job` alone.
+
 #### Added
 
 - **Tile pyramid sink, first chunk** (#24): `tiles::TilePyramidSink`
@@ -402,6 +438,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (2026-08-27)
+
+- rustc 1.98 clippy: `riapi/parse.rs` `chunks_exact(4)` → `as_chunks`
+  (`1a475127`).
+
 #### Added
 
 - **`deskew` module + `AutoDeskewEffect`** (#27): `deskew::
@@ -420,6 +461,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ## zenfilters
 
 ### [Unreleased]
+
+#### Fixed (2026-08-27)
+
+- rustc 1.98 clippy wall (`ce1c1d10`): `convenience.rs` and the
+  tests/examples use `as_chunks::<N>()`; 121 constant-fill test helper
+  loops use `slice::fill` (loops whose RHS reads the element are unchanged).
 
 #### Added
 
@@ -451,6 +498,19 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ## zencodecs
 
 ### [Unreleased]
+
+#### Fixed (2026-08-27)
+
+- rustc 1.98 clippy (`2fc057ec`): tests/examples use `as_chunks`;
+  `decode_info_format` no longer warns on `codec_config` without `jpeg`;
+  `push_dec!` is `allow(unused_macros)` for feature sets without the
+  jpeg/bitmaps/raw/svg arms.
+- **Fuzz manifest resolves again** (`0396941a0a2d`): `zencodecs/fuzz/Cargo.toml`
+  pointed `zenavif-parse` at a deleted sibling and `codec-corpus` one
+  directory too high; the unpublished mains the root patch table pins are
+  mirrored into the fuzz workspace. Compilation of the fuzz targets is
+  still blocked on their own `Limits` API rot (`with_max_memory_bytes`,
+  `with_max_width(u64)`).
 
 #### Added
 
