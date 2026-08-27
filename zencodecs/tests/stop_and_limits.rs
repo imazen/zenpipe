@@ -631,7 +631,7 @@ fn encode_animated_gif(w: u32, h: u32, frames: u32) -> Vec<u8> {
     let stride = w as usize * 4;
     for i in 0..frames {
         let mut px = vec![0u8; stride * h as usize];
-        for (n, p) in px.chunks_exact_mut(4).enumerate() {
+        for (n, p) in px.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             p[0] = (n as u32 * 7 + i * 40) as u8;
             p[1] = (i * 60) as u8;
             p[2] = 200;

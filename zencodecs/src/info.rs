@@ -102,6 +102,9 @@ fn decode_info_format(
     format: ImageFormat,
     codec_config: Option<&crate::config::CodecConfig>,
 ) -> Result<ImageInfo> {
+    // Only the JPEG arm consumes the config (DctScale dimension transforms).
+    #[cfg(not(feature = "jpeg"))]
+    let _ = codec_config;
     match format {
         // JPEG needs codec support for DctScale dimension transforms
         #[cfg(feature = "jpeg")]

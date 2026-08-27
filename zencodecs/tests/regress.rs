@@ -47,7 +47,9 @@ fn gradient_rgba() -> Vec<u8> {
 fn gradient_rgb8() -> ImgVec<Rgb<u8>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Rgb<u8>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| Rgb {
             r: px[0],
             g: px[1],
@@ -60,7 +62,9 @@ fn gradient_rgb8() -> ImgVec<Rgb<u8>> {
 fn gradient_rgba8() -> ImgVec<Rgba<u8>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Rgba<u8>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| Rgba {
             r: px[0],
             g: px[1],
@@ -74,7 +78,9 @@ fn gradient_rgba8() -> ImgVec<Rgba<u8>> {
 fn gradient_bgra8() -> ImgVec<Bgra<u8>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Bgra<u8>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| Bgra {
             b: px[2],
             g: px[1],
@@ -88,7 +94,9 @@ fn gradient_bgra8() -> ImgVec<Bgra<u8>> {
 fn gradient_gray8() -> ImgVec<Gray<u8>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Gray<u8>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| {
             // BT.601 luminance
             let y = (px[0] as u16 * 77 + px[1] as u16 * 150 + px[2] as u16 * 29) >> 8;
@@ -101,7 +109,9 @@ fn gradient_gray8() -> ImgVec<Gray<u8>> {
 fn gradient_rgb_f32() -> ImgVec<Rgb<f32>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Rgb<f32>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| Rgb {
             r: srgb_to_linear(px[0]),
             g: srgb_to_linear(px[1]),
@@ -114,7 +124,9 @@ fn gradient_rgb_f32() -> ImgVec<Rgb<f32>> {
 fn gradient_rgba_f32() -> ImgVec<Rgba<f32>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Rgba<f32>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| Rgba {
             r: srgb_to_linear(px[0]),
             g: srgb_to_linear(px[1]),
@@ -128,7 +140,9 @@ fn gradient_rgba_f32() -> ImgVec<Rgba<f32>> {
 fn gradient_gray_f32() -> ImgVec<Gray<f32>> {
     let rgba = gradient_rgba();
     let pixels: Vec<Gray<f32>> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| {
             let r = srgb_to_linear(px[0]);
             let g = srgb_to_linear(px[1]);

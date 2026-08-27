@@ -103,7 +103,9 @@ pub(crate) fn dyn_push_decode(
     params: &DecodeParams<'_>,
     sink: &mut dyn zencodec::decode::DecodeRowSink,
 ) -> Result<OutputInfo> {
-    // For codecs that return plain errors (zenjpeg, zenbitmaps).
+    // For codecs that return plain errors (zenjpeg, zenbitmaps). Only expanded by
+    // the jpeg/bitmaps/raw/svg arms, so it is unused in feature sets without them.
+    #[allow(unused_macros)]
     macro_rules! push_dec {
         ($config:expr) => {{
             let config = $config;

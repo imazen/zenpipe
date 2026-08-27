@@ -385,12 +385,22 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
     match (channel_type, bpp) {
         (ChannelType::U8, 3) => {
             // RGB8
-            let data: Vec<[u8; 3]> = bytes.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+            let data: Vec<[u8; 3]> = bytes
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|c| [c[0], c[1], c[2]])
+                .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
         (ChannelType::U8, 4) => {
             // RGBA8 -> RGB8 (drop alpha)
-            let data: Vec<[u8; 3]> = bytes.chunks_exact(4).map(|c| [c[0], c[1], c[2]]).collect();
+            let data: Vec<[u8; 3]> = bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| [c[0], c[1], c[2]])
+                .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
         (ChannelType::U8, 1) => {
@@ -401,7 +411,9 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
         (ChannelType::U16, 6) => {
             // RGB16 -> RGB8 (shift down)
             let data: Vec<[u8; 3]> = bytes
-                .chunks_exact(6)
+                .as_chunks::<6>()
+                .0
+                .iter()
                 .map(|c| {
                     let r = u16::from_ne_bytes([c[0], c[1]]);
                     let g = u16::from_ne_bytes([c[2], c[3]]);
@@ -414,7 +426,9 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
         (ChannelType::U16, 8) => {
             // RGBA16 -> RGB8 (shift down, drop alpha)
             let data: Vec<[u8; 3]> = bytes
-                .chunks_exact(8)
+                .as_chunks::<8>()
+                .0
+                .iter()
                 .map(|c| {
                     let r = u16::from_ne_bytes([c[0], c[1]]);
                     let g = u16::from_ne_bytes([c[2], c[3]]);
@@ -428,7 +442,9 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
             // RGB f32 -> RGB8 (clamp + scale)
             let floats: &[f32] = bytemuck::cast_slice(&bytes[..w * h * 12]);
             let data: Vec<[u8; 3]> = floats
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|c| {
                     [
                         (c[0].clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
