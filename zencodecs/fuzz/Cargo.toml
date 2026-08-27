@@ -14,7 +14,7 @@ enough = "0.4.3"
 
 zencodec = "0.1.26"
 zenpixels = { version = "0.2.10", default-features = false }
-codec-corpus = { path = "../../../../codec-corpus/crate" }
+codec-corpus = { path = "../../../codec-corpus/crate" }
 
 [dependencies.zencodecs]
 path = ".."
@@ -53,7 +53,22 @@ members = ["."]
 # here — it comes from the `paths` override. zenavif-parse / zenjpeg / zenrav1e
 # are not in `paths`, so they stay here.
 [patch.crates-io]
-zenavif-parse = { path = "../../../zenavif-parse" }
+# zenavif 0.1.7 (registry 0.1.7 is yanked): zencodecs' avif-decode requires
+# ^0.1.7, and the repo-root [patch.crates-io] does not reach this separate
+# fuzz workspace, so patch it to the sibling checkout (its workspace root).
+zenavif = { path = "../../../zenavif" }
+# Unpublished mains the root [patch.crates-io] pins (see its comments):
+# zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
+# zenjxl + zenjxl-decoder (mode-aware orientation API). Mirrored here because
+# this fuzz workspace resolves on its own.
+zengif = { git = "https://github.com/imazen/zengif" }
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenpng = { git = "https://github.com/imazen/zenpng" }
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+# zenavif-parse 0.7.0 is a member of the imazen/zenavif workspace (the
+# standalone repo is archived) — same sibling the root/zencodecs manifests use.
+zenavif-parse = { path = "../../../zenavif/zenavif-parse" }
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 zenbitmaps = { path = "../../../zenbitmaps" }
@@ -62,12 +77,9 @@ zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
 # its `zencodec = { workspace = true }` resolves against its own workspace root
 # (~/work/zen/ultrahdr/Cargo.toml).
 ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
-# cargo-fuzz sets a global `--cfg fuzzing`, which compiles zenrav1e's
-# `#[cfg(fuzzing)]` module. Registry zenrav1e 0.1.4's fuzzing module is
-# inconsistent with its own EncoderConfig (missing fields → E0063). The local
-# 0.1.4 fuzzing module is consistent, so patch to it. zenrav1e is pulled
-# transitively via zenavif.
-zenrav1e = { path = "../../../zenrav1e" }
+# zenrav1e needs no entry: zenavif → zenravif → zenrav1e are git-rev deps on
+# their own dep lines (no registry requirement exists), so a patch here is
+# reported unused.
 
 [profile.release]
 debug = 1
