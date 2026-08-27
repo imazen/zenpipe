@@ -119,7 +119,11 @@ pub fn detect_skew_gradient_moment(
     let gradient_deg = (0.5 * (2.0 * jxy).atan2(diff)).to_degrees();
     let mut edge_deg = gradient_deg + 90.0;
     // Fold modulo 90° into (-45, 45]: axis-aligned structure is "straight".
-    edge_deg = edge_deg.rem_euclid(90.0);
+    // (`%` then fix-up: `f64::rem_euclid` is std-only.)
+    edge_deg %= 90.0;
+    if edge_deg < 0.0 {
+        edge_deg += 90.0;
+    }
     if edge_deg > 45.0 {
         edge_deg -= 90.0;
     }
@@ -261,7 +265,7 @@ mod tests {
         for y in 0..h {
             for x in 0..w {
                 let p = (y as f32 - cy) * c - (x as f32 - cx) * s;
-                let d = p.rem_euclid(16.0);
+                let d = ((p % 16.0) + 16.0) % 16.0;
                 // Coverage of the [0, 3) band with a 1 px linear ramp.
                 let cov = (d + 0.5).min(3.5 - d).clamp(0.0, 1.0);
                 px[(y * w + x) as usize] = (255.0 * (1.0 - cov)).round() as u8;
