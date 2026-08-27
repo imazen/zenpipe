@@ -143,7 +143,8 @@ pub struct CropMargins {
 /// 1 = identity, 2 = flip-H, 3 = rotate-180, 4 = flip-V,
 /// 5 = transpose, 6 = rotate-90, 7 = transverse, 8 = rotate-270.
 ///
-/// RIAPI: `?autorotate=true` (uses embedded EXIF), `?srotate=90`
+/// RIAPI: `?autorotate=true` (uses embedded EXIF), `?srotate=90` (degrees,
+/// via the srotate adapter). Querystring: `?orientation=6` (raw EXIF value).
 /// JSON: `{ "orientation": 6 }`
 #[derive(Node, Clone, Debug)]
 #[node(id = "zenlayout.orient", group = Geometry, role = Orient)]
@@ -153,11 +154,13 @@ pub struct Orient {
     /// EXIF orientation value (1-8). 1 = no transformation.
     /// 0 is a sentinel meaning "apply the EXIF orientation found at decode".
     ///
-    /// Note: the RIAPI `srotate` key is NOT bound here — `srotate` means
-    /// degrees (source rotation) and is handled by the srotate adapter.
-    /// `autorotate=true` maps to `Orient { orientation: 0 }`.
+    /// Querystring: `?orientation=6` (the raw EXIF value). The RIAPI
+    /// `srotate` key is NOT bound here — `srotate` means degrees (source
+    /// rotation) and is handled by the srotate adapter; `autorotate=true`
+    /// maps to `Orient { orientation: 0 }` via the autorotate adapter.
     #[param(range(0..=8), default = 1, step = 1)]
     #[param(section = "Main", label = "Orientation")]
+    #[kv("orientation")]
     pub orientation: i32,
 }
 

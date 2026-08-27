@@ -391,13 +391,15 @@ fn export_querystring_keys_includes_kv_annotated_nodes() {
 
     // Only nodes with #[kv(...)] annotations appear in the querystring key
     // registry. zenlayout.crop has no kv keys (it's JSON-only), but
-    // zenlayout.orient has #[kv("srotate")] and zenresize.constrain has many.
+    // zenlayout.orient has #[kv("orientation")] (the raw EXIF value; `srotate`
+    // is degrees and lives in the hand-written adapter) and zenresize.constrain
+    // has many.
     let has_orient = nodes.contains_key("zenlayout.orient");
     let has_constrain = nodes.contains_key("zenresize.constrain");
 
     assert!(
         has_orient,
-        "should include zenlayout.orient (has srotate kv key)"
+        "should include zenlayout.orient (has orientation kv key)"
     );
     assert!(
         has_constrain,
