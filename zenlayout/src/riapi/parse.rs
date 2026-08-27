@@ -516,7 +516,9 @@ fn parse_c_focus(s: &str) -> Option<CFocus> {
         2 => Some(CFocus::Point([values[0], values[1]])),
         n if n >= 4 && n % 4 == 0 => {
             let rects = values
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|c| [c[0], c[1], c[2], c[3]])
                 .collect();
             Some(CFocus::Rects(rects))
