@@ -93,6 +93,11 @@ pub type AnalyzeBuilder =
 
 /// Return type of [`PipeGraph::compile_traced`]: the pipeline source plus the shared trace.
 #[cfg(feature = "std")]
+pub type TracedPipelineResult = crate::PipeResult<(
+    Box<dyn Source>,
+    alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
+)>;
+
 /// Build the [`ExpandCanvasSource`] for `ExpandCanvas` / `ExtendCanvas`:
 /// checked canvas arithmetic (audit H7) plus the fill mode.
 fn extend_canvas_source(
@@ -130,11 +135,6 @@ fn extend_canvas_source(
         ExpandCanvasSource::new(upstream, canvas_w, canvas_h, left as i32, top as i32, bg)?;
     Ok(Box::new(source.with_fill(fill)))
 }
-
-pub type TracedPipelineResult = crate::PipeResult<(
-    Box<dyn Source>,
-    alloc::sync::Arc<std::sync::Mutex<crate::trace::PipelineTrace>>,
-)>;
 
 /// Metadata about a source, used by [`PipelineGraph::estimate`].
 ///
