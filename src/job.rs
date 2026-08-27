@@ -683,6 +683,7 @@ impl<'a> ImageJob<'a> {
         // (quality/effort/speed/distance/min_quality) into the intent hints —
         // previously captured by the bridge and dropped.
         apply_encode_node_intent(self.nodes, &mut intent);
+        resolve_default_format(&mut intent);
         if intent.matte.is_none() {
             intent.matte = self.nodes.iter().find_map(|n| {
                 if !matches!(n.schema().id, "zenresize.constrain" | "zenlayout.constrain") {
@@ -888,6 +889,24 @@ impl<'a> ImageJob<'a> {
     /// right after, so the budget effectively covers the streaming phase.
     fn deadline(&self) -> Option<crate::limits::Deadline> {
         self.limits.as_ref().and_then(|l| l.to_deadline())
+    }
+}
+
+/// Resolve an unset output format to the job API's documented default.
+///
+/// `CodecIntent::format == None` is "context-dependent" in zencodecs, and the
+/// selector treats it like `FormatChoice::Auto`. The job envelope contract
+/// (JSON-JOB-SPEC.md, `encode.format`) is: default `keep` (match the source
+/// format), or `auto` when a `quality_profile` is set (imageflow-compatible).
+/// Without this a JPEG job with no format/extension/encode node came back as
+/// whatever the auto-selector liked best (JPEG XL when compiled in).
+pub(crate) fn resolve_default_format(intent: &mut zencodecs::CodecIntent) {
+    if intent.format.is_none() {
+        intent.format = Some(if intent.quality_profile.is_some() {
+            zencodecs::FormatChoice::Auto
+        } else {
+            zencodecs::FormatChoice::Keep
+        });
     }
 }
 
@@ -1666,6 +1685,48 @@ pub fn get_io_bytes(io: &HashMap<i32, IoSlot>, io_id: i32) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Default output format (JSON-JOB-SPEC.md `encode.format`) ──
+    //
+    // Regression for `roundtrip_jpeg_no_nodes` (below, `nodes-jpeg`): with no
+    // format/extension/encode node the selector saw `format: None`, treated it
+    // as `Auto`, and a JPEG job came back as JPEG XL.
+
+    #[test]
+    fn default_format_is_keep_without_quality_profile() {
+        let mut intent = zencodecs::CodecIntent::default();
+        assert_eq!(intent.format, None);
+        resolve_default_format(&mut intent);
+        assert_eq!(intent.format, Some(zencodecs::FormatChoice::Keep));
+    }
+
+    #[test]
+    fn default_format_is_auto_with_quality_profile() {
+        let mut intent = zencodecs::CodecIntent {
+            quality_profile: Some(zencodecs::QualityProfile::Good),
+            ..Default::default()
+        };
+        resolve_default_format(&mut intent);
+        assert_eq!(intent.format, Some(zencodecs::FormatChoice::Auto));
+    }
+
+    #[test]
+    fn explicit_format_is_left_alone() {
+        let mut intent = zencodecs::CodecIntent {
+            format: Some(zencodecs::FormatChoice::Specific(
+                zencodec::ImageFormat::Png,
+            )),
+            quality_profile: Some(zencodecs::QualityProfile::Good),
+            ..Default::default()
+        };
+        resolve_default_format(&mut intent);
+        assert_eq!(
+            intent.format,
+            Some(zencodecs::FormatChoice::Specific(
+                zencodec::ImageFormat::Png
+            ))
+        );
+    }
 
     // ── Builder pattern ──
 
