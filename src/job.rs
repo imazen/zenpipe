@@ -2114,6 +2114,7 @@ mod tests {
                 max_width: Some(2000),
                 max_height: Some(1500),
                 max_frames: Some(50),
+                max_total_pixels: Some(7_000_000),
                 max_output_bytes: Some(123_456),
                 ..Limits::NONE
             };
@@ -2122,6 +2123,8 @@ mod tests {
             assert_eq!(rl.max_width, Some(2000));
             assert_eq!(rl.max_height, Some(1500));
             assert_eq!(rl.max_frames, Some(50));
+            // zenpipe#18: the cumulative animation budget must reach the codec layer.
+            assert_eq!(rl.max_total_pixels, Some(7_000_000));
             assert_eq!(rl.max_output_bytes, Some(123_456));
         }
     }

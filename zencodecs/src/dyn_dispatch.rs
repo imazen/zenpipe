@@ -263,8 +263,103 @@ pub(crate) fn dyn_animation_frame_decoder(
         job.set_extract_gain_map(true);
     }
     let data = Cow::Owned(params.data.to_vec());
-    job.into_animation_frame_decoder(data, params.preferred)
-        .map_err(|e| wrap_boxed(format, e))
+    let decoder = job
+        .into_animation_frame_decoder(data, params.preferred)
+        .map_err(|e| wrap_boxed(format, e))?;
+    Ok(match params.limits.and_then(|l| l.max_total_pixels) {
+        Some(max) => Box::new(TotalPixelGuard {
+            inner: decoder,
+            max,
+            consumed: 0,
+        }),
+        None => decoder,
+    })
+}
+
+/// Cumulative `max_total_pixels` enforcement over an animation frame decoder
+/// (zenpipe#18).
+///
+/// Probe-time enforcement (`width × height × frame_count`) only works when
+/// the container states its frame count up front; GIF and APNG frame counts
+/// are unknown until the stream is walked. This wrapper charges every
+/// rendered frame's pixels against the budget as frames are produced, so an
+/// animation that keeps yielding frames is cut off codec-independently once
+/// the cumulative count crosses `max_total_pixels`. Downcasts (`as_any`)
+/// are forwarded to the wrapped codec decoder.
+struct TotalPixelGuard {
+    inner: Box<dyn zencodec::decode::DynAnimationFrameDecoder>,
+    max: u64,
+    consumed: u64,
+}
+
+impl TotalPixelGuard {
+    fn charge(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> core::result::Result<(), zencodec::decode::BoxedError> {
+        self.consumed = self.consumed.saturating_add(width as u64 * height as u64);
+        if self.consumed > self.max {
+            return Err(Box::new(zencodec::LimitExceeded::TotalPixels {
+                actual: self.consumed,
+                max: self.max,
+            }));
+        }
+        Ok(())
+    }
+}
+
+impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self.inner.as_any()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+        self.inner.as_any_mut()
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn core::any::Any> {
+        self.inner.into_any()
+    }
+
+    fn info(&self) -> &zencodec::ImageInfo {
+        self.inner.info()
+    }
+
+    fn frame_count(&self) -> Option<u32> {
+        self.inner.frame_count()
+    }
+
+    fn loop_count(&self) -> Option<u32> {
+        self.inner.loop_count()
+    }
+
+    fn render_next_frame_owned(
+        &mut self,
+        stop: Option<&dyn enough::Stop>,
+    ) -> core::result::Result<
+        Option<zencodec::decode::OwnedAnimationFrame>,
+        zencodec::decode::BoxedError,
+    > {
+        let frame = self.inner.render_next_frame_owned(stop)?;
+        if let Some(f) = &frame {
+            let px = f.pixels();
+            self.charge(px.width(), px.rows())?;
+        }
+        Ok(frame)
+    }
+
+    fn render_next_frame_to_sink(
+        &mut self,
+        stop: Option<&dyn enough::Stop>,
+        sink: &mut dyn zencodec::decode::DecodeRowSink,
+    ) -> core::result::Result<Option<OutputInfo>, zencodec::decode::BoxedError> {
+        let out = self.inner.render_next_frame_to_sink(stop, sink)?;
+        if let Some(info) = &out {
+            self.charge(info.width, info.height)?;
+        }
+        Ok(out)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

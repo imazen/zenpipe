@@ -615,3 +615,120 @@ fn roundtrip_gif_no_stop() {
     assert_eq!(decoded.width(), 64);
     assert_eq!(decoded.height(), 64);
 }
+
+// ===========================================================================
+// 6. max_total_pixels — cumulative enforcement while frames are produced
+//    (zenpipe#18). Probe-time `width × height × frame_count` needs a known
+//    frame count; the animation frame decoder charges each rendered frame
+//    against the budget instead, codec-independently.
+// ===========================================================================
+
+/// Build a `frames`-frame `w`×`h` animated GIF.
+fn encode_animated_gif(w: u32, h: u32, frames: u32) -> Vec<u8> {
+    let mut enc = EncodeRequest::new(ImageFormat::Gif)
+        .animation_frame_encoder(w, h)
+        .expect("gif animation encoder");
+    let stride = w as usize * 4;
+    for i in 0..frames {
+        let mut px = vec![0u8; stride * h as usize];
+        for (n, p) in px.chunks_exact_mut(4).enumerate() {
+            p[0] = (n as u32 * 7 + i * 40) as u8;
+            p[1] = (i * 60) as u8;
+            p[2] = 200;
+            p[3] = 255;
+        }
+        let ps =
+            zenpixels::PixelSlice::new(&px, w, h, stride, zenpixels::PixelDescriptor::RGBA8_SRGB)
+                .expect("pixel slice");
+        enc.push_frame(ps, 100, None).expect("push_frame");
+    }
+    enc.finish(None).expect("finish").into_vec()
+}
+
+#[test]
+fn limits_animation_total_pixels_cuts_off_mid_stream() {
+    let (w, h, frames) = (32u32, 32u32, 4u32);
+    let data = encode_animated_gif(w, h, frames);
+    let per_frame = w as u64 * h as u64;
+
+    // Budget admits exactly two full frames; the third crosses it.
+    let limits = Limits::none().with_max_total_pixels(per_frame * 2);
+    let mut dec = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .animation_frame_decoder()
+        .expect("animation decoder");
+    assert!(
+        dec.render_next_frame_owned(None)
+            .expect("frame 0")
+            .is_some()
+    );
+    assert!(
+        dec.render_next_frame_owned(None)
+            .expect("frame 1")
+            .is_some()
+    );
+    let third = dec.render_next_frame_owned(None);
+    let err = third.expect_err("third frame must exceed max_total_pixels");
+    let msg = format!("{err}");
+    assert!(
+        msg.to_ascii_lowercase().contains("pixel"),
+        "error should name the total-pixel budget: {msg}"
+    );
+
+    // A budget that covers every frame decodes the whole animation.
+    let limits = Limits::none().with_max_total_pixels(per_frame * frames as u64);
+    let mut dec = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .animation_frame_decoder()
+        .expect("animation decoder");
+    let mut n = 0;
+    while dec.render_next_frame_owned(None).expect("frame").is_some() {
+        n += 1;
+    }
+    assert_eq!(n, frames, "exact budget must not reject the final frame");
+}
+
+/// Minimal collecting sink for the to-sink path.
+struct CollectSink {
+    buf: Vec<u8>,
+}
+
+impl zencodec::decode::DecodeRowSink for CollectSink {
+    fn provide_next_buffer(
+        &mut self,
+        _y: u32,
+        height: u32,
+        width: u32,
+        descriptor: zenpixels::PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        let stride = width as usize * descriptor.bytes_per_pixel();
+        self.buf.resize(stride * height as usize, 0);
+        Ok(
+            zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                .expect("buffer sized correctly"),
+        )
+    }
+}
+
+#[test]
+fn limits_animation_total_pixels_to_sink_path() {
+    let (w, h) = (16u32, 16u32);
+    let data = encode_animated_gif(w, h, 3);
+    let limits = Limits::none().with_max_total_pixels(w as u64 * h as u64);
+    let mut dec = DecodeRequest::new(&data)
+        .with_limits(&limits)
+        .animation_frame_decoder()
+        .expect("animation decoder");
+    let mut sink = CollectSink { buf: Vec::new() };
+    assert!(
+        dec.render_next_frame_to_sink(None, &mut sink)
+            .expect("frame 0")
+            .is_some()
+    );
+    let mut sink = CollectSink { buf: Vec::new() };
+    let second = dec.render_next_frame_to_sink(None, &mut sink);
+    assert!(
+        second.is_err(),
+        "second frame exceeds a one-frame max_total_pixels budget"
+    );
+}

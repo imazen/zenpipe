@@ -128,6 +128,9 @@ impl Limits {
         if let Some(v) = self.max_frames {
             rl = rl.with_max_frames(v);
         }
+        if let Some(v) = self.max_total_pixels {
+            rl = rl.with_max_total_pixels(v);
+        }
         if let Some(v) = self.max_output_bytes {
             rl = rl.with_max_output(v);
         }

@@ -243,6 +243,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`Limits::to_codec_limits` forwards `max_total_pixels`** (#18): the
+  cumulative animation budget was dropped on the way to the codec layer,
+  so only the probe-time `width × height × frame_count` check applied
+  (and only when the frame count was known). Now reaches
+  `zencodec::ResourceLimits` and zencodecs' per-frame guard.
 - **`zen_get_image_info` reports display-oriented dimensions** (#16):
   EXIF/container orientation is applied before returning, so orientations
   5–8 report swapped `width`/`height` (matching imageflow's
@@ -323,6 +328,14 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed
 
+- **`max_total_pixels` enforced cumulatively while animation frames are
+  produced** (#18): `DecodeRequest::animation_frame_decoder()` now wraps
+  the codec decoder in a guard that charges every rendered frame (owned
+  and to-sink paths) against `Limits::max_total_pixels` and fails with
+  `LimitExceeded::TotalPixels` once the running total crosses it —
+  codec-independent, so GIF/APNG streams whose frame count is unknown at
+  probe time are bounded too. Tests: `stop_and_limits.rs`
+  `limits_animation_total_pixels_*`.
 - **UltraHDR encode derives the color gamut from CICP metadata** (#40):
   `encode_ultrahdr_rgb_f32` / `encode_ultrahdr_rgba_f32` previously ignored
   their metadata parameter and hardcoded BT.709. CICP color primaries 1/2 →
