@@ -405,6 +405,9 @@ pub(crate) fn dyn_streaming_decoder(
     use zencodec::decode::{DecodeJob as _, DecoderConfig as _};
 
     // For instrumented codecs that return At<E> from streaming_decoder.
+    // Only referenced by the arms below; gate it so a build with none of
+    // those codecs doesn't trip `unused_macros` under `-D warnings`.
+    #[cfg(any(feature = "gif", feature = "avif-decode", feature = "heic-decode"))]
     macro_rules! stream_dec {
         ($config:expr) => {{
             let config = $config;
