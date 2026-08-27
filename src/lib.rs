@@ -30,6 +30,7 @@ pub mod ops;
 pub mod session;
 pub mod sources;
 mod strip;
+pub mod tiles;
 #[cfg(feature = "std")]
 pub mod trace;
 

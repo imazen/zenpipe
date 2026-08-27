@@ -243,6 +243,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Added
 
+- **Tile pyramid sink, first chunk** (#24): `tiles::TilePyramidSink`
+  generates every Deep Zoom (DZI) level in one top-to-bottom pass with RAM
+  bounded by image width — per level a queue of `tile_size + 2·overlap`
+  rows, tile rows cut as soon as their rows arrive, 2×2 box shrink
+  cascading to the 1×1 apex (alpha-weighted for RGBA, last row/column
+  replicated for odd sizes; 8-bit-channel formats). Tiles go to a
+  pluggable `TileWriter`: `MemoryTileWriter` and a `DziFsWriter` (`std`)
+  that writes `{name}.dzi` + `{name}_files/{level}/{col}_{row}.{ext}` with
+  a caller-supplied per-tile encoder. `buffer_bytes_estimate()` is the
+  formula, not a measurement. Verified against a full-image reference
+  shrink chain (6 geometries incl. odd sizes, 3-row strips, overlap 0/1/2)
+  and a filesystem layout test. Not yet: IIIF / Google Maps / Zoomify
+  layouts, parallel tile encoding, blank-tile skipping, zip output,
+  tiled-TIFF input, heaptrack-measured memory.
+
 - **Auto-deskew, first chunk** (#27): `EffectSource` now resolves
   content-adaptive effects (`DimensionEffect::forward() == None`) against
   the materialized frame via the new `DimensionEffect::analyze` hook
