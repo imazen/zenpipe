@@ -193,14 +193,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   required dep (no feature). Both zenavif dep lines (root, zencodecs) now
   request 0.1.7 without the feature; zencodecs' `zenavif-parse` moves to
   0.7.0 (parser results are `whereat::At<Error>`). Bare-clone resolution is
-  supplied by three new `[patch.crates-io]` entries from the imazen/zenavif
-  workspace (zenavif, zenavif-parse, zenavif-serialize — the last one is
-  zenravif's registry requirement at 0.2.0, unpublished). The encode chain
-  that used to block this (zenavif → zenravif 0.2.0 → path-only zenrav1e) is
-  git-rev pinned end to end upstream as of 2026-08-27 (cavif-rs `09a0dba3`,
-  zenavif `e971bd5e`), so zenravif / zenrav1e resolve from git without patch
-  entries. Cost to note: cargo fetches zenavif's corpus submodules (~600 MB)
-  per rev for git consumers — CI is unaffected (shallow sibling clones).
+  supplied by two new `[patch.crates-io]` entries from the imazen/zenavif
+  workspace (zenavif, zenavif-parse). The encode chain that used to block
+  this (zenavif → zenravif 0.2.0 → path-only zenrav1e, plus zenravif's
+  registry requirement on the unpublished zenavif-serialize 0.2.0 that only
+  cavif-rs's own `[patch]` supplied) is git-rev pinned end to end upstream as
+  of 2026-08-27 (cavif-rs `09a0dba3` + `f6c883b6`, zenavif `e971bd5e` +
+  `11033c95`), so zenravif / zenrav1e / zenavif-serialize resolve from git
+  with no patch entries — which is what CI needs, since it deletes this
+  workspace's patch table and paths everything to sibling clones (a first
+  attempt that patched zenavif-serialize here still failed there). Cost to
+  note: cargo fetches zenavif's corpus submodules (~600 MB) per rev for git
+  consumers — CI is unaffected (shallow sibling clones).
 
 - **deps: zencodec 0.1.26 rollout — drop the `bea2f94c` flat-taxonomy git
   patch, re-pin every codec to a generation built on 0.1.26.** Every `zencodec`

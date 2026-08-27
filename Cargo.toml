@@ -302,20 +302,22 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # zenavif main is 0.1.7 (zencodec 0.1.26 two-level taxonomy, `zencodec`
 # adapter always-on — no `zencodec` feature any more); crates.io tops out at
 # 0.1.6 (pre-taxonomy). The imazen/zenavif repo is a workspace that also
-# carries zenavif-parse 0.7.0 (breaking: `At<Error>` parser results) and
-# zenavif-serialize 0.2.0, both unpublished (registry: 0.6.2 / 0.1.4) — the
-# same git source supplies all three so zenavif's in-repo path deps and our
-# registry specs unify to ONE copy each. zenavif-serialize is not a direct dep:
-# zenravif (imazen/cavif-rs, git dep of zenavif's `encode`) requires it at
-# 0.2.0 from the registry, and [patch] only applies from this top level.
-# zenravif / zenrav1e need NO patch entries: zenavif main pins zenravif 0.2.0 as
-# a git-rev dep and zenravif pins zenrav1e 0.2.0 (unpublished; registry 0.1.4)
-# as a git-rev dep since cavif-rs 2026-08-27, so the encode chain resolves from
-# bare git checkouts. (A `[patch.crates-io]` entry for either would be unused —
-# no registry requirement exists for them in this graph.)
+# carries zenavif-parse 0.7.0 (breaking: `At<Error>` parser results),
+# unpublished (registry: 0.6.2) — the same git source supplies both so
+# zenavif's in-repo path dep and zencodecs' registry spec unify to ONE copy.
+# The rest of the `encode` chain needs NO patch entries, because since
+# 2026-08-27 every unpublished link is a git-rev dep on its own dep line:
+# zenavif → zenravif 0.2.0 (imazen/cavif-rs; registry 0.1.3) → zenrav1e 0.2.0
+# (imazen/zenrav1e; registry 0.1.4) and zenavif-serialize 0.2.0 (the archived
+# imazen/zenavif-serialize repo @990bd6d; registry 0.1.4). Any patch entry for
+# those would be unused — no registry requirement for them exists in this
+# graph. (zenavif-serialize in particular must NOT come from a patch here: CI
+# deletes this section, which is exactly how the 2026-08-27 first attempt
+# still failed to resolve zenravif's requirement in sibling-clone mode.)
+# Cost to know: cargo fetches zenavif's corpus submodules (~600 MB) per rev
+# for bare-clone builds; CI is unaffected (shallow sibling clones).
 zenavif = { git = "https://github.com/imazen/zenavif" }
 zenavif-parse = { git = "https://github.com/imazen/zenavif" }
-zenavif-serialize = { git = "https://github.com/imazen/zenavif" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }

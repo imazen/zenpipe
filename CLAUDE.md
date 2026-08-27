@@ -80,7 +80,21 @@ threading, hdr directives, compat security. Verified remaining:
   (`src/zennode_defs.rs:149`) carries no `#[kv]` attribute — `srotate` is
   handled by the hand-written RIAPI adapter (`src/zennode_defs.rs:1876`),
   which the `#[kv]`-only generator does not walk (same root cause as the
-  "Generated docs regen pending" item above). Pre-existing on main; CI has
-  not reached the test step since at least 2026-08-01 (it fails at
-  dependency resolution first — see the zenavif note in the root
+  "Generated docs regen pending" item above). Pre-existing on main; between
+  2026-08-01 and 2026-08-27 CI never reached the test step (it failed at
+  dependency resolution on the dead `zenavif/zencodec` feature request —
+  fixed 2026-08-27 in `7a260875` + its follow-up that moved zenravif's
+  zenavif-serialize supply upstream; see the zenavif note in the root
   `[patch.crates-io]`).
+- **rustc 1.98 clippy wall (`-D warnings` gate red on main, verified locally
+  2026-08-27 on 1.98.0)**: `clippy::manual_slice_fill`-era lints now fire on
+  `chunks_exact`/`chunks_exact_mut` with a constant chunk size — 12 sites in
+  the zenpipe lib (`src/execute_layout.rs:927` ×2, `src/ops.rs:156-157`,
+  `src/sources/effects.rs:48`, `src/sources/expand_canvas.rs:197/202/207/
+  268/272/276`) plus `zenfilters/src/convenience.rs:30`; and two unused
+  imports (`src/tiles.rs:35` `alloc::boxed::Box` under
+  `--no-default-features`, `src/bridge/mod.rs:67` `parse::parse_matte_rgb`
+  under default features). `cargo clippy --all-targets -- -D warnings` and
+  the `--no-default-features` run both fail; `-p zencodecs
+  --no-default-features` is clean. Mechanical fix (`as_chunks` / drop the
+  imports); not touched by the 2026-08-27 dependency work.
