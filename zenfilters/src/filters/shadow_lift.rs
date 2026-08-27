@@ -257,12 +257,8 @@ mod tests {
     #[test]
     fn does_not_modify_chroma() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.05;
-        }
-        for v in &mut planes.a {
-            *v = 0.03;
-        }
+        planes.l.fill(0.05);
+        planes.a.fill(0.03);
         let a_orig = planes.a.clone();
         ShadowLift { strength: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, a_orig);

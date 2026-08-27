@@ -191,12 +191,8 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
-        for v in &mut planes.b {
-            *v = 0.03;
-        }
+        planes.a.fill(0.05);
+        planes.b.fill(0.03);
         let orig_a = planes.a.clone();
         AutoVibrance { strength: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, orig_a);
@@ -205,9 +201,7 @@ mod tests {
     #[test]
     fn boosts_muted_colors() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         // Muted warm colors (low chroma in warm sector)
         for (i, (a, b)) in planes.a.iter_mut().zip(planes.b.iter_mut()).enumerate() {
             let t = i as f32 / 99.0;

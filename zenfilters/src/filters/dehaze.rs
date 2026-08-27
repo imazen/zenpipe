@@ -218,9 +218,7 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = (i as f32 + 1.0) / (32.0 * 32.0 + 1.0);
         }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
+        planes.a.fill(0.05);
         let l_orig = planes.l.clone();
         let a_orig = planes.a.clone();
         Dehaze {
@@ -239,9 +237,7 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = 0.6 + 0.2 * (i as f32 / (64.0 * 64.0));
         }
-        for v in &mut planes.a {
-            *v = 0.02;
-        }
+        planes.a.fill(0.02);
         let l_std_before = std_dev(&planes.l);
         Dehaze {
             strength: 0.8,
@@ -258,15 +254,9 @@ mod tests {
     #[test]
     fn boosts_chroma() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.7;
-        }
-        for v in &mut planes.a {
-            *v = 0.03;
-        }
-        for v in &mut planes.b {
-            *v = -0.02;
-        }
+        planes.l.fill(0.7);
+        planes.a.fill(0.03);
+        planes.b.fill(-0.02);
         let a_orig = planes.a.clone();
         Dehaze {
             strength: 1.0,
@@ -285,9 +275,7 @@ mod tests {
     #[test]
     fn does_not_go_negative() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.1; // dark pixel in hazy scene
-        }
+        planes.l.fill(0.1); // dark pixel in hazy scene
         Dehaze {
             strength: 1.0,
             auto_strength: false,

@@ -334,12 +334,8 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = 0.3 + (i as f32) * 0.01;
         }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
-        for v in &mut planes.b {
-            *v = -0.03;
-        }
+        planes.a.fill(0.05);
+        planes.b.fill(-0.03);
         let l_orig = planes.l.clone();
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();

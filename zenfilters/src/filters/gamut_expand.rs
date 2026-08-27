@@ -771,12 +771,8 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = 0.05;
-        }
+        planes.a.fill(0.1);
+        planes.b.fill(0.05);
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();
         GamutExpand { strength: 0.0 }.apply(&mut planes, &mut FilterContext::new());
@@ -864,12 +860,8 @@ mod tests {
     #[test]
     fn does_not_modify_luminance() {
         let mut planes = OklabPlanes::new(10, 1);
-        for v in &mut planes.l {
-            *v = 0.6;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.6);
+        planes.a.fill(0.1);
         let l_orig = planes.l.clone();
         GamutExpand { strength: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, l_orig);

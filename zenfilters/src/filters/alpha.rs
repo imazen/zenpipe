@@ -101,9 +101,7 @@ mod tests {
     #[test]
     fn one_is_identity() {
         let mut planes = OklabPlanes::with_alpha(4, 4);
-        for v in planes.alpha.as_mut().unwrap() {
-            *v = 0.8;
-        }
+        planes.alpha.as_mut().unwrap().fill(0.8);
         let orig = planes.alpha.clone();
         Alpha { factor: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.alpha, orig);
@@ -112,9 +110,7 @@ mod tests {
     #[test]
     fn zero_is_transparent() {
         let mut planes = OklabPlanes::with_alpha(4, 4);
-        for v in planes.alpha.as_mut().unwrap() {
-            *v = 0.8;
-        }
+        planes.alpha.as_mut().unwrap().fill(0.8);
         Alpha { factor: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         for &v in planes.alpha.as_ref().unwrap() {
             assert!(v.abs() < 1e-6);
@@ -124,9 +120,7 @@ mod tests {
     #[test]
     fn half_alpha() {
         let mut planes = OklabPlanes::with_alpha(4, 4);
-        for v in planes.alpha.as_mut().unwrap() {
-            *v = 1.0;
-        }
+        planes.alpha.as_mut().unwrap().fill(1.0);
         Alpha { factor: 0.5 }.apply(&mut planes, &mut FilterContext::new());
         for &v in planes.alpha.as_ref().unwrap() {
             assert!((v - 0.5).abs() < 1e-5);
@@ -136,9 +130,7 @@ mod tests {
     #[test]
     fn no_alpha_is_noop() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let l_orig = planes.l.clone();
         Alpha { factor: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, l_orig);
@@ -148,18 +140,10 @@ mod tests {
     #[test]
     fn does_not_modify_lab() {
         let mut planes = OklabPlanes::with_alpha(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = -0.05;
-        }
-        for v in planes.alpha.as_mut().unwrap() {
-            *v = 1.0;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
+        planes.b.fill(-0.05);
+        planes.alpha.as_mut().unwrap().fill(1.0);
         let l_orig = planes.l.clone();
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();

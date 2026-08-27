@@ -150,9 +150,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let orig = planes.l.clone();
         Devignette::default().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, orig);
@@ -161,9 +159,7 @@ mod tests {
     #[test]
     fn brightens_edges() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let mut dv = Devignette::default();
         dv.strength = 0.5;
         dv.apply(&mut planes, &mut FilterContext::new());
@@ -179,9 +175,7 @@ mod tests {
     #[test]
     fn center_minimally_affected() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let mut dv = Devignette::default();
         dv.strength = 0.5;
         dv.apply(&mut planes, &mut FilterContext::new());
@@ -196,12 +190,8 @@ mod tests {
     #[test]
     fn scales_chroma() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let mut dv = Devignette::default();
         dv.strength = 0.5;
         dv.apply(&mut planes, &mut FilterContext::new());

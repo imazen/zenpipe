@@ -606,9 +606,7 @@ mod tests {
     fn scale_chroma_off_leaves_chroma_unchanged() {
         let mut planes = OklabPlanes::new(4, 1);
         planes.l = vec![0.2, 0.4, 0.6, 0.8];
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         let original_a = planes.a.clone();
         AutoLevels {
             scale_chroma: false,
@@ -627,9 +625,7 @@ mod tests {
     fn scale_chroma_on_scales_chroma() {
         let mut planes = OklabPlanes::new(4, 1);
         planes.l = vec![0.2, 0.4, 0.6, 0.8]; // stretched by ×1.667
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         AutoLevels {
             scale_chroma: true,
             ..Default::default()
@@ -647,16 +643,12 @@ mod tests {
     #[test]
     fn remove_cast_drives_mean_toward_zero() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
+        planes.l.fill(0.3);
         // Set a clear cast on both channels.
         for (i, v) in planes.a.iter_mut().enumerate() {
             *v = 0.2 + i as f32 * 0.001; // mean ≈ 0.25
         }
-        for v in &mut planes.b {
-            *v = -0.1; // mean = -0.1
-        }
+        planes.b.fill(-0.1); // mean = -0.1
         AutoLevels {
             remove_cast: true,
             scale_chroma: false,

@@ -559,9 +559,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let orig = planes.l.clone();
         NoiseReduction::default().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, orig);
@@ -618,9 +616,7 @@ mod tests {
     #[test]
     fn chroma_denoising() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         // Add chroma noise
         for (i, v) in planes.a.iter_mut().enumerate() {
             let noise = ((i as u32).wrapping_mul(2654435761) as f32 / u32::MAX as f32) * 0.1 - 0.05;

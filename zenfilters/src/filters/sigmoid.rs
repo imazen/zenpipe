@@ -325,12 +325,8 @@ mod tests {
     #[test]
     fn does_not_modify_chroma_when_zero() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();
         Sigmoid {

@@ -185,9 +185,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
+        planes.l.fill(0.3);
         let original = planes.l.clone();
         AutoExposure {
             strength: 0.0,
@@ -200,9 +198,7 @@ mod tests {
     #[test]
     fn brightens_dark_image() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.2; // dark
-        }
+        planes.l.fill(0.2); // dark
         AutoExposure {
             strength: 1.0,
             target: 0.5,
@@ -219,9 +215,7 @@ mod tests {
     #[test]
     fn darkens_bright_image() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.8; // bright
-        }
+        planes.l.fill(0.8); // bright
         AutoExposure {
             strength: 1.0,
             target: 0.5,
@@ -238,9 +232,7 @@ mod tests {
     #[test]
     fn respects_max_correction() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.05; // very dark
-        }
+        planes.l.fill(0.05); // very dark
         AutoExposure {
             strength: 1.0,
             target: 0.5,
@@ -259,9 +251,7 @@ mod tests {
     #[test]
     fn partial_strength_blends() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
+        planes.l.fill(0.3);
         let original = planes.l[0];
 
         let mut planes_half = planes.clone();
@@ -291,12 +281,8 @@ mod tests {
     #[test]
     fn scales_chroma_with_luminance() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.3);
+        planes.a.fill(0.1);
         AutoExposure {
             strength: 1.0,
             target: 0.5,
@@ -314,9 +300,7 @@ mod tests {
     #[test]
     fn already_correct_is_identity() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5; // already at target
-        }
+        planes.l.fill(0.5); // already at target
         let original = planes.l.clone();
         AutoExposure {
             strength: 1.0,

@@ -117,9 +117,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         let orig = planes.a.clone();
         AutoWhiteBalance { strength: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, orig);
@@ -128,9 +126,7 @@ mod tests {
     #[test]
     fn removes_warm_cast() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         // Warm cast with some chroma variance (realistic)
         for (i, v) in planes.a.iter_mut().enumerate() {
             *v = 0.03 + (i as f32 / 200.0);
@@ -150,9 +146,7 @@ mod tests {
     #[test]
     fn neutral_image_unchanged() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         // a and b near zero = neutral
         let orig_a = planes.a.clone();
         let orig_b = planes.b.clone();

@@ -92,9 +92,7 @@ mod tests {
     #[test]
     fn zero_stops_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let original = planes.l.clone();
         Exposure { stops: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, original);
@@ -103,9 +101,7 @@ mod tests {
     #[test]
     fn positive_stops_brighten() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
+        planes.l.fill(0.3);
         Exposure { stops: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         // +1 stop = 2x linear light = 2^(1/3) ≈ 1.2599 in Oklab
         let expected = 0.3 * 2.0f32.powf(1.0 / 3.0);
@@ -120,15 +116,9 @@ mod tests {
     #[test]
     fn scales_chroma_proportionally() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = -0.05;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
+        planes.b.fill(-0.05);
         Exposure { stops: 1.0 }.apply(&mut planes, &mut FilterContext::new());
 
         // All channels scale by the same factor

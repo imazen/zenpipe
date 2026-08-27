@@ -245,12 +245,8 @@ mod tests {
     #[test]
     fn always_desaturates() {
         let mut planes = OklabPlanes::new(2, 2);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = -0.05;
-        }
+        planes.a.fill(0.1);
+        planes.b.fill(-0.05);
         BwMixer::default().apply(&mut planes, &mut FilterContext::new());
         assert!(planes.a.iter().all(|&v| v == 0.0));
         assert!(planes.b.iter().all(|&v| v == 0.0));

@@ -203,9 +203,7 @@ mod tests {
     #[test]
     fn lifts_shadows() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.1; // all dark
-        }
+        planes.l.fill(0.1); // all dark
         let before = planes.l[0];
         Brilliance {
             sigma: 5.0,

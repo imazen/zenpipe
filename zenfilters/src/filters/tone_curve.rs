@@ -276,12 +276,8 @@ mod tests {
     fn does_not_modify_chroma() {
         let curve = ToneCurve::from_points(&[(0.0, 0.0), (0.5, 0.7), (1.0, 1.0)]);
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let a_orig = planes.a.clone();
         curve.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, a_orig);
@@ -347,15 +343,9 @@ mod tests {
         let curve = ToneCurve::from_lut(&gamma_lut);
 
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = -0.05;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
+        planes.b.fill(-0.05);
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();
         curve.apply(&mut planes, &mut FilterContext::new());

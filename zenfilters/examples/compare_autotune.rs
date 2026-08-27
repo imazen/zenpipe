@@ -249,7 +249,9 @@ fn main() {
         let save = |pixels: &[u8], suffix: &str| {
             let path = format!("{prefix}_{suffix}.jpg");
             let rgb_pixels: Vec<Rgb<u8>> = pixels
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|c| Rgb {
                     r: c[0],
                     g: c[1],

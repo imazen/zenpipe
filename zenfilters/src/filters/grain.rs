@@ -195,9 +195,7 @@ mod tests {
     #[test]
     fn zero_amount_is_identity() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let orig = planes.l.clone();
         Grain::default().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, orig);
@@ -206,9 +204,7 @@ mod tests {
     #[test]
     fn adds_variation() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let mut grain = Grain::default();
         grain.amount = 0.5;
         grain.apply(&mut planes, &mut FilterContext::new());
@@ -255,12 +251,8 @@ mod tests {
     #[test]
     fn does_not_modify_chroma() {
         let mut planes = OklabPlanes::new(16, 16);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let a_orig = planes.a.clone();
         let mut grain = Grain::default();
         grain.amount = 0.5;

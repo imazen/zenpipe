@@ -153,15 +153,9 @@ mod tests {
         m[24] = 1.0;
 
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
-        for v in &mut planes.b {
-            *v = -0.03;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.05);
+        planes.b.fill(-0.03);
 
         ColorMatrix { matrix: m }.apply(&mut planes, &mut FilterContext::new());
 
@@ -189,9 +183,7 @@ mod tests {
         m[14] = 0.1; // B bias
 
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let orig_l = planes.l[0];
 
         ColorMatrix { matrix: m }.apply(&mut planes, &mut FilterContext::new());

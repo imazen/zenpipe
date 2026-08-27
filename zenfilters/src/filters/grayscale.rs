@@ -41,9 +41,7 @@ mod tests {
         for (i, v) in planes.b.iter_mut().enumerate() {
             *v = (32.0 - i as f32) * 0.01;
         }
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let l_orig = planes.l.clone();
 
         Grayscale.apply(&mut planes, &mut FilterContext::new());

@@ -222,9 +222,7 @@ mod tests {
     #[test]
     fn analysis_of_flat_image() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let a = ImageAnalysis::compute(&planes);
         assert!((a.mean_l - 0.5).abs() < 0.001);
         assert!(a.std_l < 0.001);
@@ -234,15 +232,9 @@ mod tests {
     #[test]
     fn analysis_detects_color_cast() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1; // strong green-red cast
-        }
-        for v in &mut planes.b {
-            *v = -0.05; // mild blue cast
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1); // strong green-red cast
+        planes.b.fill(-0.05); // mild blue cast
         let a = ImageAnalysis::compute(&planes);
         assert!((a.mean_a - 0.1).abs() < 0.001);
         assert!((a.mean_b - (-0.05)).abs() < 0.001);

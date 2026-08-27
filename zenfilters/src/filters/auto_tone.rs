@@ -222,9 +222,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.3;
-        }
+        planes.l.fill(0.3);
         let original = planes.l.clone();
         let mut f = AutoTone::default();
         f.strength = 0.0;
@@ -253,12 +251,8 @@ mod tests {
     #[test]
     fn removes_color_cast() {
         let mut planes = OklabPlanes::new(100, 1);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.b {
-            *v = 0.08; // warm cast
-        }
+        planes.l.fill(0.5);
+        planes.b.fill(0.08); // warm cast
         let cast_before = planes.b.iter().sum::<f32>() / 100.0;
         let mut f = AutoTone::default();
         f.strength = 1.0;
@@ -275,9 +269,7 @@ mod tests {
     fn preserve_intent_reduces_correction() {
         let make = || {
             let mut planes = OklabPlanes::new(100, 1);
-            for v in &mut planes.l {
-                *v = 0.15; // moderately dark
-            }
+            planes.l.fill(0.15); // moderately dark
             planes
         };
 

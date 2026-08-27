@@ -1183,9 +1183,7 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = 0.3 + (i as f32) * 0.01;
         }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
+        planes.a.fill(0.05);
         let l_orig = planes.l.clone();
         look.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, l_orig);

@@ -27,7 +27,9 @@ fn as_f32_slice(data: &[u8]) -> Cow<'_, [f32]> {
     match bytemuck::try_cast_slice(data) {
         Ok(s) => Cow::Borrowed(s),
         Err(bytemuck::PodCastError::TargetAlignmentGreaterAndInputNotAligned) => Cow::Owned(
-            data.chunks_exact(4)
+            data.as_chunks::<4>()
+                .0
+                .iter()
                 .map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))
                 .collect(),
         ),

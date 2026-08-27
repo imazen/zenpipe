@@ -264,9 +264,7 @@ mod tests {
     #[test]
     fn screen_blend_never_exceeds_one() {
         let mut planes = OklabPlanes::new(16, 16);
-        for v in &mut planes.l {
-            *v = 0.99;
-        }
+        planes.l.fill(0.99);
 
         let mut bloom = Bloom::default();
         bloom.threshold = 0.5;

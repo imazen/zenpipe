@@ -214,9 +214,7 @@ mod tests {
     #[test]
     fn zero_shift_is_identity() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         let orig = planes.a.clone();
         ChromaticAberration::default().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, orig);
@@ -225,9 +223,7 @@ mod tests {
     #[test]
     fn does_not_modify_luminance() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let l_orig = planes.l.clone();
         let mut ca = ChromaticAberration::default();
         ca.shift_a = 0.01;
@@ -265,9 +261,7 @@ mod tests {
     fn center_minimally_affected() {
         let mut planes = OklabPlanes::new(64, 64);
         // Uniform chroma
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         let center_orig = planes.a[32 * 64 + 32];
 
         let mut ca = ChromaticAberration::default();

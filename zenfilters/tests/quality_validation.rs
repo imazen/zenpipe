@@ -418,11 +418,13 @@ fn avg_brightness(img: &RgbImage) -> f64 {
 
 /// Fraction of pixels that are clipped (any channel at 0 or 255).
 fn clipped_fraction(img: &RgbImage) -> f64 {
-    let pixels = img.as_raw().chunks_exact(3);
+    let pixels = img.as_raw().as_chunks::<3>().0.iter();
     let total = pixels.len();
     let clipped = img
         .as_raw()
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .filter(|px| px.iter().any(|&v| v == 0 || v == 255))
         .count();
     clipped as f64 / total as f64
@@ -434,7 +436,7 @@ fn clipped_fraction(img: &RgbImage) -> f64 {
 /// Returns the number of empty bins in the middle 90% of the histogram.
 fn banding_score(img: &RgbImage, channel: usize) -> u32 {
     let mut histogram = [0u32; 256];
-    for px in img.as_raw().chunks_exact(3) {
+    for px in img.as_raw().as_chunks::<3>().0.iter() {
         histogram[px[channel] as usize] += 1;
     }
 
@@ -466,8 +468,10 @@ fn mean_hue_shift(original: &RgbImage, processed: &RgbImage) -> f64 {
 
     for (orig_px, proc_px) in original
         .as_raw()
-        .chunks_exact(3)
-        .zip(processed.as_raw().chunks_exact(3))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(processed.as_raw().as_chunks::<3>().0.iter())
     {
         // Skip clipped pixels — hue is meaningless at extremes
         if orig_px.iter().any(|&v| v <= 1 || v >= 254)
@@ -945,10 +949,34 @@ fn temperature_properties() {
         let cool = apply_zenfilter(&img, Box::new(temp2));
 
         // Warm image should have more red channel energy than cool
-        let warm_r: u64 = warm.as_raw().chunks_exact(3).map(|px| px[0] as u64).sum();
-        let cool_r: u64 = cool.as_raw().chunks_exact(3).map(|px| px[0] as u64).sum();
-        let warm_b: u64 = warm.as_raw().chunks_exact(3).map(|px| px[2] as u64).sum();
-        let cool_b: u64 = cool.as_raw().chunks_exact(3).map(|px| px[2] as u64).sum();
+        let warm_r: u64 = warm
+            .as_raw()
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|px| px[0] as u64)
+            .sum();
+        let cool_r: u64 = cool
+            .as_raw()
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|px| px[0] as u64)
+            .sum();
+        let warm_b: u64 = warm
+            .as_raw()
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|px| px[2] as u64)
+            .sum();
+        let cool_b: u64 = cool
+            .as_raw()
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|px| px[2] as u64)
+            .sum();
 
         eprintln!(
             "  temperature on {img_name}: warm R/B={}/{} cool R/B={}/{}",
@@ -1028,12 +1056,16 @@ fn dehaze_properties() {
         // Dehaze should increase contrast (standard deviation of brightness)
         let orig_vals: Vec<f64> = img
             .as_raw()
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|px| (px[0] as f64 + px[1] as f64 + px[2] as f64) / 3.0)
             .collect();
         let result_vals: Vec<f64> = result
             .as_raw()
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|px| (px[0] as f64 + px[1] as f64 + px[2] as f64) / 3.0)
             .collect();
 

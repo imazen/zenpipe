@@ -365,9 +365,7 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = if i % 2 == 0 { 0.4 } else { 0.6 };
         }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
+        planes.a.fill(0.05);
         let a_orig = planes.a.clone();
         let b_orig = planes.b.clone();
         AdaptiveSharpen {

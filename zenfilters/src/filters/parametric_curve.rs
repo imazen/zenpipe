@@ -216,12 +216,8 @@ mod tests {
     fn does_not_modify_chroma() {
         let curve = ParametricCurve::new(0.5, 0.5, 0.5, 0.5, 0.25, 0.50, 0.75);
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let a_orig = planes.a.clone();
         curve.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, a_orig);

@@ -290,9 +290,7 @@ mod tests {
     #[test]
     fn shadow_lift_brightens_darks() {
         let mut planes = OklabPlanes::new(16, 16);
-        for v in &mut planes.l {
-            *v = 0.1; // dark pixel (near zone 1)
-        }
+        planes.l.fill(0.1); // dark pixel (near zone 1)
         let original_l = planes.l[0];
 
         let mut te = ToneEqualizer::default();
@@ -312,9 +310,7 @@ mod tests {
     #[test]
     fn highlight_compression_darkens_brights() {
         let mut planes = OklabPlanes::new(16, 16);
-        for v in &mut planes.l {
-            *v = 0.9; // bright pixel
-        }
+        planes.l.fill(0.9); // bright pixel
         let original_l = planes.l[0];
 
         let mut te = ToneEqualizer::default();

@@ -221,12 +221,8 @@ mod tests {
     #[test]
     fn does_not_modify_chroma() {
         let mut planes = OklabPlanes::new(10, 1);
-        for v in &mut planes.l {
-            *v = 0.9;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.9);
+        planes.a.fill(0.1);
         let a_orig = planes.a.clone();
         HighlightRecovery { strength: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, a_orig);

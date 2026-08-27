@@ -210,9 +210,7 @@ mod tests {
     #[test]
     fn zero_strength_is_identity() {
         let mut planes = OklabPlanes::new(32, 32);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let orig = planes.l.clone();
         Vignette::default().apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, orig);
@@ -221,9 +219,7 @@ mod tests {
     #[test]
     fn positive_darkens_edges() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let mut vig = Vignette::default();
         vig.strength = 0.5;
         vig.apply(&mut planes, &mut FilterContext::new());
@@ -239,9 +235,7 @@ mod tests {
     #[test]
     fn negative_brightens_edges() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let mut vig = Vignette::default();
         vig.strength = -0.5;
         vig.apply(&mut planes, &mut FilterContext::new());
@@ -257,9 +251,7 @@ mod tests {
     #[test]
     fn center_pixel_least_affected() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.6;
-        }
+        planes.l.fill(0.6);
         let mut vig = Vignette::default();
         vig.strength = 0.8;
         vig.apply(&mut planes, &mut FilterContext::new());
@@ -275,12 +267,8 @@ mod tests {
     #[test]
     fn scales_chroma_with_luminance() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.l.fill(0.5);
+        planes.a.fill(0.1);
         let mut vig = Vignette::default();
         vig.strength = 0.5;
         vig.apply(&mut planes, &mut FilterContext::new());

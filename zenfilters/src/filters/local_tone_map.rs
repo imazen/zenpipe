@@ -329,9 +329,7 @@ mod tests {
         for (i, v) in planes.l.iter_mut().enumerate() {
             *v = i as f32 / (32.0 * 32.0);
         }
-        for v in &mut planes.a {
-            *v = 0.05;
-        }
+        planes.a.fill(0.05);
         let a_orig = planes.a.clone();
         LocalToneMap {
             compression: 0.5,

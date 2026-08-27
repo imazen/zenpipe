@@ -510,7 +510,9 @@ fn phase_extract_features(pairs: &[(PathBuf, PathBuf)]) -> Vec<[f32; N_FEAT]> {
         let n = flat.len() / N_FEAT;
         assert_eq!(n, pairs.len(), "cache size mismatch — delete features.bin");
         return flat
-            .chunks_exact(N_FEAT)
+            .as_chunks::<N_FEAT>()
+            .0
+            .iter()
             .map(|c| {
                 let mut arr = [0.0f32; N_FEAT];
                 arr.copy_from_slice(c);
@@ -612,7 +614,9 @@ fn phase_cluster(features: &[[f32; N_FEAT]]) -> (Vec<[f32; N_FEAT]>, Vec<u32>) {
         let flat_centroids = load_f32s(&PathBuf::from(OUTPUT_DIR).join("centroids.bin"));
         let assignments = load_u32s(&cache);
         let centroids: Vec<[f32; N_FEAT]> = flat_centroids
-            .chunks_exact(N_FEAT)
+            .as_chunks::<N_FEAT>()
+            .0
+            .iter()
             .map(|c| {
                 let mut arr = [0.0f32; N_FEAT];
                 arr.copy_from_slice(c);
@@ -644,7 +648,9 @@ fn phase_optimize(
         println!("Loading cached cluster params from {}", cache.display());
         let flat = load_f32s(&cache);
         return flat
-            .chunks_exact(N_PARAMS)
+            .as_chunks::<N_PARAMS>()
+            .0
+            .iter()
             .map(|c| {
                 let mut arr = [0.0f32; N_PARAMS];
                 arr.copy_from_slice(c);

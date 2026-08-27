@@ -110,9 +110,7 @@ mod tests {
     #[test]
     fn one_is_identity() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
+        planes.a.fill(0.1);
         let original = planes.a.clone();
         Saturation { factor: 1.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.a, original);
@@ -121,12 +119,8 @@ mod tests {
     #[test]
     fn zero_is_grayscale() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.a {
-            *v = 0.1;
-        }
-        for v in &mut planes.b {
-            *v = -0.05;
-        }
+        planes.a.fill(0.1);
+        planes.b.fill(-0.05);
         Saturation { factor: 0.0 }.apply(&mut planes, &mut FilterContext::new());
         for &v in &planes.a {
             assert!(v.abs() < 1e-6);
@@ -139,9 +133,7 @@ mod tests {
     #[test]
     fn does_not_modify_l() {
         let mut planes = OklabPlanes::new(4, 4);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let original = planes.l.clone();
         Saturation { factor: 2.0 }.apply(&mut planes, &mut FilterContext::new());
         assert_eq!(planes.l, original);
