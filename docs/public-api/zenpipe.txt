@@ -6,21 +6,21 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1257 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1320 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 22 lines (22 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       185
+#   pub types (struct/enum/trait/alias)       195
 #   pub consts/statics                         43
 #   free functions                             56
-#   inherent methods                          281
-#   struct fields                             449
-#   enum variants                              58
+#   inherent methods                          312
+#   struct fields                             459
+#   enum variants                              61
 #   re-exports                                 21
-#   trait roster entries (type × trait)       325
-#   auto-trait-complete types                 111
-#   auto-trait exceptions                      37
+#   trait roster entries (type × trait)       346
+#   auto-trait-complete types                 118
+#   auto-trait exceptions                      38
 #
 # per-module pub lines:
 #   (root)                          198
@@ -40,12 +40,12 @@
 #   sidecar                          25
 #   sources                          71
 #   srcset                            2
-#   tiles                            38
+#   tiles                            92
 #   trace                           151
 #   watermark                        35
 #   zennode_defs                    203
 
-## items (1086 lines)
+## items (1140 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -509,24 +509,62 @@ pub mod srcset
 pub fn srcset::expand_srcset(&str) -> alloc::string::String
 pub fn srcset::parse_srcset(&str) -> alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub mod tiles
-pub struct tiles::DziFsWriter
-pub fn tiles::DziFsWriter::descriptor_path(&self) -> std::path::PathBuf
-pub fn tiles::DziFsWriter::new(impl core::convert::Into<std::path::PathBuf>, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, impl core::ops::function::FnMut(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + 'static) -> Self
-pub fn tiles::DziFsWriter::tiles_written(&self) -> u64
+#[non_exhaustive] pub enum tiles::PyramidGeometry
+pub tiles::PyramidGeometry::PaddedSquare
+pub tiles::PyramidGeometry::PaddedSquare::background: [u8; 4]
+pub tiles::PyramidGeometry::ToOnePixel
+pub tiles::PyramidGeometry::ToOneTile
+pub struct tiles::DziLayout
+pub tiles::DziLayout::ext: alloc::string::String
+pub tiles::DziLayout::name: alloc::string::String
+pub fn tiles::DziLayout::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub struct tiles::FsStore
+pub fn tiles::FsStore::new(impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn tiles::FsStore::root(&self) -> &std::path::Path
+pub struct tiles::GoogleMapsLayout
+pub tiles::GoogleMapsLayout::ext: alloc::string::String
+pub fn tiles::GoogleMapsLayout::new(impl core::convert::Into<alloc::string::String>) -> Self
+pub struct tiles::Iiif3Layout
+pub tiles::Iiif3Layout::ext: alloc::string::String
+pub tiles::Iiif3Layout::id: alloc::string::String
+pub tiles::Iiif3Layout::service_id: core::option::Option<alloc::string::String>
+pub fn tiles::Iiif3Layout::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn tiles::Iiif3Layout::with_service_id(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub struct tiles::LevelInfo
 pub tiles::LevelInfo::height: u32
 pub tiles::LevelInfo::level: u32
 pub tiles::LevelInfo::width: u32
+pub fn tiles::LevelInfo::tile_grid(&self, u32) -> (u32, u32)
+pub struct tiles::MemoryStore
+pub tiles::MemoryStore::files: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<u8>>
 pub struct tiles::MemoryTileWriter
 pub tiles::MemoryTileWriter::levels: alloc::vec::Vec<tiles::LevelInfo>
 pub tiles::MemoryTileWriter::tiles: alloc::collections::btree::map::BTreeMap<tiles::TileKey, tiles::StoredTile>
 pub fn tiles::MemoryTileWriter::finished(&self) -> bool
+pub struct tiles::PyramidWriter<L: tiles::TileLayout, S: tiles::TileStore>
+pub fn tiles::PyramidWriter<L, S>::into_store(self) -> S
+pub fn tiles::PyramidWriter<L, S>::layout(&self) -> &L
+pub fn tiles::PyramidWriter<L, S>::new(L, S, impl core::ops::function::Fn(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + core::marker::Sync + 'static) -> Self
+pub fn tiles::PyramidWriter<L, S>::store(&self) -> &S
+pub fn tiles::PyramidWriter<L, S>::tiles_skipped(&self) -> u64
+pub fn tiles::PyramidWriter<L, S>::tiles_written(&self) -> u64
+pub fn tiles::PyramidWriter<L, S>::with_skip_blanks(self, [u8; 4], u8) -> Self
+pub fn tiles::PyramidWriter<L, S>::with_threads(self, usize) -> Self
+pub fn tiles::PyramidWriter<L, S>::set_image_size(&mut self, u32, u32)
 pub struct tiles::TilePyramidConfig
+pub tiles::TilePyramidConfig::geometry: tiles::PyramidGeometry
 pub tiles::TilePyramidConfig::overlap: u32
 pub tiles::TilePyramidConfig::tile_size: u32
+pub fn tiles::TilePyramidConfig::dzi() -> Self
+pub fn tiles::TilePyramidConfig::google_maps([u8; 4]) -> Self
+pub fn tiles::TilePyramidConfig::iiif() -> Self
 pub fn tiles::TilePyramidConfig::new(u32, u32) -> Self
+pub fn tiles::TilePyramidConfig::with_geometry(self, tiles::PyramidGeometry) -> Self
+pub fn tiles::TilePyramidConfig::zoomify() -> Self
 pub struct tiles::TilePyramidSink<W: tiles::TileWriter>
+pub fn tiles::TilePyramidSink<tiles::PyramidWriter<L, S>>::with_pyramid_writer(u32, u32, format::PixelFormat, tiles::TilePyramidConfig, tiles::PyramidWriter<L, S>) -> PipeResult<Self>
 pub fn tiles::TilePyramidSink<W>::buffer_bytes_estimate(&self) -> u64
+pub fn tiles::TilePyramidSink<W>::canvas_size(&self) -> (u32, u32)
 pub fn tiles::TilePyramidSink<W>::into_writer(self) -> W
 pub fn tiles::TilePyramidSink<W>::level_count(&self) -> u32
 pub fn tiles::TilePyramidSink<W>::level_infos(&self) -> alloc::vec::Vec<tiles::LevelInfo>
@@ -540,12 +578,28 @@ pub tiles::TileRef::height: u32
 pub tiles::TileRef::level: u32
 pub tiles::TileRef::row: u32
 pub tiles::TileRef::width: u32
+pub fn tiles::TileRef<'_>::is_blank(&self, &[u8], u8) -> bool
+pub struct tiles::ZipStore<W: core::io::write::Write + core::marker::Send>
+pub fn tiles::ZipStore<W>::entry_count(&self) -> usize
+pub fn tiles::ZipStore<W>::into_inner(self) -> PipeResult<W>
+pub fn tiles::ZipStore<W>::new(W) -> Self
+pub struct tiles::ZoomifyLayout
+pub tiles::ZoomifyLayout::ext: alloc::string::String
+pub fn tiles::ZoomifyLayout::new(impl core::convert::Into<alloc::string::String>) -> Self
+pub trait tiles::TileLayout: core::marker::Send
+pub fn tiles::TileLayout::descriptors(&self, &[tiles::LevelInfo], tiles::TilePyramidConfig, (u32, u32), u64) -> alloc::vec::Vec<(alloc::string::String, alloc::vec::Vec<u8>)>
+pub fn tiles::TileLayout::tile_path(&self, tiles::TileKey, (u32, u32), &[tiles::LevelInfo], tiles::TilePyramidConfig, (u32, u32)) -> alloc::string::String
+pub fn tiles::TileLayout::validate(&self, &[tiles::LevelInfo], tiles::TilePyramidConfig) -> PipeResult<()>
+pub trait tiles::TileStore: core::marker::Send
+pub fn tiles::TileStore::finish(&mut self) -> PipeResult<()>
+pub fn tiles::TileStore::put(&mut self, &str, &[u8]) -> PipeResult<()>
 pub trait tiles::TileWriter: core::marker::Send
 pub fn tiles::TileWriter::begin(&mut self, &[tiles::LevelInfo], tiles::TilePyramidConfig, format::PixelFormat) -> PipeResult<()>
 pub fn tiles::TileWriter::finish(&mut self) -> PipeResult<()>
 pub fn tiles::TileWriter::write_tile(&mut self, tiles::TileRef<'_>) -> PipeResult<()>
+pub fn tiles::TileWriter::write_tile_row(&mut self, &[tiles::TileRef<'_>]) -> PipeResult<()>
 pub type tiles::StoredTile = (u32, u32, alloc::vec::Vec<u8>)
-pub type tiles::TileEncoder = alloc::boxed::Box<(dyn core::ops::function::FnMut(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send)>
+pub type tiles::TileEncoder = alloc::sync::Arc<(dyn core::ops::function::Fn(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + core::marker::Sync)>
 pub type tiles::TileKey = (u32, u32, u32)
 pub mod trace
 pub enum trace::ExecutionPhase
@@ -1134,7 +1188,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (133 types)
+## trait impls (141 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1180,12 +1234,20 @@ sources::TeeCursor: Source
 sources::TracingSource: Drop, Source
 sources::TransformSource: Source
 sources::WindowedFilterSource: Source
-tiles::DziFsWriter: tiles::TileWriter
+tiles::DziLayout: Clone, Debug, tiles::TileLayout
+tiles::FsStore: tiles::TileStore
+tiles::GoogleMapsLayout: Clone, Debug, tiles::TileLayout
+tiles::Iiif3Layout: Clone, Debug, tiles::TileLayout
 tiles::LevelInfo: Clone, Copy, Debug, Eq, PartialEq
+tiles::MemoryStore: Default, tiles::TileStore
 tiles::MemoryTileWriter: Default, tiles::TileWriter
+tiles::PyramidGeometry: Clone, Copy, Debug, Eq, PartialEq
+tiles::PyramidWriter<L, S>: tiles::TileWriter
 tiles::TilePyramidConfig: Clone, Copy, Debug, Default, Eq, PartialEq
 tiles::TilePyramidSink<W>: Sink
 tiles::TileRef<'a>: Clone, Copy, Debug
+tiles::ZipStore<W>: tiles::TileStore
+tiles::ZoomifyLayout: Clone, Debug, tiles::TileLayout
 trace::BridgeNodeInfo: Clone, Debug
 trace::BridgeStepTrace: Clone, Debug
 trace::BridgeTrace: Clone, Debug, Default
@@ -1272,7 +1334,7 @@ zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-111 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+118 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe
@@ -1308,5 +1370,6 @@ sources::ResizeSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::TracingSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::TransformSource: !RefUnwindSafe !Sync !UnwindSafe
 sources::WindowedFilterSource: !RefUnwindSafe !Sync !UnwindSafe
-tiles::DziFsWriter: !RefUnwindSafe !Sync !UnwindSafe
+tiles::PyramidWriter<L, S>: !Freeze !RefUnwindSafe !Sync !Unpin !UnwindSafe
 tiles::TilePyramidSink<W>: !Freeze !RefUnwindSafe !Sync !Unpin !UnwindSafe
+tiles::ZipStore<W>: !Freeze !RefUnwindSafe !Sync !Unpin !UnwindSafe

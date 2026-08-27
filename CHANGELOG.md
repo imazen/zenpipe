@@ -346,9 +346,38 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   a caller-supplied per-tile encoder. `buffer_bytes_estimate()` is the
   formula, not a measurement. Verified against a full-image reference
   shrink chain (6 geometries incl. odd sizes, 3-row strips, overlap 0/1/2)
-  and a filesystem layout test. Not yet: IIIF / Google Maps / Zoomify
-  layouts, parallel tile encoding, blank-tile skipping, zip output,
-  tiled-TIFF input, heaptrack-measured memory.
+  and a filesystem layout test.
+
+- **Tile pyramid, second chunk — layouts, stores, parallel encode** (#24):
+  `tiles::PyramidWriter<L, S>` replaces `DziFsWriter` (added a day
+  earlier, unreleased): a `TileLayout` names tiles and writes the
+  descriptor — `DziLayout` (`.dzi` + `_files/{level}/{col}_{row}`),
+  `Iiif3Layout` (`{id}/{x},{y},{w},{h}/{tw},{th}/0/default.{ext}` +
+  `info.json`, full-resolution regions like libvips `--layout iiif3`),
+  `GoogleMapsLayout` (`{z}/{y}/{x}`, image padded top-left into a
+  `256·2^k` square so every tile is complete) and `ZoomifyLayout`
+  (`TileGroup{n}/{level}-{col}-{row}` + `ImageProperties.xml`, tiles
+  numbered sequentially from the apex, 256 per group) — and a
+  `TileStore` persists them: `FsStore`, `MemoryStore`, and `ZipStore`
+  (stored entries, streaming to any `Write`, ZIP64 records past 65 535
+  entries / 4 GiB; entries over 4 GiB rejected). `TilePyramidConfig` gained
+  a `PyramidGeometry` (`ToOnePixel` / `ToOneTile` / `PaddedSquare`) with
+  `dzi()` / `iiif()` / `zoomify()` / `google_maps(bg)` presets; each
+  layout rejects a mismatched geometry in `begin`. The sink now hands the
+  writer whole tile rows (`TileWriter::write_tile_row`, one row-of-tiles
+  scratch, still bounded by width); `PyramidWriter::with_threads(n)`
+  encodes a row on `n` scoped threads with store writes kept in raster
+  order, `with_skip_blanks(bg, threshold)` drops near-background tiles
+  (`TileRef::is_blank`). Tests: every geometry against the full-image
+  reference chain (incl. padded canvases), filesystem layout tests per
+  format, zip == memory store byte-for-byte with an independent CRC, a
+  70 000-entry ZIP64 archive read back, threads=3 == threads=1, and an
+  encode error surfacing from a worker thread; mutation-verified
+  (col-major Zoomify numbering, reversed parallel results, and dropped
+  ZIP64 records each fail their test). Still not done: tiled-TIFF / mmap
+  input (`MmapTiledSource`, needs zentiff tiled access), temp-file
+  materialization for analysis barriers, column-parallel execution,
+  PMTiles, and heaptrack-measured memory numbers.
 
 - **Auto-deskew, first chunk** (#27): `EffectSource` now resolves
   content-adaptive effects (`DimensionEffect::forward() == None`) against
