@@ -68,3 +68,6 @@ demo/crate/target-threaded/
 
 # Agent coordination marker (never committed)
 .workongoing
+
+# jj (colocated) metadata
+.jj/
