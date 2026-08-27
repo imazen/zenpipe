@@ -16,7 +16,12 @@ pub(super) fn scale_plane_impl_neon(token: NeonToken, plane: &mut [f32], factor:
 }
 
 #[arcane]
-pub(super) fn scale_offset_plane_impl_neon(token: NeonToken, plane: &mut [f32], factor: f32, offset: f32) {
+pub(super) fn scale_offset_plane_impl_neon(
+    token: NeonToken,
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+) {
     super::wide_simd::scale_offset_plane_simd_neon(token, plane, factor, offset);
 }
 

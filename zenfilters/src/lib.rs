@@ -173,7 +173,13 @@ pub mod __bench_kernels {
         masking_threshold: f32,
     ) {
         crate::simd::adaptive_sharpen_apply(
-            l, detail, energy, dst, amount, noise_floor, masking_threshold,
+            l,
+            detail,
+            energy,
+            dst,
+            amount,
+            noise_floor,
+            masking_threshold,
         )
     }
     pub fn scatter_srgb_u8_to_oklab(

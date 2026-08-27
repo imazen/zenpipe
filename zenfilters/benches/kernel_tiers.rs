@@ -168,28 +168,35 @@ fn bench_kernels(suite: &mut Suite) {
 
     // The fused colour-space entry/exit points: u8 <-> planar Oklab.
     let m1 = GamutMatrix::default();
-    two_arms!(suite, "scatter_srgb_u8_to_oklab", move |b: &mut Bencher, simd| {
-        let src = planeu(N * 3, 61);
-        let (mut l, mut a, mut c) = (vec![0f32; N], vec![0f32; N], vec![0f32; N]);
-        let m = m1;
-        b.iter(move || {
-            set_simd(simd);
-            k::scatter_srgb_u8_to_oklab(&src, &mut l, &mut a, &mut c, 3, &m)
-        })
-    });
-    two_arms!(suite, "gather_oklab_to_srgb_u8", move |b: &mut Bencher, simd| {
-        let (l, a, c) = (planef(N, 67), planef(N, 71), planef(N, 73));
-        let mut dst = vec![0u8; N * 3];
-        let m = m1;
-        b.iter(move || {
-            set_simd(simd);
-            k::gather_oklab_to_srgb_u8(&l, &a, &c, &mut dst, 3, &m)
-        })
-    });
+    two_arms!(
+        suite,
+        "scatter_srgb_u8_to_oklab",
+        move |b: &mut Bencher, simd| {
+            let src = planeu(N * 3, 61);
+            let (mut l, mut a, mut c) = (vec![0f32; N], vec![0f32; N], vec![0f32; N]);
+            let m = m1;
+            b.iter(move || {
+                set_simd(simd);
+                k::scatter_srgb_u8_to_oklab(&src, &mut l, &mut a, &mut c, 3, &m)
+            })
+        }
+    );
+    two_arms!(
+        suite,
+        "gather_oklab_to_srgb_u8",
+        move |b: &mut Bencher, simd| {
+            let (l, a, c) = (planef(N, 67), planef(N, 71), planef(N, 73));
+            let mut dst = vec![0u8; N * 3];
+            let m = m1;
+            b.iter(move || {
+                set_simd(simd);
+                k::gather_oklab_to_srgb_u8(&l, &a, &c, &mut dst, 3, &m)
+            })
+        }
+    );
 
     set_simd(true);
 }
-
 
 /// The scale+offset fusion, against the two-call sequence it replaces.
 /// Three filters ran `scale_plane` then `offset_plane` on the SAME plane —
@@ -199,14 +206,18 @@ fn bench_scale_offset_fusion(suite: &mut Suite) {
     suite.compare("scale+offset+clamp plane", |g| {
         g.throughput(Throughput::Bytes((N * 4) as u64));
         g.bench("fused", |b| {
-            b.with_input(|| planef(N, 93))
-                .run(move |mut p| { k::scale_offset_clamp_plane(&mut p, 1.3, -0.15, 0.0, 1.0); p })
+            b.with_input(|| planef(N, 93)).run(move |mut p| {
+                k::scale_offset_clamp_plane(&mut p, 1.3, -0.15, 0.0, 1.0);
+                p
+            })
         });
         g.bench("sequence", |b| {
             b.with_input(|| planef(N, 93)).run(move |mut p| {
                 k::scale_plane(&mut p, 1.3);
                 k::offset_plane(&mut p, -0.15);
-                for v in p.iter_mut() { *v = v.clamp(0.0, 1.0); }
+                for v in p.iter_mut() {
+                    *v = v.clamp(0.0, 1.0);
+                }
                 p
             })
         });
@@ -214,12 +225,17 @@ fn bench_scale_offset_fusion(suite: &mut Suite) {
     suite.compare("scale+offset plane", |g| {
         g.throughput(Throughput::Bytes((N * 4) as u64));
         g.bench("fused", |b| {
-            b.with_input(|| planef(N, 91))
-                .run(move |mut p| { k::scale_offset_plane(&mut p, 1.3, -0.15); p })
+            b.with_input(|| planef(N, 91)).run(move |mut p| {
+                k::scale_offset_plane(&mut p, 1.3, -0.15);
+                p
+            })
         });
         g.bench("sequence", |b| {
-            b.with_input(|| planef(N, 91))
-                .run(move |mut p| { k::scale_plane(&mut p, 1.3); k::offset_plane(&mut p, -0.15); p })
+            b.with_input(|| planef(N, 91)).run(move |mut p| {
+                k::scale_plane(&mut p, 1.3);
+                k::offset_plane(&mut p, -0.15);
+                p
+            })
         });
     });
 }

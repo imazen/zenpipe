@@ -42,7 +42,11 @@ pub(super) fn scale_offset_clamp_plane_impl_v3(
     for chunk in chunks {
         let v = f32x8::load(token, chunk);
         let t = (v * factor_v) + offset_v;
-        let clamped = f32x8::blend(t.simd_lt(lo_v), lo_v, f32x8::blend(t.simd_gt(hi_v), hi_v, t));
+        let clamped = f32x8::blend(
+            t.simd_lt(lo_v),
+            lo_v,
+            f32x8::blend(t.simd_gt(hi_v), hi_v, t),
+        );
         clamped.store(chunk);
     }
     for v in tail {

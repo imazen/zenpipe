@@ -46,7 +46,13 @@ pub(crate) fn scale_offset_plane(plane: &mut [f32], factor: f32, offset: f32) {
 /// levels.rs ran `scale_offset_plane` and then a separate scalar clamp loop —
 /// two passes over the plane. The clamp is NaN-preserving to match
 /// `f32::clamp` bit-for-bit; see the kernel.
-pub(crate) fn scale_offset_clamp_plane(plane: &mut [f32], factor: f32, offset: f32, lo: f32, hi: f32) {
+pub(crate) fn scale_offset_clamp_plane(
+    plane: &mut [f32],
+    factor: f32,
+    offset: f32,
+    lo: f32,
+    hi: f32,
+) {
     archmage::incant!(
         scale_offset_clamp_plane_impl(plane, factor, offset, lo, hi),
         [v3, neon, wasm128, scalar]
@@ -410,7 +416,10 @@ mod scale_offset_fusion_gate {
 
                 let a: Vec<u32> = fused.iter().map(|v| v.to_bits()).collect();
                 let b: Vec<u32> = seq.iter().map(|v| v.to_bits()).collect();
-                assert_eq!(a, b, "clamp fusion diverges at n={n} f={f} o={o} lo={lo} hi={hi}");
+                assert_eq!(
+                    a, b,
+                    "clamp fusion diverges at n={n} f={f} o={o} lo={lo} hi={hi}"
+                );
             }
         }
     }
@@ -434,11 +443,11 @@ mod scale_offset_fusion_gate {
                 .collect();
             for &(f, o) in &[
                 (1.0f32, 0.0f32),
-                (-1.0, 1.0),          // invert.rs
-                (0.5, 0.25),          // levels.rs shape
-                (1.3, -0.15),         // fused_adjust.rs shape
+                (-1.0, 1.0),  // invert.rs
+                (0.5, 0.25),  // levels.rs shape
+                (1.3, -0.15), // fused_adjust.rs shape
                 (1e-20, 1e20),
-                (3.0, 0.1),           // f and o chosen so v*f+o is inexact
+                (3.0, 0.1), // f and o chosen so v*f+o is inexact
             ] {
                 let mut fused = base.clone();
                 super::scale_offset_plane(&mut fused, f, o);
