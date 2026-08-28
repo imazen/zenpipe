@@ -147,8 +147,8 @@ zencodecs/
 - `ImageInfo::metadata()` returns `ImageMetadata` borrowing from the info (for roundtrip convenience)
 - `ImageMetadata<'a>` with `icc_profile`, `exif`, `xmp` fields (all `Option<&'a [u8]>`)
 - Passed to `EncodeRequest::with_metadata(meta)`; the **retention policy** is set separately via `EncodeRequest::with_metadata_policy(MetadataPolicy)` (default `PreserveExact`) and applied at the codec boundary with `EncodeJob::with_metadata_policy` (zencodec 0.1.21). See the dated section below.
-- **Decode extraction**: JPEG (ICC/EXIF/XMP via zenjpeg extras), WebP (ICC/EXIF/XMP via demuxer), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC from codestream, EXIF/XMP from container Exif/xml boxes), AVIF (ICC/XMP; orientation from irot/imir, raw EXIF blob dropped — zenpipe#36 gap 4), GIF (none)
-- **Encode embedding**: JPEG (ICC/EXIF/XMP), WebP (ICC/EXIF/XMP via mux), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC/EXIF/XMP via container boxes), AVIF (ICC/XMP; orientation via irot/imir), GIF (none)
+- **Decode extraction**: JPEG (ICC/EXIF/XMP via zenjpeg extras), WebP (ICC/EXIF/XMP via demuxer), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC from codestream, EXIF/XMP from container Exif/xml boxes), AVIF (ICC/EXIF/XMP — the raw EXIF blob round-trips since the zenavif git-main 0.1.7 re-pin, zenpipe#36 gap 4 closed; orientation from irot/imir; CICP primaries/transfer/range from the nclx `colr` box, `matrix_coefficients` reported as coded = BT.601, see `tests/metadata_conformance.rs` `cicp_color`), GIF (none)
+- **Encode embedding**: JPEG (ICC/EXIF/XMP), WebP (ICC/EXIF/XMP via mux), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC/EXIF/XMP via container boxes), AVIF (ICC/EXIF/XMP; orientation via irot/imir; `Metadata::cicp` → nclx `colr` through `zencodec::resolve_color_emit`), GIF (none)
 - **Orientation field**: `Metadata::orientation` is folded into the EXIF blob for JPEG/PNG/WebP at the `EncodeRequest` boundary (`dispatch::fold_orientation_into_exif`, zenpipe#36 gap 1); AVIF uses irot/imir; JXL's codestream orientation is not written (gap).
 
 ### zencodec 0.1.21 adoption + lossless JPEG↔JXL transcode (2026-06-08)

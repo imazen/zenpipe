@@ -15,7 +15,12 @@
 //!   - EXIF orientation tag → normalized `info.orientation`
 //!   - `Metadata::with_orientation` → emitted → normalized `info.orientation`
 //!   - XMP packet (marker preserved via `metadata().xmp`)
-//!   - CICP color signaling (`source_color.cicp` round-trip)
+//!   - CICP color signaling (`source_color.cicp` round-trip), in two
+//!     strengths: `cicp_color` (primaries + transfer + range — what the
+//!     pixels' color space needs) and `cicp` (the full code-point triple
+//!     incl. `matrix_coefficients`, which a YCbCr codec owns: AVIF signals
+//!     the matrix it coded with, BT.601 = 6, not the RGB identity a caller
+//!     wrote — see `G_CICP_MATRIX_CODEC_OWNED`)
 //!   - Clean baseline: no EXIF/XMP in → none out
 //!   - Robustness: a fully-populated `Metadata` never breaks encode/decode,
 //!     even for metadata-less containers (GIF).
@@ -206,7 +211,11 @@ struct Support {
     /// `Metadata::with_orientation` is emitted and resolves on decode.
     orient_from_field: V,
     xmp: V,
+    /// Full `Cicp` equality (primaries, transfer, matrix, range).
     cicp: V,
+    /// Primaries + transfer + range survive (matrix excluded — see
+    /// `G_CICP_MATRIX_CODEC_OWNED`).
+    cicp_color: V,
 }
 
 // Recurring gap descriptions (each maps to a line item in GAP_TRACKING).
@@ -217,8 +226,12 @@ const G_ORIENT_FIELD: &str = "Metadata::orientation not emitted to the format's 
 #[cfg_attr(not(feature = "jxl-encode"), allow(dead_code))]
 const G_ORIENT_EXIF_NORM: &str = "carries the EXIF blob but does not normalize its orientation tag into info.orientation \
      (JPEG/WebP/AVIF do)";
-const G_CICP_NATIVE: &str =
-    "format has a native color-signaling box but Metadata::cicp is not wired through encode/decode";
+#[cfg_attr(not(feature = "avif-encode"), allow(dead_code))]
+const G_CICP_MATRIX_CODEC_OWNED: &str = "Metadata::cicp primaries/transfer/range DO round-trip through the nclx colr box \
+     (see cicp_color), but matrix_coefficients comes back as the matrix the codec coded with \
+     (YCbCr BT.601 = 6), not the RGB identity (0) the caller wrote: the matrix is a coding \
+     decision (zenavif color_model), not pass-through metadata. Exact equality would need the \
+     encoder to code identity RGB, which trades compression for a code point — by design not done";
 
 /// The set of codecs compiled into this build, each cfg-gated on the feature
 /// that also enables its encoder. Verdicts below are the *observed* behavior
@@ -242,6 +255,7 @@ fn codecs() -> Vec<Support> {
         orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::NotCarried, // JFIF/EXIF JPEG has no standard CICP carrier; color via ICC
+        cicp_color: V::NotCarried,
     });
 
     #[cfg(feature = "png")]
@@ -258,6 +272,7 @@ fn codecs() -> Vec<Support> {
         orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::Ok, // cICP chunk
+        cicp_color: V::Ok,
     });
 
     #[cfg(feature = "webp")]
@@ -272,6 +287,7 @@ fn codecs() -> Vec<Support> {
         orient_from_field: V::Ok,
         xmp: V::Ok,
         cicp: V::NotCarried, // VP8X has no CICP; color via ICC
+        cicp_color: V::NotCarried,
     });
 
     #[cfg(feature = "gif")]
@@ -285,6 +301,7 @@ fn codecs() -> Vec<Support> {
         orient_from_field: V::NotCarried,
         xmp: V::NotCarried,
         cicp: V::NotCarried,
+        cicp_color: V::NotCarried,
     });
 
     #[cfg(feature = "avif-encode")]
@@ -301,7 +318,12 @@ fn codecs() -> Vec<Support> {
         orient_from_exif: V::Ok,
         orient_from_field: V::Ok, // irot/imir
         xmp: V::Ok,
-        cicp: V::Gap(G_CICP_NATIVE), // nclx colr box exists but Metadata::cicp isn't wired
+        // Verified 2026-08-28 (zenavif git-main 11033c95): Metadata::cicp
+        // reaches the nclx colr box and comes back — primaries 12, transfer
+        // 13, full range — with matrix 6 (the coded YCbCr matrix) in place
+        // of the caller's 0. Color round-trips; the exact triple can't.
+        cicp: V::Gap(G_CICP_MATRIX_CODEC_OWNED),
+        cicp_color: V::Ok,
     });
 
     #[cfg(feature = "jxl-encode")]
@@ -319,6 +341,7 @@ fn codecs() -> Vec<Support> {
         // ICC is dropped (JXL is cicp_safe_sole_carrier) and the decoder
         // synthesizes one back from the enum, so `Icc::PresentReencoded` holds.
         cicp: V::Ok,
+        cicp_color: V::Ok,
     });
 
     v
@@ -404,6 +427,20 @@ fn obs_cicp(c: &Support) -> bool {
     try_round_trip(c, Metadata::none().with_cicp(test_cicp()))
         .and_then(|d| d.info().source_color.cicp)
         .map(|got| got == test_cicp())
+        .unwrap_or(false)
+}
+
+/// Primaries, transfer and range survive — the matrix is left to the codec
+/// (see `G_CICP_MATRIX_CODEC_OWNED`).
+fn obs_cicp_color(c: &Support) -> bool {
+    let want = test_cicp();
+    try_round_trip(c, Metadata::none().with_cicp(want))
+        .and_then(|d| d.info().source_color.cicp)
+        .map(|got| {
+            got.color_primaries == want.color_primaries
+                && got.transfer_characteristics == want.transfer_characteristics
+                && got.full_range == want.full_range
+        })
         .unwrap_or(false)
 }
 
@@ -531,6 +568,13 @@ fn xmp_marker_survival() {
 fn cicp_color_signaling() {
     for c in codecs() {
         check(c.name, "cicp", obs_cicp(&c), c.cicp);
+    }
+}
+
+#[test]
+fn cicp_color_signaling_without_matrix() {
+    for c in codecs() {
+        check(c.name, "cicp_color", obs_cicp_color(&c), c.cicp_color);
     }
 }
 
@@ -766,13 +810,13 @@ fn print_support_matrix() {
     let cs = codecs();
     eprintln!();
     eprintln!(
-        "{:<6} {:>5} {:>9} {:>11} {:>12} {:>4} {:>5}",
-        "codec", "icc", "exif_blob", "orient_exif", "orient_field", "xmp", "cicp"
+        "{:<6} {:>5} {:>9} {:>11} {:>12} {:>4} {:>5} {:>10}",
+        "codec", "icc", "exif_blob", "orient_exif", "orient_field", "xmp", "cicp", "cicp_color"
     );
     let b = |x: bool| if x { "yes" } else { " . " };
     for c in &cs {
         eprintln!(
-            "{:<6} {:>5} {:>9} {:>11} {:>12} {:>4} {:>5}",
+            "{:<6} {:>5} {:>9} {:>11} {:>12} {:>4} {:>5} {:>10}",
             c.name,
             b(obs_icc_byte_equal(c)),
             b(obs_exif_blob(c)),
@@ -780,6 +824,7 @@ fn print_support_matrix() {
             b(obs_orient_from_field(c)),
             b(obs_xmp(c)),
             b(obs_cicp(c)),
+            b(obs_cicp_color(c)),
         );
     }
     eprintln!();

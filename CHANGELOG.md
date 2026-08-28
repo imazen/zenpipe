@@ -596,6 +596,24 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed
+
+- **Metadata conformance: AVIF CICP re-verified, `cicp` split into two
+  strengths** (zenpipe#36 gap 3): with zenavif git-main (11033c95)
+  `Metadata::cicp` does reach the nclx `colr` box and comes back —
+  primaries 12 / transfer 13 / full range for a Display P3 request — so
+  the old gap note ("not wired through encode/decode") was wrong. What
+  cannot round-trip exactly is `matrix_coefficients`: AVIF signals the
+  matrix it *coded* with (BT.601 = 6), not the RGB identity (0) the
+  caller wrote — a coding decision (`zenavif` `color_model`), not
+  pass-through metadata. `tests/metadata_conformance.rs` now checks
+  `cicp_color` (primaries + transfer + range; AVIF/PNG/JXL `Ok`) next to
+  the exact-triple `cicp` (AVIF stays `Gap`, note rewritten to say the
+  matrix is codec-owned by design). Remaining #36 items all need codec
+  crates: JXL codestream orientation write + EXIF-orientation
+  normalization (jxl-encoder has no public orientation setter at
+  cd9a7325; zenjxl's adapter has no orientation plumbing).
+
 #### Fixed (2026-08-27)
 
 - rustc 1.98 clippy (`2fc057ec`): tests/examples use `as_chunks`;
