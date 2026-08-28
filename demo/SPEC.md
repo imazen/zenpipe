@@ -324,12 +324,13 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - Would enable multi-threaded resize (zenresize), filter (zenfilters), blend (zenblend)
 - Significant speedup for large images
 
-### 9.3 Srcset Generator (issue #22) ⬜
-- User picks target widths (or presets: thumbnail, mobile, desktop, retina)
-- Each width × format combination is an encode job
-- Progress bar for batch exports
-- Output as zip or individual downloads
-- Generate `<img srcset>` HTML snippet
+### 9.3 Srcset Generator (issue #22) ✅
+- User picks target widths (or presets: thumbnail, mobile, desktop, retina, all); widths above the source are capped (no upscaling)
+- Each width × format combination is an encode job on the export worker pool (`js/worker-pool.js`: 2–4 extra `worker.js` instances with their own Editor; interactive renders stay on the primary worker; cancel terminates in-flight workers)
+- Progress bar + cancel for batch exports
+- Output as one stored zip (`js/zip.js`) or individual downloads
+- Generates a `<picture>`/`<img srcset>` HTML snippet
+- Verified by `tests/srcset.spec.js` (mock backend: zip contents, snippet, pool usage, cancel)
 
 ### 9.4 SVG Rendering ✅
 - `zensvg` crate: resvg + usvg for SVG/SVGZ rendering

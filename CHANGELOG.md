@@ -282,6 +282,27 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added (demo)
+
+- **Export worker pool + srcset generator** (zenpipe#22, `demo/`):
+  `js/worker-pool.js` runs full-resolution encodes on 2–4 extra
+  `worker.js` instances, each with its own Editor decoded from a kept
+  copy of the source bytes (`state.sourceBytes`, re-`upgrade`d when the
+  primary did), so interactive overview/detail renders never queue behind
+  an export; the pool is discarded on every new image (`state.imageEpoch`)
+  and cancel terminates in-flight workers. The export modal gained a
+  Srcset section (`js/srcset.js`): width presets (thumbnail / mobile /
+  desktop / retina / all) or a custom list — capped to the source width,
+  no upscaling — × format checkboxes → one job per cell on the pool, a
+  progress bar with Cancel, output as one stored zip (`js/zip.js`) or
+  individual downloads, and a `<picture>`/`<img srcset>` snippet. The
+  plain Export button also runs on the pool now. `tests/srcset.spec.js`
+  (playwright, mock backend): zip entries = widths × formats with valid
+  CRCs, snippet contents, ≥2 workers used, cancel leaves no workers and
+  no download then respawns, pool reset on image change. Verified with
+  the OffscreenCanvas mock only — the WASM `pkg/` build is not produced
+  locally; the pool speaks the same worker protocol either way.
+
 #### Fixed
 
 - **zeneditor compiles again**: `pipeline.rs` built an
@@ -558,6 +579,22 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ## zenfilters
 
 ### [Unreleased]
+
+#### Changed
+
+- **`quality_validation` vs libvips re-measured on a second machine**
+  (zenpipe#44): with Homebrew libvips 8.18.6 on macOS arm64 and the CID22
+  corpus, all 21 corpus + vips tests pass; `saturation_boost_vs_vips`
+  scores min zensim 88.8 / avg 91.8 (1028637.png: zensim 88.8,
+  mean_diff 0.4) against the workstation's recorded failure of 43.0 /
+  mean_diff 3.0 on the same file — so the workstation number comes from
+  its vips reference render, not from zenfilters (zenfilters output is
+  identical across dependency resolutions per the issue). Not
+  reproduced here: `dt_contrast_full_corpus` — `darktable-cli` is
+  unavailable on this platform (the Homebrew cask is deprecated for
+  failing Gatekeeper and is disabled 2026-09-01). Thresholds unchanged.
+  New `just test-zenfilters-quality-vips` runs the corpus + vips subset
+  without darktable.
 
 #### Fixed (2026-08-27)
 

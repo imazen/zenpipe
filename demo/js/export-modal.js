@@ -5,6 +5,8 @@
 import { $, state, getFilterAdjustments } from './state.js';
 import { recordExport, initExportHistory } from './export-history.js';
 import { sendToWorker } from './worker-client.js';
+import { initSrcset, refreshSrcset } from './srcset.js';
+import { exportPool } from './worker-pool.js';
 
 const EXPORT_FORMATS = [
   { id: 'jpeg', label: 'JPEG', ext: 'jpg', mime: 'image/jpeg', color: '#f59e0b', engine: 'zen' },
@@ -235,8 +237,14 @@ export function openExportModal() {
   updateExportDims();
   renderFormatControls();
   updateExportEstimates();
+  refreshSrcset();
 
   $('export-modal-backdrop').classList.add('open');
+}
+
+/** Encoder options the modal holds for `format` (used by the srcset generator). */
+export function exportSettingsFor(format) {
+  return exportSettings[format] || {};
 }
 
 export function closeExportModal() {
@@ -247,6 +255,7 @@ export function closeExportModal() {
 
 export function initExportModal() {
   initExportHistory();
+  initSrcset(exportSettingsFor);
 
   // Aspect ratio lock
   $('export-aspect-lock').addEventListener('click', () => {
@@ -313,7 +322,9 @@ export function initExportModal() {
         film_preset: state.filmPreset,
       };
 
-      const result = await sendToWorker('export', exportData);
+      // Full-resolution encodes run on the export pool so the primary
+      // worker keeps serving interactive renders (zenpipe#22).
+      const [result] = await exportPool.run([{ type: 'export', data: exportData }]);
 
       // Use the actual format the worker encoded (may differ if browser fallback)
       const actualFmt = EXPORT_FORMATS.find(f => f.id === result.format) || fmt;

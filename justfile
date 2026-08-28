@@ -18,6 +18,10 @@ test-local-fixtures:
 test-zenfilters-quality:
     cargo test -p zenfilters --features local-vips,local-darktable --test quality_validation
 
+# Same, corpus + libvips only (no darktable-cli on the machine).
+test-zenfilters-quality-vips:
+    cargo test -p zenfilters --features local-fixtures,local-vips --test quality_validation
+
 # zencodecs gain-map / UltraHDR / raw surface — the avif-less feature set
 # mirrored by CI (zenpipe#38); widen to `all,cms,std` once the
 # zencodec<->zenavif drift settles.

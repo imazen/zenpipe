@@ -17,6 +17,8 @@ import { initUserPresets } from './user-presets.js';
 // File input and open button
 $('file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadImage(e.target.files[0]);
+  // Reset so picking the same file again still fires `change`.
+  e.target.value = '';
 });
 $('open-btn').addEventListener('click', () => $('file-input').click());
 

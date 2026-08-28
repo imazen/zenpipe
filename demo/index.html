@@ -393,6 +393,21 @@ aside {
 .export-resize-px { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
 
 /* Encode preview */
+.srcset-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; }
+.srcset-row label { font-size: 12px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 4px; }
+.srcset-label { font-size: 12px; color: var(--text-dim); }
+.srcset-input, .srcset-select {
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text);
+  border-radius: 4px; padding: 3px 6px; font-size: 12px; min-width: 120px;
+}
+.srcset-input { flex: 1; }
+.srcset-note { font-size: 11px; color: var(--text-dim); }
+.srcset-progress { flex: 1; min-width: 80px; height: 8px; }
+.srcset-snippet {
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text);
+  font-family: ui-monospace, monospace; font-size: 11px; border-radius: 4px; padding: 6px; resize: vertical;
+}
+
 .export-preview-wrap {
   position: relative; margin-bottom: 16px;
   background: var(--bg); border-radius: 6px; overflow: hidden;
@@ -790,6 +805,44 @@ body.dock-bottom aside {
           <input type="number" class="export-resize-input" id="export-height" min="1" max="32000">
           <span class="export-resize-px" id="export-megapixels"></span>
         </div>
+      </div>
+
+      <div class="export-section" id="srcset-section">
+        <div class="export-section-label">Srcset (responsive set)</div>
+        <div class="srcset-row">
+          <label for="srcset-preset">Preset</label>
+          <select id="srcset-preset" class="srcset-select">
+            <option value="">custom</option>
+            <option value="thumbnail">thumbnail (160, 320)</option>
+            <option value="mobile" selected>mobile (480, 640, 960)</option>
+            <option value="desktop">desktop (1280, 1600, 1920)</option>
+            <option value="retina">retina (1920, 2560, 3840)</option>
+            <option value="all">all</option>
+          </select>
+          <label for="srcset-widths">Widths</label>
+          <input type="text" id="srcset-widths" class="srcset-input" placeholder="480, 640, 960" value="480, 640, 960">
+        </div>
+        <div class="srcset-note" id="srcset-source-note"></div>
+        <div class="srcset-row" id="srcset-formats">
+          <span class="srcset-label">Formats</span>
+          <label><input type="checkbox" value="jpeg" checked> JPEG</label>
+          <label><input type="checkbox" value="webp" checked> WebP</label>
+          <label><input type="checkbox" value="avif"> AVIF</label>
+          <label><input type="checkbox" value="jxl"> JXL</label>
+          <label><input type="checkbox" value="png"> PNG</label>
+        </div>
+        <div class="srcset-row">
+          <label for="srcset-basename">Name</label>
+          <input type="text" id="srcset-basename" class="srcset-input" value="image">
+          <label><input type="checkbox" id="srcset-individual"> individual downloads (not zip)</label>
+        </div>
+        <div class="srcset-row">
+          <button class="btn btn-primary" id="srcset-generate">Generate srcset</button>
+          <button class="btn" id="srcset-cancel" disabled>Cancel</button>
+          <progress id="srcset-progress" class="srcset-progress" value="0" max="1"></progress>
+          <span class="srcset-note" id="srcset-progress-text"></span>
+        </div>
+        <textarea id="srcset-snippet" class="srcset-snippet" rows="4" readonly placeholder="&lt;picture&gt; snippet appears here"></textarea>
       </div>
 
       <div class="export-preview-wrap" id="export-preview-wrap">

@@ -4,6 +4,7 @@
 
 import { $, state } from './state.js';
 import { sendToWorker } from './worker-client.js';
+import { exportPool } from './worker-pool.js';
 import { renderOverview, renderDetail } from './render.js';
 import { showError } from './toasts.js';
 import { resetHistory } from './history.js';
@@ -44,6 +45,12 @@ export async function loadImage(file) {
 
   // Send raw bytes to worker for decoding
   const buffer = await file.arrayBuffer();
+  // The worker takes ownership of `buffer` (transfer); keep a copy for the
+  // export pool's workers.
+  state.sourceBytes = buffer.slice(0);
+  state.imageEpoch++;
+  state.nativeUpgraded = false;
+  exportPool.shutdown();
   let result;
   try {
     result = await sendToWorker('init', { data: buffer });
@@ -79,6 +86,7 @@ export async function loadImage(file) {
 async function triggerNativeUpgrade(label, backendLabel) {
   try {
     const result = await sendToWorker('upgrade', {});
+    state.nativeUpgraded = true;
     // Build metadata badges for the status bar
     const badges = [];
     if (result.format) badges.push(result.format.toUpperCase());
@@ -154,6 +162,10 @@ export async function loadPicsumPhoto(pid, thumbEl) {
     const resp = await fetch(`https://picsum.photos/id/${pid}/2500/1875`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const buffer = await resp.arrayBuffer();
+    state.sourceBytes = buffer.slice(0);
+    state.imageEpoch++;
+    state.nativeUpgraded = false;
+    exportPool.shutdown();
 
     // Pass to worker the same way as file upload
     const result = await sendToWorker('init', { data: buffer });

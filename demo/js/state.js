@@ -8,6 +8,14 @@ export const RENDER_DEBOUNCE_MS = 50;
 
 export const state = {
   sourceImage: null,
+  /** Copy of the loaded file's bytes, so export-pool workers can decode
+   *  their own editor (the primary worker's copy is transferred away). */
+  sourceBytes: null,
+  /** Bumped on every image load; pool workers holding an older image
+   *  are discarded (zenpipe#22). */
+  imageEpoch: 0,
+  /** Whether the primary worker's native (zencodecs) decode succeeded. */
+  nativeUpgraded: false,
   sourceWidth: 0,
   sourceHeight: 0,
   region: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },
