@@ -337,6 +337,35 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (`Session` incremental cache, 2026-08-28, refs #3)
+
+- **`Session::stream` ignored `config.limits`** — both the prefix and suffix
+  segments were compiled with `limits: None`, so a job that
+  `orchestrate::stream` would reject (max_pixels, max_memory_bytes, …) ran
+  unbounded through a `Session`. Limits now gate every executed segment
+  (`session_enforces_limits_on_miss_and_hit`).
+- **Cache key omitted `hdr_mode`** (and the source's alpha/HDR/gain-map
+  flags): the entry stores the processed gain-map sidecar, whose presence
+  depends on `hdr_mode`, so an `sdr_only` run could hand its (absent) sidecar
+  to a `preserve` run of the same nodes. All of these are hashed into the
+  chain root (`session_hdr_mode_is_part_of_the_key`).
+- **An entry larger than the whole budget was still inserted** after
+  evicting everything else, leaving `current_bytes > memory_budget`. It is
+  now run uncached (`session_skips_entry_larger_than_budget`).
+
+#### Changed (`Session`, refs #3)
+
+- **Merkle-chain prefix hashing + longest-prefix lookup**: node lists are
+  hashed as `chain[i] = subtree_hash(nodes[i-1], [chain[i-1]])` from a
+  source-identity root (one forward pass, `cache::prefix_chain`). Lookup
+  takes the longest cached prefix up to the geometry/filter split, so
+  appending a geometry node re-runs only the new node from the cached pixels
+  instead of the full decode + geometry
+  (`session_partial_prefix_hit_resumes_from_cache`). Partial hits fall back
+  to the full path when a gain-map sidecar must be derived from the original
+  source dimensions. No public-API change; `prefix_hash`/`subtree_hash`
+  keep their signatures.
+
 #### Fixed (2026-08-27)
 
 - **`ImageJob` with no output format re-encoded JPEG as JPEG XL**

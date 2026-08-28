@@ -317,6 +317,28 @@ estimate.check(&Limits {
 })?;
 ```
 
+## Incremental re-render (`Session`)
+
+For editors that re-run the same pipeline with tweaked downstream nodes,
+`Session` (feature `zennode`) caches the post-geometry pixels and resumes from
+them. Node lists are hashed as a Merkle chain (source identity → each node's
+schema + params), so only an unchanged prefix hits; a partial hit re-runs just
+the appended geometry nodes from the cached pixels.
+
+```rust,ignore
+use zenpipe::Session;
+
+let mut session = Session::new(64 * 1024 * 1024); // byte budget, LRU-evicted
+let source_hash = hash_of(path, mtime, size);      // caller-owned identity
+
+// Full render: decode + geometry run, post-geometry pixels are cached.
+let out = session.stream(decode(path)?, &config_exposure_0_5, None, source_hash)?;
+
+// Slider moved: same source + geometry → decoder dropped unread, only the
+// filter + encode nodes execute. `config.limits` is enforced on every run.
+let out = session.stream(decode(path)?, &config_exposure_1_0, None, source_hash)?;
+```
+
 ## Smart crop (`c.focus`)
 
 zenpipe supports content-aware cropping via the `c.focus` RIAPI parameter, back-compatible with ImageResizer's CropAround plugin.

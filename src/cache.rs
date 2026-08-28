@@ -246,6 +246,60 @@ mod zennode_impls {
         h.finish()
     }
 
+    /// Everything that determines the pixels a pipeline prefix produces
+    /// *besides* the node configs: the source identity (caller-provided
+    /// hash + probed dims/format/orientation/flags) and the job-level
+    /// `hdr_mode` (which decides whether a gain-map sidecar is processed
+    /// and cached alongside the pixels).
+    pub(crate) struct SourceIdentity<'a> {
+        pub source_hash: u64,
+        pub width: u32,
+        pub height: u32,
+        pub format: PixelFormat,
+        pub exif_orientation: u8,
+        pub has_alpha: bool,
+        pub has_gain_map: bool,
+        pub is_hdr: bool,
+        pub hdr_mode: &'a str,
+    }
+
+    /// Merkle chain over a linear node list.
+    ///
+    /// `chain[0]` is the hash of the source identity alone; `chain[i]` is
+    /// `subtree_hash(nodes[i-1], [chain[i-1]])`, i.e. the identity of the
+    /// pixels that exist after the first `i` nodes have run. Two node lists
+    /// that share a prefix share `chain[..=k]` for that prefix, which is what
+    /// lets [`Session`](crate::session::Session) resume from the longest
+    /// cached prefix when a caller appends or edits downstream nodes.
+    ///
+    /// Returns `nodes.len() + 1` hashes; one forward pass.
+    pub(crate) fn prefix_chain(
+        nodes: &[Box<dyn zennode::NodeInstance>],
+        source: &SourceIdentity<'_>,
+    ) -> alloc::vec::Vec<u64> {
+        use core::hash::{Hash, Hasher};
+
+        let mut h = FnvHasher::new();
+        source.source_hash.hash(&mut h);
+        source.width.hash(&mut h);
+        source.height.hash(&mut h);
+        hash_pixel_format(&mut h, source.format);
+        source.exif_orientation.hash(&mut h);
+        source.has_alpha.hash(&mut h);
+        source.has_gain_map.hash(&mut h);
+        source.is_hdr.hash(&mut h);
+        source.hdr_mode.hash(&mut h);
+
+        let mut chain = alloc::vec::Vec::with_capacity(nodes.len() + 1);
+        let mut prev = h.finish();
+        chain.push(prev);
+        for node in nodes {
+            prev = subtree_hash(node.as_ref(), &[prev]);
+            chain.push(prev);
+        }
+        chain
+    }
+
     /// Compute a deterministic subtree hash for a single node given its
     /// input hashes (Merkle-style).
     ///
@@ -335,6 +389,8 @@ mod zennode_impls {
 
 #[cfg(feature = "zennode")]
 pub use zennode_impls::{PipelineCache, geometry_split, prefix_hash, subtree_hash};
+#[cfg(feature = "zennode")]
+pub(crate) use zennode_impls::{SourceIdentity, prefix_chain};
 
 // ─── FNV-1a hasher ───
 
