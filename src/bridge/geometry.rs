@@ -26,6 +26,7 @@ pub(crate) const GEOMETRY_SCHEMA_IDS: &[&str] = &[
     "zenlayout.rotate_180",
     "zenlayout.rotate_270",
     "zenlayout.rotate_angle",
+    "zenlayout.auto_deskew",
     "zenresize.constrain",
     "zenlayout.constrain",
     "zenpipe.riapi_crop",
@@ -418,6 +419,42 @@ pub(crate) fn compile_geometry_run(
                 };
                 pipeline = pipeline.rotate_angle(degrees, mode);
             }
+            "zenlayout.auto_deskew" => {
+                // Analysis barrier (zenpipe#27): the planner carries the
+                // source dims through; `EffectSource` resolves the angle on
+                // the materialized frame and recomputes the output dims.
+                let max_angle = param_f32_opt(node, "max_angle")
+                    .filter(|v| *v > 0.0)
+                    .unwrap_or(10.0);
+                let mode = match param_str(node, "mode")
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
+                    "expand" => zenlayout::RotateMode::Expand {
+                        color: zenlayout::CanvasColor::Transparent,
+                    },
+                    "original" | "crop_to_original" => zenlayout::RotateMode::CropToOriginal,
+                    _ => zenlayout::RotateMode::InscribedCrop,
+                };
+                let method = match param_str(node, "method")
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
+                    "gradient" | "gradient_moment" => {
+                        zenlayout::dimension::AutoDeskewMethod::GradientMoment
+                    }
+                    "hough" => zenlayout::dimension::AutoDeskewMethod::Hough {
+                        min_confidence: 0.2,
+                    },
+                    _ => zenlayout::dimension::AutoDeskewMethod::ProjectionVariance,
+                };
+                pipeline = pipeline.effect(
+                    zenlayout::dimension::AutoDeskewEffect::new(mode, max_angle)
+                        .with_method(method),
+                );
+            }
             "zenresize.constrain" | "zenlayout.constrain" => {
                 let mut raw_w = param_u32_opt(node, "w").filter(|&v| v > 0);
                 let mut raw_h = param_u32_opt(node, "h").filter(|&v| v > 0);
@@ -604,13 +641,18 @@ pub(crate) fn compile_geometry_run(
         }
     }
 
+    // A content-adaptive effect (auto-deskew) can't be planned past until it
+    // has seen pixels: keep the command pipeline so the graph can re-plan
+    // once `EffectSource` resolves it (zenpipe#27).
+    let replan = pipeline.has_analysis_barrier().then(|| pipeline.clone());
     let (ideal, request) = pipeline.plan().map_err(|e| {
         at!(PipeError::Op(alloc::format!(
             "geometry fusion plan failed: {e}"
         )))
     })?;
     let offer = zenlayout::DecoderOffer::full_decode(source_w, source_h);
-    let plan = ideal.finalize(&request, &offer);
+    let mut plan = ideal.finalize(&request, &offer);
+    plan.replan = replan;
 
     // ── choose the filter by net scale direction (up vs down) ──
     // Pre-resize dims = the trimmed window when present, else the source.

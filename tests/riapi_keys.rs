@@ -1322,3 +1322,38 @@ fn no_hdr_key_no_directives() {
     let r = parse("w=100");
     assert!(find_node(&r.instances, "zenpipe.riapi.hdr").is_none());
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  AUTO-DESKEW (zenpipe#27)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn autodeskew_key() {
+    let r = parse("autodeskew=1");
+    let n = find_node(&r.instances, "zenlayout.auto_deskew").expect("AutoDeskew node");
+    assert_eq!(get_f32(n, "max_angle"), Some(10.0));
+    assert_eq!(get_str(n, "mode").as_deref(), Some("inscribed"));
+    assert_eq!(get_str(n, "method").as_deref(), Some("projection"));
+
+    let r = parse("autodeskew=true");
+    assert!(find_node(&r.instances, "zenlayout.auto_deskew").is_some());
+
+    // A number above 1 is the max-angle budget in degrees.
+    let r = parse("autodeskew=7");
+    let n = find_node(&r.instances, "zenlayout.auto_deskew").expect("AutoDeskew node");
+    assert_eq!(get_f32(n, "max_angle"), Some(7.0));
+
+    // Disabled / invalid → no node.
+    for qs in [
+        "autodeskew=false",
+        "autodeskew=0",
+        "autodeskew=99",
+        "autodeskew=abc",
+    ] {
+        let r = parse(qs);
+        assert!(
+            find_node(&r.instances, "zenlayout.auto_deskew").is_none(),
+            "{qs} must not create a node"
+        );
+    }
+}

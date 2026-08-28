@@ -226,6 +226,16 @@ pub enum AutoDeskewMethod {
     /// [`deskew::detect_skew_projection_variance`](crate::deskew::detect_skew_projection_variance).
     /// Accurate to the grid on documents and rulings; `O(N × angles)`.
     ProjectionVariance,
+    /// Gradient-magnitude-weighted Hough transform over Sobel edges, 1°
+    /// sweep + 0.1° refinement — see
+    /// [`deskew::detect_skew_hough`](crate::deskew::detect_skew_hough).
+    /// Ignores flat tonal regions (photos, shaded forms); resolves to 0°
+    /// when the sweep's confidence (`1 − mean / peak`) is below
+    /// `min_confidence` (0.2 is a reasonable default).
+    Hough {
+        /// Minimum confidence in `[0, 1)` to accept the detection.
+        min_confidence: f32,
+    },
 }
 
 /// Content-adaptive straightening (zenpipe#27): detect the dominant line
@@ -275,6 +285,14 @@ impl AutoDeskewEffect {
                 h,
                 stride,
                 self.max_angle_deg,
+            ),
+            AutoDeskewMethod::Hough { min_confidence } => crate::deskew::detect_skew_hough(
+                luma,
+                w,
+                h,
+                stride,
+                self.max_angle_deg,
+                min_confidence,
             ),
         }
     }

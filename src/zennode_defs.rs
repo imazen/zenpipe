@@ -241,6 +241,44 @@ pub struct Rotate180 {}
 #[node(tags("rotate", "geometry"))]
 pub struct Rotate270 {}
 
+// ─── AutoDeskew ───
+
+/// Straighten the image by the angle of its dominant line structure
+/// (zenpipe#27) — text lines on a scan, table rules, a horizon.
+///
+/// Content-adaptive: the angle is detected on the materialized frame at
+/// execution time (an analysis barrier the planner re-plans past), then
+/// applied as a non-cardinal rotation. No coherent structure within
+/// `max_angle` leaves the image unchanged.
+///
+/// JSON: `{ "max_angle": 10, "mode": "inscribed", "method": "projection" }`
+///
+/// RIAPI: `?autodeskew=1` (10° budget) or `?autodeskew=7` (7° budget).
+#[derive(Node, Clone, Debug)]
+#[node(id = "zenlayout.auto_deskew", group = Geometry, role = Orient)]
+#[node(coalesce = "layout_plan", changes_dimensions)]
+#[node(tags("deskew", "rotate", "geometry", "content-adaptive"))]
+pub struct AutoDeskew {
+    /// Largest correction to apply, in degrees (clamped to 45).
+    #[param(range(0.5..=45.0), default = 10.0, step = 0.5)]
+    #[param(unit = "deg", section = "Main", label = "Max angle")]
+    pub max_angle: f32,
+
+    /// Canvas policy for the rotation: `inscribed` (largest axis-aligned
+    /// rectangle, output shrinks), `expand` (bounding box, transparent
+    /// corners) or `original` (same size, corners lost).
+    #[param(default = "inscribed")]
+    #[param(section = "Main", label = "Mode")]
+    pub mode: String,
+
+    /// Detector: `projection` (projection variance — documents, rulings),
+    /// `hough` (edge Hough — photos, shaded forms) or `gradient`
+    /// (structure tensor — fastest, coarse).
+    #[param(default = "projection")]
+    #[param(section = "Main", label = "Method")]
+    pub method: String,
+}
+
 // ─── ExpandCanvas ───
 
 /// Expand the canvas by adding padding around the image.
@@ -1354,6 +1392,82 @@ impl NodeDef for AutorotateRiapiDef {
     }
 }
 
+/// RIAPI `autodeskew` key → [`AutoDeskew`] node (zenpipe#27).
+///
+/// `autodeskew=true|1|yes|on` straightens with the default 10° budget; a
+/// number above 1 (`autodeskew=7`) sets the budget in degrees (≤ 45);
+/// `false|0|no|off` disables. Mode and detector keep the node defaults
+/// (`inscribed`, `projection`).
+static AUTODESKEW_RIAPI_SCHEMA: NodeSchema = NodeSchema {
+    id: "zenpipe.riapi.autodeskew",
+    label: "Auto-Deskew (RIAPI)",
+    description: "Content-adaptive straightening via querystring",
+    group: zennode::NodeGroup::Geometry,
+    role: zennode::NodeRole::Orient,
+    params: &[],
+    tags: &["autodeskew", "deskew", "riapi", "adapter"],
+    coalesce: None,
+    format: zennode::FormatHint {
+        preferred: zennode::PixelFormatPreference::Srgb8,
+        alpha: zennode::AlphaHandling::Process,
+        changes_dimensions: true,
+        is_neighborhood: false,
+    },
+    version: 1,
+    compat_version: 1,
+    json_key: "",
+    deny_unknown_fields: false,
+    inputs: &[],
+};
+
+pub struct AutodeskewRiapiDef;
+pub static AUTODESKEW_RIAPI_DEF: AutodeskewRiapiDef = AutodeskewRiapiDef;
+
+impl NodeDef for AutodeskewRiapiDef {
+    fn schema(&self) -> &'static NodeSchema {
+        &AUTODESKEW_RIAPI_SCHEMA
+    }
+
+    fn create(&self, _params: &ParamMap) -> core::result::Result<Box<dyn NodeInstance>, NodeError> {
+        Err(NodeError::Other(
+            "use from_kv() for RIAPI autodeskew".into(),
+        ))
+    }
+
+    fn from_kv(
+        &self,
+        kv: &mut KvPairs,
+    ) -> core::result::Result<Option<Box<dyn NodeInstance>>, NodeError> {
+        let consumer = "zenpipe.riapi.autodeskew";
+        let Some(val) = kv.take_owned("autodeskew", consumer) else {
+            return Ok(None);
+        };
+        let lowered = val.trim().to_ascii_lowercase();
+        let max_angle = match lowered.as_str() {
+            "" | "true" | "1" | "yes" | "on" => 10.0,
+            "false" | "0" | "no" | "off" => return Ok(None),
+            other => match other.parse::<f32>() {
+                Ok(d) if d > 1.0 && d <= 45.0 => d,
+                _ => {
+                    kv.warn(
+                        "autodeskew",
+                        zennode::kv::KvWarningKind::InvalidValue,
+                        alloc::format!(
+                            "expected true/false or a max angle in degrees (1, 45], got '{val}'"
+                        ),
+                    );
+                    return Ok(None);
+                }
+            },
+        };
+        Ok(Some(Box::new(AutoDeskew {
+            max_angle,
+            mode: "inscribed".into(),
+            method: "projection".into(),
+        })))
+    }
+}
+
 /// RIAPI `frame` / `page` key → frame selection hint for the decoder.
 ///
 /// Produces an Orient node with a special sentinel, or a dedicated
@@ -2355,6 +2469,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &ROTATE90_NODE,
     &ROTATE180_NODE,
     &ROTATE270_NODE,
+    &AUTO_DESKEW_NODE,
     &EXPAND_CANVAS_NODE,
     &REGION_VIEWPORT_NODE,
     // Layout
@@ -2379,6 +2494,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &SROTATE_RIAPI_DEF,
     &SFLIP_RIAPI_DEF,
     &AUTOROTATE_RIAPI_DEF,
+    &AUTODESKEW_RIAPI_DEF,
     &FRAME_RIAPI_DEF,
     &CROP_RIAPI_DEF,
     &ROUNDCORNERS_RIAPI_DEF,

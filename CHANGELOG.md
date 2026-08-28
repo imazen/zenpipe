@@ -386,9 +386,32 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   and exposes what they resolved to through `EffectSource::effects()`.
   With `zenlayout::AutoDeskewEffect` this straightens skewed scans/rules
   end to end (`tests/auto_deskew.rs`: pipeline-rotated rulings at ±3–7.5°
-  come back within 0.2°). Not yet: planner integration (`Command::Effect`
-  with a barrier), the `autodeskew=` RIAPI key / zennode param, and a
-  timing budget measurement.
+  come back within 0.2°).
+
+- **Auto-deskew, second chunk — node, RIAPI key, planner re-plan, Hough**
+  (#27): `zenlayout.auto_deskew` node (`max_angle`, `mode`
+  inscribed/expand/original, `method` projection/hough/gradient) and the
+  `autodeskew=` RIAPI key (`true|1` → 10° budget, a number in (1, 45] →
+  that budget, `false|0` off; ordered after crop, before the resize).
+  Geometry fusion turns it into a `Command::Effect` analysis barrier, and
+  the graph now **re-plans** the fused layout once `EffectSource` resolves
+  the barrier: `LayoutPlan::replan` keeps the command pipeline when it
+  holds a barrier, `Pipeline::resolve_effect` swaps in the concrete
+  rotation, and the constraint is recomputed against the real post-deskew
+  dims (a 45° expand barrier on 320×240 with `w=200` now yields 200×200,
+  not the placeholder 200×150). The pre-flight estimate counts the two
+  full frames `EffectSource` materializes. `AutoDeskewMethod::Hough {
+  min_confidence }` (see zenlayout). Measured (release, 4000×3000, see
+  `zenlayout/examples/deskew_timing.rs`): projection variance 34 ms,
+  Hough 17.7 ms, gradient moment 1.3 ms — all under the issue's 50 ms
+  budget. Tests: `?autodeskew=1&w=200` through registry → IR4 order →
+  fusion → graph → straight output (`tests/auto_deskew.rs`), the re-plan
+  with a controllable barrier, RIAPI key parsing (`tests/riapi_keys.rs`);
+  mutation-verified (restoring the planner's `pre_effects.clear()`,
+  disabling the re-plan, and zeroing the Hough confidence each fail).
+  Not yet: `docs/querystring.md` regen for the new key (see CLAUDE.md
+  "Generated docs regen pending"), and a real scanned-document corpus —
+  accuracy is proven on synthetic anti-aliased rulings only.
 
 - **Canvas extend fill modes: replicate / mirror / repeat** (#23):
   `sources::CanvasFill { Solid, Replicate, Mirror, Repeat }` (sharp
@@ -466,6 +489,32 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ## zenlayout
 
 ### [Unreleased]
+
+#### Fixed
+
+- **Pre-resize dimension effects were dropped from the plan** (zenpipe#27):
+  `compute_layout_sequential` cleared `pre_effects` on every `Constrain`,
+  so a `rotate_angle` / `AutoDeskewEffect` placed before a resize never
+  reached `IdealLayout::effects` and the engine silently skipped it. They
+  now stay in the plan (post-ops still reset per constrain).
+
+#### Added
+
+- `deskew::detect_skew_hough` / `detect_skew_hough_with_confidence`
+  (zenpipe#27): gradient-magnitude-weighted Hough over Sobel edges, 1°
+  sweep + 0.1° refinement, with a `1 − mean / peak` confidence taken
+  against the refined peak (the coarse peak under-reports fine-pitched
+  content on subsampled scans: 0.06 vs 0.73 at step 4).
+  `AutoDeskewMethod::Hough { min_confidence }`. Ignores flat tonal
+  regions; within 0.2° on rulings.
+- `Pipeline::has_analysis_barrier` / `Pipeline::resolve_effect` and
+  `LayoutPlan::replan` (non-exhaustive struct, additive) so an engine can
+  re-plan after resolving a content-adaptive effect. `Pipeline` is now
+  `Clone`.
+- `detect_skew_projection_variance` runs its 1° sweep and a 0.25° pass on
+  a 2× coarser sample grid and only the last 0.1° pass on the full grid:
+  101 ms → 34 ms on a 4000×3000 ruling (release), same 0.1° resolution.
+- `examples/deskew_timing.rs` — the measurement behind those numbers.
 
 #### Fixed (2026-08-27)
 

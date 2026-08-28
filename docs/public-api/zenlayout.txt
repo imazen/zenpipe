@@ -6,31 +6,31 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenlayout.txt 620 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 53 lines (53 hidden + 0 excluded-feature)
+# files: zenlayout.txt 632 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 53 lines (53 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 6
 #   pub types (struct/enum/trait/alias)        74
 #   pub consts/statics                         52
-#   free functions                             16
-#   inherent methods                          178
-#   struct fields                             202
-#   enum variants                             118
+#   free functions                             18
+#   inherent methods                          182
+#   struct fields                             206
+#   enum variants                             120
 #   re-exports                                  2
 #   trait roster entries (type × trait)       184
 #   auto-trait-complete types                  31
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          271
+#   (root)                          274
 #   constraint                       99
-#   deskew                            2
-#   dimension                        68
+#   deskew                            4
+#   dimension                        70
 #   orientation                      11
-#   plan                            197
+#   plan                            202
 
-## items (578 lines)
+## items (590 lines)
 
 pub mod zenlayout
 pub use At
@@ -113,9 +113,13 @@ pub constraint::Size::width: u32
 pub const fn constraint::Size::new(u32, u32) -> Self [also: (root)]
 pub mod deskew
 pub fn deskew::detect_skew_gradient_moment(&[u8], u32, u32, usize, f32) -> core::option::Option<f32>
+pub fn deskew::detect_skew_hough(&[u8], u32, u32, usize, f32, f32) -> core::option::Option<f32>
+pub fn deskew::detect_skew_hough_with_confidence(&[u8], u32, u32, usize, f32) -> core::option::Option<(f32, f32)>
 pub fn deskew::detect_skew_projection_variance(&[u8], u32, u32, usize, f32) -> core::option::Option<f32>
 pub mod dimension
 pub dimension::AutoDeskewMethod::GradientMoment
+pub dimension::AutoDeskewMethod::Hough
+pub dimension::AutoDeskewMethod::Hough::min_confidence: f32
 pub dimension::AutoDeskewMethod::ProjectionVariance
 pub dimension::ResolutionPolicy::Custom(u32, u32)
 pub dimension::ResolutionPolicy::MatchArea
@@ -237,6 +241,7 @@ pub plan::LayoutPlan::decoder_request: plan::DecoderRequest
 pub plan::LayoutPlan::effects: alloc::vec::Vec<plan::ResolvedEffect>
 pub plan::LayoutPlan::placement: (i32, i32)
 pub plan::LayoutPlan::remaining_orientation: orientation::Orientation
+pub plan::LayoutPlan::replan: core::option::Option<plan::Pipeline>
 pub plan::LayoutPlan::resize_is_identity: bool
 pub plan::LayoutPlan::resize_to: constraint::Size
 pub plan::LayoutPlan::trim: core::option::Option<constraint::Rect>
@@ -276,6 +281,7 @@ pub fn plan::Pipeline::fit_crop(self, u32, u32) -> Self
 pub fn plan::Pipeline::fit_pad(self, u32, u32) -> Self
 pub fn plan::Pipeline::flip_h(self) -> Self
 pub fn plan::Pipeline::flip_v(self) -> Self
+pub fn plan::Pipeline::has_analysis_barrier(&self) -> bool
 pub fn plan::Pipeline::larger_than(self, u32, u32) -> Self
 pub fn plan::Pipeline::new(u32, u32) -> Self
 pub fn plan::Pipeline::output_limits(self, plan::OutputLimits) -> Self
@@ -287,6 +293,7 @@ pub fn plan::Pipeline::region(self, plan::Region) -> Self
 pub fn plan::Pipeline::region_blank(self, u32, u32, constraint::CanvasColor) -> Self
 pub fn plan::Pipeline::region_pad(self, u32, constraint::CanvasColor) -> Self
 pub fn plan::Pipeline::region_viewport(self, i32, i32, i32, i32, constraint::CanvasColor) -> Self
+pub fn plan::Pipeline::resolve_effect(&mut self, usize, alloc::boxed::Box<dyn dimension::DimensionEffect>) -> bool
 pub fn plan::Pipeline::rotate_180(self) -> Self
 pub fn plan::Pipeline::rotate_270(self) -> Self
 pub fn plan::Pipeline::rotate_90(self) -> Self
@@ -323,6 +330,8 @@ pub Align::Distort(u32, u32)
 pub Align::Extend(u32, u32)
 #[non_exhaustive] pub enum AutoDeskewMethod [also: dimension]
 pub AutoDeskewMethod::GradientMoment
+pub AutoDeskewMethod::Hough
+pub AutoDeskewMethod::Hough::min_confidence: f32
 pub AutoDeskewMethod::ProjectionVariance
 #[non_exhaustive] pub enum CanvasColor [also: constraint]
 pub CanvasColor::Linear
@@ -486,6 +495,7 @@ pub LayoutPlan::decoder_request: plan::DecoderRequest
 pub LayoutPlan::effects: alloc::vec::Vec<plan::ResolvedEffect>
 pub LayoutPlan::placement: (i32, i32)
 pub LayoutPlan::remaining_orientation: orientation::Orientation
+pub LayoutPlan::replan: core::option::Option<plan::Pipeline>
 pub LayoutPlan::resize_is_identity: bool
 pub LayoutPlan::resize_to: constraint::Size
 pub LayoutPlan::trim: core::option::Option<constraint::Rect>
@@ -534,6 +544,7 @@ pub fn plan::Pipeline::fit_crop(self, u32, u32) -> Self
 pub fn plan::Pipeline::fit_pad(self, u32, u32) -> Self
 pub fn plan::Pipeline::flip_h(self) -> Self
 pub fn plan::Pipeline::flip_v(self) -> Self
+pub fn plan::Pipeline::has_analysis_barrier(&self) -> bool
 pub fn plan::Pipeline::larger_than(self, u32, u32) -> Self
 pub fn plan::Pipeline::new(u32, u32) -> Self
 pub fn plan::Pipeline::output_limits(self, plan::OutputLimits) -> Self
@@ -545,6 +556,7 @@ pub fn plan::Pipeline::region(self, plan::Region) -> Self
 pub fn plan::Pipeline::region_blank(self, u32, u32, constraint::CanvasColor) -> Self
 pub fn plan::Pipeline::region_pad(self, u32, constraint::CanvasColor) -> Self
 pub fn plan::Pipeline::region_viewport(self, i32, i32, i32, i32, constraint::CanvasColor) -> Self
+pub fn plan::Pipeline::resolve_effect(&mut self, usize, alloc::boxed::Box<dyn dimension::DimensionEffect>) -> bool
 pub fn plan::Pipeline::rotate_180(self) -> Self
 pub fn plan::Pipeline::rotate_270(self) -> Self
 pub fn plan::Pipeline::rotate_90(self) -> Self

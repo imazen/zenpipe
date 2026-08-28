@@ -845,6 +845,21 @@ impl PipelineGraph {
                 est.streaming_bytes +=
                     kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                // Dimension effects (non-cardinal rotation, auto-deskew) run
+                // through `EffectSource`, which materializes its input and
+                // its output: two full frames of RGBA8 at the larger of the
+                // input / output dims (an Expand rotation grows the frame).
+                if !plan.effects.is_empty() {
+                    let (mut mw, mut mh) = (upstream.width, upstream.height);
+                    for e in &plan.effects {
+                        mw = mw.max(e.output_dims.width).max(e.input_dims.width);
+                        mh = mh.max(e.output_dims.height).max(e.input_dims.height);
+                    }
+                    let frame = mw as u64 * mh as u64 * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                    est.materializes = true;
+                    est.materialization_bytes =
+                        est.materialization_bytes.max(frame.saturating_mul(2));
+                }
                 Ok(SourceInfo {
                     width: out_w,
                     height: out_h,
@@ -1331,20 +1346,55 @@ impl PipelineGraph {
                 };
                 source = ensure_fmt!(source, working, "Layout")?;
 
-                let content_size = plan.content_size;
-
                 // Split effects by where they run relative to the resize step.
                 let (before_resize, after_resize): (Vec<_>, Vec<_>) =
                     plan.effects.iter().cloned().partition(|e| e.before_resize);
 
                 // Apply pre-resize effects (e.g. deskew at native resolution).
+                // An analysis barrier (auto-deskew, zenpipe#27) is resolved
+                // here on the materialized frame; the plan was computed with
+                // the barrier's input dims as a placeholder, so re-plan with
+                // the concrete effect before building the resizer.
+                let mut plan = plan;
+                let mut after_resize = after_resize;
                 if !before_resize.is_empty() {
-                    source = Box::new(crate::sources::EffectSource::new(
+                    // The dims the bridge planned against (its `source_w/h`).
+                    let (src_w, src_h) = (source.width(), source.height());
+                    let effected = crate::sources::EffectSource::new(
                         source,
                         &before_resize,
                         &crate::limits::Limits::default(),
-                    )?);
+                    )?;
+                    if let Some(pipe) = plan.replan.as_ref()
+                        && before_resize.iter().any(|e| {
+                            e.effect
+                                .forward(e.input_dims.width, e.input_dims.height)
+                                .is_none()
+                        })
+                    {
+                        let mut pipe = pipe.clone();
+                        for r in effected.effects() {
+                            pipe.resolve_effect(r.command_index, r.effect.clone());
+                        }
+                        let (ideal, request) = pipe.plan().map_err(|e| {
+                            at!(PipeError::Op(alloc::format!(
+                                "re-plan after analysis barrier failed: {e}"
+                            )))
+                        })?;
+                        let offer = zenlayout::DecoderOffer::full_decode(src_w, src_h);
+                        let mut replanned = ideal.finalize(&request, &offer);
+                        replanned.replan = None;
+                        after_resize = replanned
+                            .effects
+                            .iter()
+                            .filter(|e| !e.before_resize)
+                            .cloned()
+                            .collect();
+                        plan = replanned;
+                    }
+                    source = Box::new(effected);
                 }
+                let content_size = plan.content_size;
 
                 let in_w = source.width();
                 let in_h = source.height();

@@ -218,6 +218,9 @@ fn riapi_bucket(schema_id: &str) -> u32 {
         | "zenlayout.crop_margins"
         | "zenpipe.riapi_crop" => 30,
         "zenpipe.smart_crop_analyze" => 35,
+        // Content-adaptive straightening runs on the cropped source, before
+        // the resize (detection at native resolution).
+        "zenlayout.auto_deskew" => 37,
         "zenresize.constrain" | "zenlayout.constrain" | "zenresize.resize" => 40,
         "zenpipe.round_corners" => 50,
         // (zenfilters.* handled above = 60)

@@ -463,6 +463,14 @@ pub struct LayoutPlan {
     /// effects with `before_resize = false` run on the resize output before canvas placement.
     /// The execution engine must materialize upstream before each effect that cannot stream.
     pub effects: Vec<ResolvedEffect>,
+    /// The command pipeline this plan came from, kept only when it holds an
+    /// analysis barrier ([`Pipeline::has_analysis_barrier`]). After the
+    /// engine resolves the barrier on pixels it calls
+    /// [`Pipeline::resolve_effect`] on a clone and re-plans, so the
+    /// constraint sees the real post-effect dimensions instead of the
+    /// placeholder the first plan carried. `None` for every fixed plan.
+    /// Ignored by `PartialEq` / `Hash`.
+    pub replan: Option<Pipeline>,
 }
 
 // `ResolvedEffect` contains `Box<dyn DimensionEffect>` which can't derive
@@ -518,6 +526,7 @@ impl LayoutPlan {
             resize_is_identity: true,
             content_size: None,
             effects: Vec::new(),
+            replan: None,
         }
     }
 
@@ -1129,6 +1138,40 @@ impl Pipeline {
         self
     }
 
+    /// Whether any [`Command::Effect`] is an analysis barrier — an effect
+    /// whose [`forward`](crate::dimension::DimensionEffect::forward) is
+    /// `None` until [`analyze`](crate::dimension::DimensionEffect::analyze)
+    /// resolves it on pixels (e.g. [`AutoDeskewEffect`](crate::AutoDeskewEffect)).
+    /// A plan computed with a barrier carries the barrier's *input* dims
+    /// through, so the engine must re-plan once it is resolved — see
+    /// [`resolve_effect`](Self::resolve_effect) and [`LayoutPlan::replan`].
+    pub fn has_analysis_barrier(&self) -> bool {
+        self.commands.iter().any(|c| match c {
+            Command::Effect(e) => e.forward(self.source_w, self.source_h).is_none(),
+            _ => false,
+        })
+    }
+
+    /// Replace the effect at `command_index` (the
+    /// [`ResolvedEffect::command_index`] the planner reported) with the
+    /// concrete effect analysis resolved it to, so a second
+    /// [`plan`](Self::plan) computes the constraint against real dims.
+    /// Returns `false` (and changes nothing) when the index is not an
+    /// effect command.
+    pub fn resolve_effect(
+        &mut self,
+        command_index: usize,
+        concrete: alloc::boxed::Box<dyn crate::dimension::DimensionEffect>,
+    ) -> bool {
+        match self.commands.get_mut(command_index) {
+            Some(slot @ Command::Effect(_)) => {
+                *slot = Command::Effect(concrete);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Crop to pixel coordinates in post-orientation space.
     ///
     /// Uses origin + size: `(x, y)` is the top-left corner, `(width, height)`
@@ -1624,7 +1667,11 @@ pub fn compute_layout_sequential(
                 constraint = Some(c); // last wins
                 saw_constrain = true;
                 post_ops.clear(); // reset post-ops on each new constrain
-                pre_effects.clear(); // pre-effects reset with new constrain
+                // Pre-constrain effects are NOT cleared: they transform the
+                // source before any constraint sees it, so they stay part of
+                // the plan however many constrains follow. (Clearing them
+                // here dropped every `rotate_angle` / auto-deskew placed
+                // before a resize from the plan — zenpipe#27.)
             }
             Command::Pad(p) => {
                 if saw_constrain || !pre_regions.is_empty() {
@@ -2185,6 +2232,7 @@ pub(crate) fn finalize(
         resize_is_identity,
         content_size: ideal.content_size,
         effects: ideal.effects.clone(),
+        replan: None,
     }
 }
 

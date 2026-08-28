@@ -35,6 +35,36 @@
 //!
 //! [`AutoDeskewEffect::new`]: crate::dimension::AutoDeskewEffect::new
 //!
+//! # Method: Hough
+//!
+//! [`detect_skew_hough`] is the projection idea restricted to *edges*:
+//! Sobel edge samples vote with their gradient magnitude into a `(ρ, θ)`
+//! accumulator (ρ perpendicular to the line direction), and the θ whose
+//! ρ-column has the highest normalized energy wins — 1° sweep, 0.1°
+//! refinement, plus a confidence (`1 − mean / peak` over the sweep) that
+//! rejects isotropic content. Flat tonal regions contribute nothing, so
+//! photos and shaded forms don't pull the estimate the way they do for
+//! darkness-weighted projection. Same accuracy on rulings.
+//!
+//! # Cost (measured 2026-08-28)
+//!
+//! `examples/deskew_timing.rs`, `cargo run --release`, Apple M-series
+//! laptop core, 4000×3000 anti-aliased ruling skewed 3.7° (`step = 4`,
+//! so ~1000×750 samples are visited — every detector strides by
+//! `⌈max(w, h) / 1000⌉`, which makes the work roughly size-independent
+//! above 1000 px), mean of 20 runs:
+//!
+//! | method               | mean     | detected |
+//! |----------------------|----------|----------|
+//! | gradient moment      |  1.25 ms | 3.20°    |
+//! | projection variance  | 34.0 ms  | 3.65°    |
+//! | Hough                | 17.7 ms  | 3.70°    |
+//!
+//! All three sit under the 50 ms budget zenpipe#27 asks for. Projection
+//! variance runs its 1° sweep and a 0.25° pass on a 2× coarser grid and
+//! only the final 0.1° pass on the full grid (it was 101 ms with every
+//! pass on the full grid). Re-measure on your hardware before quoting.
+//!
 //! # Angle convention
 //!
 //! Degrees, in the image coordinate system (y down), matching
@@ -164,28 +194,35 @@ pub fn detect_skew_projection_variance(
     let n_bins = (diag / step as f64).ceil() as usize + 2;
     let mut sums = alloc::vec![0.0f64; n_bins];
     let mut counts = alloc::vec![0u32; n_bins];
-    let (cx, cy) = (wu as f64 / 2.0, hu as f64 / 2.0);
-    let half = diag / 2.0;
+    let (cx, cy) = (wu as f32 / 2.0, hu as f32 / 2.0);
+    let half = (diag / 2.0) as f32;
+    let inv_step = 1.0 / step as f32;
+    let last_bin = (n_bins - 1) as f32;
 
     // Score = variance of per-bin mean darkness over well-populated bins.
-    let mut score = |theta_deg: f64| -> f64 {
+    // `grid` multiplies the sample stride: the 1° sweep runs on a 2× coarser
+    // grid (¼ of the samples), the 0.1° refinement on the full one.
+    let mut score = |theta_deg: f64, grid: usize| -> f64 {
         sums.iter_mut().for_each(|v| *v = 0.0);
         counts.iter_mut().for_each(|v| *v = 0);
-        let (sn, cs) = theta_deg.to_radians().sin_cos();
+        let (sn, cs) = (theta_deg.to_radians() as f32).sin_cos();
+        let stride_px = step * grid;
+        // Along a row `p` changes by `-sn · stride_px / step` per sample.
+        let dp = -sn * stride_px as f32 * inv_step;
         let mut y = 0;
         while y < hu {
             let row = &luma[y * stride..y * stride + wu];
-            let dy = y as f64 - cy;
+            // p at x = 0 for this row, in bins.
+            let mut p = ((y as f32 - cy) * cs + cx * sn + half) * inv_step;
             let mut x = 0;
             while x < wu {
-                let dx = x as f64 - cx;
-                let p = (dy * cs - dx * sn + half) / step as f64;
-                let b = (p as usize).min(n_bins - 1);
+                let b = p.clamp(0.0, last_bin) as usize;
                 sums[b] += f64::from(255 - row[x]);
                 counts[b] += 1;
-                x += step;
+                p += dp;
+                x += stride_px;
             }
-            y += step;
+            y += stride_px;
         }
         let max_count = counts.iter().copied().max().unwrap_or(0);
         if max_count == 0 {
@@ -212,7 +249,7 @@ pub fn detect_skew_projection_variance(
     let mut k = -coarse_steps;
     while k <= coarse_steps {
         let t = k as f64;
-        let sc = score(t);
+        let sc = score(t, 2);
         if sc > best.1 {
             best = (t, sc);
         }
@@ -227,10 +264,167 @@ pub fn detect_skew_projection_variance(
             best.0 + max_angle
         }
         .clamp(-max_angle, max_angle),
+        2,
     );
     if best.1.is_nan() || best.1 <= baseline * 1.05 || best.1 <= 0.0 {
         return None;
     }
+    // Refinement: 0.25° steps over ±1° on the coarse grid, then 0.1° steps
+    // over ±0.3° on the full grid — the same 0.1° resolution as a flat
+    // ±1° sweep at 0.1° for a third of its cost.
+    let mut mid = (best.0, f64::NEG_INFINITY);
+    let mut j = -4i64;
+    while j <= 4 {
+        let t = best.0 + j as f64 * 0.25;
+        if t.abs() <= max_angle {
+            let sc = score(t, 2);
+            if sc > mid.1 {
+                mid = (t, sc);
+            }
+        }
+        j += 1;
+    }
+    let mut fine = (mid.0, f64::NEG_INFINITY);
+    let mut j = -3i64;
+    while j <= 3 {
+        let t = mid.0 + j as f64 * 0.1;
+        if t.abs() <= max_angle {
+            let sc = score(t, 1);
+            if sc > fine.1 {
+                fine = (t, sc);
+            }
+        }
+        j += 1;
+    }
+    Some(fine.0 as f32)
+}
+
+/// Detect the skew angle (degrees) of the dominant line structure with a
+/// gradient-magnitude-weighted Hough transform over the `[-max, +max]`
+/// band (1° sweep, then 0.1° refinement around the peak).
+///
+/// Sobel edges are extracted at every `step`-th sample (see the [module
+/// docs](self)); each edge pixel votes with its gradient magnitude into
+/// the `(ρ, θ)` accumulator, where ρ is the coordinate perpendicular to
+/// the line direction `(cos θ, sin θ)`. The θ whose ρ-column is peakiest
+/// (largest normalized energy `Σ acc² / (Σ acc)²`) is the skew. Compared
+/// with [`detect_skew_projection_variance`] (which bins *every* pixel by
+/// darkness) this only bins edges, so it is insensitive to large flat
+/// tonal regions — photos, forms with shaded boxes — and keeps 0.1°
+/// accuracy on rulings.
+///
+/// `confidence` is `1 − mean / peak` over the coarse sweep: ≈0 when every
+/// angle scores alike (noise, isotropic texture), toward 1 for a single
+/// clean direction. Returns `None` for degenerate input, no edges,
+/// confidence below `min_confidence`, or a peak outside `max_angle_deg`
+/// (clamped to `(0, 45]`). Same angle convention as the other detectors.
+pub fn detect_skew_hough(
+    luma: &[u8],
+    w: u32,
+    h: u32,
+    stride: usize,
+    max_angle_deg: f32,
+    min_confidence: f32,
+) -> Option<f32> {
+    let (angle, confidence) = detect_skew_hough_with_confidence(luma, w, h, stride, max_angle_deg)?;
+    (confidence >= min_confidence).then_some(angle)
+}
+
+/// [`detect_skew_hough`] returning `(angle, confidence)` without applying
+/// a confidence gate, so callers can calibrate their own threshold.
+pub fn detect_skew_hough_with_confidence(
+    luma: &[u8],
+    w: u32,
+    h: u32,
+    stride: usize,
+    max_angle_deg: f32,
+) -> Option<(f32, f32)> {
+    if w < 3 || h < 3 {
+        return None;
+    }
+    let (wu, hu) = (w as usize, h as usize);
+    if stride < wu || luma.len() < (hu - 1) * stride + wu {
+        return None;
+    }
+    let max_angle = f64::from(max_angle_deg).clamp(f64::EPSILON, 45.0);
+    let step = wu.max(hu).div_ceil(1000).max(1);
+
+    // Sobel magnitude at the sampled positions; keep the strong edges.
+    let mut samples: alloc::vec::Vec<(f32, f32, f32)> = alloc::vec::Vec::new();
+    let mut max_mag = 0.0f32;
+    let mut y = 1;
+    while y + 1 < hu {
+        let row = &luma[y * stride..y * stride + wu];
+        let up = &luma[(y - 1) * stride..(y - 1) * stride + wu];
+        let down = &luma[(y + 1) * stride..(y + 1) * stride + wu];
+        let mut x = 1;
+        while x + 1 < wu {
+            let ix = (f32::from(row[x + 1]) - f32::from(row[x - 1])) * 2.0
+                + (f32::from(up[x + 1]) - f32::from(up[x - 1]))
+                + (f32::from(down[x + 1]) - f32::from(down[x - 1]));
+            let iy = (f32::from(down[x]) - f32::from(up[x])) * 2.0
+                + (f32::from(down[x - 1]) - f32::from(up[x - 1]))
+                + (f32::from(down[x + 1]) - f32::from(up[x + 1]));
+            let mag = (ix * ix + iy * iy).sqrt();
+            if mag > 0.0 {
+                samples.push((x as f32, y as f32, mag));
+                max_mag = max_mag.max(mag);
+            }
+            x += step;
+        }
+        y += step;
+    }
+    // Sobel scale: a full-contrast step is 4 × 255. Keep edges of at least
+    // ~10/255 contrast and at least a quarter of the strongest one.
+    let threshold = (0.25 * max_mag).max(40.0);
+    samples.retain(|s| s.2 >= threshold);
+    if samples.len() < 8 {
+        return None;
+    }
+    let total: f64 = samples.iter().map(|s| f64::from(s.2)).sum();
+    if total <= 0.0 {
+        return None;
+    }
+
+    let diag = ((wu * wu + hu * hu) as f64).sqrt();
+    let n_bins = (diag / step as f64).ceil() as usize + 2;
+    let mut acc = alloc::vec![0.0f64; n_bins];
+    let (cx, cy) = (wu as f32 / 2.0, hu as f32 / 2.0);
+    let half = (diag / 2.0) as f32;
+    let inv_step = 1.0 / step as f32;
+
+    // Normalized energy of the ρ-histogram at θ.
+    let mut score = |theta_deg: f64| -> f64 {
+        acc.iter_mut().for_each(|v| *v = 0.0);
+        let (sn, cs) = (theta_deg.to_radians() as f32).sin_cos();
+        for &(x, y, mag) in &samples {
+            let p = ((y - cy) * cs - (x - cx) * sn + half) * inv_step;
+            let b = (p.max(0.0) as usize).min(n_bins - 1);
+            acc[b] += f64::from(mag);
+        }
+        acc.iter().map(|v| v * v).sum::<f64>() / (total * total)
+    };
+
+    // Coarse 1° sweep, tracking the mean for the confidence.
+    let coarse_steps = max_angle.floor() as i64;
+    let mut best = (0.0f64, f64::NEG_INFINITY);
+    let (mut sum, mut count) = (0.0f64, 0.0f64);
+    let mut k = -coarse_steps;
+    while k <= coarse_steps {
+        let t = k as f64;
+        let sc = score(t);
+        sum += sc;
+        count += 1.0;
+        if sc > best.1 {
+            best = (t, sc);
+        }
+        k += 1;
+    }
+    if best.1.is_nan() || best.1 <= 0.0 {
+        return None;
+    }
+    let mean = sum / count.max(1.0);
+
     // Fine 0.1° refinement around the coarse peak.
     let mut fine = best;
     let mut j = -10i64;
@@ -244,7 +438,14 @@ pub fn detect_skew_projection_variance(
         }
         j += 1;
     }
-    Some(fine.0 as f32)
+    // Confidence compares the *refined* peak against the sweep's mean: a
+    // coarse angle 0.5° off smears each line over `width·tan(0.5°)` bins,
+    // which on a subsampled 4000 px scan is wider than a text-line pitch,
+    // so the coarse peak alone under-reports clean content (measured 0.06
+    // at step 4 vs 0.62 at step 1 on the same ruling); the refined peak
+    // is sharp at every step. Noise stays ≈0 either way.
+    let confidence = (1.0 - mean / fine.1).clamp(0.0, 1.0);
+    Some((fine.0 as f32, confidence as f32))
 }
 
 #[cfg(test)]
@@ -311,6 +512,54 @@ mod tests {
             (got - 3.0).abs() <= 0.8,
             "vertical lines +3 (gradient moment): {got}"
         );
+    }
+
+    #[test]
+    fn hough_recovers_known_angles_within_0_2_degrees_with_confidence() {
+        for a in [-9.0f32, -5.0, -2.5, -0.7, 0.0, 1.3, 3.0, 6.5, 9.9] {
+            let img = ruled(256, 256, a);
+            let (got, conf) = detect_skew_hough_with_confidence(&img, 256, 256, 256, 15.0)
+                .unwrap_or_else(|| panic!("angle {a}: no detection"));
+            assert!((got - a).abs() <= 0.2, "angle {a}: detected {got}");
+            assert!(conf >= 0.3, "angle {a}: confidence {conf} too low");
+            assert_eq!(detect_skew_hough(&img, 256, 256, 256, 15.0, 0.3), Some(got));
+        }
+    }
+
+    #[test]
+    fn hough_ignores_flat_tonal_regions() {
+        // A ruling plus a large dark rectangle that would dominate a
+        // darkness-weighted projection.
+        let mut img = ruled(400, 300, 4.0);
+        for y in 40..140 {
+            for x in 60..260 {
+                img[y * 400 + x] = 30;
+            }
+        }
+        let got = detect_skew_hough(&img, 400, 300, 400, 10.0, 0.2).unwrap();
+        assert!((got - 4.0).abs() <= 0.2, "with dark block: {got}");
+    }
+
+    #[test]
+    fn hough_rejects_noise_and_flat_by_confidence() {
+        let flat = vec![128u8; 96 * 96];
+        assert_eq!(detect_skew_hough(&flat, 96, 96, 96, 10.0, 0.1), None);
+        // Deterministic pseudo-random noise: no dominant direction.
+        let mut seed = 0x9E37_79B9u32;
+        let noise: Vec<u8> = (0..128 * 128)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                (seed >> 24) as u8
+            })
+            .collect();
+        let (_, conf) = detect_skew_hough_with_confidence(&noise, 128, 128, 128, 10.0).unwrap();
+        assert!(conf < 0.1, "noise confidence {conf}");
+        assert_eq!(detect_skew_hough(&noise, 128, 128, 128, 10.0, 0.1), None);
+        // Degenerate sizes / short buffers.
+        assert_eq!(detect_skew_hough(&flat, 2, 2, 2, 10.0, 0.0), None);
+        assert_eq!(detect_skew_hough(&flat[..10], 64, 64, 64, 10.0, 0.0), None);
     }
 
     #[test]

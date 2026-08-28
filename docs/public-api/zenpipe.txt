@@ -6,20 +6,20 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1320 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 22 lines (22 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1331 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 22 lines (22 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       195
-#   pub consts/statics                         43
+#   pub types (struct/enum/trait/alias)       198
+#   pub consts/statics                         45
 #   free functions                             56
 #   inherent methods                          312
-#   struct fields                             459
+#   struct fields                             462
 #   enum variants                              61
 #   re-exports                                 21
-#   trait roster entries (type × trait)       346
-#   auto-trait-complete types                 118
+#   trait roster entries (type × trait)       352
+#   auto-trait-complete types                 121
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
@@ -43,9 +43,9 @@
 #   tiles                            92
 #   trace                           151
 #   watermark                        35
-#   zennode_defs                    203
+#   zennode_defs                    211
 
-## items (1140 lines)
+## items (1148 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -790,6 +790,12 @@ pub watermark::WatermarkPlacement::width: u32
 pub watermark::WatermarkPlacement::x: i32
 pub watermark::WatermarkPlacement::y: i32
 pub mod zennode_defs
+pub struct zennode_defs::AutoDeskew
+pub zennode_defs::AutoDeskew::max_angle: f32
+pub zennode_defs::AutoDeskew::method: alloc::string::String
+pub zennode_defs::AutoDeskew::mode: alloc::string::String
+pub struct zennode_defs::AutoDeskewNodeDef
+pub struct zennode_defs::AutodeskewRiapiDef
 pub struct zennode_defs::AutorotateRiapiDef
 pub struct zennode_defs::Composite
 pub zennode_defs::Composite::blend_mode: alloc::string::String
@@ -961,7 +967,9 @@ pub zennode_defs::SmartCropAnalyze::zoom: bool
 pub struct zennode_defs::SmartCropAnalyzeNodeDef
 pub struct zennode_defs::SrotateRiapiDef
 pub static zennode_defs::ALL: &[&dyn zennode::traits::NodeDef]
+pub static zennode_defs::AUTODESKEW_RIAPI_DEF: zennode_defs::AutodeskewRiapiDef
 pub static zennode_defs::AUTOROTATE_RIAPI_DEF: zennode_defs::AutorotateRiapiDef
+pub static zennode_defs::AUTO_DESKEW_NODE: zennode_defs::AutoDeskewNodeDef
 pub static zennode_defs::COMPOSITE_NODE: zennode_defs::CompositeNodeDef
 pub static zennode_defs::CONSTRAIN_NODE: zennode_defs::ConstrainNodeDef
 pub static zennode_defs::CROP_MARGINS_NODE: zennode_defs::CropMarginsNodeDef
@@ -1188,7 +1196,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (141 types)
+## trait impls (144 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1273,6 +1281,9 @@ watermark::FitMode: Clone, Copy, Debug, Default, PartialEq
 watermark::Gravity: Clone, Copy, Debug, Default, PartialEq
 watermark::WatermarkLayout: Clone, Debug
 watermark::WatermarkPlacement: Clone, Debug, Eq, PartialEq
+zennode_defs::AutoDeskew: Clone, Debug, zennode::schema::NodeParams, zennode::traits::NodeInstance
+zennode_defs::AutoDeskewNodeDef: zennode::traits::NodeDef
+zennode_defs::AutodeskewRiapiDef: zennode::traits::NodeDef
 zennode_defs::AutorotateRiapiDef: zennode::traits::NodeDef
 zennode_defs::Composite: Clone, Debug, Default, zennode::schema::NodeParams, zennode::traits::NodeInstance
 zennode_defs::CompositeNodeDef: zennode::traits::NodeDef
@@ -1334,7 +1345,7 @@ zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-118 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+121 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe
