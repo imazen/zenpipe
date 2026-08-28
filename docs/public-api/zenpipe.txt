@@ -6,20 +6,20 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1331 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 22 lines (22 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1352 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 23 lines (23 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       198
+#   pub types (struct/enum/trait/alias)       200
 #   pub consts/statics                         45
 #   free functions                             56
-#   inherent methods                          312
-#   struct fields                             462
+#   inherent methods                          321
+#   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 21
-#   trait roster entries (type × trait)       352
-#   auto-trait-complete types                 121
+#   trait roster entries (type × trait)       359
+#   auto-trait-complete types                 123
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
@@ -38,14 +38,14 @@
 #   riapi                             2
 #   session                           1
 #   sidecar                          25
-#   sources                          71
+#   sources                          72
 #   srcset                            2
 #   tiles                            92
-#   trace                           151
+#   trace                           169
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1148 lines)
+## items (1167 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -496,6 +496,7 @@ pub fn sources::TeeSource::new_checked(alloc::boxed::Box<dyn Source>, &limits::L
 pub fn sources::TeeSource::width(&self) -> u32
 pub struct sources::TracingSource
 pub fn sources::TracingSource::new(alloc::boxed::Box<dyn Source>, &trace::TraceEntry, core::option::Option<std::path::PathBuf>) -> Self
+pub fn sources::TracingSource::with_memory(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>, alloc::string::String, u64, alloc::string::String) -> Self
 pub fn sources::TracingSource::with_strip_events(self, bool) -> Self
 pub fn sources::TracingSource::with_timing(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>) -> Self
 pub struct sources::TransformSource
@@ -644,6 +645,8 @@ pub trace::DagSnapshotNode::position: usize
 pub trace::DagSnapshotNode::removed: bool
 pub trace::DagSnapshotNode::uid: u32
 pub struct trace::ExecutionTrace
+pub trace::ExecutionTrace::memory: alloc::vec::Vec<trace::MemorySnapshot>
+pub trace::ExecutionTrace::peak_memory_bytes: u64
 pub trace::ExecutionTrace::phases: alloc::vec::Vec<(trace::ExecutionPhase, core::time::Duration)>
 pub trace::ExecutionTrace::slowest_strip: core::option::Option<trace::SlowestStrip>
 pub trace::ExecutionTrace::total_duration: core::time::Duration
@@ -655,10 +658,23 @@ pub trace::FullPipelineTrace::execution: core::option::Option<trace::ExecutionTr
 pub trace::FullPipelineTrace::graph: trace::PipelineTrace
 pub trace::FullPipelineTrace::riapi: core::option::Option<trace::RiapiTrace>
 pub fn trace::FullPipelineTrace::finish_execution(&mut self) -> &trace::ExecutionTrace
+pub fn trace::FullPipelineTrace::memory_timeline(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::strip_timing(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::to_json(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::to_text(&self) -> alloc::string::String
 pub fn trace::FullPipelineTrace::to_animated_svg(&self) -> alloc::string::String
+pub struct trace::MemoryLedger
+pub fn trace::MemoryLedger::allocate(&mut self, u64, alloc::string::String)
+pub fn trace::MemoryLedger::live_bytes(&self) -> u64
+pub fn trace::MemoryLedger::new() -> Self
+pub fn trace::MemoryLedger::peak_bytes(&self) -> u64
+pub fn trace::MemoryLedger::release(&mut self, u64, alloc::string::String)
+pub fn trace::MemoryLedger::snapshots(&self) -> &[trace::MemorySnapshot]
+pub struct trace::MemorySnapshot
+pub trace::MemorySnapshot::allocated_bytes: u64
+pub trace::MemorySnapshot::allocation_count: u32
+pub trace::MemorySnapshot::event: alloc::string::String
+pub trace::MemorySnapshot::timestamp: core::time::Duration
 pub struct trace::NodeTiming
 pub trace::NodeTiming::bytes_processed: u64
 pub trace::NodeTiming::strip_count: u32
@@ -668,6 +684,7 @@ pub struct trace::PipelineTrace
 pub trace::PipelineTrace::compile_duration: core::option::Option<core::time::Duration>
 pub trace::PipelineTrace::edges: alloc::vec::Vec<trace::DagSnapshotEdge>
 pub trace::PipelineTrace::entries: alloc::vec::Vec<trace::TraceEntry>
+pub trace::PipelineTrace::memory: core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>>
 pub fn trace::PipelineTrace::implicit_count(&self) -> usize
 pub fn trace::PipelineTrace::is_empty(&self) -> bool
 pub fn trace::PipelineTrace::len(&self) -> usize
@@ -705,6 +722,7 @@ pub fn trace::TraceAppender::push_sub_node(&self, &str, alloc::string::String, &
 pub struct trace::TraceConfig
 pub trace::TraceConfig::bridge: bool
 pub trace::TraceConfig::dump_nodes: alloc::vec::Vec<usize>
+pub trace::TraceConfig::memory_timeline: bool
 pub trace::TraceConfig::metadata: bool
 pub trace::TraceConfig::pixel_dump_dir: core::option::Option<std::path::PathBuf>
 pub trace::TraceConfig::strip_events: bool
@@ -712,6 +730,7 @@ pub trace::TraceConfig::timing: bool
 pub fn trace::TraceConfig::full() -> Self
 pub fn trace::TraceConfig::metadata_only() -> Self
 pub fn trace::TraceConfig::should_dump(&self, usize) -> bool
+pub fn trace::TraceConfig::with_memory_timeline(self) -> Self
 pub fn trace::TraceConfig::with_pixel_dump(impl core::convert::Into<std::path::PathBuf>) -> Self
 pub fn trace::TraceConfig::with_strip_events(self) -> Self
 pub struct trace::TraceEntry
@@ -1196,7 +1215,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (144 types)
+## trait impls (146 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1265,6 +1284,8 @@ trace::DagSnapshotNode: Clone, Debug
 trace::ExecutionPhase: Clone, Copy, Debug, Eq, PartialEq
 trace::ExecutionTrace: Clone, Debug, Default
 trace::FullPipelineTrace: Clone, Debug, Default
+trace::MemoryLedger: Clone, Debug, Default
+trace::MemorySnapshot: Clone, Debug, Eq, PartialEq
 trace::NodeTiming: Clone, Debug, Default
 trace::PipelineTrace: Clone, Debug, Default
 trace::RiapiKeyTrace: Clone, Debug
@@ -1345,7 +1366,7 @@ zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-121 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+123 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe

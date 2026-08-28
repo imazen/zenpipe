@@ -31,9 +31,27 @@ pub struct TracingSource {
     /// Record a `StripEvent` per pull into `timing.strips` (zenpipe#8).
     #[cfg(feature = "std")]
     strip_events: bool,
+    /// Memory-timeline accounting for this node (zenpipe#8).
+    #[cfg(feature = "std")]
+    memory: Option<MemoryAccount>,
     format: PixelFormat,
     width: u32,
     height: u32,
+}
+
+/// What this node charges to the shared [`MemoryLedger`](crate::trace::MemoryLedger).
+#[cfg(feature = "std")]
+struct MemoryAccount {
+    ledger: alloc::sync::Arc<std::sync::Mutex<crate::trace::MemoryLedger>>,
+    /// `[order] Name` label for events.
+    label: alloc::string::String,
+    /// Full input frame a materializing node holds (0 for streaming nodes).
+    materialize_bytes: u64,
+    /// `WxH FMT` of the input, for the materialize event text.
+    input_desc: alloc::string::String,
+    /// Output strip buffer, charged at the first pull (rows × width × bpp).
+    strip_bytes: u64,
+    charged: bool,
 }
 
 impl TracingSource {
@@ -65,10 +83,35 @@ impl TracingSource {
             timing: None,
             #[cfg(feature = "std")]
             strip_events: false,
+            #[cfg(feature = "std")]
+            memory: None,
             format,
             width,
             height,
         }
+    }
+
+    /// Account this node's buffers on the shared memory ledger (zenpipe#8):
+    /// `materialize_bytes` (the full input frame, for materializing nodes)
+    /// plus the output strip buffer, charged at the first pull and released
+    /// at EOF.
+    #[cfg(feature = "std")]
+    pub fn with_memory(
+        mut self,
+        ledger: alloc::sync::Arc<std::sync::Mutex<crate::trace::MemoryLedger>>,
+        label: alloc::string::String,
+        materialize_bytes: u64,
+        input_desc: alloc::string::String,
+    ) -> Self {
+        self.memory = Some(MemoryAccount {
+            ledger,
+            label,
+            materialize_bytes,
+            input_desc,
+            strip_bytes: 0,
+            charged: false,
+        });
+        self
     }
 
     /// Enable timing measurement with a shared timing handle.
@@ -124,6 +167,29 @@ impl Source for TracingSource {
                     t.bytes_processed += bytes;
                 }
 
+                // Memory timeline: charge this node's buffers on the first
+                // pull (the materialized frame exists by the time the first
+                // strip comes back; the strip buffer is sized from it).
+                #[cfg(feature = "std")]
+                if let Some(acct) = self.memory.as_mut()
+                    && !acct.charged
+                {
+                    acct.charged = true;
+                    acct.strip_bytes =
+                        self.width as u64 * rows as u64 * self.format.bytes_per_pixel() as u64;
+                    let mut ledger = acct.ledger.lock().unwrap_or_else(|e| e.into_inner());
+                    if acct.materialize_bytes > 0 {
+                        ledger.allocate(
+                            acct.materialize_bytes,
+                            alloc::format!("+materialize {} {}", acct.label, acct.input_desc),
+                        );
+                    }
+                    ledger.allocate(
+                        acct.strip_bytes,
+                        alloc::format!("+strip {} {}x{} rows", acct.label, self.width, rows),
+                    );
+                }
+
                 // Accumulate for dump if active.
                 #[cfg(feature = "std")]
                 if let Some(ref mut dump) = self.dump_buf {
@@ -150,6 +216,10 @@ impl Source for TracingSource {
                     let mut t = timing_arc.lock().unwrap();
                     t.total_duration += start.elapsed();
                 }
+
+                // Memory timeline: this node's buffers are done.
+                #[cfg(feature = "std")]
+                self.release_memory();
 
                 // Pipeline exhausted — write dump if active.
                 #[cfg(feature = "std")]
@@ -207,8 +277,32 @@ impl TracingSource {
 }
 
 #[cfg(feature = "std")]
+impl TracingSource {
+    /// Release this node's accounted buffers — at its EOF pull, or when the
+    /// pipeline is dropped if the consumer stopped pulling before EOF (a
+    /// resize knows its input height and never asks for the strip after
+    /// the last row).
+    fn release_memory(&mut self) {
+        if let Some(acct) = self.memory.as_mut()
+            && acct.charged
+        {
+            acct.charged = false;
+            let mut ledger = acct.ledger.lock().unwrap_or_else(|e| e.into_inner());
+            ledger.release(acct.strip_bytes, alloc::format!("-strip {}", acct.label));
+            if acct.materialize_bytes > 0 {
+                ledger.release(
+                    acct.materialize_bytes,
+                    alloc::format!("-materialize {}", acct.label),
+                );
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
 impl Drop for TracingSource {
     fn drop(&mut self) {
         self.write_dump();
+        self.release_memory();
     }
 }

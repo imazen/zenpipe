@@ -436,10 +436,29 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   from the drained graph; `strip_timing()` renders an ASCII per-strip
   chart; `to_text()` prints phases + slowest strip; `to_json()` gains
   per-node `timing` / `strip_events` and a top-level `execution` object.
-  Not included: the memory timeline / `MemorySnapshot` — there is no data
-  source until `AllocationTracker` is wired (see root CLAUDE.md), and
-  `ImageJob` still does not surface its trace (only `orchestrate::process_*`,
-  `build_pipeline_traced`, and `compile_traced` do).
+
+- **Memory timeline + `JobResult::trace`** (#8, closes the two items the
+  entry above left open): `TraceConfig::memory_timeline` /
+  `with_memory_timeline()` (on in `full()`) attaches a `MemoryLedger` to
+  the `PipelineTrace`; every `TracingSource` charges the buffers the
+  engine knows it allocates — the full input frame a materializing node
+  (`Orient`, `CropWhitespace`, `Analyze`, `FillRect`, `Materialize`)
+  drains into, plus its output strip buffer — at its first pull and
+  releases them at its EOF pull or when the pipeline drops, each as a
+  `MemorySnapshot { allocated_bytes, allocation_count, timestamp, event }`
+  stamped from the start of `compile_traced`. `ExecutionTrace` gains
+  `peak_memory_bytes` + `memory`; `FullPipelineTrace::memory_timeline()`
+  renders the ASCII bar chart, `to_text()` prints the peak, `to_json()`
+  emits `execution.memory`. This is an *accounting of the graph's own
+  buffer plan against wall-clock*, not a heap measurement (no allocator
+  hook; codec-internal and resize-kernel buffers are not counted) — the
+  doc on `MemoryLedger` says exactly what is in and out; `AllocationTracker`
+  stays unwired per root CLAUDE.md. `ImageJob::with_trace` now surfaces
+  the trace on `JobResult::trace` (new field), finalized after the encode
+  drained the pipeline. Tests: materialize/strip charge + release + zero
+  at the end on an Orient→Resize graph, off-by-default, and the job path
+  (`tests/trace_execution.rs`); mutation-verified (skipping the
+  materialize charge and skipping `finish_execution` each fail).
 
 #### Fixed
 

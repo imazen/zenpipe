@@ -217,6 +217,12 @@ pub struct JobResult {
     pub encode_results: Vec<EncodeResult>,
     /// Decode metadata for each input, keyed by io_id.
     pub decode_infos: Vec<DecodeInfo>,
+    /// The pipeline trace when [`ImageJob::with_trace`] was set, with the
+    /// execution layer finalized after the encode drained the pipeline
+    /// (`to_text()` / `to_json()` / `memory_timeline()` ready). `None`
+    /// without a trace config, and on paths that never compile a pixel
+    /// graph (the lossless-JPEG orient fast path).
+    pub trace: Option<crate::trace::FullPipelineTrace>,
 }
 
 // ─── CMS mode ───
@@ -742,6 +748,7 @@ impl<'a> ImageJob<'a> {
                         extension: decision.format.extension().to_string(),
                     }],
                     decode_infos: vec![decode_info],
+                    trace: None,
                 });
             }
         }
@@ -872,14 +879,23 @@ impl<'a> ImageJob<'a> {
             limits: self.limits.as_ref(),
         };
 
-        let output = crate::orchestrate::stream(source, &config, gain_map_sidecar)?;
+        let mut output = crate::orchestrate::stream(source, &config, gain_map_sidecar)?;
+        // The trace's NodeTiming / memory handles are shared with the live
+        // pipeline; finalize after the encode has drained it.
+        let trace = output.trace.take();
 
         // 10. Encode the output.
         let encode_result = self.stream_encode(output, &decision)?;
 
+        let trace = trace.map(|mut t| {
+            t.finish_execution();
+            t
+        });
+
         Ok(JobResult {
             encode_results: vec![encode_result],
             decode_infos: vec![decode_info],
+            trace,
         })
     }
 
@@ -2003,6 +2019,7 @@ mod tests {
                 has_animation: false,
                 mime_type: String::from("image/png"),
             }],
+            trace: None,
         };
         assert_eq!(jr.encode_results.len(), 1);
         assert_eq!(jr.decode_infos.len(), 1);
@@ -2015,6 +2032,7 @@ mod tests {
         let jr = JobResult {
             encode_results: vec![],
             decode_infos: vec![],
+            trace: None,
         };
         let cloned = jr.clone();
         assert!(cloned.encode_results.is_empty());

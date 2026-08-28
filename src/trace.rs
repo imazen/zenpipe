@@ -47,6 +47,13 @@ pub struct TraceConfig {
     #[cfg(feature = "std")]
     pub strip_events: bool,
 
+    /// Record a [`MemorySnapshot`] timeline of the buffers the engine
+    /// allocates (strip buffers, materialized frames) — see
+    /// [`MemoryLedger`] for what is and isn't counted (zenpipe#8). Opt-in:
+    /// one small allocation per event.
+    #[cfg(feature = "std")]
+    pub memory_timeline: bool,
+
     /// Directory to dump pixel snapshots per node.
     #[cfg(feature = "std")]
     pub pixel_dump_dir: Option<std::path::PathBuf>,
@@ -66,12 +73,15 @@ impl TraceConfig {
             #[cfg(feature = "std")]
             strip_events: false,
             #[cfg(feature = "std")]
+            memory_timeline: false,
+            #[cfg(feature = "std")]
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
     }
 
-    /// Trace all layers including bridge decisions and execution timing.
+    /// Trace all layers including bridge decisions, execution timing,
+    /// per-strip events and the memory timeline.
     #[cfg(feature = "std")]
     pub fn full() -> Self {
         Self {
@@ -79,6 +89,7 @@ impl TraceConfig {
             bridge: true,
             timing: true,
             strip_events: true,
+            memory_timeline: true,
             pixel_dump_dir: None,
             dump_nodes: Vec::new(),
         }
@@ -92,6 +103,13 @@ impl TraceConfig {
         self
     }
 
+    /// Enable the engine-accounted memory timeline (zenpipe#8).
+    #[cfg(feature = "std")]
+    pub fn with_memory_timeline(mut self) -> Self {
+        self.memory_timeline = true;
+        self
+    }
+
     /// Trace all layers + dump pixel snapshots to a directory.
     #[cfg(feature = "std")]
     pub fn with_pixel_dump(dir: impl Into<std::path::PathBuf>) -> Self {
@@ -100,6 +118,7 @@ impl TraceConfig {
             bridge: true,
             timing: true,
             strip_events: true,
+            memory_timeline: true,
             pixel_dump_dir: Some(dir.into()),
             dump_nodes: Vec::new(),
         }
@@ -414,6 +433,105 @@ pub struct SlowestStrip {
     pub event: StripEvent,
 }
 
+/// One point on the memory timeline (zenpipe#8).
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemorySnapshot {
+    /// Engine-accounted bytes live after this event.
+    pub allocated_bytes: u64,
+    /// Engine-accounted buffers live after this event.
+    pub allocation_count: u32,
+    /// Time since the trace started (the start of `compile_traced`).
+    pub timestamp: std::time::Duration,
+    /// What triggered the snapshot, e.g. `+materialize [2] Orient 800x600
+    /// RGBA8` or `-release [2] Orient`.
+    pub event: String,
+}
+
+/// Running memory account behind the timeline (zenpipe#8).
+///
+/// **What is counted:** the buffers the engine knows it allocates per
+/// node — the full input frame a materializing node (`Orient`,
+/// `CropWhitespace`, `Analyze`, `FillRect`, `Materialize`) drains
+/// upstream into, and each node's output strip buffer — charged when the
+/// node's first strip is pulled and released at its EOF pull or, for nodes
+/// whose consumer stops before EOF, when the pipeline is dropped. **What is
+/// not:** codec-internal buffers, resize kernel windows, allocator
+/// overhead, or anything outside the traced graph. It is an accounting of
+/// the graph's own buffer plan against wall-clock time, not a measurement
+/// of the process heap: use heaptrack / `time -v` for that. Timestamps are
+/// relative to the start of `compile_traced` so content-adaptive analysis
+/// that materializes during compilation lands on the same axis.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug)]
+pub struct MemoryLedger {
+    snapshots: Vec<MemorySnapshot>,
+    allocated: u64,
+    count: u32,
+    peak: u64,
+    start: std::time::Instant,
+}
+
+#[cfg(feature = "std")]
+impl Default for MemoryLedger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "std")]
+impl MemoryLedger {
+    /// Start the clock now.
+    pub fn new() -> Self {
+        Self {
+            snapshots: Vec::new(),
+            allocated: 0,
+            count: 0,
+            peak: 0,
+            start: std::time::Instant::now(),
+        }
+    }
+
+    /// Charge `bytes` for one buffer described by `event`.
+    pub fn allocate(&mut self, bytes: u64, event: String) {
+        self.allocated = self.allocated.saturating_add(bytes);
+        self.count = self.count.saturating_add(1);
+        self.peak = self.peak.max(self.allocated);
+        self.snapshot(event);
+    }
+
+    /// Release `bytes` of one buffer described by `event`.
+    pub fn release(&mut self, bytes: u64, event: String) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+        self.count = self.count.saturating_sub(1);
+        self.snapshot(event);
+    }
+
+    fn snapshot(&mut self, event: String) {
+        self.snapshots.push(MemorySnapshot {
+            allocated_bytes: self.allocated,
+            allocation_count: self.count,
+            timestamp: self.start.elapsed(),
+            event,
+        });
+    }
+
+    /// Every snapshot, in event order.
+    pub fn snapshots(&self) -> &[MemorySnapshot] {
+        &self.snapshots
+    }
+
+    /// Highest `allocated_bytes` seen.
+    pub fn peak_bytes(&self) -> u64 {
+        self.peak
+    }
+
+    /// Bytes currently accounted as live.
+    pub fn live_bytes(&self) -> u64 {
+        self.allocated
+    }
+}
+
 /// Execution-level trace (populated after pipeline drains).
 ///
 /// Build it from the drained graph trace with
@@ -430,6 +548,11 @@ pub struct ExecutionTrace {
     pub phases: Vec<(ExecutionPhase, std::time::Duration)>,
     /// Slowest single strip across all nodes (needs `strip_events`).
     pub slowest_strip: Option<SlowestStrip>,
+    /// Peak engine-accounted bytes (needs `memory_timeline`; see
+    /// [`MemoryLedger`] for what is counted). Zero when not recorded.
+    pub peak_memory_bytes: u64,
+    /// The memory timeline (needs `memory_timeline`); empty otherwise.
+    pub memory: Vec<MemorySnapshot>,
 }
 
 #[cfg(feature = "std")]
@@ -443,6 +566,11 @@ impl ExecutionTrace {
         let mut exec = ExecutionTrace::default();
         if let Some(d) = graph.compile_duration {
             exec.phases.push((ExecutionPhase::Compilation, d));
+        }
+        if let Some(m) = graph.memory.as_ref() {
+            let m = m.lock().unwrap_or_else(|e| e.into_inner());
+            exec.peak_memory_bytes = m.peak_bytes();
+            exec.memory = m.snapshots().to_vec();
         }
         // The output node is compiled last (highest trace_order); its
         // cumulative timing is the pipeline total and its strip count is the
@@ -660,12 +788,31 @@ impl Tracer {
             notes: Vec::new(),
             timing: timing_arc.clone(),
         };
-        trace_arc.lock().unwrap().push(entry.clone());
+        let memory = {
+            let mut t = trace_arc.lock().unwrap();
+            t.push(entry.clone());
+            t.memory.clone()
+        };
         let mut wrapped = crate::sources::TracingSource::new(source, &entry, None);
         if let Some(timing) = timing_arc {
             wrapped = wrapped
                 .with_timing(timing)
                 .with_strip_events(self.strip_events);
+        }
+        if let Some(ledger) = memory {
+            // A materializing node drains its whole input into one frame;
+            // charge that frame from its first pull to its EOF pull.
+            let frame = if materializes {
+                in_w as u64 * in_h as u64 * in_fmt.bytes_per_pixel() as u64
+            } else {
+                0
+            };
+            wrapped = wrapped.with_memory(
+                ledger,
+                alloc::format!("[{trace_order}] {op_name}"),
+                frame,
+                alloc::format!("{in_w}x{in_h} {}", format_short(&in_fmt)),
+            );
         }
         Box::new(wrapped)
     }
@@ -819,6 +966,10 @@ pub struct PipelineTrace {
     /// [`ExecutionPhase::Compilation`] phase). Set by the compiler.
     #[cfg(feature = "std")]
     pub compile_duration: Option<std::time::Duration>,
+    /// The memory ledger, present when [`TraceConfig::memory_timeline`] was
+    /// set; shared with the live `TracingSource`s (zenpipe#8).
+    #[cfg(feature = "std")]
+    pub memory: Option<alloc::sync::Arc<std::sync::Mutex<MemoryLedger>>>,
 }
 
 impl PipelineTrace {
@@ -828,6 +979,8 @@ impl PipelineTrace {
             edges: Vec::new(),
             #[cfg(feature = "std")]
             compile_duration: None,
+            #[cfg(feature = "std")]
+            memory: None,
         }
     }
 
@@ -1305,6 +1458,13 @@ impl FullPipelineTrace {
                     s.trace_order, s.node, s.event.strip_num, s.event.rows, s.event.duration
                 ));
             }
+            if !exec.memory.is_empty() {
+                out.push_str(&format!(
+                    "  peak memory (engine-accounted buffers): {} bytes over {} events\n",
+                    exec.peak_memory_bytes,
+                    exec.memory.len()
+                ));
+            }
 
             // Per-node timing (differential)
             let timed: Vec<_> = self
@@ -1345,6 +1505,39 @@ impl FullPipelineTrace {
     pub fn finish_execution(&mut self) -> &ExecutionTrace {
         self.execution = Some(ExecutionTrace::from_graph(&self.graph));
         self.execution.as_ref().unwrap()
+    }
+
+    /// ASCII memory-over-time bar chart from the recorded
+    /// [`MemorySnapshot`]s — needs [`TraceConfig::memory_timeline`] and a
+    /// prior [`finish_execution`](Self::finish_execution). One row per
+    /// event: timestamp, live bytes, bar scaled to the peak, event label.
+    /// Empty string when nothing was recorded.
+    pub fn memory_timeline(&self) -> String {
+        let mut out = String::new();
+        let Some(exec) = self.execution.as_ref() else {
+            return out;
+        };
+        if exec.memory.is_empty() {
+            return out;
+        }
+        const WIDTH: u64 = 40;
+        let peak = exec.peak_memory_bytes.max(1);
+        out.push_str(&format!(
+            "Memory timeline (engine-accounted buffers, peak {} bytes)\n",
+            exec.peak_memory_bytes
+        ));
+        for s in &exec.memory {
+            let bar = (s.allocated_bytes.saturating_mul(WIDTH) / peak) as usize;
+            out.push_str(&format!(
+                "  {:>10?} {:>12} B ({:>2}) |{:<40}| {}\n",
+                s.timestamp,
+                s.allocated_bytes,
+                s.allocation_count,
+                "#".repeat(bar),
+                s.event
+            ));
+        }
+        out
     }
 
     /// ASCII per-strip timing chart, one row per strip per node — needs
@@ -1521,6 +1714,28 @@ impl FullPipelineTrace {
                     sl.event.strip_num,
                     sl.event.duration.as_micros()
                 );
+            }
+            if !exec.memory.is_empty() {
+                let _ = write!(
+                    s,
+                    ",\"memory\":{{\"peak_bytes\":{},\"snapshots\":[",
+                    exec.peak_memory_bytes
+                );
+                for (i, m) in exec.memory.iter().enumerate() {
+                    if i > 0 {
+                        s.push(',');
+                    }
+                    let _ = write!(
+                        s,
+                        "{{\"us\":{},\"bytes\":{},\"count\":{},\"event\":",
+                        m.timestamp.as_micros(),
+                        m.allocated_bytes,
+                        m.allocation_count
+                    );
+                    json_string(&mut s, &m.event);
+                    s.push('}');
+                }
+                s.push_str("]}");
             }
             s.push('}');
         }

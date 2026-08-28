@@ -1146,6 +1146,13 @@ impl PipelineGraph {
         self.validate()?;
         let trace =
             alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
+        if config.memory_timeline {
+            // The ledger's clock starts here so analysis-time
+            // materializations share the execution axis (zenpipe#8).
+            trace.lock().unwrap().memory = Some(alloc::sync::Arc::new(std::sync::Mutex::new(
+                crate::trace::MemoryLedger::new(),
+            )));
+        }
 
         // Capture graph edges into the trace.
         {

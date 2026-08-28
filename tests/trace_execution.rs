@@ -156,3 +156,156 @@ fn finish_execution_populates_totals_phases_and_slowest_strip() {
     assert!(json.contains("\"execution\":{"), "{json}");
     assert!(json.contains("\"phase\":\"Execution\""), "{json}");
 }
+
+// ─── Memory timeline (zenpipe#8) ───
+
+/// Source → Orient(Rotate90) (materializes its 128×256 input) → Resize →
+/// Output, drained with the given config; returns the finished trace.
+fn traced_with_materialization(config: &TraceConfig) -> FullPipelineTrace {
+    let mut g = PipelineGraph::new();
+    let src = g.add_node(NodeOp::Source);
+    let orient = g.add_node(NodeOp::Orient(zenlayout::Orientation::Rotate90));
+    let resize = g.add_node(NodeOp::Resize {
+        w: 64,
+        h: 32,
+        filter: None,
+        sharpen_percent: None,
+    });
+    let out = g.add_node(NodeOp::Output);
+    g.add_edge(src, orient, EdgeKind::Input);
+    g.add_edge(orient, resize, EdgeKind::Input);
+    g.add_edge(resize, out, EdgeKind::Input);
+    let mut sources = HashMap::new();
+    sources.insert(src, solid_source(128, 256, [10, 20, 30, 255]));
+    let (mut pipeline, trace) = g.compile_traced(sources, config).unwrap();
+    drain(pipeline.as_mut());
+    // Buffers of nodes whose consumer never pulls past the last row are
+    // released when the pipeline drops, so drop it before finalizing.
+    drop(pipeline);
+    let mut full = FullPipelineTrace {
+        riapi: None,
+        bridge: None,
+        graph: trace.lock().unwrap().clone(),
+        execution: None,
+    };
+    full.finish_execution();
+    full
+}
+
+#[test]
+fn memory_timeline_charges_materialized_frames_and_releases_everything() {
+    let full = traced_with_materialization(&TraceConfig::metadata_only().with_memory_timeline());
+    let exec = full.execution.as_ref().unwrap();
+    assert!(!exec.memory.is_empty(), "snapshots recorded");
+
+    // The Orient node materializes its 128×256 RGBA8 input: one event
+    // charges exactly that frame, and the peak is at least that.
+    let frame = 128 * 256 * 4u64;
+    let mat = exec
+        .memory
+        .iter()
+        .find(|s| s.event.starts_with("+materialize") && s.event.contains("Orient"))
+        .expect("materialize event for Orient");
+    assert!(mat.event.contains("128x256"), "{}", mat.event);
+    assert!(mat.allocated_bytes >= frame, "{}", mat.allocated_bytes);
+    assert!(exec.peak_memory_bytes >= frame);
+    assert!(
+        exec.memory
+            .iter()
+            .any(|s| s.event.starts_with("-materialize") && s.event.contains("Orient")),
+        "release event for Orient"
+    );
+    // Streaming nodes charge only a strip buffer.
+    assert!(
+        exec.memory
+            .iter()
+            .any(|s| s.event.starts_with("+strip") && s.event.contains("Resize")),
+        "strip buffer event for Resize"
+    );
+    // Timestamps never go backwards; everything is released by the end.
+    for w in exec.memory.windows(2) {
+        assert!(w[1].timestamp >= w[0].timestamp);
+    }
+    let last = exec.memory.last().unwrap();
+    assert_eq!(
+        (last.allocated_bytes, last.allocation_count),
+        (0, 0),
+        "{last:?}"
+    );
+    // Peak equals the max over snapshots.
+    assert_eq!(
+        exec.peak_memory_bytes,
+        exec.memory.iter().map(|s| s.allocated_bytes).max().unwrap()
+    );
+
+    // Renderers.
+    let chart = full.memory_timeline();
+    assert!(
+        chart.contains("peak") && chart.contains("+materialize"),
+        "{chart}"
+    );
+    assert!(
+        full.to_text()
+            .contains("peak memory (engine-accounted buffers)")
+    );
+    let json = full.to_json();
+    assert!(json.contains("\"memory\":{\"peak_bytes\":"), "{json}");
+    assert!(json.contains("\"event\":\"+materialize"), "{json}");
+}
+
+#[test]
+fn memory_timeline_is_off_unless_requested() {
+    let full = traced_with_materialization(&TraceConfig::metadata_only().with_strip_events());
+    let exec = full.execution.as_ref().unwrap();
+    assert!(exec.memory.is_empty());
+    assert_eq!(exec.peak_memory_bytes, 0);
+    assert!(full.memory_timeline().is_empty());
+    assert!(!full.to_json().contains("\"memory\""));
+}
+
+/// `ImageJob::with_trace` now surfaces the finished trace on `JobResult`.
+#[cfg(all(feature = "job", feature = "nodes-png"))]
+#[test]
+fn image_job_surfaces_its_finished_trace() {
+    use zenpipe::job::ImageJob;
+    let pixels: Vec<u8> = (0..48u32 * 40 * 4).map(|i| (i * 7) as u8).collect();
+    let slice = zenpixels::PixelSlice::new(&pixels, 48, 40, 48 * 4, format::RGBA8_SRGB).unwrap();
+    let png = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
+        .encode(slice, true)
+        .expect("fixture png")
+        .data()
+        .to_vec();
+    let nodes = zenpipe::full_registry().from_querystring("w=24").instances;
+    let cfg = TraceConfig::full();
+    let result = ImageJob::new()
+        .add_input(0, png.clone())
+        .add_output(1)
+        .with_nodes(&nodes)
+        .with_output_extension("png")
+        .with_trace(&cfg)
+        .run()
+        .expect("job");
+    let trace = result.trace.as_ref().expect("trace surfaced on JobResult");
+    let exec = trace.execution.as_ref().expect("execution finalized");
+    assert!(exec.total_strips > 0, "{exec:?}");
+    assert!(
+        exec.phases
+            .iter()
+            .any(|(p, _)| *p == ExecutionPhase::Execution)
+    );
+    assert!(
+        !exec.memory.is_empty(),
+        "full() records the memory timeline"
+    );
+    assert!(trace.to_text().contains("Execution Trace"));
+
+    // Without a trace config there is none.
+    let result = ImageJob::new()
+        .add_input(0, png)
+        .add_output(1)
+        .with_nodes(&nodes)
+        .with_output_extension("png")
+        .run()
+        .expect("job");
+    assert!(result.trace.is_none());
+}
