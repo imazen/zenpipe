@@ -396,9 +396,31 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   encode error surfacing from a worker thread; mutation-verified
   (col-major Zoomify numbering, reversed parallel results, and dropped
   ZIP64 records each fail their test). Still not done: tiled-TIFF / mmap
-  input (`MmapTiledSource`, needs zentiff tiled access), temp-file
-  materialization for analysis barriers, column-parallel execution,
-  PMTiles, and heaptrack-measured memory numbers.
+  input (`MmapTiledSource`, needs zentiff tiled access), column-parallel
+  execution, PMTiles.
+
+- **Tile pyramid memory, measured** (#24): `examples/tile_pyramid_mem.rs`
+  streams a synthetic image (rows generated on the fly) through a
+  counting writer; `/usr/bin/time -l` max RSS on an Apple M4 Pro, release,
+  RGBA8 / DZI 254/1: 10 000×1000 → 38.3 MB (formula 31.1), 40 000×1000 →
+  124.8 MB (123.7), 100 000×600 → 298.1 MB (308.9); runtime baseline
+  1.8 MB. Height does not enter (≤ `tile + 2·overlap + 1` rows per level
+  are held), so the issue's "100 K px wide under 1 GB" holds with room.
+  Recorded in the `tiles` module docs.
+
+- **`sources::TempFileSource` — decode once, replay from disk** (#24, the
+  "analysis barriers without full materialization" step): drains a
+  source into a spool file (`ZENPIPE_SPOOL_DIR` or the OS temp dir,
+  removed on drop) and replays it as strips on every `rewind()`, holding
+  one strip of RAM; the OS page cache owns residency. Two-pass streaming
+  operations (statistics pass, then the real pass) can run on gigapixel
+  input without a frame in memory. Not an mmap-backed
+  `MaterializedSource`: every mmap crate maps through an `unsafe fn` and
+  zenpipe forbids `unsafe`, so random-access analysis (`Analyze`,
+  `CropWhitespace`, `EffectSource`) still materializes. Unit-tested:
+  byte-exact replay across passes from a materialized and a
+  row-generator source, exhaustion until rewind, short upstream rejected
+  with the spool removed.
 
 - **Auto-deskew, first chunk** (#27): `EffectSource` now resolves
   content-adaptive effects (`DimensionEffect::forward() == None`) against

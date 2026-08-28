@@ -11,6 +11,8 @@ mod icc_transform;
 mod mask_transform;
 mod materialize;
 mod resize;
+#[cfg(feature = "std")]
+mod spool;
 mod tee;
 #[cfg(feature = "std")]
 mod tracing;
@@ -31,6 +33,8 @@ pub use icc_transform::IccTransformSource;
 pub use mask_transform::MaskTransformSource;
 pub use materialize::MaterializedSource;
 pub use resize::{ResizeF32Source, ResizeSource};
+#[cfg(feature = "std")]
+pub use spool::TempFileSource;
 pub use tee::{TeeCursor, TeeSource};
 #[cfg(feature = "std")]
 pub use tracing::TracingSource;

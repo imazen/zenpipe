@@ -14,8 +14,23 @@
 //! Buffer bytes ≈ `Σ_levels w_level × (tile_size + 2·overlap) × bpp`
 //! ≈ `2 × w × (tile_size + 2·overlap) × bpp` (geometric sum) plus one
 //! tile-row scratch — a formula, see
-//! [`TilePyramidSink::buffer_bytes_estimate`]; measure with heaptrack
-//! before quoting a number for a deployment.
+//! [`TilePyramidSink::buffer_bytes_estimate`].
+//!
+//! Measured (2026-08-28, `examples/tile_pyramid_mem.rs`, release, Apple
+//! M4 Pro / macOS 26.5, `/usr/bin/time -l` maximum resident set size,
+//! RGBA8, DZI 254/1, rows generated on the fly so the source holds no
+//! frame; the runtime baseline at 256×16 is 1.8 MB):
+//!
+//! | image         | levels | tiles | max RSS  | formula  |
+//! |---------------|--------|-------|----------|----------|
+//! | 10 000 × 1000 |   15   |   229 |  38.3 MB |  31.1 MB |
+//! | 40 000 × 1000 |   17   |   879 | 124.8 MB | 123.7 MB |
+//! | 100 000 × 600 |   18   |  1785 | 298.1 MB | 308.9 MB |
+//!
+//! RSS does not depend on the height (the sink never holds more than
+//! `tile_size + 2·overlap + 1` rows per level), so a gigapixel 100 000 px
+//! wide image stays under 300 MB of sink buffers. Re-measure on your
+//! platform before quoting a number for a deployment.
 //!
 //! # Layouts and stores (`std`)
 //!

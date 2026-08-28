@@ -6,20 +6,20 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1352 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 23 lines (23 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1361 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 23 lines (23 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       200
+#   pub types (struct/enum/trait/alias)       201
 #   pub consts/statics                         45
 #   free functions                             56
-#   inherent methods                          321
+#   inherent methods                          328
 #   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 21
-#   trait roster entries (type × trait)       359
-#   auto-trait-complete types                 123
+#   trait roster entries (type × trait)       361
+#   auto-trait-complete types                 124
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
@@ -38,14 +38,14 @@
 #   riapi                             2
 #   session                           1
 #   sidecar                          25
-#   sources                          72
+#   sources                          80
 #   srcset                            2
 #   tiles                            92
 #   trace                           169
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1167 lines)
+## items (1175 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -494,6 +494,14 @@ pub fn sources::TeeSource::height(&self) -> u32
 pub fn sources::TeeSource::new(alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::TeeSource::new_checked(alloc::boxed::Box<dyn Source>, &limits::Limits) -> PipeResult<Self>
 pub fn sources::TeeSource::width(&self) -> u32
+pub struct sources::TempFileSource
+pub fn sources::TempFileSource::bytes_on_disk(&self) -> u64
+pub fn sources::TempFileSource::from_source(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<Self>
+pub fn sources::TempFileSource::from_source_in(&std::path::Path, alloc::boxed::Box<dyn Source>, u32) -> PipeResult<Self>
+pub fn sources::TempFileSource::passes(&self) -> u32
+pub fn sources::TempFileSource::path(&self) -> &std::path::Path
+pub fn sources::TempFileSource::rewind(&mut self)
+pub fn sources::TempFileSource::spool_dir() -> std::path::PathBuf
 pub struct sources::TracingSource
 pub fn sources::TracingSource::new(alloc::boxed::Box<dyn Source>, &trace::TraceEntry, core::option::Option<std::path::PathBuf>) -> Self
 pub fn sources::TracingSource::with_memory(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>, alloc::string::String, u64, alloc::string::String) -> Self
@@ -1215,7 +1223,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (146 types)
+## trait impls (147 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1258,6 +1266,7 @@ sources::MaterializedSource: Clone, Source
 sources::ResizeF32Source: Source
 sources::ResizeSource: Source
 sources::TeeCursor: Source
+sources::TempFileSource: Drop, Source
 sources::TracingSource: Drop, Source
 sources::TransformSource: Source
 sources::WindowedFilterSource: Source
@@ -1366,7 +1375,7 @@ zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-123 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+124 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe
