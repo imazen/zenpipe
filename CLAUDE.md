@@ -58,7 +58,7 @@ threading, hdr directives, compat security. Verified remaining:
   canvas); `(stretch, canvas)` → Distort without canvas pad.
 - **Generated docs regen pending**: `docs/querystring.md` / `docs/nodes/`
   don't list the hand-written RIAPI adapter keys (crop/flip/rotate/
-  srotate/sflip/autorotate/frame/roundcorners/icc/hdr) — the generator
+  srotate/sflip/autorotate/autodeskew/frame/roundcorners/icc/hdr) — the generator
   only walks `#[kv]` params. Give adapter schemas synthetic ParamDescs or
   extend the generator, then regenerate. (`docs/querystring.md:159` /
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;

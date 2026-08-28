@@ -89,10 +89,15 @@ test.describe('srcset generator', () => {
     await page.goto('/');
     await loadTestImage(page);
     await page.locator('#export-btn').click();
-    // Enough jobs to still be running when Cancel lands: 50 widths × 5 formats.
-    const widths = Array.from({ length: 50 }, (_, i) => 20 + i * 3).join(',');
+    // Enough jobs to still be running when Cancel lands on either backend
+    // (the mock encodes ~200 jobs/s): 180 distinct widths ≤ the 200 px
+    // source × 4 formats = 720 jobs. JXL stays unchecked: on the deployed
+    // WASM build every JXL export ends in `unreachable` (measured
+    // 2026-08-28 at 100/160/200 px; JPEG/WebP/AVIF/PNG all encode), which
+    // would turn this into a codec test.
+    const widths = Array.from({ length: 180 }, (_, i) => 20 + i).join(',');
     await page.fill('#srcset-widths', widths);
-    for (const v of ['avif', 'jxl', 'png']) {
+    for (const v of ['avif', 'png']) {
       await page.locator(`#srcset-formats input[value="${v}"]`).check();
     }
     let downloaded = false;
@@ -105,7 +110,7 @@ test.describe('srcset generator', () => {
     const stats = await page.evaluate(() => window.__zenpipeExportPool.stats());
     expect(stats.alive).toBe(0);
     expect(stats.running).toBe(0);
-    expect(stats.completed).toBeLessThan(250);
+    expect(stats.completed).toBeLessThan(600);
     await page.waitForTimeout(500);
     expect(downloaded).toBe(false);
 

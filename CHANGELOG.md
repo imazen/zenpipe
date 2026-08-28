@@ -299,9 +299,15 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   plain Export button also runs on the pool now. `tests/srcset.spec.js`
   (playwright, mock backend): zip entries = widths × formats with valid
   CRCs, snippet contents, ≥2 workers used, cancel leaves no workers and
-  no download then respawns, pool reset on image change. Verified with
-  the OffscreenCanvas mock only — the WASM `pkg/` build is not produced
-  locally; the pool speaks the same worker protocol either way.
+  no download then respawns, pool reset on image change. Verified on
+  both backends: the OffscreenCanvas mock locally, and the deployed
+  Pages WASM build (`d326fe3b`, mirrored to a local server) where the
+  same 4 tests pass with real JPEG/WebP/AVIF encodes (4 pool workers
+  finished 117 of 200 encodes in 0.8 s before Cancel landed). Found
+  while doing so: on that WASM build every JXL export ends in
+  `unreachable` at 100/160/200 px while JPEG/WebP/AVIF/PNG encode fine
+  (the PNG skip note in `features.spec.js` is stale) — a codec-in-WASM
+  issue outside this feature.
 
 #### Fixed
 
