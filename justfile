@@ -86,8 +86,29 @@ api-doc-check:
 fmt-check:
     cargo fmt --all --check
 
+# Both fuzz workspaces are standalone `[workspace] members = ["."]` packages
+# excluded from the root, so `cargo check --all-targets` and `just clippy` at
+# the repo root never touch them; without this they only ever get compiled by
+# hand. `cargo check` rather than `cargo fuzz build` for the same reason CI
+# does it: the drift this catches is type errors and resolution failures, and
+# cargo-fuzz would cost a nightly toolchain plus a full sanitizer-instrumented
+# codegen of the codec graph to catch the same class.
+#
+# `zencodecs/fuzz` path-patches five sibling checkouts (`../../../zenavif`,
+# `zenbitmaps`, `zenjpeg`, `zenanalyze`, `ultrahdr`) plus `codec-corpus/crate`;
+# they must be checked out next to this repo or its cell fails to resolve.
+#
+# Compile every fuzz target — what .github/workflows/fuzz.yml gates.
+fuzz-check:
+    cd fuzz && cargo check --all-targets
+    cd zencodecs/fuzz && cargo check --all-targets
+
+# Replay the committed crash seeds (zencodecs/fuzz/regression/) on stable.
+fuzz-regression:
+    cargo test -p zencodecs --no-default-features --features "std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp" --test fuzz_regression -- --nocapture
+
 # Run all CI checks locally
-ci: fmt-check clippy test
+ci: fmt-check clippy test fuzz-check fuzz-regression
 
 # Build documentation site
 site-build:
