@@ -24,10 +24,10 @@ fuzz_target!(|input: FuzzInput| {
     let max_frames = input.max_frames.max(1) as u32;
 
     let limits = Limits::none()
-        .with_max_width(max_w as u64)
-        .with_max_height(max_h as u64)
+        .with_max_width(max_w as u32)
+        .with_max_height(max_h as u32)
         .with_max_pixels((max_w as u64) * (max_h as u64))
-        .with_max_memory_bytes(max_mem)
+        .with_max_memory(max_mem)
         .with_max_frames(max_frames);
 
     let result = DecodeRequest::new(&input.data)

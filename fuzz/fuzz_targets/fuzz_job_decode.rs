@@ -18,6 +18,10 @@ fn fuzz_limits() -> Limits {
         max_height: Some(4096),
         max_frames: Some(4),
         max_total_pixels: Some(64_000_000),
+        // Same ceiling as max_memory_bytes: an unbounded encode buffer is an
+        // OOM the fuzzer would report as a crash, which is noise rather than a
+        // finding. Added when `Limits` grew the field (9cb07998).
+        max_output_bytes: Some(64 * 1024 * 1024),
         max_duration: Some(core::time::Duration::from_secs(10)),
     }
 }

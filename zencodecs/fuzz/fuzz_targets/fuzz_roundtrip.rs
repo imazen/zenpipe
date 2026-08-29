@@ -65,7 +65,7 @@ fuzz_target!(|input: RoundtripInput| {
         .with_max_width(4096)
         .with_max_height(4096)
         .with_max_pixels(4_000_000)
-        .with_max_memory_bytes(64 * 1024 * 1024)
+        .with_max_memory(64 * 1024 * 1024)
         .with_max_frames(50);
     let decoded = match DecodeRequest::new(encoded.data())
         .with_limits(&limits)
