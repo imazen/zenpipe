@@ -107,8 +107,22 @@ fuzz-check:
 fuzz-regression:
     cargo test -p zencodecs --no-default-features --features "std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp" --test fuzz_regression -- --nocapture
 
+# A git dep with no `rev` re-resolves to whatever the branch points at, so the
+# AVIF decoder under this repo (imazen/zenavif -> imazen/rav1d-safe) can change
+# with no edit to any manifest — and no job here enables `avif-decode`, so
+# nothing else would notice. The self-test runs first so a check that has
+# stopped detecting anything fails loudly instead of passing vacuously.
+# Audit a sibling repo with:
+#   python3 scripts/check-decoder-pins.py --root ../zentone \
+#       --expect https://github.com/imazen/zenavif=<rev>
+#
+# Fail if the AVIF-decoder git deps float, disagree, or sit dead as an unused patch
+check-pins:
+    python3 scripts/check-decoder-pins.py --self-test
+    python3 scripts/check-decoder-pins.py
+
 # Run all CI checks locally
-ci: fmt-check clippy test fuzz-check fuzz-regression
+ci: fmt-check clippy check-pins test fuzz-check fuzz-regression
 
 # Build documentation site
 site-build:

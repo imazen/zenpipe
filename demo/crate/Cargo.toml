@@ -77,7 +77,11 @@ zenpdf = { git = "https://github.com/imazen/zenextras" }
 # 0.1.7 is yanked". Present at the workspace root; this table drifted out of
 # sync with it (the Pages deploy hides the drift by overwriting this whole
 # section with the root's, so only local `cargo build` in demo/crate saw it).
-zenavif = { git = "https://github.com/imazen/zenavif" }
+# Rev-pinned to the same rev as the root table's entry — it is what fixes the
+# rav1d-safe decoder (see the root manifest). This crate's committed lock had
+# fallen back to the REGISTRY at zenavif 0.1.6 while this entry floated, i.e.
+# the patch was declared but not reflected in the resolved graph at all.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg

@@ -71,3 +71,7 @@ demo/crate/target-threaded/
 
 # jj (colocated) metadata
 .jj/
+
+# Python bytecode from scripts/ (e.g. scripts/check-decoder-pins.py)
+__pycache__/
+*.pyc

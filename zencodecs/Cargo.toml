@@ -71,7 +71,14 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `../zenavif/zenavif-parse`, so there is one zenavif-parse in the graph in
 # both CI and bare-clone mode. Parser entry points return `whereat::At<Error>`
 # from 0.7.0 on. Return to a registry spec at the 0.7.0 publish.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", optional = true, features = ["eager"] }
+# Rev-pinned, and it MUST be the same rev as the `zenavif` patch entry at the
+# workspace root. cargo treats `git+URL` and `git+URL?rev=X` as DIFFERENT
+# sources, so a rev here that disagrees with (or is missing next to) the root
+# pin puts two copies of the imazen/zenavif workspace in the graph and its
+# `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
+# boundary. See the root manifest's zenavif entry for why that rev is the one
+# that decides which rav1d-safe decoder this repo uses.
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to

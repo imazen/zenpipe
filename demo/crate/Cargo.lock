@@ -824,8 +824,7 @@ dependencies = [
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5f921332331631dd8716a93d81aef9ac21245da74af62bc14000a4fd7fdbfd"
+source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -834,9 +833,8 @@ dependencies = [
 
 [[package]]
 name = "rav1d-safe"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "717c3ef9a98101f3d2e33c4a8a4d1fd8b4fb0d39fa67a838e3308386ad9e7a1a"
+version = "0.6.0"
+source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
 dependencies = [
  "aligned",
  "archmage",
@@ -845,6 +843,7 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
+ "enough",
  "nasm-rs",
  "parking_lot",
  "paste",
@@ -853,6 +852,7 @@ dependencies = [
  "safe_unaligned_simd",
  "strum",
  "to_method",
+ "whereat",
  "zerocopy",
 ]
 
@@ -1281,9 +1281,8 @@ dependencies = [
 
 [[package]]
 name = "zenavif"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d998e2cd26b3f82d0cf7fd5f36b3d81dd07184b90c2f53328df05fdcaabf6cb"
+version = "0.1.7"
+source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1297,6 +1296,7 @@ dependencies = [
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
+ "ultrahdr-core",
  "whereat",
  "yuv",
  "zenavif-parse",
@@ -1308,9 +1308,8 @@ dependencies = [
 
 [[package]]
 name = "zenavif-parse"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ea3a5640719078e3d91e5feab60dd5d7cff3c34bf5c666925044745c58569d"
+version = "0.7.0"
+source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1319,16 +1318,17 @@ dependencies = [
  "fallible_collections",
  "leb128",
  "log",
+ "whereat",
  "zencodec",
 ]
 
 [[package]]
 name = "zenavif-serialize"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbc63468f1ad230080baa8f87b0bf1b6aad9987f85e533566337181e0a5349c6"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d025ece47da74cbd74c245302bd45bbf8e"
 dependencies = [
  "arrayvec",
+ "whereat",
 ]
 
 [[package]]
@@ -1675,9 +1675,8 @@ dependencies = [
 
 [[package]]
 name = "zenrav1e"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c2f798defdace5a2d991e4f679697768cf256a3cef130bfa2d84702cebf3a76"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037553434efb57ecbf4414c8b49922ba3e4"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -1704,19 +1703,20 @@ dependencies = [
  "thiserror",
  "v_frame",
  "wasm-bindgen",
+ "whereat",
 ]
 
 [[package]]
 name = "zenravif"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51edf23ff0690e4a7c3c7df67ee2143709f9bf33ecb8785cfffa33bba95ac314"
+version = "0.2.0"
+source = "git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6e7395fad67c87ddab676c4df59575a41"
 dependencies = [
  "almost-enough",
  "imgref",
  "loop9",
  "quick-error",
  "rgb",
+ "whereat",
  "zenavif-serialize",
  "zenrav1e",
 ]
@@ -1830,9 +1830,14 @@ version = "0.1.0"
 source = "git+https://github.com/imazen/imageflow#cea99d01d37f06c59920293538f76ca6ec833b14"
 
 [[patch.unused]]
+name = "zenanalyze"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze#586f6841db18b415d86e9c63149e89773c1c6936"
+
+[[patch.unused]]
 name = "zenanalyze-api"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zenanalyze#a6802a330f06b3d931115db80b5ecedc200db4c5"
+version = "0.1.1"
+source = "git+https://github.com/imazen/zenanalyze#586f6841db18b415d86e9c63149e89773c1c6936"
 
 [[patch.unused]]
 name = "zenpdf"

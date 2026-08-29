@@ -9,6 +9,86 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixed (dependency resolution + CI coverage, 2026-08-29)
 
+- **The AVIF decoder is pinned instead of floating, and the pin is now
+  checked** (`scripts/check-decoder-pins.py`, `just check-pins`, CI job
+  "Decoder pin agreement"). This repo decodes AVIF through
+  `zenavif → rav1d-safe`, and every reference to `imazen/zenavif` was a git
+  dep or patch entry **with no `rev`** — so each fresh resolve re-picked
+  whatever `main` was at that moment, and the decoder underneath moved with
+  no edit to any manifest and nothing in any output recording it. No CI job
+  here enables `avif-decode`, so nothing else would have noticed either.
+  - Measured before-state, from the committed lockfiles: **three different
+    zenavif revisions in one repo.** Root `Cargo.lock` at `11033c95`
+    (rav1d-safe `140f9145`), `fuzz/Cargo.lock` at `7d950f1c`, and
+    `demo/crate/Cargo.lock` fallen all the way back to the **registry** at
+    zenavif 0.1.6 / rav1d-safe 0.5.7 — its `[patch.crates-io]` entry
+    declared but not reflected in the resolved graph at all.
+  - Pinned at the level that actually controls the decoder: **`zenavif`, not
+    `rav1d-safe`.** A `[patch.crates-io] rav1d-safe` here would substitute
+    nothing — patch replaces registry sources only, and rav1d-safe is
+    reached through a git-rev dep on zenavif's own dep line. All four
+    references now carry the same rev (root patch, `zencodecs`'s
+    `zenavif-parse` dep line, and the mirrored tables in `fuzz/` and
+    `demo/crate/`). They must stay equal: cargo treats `git+URL` and
+    `git+URL?rev=X` as different sources, so a mismatch puts two copies of
+    the zenavif workspace in one graph and its `At<Error>` stops unifying.
+- **The pin is held at `zenavif 11033c95` / `rav1d-safe 140f9145`, NOT the
+  workspace-wide `66f58fa6`** — deliberately, because moving forward was
+  measured to break AVIF decode here. zenavif, ravif and zenmetrics are all
+  on `66f58fa6`; this repo is the exception until rav1d-safe#526 closes.
+  ```
+  cargo test -p zencodecs --no-default-features \
+    --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
+    --test corpus -- --ignored avif
+  ```
+  | zenavif | rav1d-safe | `corpus_avif_decode_valid` |
+  |---|---|---|
+  | `11033c95` | `140f9145` | **ok**, 60–66 s |
+  | `e4b3820` | `66f58fa6` | **FAILED**, 2 of 2 runs |
+
+  The failure is a panic in rav1d-safe's own bounds-map guard on aarch64 —
+  `src/safe_simd/filmgrain_arm.rs:1628:41 took a 122880 B picture-plane
+  reservation while tile threading is active; the measured ceiling for that
+  file is 3840 B` — on every worker thread, followed by
+  `Option::unwrap()` on `None` at `src/thread_task.rs:534` during unwind.
+  `PIC_EXTENT_CEILINGS` is absent at `140f9145` and present at `66f58fa6`
+  and no commit in the range touches `filmgrain_arm.rs`, so the guard was
+  *added* inside the range: the over-wide reservation is likely older than
+  the guard rather than a new regression. Filed as **rav1d-safe#526**.
+  - `140f9145` is still on the correct side of the aarch64 NEON conformance
+    campaign of 2026-08-07/08 (2026-08-11 vs 08-07/08), which took
+    rav1d-safe from **302/766 to 766/766** against dav1d's published MD5
+    vectors. What this pin gives up versus `66f58fa6` is
+    `Settings::strictness` defaulting to `Strict` (rav1d-safe@2e0f7e8) and
+    rav1d-safe#524's x86_64 loop-filter fix. ravif measured decoded pixels
+    **identical** across `140f9145 → 66f58fa6` (0 of 400 cells moved), so
+    holding here costs no decode correctness on aarch64.
+- **`just check-pins` / CI job "Decoder pin agreement"** fails on three
+  things, and self-tests itself first so a check that has stopped detecting
+  anything fails loudly rather than passing vacuously:
+  1. **FLOAT** — a tracked git dep or patch entry with no `rev`.
+  2. **DISAGREE** — a `rev` that differs between manifests, or a lockfile
+     that resolved something else (including a silent fallback to the
+     registry, which is what `demo/crate` had done).
+  3. **DEAD PATCH** — a `[patch]` entry cargo did not use. This is the one
+     that is otherwise invisible: a `[patch.crates-io]` can only replace a
+     package required *from the registry*, so pointing one at a crate
+     reached through a git dep leaves it inert, recorded only as
+     `[[patch.unused]]` in the lock while the graph resolves something else.
+     That is how zenmetrics' patch entry sat dead, and how zentone's
+     shootout `rav1d-safe` patch controlled nothing.
+
+  It distinguishes real defects from three things that merely look like
+  them, reporting each as a note instead of failing: a patch unused because
+  the feature that would pull it in is off (`fuzz/` has one legitimately); a
+  stale `Cargo.lock` beside a workspace *member*, which cargo never reads
+  (`zeneditor/`, `zenfilters/`, `zenpipe-cmd/`); and a rev inherited through
+  a **path** dep into a sibling checkout, which no manifest here can pin
+  (`zencodecs/fuzz` reaches zenavif that way and therefore follows whatever
+  that checkout is on — currently `66f58fa6`, compile-only in CI).
+  `--root` plus `--expect URL=REV` audits a sibling repo; zentone and ravif
+  both pass under their own expected revs.
+
 - **The Pages deploy resolves again: carry the sibling's `zenanalyze`
   patch.** zenjpeg `147444fe` moved its own `zenanalyze` dep from a git rev
   pin to a crates.io VERSION (`0.2.0`) resolved through a

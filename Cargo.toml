@@ -343,7 +343,63 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # still failed to resolve zenravif's requirement in sibling-clone mode.)
 # Cost to know: cargo fetches zenavif's corpus submodules (~600 MB) per rev
 # for bare-clone builds; CI is unaffected (shallow sibling clones).
-zenavif = { git = "https://github.com/imazen/zenavif" }
+#
+# REV-PINNED, unlike most of this table, and the reason is the DECODER. This
+# entry is the level that controls which rav1d-safe the whole repo decodes AVIF
+# through: zenavif carries a git-rev dep on rav1d-safe on its own dep line, so
+# `[patch.crates-io] rav1d-safe` here would substitute NOTHING (patch replaces
+# registry sources only, and no registry rav1d-safe requirement exists in this
+# graph). Pinning zenavif is what actually fixes the decoder. zenavif 11033c95
+# selects rav1d-safe 140f9145.
+#
+# WHAT FLOATS IF YOU DELETE `rev`: every fresh resolve re-picks imazen/zenavif
+# main, and the decoder underneath it moves with no edit to any manifest and
+# nothing in any output recording that it happened. Not hypothetical — before
+# this pin the committed root Cargo.lock held zenavif 11033c95 / rav1d-safe
+# 140f9145, fuzz/Cargo.lock held zenavif 7d950f1c, and demo/crate/Cargo.lock
+# had fallen back to the REGISTRY at 0.1.6: three different decoders in one
+# repo. And AVIF decode is not covered by CI here (no job enables
+# `avif-decode`), so a decoder change lands silently.
+#
+# WHY 11033c95 AND NOT THE WORKSPACE-WIDE 66f58fa6. zenavif, ravif and
+# zenmetrics have aligned on rav1d-safe 66f58fa6, and this repo deliberately
+# has not, because moving forward was MEASURED to break AVIF decode here:
+#
+#   cargo test -p zencodecs --no-default-features \
+#     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
+#     --test corpus -- --ignored avif
+#
+#   zenavif 11033c95 (rav1d-safe 140f9145):  corpus_avif_decode_valid ok, 66 s
+#   zenavif e4b3820  (rav1d-safe 66f58fa6):  corpus_avif_decode_valid FAILED,
+#                                            twice out of two runs
+#
+# The failure is a panic in rav1d-safe's own bounds-map guard, on aarch64:
+#   src/safe_simd/filmgrain_arm.rs:1628:41 took a 122880 B picture-plane
+#   reservation while tile threading is active; the measured ceiling for that
+#   file is 3840 B
+# followed by `Option::unwrap()` on `None` at src/thread_task.rs:534 as the
+# worker threads unwind. `PIC_EXTENT_CEILINGS` is absent at 140f9145 and
+# present at 66f58fa6, so the guard was ADDED inside the range: the over-wide
+# film-grain reservation is probably not new, but at 140f9145 nothing policed
+# it. Tracked as rav1d-safe#526; move this pin to 66f58fa6 when that closes,
+# and re-run the command above rather than assuming.
+#
+# 140f9145 is still on the CORRECT side of the aarch64 NEON conformance
+# campaign of 2026-08-07/08 (2026-08-11 vs the campaign's 08-07/08), which took
+# rav1d-safe from 302/766 to 766/766 against dav1d's published MD5 vectors.
+# What this pin gives up versus 66f58fa6 is rav1d-safe@2e0f7e8's
+# `Settings::strictness` defaulting to `Strict`, and rav1d-safe#524's x86_64
+# loop-filter DisjointMut fix. ravif measured decoded pixels IDENTICAL across
+# 140f9145 -> 66f58fa6 (0 of 400 cells moved), so this pin costs no decode
+# correctness on aarch64.
+#
+# Keep every imazen/zenavif reference in this repo on the SAME rev — the
+# zenavif-parse git dep in zencodecs/Cargo.toml, and the mirrored patch tables
+# in fuzz/ and demo/crate/. A rev mismatch does not merely disagree, it splits
+# the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
+# so you get two zenavif-parse instances and its `At<Error>` stops unifying.
+# `just check-pins` fails on a missing, disagreeing or dead pin.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }

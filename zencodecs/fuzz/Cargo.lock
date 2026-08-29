@@ -789,7 +789,7 @@ dependencies = [
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -799,7 +799,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "archmage",
@@ -1357,7 +1357,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif#7d950f1ce0f2a6e76c9bc41feb2ee9efa95835f1"
+source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1419,7 +1419,7 @@ dependencies = [
  "ultrahdr-core 0.6.0",
  "whereat",
  "zenavif",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
  "zenbitmaps",
  "zencodec",
  "zengif",

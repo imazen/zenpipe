@@ -58,6 +58,28 @@ jobs:
   # stable toolchain (zenpipe#bug-19: this gate was previously absent, so a
   # stale committed snapshot — depthmap/exif removed 2026-06-25, Limits
   # aliased to zencodec::ResourceLimits — never got caught).
+  # Fails if the AVIF-decoder git deps float, disagree across this repo's
+  # several manifests and lockfiles, or sit dead as an unused `[patch]`.
+  # No toolchain and no cargo: it reads the committed manifests and lockfiles,
+  # so it costs seconds and cannot be skipped by a cache hit. It has to be its
+  # own job rather than a step in `rust` because that one is routed through the
+  # reusable rust-ci.yml.
+  #
+  # Why it exists: a git dep with no `rev` re-resolves to whatever the branch
+  # points at, with no edit to any manifest and nothing recording that it moved.
+  # This repo held three different zenavif revs across its lockfiles at once
+  # (root 11033c95, fuzz/ 7d950f1c, demo/crate/ fallen back to the registry at
+  # 0.1.6), and no CI job here enables `avif-decode`, so nothing else notices.
+  decoder-pins:
+    name: Decoder pin agreement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Self-test the check (it must fail on each defect)
+        run: python3 scripts/check-decoder-pins.py --self-test
+      - name: Check every manifest and lockfile agrees
+        run: python3 scripts/check-decoder-pins.py
+
   api-doc:
     name: Public API snapshots
     runs-on: ubuntu-latest

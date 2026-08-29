@@ -50,7 +50,11 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # publishes the version zenpipe asks for.
 zengif = { git = "https://github.com/imazen/zengif" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
-zenavif = { git = "https://github.com/imazen/zenavif" }
+# Rev-pinned to the same rev as the root table's entry — it is what fixes the
+# rav1d-safe decoder (see the root manifest for the full rationale). This
+# workspace's committed lock had drifted to a DIFFERENT zenavif (7d950f1c)
+# than the root's (11033c95) while both entries floated.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
 heic = { git = "https://github.com/imazen/heic" }
 zentiff = { git = "https://github.com/imazen/zenextras" }
 zenraw = { git = "https://github.com/imazen/zenraw" }

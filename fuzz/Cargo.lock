@@ -872,7 +872,7 @@ source = "git+https://github.com/imazen/jxl-encoder#5f40694e45c4cc3b6c57c3fa5d81
 [[patch.unused]]
 name = "zenavif"
 version = "0.1.7"
-source = "git+https://github.com/imazen/zenavif#7d950f1ce0f2a6e76c9bc41feb2ee9efa95835f1"
+source = "git+https://github.com/imazen/zenavif?rev=e4b3820d24e20edd23c1ab490dedd9674ccf9f00#e4b3820d24e20edd23c1ab490dedd9674ccf9f00"
 
 [[patch.unused]]
 name = "zenbitmaps"
