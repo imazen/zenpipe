@@ -4615,8 +4615,8 @@ dependencies = [
 
 [[package]]
 name = "zenanalyze-api"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zenanalyze#7b84d53c4a142341280c23ea304640e944916b70"
+version = "0.1.1"
+source = "git+https://github.com/imazen/zenanalyze#6b080abf84ae2407bc7f2b127940404b3adb70b0"
 
 [[package]]
 name = "zenavif"
@@ -5559,3 +5559,8 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core 0.5.1",
 ]
+
+[[patch.unused]]
+name = "zenanalyze"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze#6b080abf84ae2407bc7f2b127940404b3adb70b0"
