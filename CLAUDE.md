@@ -22,7 +22,41 @@ repo. Wired: the zennode registry (`#[kv]`/`from_kv` via
 the dead ones. The doc comments in `src/imageflow_compat/riapi.rs:9,112`
 claiming `zenlayout::riapi` is used are wrong.
 
+**Decoder pin:** this repo decodes AVIF through `zenavif → rav1d-safe`, and the
+rev that decides *which decoder* is the **zenavif** one — rav1d-safe hangs off
+zenavif's own dep line, so a `[patch.crates-io] rav1d-safe` here substitutes
+nothing. Four manifests reference `imazen/zenavif` (root patch table,
+`zencodecs`'s `zenavif-parse` dep line, `fuzz/`, `demo/crate/`) and they must
+all carry the *same* rev: cargo treats `git+URL` and `git+URL?rev=X` as
+different sources, so a mismatch puts two copies of the zenavif workspace in one
+graph and `At<Error>` stops unifying. `just check-pins` enforces it (and
+self-tests itself first). Note also that a `[patch."<git-url>"]` cannot re-pin a
+git dep to another rev of the *same* repo at all — cargo rejects it outright:
+`patch for X points to the same source, but patches must point to different
+sources`.
+
 ## Known Bugs
+
+- **AVIF decode is not covered by CI here.** No job in `ci.yml` enables
+  `avif-decode` (the widest feature list, in the `zencodecs` leg, stops at
+  `raw-decode-gainmap`), and every real AVIF decode test is `#[ignore]`d —
+  `corpus_avif_decode_valid` / `corpus_avif_invalid_no_panic` need
+  `codec-corpus` (network on first run), and the three
+  `avif_hdr_fixture_*` tests need `/mnt/v/input/`. So a decoder change lands
+  here silently. Run them by hand:
+  ```
+  cargo test -p zencodecs --no-default-features \
+    --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
+    --test corpus -- --ignored avif
+  ```
+- **The rav1d-safe pin is held back at `140f9145`** (via `zenavif 11033c95`)
+  while zenavif, ravif and zenmetrics are all on `66f58fa6`. Not neglect —
+  measured: at `66f58fa6` the command above fails 2 of 2 runs with a panic in
+  rav1d-safe's bounds-map guard on aarch64 (`filmgrain_arm.rs:1628` reserves
+  122880 B against a 3840 B ceiling under tile threading), then
+  `Option::unwrap()` on `None` at `thread_task.rs:534`. Filed as
+  **rav1d-safe#526**. Move the pin when that closes, and re-run the command
+  rather than assuming.
 
 Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
 original list — animation per-frame routing, matte flatten, the two-engine
