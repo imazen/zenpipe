@@ -67,13 +67,25 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   --add-paths` points deps at sibling checkouts above the repo, which
   `cross` does not bind-mount into its container; a plain checkout resolves
   the same graph through the repo's own git-form `[patch.crates-io]`.
-- **`Cross.toml`** (`c948aaa0`) — installs nasm into the i686 container.
-  zencodecs' dev-dependency `turbojpeg` builds libjpeg-turbo from source
-  with `REQUIRE_SIMD=ON`, and dev-deps compile for every test target
-  regardless of features, so the lane's third step died at *"No
-  CMAKE_ASM_NASM_COMPILER could be found"* while its first two passed on
-  the merits. Verified in the real cross image (whose apt nasm is 2.11.08)
-  that the configure then finds the assembler and keeps `WITH_SIMD = 1`.
+- **`turbojpeg` no longer builds on every CI job** (`ee215ac6`). It was an
+  unconditional dev-dependency of zencodecs, and cargo compiles every
+  dev-dep for `--all-targets` whether a target uses it or not — so the
+  `required-features = ["calibrate"]` already on its only consumer, the
+  `quality_calibrate` example, did nothing. Every job on every platform was
+  building libjpeg-turbo from source through cmake with `REQUIRE_SIMD=ON`,
+  which needs an assembler; that broke both new lanes (*"No
+  CMAKE_ASM_NASM_COMPILER could be found"* — the `cross` i686 container has
+  no nasm, and neither does GitHub's Intel macOS image, where the reusable
+  workflow gives a caller no way to inject an install step). Now an optional
+  regular dependency pulled in by `calibrate`, the same feature that gates
+  the example. A `Cross.toml` that installed nasm into the container
+  (`c948aaa0`) went in first and is removed again by the same commit: with
+  turbojpeg out of the graph, no i686 lane graph contains an
+  assembler-needing crate at all.
+- **`quality_calibrate` compiles again** (`05d94908`) — pre-existing rot
+  found while confirming the gate: `zenwebp::WebpEncoderConfig` moved into
+  `zenwebp::zencodec`, and `encode_full_frame_srgba8_imgref` is now
+  `encode_srgba8_imgref`. Renames only, no behaviour change.
 
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
