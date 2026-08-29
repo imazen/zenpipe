@@ -63,11 +63,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: fuzz-${{ matrix.workspace }}
-          workspaces: ${{ matrix.workspace }}
 
+      # Before rust-cache, not after: the cache action runs `cargo metadata` on
+      # the declared workspace to build its key, and with the siblings missing
+      # that failed ("failed to load manifest for workspace member
+      # zencodecs/fuzz/." on run 33245135943). It recovered — the right paths
+      # were still cached — but it could not enumerate workspace crates, so its
+      # target-dir cleaning was working blind. Same ordering, same reason, as
+      # zen-workspace's setup action ("Cache AFTER ci-clone so cargo metadata
+      # can find all deps").
+      #
       # Deliberately NOT zen-workspace's setup action. That action runs
       # `cargo superwork ci-clone --add-paths`, which REWRITES manifests
       # (it reported "pathed 131 manifests" and "deleted sections:
@@ -96,6 +101,11 @@ jobs:
             https://github.com/imazen/codec-corpus.git
           git -C codec-corpus sparse-checkout set crate
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-${{ matrix.workspace }}
+          workspaces: ${{ matrix.workspace }}
+
       # No `--locked`: a lock pinned to a stale sibling rev would keep passing
       # while the API it targets moved on, which is the drift this gate exists
       # to see. The two `Cargo.lock` files stay committed for reproducible
@@ -122,10 +132,14 @@ jobs:
         with:
           key: fuzz-regression
 
-      # Same zencodecs feature line ci.yml already builds, so this adds a job
-      # but no new dependency graph. It is the set that matters here: every
-      # committed seed is a JPEG XL codestream (`ff 0a`), so `jxl-decode` is
-      # what actually carries them past format detection.
+      # A subset of the zencodecs feature line ci.yml already builds (that one
+      # plus `raw-decode*`), so this adds a job but no new dependency graph.
+      # The `raw-*` features are dropped on purpose: RAW decode routes
+      # TIFF-magic input into rawler, which `zencodecs/fuzz/Cargo.toml`
+      # documents as not panic-safe on untrusted input and deliberately
+      # excludes from fuzzing. Everything the seeds actually need is here —
+      # each committed seed is a JPEG XL codestream (`ff 0a`), so `jxl-decode`
+      # is what carries them past format detection.
       - name: Replay committed crash seeds
         run: |
           cargo test -p zencodecs --no-default-features \
