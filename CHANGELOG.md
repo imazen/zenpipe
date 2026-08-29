@@ -28,6 +28,40 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   resolve of the demo died on "version 0.1.7 is yanked". The Pages job
   overwrites that whole section with the root's (which carries zenavif), so
   only local demo builds saw it (`c36f8c5e`).
+- **`wasm-size-shim` resolves again.** The WASM Benchmark workflow had been
+  red since 2026-08-27 on `failed to select a version for the requirement
+  zenjpeg = "^0.9.0"` — `zenpipe = { path = ".." }` puts zenpipe's registry
+  requirements into that graph and several are unpublished (zenjpeg 0.9.0,
+  zenwebp 0.5.0, zenpng 0.2.0, zengif 0.8.0), while its committed lockfile
+  predated the bumps and hid it. Patch table completed, with the form chosen
+  per entry: path for the four crates it also path-deps directly (a git
+  source would double the instance and break zencodec type unification),
+  git for zenanalyze (absent from the workflow's sibling clone list), and
+  path for zenpixels-convert (the git form put two zenpixels in the graph —
+  ten E0308s on `PixelDescriptor`/`PixelSlice`). Lockfile regenerated
+  (`31a305b8`).
+
+#### Added (CI coverage, 2026-08-29)
+
+- **macOS Intel and i686 lanes** (`a3ec316e`). The matrix was Linux x64/arm
+  + Windows x64/arm only. macOS Intel comes back via the reusable
+  workflow's documented `platforms` opt-in (`macos-26-intel` — zenpipe
+  ships no binaries), covering both its clippy and test jobs.
+  `i686-unknown-linux-gnu` is a new `cross` job covering the workspace root
+  `--no-default-features`, zenlayout `--all-targets`, and zencodecs
+  `--no-default-features` — 32-bit is where `usize` narrowing shows up and
+  is the closest proxy CI has for the wasm32 pointer width the demo ships
+  on. That job deliberately skips zen-workspace's setup action: `ci-clone
+  --add-paths` points deps at sibling checkouts above the repo, which
+  `cross` does not bind-mount into its container; a plain checkout resolves
+  the same graph through the repo's own git-form `[patch.crates-io]`.
+- **`Cross.toml`** (`c948aaa0`) — installs nasm into the i686 container.
+  zencodecs' dev-dependency `turbojpeg` builds libjpeg-turbo from source
+  with `REQUIRE_SIMD=ON`, and dev-deps compile for every test target
+  regardless of features, so the lane's third step died at *"No
+  CMAKE_ASM_NASM_COMPILER could be found"* while its first two passed on
+  the merits. Verified in the real cross image (whose apt nasm is 2.11.08)
+  that the configure then finds the assembler and keeps `WITH_SIMD = 1`.
 
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
