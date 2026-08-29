@@ -241,7 +241,7 @@ fn encode_and_measure(
         }
         #[cfg(feature = "webp")]
         Codec::Webp(q) => {
-            let config = zenwebp::WebpEncoderConfig::lossy().with_generic_quality(*q);
+            let config = zenwebp::zencodec::WebpEncoderConfig::lossy().with_generic_quality(*q);
             encode_rgb8_with_config(&config, source)
         }
         #[cfg(feature = "avif-encode")]
@@ -366,7 +366,7 @@ where
     let rgba_img = Img::new(rgba_pixels.as_slice(), img.width(), img.height());
 
     let output = config
-        .encode_full_frame_srgba8_imgref(rgba_img, true)
+        .encode_srgba8_imgref(rgba_img, true)
         .map_err(|e| format!("{e}"))?;
     Ok(output.into_vec())
 }
