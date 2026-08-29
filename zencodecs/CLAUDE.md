@@ -826,15 +826,33 @@ or similar. Not a full classifier. Document the heuristic precisely.
 
 ## Fuzzing (2026-03-30)
 
-11 fuzz targets in `fuzz/` covering all major entry points:
-- `fuzz_probe`, `fuzz_decode`, `fuzz_exif`, `fuzz_decode_limits` (HIGH priority)
-- `fuzz_gainmap`, `fuzz_depthmap`, `fuzz_push_decode`, `fuzz_animation`, `fuzz_transcode` (MEDIUM)
+**9** fuzz targets in `fuzz/` covering all major entry points (was 11 — corrected
+2026-08-29):
+- `fuzz_probe`, `fuzz_decode`, `fuzz_decode_limits` (HIGH priority)
+- `fuzz_gainmap`, `fuzz_push_decode`, `fuzz_animation`, `fuzz_transcode` (MEDIUM)
 - `fuzz_roundtrip`, `fuzz_select` (LOW)
 
-Uses `cargo-fuzz` + `libfuzzer-sys 0.4`, requires nightly. Corpus seeded from 1800+ files
-across sibling crate corpora + external GitHub repos (dvyukov/go-fuzz-corpus, libjpeg-turbo/fuzz).
+`fuzz_exif` and `fuzz_depthmap` are GONE: the hand-rolled exif module (`85ecbb5`)
+and depth-map support (`6cfc21b`) were deleted on 2026-06-25 and took their targets
+with them. This list, and the `fuzz-ci`/`fuzz-smoke`/`fuzz-deep` justfile recipes,
+kept naming them until 2026-08-29 — `cargo fuzz run` on a name with no `[[bin]]`
+fails, so those three recipes were unrunnable the whole time.
 
-Key justfile commands: `fuzz-seed`, `fuzz-smoke`, `fuzz-deep`, `fuzz-ci`, `fuzz <target>`.
+Uses `cargo-fuzz` + `libfuzzer-sys 0.4`; *fuzzing* needs nightly, but merely
+**compiling** the targets does not — `.github/workflows/fuzz.yml` (added 2026-08-29,
+`4b82b6dd`) runs `cargo check --all-targets` in this workspace on stable, on every
+push and PR, which is what stops the targets bit-rotting between hand-run sessions.
+It also replays `fuzz/regression/`'s committed crash seeds via
+`zencodecs/tests/fuzz_regression.rs`. Corpus seeded from 1800+ files across sibling
+crate corpora + external GitHub repos (dvyukov/go-fuzz-corpus, libjpeg-turbo/fuzz).
+
+Key justfile commands here: `fuzz-seed`, `fuzz-smoke`, `fuzz-deep`, `fuzz-ci`,
+`fuzz <target>`. At the repo root: `just fuzz-check` (compile both fuzz workspaces)
+and `just fuzz-regression` (replay the seeds) — both are in `just ci`.
+
+**This workspace does not resolve from a bare clone.** It path-patches five sibling
+checkouts (`../../../{zenavif,zenbitmaps,zenjpeg,zenanalyze,ultrahdr}`) plus
+`codec-corpus/crate`; the CI job clones exactly those six next to the repo.
 
 ### DoS fixes (2026-03-30)
 - **Fixed**: Integer overflow in JPEG UltraHDR allocation (`codecs/jpeg.rs:190`) — added `checked_mul` + limits enforcement
