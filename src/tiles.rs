@@ -19,7 +19,8 @@
 //! Measured (2026-08-28, `examples/tile_pyramid_profile.rs`, release,
 //! Apple M4 Pro / macOS 26.5, RGBA8, DZI 254/1, rows generated on the fly
 //! so the source holds no frame; the runtime baseline at 256×16 is
-//! 1.8 MB). "peak heap" is the high-water mark of live heap from the
+//! 0.6 MB peak heap / 2.1 MB RSS). "peak heap" is the high-water mark of
+//! live heap from the
 //! example's counting global allocator, "max RSS" is `/usr/bin/time -l`:
 //!
 //! | image         | levels | tiles | peak heap | max RSS  | formula  |

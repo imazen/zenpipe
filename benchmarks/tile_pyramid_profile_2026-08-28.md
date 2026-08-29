@@ -89,7 +89,7 @@ attribution:
 
 ---
 
-## 3. Size sweep — RSS is a function of *width*, not pixels
+## 3. Size sweep — memory is a function of *width*, not pixels
 
 M4, DZI 254/1, RGBA8, `--store sink-only`, 1 thread, steady state of 5 runs.
 
@@ -110,6 +110,14 @@ Same pixel count, 11× the memory — because every buffer is
 
 `buffer_bytes_estimate()` is a good upper bound: it is within 8 % on every row
 and never under-predicts by more than 2 MB.
+
+> **On the `max RSS` column here.** These cells run `--repeat 5`, so RSS
+> accumulates allocator fragmentation across five build-and-tear-down cycles and
+> runs above a single-shot figure — most visibly at 100000 × 600, where RSS is
+> 376.1 MB over five runs but a stable **298.8 MB** single-shot (three
+> consecutive runs, identical to the digit). `peak_live_mb` is unaffected: it is
+> re-armed per run. Quote the single-shot RSS for a deployment; the module docs
+> do.
 
 **Tiny inputs carry a real fixed cost.** At 256×256 the sink's own buffers are
 0.9 MB for a 0.26 MB image — 3.4× the frame — because the row queue is
@@ -192,8 +200,8 @@ the image. It is for tests and small pyramids, as documented; do not reach for
 it on anything gigapixel.
 
 **`ZipStore` was 4.4× slower than `FsStore` and all of the gap was its
-CRC-32.** The byte-at-a-time table loop ran over 60 MB of tile bytes at roughly
-600 MB/s. Slicing-by-8 (`2fe50306`) took zip from 0.105 s to 0.038 s — its
+CRC-32.** The byte-at-a-time table loop ran over the pyramid's 60.0 MB of tile bytes
+(229 tiles × 256 × 256 × 4) at ~740 MB/s. Slicing-by-8 (`2fe50306`) took zip from 0.105 s to 0.038 s — its
 overhead over `FsStore` fell 6.8× (81 ms → 12 ms). Fixed.
 
 ### Thread scaling — limited by the serial sink pass, not by the pool
