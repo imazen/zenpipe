@@ -50,11 +50,40 @@ zenwebp = { path = "../../zenwebp" }
 
 
 [patch.crates-io]
+# `zenpipe = { path = ".." }` drags zenpipe's whole OPTIONAL dep set into
+# resolution (cargo resolves optional deps whether or not their feature is on),
+# and most of those crates' current versions are unpublished. So every one of
+# them needs an entry here or a fresh resolve dies at the first unmet registry
+# requirement — which is what took the WASM Benchmark workflow red on
+# 2026-08-27 ("failed to select a version for the requirement
+# `zenjpeg = ^0.9.0`", registry tops out at 0.8.4).
+#
+# Form matters. For a crate this manifest ALSO path-deps directly (zenjpeg,
+# zengif, zenpng, zenwebp above), the entry must be the SAME path, or the graph
+# ends up with two instances of it and the shared zencodec types stop unifying.
+# For everything else, git — the wasm-bench workflow clones a fixed list of
+# siblings and a git source needs no clone at all.
+zenjpeg = { path = "../../zenjpeg/zenjpeg" }
+zengif = { path = "../../zengif" }
+zenpng = { path = "../../zenpng" }
+zenwebp = { path = "../../zenwebp" }
 # zenjpeg is a direct path dep above, so its own workspace-root
 # [patch.crates-io] (where `zenanalyze 0.2.0` resolves) never applies here, and
 # the registry is frozen at 0.1.0. Without this a fresh resolve fails with
 # "failed to select a version for the requirement `zenanalyze = ^0.2.0`".
-zenanalyze = { path = "../../zenanalyze" }
+# Git, not path: zenanalyze is not in the wasm-bench clone list, and it is not
+# a direct dep here, so there is no instance to unify with.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+# Reached through zenjpeg (gain-map/UltraHDR types). Rev-pinned to 0.5.0 for
+# the same reason the repo-root table pins it: ultrahdr main is 0.6.0, and a
+# floating patch would stop satisfying the `^0.5` requirement on this edge.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
+# zenpixels' sibling crate; registry 0.2.10 predates the zenpixels main that
+# `zenpixels = { path = ... }` below resolves to, so it has to move with it.
+# Path, matching that entry: a git source here pulls zenpixels through its own
+# internal dep and the graph ends up with two zenpixels, at which point
+# `PixelDescriptor` / `PixelSlice` stop unifying across zencodecs (E0308).
+zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
 zennode = { path = "../../zennode/zennode" }
 zennode-derive = { path = "../../zennode/zennode-derive" }
 zenpixels = { path = "../../zenpixels/zenpixels" }
