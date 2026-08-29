@@ -7,6 +7,28 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (dependency resolution + CI coverage, 2026-08-29)
+
+- **The Pages deploy resolves again: carry the sibling's `zenanalyze`
+  patch.** zenjpeg `147444fe` moved its own `zenanalyze` dep from a git rev
+  pin to a crates.io VERSION (`0.2.0`) resolved through a
+  `[patch.crates-io]` at the *zenjpeg* workspace root — one patch there
+  collapses the `zenanalyze_api::Offer` contract to a single type. A
+  dependency's patch table is invisible from outside its own workspace, so
+  every manifest here started asking crates.io for `zenanalyze ^0.2.0`,
+  which does not and will not exist (registry frozen at `0.1.0` by the
+  crate's 0.1.x API freeze; 0.2.x lives only on git). "Deploy Demo to
+  GitHub Pages" deletes both lockfiles and re-resolves, so it failed first
+  (runs 33229080325 / 33230408160) while committed locks — still pinning
+  the pre-`147444fe` zenjpeg — hid it locally. Fixed by adding the entry to
+  all five independently-resolving manifests (`7040aa6a`); same shape and
+  reason as zenjxl `1ae0da79`.
+- **`demo/crate`'s patch table had lost `zenavif`** — registry 0.1.7 is
+  yanked and `zencodecs/avif-decode` requires `^0.1.7`, so a standalone
+  resolve of the demo died on "version 0.1.7 is yanked". The Pages job
+  overwrites that whole section with the root's (which carries zenavif), so
+  only local demo builds saw it (`c36f8c5e`).
+
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
 - **`cargo clippy -- -D warnings` on 1.98.0** — the new
