@@ -7,6 +7,31 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed (zencodec/zenpixels version ranges, 2026-08-29)
+
+- **Every `zencodec` / `zenpixels` / `zenpixels-convert` requirement across the
+  workspace now spans the published minor AND the next one** — 15 requirement
+  lines in the root `[workspace.dependencies]`, `zencodecs`, `zencodecs/fuzz`,
+  `zencodecs/zcimg`, `zenfilters`, `demo/crate` and `wasm-size-shim`. `zencodec`
+  becomes `>=0.1.26, <0.3.0`; `zenpixels` / `zenpixels-convert` become
+  `>=0.2.10, <0.4.0` (`>=0.2.15, <0.4.0` where zenfilters already required
+  0.2.15). For a `0.x` crate Cargo treats the minor as the major, so a plain
+  `"0.1.26"` meant `^0.1.26` = `>=0.1.26, <0.2.0` and a `zencodec 0.2.0` release
+  would have been invisible until all seven manifests were hand-edited — which
+  is precisely the coordinated wave the `zencodec 0.1.26` rollout cost this
+  workspace. Floors are unchanged (each crate keeps its own minimum) and nothing
+  newer is published, so resolution is identical: `cargo metadata` still yields
+  exactly one `zencodec 0.1.26`, one `zenpixels`, one `zenpixels-convert`.
+  **Why uniformity matters here specifically:** this workspace has repeatedly
+  hit the two-copies failure — a graph carrying two versions of one `0.x` crate,
+  whose types do not unify, so a trait impl from one copy silently fails to apply
+  to the other. Widening only some consumers is how that second copy gets in, so
+  the sweep covered every manifest at once. All `[patch.crates-io]` entries and
+  the `path =` / `git =` bindings are untouched — a patch replaces the source
+  regardless of the requirement; the range removes the need for a future *edit*,
+  not the present patch. The standing current-plus-next rule (re-derive the
+  ceiling at each release) is documented in the zencodec repo's `CLAUDE.md`.
+
 #### Fixed (dependency resolution + CI coverage, 2026-08-29)
 
 - **The AVIF decoder is pinned instead of floating, and the pin is now

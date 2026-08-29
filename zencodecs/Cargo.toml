@@ -19,7 +19,7 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = "0.1.26" }
+zencodec = { version = ">=0.1.26, <0.3.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -30,8 +30,8 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", optional = true }
 # `{ version = "0.1.0", path }`; consumed via git, that resolves to this same
 # registry crate, so the `zenanalyze_api` types unify to one instance.
 zenanalyze-api = { version = "0.1.0", optional = true, default-features = false }
-zenpixels = { version = "0.2.10", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = "0.2.10", features = ["imgref"] }
+zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = ">=0.2.10, <0.4.0", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)

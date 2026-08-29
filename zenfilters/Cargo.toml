@@ -42,10 +42,10 @@ bytemuck = { version = "1.21", default-features = false, features = ["extern_cra
 linear-srgb = { version = "0.6.8" }
 magetypes = { version = "0.9.17" }
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
-zenpixels = { version = "0.2.10", features = ["planar"] }
+zenpixels = { version = ">=0.2.10, <0.4.0", features = ["planar"] }
 whereat = { version = "0.1.5" }
 zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
-zenpixels-convert = { version = "0.2.15", features = ["hdr-experimental"] }
+zenpixels-convert = { version = ">=0.2.15, <0.4.0", features = ["hdr-experimental"] }
 zenquant = { version = "0.1.2", default-features = false, optional = true }
 
 [dev-dependencies]
@@ -56,8 +56,8 @@ almost-enough = "0.4.4"
 # 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
 # git patch, same shape as zencodecs' zensim dep. CI paths it to the sibling clone.
 zensim = { version = "0.3.0", default-features = false }
-zenpixels = { version = "0.2.10", features = ["planar", "rgb"] }
-zenpixels-convert = { version = "0.2.10", features = ["planar"] }
+zenpixels = { version = ">=0.2.10, <0.4.0", features = ["planar", "rgb"] }
+zenpixels-convert = { version = ">=0.2.10, <0.4.0", features = ["planar"] }
 # examples/compare_autotune.rs decodes the corpus and re-encodes JPEG through
 # the dispatch layer. Dev-only, so this does not make zenfilters depend on
 # zencodecs (and zencodecs does not depend on zenfilters, so there is no cycle).

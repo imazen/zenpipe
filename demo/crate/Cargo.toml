@@ -17,7 +17,7 @@ parallel = ["dep:rayon", "dep:wasm-bindgen-rayon"]
 zeneditor = { path = "../../zeneditor" }
 
 # Codec types for format detection in WASM glue
-zencodec = { version = "0.1.26", default-features = false }
+zencodec = { version = ">=0.1.26, <0.3.0", default-features = false }
 
 serde_json = "1"
 
