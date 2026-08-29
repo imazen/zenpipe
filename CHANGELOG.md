@@ -116,7 +116,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   does not gate: the seed directory must exist and must be non-empty. It
   also rides along on the existing `cargo test -p zencodecs ...
   --all-targets` lines, so it covers all five platforms, not just the new
-  job's Linux runner.
+  job's Linux runner. Verified green on its first real run
+  (33245135943, ~2 min per cell cold).
+- **`just fuzz-check` / `just fuzz-regression`, both wired into `just ci`**
+  (`eac1d5e8`) — the same two commands the workflow runs, so `just ci` no
+  longer claims to run all CI checks locally while skipping the only gate
+  that compiles the fuzz targets. Running them needs the five siblings
+  checked out next to the repo, as the recipe comment says.
+- **The fuzz gate clones its siblings before `rust-cache`, not after**
+  (`4ab400ed`). rust-cache runs `cargo metadata` on the workspace it caches
+  to build its key; with the siblings still missing it failed on run
+  33245135943 (*"failed to load manifest for workspace member
+  .../zencodecs/fuzz/."*). Non-fatal — the right paths were cached and the
+  save succeeded — but the action could not enumerate workspace crates, so
+  its target-dir cleaning ran blind. Same ordering, same reason, that
+  zen-workspace's setup action already documents.
 
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
