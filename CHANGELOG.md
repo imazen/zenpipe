@@ -7,6 +7,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed (third-party lockfile refresh, 2026-08-29)
+
+- **`Cargo.lock` refreshed within the existing requirements — crates.io packages only.** 118 registry packages moved (`anyhow 1.0.102 -> 1.0.104`, `bytemuck 1.25.0 -> 1.25.2`, `brotli 8.0.3 -> 8.0.4`, `clap 4.6.1 -> 4.6.6`, `exr 1.74.0 -> 1.74.2`, `flate2 1.1.9 -> 1.1.10`, `futures-util 0.3.32 -> 0.3.34`, `palette 0.7.6 -> 0.7.7`, `serde 1.0.228 -> 1.0.229`, `turbojpeg`, `wasm-bindgen`, the `icu_*` and `zerovec` families, among others). No manifest requirement changed.
+  **Every sibling git dependency was deliberately left where it was.** An unconstrained `cargo update` here re-resolves roughly thirty `imazen/*` git deps — `zenjpeg`, `zenavif`, `zenwebp`, `zenpng`, `zenjxl`, `zengif`, `zenraw`, `heic`, `ultrahdr`, `jxl-encoder`, `rav1d-safe`, `imageflow_*`, `zenanalyze` and the rest — several of which are rev-pinned on purpose because they decide which *decoder* this repo measures and ships through. The update was therefore constrained to an explicit list of registry package specs, and the resulting `Cargo.lock` diff contains **no `git+` line and no zen-family package** at all. `zenbench` also had a newer release available and was held for the same reason.
+  Verified locally on aarch64 across every CI configuration except the i686-cross and nightly-rustdoc jobs: `scripts/check-decoder-pins.py` (self-test plus the real check) still reports every tracked decoder dep pinned, in agreement and live; `cargo test` 632, `--features zennode` 632, `--features zennode,json-schema` 667, `--all-targets --no-default-features` 271, `-p zenfilters --all-targets` 588, `-p zenlayout --all-targets` 441, `-p zencodecs --no-default-features --all-targets` 147, `-p zencodecs` with the full codec feature set 333, `-p zeneditor --all-targets` 35 — 0 failures anywhere. All six `clippy -D warnings` runs and `fmt --check` are clean.
+
 #### Fixed (orphaned member lockfiles / Dependabot, 2026-08-29)
 
 - **Deleted `zeneditor/Cargo.lock`, `zenfilters/Cargo.lock` and
