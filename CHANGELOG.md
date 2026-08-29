@@ -86,6 +86,37 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   found while confirming the gate: `zenwebp::WebpEncoderConfig` moved into
   `zenwebp::zencodec`, and `encode_full_frame_srgba8_imgref` is now
   `encode_srgba8_imgref`. Renames only, no behaviour change.
+- **A Fuzz build gate** (`4b82b6dd`), the missing piece the entry above
+  names: `.github/workflows/fuzz.yml` compiles every fuzz target on every
+  push, Linux only. `cargo check --all-targets` per fuzz workspace rather
+  than `cargo fuzz build` — cargo-fuzz needs nightly plus
+  `-Zsanitizer=address` and fully codegens the codec graph with
+  sanitizer-coverage instrumentation per target, while every rot actually
+  found was an E0063/E0308/E0599 or a resolution failure that `cargo check`
+  catches on stable for a fraction of the cost. Real fuzzing stays
+  hand-run/nightly. The `zencodecs/fuzz` cell clones the five siblings it
+  path-patches into `$GITHUB_WORKSPACE/..` plus a blobless sparse checkout
+  of `codec-corpus/crate` (~2 MB, ~1s, against ~700 MB for the full repo);
+  `cargo metadata` confirms those six are the whole out-of-repo closure. It
+  deliberately skips zen-workspace's setup action for the same reason the
+  i686 job does, with one addition: `ci-clone --add-paths` rewrites
+  manifests, and a stale fuzz patch table is precisely what this gate must
+  see.
+- **Committed crash seeds are replayed on stable**
+  (`zencodecs/tests/fuzz_regression.rs`, `4b82b6dd`).
+  `zencodecs/fuzz/regression/` held five minimized POCs that nothing ran.
+  The harness walks the directory and puts every seed through every entry
+  point the fuzz targets drive — `decode_full_frame`,
+  `animation_frame_decoder`, `decode_gain_map` (behind `jpeg-ultrahdr`) and
+  `push_decode` — under the targets' own tight `Limits`. Every seed on
+  every entry point, not just the one that found it: they are
+  format-detected bytes, and `fuzz_depthmap/` has had no target since
+  depth-map decode was removed on 2026-06-25 yet its bytes still exercise
+  detection and dispatch. Two assertions keep it from becoming a gate that
+  does not gate: the seed directory must exist and must be non-empty. It
+  also rides along on the existing `cargo test -p zencodecs ...
+  --all-targets` lines, so it covers all five platforms, not just the new
+  job's Linux runner.
 
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
