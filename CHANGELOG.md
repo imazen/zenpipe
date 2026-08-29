@@ -337,6 +337,34 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
+
+- **The sink's own pass is 26–33 % faster** with byte-identical output
+  (`5b3c8101`). `shrink_rows` spent 62 % of that pass on three integer
+  divides per output pixel in the alpha-weighted average; fully opaque row
+  pairs now take the plain path, which is provably identical there
+  (`(255·S + 510)/1020` reduces exactly to `(S + 2)/4`), and the remaining
+  paths index fixed-size arrays. `shrink_rows` is 42 % faster per run.
+- **Allocation churn down 25 % / 22 %** (`5b3c8101`): every even row used to
+  be cloned into `Level::pending` so it could pair one level down; the row
+  queue now keeps the newest row and `push_row` reads the pair in place.
+  Peak memory is unchanged — the clone was transient.
+- **`ZipStore` is 2.8× faster** (`2fe50306`): its byte-at-a-time CRC-32 was
+  the entire gap to `FsStore` (0.105 s vs 0.024 s for 229 tiles). Now
+  slicing-by-8; zip's overhead over `FsStore` fell 6.8× (81 ms → 12 ms).
+- **`examples/tile_pyramid_profile.rs`** (`275c5dbb`) — counting global
+  allocator (peak live heap + allocation churn) plus
+  `--layout/--store/--threads/--encode/--source` axes. `--source` measures
+  the four input classes: perfect stream, real streaming codec, full-frame
+  decode, and `TempFileSource` spool. Validated against `heaptrack` on
+  x86_64 Linux (agreement within 0.1 %).
+- **`benchmarks/tile_pyramid_profile_2026-08-28.{md,tsv}`** — the full grid,
+  the `sample` time profile, and an honest per-input-class answer: only
+  JPEG/PNG/WebP/GIF stream today, so a JXL or TIFF pyramid pays a whole
+  decoded frame (280.4 MB at 64 MP vs 25.0 MB streaming). `zenjxl-decoder`
+  exposes no region/group accessor and `zentiff` has no strip/tile accessor
+  on main — both blockers live outside this repo.
+
 #### Fixed (`Session` incremental cache, 2026-08-28, refs #3)
 
 - **`Session::stream` ignored `config.limits`** — both the prefix and suffix

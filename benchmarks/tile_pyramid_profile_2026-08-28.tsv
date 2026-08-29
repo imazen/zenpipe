@@ -1,0 +1,52 @@
+# zenpipe#24 tile-pyramid profile grid, 2026-08-28
+# host: Apple M4 Pro / macOS 26.5, 12 cores; release build
+# commit: 2fe50306 (post-fix). peak_live_mb/allocs/alloc_mb from the counting
+# global allocator in examples/tile_pyramid_profile.rs; max_rss_mb from /usr/bin/time -l.
+width	height	tile	layout	store	threads	encode	source	levels	tiles	wall_s	allocs	alloc_mb	peak_live_mb	estimate_mb	max_rss_mb
+256	256	254	dzi	sink-only	1	raw	callback	9	12	0.000	818	0.6	0.9	1.0	2.9
+1024	1024	254	dzi	sink-only	1	raw	callback	11	46	0.001	3152	9.8	3.3	3.4	5.4
+4096	4096	254	dzi	sink-only	1	raw	callback	13	416	0.014	12434	156.7	13.0	12.9	15.3
+8000	8000	254	dzi	sink-only	1	raw	callback	14	1373	0.052	24209	597.5	25.0	24.8	28.0
+10000	1000	254	dzi	sink-only	1	raw	callback	15	229	0.009	3092	93.4	29.0	31.1	39.0
+40000	1000	254	dzi	sink-only	1	raw	callback	17	879	0.042	3100	373.4	115.3	123.7	130.0
+100000	600	254	dzi	sink-only	1	raw	callback	18	1785	0.063	1904	560.2	279.8	308.9	376.1
+40000	1000	128	dzi	sink-only	1	raw	callback	17	3378	0.043	3114	373.6	61.7	63.1	72.1
+40000	1000	254	dzi	sink-only	1	raw	callback	17	879	0.043	3100	373.4	115.3	123.7	130.0
+40000	1000	256	dzi	sink-only	1	raw	callback	17	875	0.043	3102	373.4	114.6	124.7	126.3
+40000	1000	512	dzi	sink-only	1	raw	callback	17	248	0.055	3097	373.4	217.6	248.3	291.2
+40000	1000	1024	dzi	sink-only	1	raw	callback	17	91	0.045	3095	373.4	384.3	497.1	395.4
+4096	4096	0	dzi	null	1	raw	callback	13	416	0.016	14220	247.6	13.2	12.9	15.8
+4096	4096	0	iiif	null	1	raw	callback	13	94	0.015	12752	246.2	25.9	25.2	28.7
+4096	4096	0	zoomify	null	1	raw	callback	5	341	0.015	12891	246.0	12.9	12.4	15.5
+4096	4096	0	gmaps	null	1	raw	callback	5	341	0.015	13229	246.0	12.9	12.4	15.5
+10000	1000	0	dzi	null	1	raw	callback	15	229	0.010	4056	147.4	29.2	31.1	39.1
+10000	1000	0	iiif	null	1	raw	callback	15	70	0.011	3364	146.7	55.5	62.0	67.6
+10000	1000	0	zoomify	null	1	raw	callback	7	221	0.010	3531	146.7	28.9	30.9	39.1
+5000	3000	0	gmaps	null	1	raw	callback	6	1365	0.097	23598	775.9	25.6	25.0	37.0
+5000	3000	0	dzi	null	1	raw	callback	14	332	0.014	10545	221.2	15.7	15.5	19.3
+10000	1000	254	dzi	sink-only	1	raw	callback	15	229	0.009	3092	93.4	29.0	31.1	38.9
+10000	1000	254	dzi	null	1	raw	callback	15	229	0.010	4056	147.4	29.2	31.1	39.0
+10000	1000	254	dzi	mem	1	raw	callback	15	229	0.011	4552	201.5	74.8	31.1	85.6
+10000	1000	254	dzi	fs	1	raw	callback	15	229	0.024	4537	147.4	29.2	31.1	39.2
+10000	1000	254	dzi	zip	1	raw	callback	15	229	0.105	4754	147.5	29.2	31.1	39.2
+10000	1000	254	dzi	fs	1	jpeg	callback	15	229	0.124	39645	190.2	29.2	31.1	41.1
+10000	1000	254	dzi	fs	2	jpeg	callback	15	229	0.073	39945	190.3	30.1	31.1	43.1
+10000	1000	254	dzi	fs	4	jpeg	callback	15	229	0.048	39996	190.3	30.5	31.1	44.2
+10000	1000	254	dzi	fs	8	jpeg	callback	15	229	0.038	40083	190.3	31.2	31.1	45.8
+10000	1000	254	dzi	fs	12	jpeg	callback	15	229	0.038	40175	190.3	32.0	31.1	47.6
+4096	4096	254	dzi	fs	1	jpeg	callback	13	416	0.212	78633	322.3	13.2	12.9	17.6
+4096	4096	254	dzi	fs	4	jpeg	callback	13	416	0.084	79524	322.4	14.1	12.9	19.2
+4096	4096	254	dzi	fs	12	jpeg	callback	13	416	0.068	80116	322.5	15.6	12.9	22.2
+4096	4096	254	dzi	sink-only	1	raw	callback	13	416	0.015	12434	156.7	13.0	12.9	15.0
+4096	4096	254	dzi	sink-only	1	raw	jpeg	13	416	0.073	8338	89.5	18.7	12.9	32.1
+4096	4096	254	dzi	sink-only	1	raw	materialized	13	416	0.012	8338	89.5	79.8	12.9	81.8
+4096	4096	254	dzi	sink-only	1	raw	spool	13	416	0.018	8338	89.5	13.0	12.9	15.2
+8000	8000	254	dzi	sink-only	1	raw	callback	14	1373	0.055	24209	597.5	25.0	24.8	27.7
+8000	8000	254	dzi	sink-only	1	raw	jpeg	14	1373	0.270	16209	341.5	45.2	24.8	79.8
+8000	8000	254	dzi	sink-only	1	raw	materialized	14	1373	0.047	16209	341.5	280.4	24.8	283.2
+8000	8000	254	dzi	sink-only	1	raw	spool	14	1373	0.063	16209	341.5	25.0	24.8	28.4
+40000	1000	254	dzi	sink-only	1	raw	callback	17	879	0.048	3100	373.4	115.3	123.7	125.4
+40000	1000	254	dzi	sink-only	1	raw	jpeg	17	879	0.176	2100	213.4	134.5	123.7	178.0
+40000	1000	254	dzi	sink-only	1	raw	materialized	17	879	0.044	2100	213.4	272.7	123.7	330.1
+40000	1000	254	dzi	sink-only	1	raw	spool	17	879	0.049	2100	213.4	115.4	123.7	128.0
+100000	600	254	dzi	fs	8	jpeg	callback	18	1785	0.251	281299	1235.2	289.2	308.9	325.1

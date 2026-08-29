@@ -16,21 +16,30 @@
 //! tile-row scratch — a formula, see
 //! [`TilePyramidSink::buffer_bytes_estimate`].
 //!
-//! Measured (2026-08-28, `examples/tile_pyramid_mem.rs`, release, Apple
-//! M4 Pro / macOS 26.5, `/usr/bin/time -l` maximum resident set size,
-//! RGBA8, DZI 254/1, rows generated on the fly so the source holds no
-//! frame; the runtime baseline at 256×16 is 1.8 MB):
+//! Measured (2026-08-28, `examples/tile_pyramid_profile.rs`, release,
+//! Apple M4 Pro / macOS 26.5, RGBA8, DZI 254/1, rows generated on the fly
+//! so the source holds no frame; the runtime baseline at 256×16 is
+//! 1.8 MB). "peak heap" is the high-water mark of live heap from the
+//! example's counting global allocator, "max RSS" is `/usr/bin/time -l`:
 //!
-//! | image         | levels | tiles | max RSS  | formula  |
-//! |---------------|--------|-------|----------|----------|
-//! | 10 000 × 1000 |   15   |   229 |  38.3 MB |  31.1 MB |
-//! | 40 000 × 1000 |   17   |   879 | 124.8 MB | 123.7 MB |
-//! | 100 000 × 600 |   18   |  1785 | 298.1 MB | 308.9 MB |
+//! | image         | levels | tiles | peak heap | max RSS  | formula  |
+//! |---------------|--------|-------|-----------|----------|----------|
+//! | 10 000 × 1000 |   15   |   229 |   29.0 MB |  38.6 MB |  31.1 MB |
+//! | 40 000 × 1000 |   17   |   879 |  115.3 MB | 125.4 MB | 123.7 MB |
+//! | 100 000 × 600 |   18   |  1785 |  279.8 MB | 298.8 MB | 308.9 MB |
 //!
-//! RSS does not depend on the height (the sink never holds more than
-//! `tile_size + 2·overlap + 1` rows per level), so a gigapixel 100 000 px
-//! wide image stays under 300 MB of sink buffers. Re-measure on your
-//! platform before quoting a number for a deployment.
+//! Memory tracks the *width*, not the pixel count: the sink never holds
+//! more than `tile_size + 2·overlap + 1` rows per level, so a 64 MP
+//! 8000 × 8000 image peaks at 25.0 MB while a 60 MP image 100 000 px wide
+//! peaks at 280 MB. `heaptrack` on x86_64 Linux agrees with the counting
+//! allocator to within 0.1 % on every cell, and attributes 103.29 MB of
+//! the 100 000 × 600 peak (36 %) to `row_scratch` alone. Tile size is the
+//! memory dial — it is linear, and wall time is flat across it, so
+//! halving `tile_size` halves the footprint for free.
+//!
+//! Re-measure on your platform before quoting a number for a deployment.
+//! Full grid, time profile and per-input-class analysis:
+//! `benchmarks/tile_pyramid_profile_2026-08-28.md`.
 //!
 //! # Layouts and stores (`std`)
 //!
@@ -52,8 +61,24 @@
 //! ([`google_maps`](TilePyramidConfig::google_maps)). [`PyramidWriter`]
 //! rejects a mismatched pairing in [`TileWriter::begin`].
 //!
-//! Not yet: tiled-TIFF / mmap input, temp-file materialization for
-//! analysis barriers, column-parallel execution, PMTiles.
+//! # Feeding the sink
+//!
+//! The sink's bounded memory only survives if the *source* streams.
+//! [`ImageJob`](crate::job) prefers a row-level decoder and falls back to
+//! a whole decoded frame for any codec whose `zencodec` adapter reports
+//! `streaming_decoder` unsupported — which today is JXL, TIFF, AVIF, HEIC
+//! and RAW. Measured at 8000 × 8000 RGBA8: 25.0 MB peak heap from a
+//! streaming source, 45.2 MB through the real `zenjpeg` row decoder,
+//! **280.4 MB** through a full-frame decode.
+//! [`TempFileSource`](crate::sources::TempFileSource) replays a
+//! materialized frame in 25.0 MB, trading the RAM for disk — but it can
+//! only be built once the rows exist, so it does not rescue a codec that
+//! had to materialize to produce them.
+//!
+//! Not yet: tiled-TIFF / mmap input (needs a strip/tile accessor in
+//! `zentiff`, which has none on main), group-addressed JXL decode (needs
+//! a region or per-group flush in `zenjxl-decoder`, which exposes none),
+//! column-parallel execution, PMTiles.
 //!
 //! # Levels
 //!
