@@ -74,6 +74,12 @@ zenraw = { git = "https://github.com/imazen/zenraw" }
 zenpdf = { git = "https://github.com/imazen/zenextras" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+# zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg
+# 147444fe resolves it through a patch at ITS workspace root, which is invisible
+# to us, so this graph asks crates.io for `zenanalyze ^0.2.0` and fails to
+# resolve. The Pages deploy deletes both lockfiles, so it hit this first (runs
+# 33229080325 / 33230408160). See the root manifest for the full rationale.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

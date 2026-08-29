@@ -22,6 +22,11 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+# zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
+# root, which is invisible from here; the registry is frozen at 0.1.0. Without
+# this entry a fresh resolve of this workspace fails outright. See the repo-root
+# manifest for the full rationale.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }

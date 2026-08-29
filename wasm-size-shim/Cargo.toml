@@ -50,6 +50,11 @@ zenwebp = { path = "../../zenwebp" }
 
 
 [patch.crates-io]
+# zenjpeg is a direct path dep above, so its own workspace-root
+# [patch.crates-io] (where `zenanalyze 0.2.0` resolves) never applies here, and
+# the registry is frozen at 0.1.0. Without this a fresh resolve fails with
+# "failed to select a version for the requirement `zenanalyze = ^0.2.0`".
+zenanalyze = { path = "../../zenanalyze" }
 zennode = { path = "../../zennode/zennode" }
 zennode-derive = { path = "../../zennode/zennode-derive" }
 zenpixels = { path = "../../zenpixels/zenpixels" }

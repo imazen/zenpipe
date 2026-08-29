@@ -73,6 +73,12 @@ zenavif-parse = { path = "../../../zenavif/zenavif-parse" }
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 zenbitmaps = { path = "../../../zenbitmaps" }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
+# zenjpeg resolves `zenanalyze 0.2.0` through a [patch.crates-io] at the zenjpeg
+# WORKSPACE root; patched in by path to its member crate, that table never
+# applies, and the registry is frozen at 0.1.0 — so a fresh resolve here fails
+# with "failed to select a version for the requirement `zenanalyze = ^0.2.0`".
+# Path (not git) to match every other sibling patch in this fuzz workspace.
+zenanalyze = { path = "../../../zenanalyze" }
 # Needed by the jpeg-ultrahdr feature (gain-map decode). As a real path-patch
 # its `zencodec = { workspace = true }` resolves against its own workspace root
 # (~/work/zen/ultrahdr/Cargo.toml).

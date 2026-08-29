@@ -289,6 +289,27 @@ zensim-regress = { git = "https://github.com/imazen/zensim" }
 # unify to one instance. Drop this once zenpicker/zenpredict publish (then every
 # edge resolves zenanalyze-api from the registry).
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+# zenanalyze itself: git-only forever. Its main is 0.2.0 (the `hdr` feature /
+# retired `composites`), while the registry tops out at 0.1.0 and stays there —
+# zenanalyze's public API is frozen at 0.1.x by policy, so 0.2.x only exists on
+# git. zenjpeg 147444fe (2026-08-29) moved its own zenanalyze dep from a git rev
+# pin to a crates.io VERSION resolved through a [patch.crates-io] at the ZENJPEG
+# workspace root — the right shape there, because one root patch unifies the
+# `zenanalyze_api::Offer` contract across every consumer where per-manifest rev
+# pins had produced several incompatible `Offer` types in one graph. But a
+# dependency's [patch] table is ignored when that dependency is consumed from
+# outside its own workspace, which is exactly how we consume zenjpeg (git patch
+# above). So the moment 147444fe landed, every fresh resolve of this graph asked
+# crates.io for `zenanalyze ^0.2.0` and died before compiling a line:
+#   error: failed to select a version for the requirement `zenanalyze = "^0.2.0"`
+#   candidate versions found which didn't match: 0.1.0
+# That took down the Pages deploy (runs 33229080325 / 33230408160), which deletes
+# Cargo.lock and re-resolves from scratch; committed locks still pointed at the
+# pre-147444fe zenjpeg and hid it locally. Fix: carry the sibling's patch here —
+# same shape and same reason as zenjxl 1ae0da79. Floating (no rev) like every
+# other entry in this table on purpose: a rev pin would strand us the next time
+# zenjpeg's main bumps its zenanalyze requirement.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 # imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
