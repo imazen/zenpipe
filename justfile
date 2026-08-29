@@ -28,6 +28,40 @@ test-zenfilters-quality-vips:
 test-gainmap-surface:
     cargo test -p zencodecs --no-default-features --features "std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap" --all-targets
 
+# Tile-pyramid memory/time grid (zenpipe#24). Writes a TSV of peak live heap,
+# allocation churn and wall per (size x tile x layout x store x threads x
+# source class). See benchmarks/tile_pyramid_profile_2026-08-28.md for how to
+# read it and how to pair it with heaptrack (Linux) / `sample` (macOS).
+tile-profile out="benchmarks/tile_pyramid_profile_$(date +%Y-%m-%d).tsv":
+    cargo build --release --example tile_pyramid_profile
+    ./target/release/examples/tile_pyramid_profile --tsv-header > "{{out}}"
+    for wh in "256 256" "1024 1024" "4096 4096" "8000 8000" "10000 1000" "40000 1000" "100000 600"; do \
+        set -- $wh; \
+        ./target/release/examples/tile_pyramid_profile --width $1 --height $2 \
+            --tile 254 --store sink-only --layout dzi --repeat 5 | tail -1 >> "{{out}}"; \
+    done
+    for t in 128 254 512 1024; do \
+        ./target/release/examples/tile_pyramid_profile --width 40000 --height 1000 \
+            --tile $t --store sink-only --layout dzi --repeat 5 | tail -1 >> "{{out}}"; \
+    done
+    for l in dzi iiif zoomify gmaps; do \
+        ./target/release/examples/tile_pyramid_profile --width 4096 --height 4096 \
+            --tile 0 --store null --layout $l --repeat 5 | tail -1 >> "{{out}}"; \
+    done
+    for s in sink-only null mem fs zip; do \
+        ./target/release/examples/tile_pyramid_profile --width 10000 --height 1000 \
+            --tile 254 --store $s --layout dzi --repeat 3 | tail -1 >> "{{out}}"; \
+    done
+    for n in 1 2 4 8 12; do \
+        ./target/release/examples/tile_pyramid_profile --width 10000 --height 1000 \
+            --tile 254 --store fs --layout dzi --encode jpeg --threads $n --repeat 3 | tail -1 >> "{{out}}"; \
+    done
+    for src in callback jpeg materialized spool; do \
+        ./target/release/examples/tile_pyramid_profile --width 8000 --height 8000 \
+            --tile 254 --store sink-only --layout dzi --source $src | tail -1 >> "{{out}}"; \
+    done
+    @echo "wrote {{out}}"
+
 # Run clippy
 clippy:
     cargo clippy --all-targets -- -D warnings
