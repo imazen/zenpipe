@@ -179,6 +179,11 @@ required-features = ["std"]
 name = "riapi_reference"
 required-features = ["json-schema", "zennode"]
 
+# Drives PyramidWriter / FsStore / ZipStore / TempFileSource, all `std`-gated.
+[[example]]
+name = "tile_pyramid_profile"
+required-features = ["std"]
+
 [[bench]]
 name = "session_cache"
 harness = false
