@@ -339,12 +339,15 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
-- **The sink's own pass is 26–33 % faster** with byte-identical output
-  (`5b3c8101`). `shrink_rows` spent 62 % of that pass on three integer
-  divides per output pixel in the alpha-weighted average; fully opaque row
-  pairs now take the plain path, which is provably identical there
-  (`(255·S + 510)/1020` reduces exactly to `(S + 2)/4`), and the remaining
-  paths index fixed-size arrays. `shrink_rows` is 42 % faster per run.
+- **The sink's own pass is 23–29 % faster** with byte-identical output
+  (`5b3c8101`; matched back-to-back A/B, `--repeat 25` — the commit message's
+  "26–33 %" paired a single-shot baseline against a warmed run and is
+  optimistic, see the benchmarks doc). `shrink_rows` spent 62 % of that pass
+  on three integer divides per output pixel in the alpha-weighted average;
+  fully opaque row pairs now take the plain path, which is provably identical
+  there (`(255·S + 510)/1020` reduces exactly to `(S + 2)/4`), and the
+  remaining paths index fixed-size arrays. `shrink_rows` fell from 62 % to
+  54 % of the pass.
 - **Allocation churn down 25 % / 22 %** (`5b3c8101`): every even row used to
   be cloned into `Level::pending` so it could pair one level down; the row
   queue now keeps the newest row and `push_row` reads the pair in place.

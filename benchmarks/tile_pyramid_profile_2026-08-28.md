@@ -287,7 +287,9 @@ take the plain path, which is *bit-identical* there — with every alpha 255,
 one linear scan of the two rows. The remaining paths index fixed-size arrays
 (`as_chunks::<N>`) instead of runtime-length slices.
 
-`shrink_rows` is **42 % faster per run** and now 54 % of sink time.
+`shrink_rows` dropped from **62 % to 54 %** of the sink's own pass — roughly
+40 % less time per run once the sample counts are normalized by the matched
+wall times below.
 
 `shrink_rows_matches_reference_bit_for_bit` pins the result against the previous
 per-pixel implementation across bpp 1–4 × alpha on/off × opaque/non-opaque ×
@@ -298,14 +300,25 @@ widths 1–33 and 1024. Output is unchanged, not merely close.
 Slicing-by-8 (see §5). `crc32_matches_byte_at_a_time_at_every_length` pins it
 against the textbook form at every length 0..=300.
 
-### Net effect on the sink's own pass (M4, `--store sink-only`, steady state)
+### Net effect on the sink's own pass
+
+M4, `--store sink-only`, **both binaries built from the same tree and run
+back to back, `--repeat 25`, last run reported.** Pre-fix binary is
+`src/tiles.rs` as of `275c5dbb`.
 
 | image | before | after | Δ |
 |---|---|---|---|
-| 10000 × 1000 | 0.013 s | 0.009 s | **−31 %** |
-| 40000 × 1000 | 0.057 s | 0.042 s | **−26 %** |
-| 4096 × 4096 | 0.021 s | 0.014 s | **−33 %** |
-| 8000 × 8000 | 0.078 s | 0.052 s | **−33 %** |
+| 10000 × 1000 | 0.013 s | 0.010 s | **−23 %** |
+| 40000 × 1000 | 0.060 s | 0.046 s | **−23 %** |
+| 4096 × 4096 | 0.021 s | 0.015 s | **−29 %** |
+| 8000 × 8000 | 0.080 s | 0.057 s | **−29 %** |
+| 100000 × 600 | 0.088 s | 0.066 s | **−25 %** |
+
+> **Correction.** The commit messages of `5b3c8101` / `2fe50306` quote
+> "26–33 %" and a `100000 × 600` figure of `0.092 → 0.064 s`. Those paired a
+> *single-shot* pre-fix run against a *warmed* post-fix run and are
+> optimistic. The matched back-to-back numbers above — **23–29 %** — are the
+> ones to use. Commit messages are immutable; this table is the record.
 
 ### Measured and *rejected*: a recycled-row pool
 
