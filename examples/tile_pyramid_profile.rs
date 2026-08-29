@@ -21,7 +21,11 @@
 //! - `allocs` / `alloc_mb` — total allocation calls and bytes requested,
 //!   i.e. churn. Two runs with the same peak but a 10× allocs gap differ in
 //!   malloc pressure, not footprint.
-//! - `wall_s` — end-to-end `execute()`.
+//! - `wall_s` — the `execute()` pass only. The source is built *before* the
+//!   timer starts, so a `--source spool` run does not include the spool
+//!   write and a `--source materialized` run does not include the frame
+//!   fill. The memory columns are unaffected (the peak is re-armed at
+//!   whatever is live when the timer starts, so a held frame still counts).
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};

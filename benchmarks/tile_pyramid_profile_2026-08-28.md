@@ -449,11 +449,22 @@ cost plus one strip of RAM. So it is worth it exactly when:
   whitespace crop, statistics) **and** the frame does not fit comfortably; or
 - the decode is expensive and non-repeatable.
 
-It is **not** worth it when the source can simply be decoded again — for a
-streaming codec, re-decoding a 64 MP JPEG costs ~0.27 s of CPU against a 256 MB
-spool file write plus read-back. For those formats a second `DecoderSource` over
-the same bytes is cheaper than the spool. The spool's home is the
-already-materialized case, where it turns 280 MB of RAM into 25 MB.
+> **Caveat on `wall_s` for the source classes.** The harness builds the source
+> *before* starting the timer, so `wall_s` is the pyramid pass over an
+> already-constructed source. For `--source spool` that means **the spool write
+> is not in the number** (only the replay), and for `--source materialized` the
+> frame fill is not either. The memory columns are unaffected — the peak is
+> re-armed at whatever is live when the timer starts, so a held frame still
+> counts. Do not read the source-class `wall_s` column as a total cost of
+> ownership; it is a like-for-like comparison of the *pyramid pass* given each
+> source.
+
+Because of that caveat this profile does **not** establish whether spooling
+beats re-decoding on wall time for a streaming codec — that needs a harness that
+times source construction, which this one deliberately does not. What is
+measured is the memory: the spool replays in **25.0 MB**, the same as a perfect
+stream, against 280.4 MB for holding the frame. Choose it on that basis, plus
+the disk it costs (one full uncompressed frame — 256 MB for this image).
 
 ---
 
