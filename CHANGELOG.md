@@ -7,6 +7,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+- **`hashbrown` 0.16 -> 0.17 is a public-API break and is deliberately NOT taken yet.** `hashbrown::HashMap` is named in three exported signatures — `PipelineGraph::compile`, `PipelineGraph::compile_traced` and `PipelineGraph::estimate` — as recorded in `docs/public-api/zenpipe.txt:281-283`. For a `0.x` crate Cargo treats the minor as the major, so a consumer holding a `hashbrown 0.16` map could not pass it to a zenpipe built against 0.17: the two `HashMap` types would not unify. Ship this with the next batched breaking release, not on its own.
+
+#### Deferred dependency updates (third-party, 2026-08-29)
+
+Three crates.io requirements block a newer release and were left alone on purpose; each needs an owner decision rather than a routine bump:
+
+- `libblur` **0.23 -> 0.24.0** (`zenfilters` dev-dependency). `libblur` is not just a bench competitor here — `zenfilters/tests/reference_validation.rs` validates our blur against it under zensim psychovisual thresholds, so it is a tolerance-gated *reference implementation*. Moving it changes what the gate compares against; it should move together with a re-run and, if the thresholds shift, a recorded re-baseline.
+- `indicatif` **0.17 -> 0.18.6** (`zencodecs/zcimg`). Blocked by something structural rather than by risk: **`zencodecs/zcimg` does not build at all.** It is not in the root `workspace.members`, not in `workspace.exclude`, and carries no `[workspace]` table of its own, so `cargo metadata --manifest-path zencodecs/zcimg/Cargo.toml` fails with "current package believes it's in a workspace when it's not". It is absent from `Cargo.lock` and has no lockfile of its own, so no CI job and no local gate compiles it or any of its dependencies. Wire it into the workspace (or exclude it and give it a `[workspace]` table) before treating its dependency list as live.
+- `hashbrown` **0.16.1 -> 0.17.1** — see QUEUED BREAKING CHANGES above.
+
 #### Changed (third-party lockfile refresh, 2026-08-29)
 
 - **`Cargo.lock` refreshed within the existing requirements — crates.io packages only.** 118 registry packages moved (`anyhow 1.0.102 -> 1.0.104`, `bytemuck 1.25.0 -> 1.25.2`, `brotli 8.0.3 -> 8.0.4`, `clap 4.6.1 -> 4.6.6`, `exr 1.74.0 -> 1.74.2`, `flate2 1.1.9 -> 1.1.10`, `futures-util 0.3.32 -> 0.3.34`, `palette 0.7.6 -> 0.7.7`, `serde 1.0.228 -> 1.0.229`, `turbojpeg`, `wasm-bindgen`, the `icu_*` and `zerovec` families, among others). No manifest requirement changed.
