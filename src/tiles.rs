@@ -37,9 +37,9 @@
 //! memory dial — it is linear, and wall time is flat across it, so
 //! halving `tile_size` halves the footprint for free.
 //!
-//! There is a floor worth knowing: the row queue is `tile_size + 2·overlap
-//! + 1` rows deep at *every* level, whether or not the level is that tall,
-//! so below roughly `2 × tile_size` in both dimensions the pyramid's
+//! There is a floor worth knowing: every level's row queue is
+//! `tile_size + 2·overlap + 1` rows deep whether or not the level is that
+//! tall, so below roughly `2 × tile_size` in both dimensions the pyramid's
 //! buffers exceed the frame itself (256 × 256 RGBA8 measures 0.9 MB of
 //! sink buffers for a 0.26 MB image). Tiling a thumbnail costs more than
 //! decoding it.
