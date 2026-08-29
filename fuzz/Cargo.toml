@@ -40,6 +40,27 @@ imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
+# The rest of the parent table this file had drifted away from. `fuzz/` is its
+# own [workspace], so it inherits nothing from ../Cargo.toml and every
+# unpublished version zenpipe requires has to be repeated here or resolution
+# stops at the first one — as it did on `zengif = "^0.8.0"` (registry tops out
+# at 0.7.3). All git rather than path: unlike zencodecs/fuzz, nothing in this
+# workspace binds a local sibling checkout, so a git source adds no second copy
+# of any crate and needs nothing cloned. Each is removable the moment its crate
+# publishes the version zenpipe asks for.
+zengif = { git = "https://github.com/imazen/zengif" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+zenavif = { git = "https://github.com/imazen/zenavif" }
+heic = { git = "https://github.com/imazen/heic" }
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }
+zenpixels = { git = "https://github.com/imazen/zenpixels" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
+# Rev-pinned to 0.5.0 exactly as demo/crate pins it: ultrahdr main is 0.6.0,
+# and a floating patch would stop satisfying heic's `^0.5.0`, stranding it on
+# the boost-less registry 0.5.0.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
 
 # Override zenresize's git dep on zenlayout to use the workspace copy
 # (mirrors the root manifest's source-replacement patch).
