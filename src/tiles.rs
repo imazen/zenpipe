@@ -37,6 +37,13 @@
 //! memory dial — it is linear, and wall time is flat across it, so
 //! halving `tile_size` halves the footprint for free.
 //!
+//! There is a floor worth knowing: the row queue is `tile_size + 2·overlap
+//! + 1` rows deep at *every* level, whether or not the level is that tall,
+//! so below roughly `2 × tile_size` in both dimensions the pyramid's
+//! buffers exceed the frame itself (256 × 256 RGBA8 measures 0.9 MB of
+//! sink buffers for a 0.26 MB image). Tiling a thumbnail costs more than
+//! decoding it.
+//!
 //! Re-measure on your platform before quoting a number for a deployment.
 //! Full grid, time profile and per-input-class analysis:
 //! `benchmarks/tile_pyramid_profile_2026-08-28.md`.
@@ -166,6 +173,16 @@ impl TilePyramidConfig {
 
     /// Google Maps XYZ: 256 px, no overlap, image padded into a
     /// `256 × 2^k` square with `background`, levels down to one tile.
+    ///
+    /// **Pair this with [`PyramidWriter::with_skip_blanks`] unless the image
+    /// already is a `256 × 2^k` square.** Everything scales with the *padded*
+    /// canvas, so an image that just misses a power of two pays for the
+    /// difference in encoded, stored, background-only tiles: measured
+    /// 2026-08-28, 5000 × 3000 (15 MP) pads to 8192² (67 MP) and produces
+    /// 1 365 tiles in 0.097 s against DZI's 332 in 0.014 s — 4.1× the tiles
+    /// and 6.9× the wall time, roughly three quarters of them pure
+    /// background. When the image *is* such a square (e.g. 4096²) the
+    /// padding is free. See `benchmarks/tile_pyramid_profile_2026-08-28.md`.
     pub fn google_maps(background: [u8; 4]) -> Self {
         Self {
             tile_size: 256,
