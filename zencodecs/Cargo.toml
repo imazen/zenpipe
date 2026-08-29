@@ -109,6 +109,18 @@ moxcms = { version = ">=0.8.1, <0.10", optional = true, default-features = false
 # threads/avx512 forced; SIMD still dispatches at runtime.
 zensim = { version = "0.3.0", optional = true, default-features = false, features = ["imgref"] }
 
+# mozjpeg reference encoder for the `quality_calibrate` example only. An
+# OPTIONAL REGULAR dep behind `calibrate` rather than a dev-dependency, because
+# cargo builds every dev-dependency for `--all-targets` whether or not a target
+# uses it — `required-features` on the example does not gate it. turbojpeg-sys
+# builds libjpeg-turbo from source through cmake with REQUIRE_SIMD=ON, so as a
+# dev-dep it forced an assembler onto EVERY CI job on EVERY platform, and broke
+# the two that have none: the `cross` i686 container, and the macos-26-intel
+# runner image (`No CMAKE_ASM_NASM_COMPILER could be found` — GitHub's Intel
+# macOS image ships no nasm, and zen-workspace's setup action installs it on
+# Linux only). Nothing in src/ or tests/ touches turbojpeg; only the example.
+turbojpeg = { version = "1.4", optional = true }
+
 [dev-dependencies]
 png = "0.18"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
@@ -117,7 +129,6 @@ zensim-regress = { version = "0.4.0" }
 codec-corpus = "1"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 rayon = "1"
-turbojpeg = "1.4"
 
 [features]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
@@ -198,8 +209,10 @@ moxcms = ["dep:moxcms"]  # alias for back-compat
 # All codecs
 all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
 
-# Calibration harness (all lossy encoders)
-calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std"]
+# Calibration harness (all lossy encoders). Also gates `dep:turbojpeg`, the
+# mozjpeg reference encoder the harness compares against — see its declaration
+# in [dependencies] for why it is not a plain dev-dependency.
+calibrate = ["jpeg", "webp", "png", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "std", "dep:turbojpeg"]
 
 # Tests that read fixtures only present on the dev workstation (sibling
 # jpegli-cpp profile trees, /mnt/v corpora). The skip decision is the
