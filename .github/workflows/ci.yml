@@ -16,6 +16,16 @@ jobs:
   rust:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:
+      # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
+      # of the SIMD tiers and the Apple linker are exercised together), and
+      # `macos-latest` is aarch64-only, so it has to be named explicitly. The
+      # reusable workflow dropped macOS from its DEFAULT list to cut Actions
+      # spend and documents `platforms` as the opt-back-in; this is that opt-in.
+      # `macos-26-intel` rather than `macos-15-intel` because zenpipe ships no
+      # binaries — nothing here needs the older SDK's deployment target.
+      # Everything else is the reusable workflow's default list, repeated
+      # verbatim because `platforms` replaces it wholesale rather than adding.
+      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-26-intel"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
       # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
@@ -61,3 +71,42 @@ jobs:
         run: cargo test --manifest-path apidoc/Cargo.toml
         env:
           ZEN_API_DOC: check
+
+  # 32-bit coverage. i686 is a primary target: it is where `usize` narrowing
+  # bugs show up (stride/offset arithmetic that silently fits in 64 bits, byte
+  # counts multiplied before a bounds check) and it is the closest proxy CI has
+  # for wasm32 pointer width, which the demo actually ships on.
+  #
+  # Deliberately NOT routed through zen-workspace's setup action: that action
+  # runs `ci-clone --add-paths`, which rewrites every internal dep to a sibling
+  # checkout ABOVE the repo directory. `cross` only bind-mounts the project
+  # directory into its container, so those paths would be missing inside it and
+  # every job would fail at manifest load. A plain checkout resolves the same
+  # graph through the repo's own git-form [patch.crates-io] — which is exactly
+  # the bare-clone route those entries exist for (see the root Cargo.toml) — and
+  # needs nothing outside the project dir. The one path patch that remains
+  # (`zenlayout`) is in-repo, so it mounts fine.
+  #
+  # `--no-default-features` keeps the graph to the pure-Rust core (default
+  # pulls zenfilters + moxcms); the per-package runs below add the two crates
+  # whose arithmetic is most pointer-width-sensitive.
+  i686:
+    name: Test (i686 cross)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-gnu
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cross-i686
+      - name: Test zenpipe (no default features)
+        run: cross test --target i686-unknown-linux-gnu --no-default-features
+      - name: Test zenlayout
+        run: cross test -p zenlayout --target i686-unknown-linux-gnu --all-targets
+      - name: Test zencodecs (no default features)
+        run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features
