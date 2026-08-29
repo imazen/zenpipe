@@ -1,0 +1,133 @@
+name: Fuzz
+
+# A BUILD gate, not a fuzzing campaign. It compiles every fuzz target on every
+# push so API drift fails CI the day it happens.
+#
+# Why it exists: this repo had no Fuzz workflow at all, so nothing ever
+# compiled `fuzz/` or `zencodecs/fuzz/`. Both are standalone Cargo workspaces
+# (`[workspace] members = ["."]`) excluded from the root, so neither
+# `cargo check --all-targets` nor clippy at the repo root ever reaches them.
+# They rotted silently: by 2026-08-29 the two sub-workspaces could not even
+# resolve (4fd592d0, 6d43e25c) and eight targets no longer compiled against
+# `Limits` (57f3c9f9 — E0063 for the added `max_output_bytes`, E0599 for
+# `with_max_memory_bytes` → `with_max_memory`, E0308 for u64 → u32
+# width/height). Every one of those is a plain type error a `cargo check`
+# would have caught on the commit that introduced it.
+#
+# Why `cargo check` and not `cargo fuzz build`: `cargo fuzz` needs a nightly
+# toolchain plus `-Zsanitizer=address`, and it fully codegens the whole codec
+# dependency graph with sanitizer-coverage instrumentation — minutes of work
+# per target, times eleven targets, for a gate whose entire job is to catch
+# type drift. `cargo check` catches exactly the same class (every rot found on
+# 2026-08-29 was E0063/E0308/E0599 or a resolution failure) on stable, in a
+# fraction of the time. Actual fuzzing stays a hand-run/nightly activity —
+# `zencodecs/fuzz/README.md` and the justfile document it.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Superseded runs waste runner queue; only the newest commit per ref matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Linux only, deliberately: the fuzz targets are `#![no_main]` libFuzzer bins
+  # that only ever run under `cargo fuzz` on x86-64 Linux. Compiling them on
+  # Windows/macOS would gate nothing these targets can actually exercise.
+  targets:
+    name: Fuzz targets compile (${{ matrix.workspace }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Resolves entirely through its own git-form `[patch.crates-io]` plus
+          # in-repo path deps (`..`, `../zencodecs`, `../zenlayout`), so a bare
+          # checkout is all it needs — the same "bare clone" route the i686 job
+          # in ci.yml uses, and the route those patch entries exist for.
+          - workspace: fuzz
+            siblings: ''
+          # Path-patches five sibling checkouts at `../../../<repo>` (see the
+          # comments in its Cargo.toml for why each one is by path rather than
+          # git) plus `codec-corpus/crate` for `seed_corpus_tool`. Verified
+          # against `cargo metadata` on 2026-08-29: these six, and nothing else
+          # outside the repo, appear in the resolved graph.
+          - workspace: zencodecs/fuzz
+            siblings: 'zenavif zenbitmaps zenjpeg zenanalyze ultrahdr'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-${{ matrix.workspace }}
+          workspaces: ${{ matrix.workspace }}
+
+      # Deliberately NOT zen-workspace's setup action. That action runs
+      # `cargo superwork ci-clone --add-paths`, which REWRITES manifests
+      # (it reported "pathed 131 manifests" and "deleted sections:
+      # patch.crates-io" on run 33240717657). Rewriting is the wrong thing for
+      # this gate specifically: the failure it exists to catch is a fuzz
+      # manifest whose own patch table has gone stale, and a rewrite would mask
+      # exactly that. Cloning the siblings by hand keeps the committed
+      # manifests under test verbatim. It also skips the ~40s
+      # `cargo install cargo-superwork` build.
+      #
+      # ci-clone puts siblings at `$GITHUB_WORKSPACE/..`, which is where
+      # `../../../<repo>` from `zencodecs/fuzz/` lands, so this mirrors the
+      # layout every other job in the repo already builds against.
+      - name: Clone the sibling checkouts this workspace path-patches
+        if: matrix.siblings != ''
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/.."
+          for repo in ${{ matrix.siblings }}; do
+            git clone --depth 1 "https://github.com/imazen/$repo.git"
+          done
+          # codec-corpus carries ~700 MB of corpus blobs; the fuzz workspace
+          # only needs the `crate/` Rust package, so take a blobless sparse
+          # checkout of that one directory (~2 MB, ~1s).
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/imazen/codec-corpus.git
+          git -C codec-corpus sparse-checkout set crate
+
+      # No `--locked`: a lock pinned to a stale sibling rev would keep passing
+      # while the API it targets moved on, which is the drift this gate exists
+      # to see. The two `Cargo.lock` files stay committed for reproducible
+      # hand-fuzzing; CI is allowed to re-resolve on top of them.
+      - name: cargo check --all-targets
+        working-directory: ${{ matrix.workspace }}
+        run: cargo check --all-targets
+
+  # The committed crash seeds under `zencodecs/fuzz/regression/` are minimized
+  # inputs for bugs that have been fixed. Replaying them needs neither nightly
+  # nor cargo-fuzz, so they gate on stable — see
+  # `zencodecs/tests/fuzz_regression.rs`.
+  #
+  # No `|| true`-shaped fallback anywhere in this job: the harness asserts the
+  # seed directory exists and is non-empty, so a moved or emptied corpus fails
+  # loudly instead of turning into a gate that doesn't gate.
+  regression:
+    name: Fuzz regression seeds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-regression
+
+      # Same zencodecs feature line ci.yml already builds, so this adds a job
+      # but no new dependency graph. It is the set that matters here: every
+      # committed seed is a JPEG XL codestream (`ff 0a`), so `jxl-decode` is
+      # what actually carries them past format detection.
+      - name: Replay committed crash seeds
+        run: |
+          cargo test -p zencodecs --no-default-features \
+            --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp \
+            --test fuzz_regression -- --nocapture
