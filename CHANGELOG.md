@@ -132,6 +132,19 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   its target-dir cleaning ran blind. Same ordering, same reason, that
   zen-workspace's setup action already documents.
 
+#### Fixed (fuzz-tooling rot, 2026-08-29)
+
+- **`zencodecs`'s `fuzz-ci` / `fuzz-smoke` / `fuzz-deep` recipes ran no
+  fuzzing at all** (`ee827ea4`). All three invoked `fuzz_exif` and
+  `fuzz_depthmap`, whose targets were deleted along with the hand-rolled exif
+  module (`85ecbb5`) and depth-map support (`6cfc21b`) on 2026-06-25;
+  `cargo fuzz run` on a name with no `[[bin]]` fails, so the recipes had been
+  unrunnable for two months. `zencodecs/CLAUDE.md` still advertised 11 targets
+  and named both. Recipes and docs now list the nine that exist, say which two
+  went and when, and record that compiling the targets no longer needs nightly.
+  Found while wiring the Fuzz gate — same rot class, one layer up from the
+  targets themselves.
+
 #### Fixed (CI green on rustc 1.98, 2026-08-27)
 
 - **`cargo clippy -- -D warnings` on 1.98.0** — the new
