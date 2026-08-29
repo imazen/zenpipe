@@ -72,6 +72,12 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # taxonomy; their mains are on zencodec 0.1.26.
 zenraw = { git = "https://github.com/imazen/zenraw" }
 zenpdf = { git = "https://github.com/imazen/zenextras" }
+# zenavif: registry 0.1.7 is YANKED and zencodecs' avif-decode requires ^0.1.7,
+# so without this entry a standalone resolve of this crate dies with "version
+# 0.1.7 is yanked". Present at the workspace root; this table drifted out of
+# sync with it (the Pages deploy hides the drift by overwriting this whole
+# section with the root's, so only local `cargo build` in demo/crate saw it).
+zenavif = { git = "https://github.com/imazen/zenavif" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg
