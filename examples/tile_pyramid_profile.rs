@@ -391,9 +391,16 @@ fn config_for(layout: &str, tile: u32) -> TilePyramidConfig {
         "gmaps" => TilePyramidConfig::google_maps([0, 0, 0, 255]),
         other => panic!("unknown layout {other}"),
     };
-    TilePyramidConfig {
-        tile_size: tile,
-        ..base
+    if tile == 0 {
+        // `--tile 0` keeps each layout's own convention (DZI 254/1, IIIF
+        // 512/0, Zoomify and Google Maps 256/0) — the only apples-to-apples
+        // way to compare layouts.
+        base
+    } else {
+        TilePyramidConfig {
+            tile_size: tile,
+            ..base
+        }
     }
 }
 

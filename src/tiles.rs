@@ -1424,12 +1424,18 @@ impl<W: std::io::Write + Send> TileStore for ZipStore<W> {
 }
 
 /// CRC-32 (IEEE 802.3), as zip needs.
+///
+/// Slicing-by-8: consumes 8 bytes per iteration from eight 256-entry tables
+/// instead of one byte from one. Tile bytes are the whole payload of a
+/// [`ZipStore`] pyramid, and the byte-at-a-time form was measured as *all* of
+/// zip's overhead over [`FsStore`] (10 000 × 1000 DZI: 0.105 s vs 0.024 s for
+/// the same 229 tiles). The 8 KiB of tables is built once, on first use.
 #[cfg(feature = "std")]
 fn crc32(data: &[u8]) -> u32 {
-    static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| {
-        let mut t = [0u32; 256];
-        for (i, e) in t.iter_mut().enumerate() {
+    static TABLE: std::sync::OnceLock<[[u32; 256]; 8]> = std::sync::OnceLock::new();
+    let t = TABLE.get_or_init(|| {
+        let mut t = [[0u32; 256]; 8];
+        for (i, e) in t[0].iter_mut().enumerate() {
             let mut c = i as u32;
             for _ in 0..8 {
                 c = if c & 1 != 0 {
@@ -1440,11 +1446,29 @@ fn crc32(data: &[u8]) -> u32 {
             }
             *e = c;
         }
+        for n in 1..8 {
+            for i in 0..256 {
+                let prev = t[n - 1][i];
+                t[n][i] = (prev >> 8) ^ t[0][(prev & 0xFF) as usize];
+            }
+        }
         t
     });
     let mut crc = 0xFFFF_FFFFu32;
-    for &b in data {
-        crc = table[((crc ^ u32::from(b)) & 0xFF) as usize] ^ (crc >> 8);
+    let (blocks, tail) = data.as_chunks::<8>();
+    for b in blocks {
+        crc ^= u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+        crc = t[7][(crc & 0xFF) as usize]
+            ^ t[6][((crc >> 8) & 0xFF) as usize]
+            ^ t[5][((crc >> 16) & 0xFF) as usize]
+            ^ t[4][(crc >> 24) as usize]
+            ^ t[3][b[4] as usize]
+            ^ t[2][b[5] as usize]
+            ^ t[1][b[6] as usize]
+            ^ t[0][b[7] as usize];
+    }
+    for &b in tail {
+        crc = t[0][((crc ^ u32::from(b)) & 0xFF) as usize] ^ (crc >> 8);
     }
     !crc
 }
@@ -2155,6 +2179,44 @@ mod tests {
     fn crc32_matches_known_vectors() {
         assert_eq!(crc32(b""), 0);
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+    }
+
+    /// The slicing-by-8 CRC must equal the textbook byte-at-a-time form at
+    /// every length, including the 0..8-byte tails either side of a block.
+    #[cfg(feature = "std")]
+    #[test]
+    fn crc32_matches_byte_at_a_time_at_every_length() {
+        fn reference(data: &[u8]) -> u32 {
+            let mut crc = 0xFFFF_FFFFu32;
+            for &b in data {
+                let mut c = (crc ^ u32::from(b)) & 0xFF;
+                for _ in 0..8 {
+                    c = if c & 1 != 0 {
+                        0xEDB8_8320 ^ (c >> 1)
+                    } else {
+                        c >> 1
+                    };
+                }
+                crc = c ^ (crc >> 8);
+            }
+            !crc
+        }
+        let mut state = 0x1234_5678_9ABC_DEF0u64;
+        let data: Vec<u8> = (0..300)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                (state >> 32) as u8
+            })
+            .collect();
+        for len in 0..=data.len() {
+            assert_eq!(
+                crc32(&data[..len]),
+                reference(&data[..len]),
+                "crc32 diverged at len {len}"
+            );
+        }
     }
 
     /// The straightforward per-output-pixel form `shrink_rows` was before the
