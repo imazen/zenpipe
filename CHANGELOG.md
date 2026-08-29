@@ -40,6 +40,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   path for zenpixels-convert (the git form put two zenpixels in the graph —
   ten E0308s on `PixelDescriptor`/`PixelSlice`). Lockfile regenerated
   (`31a305b8`).
+- **Both fuzz sub-workspaces resolve and compile again.** `fuzz/` and
+  `zencodecs/fuzz/` are each their own `[workspace]` and inherit nothing
+  from the root patch table. `fuzz/` stopped at `zengif = "^0.8.0"`
+  (registry tops out at 0.7.3); its table now mirrors the root in full,
+  git-form throughout since nothing there binds a local checkout
+  (`4fd592d0`). `zencodecs/fuzz/` failed differently — a stale lock pinning
+  archmage 0.9.26 against the `^0.9.27` current zenanalyze needs — and was
+  regenerated to 0.9.28 (`6d43e25c`). With resolution unblocked, eight fuzz
+  targets turned out to have bit-rotted against `Limits`: the new
+  `max_output_bytes` field, `with_max_memory_bytes` →
+  `with_max_memory`, and u64→u32 width/height builders (`57f3c9f9`). The
+  rot accumulated silently because this repo has no Fuzz CI workflow.
 
 #### Added (CI coverage, 2026-08-29)
 
