@@ -7,6 +7,33 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (orphaned member lockfiles / Dependabot, 2026-08-29)
+
+- **Deleted `zeneditor/Cargo.lock`, `zenfilters/Cargo.lock` and
+  `zenpipe-cmd/Cargo.lock` — cargo never read them, but GitHub did.** All three
+  directories are `[workspace] members`, so cargo resolves them against the ROOT
+  `Cargo.lock`; a lockfile inside a member is dead weight. Proven rather than
+  assumed: `cargo locate-project --workspace` run from each of the three returns
+  the root `/Cargo.toml`, and `cargo update -p rand` invoked inside `zeneditor/`
+  reports the ROOT lock's `rand@0.9.4` / `rand@0.10.1` — not the `rand 0.9.2`
+  sitting in `zeneditor/Cargo.lock`. Nothing in CI, the justfile, or any script
+  referenced them. `demo/crate/Cargo.lock` and `wasm-size-shim/Cargo.lock` are
+  **kept**: those two are in `exclude`, `locate-project` resolves each to itself,
+  so their locks are live.
+- **This was the repo's only open security alert, and it was a phantom.**
+  GHSA-cq8v-f236-94qc (`rand >= 0.9.0, < 0.9.3`, low) was reported against
+  `zeneditor/Cargo.lock` — the dead file pinning `rand 0.9.2`. The real dependency
+  graph has been on `rand 0.9.4` (and `0.10.1`), both patched, the whole time. The
+  alert could never be closed by updating anything real, because nothing real was
+  vulnerable; deleting the stale file is the fix.
+- **It is also why `Dependabot Updates` went red on 2026-04-22 and 2026-05-07.**
+  Dependabot treats each lockfile as its own update directory, which is why the run
+  titles name `/zeneditor`, `/zenfilters` and `/demo/crate` separately. For a
+  directory that is a workspace *member*, the update it computes cannot agree with
+  the root resolution that actually governs the build, so the job errors instead of
+  opening a PR. Removing the three orphans leaves Dependabot only directories whose
+  lockfiles cargo genuinely owns.
+
 #### Changed (zencodec/zenpixels version ranges, 2026-08-29)
 
 - **Every `zencodec` / `zenpixels` / `zenpixels-convert` requirement across the
