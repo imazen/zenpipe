@@ -486,12 +486,27 @@ Ranked by measured size of the prize.
    through Google Maps produces 1 365 tiles in 0.097 s versus DZI's 332 in
    0.014 s, ~75 % of them background (§4).
 
-4. **`shrink_rows` is still 54 % of the sink's own pass** after the fixes. The
-   plain path is a scalar per-channel `(sum + 2) / 4` over fixed-size arrays;
-   it is a textbook `magetypes` kernel (u8 widen → add → shift → narrow) and
-   should vectorize several-fold. Deferred because zenpipe's core is
-   `no_std + alloc` with no archmage dependency today — adding one is a
-   dependency decision, not a perf decision.
+4. **`shrink_rows` is still 54 % of the sink's own pass — but SIMD will not
+   help, and this was tested rather than assumed.** `objdump` confirms the
+   shipped kernel is scalar (37 `ldrb` / 15 `strb`, 2 vector ops). A variant
+   processing four output pixels per iteration from `[u8; 32]` blocks *does*
+   get auto-vectorized (16 `uaddl.8h`, 10 `add.8h`, 8 `ld1.s`) — and measures
+   **identical**, back to back at `--repeat 25`:
+
+   | image | scalar | auto-vectorized |
+   |---|---|---|
+   | 40000 × 1000 | 0.046 s | 0.046 s |
+   | 8000 × 8000 | 0.056 s | 0.058 s |
+   | 100000 × 600 | 0.068 s | 0.065 s |
+   | 4096 × 4096 | 0.015 s | 0.015 s |
+
+   The reason is that once the three per-pixel integer divides were removed
+   (§7), the 2×2 shrink is **memory-bound**: it reads two full rows and writes
+   one, per level, and that traffic is inherent to the algorithm. So a
+   `magetypes` port of this kernel would buy nothing, and the sink's own pass
+   is close to its floor. The remaining lever on the sink is *less traffic*
+   (item 1), not faster arithmetic. Experiment reverted; recording the
+   negative result so nobody re-runs it.
 
 5. **No streaming decode for JXL / TIFF / AVIF / HEIC / RAW** (§8a, §8b). Owned
    by `zenjxl-decoder` + `zenjxl` and `zentiff` respectively. Until then, every
