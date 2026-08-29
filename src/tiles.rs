@@ -304,8 +304,6 @@ struct Level {
     next_row: u32,
     /// Next tile row to emit.
     next_tile_row: u32,
-    /// An odd row waiting for its pair before shrinking into the next level.
-    pending: Option<Vec<u8>>,
 }
 
 /// Streaming tile pyramid [`Sink`](crate::Sink). See the [module docs](self).
@@ -409,7 +407,6 @@ impl<W: TileWriter> TilePyramidSink<W> {
                 first_row: 0,
                 next_row: 0,
                 next_tile_row: 0,
-                pending: None,
             })
             .collect();
 
@@ -486,10 +483,10 @@ impl<W: TileWriter> TilePyramidSink<W> {
         let bpp = self.bpp;
         let has_next = li + 1 < self.levels.len();
         let alpha = self.format.has_alpha();
-        let shrunk = {
-            let level = &mut self.levels[li];
-            let lw = level.info.width;
-            debug_assert_eq!(row.len(), lw as usize * bpp);
+        let lw = self.levels[li].info.width;
+        debug_assert_eq!(row.len(), lw as usize * bpp);
+        {
+            let level = &self.levels[li];
             if level.next_row >= level.info.height {
                 return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                     "TilePyramidSink: level {} received more than {} rows",
@@ -497,22 +494,31 @@ impl<W: TileWriter> TilePyramidSink<W> {
                     level.info.height
                 ))));
             }
-            // Shrink pairing for the next level (before the row moves).
-            let shrunk = if has_next {
-                match level.pending.take() {
-                    None => {
-                        level.pending = Some(row.clone());
-                        None
-                    }
-                    Some(prev) => Some(shrink_rows(&prev, &row, lw, bpp, alpha)),
-                }
-            } else {
-                None
-            };
+        }
+        let idx = self.levels[li].next_row;
+        // Rows pair (0,1), (2,3), … into the next level: the odd row of a pair
+        // shrinks with its predecessor, read straight out of the queue.
+        // `emit_ready_tile_rows` never drops the newest row, which is what
+        // makes that predecessor still be there — so no copy of every even row
+        // is needed (it used to cost one full-width allocation + memcpy per
+        // even row per level).
+        let mut shrunk = if has_next && !idx.is_multiple_of(2) {
+            Some(vec![0u8; lw.div_ceil(2) as usize * bpp])
+        } else {
+            None
+        };
+        {
+            let level = &mut self.levels[li];
+            let base = level.first_row;
             level.rows.push_back(row);
             level.next_row += 1;
-            shrunk
-        };
+            if let Some(out) = shrunk.as_mut() {
+                debug_assert!(idx > base, "shrink pair dropped: {idx} <= {base}");
+                let prev = &level.rows[(idx - 1 - base) as usize];
+                let cur = &level.rows[(idx - base) as usize];
+                shrink_rows_into(out, prev, cur, lw, bpp, alpha);
+            }
+        }
 
         self.emit_ready_tile_rows(li)?;
 
@@ -538,9 +544,15 @@ impl<W: TileWriter> TilePyramidSink<W> {
                 break;
             }
             self.emit_tile_row(li, r)?;
-            // Drop rows the next tile row can't reference.
-            let keep_from = (r + 1).saturating_mul(t).saturating_sub(o);
+            // Drop rows the next tile row can't reference — but never the
+            // newest one: `push_row` pairs it with the row that follows to
+            // shrink into the next level without copying it (and `finish`
+            // pairs it with itself when the level's height is odd).
             let level = &mut self.levels[li];
+            let keep_from = (r + 1)
+                .saturating_mul(t)
+                .saturating_sub(o)
+                .min(level.next_row.saturating_sub(1));
             while level.first_row < keep_from && !level.rows.is_empty() {
                 level.rows.pop_front();
                 level.first_row += 1;
@@ -609,6 +621,8 @@ impl<W: TileWriter> TilePyramidSink<W> {
         let bpp = self.bpp;
         let img = self.width as usize * bpp;
         if self.canvas_w == self.width {
+            // `to_vec` allocates without zeroing first — the copy is the
+            // only pass over the bytes.
             return src[..img].to_vec();
         }
         let mut row = self.background_row();
@@ -635,35 +649,120 @@ impl<W: TileWriter> TilePyramidSink<W> {
 /// averaged alpha-weighted (color premultiplied, alpha plain mean) so
 /// transparent pixels don't bleed their color; other layouts are a plain
 /// per-channel rounded mean.
-fn shrink_rows(a: &[u8], b: &[u8], w: u32, bpp: usize, alpha: bool) -> Vec<u8> {
-    let out_w = w.div_ceil(2) as usize;
-    let mut out = vec![0u8; out_w * bpp];
-    let last = w as usize - 1;
-    for x in 0..out_w {
-        let x0 = 2 * x;
-        let x1 = (2 * x + 1).min(last);
-        let p = [
-            &a[x0 * bpp..x0 * bpp + bpp],
-            &a[x1 * bpp..x1 * bpp + bpp],
-            &b[x0 * bpp..x0 * bpp + bpp],
-            &b[x1 * bpp..x1 * bpp + bpp],
-        ];
-        let dst = &mut out[x * bpp..x * bpp + bpp];
+fn shrink_rows_into(out: &mut [u8], a: &[u8], b: &[u8], w: u32, bpp: usize, alpha: bool) {
+    let w = w as usize;
+    let out_w = w.div_ceil(2);
+    debug_assert_eq!(out.len(), out_w * bpp);
+    // Output pixels backed by a real 2-wide pair. Only an odd `w` leaves a
+    // tail pixel, which replicates the last column.
+    let full = w / 2;
+    if full > 0 {
+        let (head, tail_a, tail_b) = (
+            &mut out[..full * bpp],
+            &a[..full * 2 * bpp],
+            &b[..full * 2 * bpp],
+        );
+        match (alpha, bpp) {
+            // Fully opaque rows take the plain path: it is *bit-identical*
+            // there (with every alpha 255, `a_sum` is 1020 and
+            // `(255·S + 510) / 1020` reduces exactly to `(S + 2) / 4`), and it
+            // skips three integer divides per output pixel — the alpha-
+            // weighted path's dominant cost. One linear scan of two rows buys
+            // that for the common case; see the equivalence test.
+            (true, 4) if rows_are_opaque(tail_a, tail_b) => {
+                shrink_pairs_plain::<4>(head, tail_a, tail_b);
+            }
+            (true, 4) => shrink_pairs_rgba(head, tail_a, tail_b),
+            (_, 1) => shrink_pairs_plain::<1>(head, tail_a, tail_b),
+            (_, 2) => shrink_pairs_plain::<2>(head, tail_a, tail_b),
+            (_, 3) => shrink_pairs_plain::<3>(head, tail_a, tail_b),
+            (_, 4) => shrink_pairs_plain::<4>(head, tail_a, tail_b),
+            // `TilePyramidSink::new` rejects everything outside 1..=4 bpp.
+            _ => unreachable!("bpp {bpp} outside 1..=4"),
+        }
+    }
+    if w % 2 == 1 {
+        // The last column is replicated, so both samples of the pair are it.
+        let s = (w - 1) * bpp;
+        let (pa, pb) = (&a[s..s + bpp], &b[s..s + bpp]);
+        let dst = &mut out[(out_w - 1) * bpp..];
         if alpha && bpp == 4 {
-            let a_sum: u32 = p.iter().map(|q| u32::from(q[3])).sum();
+            let q = [pa, pa, pb, pb];
+            let a_sum: u32 = q.iter().map(|p| u32::from(p[3])).sum();
             for c in 0..3 {
-                let num: u32 = p.iter().map(|q| u32::from(q[c]) * u32::from(q[3])).sum();
+                let num: u32 = q.iter().map(|p| u32::from(p[c]) * u32::from(p[3])).sum();
                 dst[c] = (num + a_sum / 2).checked_div(a_sum).unwrap_or(0) as u8;
             }
             dst[3] = ((a_sum + 2) / 4) as u8;
         } else {
             for c in 0..bpp {
-                let sum: u32 = p.iter().map(|q| u32::from(q[c])).sum();
+                let sum = 2 * u32::from(pa[c]) + 2 * u32::from(pb[c]);
                 dst[c] = ((sum + 2) / 4) as u8;
             }
         }
     }
+}
+
+/// Allocating wrapper around [`shrink_rows_into`] — tests and the
+/// non-recycled paths.
+#[cfg(test)]
+fn shrink_rows(a: &[u8], b: &[u8], w: u32, bpp: usize, alpha: bool) -> Vec<u8> {
+    let mut out = vec![0u8; w.div_ceil(2) as usize * bpp];
+    shrink_rows_into(&mut out, a, b, w, bpp, alpha);
     out
+}
+
+/// Every RGBA8 pixel of both rows has alpha 255.
+fn rows_are_opaque(a: &[u8], b: &[u8]) -> bool {
+    let (apx, _) = a.as_chunks::<4>();
+    let (bpx, _) = b.as_chunks::<4>();
+    apx.iter().chain(bpx).all(|p| p[3] == 255)
+}
+
+/// Plain per-channel rounded mean of a 2×2 block, `N` bytes per pixel.
+///
+/// `N` is a const so every index is inside a fixed-size array — no bounds
+/// checks in the loop body, and the channel loop unrolls into something LLVM
+/// can vectorize.
+fn shrink_pairs_plain<const N: usize>(out: &mut [u8], a: &[u8], b: &[u8]) {
+    let (dsts, _) = out.as_chunks_mut::<N>();
+    let (apx, _) = a.as_chunks::<N>();
+    let (bpx, _) = b.as_chunks::<N>();
+    let (apairs, _) = apx.as_chunks::<2>();
+    let (bpairs, _) = bpx.as_chunks::<2>();
+    for ((dst, ap), bp) in dsts.iter_mut().zip(apairs).zip(bpairs) {
+        for c in 0..N {
+            let sum = u32::from(ap[0][c])
+                + u32::from(ap[1][c])
+                + u32::from(bp[0][c])
+                + u32::from(bp[1][c]);
+            dst[c] = ((sum + 2) / 4) as u8;
+        }
+    }
+}
+
+/// Alpha-weighted mean of a 2×2 RGBA block: color is averaged premultiplied
+/// and alpha plainly, so fully transparent pixels don't bleed their color.
+fn shrink_pairs_rgba(out: &mut [u8], a: &[u8], b: &[u8]) {
+    let (dsts, _) = out.as_chunks_mut::<4>();
+    let (apx, _) = a.as_chunks::<4>();
+    let (bpx, _) = b.as_chunks::<4>();
+    let (apairs, _) = apx.as_chunks::<2>();
+    let (bpairs, _) = bpx.as_chunks::<2>();
+    for ((dst, ap), bp) in dsts.iter_mut().zip(apairs).zip(bpairs) {
+        let q = [ap[0], ap[1], bp[0], bp[1]];
+        let a_sum =
+            u32::from(q[0][3]) + u32::from(q[1][3]) + u32::from(q[2][3]) + u32::from(q[3][3]);
+        let half = a_sum / 2;
+        for c in 0..3 {
+            let num = u32::from(q[0][c]) * u32::from(q[0][3])
+                + u32::from(q[1][c]) * u32::from(q[1][3])
+                + u32::from(q[2][c]) * u32::from(q[2][3])
+                + u32::from(q[3][c]) * u32::from(q[3][3]);
+            dst[c] = (num + half).checked_div(a_sum).unwrap_or(0) as u8;
+        }
+        dst[3] = ((a_sum + 2) / 4) as u8;
+    }
 }
 
 impl<W: TileWriter> crate::Sink for TilePyramidSink<W> {
@@ -720,13 +819,20 @@ impl<W: TileWriter> crate::Sink for TilePyramidSink<W> {
             }
         }
         // Odd heights: the last row pairs with itself, level by level (each
-        // flush may leave a pending row one level down).
-        for li in 0..self.levels.len() {
-            if let Some(prev) = self.levels[li].pending.take() {
-                let lw = self.levels[li].info.width;
-                let s = shrink_rows(&prev, &prev, lw, self.bpp, self.format.has_alpha());
-                self.push_row(li + 1, s)?;
+        // flush may leave an unpaired row one level down). Levels are walked
+        // top down so level `li` has received all its rows before it is read.
+        for li in 0..self.levels.len().saturating_sub(1) {
+            let level = &self.levels[li];
+            if level.next_row.is_multiple_of(2) {
+                continue;
             }
+            let (lw, base, idx) = (level.info.width, level.first_row, level.next_row - 1);
+            let mut s = vec![0u8; lw.div_ceil(2) as usize * self.bpp];
+            {
+                let last = &self.levels[li].rows[(idx - base) as usize];
+                shrink_rows_into(&mut s, last, last, lw, self.bpp, self.format.has_alpha());
+            }
+            self.push_row(li + 1, s)?;
         }
         // Every level must have emitted all its tile rows.
         for l in &self.levels {
@@ -2049,5 +2155,96 @@ mod tests {
     fn crc32_matches_known_vectors() {
         assert_eq!(crc32(b""), 0);
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+    }
+
+    /// The straightforward per-output-pixel form `shrink_rows` was before the
+    /// fixed-array rewrite. Kept as the oracle for
+    /// [`shrink_rows_matches_reference_bit_for_bit`] — the fast paths must be
+    /// byte-identical, not merely close.
+    fn shrink_rows_reference(a: &[u8], b: &[u8], w: u32, bpp: usize, alpha: bool) -> Vec<u8> {
+        let out_w = w.div_ceil(2) as usize;
+        let mut out = vec![0u8; out_w * bpp];
+        let last = w as usize - 1;
+        for x in 0..out_w {
+            let x0 = 2 * x;
+            let x1 = (2 * x + 1).min(last);
+            let p = [
+                &a[x0 * bpp..x0 * bpp + bpp],
+                &a[x1 * bpp..x1 * bpp + bpp],
+                &b[x0 * bpp..x0 * bpp + bpp],
+                &b[x1 * bpp..x1 * bpp + bpp],
+            ];
+            let dst = &mut out[x * bpp..x * bpp + bpp];
+            if alpha && bpp == 4 {
+                let a_sum: u32 = p.iter().map(|q| u32::from(q[3])).sum();
+                for c in 0..3 {
+                    let num: u32 = p.iter().map(|q| u32::from(q[c]) * u32::from(q[3])).sum();
+                    dst[c] = (num + a_sum / 2).checked_div(a_sum).unwrap_or(0) as u8;
+                }
+                dst[3] = ((a_sum + 2) / 4) as u8;
+            } else {
+                for c in 0..bpp {
+                    let sum: u32 = p.iter().map(|q| u32::from(q[c])).sum();
+                    dst[c] = ((sum + 2) / 4) as u8;
+                }
+            }
+        }
+        out
+    }
+
+    /// Every (width, bpp, alpha) the sink can hand `shrink_rows` must produce
+    /// exactly the reference bytes — including the odd-width replicated
+    /// column, fully transparent blocks (`a_sum == 0`), and saturated alpha.
+    #[test]
+    fn shrink_rows_matches_reference_bit_for_bit() {
+        // Deterministic pseudo-random bytes, plus the 0 / 255 corners that
+        // exercise the alpha-weighted divide.
+        let mut state = 0x2545_F491_4F6C_DD1Du64;
+        let mut byte = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            match state % 16 {
+                0 => 0u8,
+                1 => 255,
+                _ => (state >> 24) as u8,
+            }
+        };
+        // `opaque` forces every alpha byte to 255 so the RGBA8 fast path (which
+        // is only reached when both rows are fully opaque) is exercised too.
+        for &bpp in &[1usize, 2, 3, 4] {
+            for alpha in [false, true] {
+                for opaque in [false, true] {
+                    for w in 1u32..=33 {
+                        let n = w as usize * bpp;
+                        let mut a: Vec<u8> = (0..n).map(|_| byte()).collect();
+                        let mut b: Vec<u8> = (0..n).map(|_| byte()).collect();
+                        if opaque && bpp == 4 {
+                            for px in a.as_chunks_mut::<4>().0 {
+                                px[3] = 255;
+                            }
+                            for px in b.as_chunks_mut::<4>().0 {
+                                px[3] = 255;
+                            }
+                        }
+                        assert_eq!(
+                            shrink_rows(&a, &b, w, bpp, alpha),
+                            shrink_rows_reference(&a, &b, w, bpp, alpha),
+                            "shrink_rows diverged at w={w} bpp={bpp} alpha={alpha} opaque={opaque}"
+                        );
+                    }
+                }
+                // A wide row so the chunked path runs many iterations.
+                let w = 1024u32;
+                let n = w as usize * bpp;
+                let a: Vec<u8> = (0..n).map(|_| byte()).collect();
+                let b: Vec<u8> = (0..n).map(|_| byte()).collect();
+                assert_eq!(
+                    shrink_rows(&a, &b, w, bpp, alpha),
+                    shrink_rows_reference(&a, &b, w, bpp, alpha),
+                    "shrink_rows diverged at w=1024 bpp={bpp} alpha={alpha}"
+                );
+            }
+        }
     }
 }
