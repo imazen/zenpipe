@@ -91,9 +91,9 @@ for its domain; `full_registry()` aggregates them all.
 
 | Owner | Nodes | Count |
 |-------|-------|------:|
-| **zenpipe** | Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha, RoundCorners | 6 |
+| **zenpipe** | Geometry + layout (crop/orient/flip/rotate/region/expand-canvas), Constrain, Resize, CropWhitespace, SmartCrop, FillRect, RemoveAlpha, RoundCorners, Composite, Overlay + RIAPI adapters | 26 |
 | **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP/HEIC encode+decode, Quantize, QualityIntentNode | 16 |
-| **zenfilters** | Photo adjustment filter nodes | 43 |
+| **zenfilters** | Photo adjustment filter nodes | 61 |
 
 
 ### Constrain node
@@ -119,7 +119,7 @@ The Constrain node is the primary geometry entry point with 17 parameters:
 | zenfilters | Filter node — photo adjustments on Oklab f32 (per-pixel streams, neighborhood windows) |
 | zenpixels | Strip type, ColorContext (ICC/CICP), metadata propagation |
 | zenpixels-convert | Automatic row-level format conversion between nodes |
-| zennode | Bridge: declarative node instances → PipelineGraph; node definitions owned by zencodecs (16), zenfilters (43), and zenpipe (6); `full_registry()` aggregates all three |
+| zennode | Bridge: declarative node instances → PipelineGraph; node definitions owned by zencodecs (16), zenfilters (61), and zenpipe (26); `full_registry()` aggregates all three |
 | moxcms | IccTransform node — row-by-row ICC profile conversion (optional) |
 
 ## Bridge layer (zennode → PipelineGraph)
@@ -127,7 +127,7 @@ The Constrain node is the primary geometry entry point with 17 parameters:
 When the `zennode` feature is enabled, declarative node definitions compile
 into an executable pipeline graph with automatic fusion. Node definitions
 are distributed: zencodecs owns 16 codec/quantize/quality-intent nodes,
-zenfilters owns 43 filter nodes, and zenpipe owns 6 geometry/resize/pipeline
+zenfilters owns 61 filter nodes, and zenpipe owns 26 geometry/resize/pipeline/RIAPI-adapter
 nodes (Constrain, Resize, CropWhitespace, FillRect, RemoveAlpha,
 RoundCorners). Call `full_registry()` to aggregate all three.
 
@@ -185,6 +185,28 @@ estimate.check(&Limits {
     max_memory_bytes: Some(512 * 1024 * 1024),
     ..Default::default()
 })?;
+```
+
+## Incremental re-render (`Session`)
+
+For editors that re-run the same pipeline with tweaked downstream nodes,
+`Session` (feature `zennode`) caches the post-geometry pixels and resumes from
+them. Node lists are hashed as a Merkle chain (source identity → each node's
+schema + params), so only an unchanged prefix hits; a partial hit re-runs just
+the appended geometry nodes from the cached pixels.
+
+```rust,ignore
+use zenpipe::Session;
+
+let mut session = Session::new(64 * 1024 * 1024); // byte budget, LRU-evicted
+let source_hash = hash_of(path, mtime, size);      // caller-owned identity
+
+// Full render: decode + geometry run, post-geometry pixels are cached.
+let out = session.stream(decode(path)?, &config_exposure_0_5, None, source_hash)?;
+
+// Slider moved: same source + geometry → decoder dropped unread, only the
+// filter + encode nodes execute. `config.limits` is enforced on every run.
+let out = session.stream(decode(path)?, &config_exposure_1_0, None, source_hash)?;
 ```
 
 ## Smart crop (`c.focus`)
@@ -261,21 +283,22 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
-| Codec internals | [zenjxl-decoder] · [jxl-encoder] · [zenrav1e] · [rav1d-safe] · [zenavif-parse] · [zenavif-serialize] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
-| Pixels & color | [zenpixels] · [zenpixels-convert] · [linear-srgb] · [garb] |
+| Pixels & color | [zenpixels] · [zenpixels-convert] · [linear-srgb] · [garb] · [zenyuv] |
 | Pipeline & framework | **zenpipe** · [zencodec] · [zencodecs] · [zenlayout] · [zennode] · [zenwasm] · [zentract] |
 | Metrics | [zensim] · [fast-ssim2] · [butteraugli] · [zenmetrics] · [resamplescope-rs] |
-| Pickers & ML | [zenanalyze] · [zenpredict] · [zenpicker] |
+| Pickers & ML | [zenanalyze] · [zenpredict] · [zenpicker] · [zenanalyze-api] |
+| Test corpora | [codec-corpus] · [imazen-26] |
 | Products | [Imageflow] image engine ([.NET][imageflow-dotnet] · [Node][imageflow-node] · [Go][imageflow-go]) · [Imageflow Server] · [ImageResizer] (C#) |
 
 <sub>¹ pure-Rust, `#![forbid(unsafe_code)]` codecs, as of 2026</sub>
 
 ### General Rust awesomeness
 
-[zenbench] · [archmage] · [magetypes] · [enough] · [whereat] · [cargo-copter]
+[zenbench] · [archmage] · [magetypes] · [enough] · [whereat] · [cargo-copter] · [zenutils]
 
 [Open source](https://www.imazen.io/open-source) · [@imazen](https://github.com/imazen) · [@lilith](https://github.com/lilith) · [lib.rs/~lilith](https://lib.rs/~lilith)
 
@@ -285,36 +308,38 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 [zengif]: https://github.com/imazen/zengif
 [zenavif]: https://github.com/imazen/zenavif
 [zenjxl]: https://github.com/imazen/zenjxl
+[zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
+[jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
 [heic]: https://github.com/imazen/heic
-[zentiff]: https://github.com/imazen/zentiff
-[zenpdf]: https://github.com/imazen/zenpdf
+[zentiff]: https://github.com/imazen/zenextras
+[zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras
 [zenjp2]: https://github.com/imazen/zenextras
 [zenraw]: https://github.com/imazen/zenraw
 [ultrahdr]: https://github.com/imazen/ultrahdr
-[zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
-[jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenrav1e]: https://github.com/imazen/zenrav1e
 [rav1d-safe]: https://github.com/imazen/rav1d-safe
-[zenavif-parse]: https://github.com/imazen/zenavif-parse
-[zenavif-serialize]: https://github.com/imazen/zenavif-serialize
+[zenravif]: https://github.com/imazen/cavif-rs
+[zenavif-parse]: https://github.com/imazen/zenavif
+[zenavif-serialize]: https://github.com/imazen/zenavif
 [zenflate]: https://github.com/imazen/zenflate
 [zenzop]: https://github.com/imazen/zenzop
 [zenzstd]: https://github.com/imazen/zenzstd
 [zenresize]: https://github.com/imazen/zenresize
 [zenquant]: https://github.com/imazen/zenquant
 [zenblend]: https://github.com/imazen/zenblend
-[zenfilters]: https://github.com/imazen/zenfilters
+[zenfilters]: https://github.com/imazen/zenpipe
 [zensally]: https://github.com/imazen/zensally
 [zentone]: https://github.com/imazen/zentone
 [zenpixels]: https://github.com/imazen/zenpixels
 [zenpixels-convert]: https://github.com/imazen/zenpixels
 [linear-srgb]: https://github.com/imazen/linear-srgb
 [garb]: https://github.com/imazen/garb
+[zenyuv]: https://github.com/imazen/zenjpeg
 [zencodec]: https://github.com/imazen/zencodec
-[zencodecs]: https://github.com/imazen/zencodecs
-[zenlayout]: https://github.com/imazen/zenlayout
+[zencodecs]: https://github.com/imazen/zenpipe
+[zenlayout]: https://github.com/imazen/zenpipe
 [zennode]: https://github.com/imazen/zennode
 [zenwasm]: https://github.com/imazen/zenwasm
 [zentract]: https://github.com/imazen/zentract
@@ -326,12 +351,16 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 [zenanalyze]: https://github.com/imazen/zenanalyze
 [zenpredict]: https://github.com/imazen/zenanalyze
 [zenpicker]: https://github.com/imazen/zenanalyze
+[zenanalyze-api]: https://github.com/imazen/zenanalyze
+[codec-corpus]: https://github.com/imazen/codec-corpus
+[imazen-26]: https://github.com/imazen/imazen-26
 [zenbench]: https://github.com/imazen/zenbench
 [archmage]: https://github.com/imazen/archmage
 [magetypes]: https://github.com/imazen/archmage
 [enough]: https://github.com/imazen/enough
 [whereat]: https://github.com/lilith/whereat
 [cargo-copter]: https://github.com/imazen/cargo-copter
+[zenutils]: https://github.com/imazen/zenutils
 [Imageflow]: https://github.com/imazen/imageflow
 [Imageflow Server]: https://github.com/imazen/imageflow-dotnet-server
 [ImageResizer]: https://github.com/imazen/resizer
