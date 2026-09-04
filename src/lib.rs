@@ -88,6 +88,12 @@ pub use zencodecs::quality::{QualityIntent, QualityProfile};
 // Re-export ImageFormat for callers that need to display/match format names.
 pub use zencodec::ImageFormat;
 
+/// AVIF backend + knob auto-tuning — the consumer side of
+/// [`zenavif::backend_tuner`]. The tuning logic lives in the codec; this
+/// module connects a pipeline's quality + time intent to it.
+#[cfg(feature = "avif-autotune")]
+pub mod avif_autotune;
+
 pub mod animation;
 pub mod codec;
 #[cfg(feature = "json-schema")]

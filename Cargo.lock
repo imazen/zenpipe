@@ -2761,6 +2761,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rav1d-disjoint-mut"
+version = "0.3.1"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
+dependencies = [
+ "aligned",
+ "aligned-vec",
+ "zerocopy",
+]
+
+[[package]]
 name = "rav1d-safe"
 version = "0.6.0"
 source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
@@ -2776,7 +2786,32 @@ dependencies = [
  "nasm-rs",
  "parking_lot",
  "paste",
- "rav1d-disjoint-mut",
+ "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
+ "raw-cpuid",
+ "safe_unaligned_simd",
+ "strum",
+ "to_method",
+ "whereat",
+ "zerocopy",
+]
+
+[[package]]
+name = "rav1d-safe"
+version = "0.6.0"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
+dependencies = [
+ "aligned",
+ "archmage",
+ "assert_matches",
+ "atomig",
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "enough",
+ "nasm-rs",
+ "parking_lot",
+ "paste",
+ "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec)",
  "raw-cpuid",
  "safe_unaligned_simd",
  "strum",
@@ -4478,6 +4513,18 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
+dependencies = [
+ "archmage",
+ "garb",
+ "linear-srgb",
+ "magetypes",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
+name = "zenanalyze"
+version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
 dependencies = [
  "archmage",
@@ -4506,18 +4553,63 @@ dependencies = [
  "linear-srgb",
  "log",
  "magetypes",
- "rav1d-safe",
+ "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
  "rgb",
  "safe_unaligned_simd",
  "thiserror 2.0.20",
  "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
- "zenavif-parse",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
  "zenravif",
+]
+
+[[package]]
+name = "zenavif"
+version = "0.2.0"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb",
+ "log",
+ "magetypes",
+ "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec)",
+ "rgb",
+ "safe_unaligned_simd",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ultrahdr-core 0.5.0",
+ "whereat",
+ "yuv",
+ "zenanalyze 0.2.0",
+ "zenanalyze-api",
+ "zenavif-parse 0.7.0",
+ "zencodec",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenpredict 0.2.0",
+ "zenravif",
+]
+
+[[package]]
+name = "zenavif-parse"
+version = "0.7.0"
+dependencies = [
+ "arrayvec 0.7.8",
+ "bitreader",
+ "byteorder",
+ "enough",
+ "fallible_collections",
+ "leb128",
+ "log",
+ "whereat",
+ "zencodec",
 ]
 
 [[package]]
@@ -4617,8 +4709,8 @@ dependencies = [
  "ultrahdr-core 0.6.0",
  "whereat",
  "zenanalyze-api",
- "zenavif",
- "zenavif-parse",
+ "zenavif 0.1.7",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
  "zenbitmaps",
  "zencodec",
  "zengif",
@@ -4631,7 +4723,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpng 0.2.0",
- "zenpredict 0.2.0",
+ "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze)",
  "zenraw",
  "zensim",
  "zensim-regress",
@@ -4755,7 +4847,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core 0.6.0",
  "whereat",
- "zenanalyze",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -4881,13 +4973,14 @@ source = "git+https://github.com/imazen/zenanalyze#7b84d53c4a142341280c23ea30464
 dependencies = [
  "libm",
  "zenanalyze-api",
- "zenpredict 0.2.0",
+ "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze)",
 ]
 
 [[package]]
 name = "zenpipe"
 version = "0.1.0"
 dependencies = [
+ "almost-enough",
  "bytemuck",
  "codec-corpus",
  "enough",
@@ -4900,7 +4993,8 @@ dependencies = [
  "rgb",
  "serde_json",
  "whereat",
- "zenavif",
+ "zenavif 0.1.7",
+ "zenavif 0.2.0",
  "zenbench",
  "zenbitmaps",
  "zenblend",
@@ -5012,6 +5106,16 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenquant",
+]
+
+[[package]]
+name = "zenpredict"
+version = "0.2.0"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "libm",
+ "lz4_flex 0.11.6",
 ]
 
 [[package]]

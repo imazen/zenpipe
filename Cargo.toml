@@ -69,6 +69,16 @@ nodes-png = ["zennode", "dep:zenpng", "zencodecs/png"]
 nodes-webp = ["zennode", "dep:zenwebp", "zencodecs/webp"]
 nodes-gif = ["zennode", "dep:zengif", "zencodecs/gif"]
 nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
+# AVIF backend + knob auto-tuning (`crate::avif_autotune`). OFF by default and
+# flips no default: a caller opts in by holding an `AvifAutotune`.
+#
+# Takes zenavif 0.2.x as a SEPARATELY-NAMED direct dep (`zenavif_tuner`)
+# alongside the 0.1.x edge zenpipe + zencodecs already use for decode/encode.
+# The two are semver-incompatible so they coexist, and no 0.2 type is ever
+# handed to a 0.1 API. Migrating the whole edge to 0.2.x is a real change with
+# nothing additive about it; when it happens, drop the rename and this feature
+# keeps working unchanged.
+avif-autotune = ["std", "dep:zenavif_tuner", "dep:almost-enough", "dep:imgref", "dep:rgb"]
 nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
 nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
@@ -142,6 +152,25 @@ zengif = { version = "0.8.0", default-features = false, features = ["std"], opti
 # requested here (CI resolves zenavif from the sibling clone of main, and
 # "zenavif does not have that feature" was the resolution failure since 2026-08-01).
 zenavif = { version = "0.1.7", default-features = false, optional = true }
+# zenavif 0.2.x, ONLY for `avif-autotune` (see the feature comment above). A
+# SIBLING PATH because the backend tuner needs zenavif's `auto-tune` feature,
+# whose own zenanalyze/zenpredict deps are path-pinned to `../zenanalyze` — a
+# git dep cannot resolve those. The crate is renamed so it sits beside the
+# 0.1.x dep on the line above. Requires a `../zenavif` checkout at or past
+# cdfe7b46 (the backend_tuner commit); the feature is off by default, so a
+# tree without one still builds everything else.
+zenavif_tuner = { package = "zenavif", path = "../zenavif", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
+# `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
+# `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
+# itself depends on so the two unify rather than resolving twice.
+almost-enough = { version = "0.4.3", default-features = false, optional = true }
+# The pixel-view types `zenavif::encode_rgb8` takes. Pinned to the exact
+# versions zenavif itself depends on so the types UNIFY — a second resolution
+# of either would make the call site fail to typecheck for a reason that reads
+# like nonsense. (They are also dev-dependencies of this crate; that entry is
+# for tests and does not reach the library.)
+imgref = { version = "1.12.0", optional = true }
+rgb = { version = "0.8.52", default-features = false, features = ["bytemuck"], optional = true }
 zenjxl = { version = "0.3.0", default-features = false, features = ["zencodec"], optional = true }
 zentiff = { version = "0.1.0", default-features = false, optional = true }
 zenbitmaps = { version = "0.2.0", default-features = false, optional = true }

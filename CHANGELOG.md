@@ -7,6 +7,34 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added (AVIF auto-tuning consumer, 2026-09-04)
+
+- **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam
+  for zenavif's backend + knob tuner. `AvifAutotune::{stub, from_bake}` →
+  `plan(rgb, w, h, AvifIntent)` → `AvifPlan{backend, config,
+  expected_bytes, expected_wall_ms, explain}` → `encode`. Off by default
+  and flips no default: the ordinary `CodecIntent` → `zencodecs` encode
+  path does not consult it. All tuning logic lives in
+  `zenavif::backend_tuner` (a codec owns its tuning code); this is intent
+  in, config out. No bundled model weights — `from_bake` takes the
+  caller's bytes and fails loudly on a malformed bake rather than falling
+  back to defaults, and `AvifPlan::explain()` always reports
+  `source=stub` vs `source=model` so a trace line cannot misattribute a
+  table lookup to a prediction. Takes zenavif 0.2.x as a separately-named
+  path dep (`zenavif_tuner`) beside the existing 0.1.x edge; needs a
+  `../zenavif` sibling at or past `cdfe7b46`. imageflow is NOT wired.
+  **The feature does not resolve on `main` today** — a pre-existing
+  three-source `zenanalyze-api` conflict (the `[patch.crates-io]` git
+  entry, `zenpicker`'s different zenanalyze rev `7b84d53c` via
+  `zencodecs`, and the sibling path zenavif's `auto-tune` pins); cargo
+  reports `all possible versions conflict with previously selected
+  packages`, and patching the git source to the path does not fix it.
+  Unifying those is a graph decision for this repo's owner. The module
+  itself compiles and its 4 tests pass on a graph where `zenanalyze-api`
+  resolves once, and the DEFAULT build is unaffected.
+
+
+
 #### QUEUED BREAKING CHANGES
 
 - **`hashbrown` 0.16 -> 0.17 is a public-API break and is deliberately NOT taken yet.** `hashbrown::HashMap` is named in three exported signatures — `PipelineGraph::compile`, `PipelineGraph::compile_traced` and `PipelineGraph::estimate` — as recorded in `docs/public-api/zenpipe.txt:281-283`. For a `0.x` crate Cargo treats the minor as the major, so a consumer holding a `hashbrown 0.16` map could not pass it to a zenpipe built against 0.17: the two `HashMap` types would not unify. Ship this with the next batched breaking release, not on its own.

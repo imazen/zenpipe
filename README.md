@@ -384,6 +384,66 @@ limits) builds in a `no_std + alloc` environment without `std`.
 | [`zenfilters`](https://github.com/imazen/zenpipe/tree/main/zenfilters) | Photo adjustment filters on planar Oklab f32 with SIMD |
 | [`zenlayout`](https://github.com/imazen/zenpipe/tree/main/zenlayout) | Resize/crop/canvas geometry with constraint modes + orientation |
 
+## AVIF auto-tuning (`avif-autotune`, off by default)
+
+Given a frame, a target quality and an optional time budget, pick the AV1
+**backend** and its **knobs** — then encode with them.
+
+```rust,ignore
+use zenpipe::avif_autotune::{AvifAutotune, AvifIntent};
+
+// Hold one for the process. Swap `stub()` for `from_bake(&bytes)` when a
+// trained bake exists; nothing below this line changes.
+let tuner = AvifAutotune::stub();
+
+let plan = tuner.plan(&rgb8, w, h, AvifIntent::new(82.0).within_ms(250.0))?;
+tracing::info!("{}", plan.explain());   // cell=… source=stub|model expected_wall=… 
+let avif = tuner.encode(&rgb8, w, h, &plan)?;
+```
+
+**The tuning logic is not here.** It lives in
+[`zenavif::backend_tuner`](https://github.com/imazen/zenavif) — a codec
+owns its own tuning code. This module is the consumer seam: intent in,
+config out, encode.
+
+**No bundled model weights.** zenavif ships none, and neither does this.
+`from_bake` takes bytes the caller supplies; the contract a bake must
+declare is zenavif's `docs/AUTOTUNE_CONTRACT.md`. A malformed bake fails
+loudly rather than falling back to defaults — a pipeline that asked for a
+model and silently got a table would log predictions it never made, which
+is why `AvifPlan::explain()` always states `source=stub` or `source=model`.
+
+**It flips no default.** The ordinary `CodecIntent` → `zencodecs` encode
+path does not consult it; you opt in by holding an `AvifAutotune`.
+
+**Build requirement.** The feature takes zenavif **0.2.x** as a
+separately-named path dependency (`zenavif_tuner`) alongside the 0.1.x
+crate zenpipe and `zencodecs` already use — the two are
+semver-incompatible, so they coexist, and no 0.2 type is ever handed to a
+0.1 API. It is a path dep because zenavif's `auto-tune` feature path-pins
+its own zenanalyze/zenpredict deps, which a git dep cannot resolve. So
+`--features avif-autotune` needs a `../zenavif` sibling checkout at or
+past `cdfe7b46`. Every other feature builds without one.
+
+**⛔ The feature does not resolve on `main` today — a pre-existing graph
+knot, not a defect in this module.** `--features avif-autotune` needs one
+`zenanalyze-api` instance, and the graph already wants three sources of
+it: the `[patch.crates-io]` git entry, `zenpicker` from a *different*
+zenanalyze git rev (`7b84d53c`) via `zencodecs`, and the sibling **path**
+that zenavif's `auto-tune` deps pin. Cargo reports
+`failed to select a version for zenanalyze-api ... all possible versions
+conflict with previously selected packages`. Patching the git source to
+the path does not fix it — the `zenpicker` rev still disagrees.
+Unifying those three is a zenpipe dependency-graph decision, not
+additive consumer wiring, so it is left to that owner. Everything else
+here is verified: the module compiles and its four unit tests pass on a
+graph where `zenanalyze-api` resolves once, and zenpipe's **default**
+build is unaffected (`cargo check -p zenpipe --lib` clean).
+
+**imageflow is not wired to this.** zenpipe is the intended forward
+backend for imageflow v3 but is not wired into it today, so this lands on
+the zenpipe side only.
+
 ## License
 
 Dual-licensed: [AGPL-3.0](https://github.com/imazen/zenpipe/blob/main/LICENSE-AGPL3) or [commercial](https://github.com/imazen/zenpipe/blob/main/LICENSE-COMMERCIAL).
