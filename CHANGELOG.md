@@ -23,15 +23,60 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   table lookup to a prediction. Takes zenavif 0.2.x as a separately-named
   path dep (`zenavif_tuner`) beside the existing 0.1.x edge; needs a
   `../zenavif` sibling at or past `cdfe7b46`. imageflow is NOT wired.
-  **The feature does not resolve on `main` today** — a pre-existing
-  three-source `zenanalyze-api` conflict (the `[patch.crates-io]` git
-  entry, `zenpicker`'s different zenanalyze rev `7b84d53c` via
-  `zencodecs`, and the sibling path zenavif's `auto-tune` pins); cargo
-  reports `all possible versions conflict with previously selected
-  packages`, and patching the git source to the path does not fix it.
-  Unifying those is a graph decision for this repo's owner. The module
-  itself compiles and its 4 tests pass on a graph where `zenanalyze-api`
-  resolves once, and the DEFAULT build is unaffected.
+  The feature builds and all 4 of its tests pass; see the Fixed entry
+  below for the `zenanalyze-api` resolution failure that blocked it at
+  the time this entry was first written, and what it actually was.
+
+#### Fixed (dependency unification, 2026-09-04)
+
+- **`zenanalyze-api` resolves to exactly ONE instance again — the graph
+  had drifted onto two revs of `imazen/zenanalyze` in `Cargo.lock`.** The
+  committed lock held `zenanalyze-api` at `6b080abf` while `zenpicker`
+  and `zenpredict` sat at `7b84d53c`, so the graph carried two checkouts
+  of the same repo and therefore two `zenanalyze_api::Offer` types. This
+  broke `--features picker-api` and `--features avif-autotune` outright,
+  with a message that names neither the second rev nor the cause:
+  `failed to download zenanalyze-api v0.1.1 (…#6b080abf)` / `failed to
+  find … in path source` / `this is an unexpected cargo internal error`.
+  Converged all three onto `#f7fe3435` with a scoped
+  `cargo update -p 'git+…#zenpicker@0.1.0' -p 'git+…#zenpredict@0.2.0'`.
+  **Lockfile-only — no manifest dependency changed**, and `cargo
+  public-api` reports a ZERO delta for both `zenpipe` (7,363 items) and
+  `zencodecs --features picker-api` (2,959 items, measured against the
+  same crate built at the superseded `7b84d53c` rev). Nothing published.
+
+  Three claims in the entry above were **measured false** and are
+  corrected here rather than left standing: (1) it was not a *three*-source
+  conflict and not a manifest conflict at all — the manifests were already
+  correct, since the floating git patch and zencodecs' floating
+  `zenpicker`/`zenpredict` deps name one repo and converge on one checkout
+  whenever the lock is freshly resolved; (2) cargo never reported "all
+  possible versions conflict with previously selected packages" — the
+  actual error is the internal-error text above; (3) "patching the git
+  source to the path does not fix it" is wrong — a path patch also resolves
+  to one instance (verified), it is simply the worse fix, because it would
+  make a DEFAULT build depend on a sibling checkout and break this repo's
+  git-consumability rule. The reason the registry `0.1.0` cannot be used
+  instead is recorded on the patch entry in `Cargo.toml`: zenanalyze 0.2.x
+  requires `^0.1.1` for `Select::Names`, and 0.1.1 is unpublished.
+
+- **`avif-autotune` needs a `../zenavif` CHECKOUT at main, not a manifest
+  change in zenavif.** Verified by building the feature against a
+  read-only export of zenavif `main` (`c6c4c96`) beside a symlink to
+  `../zenanalyze`: `cargo build -p zenpipe --features avif-autotune` and
+  `cargo test -p zenpipe --lib --features avif-autotune` both pass (287
+  tests, all four `avif_autotune` cases green) with one `zenanalyze-api`
+  in the graph and **zero edits to zenavif**. An `unresolved import
+  zenavif_tuner::backend_tuner` from this feature means the sibling
+  working copy is behind its own main — advance the checkout.
+
+- **The reported `zengif` / `zencodec` `CategorizedError` taxonomy drift
+  did not reproduce.** With the lock converged, `cargo test -p zenpipe
+  --lib` is green at 283 tests on default features, on `nodes-gif` and on
+  `nodes-all`, and the two zengif-touching integration suites
+  (`bridge_codec`, `streaming_codec`) pass. The graph carries a single
+  `zencodec 0.1.26` from the registry, which is the taxonomy every codec
+  pin is built against. No zengif change was needed or made.
 
 
 

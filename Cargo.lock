@@ -4538,7 +4538,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze-api"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zenanalyze#6b080abf84ae2407bc7f2b127940404b3adb70b0"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 
 [[package]]
 name = "zenavif"
@@ -4969,7 +4969,7 @@ dependencies = [
 [[package]]
 name = "zenpicker"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenanalyze#7b84d53c4a142341280c23ea304640e944916b70"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
  "libm",
  "zenanalyze-api",
@@ -5121,8 +5121,9 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#7b84d53c4a142341280c23ea304640e944916b70"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
+ "archmage",
  "bytemuck",
  "libm",
  "lz4_flex 0.11.6",
@@ -5548,4 +5549,4 @@ dependencies = [
 [[patch.unused]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#6b080abf84ae2407bc7f2b127940404b3adb70b0"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"

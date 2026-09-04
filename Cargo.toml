@@ -159,6 +159,18 @@ zenavif = { version = "0.1.7", default-features = false, optional = true }
 # 0.1.x dep on the line above. Requires a `../zenavif` checkout at or past
 # cdfe7b46 (the backend_tuner commit); the feature is off by default, so a
 # tree without one still builds everything else.
+#
+# That "at or past" is a CHECKOUT requirement, not a manifest one — VERIFIED
+# 2026-09-04 by building this feature against a read-only export of zenavif
+# `main` (c6c4c96) placed beside a symlink to ../zenanalyze: `cargo build -p
+# zenpipe --features avif-autotune` and `cargo test -p zenpipe --lib --features
+# avif-autotune` both pass (287 tests, incl. all four avif_autotune cases), with
+# ONE zenanalyze-api in the graph and no edit to zenavif's manifest. So if this
+# feature fails with `unresolved import zenavif_tuner::backend_tuner` (or a
+# missing AvifTune / AvifTuner / TuneSource), the sibling ../zenavif working
+# copy is simply BEHIND its own main — advance that checkout; do not change any
+# Cargo.toml here or there. zenavif main exports exactly what src/avif_autotune.rs
+# imports, under `#[cfg(all(feature = "auto-tune", feature = "encode"))]`.
 zenavif_tuner = { package = "zenavif", path = "../zenavif", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
@@ -317,6 +329,42 @@ zensim-regress = { git = "https://github.com/imazen/zensim" }
 # boundary (verified: E0308). Patch the registry crate to the same git source to
 # unify to one instance. Drop this once zenpicker/zenpredict publish (then every
 # edge resolves zenanalyze-api from the registry).
+#
+# MEASURED 2026-09-04 — WHAT "ONE INSTANCE" ACTUALLY REQUIRES, AND THE TRAP.
+# The floating git spec here and the floating `zenpicker`/`zenpredict` git deps
+# in zencodecs/Cargo.toml all name the SAME repo, so a clean resolve converges
+# them on ONE checkout and yields exactly ONE zenanalyze-api. That is the whole
+# mechanism — there is nothing else to configure. But it is only true of a
+# FRESHLY RESOLVED lock: `Cargo.lock` records the rev each entry was locked at,
+# and entries locked at different times drift onto DIFFERENT revs of this repo.
+# When they do, the graph carries two checkouts and cargo does not report a
+# version conflict — it dies with a bogus-looking internal error:
+#   error: failed to download `zenanalyze-api v0.1.1 (…zenanalyze#<revA>)`
+#   Caused by: failed to find zenanalyze-api v0.1.1 (…) in path source
+#   note: this is an unexpected cargo internal error
+# That message names neither the second rev nor the real cause. Do NOT read it
+# as a manifest conflict, and do NOT "fix" it by re-pinning revs or converting
+# this entry to a path — both move the duplicate rather than removing it.
+# THE FIX IS A LOCK RE-RESOLVE, and it is three lines of diff:
+#   cargo update -p 'git+https://github.com/imazen/zenanalyze#zenpicker@0.1.0' \
+#                -p 'git+https://github.com/imazen/zenanalyze#zenpredict@0.2.0'
+# Verify with: `grep -c 'name = "zenanalyze-api"' Cargo.lock` — it must print 1.
+# (2026-09-04 this had drifted to zenanalyze-api@6b080abf vs
+# zenpicker/zenpredict@7b84d53c, which broke `--features picker-api` and
+# `--features avif-autotune` outright; converged to #f7fe3435, zero manifest
+# changes, `cargo public-api` delta ZERO for both zenpipe and zencodecs.)
+#
+# WHY THE REGISTRY 0.1.0 IS NOT ENOUGH TODAY (the reason this entry still
+# exists). zenanalyze-api is FROZEN at 0.1.x by policy (zenanalyze CLAUDE.md,
+# user directive 2026-07-19) and the sibling is 0.1.1 — an ADDITIVE patch
+# release whose only public-surface delta over the published 0.1.0 is
+# `Select::Names`, a new variant on an already `#[non_exhaustive]` enum (item
+# diff vs the published crate is EMPTY, so the frozen contract is intact).
+# zenanalyze 0.2.x MATCHES on that variant (zenanalyze/src/offer.rs) and
+# requires `^0.1.1`, which crates.io cannot satisfy. Publishing zenanalyze-api
+# 0.1.1 is therefore all that stands between this graph and a registry-only
+# resolve; `FeatureProvider`, cited by older comments as the blocking addition,
+# was CUT before 0.1.1 (zenanalyze 62bfd43) and has no consumers.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zenanalyze itself: git-only forever. Its main is 0.2.0 (the `hdr` feature /
 # retired `composites`), while the registry tops out at 0.1.0 and stays there —
