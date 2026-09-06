@@ -1,0 +1,39 @@
+# Native ARM adapter audit, 2026-09-06
+
+Baseline `12b468e3`, Apple M4 Pro, Rust 1.98. No production source, dependency
+pin, or test expectation changes. Existing changelog WIP is retained separately
+as jj snapshot `6a68ba94`.
+
+`just arm-codec-integration-audit` enables the defaults plus std,cms,tiff,svg,
+pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga. Heavy work
+is serialized under nice -n19 and four build/Rayon/OMP/test threads.
+
+The complete no-fail-fast run has 334 passed, one failed, and 79 existing ignored
+tests across 23 result summaries, including doctests. It is not a passing
+integration gate. The sole failure is
+`estimate::tests::pdf_custom_format_reaches_zenpdf_estimator`: the test requires
+`ResourceEstimate::unknown()`, while the delegated zenpdf backend now returns
+an estimate. The adapter already calls that backend. No assertion was relaxed
+or ignored. The proposed correction is preserved in
+[pdf-assertion-proposal.diff](pdf-assertion-proposal.diff), awaiting the user's
+required approval for changing an expected value.
+
+Coverage includes feature-enabled SVG render/error checks, default-format
+metadata, stop/limits, and encode/decode integration. Corpus/HDR and latency
+cases listed as ignored are not counted as coverage. Existing JXL/raw test
+imports produce feature-dependent warnings; no new source warnings are added.
+
+The standalone JP2 decoder was measured in zenextras, but zencodecs still has
+an explicit compile-error `jp2-decode` stub. This audit does not implement that
+public feature. The AVIF adapter retains zenavif 0.1.7 / `11033c95`, rather than
+silently moving to audited zenavif 0.2.0. The historical film-grain pin blocker
+[rav1d-safe#526](https://github.com/imazen/rav1d-safe/issues/526) is now closed;
+a closure alone does not validate a dependency/API migration.
+
+See [retained logs](logs.pointer.md) and [cross-repository report](CROSS_REPO.md).
+
+Strict feature-expanded library clippy and decoder-pin self-tests/check pass.
+The latest pre-audit remote CI fails in bare-checkout API/i686 jobs because the
+optional `zenavif_tuner` dependency requires a sibling checkout, and in root
+formatting for two reflow-only hunks. These are not failures introduced by the
+audit recipe. The exact CI log is retained in the pointer file.

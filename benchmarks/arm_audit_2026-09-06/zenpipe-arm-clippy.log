@@ -1,0 +1,254 @@
+warning: patch `zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#f7fe3435)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenanalyze
+          	/Users/lilith/work/zen/zenanalyze
+    Checking libm v0.2.16
+    Checking cfg-if v1.0.4
+    Checking bytemuck v1.25.2
+    Checking once_cell v1.21.4
+    Checking safe_unaligned_simd v0.2.5
+    Checking whereat v0.1.5
+    Checking num-traits v0.2.19
+    Checking enough v0.4.4
+    Checking archmage v0.9.28
+    Checking rgb v0.8.53
+    Checking imgref v1.12.3
+    Checking memchr v2.8.3
+    Checking thiserror v2.0.20
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+    Checking magetypes v0.9.28
+    Checking smallvec v1.15.2
+    Checking arrayvec v0.7.8
+    Checking crc32fast v1.5.1
+    Checking zenpixels v0.2.16 (https://github.com/imazen/zenpixels#3dbf2463)
+    Checking log v0.4.34
+    Checking miniz_oxide v0.9.1
+    Checking almost-enough v0.4.4
+    Checking bitflags v2.13.1
+    Checking flate2 v1.1.10
+    Checking tracing-core v0.1.36
+    Checking pin-project-lite v0.2.17
+    Checking either v1.18.0
+    Checking tracing v0.1.44
+    Checking zencodec v0.1.26
+    Checking crossbeam-utils v0.8.22
+    Checking libc v0.2.189
+    Checking crossbeam-epoch v0.9.20
+    Checking foldhash v0.2.0
+    Checking crossbeam-deque v0.8.7
+   Compiling serde_core v1.0.229
+    Checking rayon-core v1.13.0
+    Checking jxl-bitstream v1.1.0
+    Checking miniz_oxide v0.8.9
+    Checking zune-core v0.5.3
+    Checking rayon v1.12.0
+    Checking zune-jpeg v0.5.15
+    Checking garb v0.2.8
+    Checking polycool v0.4.0
+    Checking fdeflate v0.3.7
+   Compiling equivalent v1.0.2
+    Checking alloc-no-stdlib v2.0.4
+    Checking linear-srgb v0.6.12
+    Checking alloc-stdlib v0.2.4
+   Compiling indexmap v2.14.1
+    Checking equator v0.4.2
+    Checking zerocopy v0.8.56
+    Checking png v0.18.1
+    Checking kurbo v0.13.1
+   Compiling serde v1.0.229
+    Checking jxl-oxide-common v1.0.0
+    Checking jxl-grid v0.6.2
+    Checking aligned-vec v0.6.4
+    Checking brotli-decompressor v5.0.3
+    Checking jxl-threadpool v1.0.0
+    Checking jxl-coding v1.0.1
+    Checking hashbrown v0.17.1
+    Checking siphasher v1.0.3
+    Checking stable_deref_trait v1.2.1
+    Checking byteorder-lite v0.1.0
+    Checking lz4_flex v0.13.1
+    Checking pxfm v0.1.30
+    Checking zenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#3dbf2463)
+    Checking no_std_io2 v0.9.4
+    Checking weezl v0.1.12
+    Checking fearless_simd v0.4.1
+    Checking jxl-modular v0.11.3
+    Checking jxl-image v0.13.0
+    Checking byteorder v1.5.0
+    Checking quick-error v2.0.1
+   Compiling phf_shared v0.13.1
+    Checking jxl-vardct v0.11.1
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+    Checking memmap2 v0.9.11
+    Checking num-integer v0.1.47
+    Checking core_maths v0.1.1
+    Checking float-cmp v0.9.0
+   Compiling toml_write v0.1.2
+    Checking tinyvec_macros v0.1.1
+    Checking allocator-api2 v0.2.21
+   Compiling winnow v0.7.15
+    Checking tinyvec v1.12.0
+    Checking half v2.7.1
+    Checking hashbrown v0.16.1
+   Compiling phf_generator v0.13.1
+   Compiling toml_edit v0.22.27
+    Checking strict-num v0.1.1
+    Checking ttf-parser v0.25.1
+   Compiling toml_edit v0.25.13+spec-1.1.0
+   Compiling jobserver v0.1.35
+    Checking jxl-frame v0.13.3
+    Checking moxcms v0.7.11
+    Checking bitstream-io v4.10.0
+    Checking itertools v0.14.0
+    Checking euclid v0.22.14
+    Checking font-types v0.11.3
+    Checking color v0.3.3
+    Checking arrayref v0.3.9
+    Checking linebender_resource_handle v0.1.1
+    Checking hayro-ccitt v0.3.0
+    Checking peniko v0.6.1
+    Checking hayro-jbig2 v0.3.0
+    Checking guillotiere v0.7.0
+    Checking tiny-skia-path v0.12.0
+   Compiling nasm-rs v0.3.2
+    Checking read-fonts v0.39.2
+    Checking image v0.25.9
+    Checking zerofrom v0.1.8
+   Compiling toml v0.8.23
+    Checking slotmap v1.1.1
+   Compiling proc-macro-crate v3.5.0
+   Compiling phf_macros v0.13.1
+    Checking anyhow v1.0.104
+    Checking num-bigint v0.4.8
+   Compiling target-features v0.1.6
+    Checking hayro-jpeg2000 v0.3.5
+    Checking jxl-color v0.11.0
+    Checking as-slice v0.2.1
+    Checking brotli v8.0.4
+   Compiling toml v0.5.11
+    Checking color_quant v1.1.0
+    Checking hayro-postscript v0.1.0
+    Checking core-foundation-sys v0.8.7
+    Checking unicode-bidi-mirroring v0.4.0
+    Checking unicode-ccc v0.4.0
+    Checking rustc-hash v2.1.3
+    Checking rle-decode-fast v1.0.3
+    Checking gimli v0.32.3
+    Checking unicode-script v0.5.8
+    Checking scopeguard v1.2.0
+    Checking unicode-properties v0.1.4
+    Checking lock_api v0.4.14
+    Checking addr2line v0.25.1
+    Checking rustybuzz v0.20.1
+   Compiling rawloader v0.37.2
+    Checking libflate_lz77 v2.3.0
+    Checking hayro-syntax v0.7.2
+    Checking iana-time-zone v0.1.65
+    Checking gif v0.14.2
+    Checking profiling v1.0.18
+    Checking phf v0.13.1
+    Checking aligned v0.4.3
+    Checking hayro-cmap v0.1.0
+    Checking jxl-render v0.12.4
+    Checking yoke v0.8.3
+    Checking num-rational v0.4.2
+   Compiling multiversion-macros v0.8.0
+   Compiling rawler v0.7.2
+    Checking av1-grain v0.2.5
+    Checking skrifa v0.42.1
+   Compiling num_enum_derive v0.7.6
+    Checking fontdb v0.23.0
+   Compiling rav1d-safe v0.6.0 (https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f9145)
+    Checking getrandom v0.4.3
+    Checking object v0.37.3
+    Checking vello_common v0.0.8
+    Checking parking_lot_core v0.9.12
+    Checking jxl-jbr v0.2.1
+    Checking num-iter v0.1.46
+    Checking moxcms v0.8.1
+    Checking svgtypes v0.16.1
+    Checking v_frame v0.3.9
+    Checking simplecss v0.2.2
+    Checking roxmltree v0.21.1
+    Checking num-complex v0.4.6
+    Checking wide v1.7.0
+    Checking maybe-rayon v0.1.1
+    Checking unicode-vo v0.1.0
+    Checking lazy_static v1.5.0
+    Checking imagesize v0.14.0
+    Checking rustc-demangle v0.1.28
+    Checking base64 v0.22.1
+    Checking xmlwriter v0.1.0
+    Checking dary_heap v0.3.9
+    Checking data-url v0.3.2
+    Checking adler32 v1.2.0
+    Checking unicode-bidi v0.3.18
+    Checking pico-args v0.5.0
+    Checking libflate v2.3.1
+    Checking zenrav1e v0.2.0 (https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037)
+    Checking usvg v0.47.0
+    Checking backtrace v0.3.76
+    Checking num v0.4.3
+    Checking atomig v0.4.3
+    Checking vello_cpu v0.0.8
+    Checking hayro-interpret v0.7.0
+    Checking multiversion v0.8.0
+    Checking parking_lot v0.12.5
+    Checking jxl-oxide v0.12.6
+    Checking num_enum v0.7.6
+    Checking uuid v1.26.0
+    Checking rav1d-disjoint-mut v0.3.1 (https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f9145)
+    Checking ultrahdr-core v0.5.0 (https://github.com/imazen/ultrahdr#031d4a20)
+    Checking chrono v0.4.45
+    Checking strum v0.28.0
+    Checking tiny-skia v0.12.0
+    Checking image-webp v0.2.4
+    Checking pic-scale v0.7.11
+    Checking zenquant v0.1.3
+    Checking zenjxl-decoder-simd v0.3.9 (https://github.com/imazen/zenjxl-decoder#f1faec70)
+    Checking raw-cpuid v11.6.0
+    Checking zenavif-serialize v0.2.0 (https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d0)
+    Checking loop9 v0.1.5
+    Checking bitreader v0.3.11
+    Checking md5 v0.8.1
+    Checking fax v0.2.7
+    Checking assert_matches v1.5.0
+    Checking to_method v1.1.0
+    Checking mutate_once v0.1.2
+    Checking leb128 v0.2.7
+    Checking array-init v2.1.0
+    Checking atomic_refcell v0.1.14
+    Checking hex v0.4.3
+    Checking fallible_collections v0.5.2
+    Checking hayro v0.7.1
+    Checking zenjxl-decoder v0.4.0 (https://github.com/imazen/zenjxl-decoder#f1faec70)
+    Checking zenavif-parse v0.7.0 (https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c95)
+    Checking kamadak-exif v0.6.1
+    Checking tiff v0.11.3
+    Checking zenravif v0.2.0 (https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6)
+    Checking resvg v0.47.0
+    Checking zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3b)
+    Checking ultrahdr-core v0.6.0
+    Checking zenyuv v0.1.3
+    Checking zenyuv v0.1.3 (https://github.com/imazen/zenjpeg#e7c53d2e)
+    Checking heic-core v0.2.0 (https://github.com/imazen/heic#8d40c94e)
+    Checking zenflate v0.3.6
+    Checking yuv v0.8.17
+    Checking self_cell v1.3.0
+    Checking zenwebp v0.5.0 (https://github.com/imazen/zenwebp#47c562b1)
+    Checking zenpng v0.2.0 (https://github.com/imazen/zenpng#f7167b79)
+    Checking zenraw v0.2.0 (https://github.com/imazen/zenraw#a6b78e93)
+    Checking zenjpeg v0.9.0 (https://github.com/imazen/zenjpeg#e7c53d2e)
+    Checking heic v0.2.0 (https://github.com/imazen/heic#8d40c94e)
+    Checking zenjxl v0.3.0 (https://github.com/imazen/zenjxl#9226d3a3)
+    Checking zensvg v0.1.0 (https://github.com/imazen/zenextras#f3b191a7)
+    Checking zentiff v0.1.2 (https://github.com/imazen/zenextras#f3b191a7)
+    Checking zenpdf v0.2.0 (https://github.com/imazen/zenextras#f3b191a7)
+    Checking zengif v0.8.0 (https://github.com/imazen/zengif#510e7a88)
+    Checking zenbitmaps v0.2.0 (https://github.com/imazen/zenbitmaps#bedb3035)
+    Checking zenavif v0.1.7 (https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c95)
+    Checking zencodecs v0.1.0 (/Users/lilith/work/zen/zenpipe/zencodecs)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.66s

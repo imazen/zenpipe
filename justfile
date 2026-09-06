@@ -131,3 +131,7 @@ site-build:
 # Serve documentation site locally
 site-serve:
     zola --root site serve --port 3100
+
+# Exercise codec adapters on native ARM; JP2 remains a compile-error feature.
+arm-codec-integration-audit:
+    CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --no-fail-fast --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga

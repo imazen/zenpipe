@@ -1,0 +1,26 @@
+--- a/zencodecs/src/estimate.rs
++++ b/zencodecs/src/estimate.rs
+@@ -368,18 +368,14 @@
+     #[test]
+     #[cfg(feature = "pdf-decode")]
+     fn pdf_custom_format_reaches_zenpdf_estimator() {
+-        // The fixed arm is `ImageFormat::Custom(def) if def.name == "pdf"`
+-        // (mirroring the dng/raw arm), so this must dispatch into zenpdf's
+-        // estimator rather than the `_ => unknown()` catch-all. zenpdf
+-        // doesn't implement `estimate_decode_resources` yet (the trait
+-        // default IS `unknown()`), so the *value* is unchanged today --
+-        // this test exists so a future zenpdf estimator update is exercised
+-        // automatically, and so the arm keeps compiling against a real
+-        // `Custom` value instead of quietly reverting to dead code.
++        // Compare the delegated result to the backend directly, so a fallback
++        // to unknown() fails when the backend provides an estimate.
++        use zencodec::decode::DecoderConfig;
+         let c = chars(64, 64);
+         let env = ComputeEnvironment::new();
+         let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
+-        assert_eq!(est, ResourceEstimate::unknown());
++        let direct = zenpdf::PdfDecoderConfig::new().estimate_decode_resources(&c, &env);
++        assert_eq!(est, direct);
+     }
+ 
+     #[test]

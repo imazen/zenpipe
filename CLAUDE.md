@@ -37,6 +37,12 @@ sources`.
 
 ## Known Bugs
 
+- ARM adapter audit 2026-09-06: `pdf_custom_format_reaches_zenpdf_estimator`
+  still asserts `unknown()` after zenpdf acquired an estimator. The full
+  feature-expanded run has 334 passed / one failed / 79 existing ignored.
+  The assertion remains unchanged pending approval; exact proposed correction
+  and logs are in `benchmarks/arm_audit_2026-09-06/`.
+
 - **AVIF decode is not covered by CI here.** No job in `ci.yml` enables
   `avif-decode` (the widest feature list, in the `zencodecs` leg, stops at
   `raw-decode-gainmap`), and every real AVIF decode test is `#[ignore]`d —
