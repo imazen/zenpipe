@@ -87,6 +87,9 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
       - uses: dtolnay/rust-toolchain@stable
+      - uses: imazen/zen-workspace/.github/actions/setup@main
+        with:
+          cache: 'false'
       - uses: Swatinem/rust-cache@v2
 
       - name: Check committed API snapshots are current
@@ -99,27 +102,25 @@ jobs:
   # counts multiplied before a bounds check) and it is the closest proxy CI has
   # for wasm32 pointer width, which the demo actually ships on.
   #
-  # Deliberately NOT routed through zen-workspace's setup action: that action
-  # runs `ci-clone --add-paths`, which rewrites every internal dep to a sibling
-  # checkout ABOVE the repo directory. `cross` only bind-mounts the project
-  # directory into its container, so those paths would be missing inside it and
-  # every job would fail at manifest load. A plain checkout resolves the same
-  # graph through the repo's own git-form [patch.crates-io] — which is exactly
-  # the bare-clone route those entries exist for (see the root Cargo.toml) — and
-  # needs nothing outside the project dir. The one path patch that remains
-  # (`zenlayout`) is in-repo, so it mounts fine.
-  #
+  # Resolve the optional tuner and its sibling manifests before Cargo loads
+  # the workspace. Mount the sibling directory for cross too: even disabled
+  # path dependencies must have readable manifests inside the container.
   # `--no-default-features` keeps the graph to the pure-Rust core (default
   # pulls zenfilters + moxcms); the per-package runs below add the two crates
   # whose arithmetic is most pointer-width-sensitive.
   i686:
     name: Test (i686 cross)
     runs-on: ubuntu-latest
+    env:
+      CROSS_CONTAINER_OPTS: -v ${{ github.workspace }}/..:${{ github.workspace }}/..
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
+      - uses: imazen/zen-workspace/.github/actions/setup@main
+        with:
+          cache: 'false'
       - uses: taiki-e/install-action@v2
         with:
           tool: cross

@@ -37,3 +37,18 @@ The latest pre-audit remote CI fails in bare-checkout API/i686 jobs because the
 optional `zenavif_tuner` dependency requires a sibling checkout, and in root
 formatting for two reflow-only hunks. These are not failures introduced by the
 audit recipe. The exact CI log is retained in the pointer file.
+
+## CI dependency setup repair
+
+The API, i686 and fuzz-regression jobs now use the existing zen-workspace setup
+action to provision the optional tuner dependency closure. The i686 container
+also receives the sibling directory through Cross's documented
+[`CROSS_CONTAINER_OPTS`](https://github.com/cross-rs/cross/blob/main/docs/environment_variables.md)
+mount option. Test commands and expectations are unchanged.
+
+The fuzz-target gate retains its committed manifests rather than rewriting them:
+its root workspace now clones the missing tuner siblings, and zencodecs/fuzz
+uses the same zenavif/parser 0.1.7 git pin as the production adapter. Cargo update
+changes only that source, its rav1d transitive pin, and removes a duplicate parser
+instance. The prior sibling 0.2.0 patch could not satisfy the 0.1.7 requirement.
+Root formatting was repaired separately in `84d1de35`. CI execution is pending.

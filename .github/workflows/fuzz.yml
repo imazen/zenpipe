@@ -47,17 +47,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Resolves entirely through its own git-form `[patch.crates-io]` plus
-          # in-repo path deps (`..`, `../zencodecs`, `../zenlayout`), so a bare
-          # checkout is all it needs — the same "bare clone" route the i686 job
-          # in ci.yml uses, and the route those patch entries exist for.
+          # The root package's optional tuner still requires its path manifests
+          # to exist, even though this fuzz configuration does not enable it.
           - workspace: fuzz
-            siblings: ''
-          # Path-patches five sibling checkouts at `../../../<repo>` (see the
-          # comments in its Cargo.toml for why each one is by path rather than
-          # git) plus `codec-corpus/crate` for `seed_corpus_tool`. Verified
-          # against `cargo metadata` on 2026-08-29: these six, and nothing else
-          # outside the repo, appear in the resolved graph.
+            siblings: 'zenavif zenanalyze'
+          # Codec path patches and the corpus seed tool still need sibling
+          # checkouts. Decoder/parser now resolve through the production git pin.
           - workspace: zencodecs/fuzz
             siblings: 'zenavif zenbitmaps zenjpeg zenanalyze ultrahdr'
     steps:
@@ -128,6 +123,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - uses: imazen/zen-workspace/.github/actions/setup@main
+        with:
+          cache: 'false'
       - uses: Swatinem/rust-cache@v2
         with:
           key: fuzz-regression
