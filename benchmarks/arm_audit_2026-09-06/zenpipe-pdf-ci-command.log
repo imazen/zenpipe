@@ -1,0 +1,17 @@
+warning: patch `zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#f7fe3435)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	/Users/lilith/work/zen/zenanalyze
+          	https://github.com/imazen/zenanalyze
+   Compiling zencodecs v0.1.0 (/Users/lilith/work/zen/zenpipe/zencodecs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests src/lib.rs (target/debug/deps/zencodecs-e75e5faa7f192677)
+
+running 4 tests
+test info::tests::custom_format_none_denies_pdf_probe ... ok
+test estimate::pdf_tests::pdf_is_a_custom_format_not_the_named_variant ... ok
+test estimate::pdf_tests::pdf_custom_format_reaches_zenpdf_estimator ... ok
+test info::tests::custom_format_all_lets_pdf_probe_reach_codec ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 147 filtered out; finished in 0.00s
+

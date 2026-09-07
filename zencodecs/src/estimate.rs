@@ -343,45 +343,6 @@ mod tests {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Bug #6 regression: `estimate_decode`'s PDF arm used to key on the
-    // bare `ImageFormat::Pdf` variant, which is dead code -- `pdf_format()`
-    // (and every real probe/decode) always produces
-    // `ImageFormat::Custom(&zenpdf::PDF_FORMAT)`, never the named variant,
-    // so PDF decode-estimates silently fell through to the `unknown()`
-    // floor even with `pdf-decode` compiled in.
-    // ═══════════════════════════════════════════════════════════════════
-
-    #[test]
-    #[cfg(feature = "pdf-decode")]
-    fn pdf_is_a_custom_format_not_the_named_variant() {
-        // Confirms *why* the old `ImageFormat::Pdf` arm was unreachable: the
-        // definition's `image_format` is `None`, so `to_image_format()`
-        // (what `pdf_format()` calls) always wraps as `Custom`, never `Pdf`.
-        assert_eq!(zenpdf::PDF_FORMAT.image_format, None);
-        assert_eq!(
-            zenpdf::PDF_FORMAT.to_image_format(),
-            ImageFormat::Custom(&zenpdf::PDF_FORMAT)
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "pdf-decode")]
-    fn pdf_custom_format_reaches_zenpdf_estimator() {
-        // The fixed arm is `ImageFormat::Custom(def) if def.name == "pdf"`
-        // (mirroring the dng/raw arm), so this must dispatch into zenpdf's
-        // estimator rather than the `_ => unknown()` catch-all. zenpdf
-        // doesn't implement `estimate_decode_resources` yet (the trait
-        // default IS `unknown()`), so the *value* is unchanged today --
-        // this test exists so a future zenpdf estimator update is exercised
-        // automatically, and so the arm keeps compiling against a real
-        // `Custom` value instead of quietly reverting to dead code.
-        let c = chars(64, 64);
-        let env = ComputeEnvironment::new();
-        let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
-        assert_eq!(est, ResourceEstimate::unknown());
-    }
-
     #[test]
     fn unsupported_encode_format_errors() {
         let c = chars(64, 64);
@@ -451,5 +412,43 @@ mod tests {
         };
         let plan = plan_encode_effort(ImageFormat::WebP, &q, None, &c, &budget).unwrap();
         assert!(!plan.fits);
+    }
+}
+
+#[cfg(all(test, feature = "pdf-decode"))]
+mod pdf_tests {
+    use super::*;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Bug #6 regression: `estimate_decode`'s PDF arm used to key on the
+    // bare `ImageFormat::Pdf` variant, which is dead code -- `pdf_format()`
+    // (and every real probe/decode) always produces
+    // `ImageFormat::Custom(&zenpdf::PDF_FORMAT)`, never the named variant,
+    // so PDF decode-estimates silently fell through to the `unknown()`
+    // floor even with `pdf-decode` compiled in.
+    // ═══════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn pdf_is_a_custom_format_not_the_named_variant() {
+        // Confirms *why* the old `ImageFormat::Pdf` arm was unreachable: the
+        // definition's `image_format` is `None`, so `to_image_format()`
+        // (what `pdf_format()` calls) always wraps as `Custom`, never `Pdf`.
+        assert_eq!(zenpdf::PDF_FORMAT.image_format, None);
+        assert_eq!(
+            zenpdf::PDF_FORMAT.to_image_format(),
+            ImageFormat::Custom(&zenpdf::PDF_FORMAT)
+        );
+    }
+
+    #[test]
+    fn pdf_custom_format_reaches_zenpdf_estimator() {
+        // Compare the delegated result to the backend directly, so a fallback
+        // to unknown() fails when the backend provides an estimate.
+        use zencodec::decode::DecoderConfig;
+        let c = ImageCharacteristics::new(64, 64, zenpixels::PixelDescriptor::RGBA8_SRGB);
+        let env = ComputeEnvironment::new();
+        let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
+        let direct = zenpdf::PdfDecoderConfig::new().estimate_decode_resources(&c, &env);
+        assert_eq!(est, direct);
     }
 }

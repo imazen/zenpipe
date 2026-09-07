@@ -1,0 +1,32 @@
+warning: patch `zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#f7fe3435)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	/Users/lilith/work/zen/zenanalyze
+          	https://github.com/imazen/zenanalyze
+   Compiling zencodecs v0.1.0 (/Users/lilith/work/zen/zenpipe/zencodecs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.53s
+     Running unittests src/lib.rs (target/debug/deps/zencodecs-e75e5faa7f192677)
+
+running 4 tests
+test estimate::pdf_tests::pdf_is_a_custom_format_not_the_named_variant ... ok
+test info::tests::custom_format_none_denies_pdf_probe ... ok
+test info::tests::custom_format_all_lets_pdf_probe_reach_codec ... ok
+test estimate::pdf_tests::pdf_custom_format_reaches_zenpdf_estimator ... FAILED
+
+failures:
+
+---- estimate::pdf_tests::pdf_custom_format_reaches_zenpdf_estimator stdout ----
+
+thread 'estimate::pdf_tests::pdf_custom_format_reaches_zenpdf_estimator' (144294874) panicked at zencodecs/src/estimate.rs:452:9:
+assertion `left == right` failed
+  left: ResourceEstimate { peak_memory_bytes_est: None, peak_memory_bytes_max: None, wall_ms: None, cpu_ms: None, threading: None }
+ right: ResourceEstimate { peak_memory_bytes_est: Some(16842752), peak_memory_bytes_max: Some(16908288), wall_ms: Some(0), cpu_ms: None, threading: Some(ThreadingInformation { parallel: false, max_efficient_threads: Some(1) }) }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    estimate::pdf_tests::pdf_custom_format_reaches_zenpdf_estimator
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 147 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p zencodecs --lib`

@@ -3,10 +3,9 @@
 Coverage is **18 of 18 format families measured**: JPEG, JPEG XL, PNG, WebP,
 GIF, AVIF, RAW/DNG, HEIC, TIFF, JPEG 2000, PDF, SVG, PNM, farbfeld, BMP, QOI,
 TGA and Radiance HDR. These are the explicit modes and fixtures in the reports,
-not every format variant. The remaining validation issue is an existing
-zencodecs PDF-estimator assertion: it still requires `unknown()` after the
-backend acquired a resource estimator. The assertion remains unchanged pending
-approval. The ravif backend-update checks and CI pass. Zenpipe’s repaired CI remains in progress.
+not every format variant. The stale PDF-estimator assertion is corrected:
+335 expanded adapter tests pass, zero fail; 79 existing ignored tests remain.
+The three explicitly enabled AVIF corpus tests pass separately.
 
 Pushed audit work spans 19 repositories, including the shared SIMD generator and the AV1 encoder/decoder backends. No release or crates.io publication was made. The measurements below are from an Apple M4 Pro, Rust 1.98 / LLVM 22, runtime dispatch without target-cpu=native. Heavy local work was serialized under nice -n19 with four build/Rayon/OMP threads. Individual reports retain commands, fixtures, confidence intervals and limits.
 
@@ -30,17 +29,17 @@ Pushed audit work spans 19 repositories, including the shared SIMD generator and
 | [zenextras](https://github.com/imazen/zenextras) | Four-family native decode/encode size grid, exact JP2 references, paired TIFF conversion benchmarks | TIFF slice writes win all 16 comparisons; float slice code auto-vectorizes. Native backend costs are not labeled SIMD/scalar gains | `4e56317b` |
 | [zenbitmaps](https://github.com/imazen/zenbitmaps) | RGB8 BMP row conversion and fixed-output RGBA16 farbfeld; six-family paired benchmarks | 48 paired comparisons complete. At 4096², BMP 40.3 to 3.6 ms and farbfeld 31.0 to 7.1 ms in separate builds. Exact byte tests and strict all-target clippy pass; full bitmap CI green | `32376ef8` |
 | [ravif](https://github.com/imazen/cavif-rs) | Validate assembly, pure-Rust and expert/stop modes; update native/WASM backend pin to audited zenrav1e | Updated backend passes strict pure-Rust clippy and all three integration configurations. Existing backend chroma/top-right fixes are not attributed to this audit | `a7e9fcc5` |
-| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded adapter audit; repair CI dependency setup and fuzz decoder pin; preserve PDF assertion for review | Full no-fail-fast run: 334 passed, one stale PDF-estimator assertion failed, 79 existing ignored tests. JP2 adapter remains a compile-error feature | `6e46dfed` |
+| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded adapter audit; repair CI dependency setup and fuzz decoder pin; correct the PDF estimator regression | Full no-fail-fast run: 335 passed, zero failures, 79 existing ignored tests. JP2 adapter remains a compile-error feature | `6e46dfed` |
 
 These are bounded measurements, not speed guarantees across every image, quality, platform or optional feature. Separate-build timings are not paired before/after confidence intervals. Scalar fallback may auto-vectorize: AVIF YUV conversion and AOM SAD show vector instructions in both token states, explaining their ties. Tiny-kernel dispatch boundaries, row stores and bounds-check structure explain several measured regressions more directly than a missing ARM intrinsic.
 
 ## Detailed records
 
-Most reports live at `<repo>/benchmarks/arm_audit_2026-09-06/README.md`; SVT uses `rust/benchmarks/arm_audit_2026-09-06/README.md`. WebP's record is [IMPROVEMENTS.md](zenwebp/benchmarks/arm_codegen_2026-09-05/IMPROVEMENTS.md). Links below resolve to local records:
+Most reports live at `<repo>/benchmarks/arm_audit_2026-09-06/README.md`; SVT uses `rust/benchmarks/arm_audit_2026-09-06/README.md`. WebP's record is [IMPROVEMENTS.md](https://github.com/imazen/zenwebp/blob/018753cf/benchmarks/arm_codegen_2026-09-05/IMPROVEMENTS.md). Links below resolve to local records:
 
-- [JPEG](zenjpeg/benchmarks/arm_audit_2026-09-06/README.md), [GIF](zengif/benchmarks/arm_audit_2026-09-06/README.md), [PNG](zenpng/benchmarks/arm_audit_2026-09-06/README.md)
-- [JXL encoder](jxl-encoder/benchmarks/arm_audit_2026-09-06/README.md), [JXL decoder](zenjxl-decoder/benchmarks/arm_audit_2026-09-06/README.md), [JXL wrapper](zenjxl/benchmarks/arm_audit_2026-09-06/README.md)
-- [AVIF](zenavif/benchmarks/arm_audit_2026-09-06/README.md), [AOM](zenav1-aom/benchmarks/arm_audit_2026-09-06/README.md), [SVT](zenav1-svt/rust/benchmarks/arm_audit_2026-09-06/README.md)
+- [JPEG](https://github.com/imazen/zenjpeg/blob/2c7f67f9/benchmarks/arm_audit_2026-09-06/README.md), [GIF](https://github.com/imazen/zengif/blob/8cd4c9ef/benchmarks/arm_audit_2026-09-06/README.md), [PNG](https://github.com/imazen/zenpng/blob/fdaa8de6/benchmarks/arm_audit_2026-09-06/README.md)
+- [JXL encoder](https://github.com/imazen/jxl-encoder/blob/6fcf14b6/benchmarks/arm_audit_2026-09-06/README.md), [JXL decoder](https://github.com/imazen/zenjxl-decoder/blob/17dc3030/benchmarks/arm_audit_2026-09-06/README.md), [JXL wrapper](https://github.com/imazen/zenjxl/blob/4a2c021b/benchmarks/arm_audit_2026-09-06/README.md)
+- [AVIF](https://github.com/imazen/zenavif/blob/e164f9e8/benchmarks/arm_audit_2026-09-06/README.md), [AOM](https://github.com/imazen/zenav1-aom/blob/a7b1ab13/benchmarks/arm_audit_2026-09-06/README.md), [SVT](https://github.com/imazen/zenav1-svt/blob/73d4fe35/rust/benchmarks/arm_audit_2026-09-06/README.md)
 
 ## Provenance
 
@@ -50,7 +49,7 @@ SVT's focused oracle repair now passes: broad scalar checks are retained,
 C NEON's wide-input divergence is asserted explicitly, and 12 actual PD0
 transform shapes × 16 residual patterns × 256 qindices match both C paths.
 This is measured producer coverage, not a universal coefficient-bound proof.
-See [oracle resolution](zenav1-svt/rust/benchmarks/arm_audit_2026-09-06/oracle-resolution.md).
+See [oracle resolution](https://github.com/imazen/zenav1-svt/blob/73d4fe35/rust/benchmarks/arm_audit_2026-09-06/oracle-resolution.md).
 
 CI update: AOM run [34033961158](https://github.com/imazen/zenav1-aom/actions/runs/34033961158) is fully green at `a7b1ab13`, including both ARM differential modes, x86, Windows ARM, macOS Intel and i686. PNG and JXL decoder main CI are also green; AVIF integration and fuzz CI are also green at `e164f9e8` ([CI](https://github.com/imazen/zenavif/actions/runs/34035488054)). JXL wrapper CI is fully green at `4a2c021b` ([CI](https://github.com/imazen/zenjxl/actions/runs/34034940970)). HEIC copy-removal CI [34068532578](https://github.com/imazen/heic/actions/runs/34068532578), fuzz and MediaCodec runtime checks all passed at `c45113e4`. RAW CI [34067865334](https://github.com/imazen/zenraw/actions/runs/34067865334) and bitmap CI [34067620276](https://github.com/imazen/zenbitmaps/actions/runs/34067620276) also passed. The JXL encoder repair passed stable manual run [34037117019](https://github.com/imazen/jxl-encoder/actions/runs/34037117019) at `4d06cb5c`, which contains `6fcf14b6`; the original push run was superseded by a concurrent benchmark-only commit.
 
@@ -112,9 +111,9 @@ Zenextras audit CI [34066669454](https://github.com/imazen/zenextras/actions/run
   This audit does not silently migrate the adapter across that version boundary.
   The older pin's film-grain issue [rav1d-safe#526](https://github.com/imazen/rav1d-safe/issues/526)
   is closed as of 2026-09-06; that closure alone is not consumer validation.
-- The PDF estimator test expects `unknown()` despite the current backend returning
-  an estimate. The proposed correction compares dispatch to the backend's direct
-  result. No expectation was changed without approval.
+- The PDF estimator test formerly expected `unknown()` despite the backend returning
+  an estimate. The corrected test compares dispatch to the backend's direct
+  result and is explicitly enabled in native CI.
 
 ## Shared code generation conclusion
 
@@ -128,7 +127,7 @@ changes preserve arithmetic and improve the actual generated loop or data moveme
 Zenpipe's latest pre-audit CI [33844317596](https://github.com/imazen/zenpipe/actions/runs/33844317596)
 was already failing: the API/i686 jobs cannot resolve the optional sibling-only
 `zenavif_tuner` path in a bare checkout, and Format reports `src/avif_autotune.rs`
-reflow. The setup repair below resolves those failing jobs; the full workflow is still running. Those failures were separate
+reflow. The setup repair below resolves those failing jobs; the full workflow at `59fe3a54` passes. Those failures were separate
 from the native PDF assertion and from the standalone codec measurements.
 
 Ravif backend-update CI [34068668993](https://github.com/imazen/cavif-rs/actions/runs/34068668993) is fully green at `a7e9fcc5`, including Windows ARM, macOS Intel, i686 and both x86 assembly jobs.
@@ -138,6 +137,8 @@ ignored, against the retained production decoder pin. The fuzz workflow
 [34069397883](https://github.com/imazen/zenpipe/actions/runs/34069397883)
 is fully green at `6e46dfed`. This commit repairs the missing sibling setup
 and mismatched fuzz decoder pin; `84d1de35` repairs the formatting failure.
-The main CI run is still in progress. The PDF expected-value change awaits approval.
+Main CI [34069770114](https://github.com/imazen/zenpipe/actions/runs/34069770114) is fully green at `59fe3a54`. The PDF assertion is corrected and passes locally.
 
-At `6e46dfed`, the repaired public-API snapshot and i686 cross jobs both pass. Fuzz, Format, MSRV and decoder-pin gates pass too; remaining native jobs are still running.
+At `6e46dfed`, the repaired public-API snapshot and i686 cross jobs both pass. Fuzz, Format, MSRV and decoder-pin gates pass too; all native jobs passed in the subsequent `59fe3a54` run.
+
+SVT final benchmark-group CI [34068813843](https://github.com/imazen/zenav1-svt/actions/runs/34068813843) is fully green at `73d4fe35`, including the full x86 differential/conformance job.

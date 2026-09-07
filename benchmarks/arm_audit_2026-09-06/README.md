@@ -1,22 +1,20 @@
 # Native ARM adapter audit, 2026-09-06
 
-Baseline `12b468e3`, Apple M4 Pro, Rust 1.98. No production source, dependency
-pin, or test expectation changes. Existing changelog WIP is retained separately
+Baseline `12b468e3`, Apple M4 Pro, Rust 1.98. The PDF test expectation and CI dependency
+setup are corrected; production codec arithmetic is unchanged. Existing changelog WIP is retained separately
 as jj snapshot `6a68ba94`.
 
 `just arm-codec-integration-audit` enables the defaults plus std,cms,tiff,svg,
 pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga. Heavy work
 is serialized under nice -n19 and four build/Rayon/OMP/test threads.
 
-The complete no-fail-fast run has 334 passed, one failed, and 79 existing ignored
-tests across 23 result summaries, including doctests. It is not a passing
-integration gate. The sole failure is
-`estimate::tests::pdf_custom_format_reaches_zenpdf_estimator`: the test requires
-`ResourceEstimate::unknown()`, while the delegated zenpdf backend now returns
-an estimate. The adapter already calls that backend. No assertion was relaxed
-or ignored. The proposed correction is preserved in
-[pdf-assertion-proposal.diff](pdf-assertion-proposal.diff), awaiting the user's
-required approval for changing an expected value.
+The corrected no-fail-fast run passes **335 tests, zero failures**, with 79
+existing ignored tests across 23 result summaries including doctests. The
+baseline's sole failure was `pdf_custom_format_reaches_zenpdf_estimator`, which
+required `ResourceEstimate::unknown()` after zenpdf acquired an estimator.
+It now compares dispatch to the backend's direct estimate. Native CI explicitly
+enables `std,pdf-decode` and runs the PDF library tests. No production estimate
+was changed to accommodate the stale test.
 
 Coverage includes feature-enabled SVG render/error checks, default-format
 metadata, stop/limits, and encode/decode integration. Corpus/HDR and latency
@@ -51,7 +49,9 @@ its root workspace now clones the missing tuner siblings, and zencodecs/fuzz
 uses the same zenavif/parser 0.1.7 git pin as the production adapter. Cargo update
 changes only that source, its rav1d transitive pin, and removes a duplicate parser
 instance. The prior sibling 0.2.0 patch could not satisfy the 0.1.7 requirement.
-Root formatting was repaired separately in `84d1de35`. CI execution is pending.
+Root formatting was repaired separately in `84d1de35`. Full CI at `59fe3a54`
+[34069770114](https://github.com/imazen/zenpipe/actions/runs/34069770114) passes,
+including Windows ARM, macOS Intel, i686, API snapshots, format and clippy.
 
 ## Explicit AVIF corpus invocation
 
@@ -65,9 +65,12 @@ or exhaustive corpus coverage. The repeatable recipe adds `--show-output` for
 future per-test summaries.
 
 Fuzz CI [34069397883](https://github.com/imazen/zenpipe/actions/runs/34069397883)
-is fully green after the setup/pin repair `6e46dfed`: both fuzz workspaces
-compile and the regression seeds pass. Main CI is still running.
+is fully green after setup/pin repair `6e46dfed`: both fuzz workspaces compile
+and the regression seeds pass. The PDF assertion correction is additionally
+validated locally in the full feature suite and by strict library clippy.
 
-The repaired public-API snapshot and i686 cross jobs also pass in main CI
-[34069398734](https://github.com/imazen/zenpipe/actions/runs/34069398734).
-Other native jobs are still running; the PDF assertion remains unchanged.
+The PDF tests also moved out of the WebP-gated test module: `pdf-decode` alone
+now includes them. A local mutation replacing the production PDF estimate call
+with `unknown()` fails the corrected regression; restoring the real dispatch
+passes the exact `std,pdf-decode --lib pdf_` CI command. This checks that the
+gate both runs and detects the original routing regression.

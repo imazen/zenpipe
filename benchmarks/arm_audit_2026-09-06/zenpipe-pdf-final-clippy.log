@@ -1,0 +1,7 @@
+warning: patch `zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#f7fe3435)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenanalyze
+          	/Users/lilith/work/zen/zenanalyze
+    Checking zencodecs v0.1.0 (/Users/lilith/work/zen/zenpipe/zencodecs)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s

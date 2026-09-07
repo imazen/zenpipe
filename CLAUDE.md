@@ -37,11 +37,11 @@ sources`.
 
 ## Known Bugs
 
-- ARM adapter audit 2026-09-06: `pdf_custom_format_reaches_zenpdf_estimator`
-  still asserts `unknown()` after zenpdf acquired an estimator. The full
-  feature-expanded run has 334 passed / one failed / 79 existing ignored.
-  The assertion remains unchanged pending approval; exact proposed correction
-  and logs are in `benchmarks/arm_audit_2026-09-06/`.
+- ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
+  dispatch with the actual backend estimate. The corrected expanded suite has
+  335 passed / zero failed / 79 existing ignored tests. Native CI explicitly
+  enables `std,pdf-decode` for the PDF regression. Records are in
+  `benchmarks/arm_audit_2026-09-06/`.
 
 - **AVIF decode is not covered by CI here.** No job in `ci.yml` enables
   `avif-decode` (the widest feature list, in the `zencodecs` leg, stops at
