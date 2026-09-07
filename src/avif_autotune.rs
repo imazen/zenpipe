@@ -112,12 +112,8 @@ impl AvifIntent {
     }
 
     fn to_request(&self, width: u32, height: u32) -> TuneRequest {
-        let mut req = TuneRequest::new(
-            QualityTarget::Zensim(self.target_quality),
-            width,
-            height,
-        )
-        .with_alpha(self.has_alpha);
+        let mut req = TuneRequest::new(QualityTarget::Zensim(self.target_quality), width, height)
+            .with_alpha(self.has_alpha);
         if let Some(ms) = self.time_budget_ms {
             req = req.with_time_budget_ms(ms);
         }
@@ -361,7 +357,9 @@ mod tests {
     fn a_wrong_sized_buffer_is_refused_before_the_encoder_sees_it() {
         let tuner = AvifAutotune::stub();
         let rgb = gradient(32, 32);
-        let plan = tuner.plan(&rgb, 32, 32, AvifIntent::new(80.0)).expect("plan");
+        let plan = tuner
+            .plan(&rgb, 32, 32, AvifIntent::new(80.0))
+            .expect("plan");
         match tuner.encode(&rgb, 64, 64, &plan) {
             Err(AvifAutotuneError::Tune(_)) => {}
             Err(other) => panic!("wrong error variant: {other}"),
