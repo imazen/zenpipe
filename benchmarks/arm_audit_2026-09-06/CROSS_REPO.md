@@ -152,7 +152,7 @@ adapter tests and the deliberate broken-dispatch mutation check. Its
 [native CI](https://github.com/imazen/zenpipe/actions/runs/34074303306) is still running.
 AVIF decoder integration `43fc5874` passes 203 default tests (9 existing ignored),
 strict library/example clippy and the explicit film-grain thread parity check;
-[CI](https://github.com/imazen/zenavif/actions/runs/34075059287) has started.
+[CI](https://github.com/imazen/zenavif/actions/runs/34075059281) is queued and fuzz CI has started.
 These pending runs are not reported as green. All 19 earlier audit commits
 were independently verified reachable on their remote default branches;
 [verification record](remote-verification.tsv).
