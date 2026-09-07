@@ -19,7 +19,7 @@ Pushed audit work spans 19 repositories, including the shared SIMD generator and
 | [jxl-encoder](https://github.com/imazen/jxl-encoder) | Fixed-array DCT16 helper; truthful entropy/rectangular measurements; provision required v0.12 reference tools in CI | DCT16² 581.8 to 413.9 ns in separate builds, scalar 722.3/767.4 ns. Four rectangular forward/inverse paths beat scalar. New tool provisioning passed 1589 library + 489 integration tests locally | `6fcf14b6` |
 | [zenjxl-decoder](https://github.com/imazen/zenjxl-decoder) | Native kernel/whole-decode profiling; correct per-fixture throughput groups | 12 vector-capable inverse shapes beat scalar, 2x2 is a scalar control. Green Queen modular ties scalar; fixed-error-array experiment rejected after no timing gain. No production decoder change | `17dc3030` |
 | [zenjxl](https://github.com/imazen/zenjxl) | Wrapper integration audit and repeatable feature-enabled recipe | 25 default tests, 139 with zencodec/expert features; wrapper delegates to the two JXL backends. No independent wrapper SIMD change | `4a2c021b` |
-| [zenavif](https://github.com/imazen/zenavif) | Native conversion/decode comparisons; integrate improved AOM encode/DSP pin | Three whole-decode fixtures have exact cross-tier pixels. 45 selected encode integration tests pass with the AOM update, including 8/10/12-bit checks. No whole-encode speedup claimed | `e164f9e8` |
+| [zenavif](https://github.com/imazen/zenavif) | Native conversion/decode comparisons; integrate improved AOM encode/DSP and fixed film-grain decoder pins | Three whole-decode fixtures have exact cross-tier pixels. 45 selected encode integration tests pass with the AOM update, including 8/10/12-bit checks. Film-grain fixture now passes exact 1/2/4/8-thread pixels; 203 default tests pass. No whole-encode speedup claimed | `43fc5874` |
 | [zenav1-aom](https://github.com/imazen/zenav1-aom) | Measure actual dispatch; direct smooth-V stores; fixed four-column smooth/Paeth paths | Full intra scalar/SIMD differential matrix passes. Four-column Paeth batch 65.48 us vs unchanged scalar 173.35 us; generated NEON arithmetic and one 64-bit row store | `a7b1ab13` |
 | [zenrav1e](https://github.com/imazen/zenrav1e) | Rust/NEON-assembly benchmark and parity audit; no production change | Speed8/qindex100, 256² and 512²: Rust 155.56/601.71 ms vs NEON assembly 116.21/448.50 ms in separate builds; identical OBU bytes and reconstruction for the fixtures | `60594682` (master) |
 | [rav1d-safe](https://github.com/imazen/rav1d-safe) | ARM tier benchmark; fix x86 film-grain row reservations exposed by CI | Five IVF fixtures / 52 frames retain exact cross-tier pixels. New x86 row borrowing removes multi-row reservations; native Zen5 and ARM validation plus CI passed | `e73811f5` |
@@ -29,7 +29,7 @@ Pushed audit work spans 19 repositories, including the shared SIMD generator and
 | [zenextras](https://github.com/imazen/zenextras) | Four-family native decode/encode size grid, exact JP2 references, paired TIFF conversion benchmarks | TIFF slice writes win all 16 comparisons; float slice code auto-vectorizes. Native backend costs are not labeled SIMD/scalar gains | `4e56317b` |
 | [zenbitmaps](https://github.com/imazen/zenbitmaps) | RGB8 BMP row conversion and fixed-output RGBA16 farbfeld; six-family paired benchmarks | 48 paired comparisons complete. At 4096², BMP 40.3 to 3.6 ms and farbfeld 31.0 to 7.1 ms in separate builds. Exact byte tests and strict all-target clippy pass; full bitmap CI green | `32376ef8` |
 | [ravif](https://github.com/imazen/cavif-rs) | Validate assembly, pure-Rust and expert/stop modes; update native/WASM backend pin to audited zenrav1e | Updated backend passes strict pure-Rust clippy and all three integration configurations. Existing backend chroma/top-right fixes are not attributed to this audit | `a7e9fcc5` |
-| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded adapter audit; repair CI dependency setup and fuzz decoder pin; correct the PDF estimator regression | Full no-fail-fast run: 335 passed, zero failures, 79 existing ignored tests. JP2 adapter remains a compile-error feature | `6e46dfed` |
+| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded adapter audit; repair CI dependency setup and fuzz decoder pin; correct the PDF estimator regression | Full no-fail-fast run: 335 passed, zero failures, 79 existing ignored tests. JP2 adapter remains a compile-error feature | `76cfc8dc` |
 
 These are bounded measurements, not speed guarantees across every image, quality, platform or optional feature. Separate-build timings are not paired before/after confidence intervals. Scalar fallback may auto-vectorize: AVIF YUV conversion and AOM SAD show vector instructions in both token states, explaining their ties. Tiny-kernel dispatch boundaries, row stores and bounds-check structure explain several measured regressions more directly than a missing ARM intrinsic.
 
@@ -109,8 +109,11 @@ Zenextras audit CI [34066669454](https://github.com/imazen/zenextras/actions/run
 - JP2 works in standalone zenjp2; zencodecs' `jp2-decode` is still an unwired stub.
 - zencodecs currently uses zenavif 0.1.7/`11033c95`; audited zenavif is 0.2.0.
   This audit does not silently migrate the adapter across that version boundary.
-  The older pin's film-grain issue [rav1d-safe#526](https://github.com/imazen/rav1d-safe/issues/526)
-  is closed as of 2026-09-06; that closure alone is not consumer validation.
+  Current zenavif 0.2.0 now selects `e73811f5`: its previous `66f58fa6` pin
+  reproduced [rav1d-safe#526](https://github.com/imazen/rav1d-safe/issues/526)
+  on a real film-grain AVIF. The updated wrapper passes exact pixels at
+  1/2/4/8 threads, three decodes per setting. The retained zencodecs 0.1.7
+  dependency remains a separate, explicitly tested configuration.
 - The PDF estimator test formerly expected `unknown()` despite the backend returning
   an estimate. The corrected test compares dispatch to the backend's direct
   result and is explicitly enabled in native CI.
@@ -142,3 +145,14 @@ Main CI [34069770114](https://github.com/imazen/zenpipe/actions/runs/34069770114
 At `6e46dfed`, the repaired public-API snapshot and i686 cross jobs both pass. Fuzz, Format, MSRV and decoder-pin gates pass too; all native jobs passed in the subsequent `59fe3a54` run.
 
 SVT final benchmark-group CI [34068813843](https://github.com/imazen/zenav1-svt/actions/runs/34068813843) is fully green at `73d4fe35`, including the full x86 differential/conformance job.
+
+Final integration updates: PDF regression commit `76cfc8dc` passes 335 local
+adapter tests and the deliberate broken-dispatch mutation check. Its
+[fuzz CI](https://github.com/imazen/zenpipe/actions/runs/34074302453) passed;
+[native CI](https://github.com/imazen/zenpipe/actions/runs/34074303306) is still running.
+AVIF decoder integration `43fc5874` passes 203 default tests (9 existing ignored),
+strict library/example clippy and the explicit film-grain thread parity check;
+[CI](https://github.com/imazen/zenavif/actions/runs/34075059287) has started.
+These pending runs are not reported as green. All 19 earlier audit commits
+were independently verified reachable on their remote default branches;
+[verification record](remote-verification.tsv).
