@@ -1,0 +1,10 @@
+    Updating git repository `https://github.com/imazen/zenavif`
+    Updating crates.io index
+    Updating git repository `https://github.com/imazen/rav1d-safe`
+     Locking 3 packages to latest Rust 1.98.0 compatible versions
+      Adding rav1d-disjoint-mut v0.3.1 (https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f9145)
+    Removing rav1d-disjoint-mut v0.3.1 (https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6)
+      Adding rav1d-safe v0.6.0 (https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f9145)
+    Removing rav1d-safe v0.6.0 (https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6)
+      Adding zenavif v0.1.7 (https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c95)
+note: pass `--verbose` to see 10 unchanged dependencies behind latest

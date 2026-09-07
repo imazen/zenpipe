@@ -52,3 +52,22 @@ uses the same zenavif/parser 0.1.7 git pin as the production adapter. Cargo upda
 changes only that source, its rav1d transitive pin, and removes a duplicate parser
 instance. The prior sibling 0.2.0 patch could not satisfy the 0.1.7 requirement.
 Root formatting was repaired separately in `84d1de35`. CI execution is pending.
+
+## Explicit AVIF corpus invocation
+
+With the same feature set and pinned production decoder, the caller-selected
+`--test corpus -- --ignored avif` run passes all three tests, zero ignored:
+valid decode, invalid-input no-panic, and AVIF round trip. Test time is 826.45 s
+in the unoptimized test profile, not a release performance measurement. The
+existing round-trip test attempts at most five candidate source files and may
+skip failed source decodes, so this result does not claim five successful files
+or exhaustive corpus coverage. The repeatable recipe adds `--show-output` for
+future per-test summaries.
+
+Fuzz CI [34069397883](https://github.com/imazen/zenpipe/actions/runs/34069397883)
+is fully green after the setup/pin repair `6e46dfed`: both fuzz workspaces
+compile and the regression seeds pass. Main CI is still running.
+
+The repaired public-API snapshot and i686 cross jobs also pass in main CI
+[34069398734](https://github.com/imazen/zenpipe/actions/runs/34069398734).
+Other native jobs are still running; the PDF assertion remains unchanged.

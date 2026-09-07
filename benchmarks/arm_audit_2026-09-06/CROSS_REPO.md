@@ -6,7 +6,7 @@ TGA and Radiance HDR. These are the explicit modes and fixtures in the reports,
 not every format variant. The remaining validation issue is an existing
 zencodecs PDF-estimator assertion: it still requires `unknown()` after the
 backend acquired a resource estimator. The assertion remains unchanged pending
-approval. The ravif backend-update checks and CI pass. Zenpipe CI has pre-existing failures, detailed below.
+approval. The ravif backend-update checks and CI pass. Zenpipe’s repaired CI remains in progress.
 
 Pushed audit work spans 19 repositories, including the shared SIMD generator and the AV1 encoder/decoder backends. No release or crates.io publication was made. The measurements below are from an Apple M4 Pro, Rust 1.98 / LLVM 22, runtime dispatch without target-cpu=native. Heavy local work was serialized under nice -n19 with four build/Rayon/OMP threads. Individual reports retain commands, fixtures, confidence intervals and limits.
 
@@ -30,7 +30,7 @@ Pushed audit work spans 19 repositories, including the shared SIMD generator and
 | [zenextras](https://github.com/imazen/zenextras) | Four-family native decode/encode size grid, exact JP2 references, paired TIFF conversion benchmarks | TIFF slice writes win all 16 comparisons; float slice code auto-vectorizes. Native backend costs are not labeled SIMD/scalar gains | `4e56317b` |
 | [zenbitmaps](https://github.com/imazen/zenbitmaps) | RGB8 BMP row conversion and fixed-output RGBA16 farbfeld; six-family paired benchmarks | 48 paired comparisons complete. At 4096², BMP 40.3 to 3.6 ms and farbfeld 31.0 to 7.1 ms in separate builds. Exact byte tests and strict all-target clippy pass; full bitmap CI green | `32376ef8` |
 | [ravif](https://github.com/imazen/cavif-rs) | Validate assembly, pure-Rust and expert/stop modes; update native/WASM backend pin to audited zenrav1e | Updated backend passes strict pure-Rust clippy and all three integration configurations. Existing backend chroma/top-right fixes are not attributed to this audit | `a7e9fcc5` |
-| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded native adapter audit; preserve existing failure for review | Full no-fail-fast run: 334 passed, one stale PDF-estimator assertion failed, 79 existing ignored tests. JP2 adapter remains a compile-error feature | this report commit |
+| [zenpipe / zencodecs](https://github.com/imazen/zenpipe) | Feature-expanded adapter audit; repair CI dependency setup and fuzz decoder pin; preserve PDF assertion for review | Full no-fail-fast run: 334 passed, one stale PDF-estimator assertion failed, 79 existing ignored tests. JP2 adapter remains a compile-error feature | `6e46dfed` |
 
 These are bounded measurements, not speed guarantees across every image, quality, platform or optional feature. Separate-build timings are not paired before/after confidence intervals. Scalar fallback may auto-vectorize: AVIF YUV conversion and AOM SAD show vector instructions in both token states, explaining their ties. Tiny-kernel dispatch boundaries, row stores and bounds-check structure explain several measured regressions more directly than a missing ARM intrinsic.
 
@@ -128,7 +128,16 @@ changes preserve arithmetic and improve the actual generated loop or data moveme
 Zenpipe's latest pre-audit CI [33844317596](https://github.com/imazen/zenpipe/actions/runs/33844317596)
 was already failing: the API/i686 jobs cannot resolve the optional sibling-only
 `zenavif_tuner` path in a bare checkout, and Format reports `src/avif_autotune.rs`
-reflow. This audit does not claim zenpipe CI is green. Those failures are separate
+reflow. The setup repair below resolves those failing jobs; the full workflow is still running. Those failures were separate
 from the native PDF assertion and from the standalone codec measurements.
 
 Ravif backend-update CI [34068668993](https://github.com/imazen/cavif-rs/actions/runs/34068668993) is fully green at `a7e9fcc5`, including Windows ARM, macOS Intel, i686 and both x86 assembly jobs.
+
+Zenpipe update: the three explicitly enabled AVIF corpus tests pass, zero
+ignored, against the retained production decoder pin. The fuzz workflow
+[34069397883](https://github.com/imazen/zenpipe/actions/runs/34069397883)
+is fully green at `6e46dfed`. This commit repairs the missing sibling setup
+and mismatched fuzz decoder pin; `84d1de35` repairs the formatting failure.
+The main CI run is still in progress. The PDF expected-value change awaits approval.
+
+At `6e46dfed`, the repaired public-API snapshot and i686 cross jobs both pass. Fuzz, Format, MSRV and decoder-pin gates pass too; remaining native jobs are still running.

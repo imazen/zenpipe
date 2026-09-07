@@ -1,0 +1,16 @@
+warning: patch `zenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#f7fe3435)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenanalyze
+          	/Users/lilith/work/zen/zenanalyze
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s
+     Running tests/corpus.rs (target/debug/deps/corpus-1e4e85afe58b4dce)
+
+running 3 tests
+test corpus_avif_invalid_no_panic ... ok
+test corpus_avif_decode_valid ... ok
+test corpus_avif_roundtrip has been running for over 60 seconds
+test corpus_avif_roundtrip ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 826.45s
+

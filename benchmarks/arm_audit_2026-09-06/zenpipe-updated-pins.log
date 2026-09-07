@@ -1,0 +1,29 @@
+python3 scripts/check-decoder-pins.py --self-test
+check-decoder-pins self-test:
+  [ok  ] must PASS: clean tree
+  [ok  ] must FAIL: FLOAT: git dep with no rev
+           -> FLOAT     Cargo.toml: `zenavif` -> https://github.com/imazen/zenavif has no `rev`.
+  [ok  ] must FAIL: DISAGREE: manifest rev differs from expected
+           -> DISAGREE  Cargo.toml: `zenavif` -> https://github.com/imazen/zenavif
+  [ok  ] must FAIL: DISAGREE: lock resolved a different rev than the manifest pins
+           -> DISAGREE  Cargo.lock: `rav1d-safe` resolved to 1111111111111111111111111111111111111111
+  [ok  ] must FAIL: DISAGREE: lock fell back to the registry
+           -> DISAGREE  Cargo.lock: `zenavif` resolves from the REGISTRY at 0.1.7,
+  [ok  ] must FAIL: DEAD PATCH: declared, depended on, and unused
+           -> DEAD PATCH Cargo.lock: `zenavif` is under [[patch.unused]] but a manifest in this
+  [ok  ] must PASS: not a defect: patch unused because the feature is off
+
+self-test OK -- the check fires on float, disagreement and dead patch,
+and stays quiet on a clean tree and on a legitimately-unused patch.
+python3 scripts/check-decoder-pins.py
+check-decoder-pins: /Users/lilith/work/zen/zenpipe
+  expected  https://github.com/imazen/rav1d-safe @ 140f91450c3551c25a5699d12ded6d629ecf6d97
+  expected  https://github.com/imazen/zenavif @ 11033c957df69dcf37a6820032ed2a64f2f6f213
+  scanned   6 manifest entries, 10 lockfile entries
+  note: Cargo.lock: zenavif, zenavif-parse resolve by PATH from a sibling checkout, so this workspace's decoder rev follows that other repo's working tree and cannot be pinned from here. Revs below it are inherited and are reported, not enforced.
+  note: INHERITED Cargo.lock: `rav1d-safe` resolved to 66f58fa6a64c689998721cc5cdb16a4698e26eec
+          expected 140f91450c3551c25a5699d12ded6d629ecf6d97 from https://github.com/imazen/rav1d-safe
+          (pulled in by the path-sourced crate above; not enforceable from this repo)
+  note: fuzz/Cargo.lock: patch `zenavif` is unused because nothing in that workspace pulls it in (feature off) -- not a defect.
+
+OK -- every tracked decoder dep is pinned, agrees, and is live.
