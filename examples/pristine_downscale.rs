@@ -35,10 +35,17 @@
 //! zencodecs decode (jpeg/heic/png/avif/jxl, gain maps, cICP) -> zenresize
 //! linear-light resample -> zencodecs PNG encode carrying cICP through. No
 //! foreign imaging library, and in particular no cICP-splicing post-pass: the
-//! 2026-06 HDR renderer needed one because it went through the `image` crate,
-//! and zenresize then hardcoded the sRGB transfer. zenresize now carries real
-//! `Pq`/`Hlg` curves and *rejects* an unknown transfer, so HDR resamples in
-//! correct linear light on the same path as SDR.
+//! 2026-06 HDR renderer needed one because it went through the `image` crate.
+//!
+//! That renderer's other warning still stands, and this tool works around it
+//! rather than having been freed from it. zenresize's **u8** path dispatches on
+//! the descriptor's transfer, so 8-bit sRGB resamples in correct linear light
+//! for free. Its **u16** path does not: `resize_u16` linearizes with a
+//! hardcoded sRGB curve (its own doc comment says so), which is wrong for
+//! PQ/HLG. So 16-bit sources are linearized here with their own curve
+//! (`zenresize::Pq`/`Hlg` through `TransferCurve`), resized as linear f32, and
+//! re-encoded -- see `render`. Verified on the corpus HDR layer: PQ read from
+//! cICP, 16-bit RGB out, cICP preserved byte-for-byte.
 //!
 //! # Usage
 //!
@@ -54,9 +61,9 @@
 
 use std::path::{Path, PathBuf};
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+use zencodecs::{ColorEmitPolicy, DecodeRequest, EncodeRequest, ImageFormat};
 use zenpixels::{PixelSlice, TransferFunction};
-use zenresize::{Filter, ResizeConfig, Resizer};
+use zenresize::{Bt709, Filter, Hlg, Pq, ResizeConfig, Resizer, Srgb, TransferCurve};
 
 fn filter_by_name(name: &str) -> Option<Filter> {
     Some(match name {
@@ -69,6 +76,18 @@ fn filter_by_name(name: &str) -> Option<Filter> {
     })
 }
 
+/// The source's real transfer curve. Refuses to guess: a wrong curve here
+/// corrupts highlights silently, which is worse than failing.
+fn curve_for(tf: TransferFunction) -> Result<Box<dyn TransferCurve<Luts = ()>>, String> {
+    match tf {
+        TransferFunction::Srgb => Ok(Box::new(Srgb)),
+        TransferFunction::Pq => Ok(Box::new(Pq)),
+        TransferFunction::Hlg => Ok(Box::new(Hlg)),
+        TransferFunction::Bt709 => Ok(Box::new(Bt709)),
+        other => Err(format!("no transfer curve for {other:?}")),
+    }
+}
+
 /// What one source produced, for the manifest row.
 struct Rendered {
     png: Vec<u8>,
@@ -79,6 +98,7 @@ struct Rendered {
     out_w: u32,
     out_h: u32,
     transfer: TransferFunction,
+    transfer_assumed: bool,
     cicp: String,
 }
 
@@ -92,8 +112,20 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     let transfer = decoded.info().source_color.transfer_function();
     let has_alpha = decoded.has_alpha();
     let pixels = decoded.pixels();
-    let descriptor = pixels.descriptor();
     let (src_w, src_h) = (pixels.width(), pixels.rows());
+
+    // zenresize refuses to resample through an unknown transfer rather than
+    // guessing sRGB, which is the right call — resampling through the wrong
+    // curve corrupts highlights. But a plain untagged JPEG genuinely IS sRGB by
+    // web convention, and most of this corpus is untagged, so the assumption has
+    // to be made somewhere. Make it here, explicitly, and record it per row:
+    // an assumed transfer is a fact about the reference set that a consumer
+    // needs, not an implementation detail to bury.
+    let mut descriptor = pixels.descriptor();
+    let transfer_assumed = descriptor.transfer == TransferFunction::Unknown;
+    if transfer_assumed {
+        descriptor.transfer = TransferFunction::Srgb;
+    }
 
     // Whole blocks only — a partial MCU cannot have its AC cancelled.
     let crop_w = (src_w / ratio) * ratio;
@@ -105,20 +137,81 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     }
     let (out_w, out_h) = (crop_w / ratio, crop_h / ratio);
 
-    // The descriptor carries the transfer function, so zenresize linearizes with
-    // the correct curve (sRGB / PQ / HLG) instead of assuming sRGB.
-    let config = ResizeConfig::builder(src_w, src_h, out_w, out_h)
-        .filter(filter)
-        .format(descriptor)
-        .crop(0, 0, crop_w, crop_h)
-        .build();
-    let resized = Resizer::new(&config).resize(pixels.as_strided_bytes());
+    // zenresize's u8 path dispatches on the descriptor's transfer, so 8-bit
+    // sRGB resamples in correct linear light for free. Its u16 path does NOT:
+    // `resize_u16` linearizes with a hardcoded sRGB curve, which is wrong for
+    // PQ/HLG and would corrupt highlights — exactly the trap the 2026-06 HDR
+    // renderer documented, and it is still open in zenresize 0.3.1.
+    //
+    // So anything that is not 8-bit is linearized here with its OWN curve,
+    // resampled as linear f32, and re-encoded. That keeps one code path honest
+    // for SDR and HDR instead of silently mis-resampling the HDR half.
+    let src_bytes = pixels.as_strided_bytes();
+    let bpp = descriptor.bytes_per_pixel();
+    let channels = descriptor.channels();
+    let is_u8 = descriptor.channel_type() == zenpixels::ChannelType::U8;
 
-    let out_stride = (out_w as usize) * descriptor.bytes_per_pixel();
-    let out_slice = PixelSlice::new(&resized, out_w, out_h, out_stride, descriptor)
+    let (resized, out_desc) = if is_u8 {
+        let config = ResizeConfig::builder(src_w, src_h, out_w, out_h)
+            .filter(filter)
+            .format(descriptor)
+            .crop(0, 0, crop_w, crop_h)
+            .build();
+        (Resizer::new(&config).resize(src_bytes), descriptor)
+    } else {
+        if descriptor.channel_type() != zenpixels::ChannelType::U16 {
+            return Err(format!(
+                "unsupported sample type {:?}; only U8 and U16 sources are handled",
+                descriptor.channel_type()
+            ));
+        }
+        let curve = curve_for(descriptor.transfer)?;
+        let stride = pixels.stride();
+
+        // u16 -> linear f32, via the source's real transfer curve.
+        let mut lin = Vec::with_capacity((src_w as usize) * (src_h as usize) * channels);
+        for y in 0..src_h as usize {
+            let row = &src_bytes[y * stride..y * stride + (src_w as usize) * bpp];
+            for c in row.chunks_exact(2) {
+                let v = u16::from_ne_bytes([c[0], c[1]]) as f32 / 65535.0;
+                lin.push(curve.to_linear(v));
+            }
+        }
+
+        let lin_desc = match channels {
+            3 => zenpixels::PixelDescriptor::RGBF32_LINEAR,
+            4 => zenpixels::PixelDescriptor::RGBAF32_LINEAR,
+            1 => zenpixels::PixelDescriptor::GRAYF32_LINEAR,
+            n => return Err(format!("unsupported channel count {n}")),
+        };
+        let config = ResizeConfig::builder(src_w, src_h, out_w, out_h)
+            .filter(filter)
+            .format(lin_desc)
+            .crop(0, 0, crop_w, crop_h)
+            .build();
+        let out_lin = Resizer::new(&config).resize_f32(&lin);
+
+        // linear f32 -> u16, same curve back.
+        let mut out16 = Vec::with_capacity(out_lin.len() * 2);
+        for v in &out_lin {
+            let e = (curve.from_linear(*v).clamp(0.0, 1.0) * 65535.0).round() as u16;
+            out16.extend_from_slice(&e.to_ne_bytes());
+        }
+        (out16, descriptor)
+    };
+
+    let out_stride = (out_w as usize) * out_desc.bytes_per_pixel();
+    let out_slice = PixelSlice::new(&resized, out_w, out_h, out_stride, out_desc)
         .map_err(|e| format!("wrap resized: {e}"))?;
 
-    let mut req = EncodeRequest::new(ImageFormat::Png).with_lossless(true);
+    // Verbatim: emit the source's colour exactly as it came in. The default
+    // policy negotiates towards sRGB/BT.709, which for a Display-P3 PQ source
+    // means a gamut+tone conversion — it fails outright without a peak
+    // luminance, and where it succeeds it would silently make the "reference"
+    // a different image from the thing it references.
+    let mut req = EncodeRequest::new(ImageFormat::Png)
+        .with_lossless(true)
+        .with_color_emit_policy(ColorEmitPolicy::Verbatim);
     if let Some(c) = info_cicp {
         req = req.with_cicp(Some(c));
     }
@@ -128,6 +221,7 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
 
     Ok(Rendered {
         png: png.into_vec(),
+        transfer_assumed,
         src_w,
         src_h,
         crop_w,
@@ -197,7 +291,7 @@ fn main() -> std::process::ExitCode {
     }
 
     let mut rows = String::from(
-        "src\tout\tkernel\tratio\tsrc_w\tsrc_h\tcrop_w\tcrop_h\tout_w\tout_h\ttransfer\tcicp\tout_bytes\n",
+        "src\tout\tkernel\tratio\tsrc_w\tsrc_h\tcrop_w\tcrop_h\tout_w\tout_h\ttransfer\ttransfer_assumed\tcicp\tout_bytes\n",
     );
     let (mut ok, mut failed) = (0usize, 0usize);
 
@@ -223,7 +317,7 @@ fn main() -> std::process::ExitCode {
                     continue;
                 }
                 rows.push_str(&format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{}\t{}\n",
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{}\t{}\t{}\n",
                     src.display(),
                     dst.display(),
                     filter_name,
@@ -235,6 +329,7 @@ fn main() -> std::process::ExitCode {
                     r.out_w,
                     r.out_h,
                     r.transfer,
+                    r.transfer_assumed,
                     r.cicp,
                     r.png.len(),
                 ));
