@@ -62,7 +62,7 @@
 use std::path::{Path, PathBuf};
 
 use zencodecs::{ColorEmitPolicy, DecodeRequest, EncodeRequest, ImageFormat};
-use zenpixels::{PixelSlice, TransferFunction};
+use zenpixels::{ColorPrimaries, PixelSlice, TransferFunction};
 use zenresize::{Bt709, Filter, Hlg, Pq, ResizeConfig, Resizer, Srgb, TransferCurve};
 
 fn filter_by_name(name: &str) -> Option<Filter> {
@@ -99,6 +99,7 @@ struct Rendered {
     out_h: u32,
     transfer: TransferFunction,
     transfer_assumed: bool,
+    color_untagged: bool,
     cicp: String,
 }
 
@@ -114,17 +115,43 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     let pixels = decoded.pixels();
     let (src_w, src_h) = (pixels.width(), pixels.rows());
 
-    // zenresize refuses to resample through an unknown transfer rather than
-    // guessing sRGB, which is the right call — resampling through the wrong
-    // curve corrupts highlights. But a plain untagged JPEG genuinely IS sRGB by
-    // web convention, and most of this corpus is untagged, so the assumption has
-    // to be made somewhere. Make it here, explicitly, and record it per row:
-    // an assumed transfer is a fact about the reference set that a consumer
-    // needs, not an implementation detail to bury.
+    // Reconcile the descriptor with the source's own colour before doing
+    // anything with it. A decoder can hand back pixels whose descriptor says
+    // BT.709 while the container's cICP says Display-P3 -- measured on the
+    // corpus HEICs -- and then the resample linearizes with one story while the
+    // file gets written with the other. The container is the authority on what
+    // the colour IS, so it wins here and descriptor and tag agree from this
+    // point on.
     let mut descriptor = pixels.descriptor();
-    let transfer_assumed = descriptor.transfer == TransferFunction::Unknown;
-    if transfer_assumed {
+    // Only when the container ACTUALLY declares a colour. `color_primaries()`
+    // returns a default rather than an Option, so overriding unconditionally
+    // stamps BT.709 over a decoder-supplied Display-P3 descriptor whenever the
+    // source carries its colour some other way (an ICC profile, say). Measured:
+    // doing that dropped 18 of 44 Display-P3 tags in this corpus.
+    if info_cicp.is_some() {
+        let src_primaries = decoded.info().color_primaries();
+        if descriptor.primaries != src_primaries {
+            descriptor.primaries = src_primaries;
+        }
+    }
+    let src_transfer = decoded.info().transfer_function();
+    if descriptor.transfer == TransferFunction::Unknown && src_transfer != TransferFunction::Unknown
+    {
+        descriptor.transfer = src_transfer;
+    }
+    // Only after the container has had its say: an untagged JPEG genuinely IS
+    // sRGB by web convention, and most of this corpus is untagged. zenresize
+    // refuses to resample through an unknown transfer rather than guessing,
+    // which is right, so the assumption is made here, explicitly, and recorded
+    // per row -- an assumed transfer is a fact about the reference set a
+    // consumer needs, not an implementation detail to bury.
+    let transfer_assumed = descriptor.transfer == TransferFunction::Unknown
+        || descriptor.primaries == ColorPrimaries::Unknown;
+    if descriptor.transfer == TransferFunction::Unknown {
         descriptor.transfer = TransferFunction::Srgb;
+    }
+    if descriptor.primaries == ColorPrimaries::Unknown {
+        descriptor.primaries = ColorPrimaries::Bt709;
     }
 
     // Whole blocks only — a partial MCU cannot have its AC cancelled.
@@ -219,9 +246,73 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
         .encode(out_slice, has_alpha)
         .map_err(|e| format!("encode: {e}"))?;
 
+    // Verify what was actually written. The encoder negotiates the pixel format
+    // against the codec's supported-descriptor list, and if that list does not
+    // contain this descriptor the pixels are CONVERTED on the way out -- while
+    // `with_cicp` still stamps the colour we asked for. That combination is a
+    // silently mislabelled file: pixels in one encoding, a chunk claiming
+    // another. For a reference set that is the worst possible failure, so the
+    // output is decoded back and compared sample-for-sample against the buffer
+    // handed in. Lossless PNG must round-trip exactly; anything else is a bug.
+    let check = DecodeRequest::new(png.data())
+        .decode_full_frame()
+        .map_err(|e| format!("verify decode: {e}"))?;
+    let check_px = check.pixels();
+    // The pixels are the test. A byte-identical lossless round-trip proves the
+    // encoder did not convert anything, whatever the container ended up tagged
+    // as. A descriptor difference alone does not: an untagged PNG legitimately
+    // reads back as `transfer: Unknown` because PNG has no chunk saying "sRGB"
+    // unless one is written, and that is the normal case for 8-bit sRGB.
+    let wrote = check_px.as_strided_bytes();
+    if wrote.len() != resized.len() || wrote != resized.as_slice() {
+        let diff = wrote
+            .iter()
+            .zip(resized.iter())
+            .filter(|(a, b)| a != b)
+            .count();
+        return Err(format!(
+            "write-verify: {} of {} bytes differ after a lossless round-trip — the \
+             codec converted the pixels (asked for {:?}, read back {:?})",
+            diff.max(1),
+            resized.len(),
+            out_desc,
+            check_px.descriptor()
+        ));
+    }
+    // Pixels survived. Whether the COLOUR survived is a separate fact, and for
+    // anything non-sRGB it is load-bearing: PQ pixels in a container that does
+    // not say PQ are a mislabelled file even though every byte is intact.
+    let readback = check_px.descriptor();
+    let color_kept =
+        readback.transfer == out_desc.transfer && readback.primaries == out_desc.primaries;
+    // sRGB/BT.709 is conventionally untagged; a PNG with no colour chunk means
+    // exactly that, so an Unknown readback there is not a loss.
+    let conventional_srgb = readback.transfer == TransferFunction::Unknown
+        && out_desc.transfer == TransferFunction::Srgb
+        && out_desc.primaries == ColorPrimaries::Bt709;
+    // Some transfers have no cICP code point to be written as — `Gamma22` is
+    // the one this corpus hits (2 of 507 sources). PNG could carry it in `gAMA`
+    // instead, but zencodecs does not derive that, so the file genuinely cannot
+    // describe itself. That is a recorded limitation, not a silent one: the row
+    // carries `color_untagged`, and it is only tolerated when the transfer is
+    // inexpressible AND the primaries survived. Anything else -- a lost PQ or
+    // Display-P3 tag -- still fails.
+    let inexpressible =
+        out_desc.transfer.to_cicp().is_none() && readback.primaries == out_desc.primaries;
+    let color_untagged = !color_kept;
+    if !color_kept && !conventional_srgb && !inexpressible {
+        return Err(format!(
+            "write-verify: pixels are intact but the colour tag was lost — wrote \
+             {:?}/{:?}, reads back {:?}/{:?}. A reference file that does not \
+             describe its own colour is mislabelled.",
+            out_desc.transfer, out_desc.primaries, readback.transfer, readback.primaries
+        ));
+    }
+
     Ok(Rendered {
         png: png.into_vec(),
         transfer_assumed,
+        color_untagged,
         src_w,
         src_h,
         crop_w,
@@ -291,7 +382,7 @@ fn main() -> std::process::ExitCode {
     }
 
     let mut rows = String::from(
-        "src\tout\tkernel\tratio\tsrc_w\tsrc_h\tcrop_w\tcrop_h\tout_w\tout_h\ttransfer\ttransfer_assumed\tcicp\tout_bytes\n",
+        "src\tout\tkernel\tratio\tsrc_w\tsrc_h\tcrop_w\tcrop_h\tout_w\tout_h\ttransfer\ttransfer_assumed\tcolor_untagged\tcicp\tout_bytes\n",
     );
     let (mut ok, mut failed) = (0usize, 0usize);
 
@@ -317,7 +408,7 @@ fn main() -> std::process::ExitCode {
                     continue;
                 }
                 rows.push_str(&format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{}\t{}\t{}\n",
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{}\t{}\t{}\t{}\n",
                     src.display(),
                     dst.display(),
                     filter_name,
@@ -330,6 +421,7 @@ fn main() -> std::process::ExitCode {
                     r.out_h,
                     r.transfer,
                     r.transfer_assumed,
+                    r.color_untagged,
                     r.cicp,
                     r.png.len(),
                 ));

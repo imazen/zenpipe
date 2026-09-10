@@ -5097,7 +5097,7 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng#f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720"
+source = "git+https://github.com/imazen/zenpng#cfccd88f77cce5836c25bb70534fa49e4a5cd3c0"
 dependencies = [
  "almost-enough",
  "archmage",
