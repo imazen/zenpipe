@@ -134,6 +134,8 @@ fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 rayon = "1"
 
 [features]
+# Encoded metadata inspection/rewrite; no new dependency. Pixel codecs remain optional.
+metadata = []
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
 std = []
 

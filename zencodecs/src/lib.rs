@@ -138,6 +138,8 @@ mod info;
 pub mod intent;
 mod limits;
 mod macros;
+#[cfg(feature = "metadata")]
+pub mod metadata;
 #[cfg(feature = "picker")]
 pub mod picker;
 pub mod pixel;

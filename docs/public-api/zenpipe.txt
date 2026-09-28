@@ -588,7 +588,7 @@ pub tiles::TileRef::level: u32
 pub tiles::TileRef::row: u32
 pub tiles::TileRef::width: u32
 pub fn tiles::TileRef<'_>::is_blank(&self, &[u8], u8) -> bool
-pub struct tiles::ZipStore<W: core::io::write::Write + core::marker::Send>
+pub struct tiles::ZipStore<W: std::io::Write + core::marker::Send>
 pub fn tiles::ZipStore<W>::entry_count(&self) -> usize
 pub fn tiles::ZipStore<W>::into_inner(self) -> PipeResult<W>
 pub fn tiles::ZipStore<W>::new(W) -> Self

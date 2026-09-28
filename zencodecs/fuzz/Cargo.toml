@@ -39,7 +39,7 @@ features = [
     "png", "png-zenquant", "avif-decode", "jxl-decode",
     "bitmaps", "bitmaps-bmp",
     "cms", "riapi",
-    "jpeg-ultrahdr",
+    "jpeg-ultrahdr", "metadata",
 ]
 
 # Prevent workspace interference
@@ -67,8 +67,8 @@ zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
 # zencodec is patched above to the coordinated shared pixel/timing contract.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
 # ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
 # route heic's ReconstructHdr path calls); crates.io 0.5.0 predates it. Locked
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
@@ -264,6 +264,13 @@ bench = false
 [[bin]]
 name = "seed_corpus_tool"
 path = "seed_corpus_tool.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_metadata_scrub"
+path = "fuzz_targets/fuzz_metadata_scrub.rs"
 test = false
 doc = false
 bench = false

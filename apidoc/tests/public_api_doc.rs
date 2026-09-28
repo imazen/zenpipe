@@ -11,6 +11,6 @@ fn public_api_surface_docs_are_current() {
         // full-feature default build is the supported surface: no features file.
         .no_extra_section("zenpipe")
         // Include the coordinated codec, CMS and JPEG 2000 surface.
-        .pinned_features("zencodecs", "all,jp2-decode")
+        .pinned_features("zencodecs", "all,jp2-decode,metadata")
         .run();
 }

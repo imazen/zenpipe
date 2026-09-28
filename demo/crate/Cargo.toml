@@ -48,8 +48,8 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "ab83a51284ac231661
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 # zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
