@@ -6,6 +6,12 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+- Precomputed gain-map encodes now honor metadata retention and coarse privacy
+  gates. Forward filtered metadata to JPEG, JXL and AVIF instead of bypassing it.
+- JPEG retains EXIF orientation and requested attribution, emits ICC for supported
+  CICP, and regenerates gain-map discovery independently of source XMP. Requests
+  to preserve arbitrary source XMP refuse rather than silently discarding it.
+
 ### Fixed
 - Coordinate codec revisions around zenpixels 0.3, UltraHDR 0.6 and the exact
   animation/color contracts; eliminate duplicate incompatible pixel types.

@@ -349,11 +349,12 @@ pub(crate) fn encode_with_precomputed_gainmap(
     codec_config: Option<&CodecConfig>,
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
+    source_metadata: &zencodec::Metadata,
     stop: Option<StopToken>,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
-        UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, encode_with_gainmap,
+        GainMapEncodingFormat, UhdrColorTransfer, UhdrPixelFormat, encode_with_gainmap_metadata,
     };
 
     let stop_token = crate::limits::stop_or_default(&stop);
@@ -372,19 +373,22 @@ pub(crate) fn encode_with_precomputed_gainmap(
         width,
         height,
         pixel_format,
-        UhdrColorGamut::Bt709,
+        uhdr_gamut_from_metadata(Some(source_metadata))?,
         UhdrColorTransfer::Srgb,
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
     let enc = build_encoding(quality, None, codec_config);
 
-    let out = encode_with_gainmap(
+    let out = encode_with_gainmap_metadata(
         &sdr,
         gain_map,
         metadata,
         enc.inner(),
         quality.unwrap_or(75.0).min(85.0),
+        GainMapEncodingFormat::Both,
+        source_metadata,
+        &zencodec::MetadataPolicy::PreserveExact,
         stop_token,
     )
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
@@ -444,6 +448,74 @@ mod ultrahdr_gamut_tests {
         for code in [4u8, 5, 6, 7, 8, 10, 11, 22] {
             let err = uhdr_gamut_from_metadata(Some(&meta_with_primaries(code)));
             assert!(err.is_err(), "CICP primaries {code} must be rejected");
+        }
+    }
+}
+
+#[cfg(all(test, feature = "jpeg-ultrahdr"))]
+mod metadata_retention_tests {
+    use super::*;
+    #[test]
+    fn precomputed_gain_map_retains_rights_only_when_requested() {
+        use zencodec::{
+            MetadataPolicy, Orientation,
+            exif::{Exif, TextEncoding},
+        };
+        let pixels: alloc::vec::Vec<u8> = (0..16 * 16 * 3)
+            .map(|i| ((i * 37 + i / 7 * 53) % 256) as u8)
+            .collect();
+        let gain_map = crate::gainmap::GainMap {
+            width: 4,
+            height: 4,
+            channels: 1,
+            data: alloc::vec![128; 16],
+        };
+        let mut params = crate::gainmap::GainMapMetadata::default();
+        params.alternate_hdr_headroom = 2.0;
+        for ch in &mut params.channels {
+            ch.max = 2.0;
+        }
+        let mut exif = Exif::new(TextEncoding::Ascii);
+        exif.set_artist("PUBLIC-ARTIST");
+        exif.set_orientation(Orientation::Rotate90);
+        let meta = Metadata::none()
+            .with_exif(exif.to_bytes())
+            .with_orientation(Orientation::Rotate90)
+            .with_xmp(b"PRIVATE-XMP".to_vec())
+            .with_cicp(zencodec::Cicp::SRGB);
+        for (policy, keep_artist) in [
+            (MetadataPolicy::Web, true),
+            (MetadataPolicy::ColorAndRotation, false),
+        ] {
+            let view = zenpixels::PixelSlice::new(
+                &pixels,
+                16,
+                16,
+                48,
+                zenpixels::PixelDescriptor::RGB8_SRGB,
+            )
+            .unwrap();
+            let output = crate::EncodeRequest::new(ImageFormat::Jpeg)
+                .with_metadata(meta.clone())
+                .with_metadata_policy(policy)
+                .with_gain_map(crate::gainmap::GainMapSource::Precomputed {
+                    gain_map: &gain_map,
+                    metadata: &params,
+                })
+                .encode(view, false)
+                .unwrap()
+                .into_vec();
+            assert!(!output.windows(11).any(|w| w == b"PRIVATE-XMP"));
+            let info = probe(&output).unwrap();
+            assert_eq!(info.orientation, Orientation::Rotate90);
+            assert_eq!(
+                output.windows(13).any(|w| w == b"PUBLIC-ARTIST"),
+                keep_artist
+            );
+            let (_, gm) = crate::DecodeRequest::new(&output)
+                .decode_gain_map()
+                .unwrap();
+            assert!(gm.is_some());
         }
     }
 }
