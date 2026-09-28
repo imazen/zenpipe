@@ -506,21 +506,19 @@ fn icc_present_for_reencoding_codecs() {
     }
 }
 
-/// Codecs declaring `NotCarried` for ICC must report no profile.
+/// A codec without a color-profile carrier must reject unresolved ICC colors,
+/// rather than discard the description and silently label the samples sRGB.
 #[test]
-fn icc_absent_when_not_carried() {
+fn gif_rejects_unresolved_icc_and_emits_no_profile_for_srgb() {
     for c in codecs() {
-        if c.icc == Icc::NotCarried {
-            let icc = synthetic_icc(256);
-            let got = round_trip(&c, Metadata::none().with_icc(icc))
-                .info()
-                .source_color
-                .icc_profile
-                .is_some();
+        if c.fmt == ImageFormat::Gif {
+            assert!(encode(&c, Metadata::none().with_icc(synthetic_icc(256))).is_err());
             assert!(
-                !got,
-                "[{}] declares no ICC carrier but a profile survived; update the table",
-                c.name
+                round_trip(&c, Metadata::none())
+                    .info()
+                    .source_color
+                    .icc_profile
+                    .is_none()
             );
         }
     }
@@ -631,9 +629,9 @@ fn transcode_forward(
         if let Some(x) = &m.xmp {
             fwd = fwd.with_xmp(x.clone());
         }
-        if let Some(icc) = &info.source_color.icc_profile {
-            fwd = fwd.with_icc(icc.clone());
-        }
+        // This helper re-encodes the fixed sRGB fixture, not the decoded pixels.
+        // Carry only the descriptive metadata under test. Actual pixel/color
+        // transcodes, including an ICC source into GIF, are in transcode_color.rs.
         fwd
     };
     decode(&encode(dst, fwd).ok()?).ok()
@@ -760,9 +758,9 @@ fn clean_baseline_emits_no_exif_or_xmp() {
     }
 }
 
-/// A fully-populated `Metadata` of *valid* fields must never break encode or
-/// decode — including for containers with no metadata carriers (GIF), which
-/// must silently drop what they can't represent rather than erroring.
+/// Valid descriptive metadata must not break encode/decode. Color signaling
+/// needs an actual carrier or conversion: GIF rejects the P3/ICC request, then
+/// accepts descriptive metadata on known sRGB pixels.
 ///
 /// A valid ICC profile is included only under `cms` (it needs a real sRGB
 /// profile from moxcms). The synthetic ICC used elsewhere is intentionally
@@ -781,8 +779,17 @@ fn full_metadata_never_breaks_round_trip() {
         {
             meta = meta.with_icc(zencodecs::cms::srgb_icc_profile());
         }
-        let bytes = encode(&c, meta)
-            .unwrap_or_else(|e| panic!("[{}] full-metadata encode must not error: {e}", c.name));
+        if c.fmt == ImageFormat::Gif {
+            assert!(
+                encode(&c, meta.clone()).is_err(),
+                "GIF must not discard unresolved color"
+            );
+            meta.icc_profile = None;
+            meta.cicp = None;
+        }
+        let bytes = encode(&c, meta).unwrap_or_else(|e| {
+            panic!("[{}] supported metadata encode must not error: {e}", c.name)
+        });
         let out = decode(&bytes)
             .unwrap_or_else(|e| panic!("[{}] full-metadata decode must not error: {e}", c.name));
         assert_eq!(out.info().width, 64, "[{}] width preserved", c.name);

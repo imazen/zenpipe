@@ -9,24 +9,8 @@
 //!
 //! Gated on the off-by-default `avif-autotune` feature.
 //!
-//! # Why the dependency is spelled `zenavif_tuner`
-//!
-//! zenpipe and `zencodecs` depend on zenavif **0.1.x** for the ordinary
-//! decode/encode path. The backend tuner is 0.2.x. Rather than migrate
-//! that whole edge — a change with nothing additive about it — this
-//! feature takes the newer crate as a separately-named direct dependency
-//! (`zenavif_tuner`, package `zenavif`, sibling path `../zenavif`). The
-//! two coexist because they are semver-incompatible, and nothing here
-//! hands a 0.2 type to a 0.1 API: this module produces a config and
-//! encodes with it through the same crate it came from.
-//!
-//! It is a **path** dep, not a git one, because zenavif's `auto-tune`
-//! feature path-pins its own zenanalyze/zenpredict deps to
-//! `../zenanalyze` — which a git dep cannot resolve. Same sibling-checkout
-//! convention zenavif itself uses.
-//!
-//! When the ordinary edge moves to 0.2.x, delete the rename and the
-//! second dependency; nothing else in this module changes.
+//! Decode, encode, and auto-tuning now use the same zenavif 0.2 dependency.
+//! Its pinned git dependencies resolve from an ordinary standalone clone.
 //!
 //! # Usage
 //!
@@ -55,8 +39,8 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use zenavif_tuner::backend_tuner::{AllowedBackends, AvifTuning, StubTuner, TuneRequest};
-use zenavif_tuner::{Av1Backend, AvifTune, AvifTuner, QualityTarget};
+use zenavif::backend_tuner::{AllowedBackends, AvifTuning, StubTuner, TuneRequest};
+use zenavif::{Av1Backend, AvifTune, AvifTuner, QualityTarget};
 
 /// What the pipeline wants from an AVIF encode.
 ///
@@ -228,7 +212,7 @@ impl AvifAutotune {
             .map(|c| rgb::Rgb::new(c[0], c[1], c[2]))
             .collect();
         let img = imgref::Img::new(px, width as usize, height as usize);
-        zenavif_tuner::encode_rgb8(
+        zenavif::encode_rgb8(
             img.as_ref(),
             plan.tuned.config(),
             almost_enough::StopToken::new(almost_enough::Unstoppable),
@@ -267,8 +251,8 @@ impl AvifPlan {
     /// about `stub` vs `model` so the two are never confused in a log.
     pub fn explain(&self) -> String {
         let source = match self.tuned.source() {
-            zenavif_tuner::TuneSource::Model => "model",
-            zenavif_tuner::TuneSource::Stub => "stub (measured defaults, no model)",
+            zenavif::TuneSource::Model => "model",
+            zenavif::TuneSource::Stub => "stub (measured defaults, no model)",
             _ => "unknown",
         };
         let ms = match self.tuned.expected_wall_ms() {
@@ -286,7 +270,7 @@ impl AvifPlan {
     }
 
     /// The encoder config to use.
-    pub fn config(&self) -> &zenavif_tuner::EncoderConfig {
+    pub fn config(&self) -> &zenavif::EncoderConfig {
         self.tuned.config()
     }
 }

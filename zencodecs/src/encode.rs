@@ -194,9 +194,11 @@ impl<'a> EncodeRequest<'a> {
 
     /// Set metadata to embed in the output (ICC profile, EXIF, XMP).
     ///
-    /// Not all formats support all metadata types. Unsupported metadata
-    /// is silently ignored — GIF ignores all metadata, AVIF encode only
-    /// supports EXIF, etc.
+    /// Not all formats carry every metadata type. Descriptive metadata may be
+    /// omitted; unsupported color signaling can be rejected to avoid changing
+    /// the meaning of the pixels. This method does not convert colors. Use an
+    /// explicit pixel conversion before encoding to a restricted format such
+    /// as GIF, or select `TranscodeColor::Srgb8` in the high-level transcode API.
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self
@@ -774,7 +776,7 @@ impl<'a> EncodeRequest<'a> {
             &self.quality_intent(),
             self.codec_config,
             &image,
-            &ComputeEnvironment::new(),
+            &ComputeEnvironment::conservative(),
         )
     }
 
@@ -844,7 +846,7 @@ impl<'a> EncodeRequest<'a> {
                 &self.quality_intent(),
                 self.codec_config,
                 &image,
-                &ComputeEnvironment::new(),
+                &ComputeEnvironment::conservative(),
             )?;
             check_estimate_against_limits(&est, &image, limits)?;
         }

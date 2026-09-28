@@ -72,13 +72,8 @@ nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
 # AVIF backend + knob auto-tuning (`crate::avif_autotune`). OFF by default and
 # flips no default: a caller opts in by holding an `AvifAutotune`.
 #
-# Takes zenavif 0.2.x as a SEPARATELY-NAMED direct dep (`zenavif_tuner`)
-# alongside the 0.1.x edge zenpipe + zencodecs already use for decode/encode.
-# The two are semver-incompatible so they coexist, and no 0.2 type is ever
-# handed to a 0.1 API. Migrating the whole edge to 0.2.x is a real change with
-# nothing additive about it; when it happens, drop the rename and this feature
-# keeps working unchanged.
-avif-autotune = ["std", "dep:zenavif_tuner", "dep:almost-enough", "dep:imgref", "dep:rgb"]
+# Decode, encode, and auto-tuning share the pinned zenavif 0.2 API.
+avif-autotune = ["std", "dep:zenavif", "zenavif/auto-tune", "zenavif/encode-imazen", "dep:almost-enough", "dep:imgref", "dep:rgb"]
 nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
 nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
@@ -147,31 +142,8 @@ zenwebp = { version = "0.5.0", default-features = false, optional = true }
 # `zencodec` feature is now gated on plain `std` (which that feature always
 # implied). Request `std` directly; `zencodec` is no longer a valid feature name.
 zengif = { version = "0.8.0", default-features = false, features = ["std"], optional = true }
-# zenavif main (0.1.7, git-patched below) made `zencodec` a required, always-on
-# dependency — its `zencodec` cargo feature no longer exists, so it must not be
-# requested here (CI resolves zenavif from the sibling clone of main, and
-# "zenavif does not have that feature" was the resolution failure since 2026-08-01).
-zenavif = { version = "0.1.7", default-features = false, optional = true }
-# zenavif 0.2.x, ONLY for `avif-autotune` (see the feature comment above). A
-# SIBLING PATH because the backend tuner needs zenavif's `auto-tune` feature,
-# whose own zenanalyze/zenpredict deps are path-pinned to `../zenanalyze` — a
-# git dep cannot resolve those. The crate is renamed so it sits beside the
-# 0.1.x dep on the line above. Requires a `../zenavif` checkout at or past
-# cdfe7b46 (the backend_tuner commit); the feature is off by default, so a
-# tree without one still builds everything else.
-#
-# That "at or past" is a CHECKOUT requirement, not a manifest one — VERIFIED
-# 2026-09-04 by building this feature against a read-only export of zenavif
-# `main` (c6c4c96) placed beside a symlink to ../zenanalyze: `cargo build -p
-# zenpipe --features avif-autotune` and `cargo test -p zenpipe --lib --features
-# avif-autotune` both pass (287 tests, incl. all four avif_autotune cases), with
-# ONE zenanalyze-api in the graph and no edit to zenavif's manifest. So if this
-# feature fails with `unresolved import zenavif_tuner::backend_tuner` (or a
-# missing AvifTune / AvifTuner / TuneSource), the sibling ../zenavif working
-# copy is simply BEHIND its own main — advance that checkout; do not change any
-# Cargo.toml here or there. zenavif main exports exactly what src/avif_autotune.rs
-# imports, under `#[cfg(all(feature = "auto-tune", feature = "encode"))]`.
-zenavif_tuner = { package = "zenavif", path = "../zenavif", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
+# The shared 0.2 codec contract; auto-tuning enables its native encoder.
+zenavif = { version = "0.2.0", default-features = false, optional = true }
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
 # itself depends on so the two unify rather than resolving twice.
@@ -291,53 +263,51 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # applies from the top-level workspace — git consumers of zenpipe that enable
 # features needing these crates must mirror the relevant entries.
 [patch.crates-io]
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
+# Coordinated shared pixel contracts for the 0.3 migration.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "e4661dcb0ad9d4fb64e57400edeb467554b2f91b" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
-heic = { git = "https://github.com/imazen/heic" }
+heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 # zentiff main is 0.1.2 on zencodec 0.1.26 (the zencodec decode/encode adapter +
 # heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
 # (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
-zentiff = { git = "https://github.com/imazen/zenextras" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-# `zencodec` itself is NOT patched: the registry 0.1.26 carries the two-level
-# CodecError/CategorizedError taxonomy every codec pin below is built against.
-zenpixels = { git = "https://github.com/imazen/zenpixels" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
-# ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
-# route heic's ReconstructHdr path calls); crates.io 0.5.0 predates it. Locked
-# at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
-# resolves to 0.6.x would no longer satisfy heic's `^0.5.0`, stranding it on the
-# boost-less registry 0.5.0. zenjpeg 0.9.0 + zencodecs use registry 0.6.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+# zencodec is patched above to the coordinated shared pixel/timing contract.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+# Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
-zenjxl = { git = "https://github.com/imazen/zenjxl" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa7cbc73d67e6d489d4860" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
 # uses; 0.3.10 on crates.io predates it (same version number, older content).
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "3aea2ed4e5bd5841852e1ce461b0930df17d5fb0" }
 # zenwebp main is 0.5.0 (unreleased pre-bump; last unyanked crates.io release
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
 # optional feature to a required dep (zenwebp#69).
-zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "27393eef995aea329cfbc1df5cac5e3f7346b4cb" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
-zensim = { git = "https://github.com/imazen/zensim" }
-zensim-regress = { git = "https://github.com/imazen/zensim" }
+zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
 # zenanalyze-api 0.1.0 IS on crates.io (zencodecs declares it from the registry),
 # but zenpicker/zenpredict (git mains, unpublished) pull THEIR copy from the
 # zenanalyze git checkout via an internal `{ version, path }` dep — so a bare
@@ -382,7 +352,7 @@ zensim-regress = { git = "https://github.com/imazen/zensim" }
 # 0.1.1 is therefore all that stands between this graph and a registry-only
 # resolve; `FeatureProvider`, cited by older comments as the blocking addition,
 # was CUT before 0.1.1 (zenanalyze 62bfd43) and has no consumers.
-zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 # zenanalyze itself: git-only forever. Its main is 0.2.0 (the `hdr` feature /
 # retired `composites`), while the registry tops out at 0.1.0 and stays there —
 # zenanalyze's public API is frozen at 0.1.x by policy, so 0.2.x only exists on
@@ -403,7 +373,7 @@ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # same shape and same reason as zenjxl 1ae0da79. Floating (no rev) like every
 # other entry in this table on purpose: a rev pin would strand us the next time
 # zenjpeg's main bumps its zenanalyze requirement.
-zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 # imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
@@ -413,93 +383,25 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # zenbitmaps main is 0.2.0 (At<BitmapError> error wrapper + 120 MP default pixel cap
 # + 16-bit ASCII PNM roundtrip fix, fuzz zenbitmaps#7/#10); crates.io tops out at 0.1.5.
 # Powers the bitmaps-* (BMP / PNM / farbfeld) decode path (zenpipe#50).
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "adc96ccad471a2d4c1b5fe9821f91b249580f300" }
 # zengif main (0.7.3, unreleased-beyond-tag content) adopted the zencodec
 # Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
 # predates both changes.
-zengif = { git = "https://github.com/imazen/zengif" }
-# zenavif main is 0.1.7 (zencodec 0.1.26 two-level taxonomy, `zencodec`
-# adapter always-on — no `zencodec` feature any more); crates.io tops out at
-# 0.1.6 (pre-taxonomy). The imazen/zenavif repo is a workspace that also
-# carries zenavif-parse 0.7.0 (breaking: `At<Error>` parser results),
-# unpublished (registry: 0.6.2); zencodecs takes that one as a git dep on the
-# same repo directly (see its manifest for why a registry spec + patch here
-# collides with zenavif's member under CI's sibling pathing), so it needs no
-# entry here. The rest of the `encode` chain needs NO patch entries, because since
-# 2026-08-27 every unpublished link is a git-rev dep on its own dep line:
-# zenavif → zenravif 0.2.0 (imazen/cavif-rs; registry 0.1.3) → zenrav1e 0.2.0
-# (imazen/zenrav1e; registry 0.1.4) and zenavif-serialize 0.2.0 (the archived
-# imazen/zenavif-serialize repo @990bd6d; registry 0.1.4). Any patch entry for
-# those would be unused — no registry requirement for them exists in this
-# graph. (zenavif-serialize in particular must NOT come from a patch here: CI
-# deletes this section, which is exactly how the 2026-08-27 first attempt
-# still failed to resolve zenravif's requirement in sibling-clone mode.)
-# Cost to know: cargo fetches zenavif's corpus submodules (~600 MB) per rev
-# for bare-clone builds; CI is unaffected (shallow sibling clones).
-#
-# REV-PINNED, unlike most of this table, and the reason is the DECODER. This
-# entry is the level that controls which rav1d-safe the whole repo decodes AVIF
-# through: zenavif carries a git-rev dep on rav1d-safe on its own dep line, so
-# `[patch.crates-io] rav1d-safe` here would substitute NOTHING (patch replaces
-# registry sources only, and no registry rav1d-safe requirement exists in this
-# graph). Pinning zenavif is what actually fixes the decoder. zenavif 11033c95
-# selects rav1d-safe 140f9145.
-#
-# WHAT FLOATS IF YOU DELETE `rev`: every fresh resolve re-picks imazen/zenavif
-# main, and the decoder underneath it moves with no edit to any manifest and
-# nothing in any output recording that it happened. Not hypothetical — before
-# this pin the committed root Cargo.lock held zenavif 11033c95 / rav1d-safe
-# 140f9145, fuzz/Cargo.lock held zenavif 7d950f1c, and demo/crate/Cargo.lock
-# had fallen back to the REGISTRY at 0.1.6: three different decoders in one
-# repo. And AVIF decode is not covered by CI here (no job enables
-# `avif-decode`), so a decoder change lands silently.
-#
-# WHY 11033c95 AND NOT THE WORKSPACE-WIDE 66f58fa6. zenavif, ravif and
-# zenmetrics have aligned on rav1d-safe 66f58fa6, and this repo deliberately
-# has not, because moving forward was MEASURED to break AVIF decode here:
-#
-#   cargo test -p zencodecs --no-default-features \
-#     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
-#     --test corpus -- --ignored avif
-#
-#   zenavif 11033c95 (rav1d-safe 140f9145):  corpus_avif_decode_valid ok, 66 s
-#   zenavif e4b3820  (rav1d-safe 66f58fa6):  corpus_avif_decode_valid FAILED,
-#                                            twice out of two runs
-#
-# The failure is a panic in rav1d-safe's own bounds-map guard, on aarch64:
-#   src/safe_simd/filmgrain_arm.rs:1628:41 took a 122880 B picture-plane
-#   reservation while tile threading is active; the measured ceiling for that
-#   file is 3840 B
-# followed by `Option::unwrap()` on `None` at src/thread_task.rs:534 as the
-# worker threads unwind. `PIC_EXTENT_CEILINGS` is absent at 140f9145 and
-# present at 66f58fa6, so the guard was ADDED inside the range: the over-wide
-# film-grain reservation is probably not new, but at 140f9145 nothing policed
-# it. Tracked as rav1d-safe#526; move this pin to 66f58fa6 when that closes,
-# and re-run the command above rather than assuming.
-#
-# 140f9145 is still on the CORRECT side of the aarch64 NEON conformance
-# campaign of 2026-08-07/08 (2026-08-11 vs the campaign's 08-07/08), which took
-# rav1d-safe from 302/766 to 766/766 against dav1d's published MD5 vectors.
-# What this pin gives up versus 66f58fa6 is rav1d-safe@2e0f7e8's
-# `Settings::strictness` defaulting to `Strict`, and rav1d-safe#524's x86_64
-# loop-filter DisjointMut fix. ravif measured decoded pixels IDENTICAL across
-# 140f9145 -> 66f58fa6 (0 of 400 cells moved), so this pin costs no decode
-# correctness on aarch64.
-#
-# Keep every imazen/zenavif reference in this repo on the SAME rev — the
-# zenavif-parse git dep in zencodecs/Cargo.toml, and the mirrored patch tables
-# in fuzz/ and demo/crate/. A rev mismatch does not merely disagree, it splits
-# the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
-# so you get two zenavif-parse instances and its `At<Error>` stops unifying.
-# `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "1d91101ae53b92833124087624f2f0238fabd760" }
+# Coordinated animation/native-12/color contract. This directly selects the
+# managed rav1d-safe decoder; a registry patch cannot replace a git dependency.
+# The former ARM film-grain blocker (rav1d-safe#526) was fixed by #527,
+# commit 83fa5d3edd5137f1b0b1d981625c0ba28ae79a49, an ancestor of the selected
+# dfd01e32. All manifests and authoritative lockfiles must agree; run
+# scripts/check-decoder-pins.py after resolving any workspace.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "b777fa12a92059d3d50c0bfa12e30d2b10502df6" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
-zenraw = { git = "https://github.com/imazen/zenraw" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
 # zenpdf: registry 0.2.0 predates the taxonomy entirely; zenextras main is on
 # zencodec 0.1.26. Powers `zencodecs/pdf-decode`.
-zenpdf = { git = "https://github.com/imazen/zenextras" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]

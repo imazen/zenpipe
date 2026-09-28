@@ -14,8 +14,9 @@ concurrency:
 
 jobs:
   rust:
-    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
+    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@6294a0dde3b9bd35f189f7bc262b5295c0173818
     with:
+      sibling_overrides: false
       # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
       # of the SIMD tiers and the Apple linker are exercised together), and
       # `macos-latest` is aarch64-only, so it has to be named explicitly. The
@@ -88,9 +89,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
 
       - name: Check committed API snapshots are current
@@ -119,9 +121,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: taiki-e/install-action@v2
         with:
           tool: cross
