@@ -55,14 +55,13 @@ sources`.
     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
     --test corpus -- --ignored avif
   ```
-- **The rav1d-safe pin is held back at `140f9145`** (via `zenavif 11033c95`)
-  while zenavif, ravif and zenmetrics are all on `66f58fa6`. Not neglect —
-  measured: at `66f58fa6` the command above fails 2 of 2 runs with a panic in
-  rav1d-safe's bounds-map guard on aarch64 (`filmgrain_arm.rs:1628` reserves
-  122880 B against a 3840 B ceiling under tile threading), then
-  `Option::unwrap()` on `None` at `thread_task.rs:534`. Filed as
-  **rav1d-safe#526**. Move the pin when that closes, and re-run the command
-  rather than assuming.
+- **The coordinated media dependency pin advances to `rav1d-safe dfd01e32`**
+  via `zenavif b777fa12`. The former aarch64 film-grain reservation blocker
+  **rav1d-safe#526** closed with **#527**, commit `83fa5d3edd5137f1b0b1d981625c0ba28ae79a49`,
+  an ancestor of this pin. Keep all root/demo/fuzz manifests and authoritative
+  locks consistent; the pin checker rejects drift. Re-run the corpus command
+  above for decoder changes; x86 validation does not replace the upstream ARM
+  conformance evidence.
 
 Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
 original list — animation per-frame routing, matte flatten, the two-engine

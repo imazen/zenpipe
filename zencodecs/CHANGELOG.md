@@ -7,6 +7,10 @@ All notable changes to `zencodecs` are documented here. Format follows
 ## [Unreleased]
 
 ### Fixed
+- Coordinate codec revisions around zenpixels 0.3, UltraHDR 0.6 and the exact
+  animation/color contracts; eliminate duplicate incompatible pixel types.
+- Wire JPEG 2000 decoding through zenjp2 and include it in runtime allowlists.
+  Encoding remains unsupported.
 - **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
   correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
   bypass the registry entirely for Custom formats (fail-open — `none()` still let
@@ -38,6 +42,10 @@ All notable changes to `zencodecs` are documented here. Format follows
   (ad2ab9e1).
 
 ### Added
+- Explicit `TranscodeColor::Srgb8` conversion using the current decoded color
+  context (`cms` feature), with HDR/rendering and unchanged-gain-map rejection.
+  `Preserve` remains the default. GIF rejects unresolved ICC/P3 color requests;
+  descriptive metadata without a carrier may still be dropped.
 - **`picker::route_format_from_offer` (the `picker-api` feature)** — a route-based format picker over
   the **shipped cross-codec router** (`zenpicker::default_route`: the f32 6-pairwise-discriminant
   lossy router + i8 auto-gate + lossless), masked to the candidate formats and **quality-aware**

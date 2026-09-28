@@ -10,8 +10,7 @@ fn public_api_surface_docs_are_current() {
         // zenpipe --all-features does not build (stub codec features), so its
         // full-feature default build is the supported surface: no features file.
         .no_extra_section("zenpipe")
-        // zencodecs `--features all` does not build (gainmap drift); snapshot
-        // the documented-good combo instead.
-        .pinned_features("zencodecs", "jxl-encode,cms")
+        // Include the coordinated codec, CMS and JPEG 2000 surface.
+        .pinned_features("zencodecs", "all,jp2-decode")
         .run();
 }

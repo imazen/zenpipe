@@ -48,6 +48,8 @@ const COMPILED_DECODE: FormatSet = {
     let s = s.with_const(ImageFormat::Jxl);
     #[cfg(feature = "heic-decode")]
     let s = s.with_const(ImageFormat::Heic);
+    #[cfg(feature = "jp2-decode")]
+    let s = s.with_const(ImageFormat::Jp2);
     s
 };
 

@@ -115,16 +115,6 @@
     )
 )]
 
-// ── Stub features fail loudly (zenpipe#43) ──
-// These features gate adapter code whose backing decoder crate/API is not
-// wired yet; enabling one can only produce a flood of unresolved-item
-// errors. Surface the configuration error as one clear message instead.
-// Delete the guard (and wire the dependency) when a backend lands.
-#[cfg(feature = "jp2-decode")]
-compile_error!(
-    "zencodecs feature `jp2-decode` is a stub: no JPEG 2000 decoder dependency is wired yet (zenpipe#43)"
-);
-
 extern crate alloc;
 
 whereat::define_at_crate_info!();
@@ -201,7 +191,8 @@ pub use select::ImageFacts;
 pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
 pub use trace::SelectionTrace;
 pub use transcode::{
-    SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,
+    SupplementPolicy, SupplementSet, TranscodeColor, TranscodeOptions, TranscodeOutput,
+    TranscodeSink,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;

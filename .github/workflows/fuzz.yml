@@ -46,68 +46,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # The root package's optional tuner still requires its path manifests
-          # to exist, even though this fuzz configuration does not enable it.
-          - workspace: fuzz
-            siblings: 'zenavif zenanalyze'
-          # Codec path patches and the corpus seed tool still need sibling
-          # checkouts. Decoder/parser now resolve through the production git pin.
-          - workspace: zencodecs/fuzz
-            siblings: 'zenavif zenbitmaps zenjpeg zenanalyze ultrahdr'
+        workspace: [fuzz, zencodecs/fuzz]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
 
-      # Before rust-cache, not after: the cache action runs `cargo metadata` on
-      # the declared workspace to build its key, and with the siblings missing
-      # that failed ("failed to load manifest for workspace member
-      # zencodecs/fuzz/." on run 33245135943). It recovered — the right paths
-      # were still cached — but it could not enumerate workspace crates, so its
-      # target-dir cleaning was working blind. Same ordering, same reason, as
-      # zen-workspace's setup action ("Cache AFTER ci-clone so cargo metadata
-      # can find all deps").
-      #
-      # Deliberately NOT zen-workspace's setup action. That action runs
-      # `cargo superwork ci-clone --add-paths`, which REWRITES manifests
-      # (it reported "pathed 131 manifests" and "deleted sections:
-      # patch.crates-io" on run 33240717657). Rewriting is the wrong thing for
-      # this gate specifically: the failure it exists to catch is a fuzz
-      # manifest whose own patch table has gone stale, and a rewrite would mask
-      # exactly that. Cloning the siblings by hand keeps the committed
-      # manifests under test verbatim. It also skips the ~40s
-      # `cargo install cargo-superwork` build.
-      #
-      # ci-clone puts siblings at `$GITHUB_WORKSPACE/..`, which is where
-      # `../../../<repo>` from `zencodecs/fuzz/` lands, so this mirrors the
-      # layout every other job in the repo already builds against.
-      - name: Clone the sibling checkouts this workspace path-patches
-        if: matrix.siblings != ''
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE/.."
-          for repo in ${{ matrix.siblings }}; do
-            git clone --depth 1 "https://github.com/imazen/$repo.git"
-          done
-          # codec-corpus carries ~700 MB of corpus blobs; the fuzz workspace
-          # only needs the `crate/` Rust package, so take a blobless sparse
-          # checkout of that one directory (~2 MB, ~1s).
-          git clone --depth 1 --filter=blob:none --sparse \
-            https://github.com/imazen/codec-corpus.git
-          git -C codec-corpus sparse-checkout set crate
-
+      # Both standalone manifests use exact git revisions and portable patch
+      # tables. Compile those declarations verbatim; sibling overrides would
+      # hide incompatible versions or replace the coordinated codec APIs.
       - uses: Swatinem/rust-cache@v2
         with:
           key: fuzz-${{ matrix.workspace }}
           workspaces: ${{ matrix.workspace }}
 
-      # No `--locked`: a lock pinned to a stale sibling rev would keep passing
-      # while the API it targets moved on, which is the drift this gate exists
-      # to see. The two `Cargo.lock` files stay committed for reproducible
-      # hand-fuzzing; CI is allowed to re-resolve on top of them.
       - name: cargo check --all-targets
         working-directory: ${{ matrix.workspace }}
-        run: cargo check --all-targets
+        run: cargo check --locked --all-targets
 
   # The committed crash seeds under `zencodecs/fuzz/regression/` are minimized
   # inputs for bugs that have been fixed. Replaying them needs neither nightly
@@ -123,9 +77,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
         with:
           key: fuzz-regression

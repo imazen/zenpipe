@@ -47,6 +47,9 @@ pub struct TranscodeOptions {
     /// - `Some(meta)`: use the provided metadata instead of the source's.
     pub metadata: Option<zencodec::Metadata>,
 
+    /// Pixel color policy. Metadata overrides do not perform color conversion.
+    pub color: TranscodeColor,
+
     /// Retention policy applied to the embedded metadata.
     ///
     /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim roundtrip, with a
@@ -79,6 +82,7 @@ impl Default for TranscodeOptions {
     fn default() -> Self {
         Self {
             metadata: None,
+            color: TranscodeColor::Preserve,
             // No implicit privacy choice: roundtrip verbatim by default. Callers
             // publishing to the web should set `MetadataPolicy::Web`.
             metadata_policy: MetadataPolicy::PreserveExact,
@@ -89,6 +93,21 @@ impl Default for TranscodeOptions {
             orientation: zencodec::OrientationHint::Preserve,
         }
     }
+}
+
+/// Color conversion requested by a transcode caller.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TranscodeColor {
+    /// Keep the decoded pixel colors and precision. A target that cannot carry
+    /// the source color description may reject the request (for example GIF).
+    #[default]
+    Preserve,
+    /// Convert SDR pixels through their current ICC/CICP description to straight
+    /// RGBA8 sRGB. Requires `cms`. Replaces output ICC/CICP/HDR signaling, while
+    /// retaining unrelated metadata. PQ/HLG require an explicit rendering policy
+    /// and are rejected; preserving a gain map across this conversion is rejected.
+    Srgb8,
 }
 
 /// What to do with container supplements (gain maps, depth maps, etc.)
@@ -252,10 +271,14 @@ pub fn transcode(
     // descriptor's color-space enum can't represent an arbitrary ICC-resolved primary
     // set — so without this explicit carrier a wide-gamut HEIC→PNG is silently
     // mislabeled sRGB. `None` for sRGB-class sources (the encoder's default).
-    let src_cicp = decoded.info().source_color.cicp;
+    #[allow(unused_mut)] // Mutated by the optional CMS conversion.
+    let mut src_cicp = decoded.info().source_color.cicp;
+    #[allow(unused_variables)] // Used only by the optional cms conversion.
+    let source_color = decoded.info().source_color.clone();
 
     // Step 2: Determine metadata to embed
-    let metadata = match opts.metadata.clone() {
+    #[allow(unused_mut)] // Mutated by the optional CMS conversion.
+    let mut metadata = match opts.metadata.clone() {
         Some(m) => m,
         None => {
             // Roundtrip metadata from source via probe
@@ -265,6 +288,75 @@ pub fn transcode(
                     // No metadata to roundtrip — proceed without it
                     zencodec::Metadata::none()
                 }
+            }
+        }
+    };
+
+    let buffer = decoded.into_buffer();
+    let buffer = match opts.color {
+        TranscodeColor::Preserve => buffer,
+        TranscodeColor::Srgb8 => {
+            #[cfg(not(feature = "cms"))]
+            return Err(at!(CodecError::UnsupportedOperation {
+                format: decision.format,
+                detail: "SDR sRGB conversion requires the cms feature",
+            }));
+            #[cfg(feature = "cms")]
+            {
+                if matches!(
+                    buffer.descriptor().transfer(),
+                    zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
+                ) || src_cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+                {
+                    return Err(at!(CodecError::ColorManagement(
+                        "HDR-to-SDR requires an explicit display and tone-map policy".into()
+                    )));
+                }
+                #[cfg(feature = "jpeg-ultrahdr")]
+                if gain_map.is_some() {
+                    return Err(at!(CodecError::ColorManagement(
+                        "sRGB conversion cannot preserve an unchanged gain map; select SupplementPolicy::Strip".into()
+                    )));
+                }
+                // The decoded descriptor is only a best-effort label (PNG8
+                // decoders label RGBA8 as sRGB by convention). Attach the
+                // authoritative source color — ICC or CICP per
+                // `color_authority` — so the CMS converts e.g. embedded Adobe
+                // RGB instead of assuming the pixels are already sRGB, and so
+                // malformed ICC bytes fail here instead of being silently
+                // dropped by the metadata clearing below.
+                let buffer = if buffer.color_context().is_none()
+                    && (source_color.cicp.is_some() || source_color.icc_profile.is_some())
+                {
+                    buffer
+                        .with_color_context(alloc::sync::Arc::new(source_color.to_color_context()))
+                } else {
+                    buffer
+                };
+                let origin = match (&source_color.icc_profile, source_color.cicp) {
+                    (Some(icc), Some(cicp)) => {
+                        zenpixels::ColorOrigin::from_icc_and_cicp(icc.clone(), cicp)
+                    }
+                    (Some(icc), None) => zenpixels::ColorOrigin::from_icc(icc.clone()),
+                    (None, Some(cicp)) => zenpixels::ColorOrigin::from_cicp(cicp),
+                    (None, None) => zenpixels::ColorOrigin::assumed(),
+                }
+                .with_color_authority(source_color.color_authority);
+                let ready = zenpixels_convert::finalize_for_output_with(
+                    &buffer,
+                    &origin,
+                    zenpixels_convert::output::OutputProfile::Named(zenpixels::Cicp::SRGB),
+                    zenpixels::PixelFormat::Rgba8,
+                    Some(&zenpixels_convert::cms_moxcms::MoxCms),
+                )
+                .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                metadata.icc_profile = None;
+                metadata.cicp = Some(zencodec::Cicp::SRGB);
+                metadata.content_light_level = None;
+                metadata.mastering_display = None;
+                metadata.diffuse_white = None;
+                src_cicp = metadata.cicp;
+                ready.into_parts().0
             }
         }
     };
@@ -289,8 +381,6 @@ pub fn transcode(
     if let Some(effort) = decision.quality.effort {
         request = request.with_effort(effort);
     }
-
-    let buffer = decoded.into_buffer();
 
     // Passthrough re-embed: carry the source gain map into the target container
     // unchanged. `DecodedGainMap.gain_map` / `.metadata` are already exactly the
@@ -507,6 +597,8 @@ fn recompress_jpeg_to_jxl(data: &[u8], quality: QualityTarget) -> Result<Transco
 
     // RelativeScorer = Fn(ref_rgb8, dist_rgb8, w, h) -> f32 over the packed RGB8
     // buffers zenjxl decodes internally. Higher zensim-A = better.
+    // Keep the established scorer; changing the profile changes quality targets.
+    #[allow(deprecated)]
     let metric = Zensim::new(ZensimProfile::A);
     let scorer = move |r: &[u8], d: &[u8], w: u32, h: u32| -> f32 {
         let (pw, ph) = (w as usize, h as usize);

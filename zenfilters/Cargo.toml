@@ -73,7 +73,7 @@ zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 # the SIMD path. Feature unification applies this to test/bench builds only.
 archmage = { version = "0.9.17", features = ["testable_dispatch"] }
 libblur = { version = "0.23", default-features = true }
-zenresize = { version = "0.2.1", default-features = false, features = ["std"] }
+zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
 image = "0.25"
 codec-corpus = "1.0.3"
 

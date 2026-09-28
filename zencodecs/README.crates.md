@@ -65,6 +65,34 @@ req.encode_rgba_f32(img)   // ImgRef<Rgba<f32>> — linear light
 req.encode_gray_f32(img)   // ImgRef<Gray<f32>> — linear light
 ```
 
+### Explicit SDR color conversion
+
+Embedding ICC/CICP metadata does not convert pixel values. A destination with
+restricted color support, such as GIF, rejects unresolved source color rather
+than discarding its meaning. The high-level transcode API preserves source
+color and precision by default. With the `cms` feature, callers can explicitly
+request SDR sRGB conversion:
+
+```rust,no_run
+use zencodecs::{AllowedFormats, FormatDecision, ImageFormat, TranscodeColor,
+    TranscodeOptions, transcode};
+let source: &[u8] = todo!();
+let options = TranscodeOptions {
+    color: TranscodeColor::Srgb8,
+    ..Default::default()
+};
+let output = transcode(source, &FormatDecision::for_format(ImageFormat::Gif),
+    &options, &AllowedFormats::all())?;
+# Ok::<(), whereat::At<zencodecs::CodecError>>(())
+```
+
+This converts through the current decoded ICC/CICP description into straight
+RGBA8 sRGB and replaces stale color metadata. Descriptive metadata follows the
+requested retention policy. PQ/HLG needs an explicit display/tone-map policy;
+a preserved gain map also cannot be reused unchanged after this conversion.
+Those requests return errors. This convenience path decodes the whole first
+frame; animated/video timelines live in the experimental `zencodec/media` API.
+
 ### Probing
 
 ```rust
