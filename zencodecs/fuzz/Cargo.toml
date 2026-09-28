@@ -54,7 +54,7 @@ zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "e4661dcb0ad9d4fb64e57400edeb467554b2f91b" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "60838e9bb8c17a3bb3d91694aad67271170e5b8f" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
@@ -67,8 +67,8 @@ zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
 # zencodec is patched above to the coordinated shared pixel/timing contract.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
 # ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
 # route heic's ReconstructHdr path calls); crates.io 0.5.0 predates it. Locked
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that

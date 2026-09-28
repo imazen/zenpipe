@@ -43,13 +43,13 @@ zencodec = { git = "https://github.com/imazen/zencodec", rev = "e4661dcb0ad9d4fb
 # One entry per git-form entry at the workspace root (see the rationale
 # comments there); keep the two tables in sync.
 # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "60838e9bb8c17a3bb3d91694aad67271170e5b8f" }
 # heic main is 0.2.0 (zencodec decode adapter); crates.io tops out at 0.1.6.
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 # zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f28f6b891b1dbf95d31feb5805078a582707c561" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.

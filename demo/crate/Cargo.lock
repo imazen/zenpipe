@@ -1612,7 +1612,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=afc2ccbb0857bc9736f07d1583e062a8a1fd09e3#afc2ccbb0857bc9736f07d1583e062a8a1fd09e3"
+source = "git+https://github.com/imazen/zenjpeg?rev=60838e9bb8c17a3bb3d91694aad67271170e5b8f#60838e9bb8c17a3bb3d91694aad67271170e5b8f"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -1633,7 +1633,7 @@ dependencies = [
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
- "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=afc2ccbb0857bc9736f07d1583e062a8a1fd09e3)",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=60838e9bb8c17a3bb3d91694aad67271170e5b8f)",
 ]
 
 [[package]]
@@ -1761,7 +1761,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6#29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6"
+source = "git+https://github.com/imazen/zenpixels?rev=f28f6b891b1dbf95d31feb5805078a582707c561#f28f6b891b1dbf95d31feb5805078a582707c561"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1772,7 +1772,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6#29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6"
+source = "git+https://github.com/imazen/zenpixels?rev=f28f6b891b1dbf95d31feb5805078a582707c561#f28f6b891b1dbf95d31feb5805078a582707c561"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1948,7 +1948,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=afc2ccbb0857bc9736f07d1583e062a8a1fd09e3#afc2ccbb0857bc9736f07d1583e062a8a1fd09e3"
+source = "git+https://github.com/imazen/zenjpeg?rev=60838e9bb8c17a3bb3d91694aad67271170e5b8f#60838e9bb8c17a3bb3d91694aad67271170e5b8f"
 dependencies = [
  "archmage",
  "imgref",
