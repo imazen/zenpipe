@@ -273,6 +273,7 @@ pub fn transcode(
     // mislabeled sRGB. `None` for sRGB-class sources (the encoder's default).
     #[allow(unused_mut)] // Mutated by the optional CMS conversion.
     let mut src_cicp = decoded.info().source_color.cicp;
+    #[allow(unused_variables)] // Used only by the optional cms conversion.
     let source_color = decoded.info().source_color.clone();
 
     // Step 2: Determine metadata to embed
