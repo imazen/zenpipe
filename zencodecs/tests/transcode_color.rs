@@ -92,7 +92,7 @@ fn sdr_conversion_rejects_hdr_and_invalid_icc() {
     let target = FormatDecision::for_format(ImageFormat::Png);
     for transfer in [TransferFunction::Pq, TransferFunction::Hlg] {
         let pixels = PixelBuffer::from_vec(
-            vec![1000u16; 3 * 4 * 4],
+            1000_u16.to_ne_bytes().repeat(3 * 4 * 4),
             4,
             4,
             PixelDescriptor::RGB16_SRGB
