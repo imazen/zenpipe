@@ -79,6 +79,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     codec_config: Option<&crate::config::CodecConfig>,
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
+    source_metadata: &zencodec::Metadata,
     limits: Option<&crate::Limits>,
     stop: Option<&zencodec::StopToken>,
 ) -> crate::error::Result<crate::EncodeOutput> {
@@ -144,7 +145,10 @@ pub(crate) fn encode_with_precomputed_gainmap(
 
     // Step 4: Encode the base image through the normal trait path
     use zencodec::encode::{EncodeJob as _, Encoder as _};
-    let mut job = enc.job();
+    let mut job = enc.job().with_metadata_policy(
+        source_metadata.clone(),
+        zencodec::MetadataPolicy::PreserveExact,
+    );
     if let Some(lim) = limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
