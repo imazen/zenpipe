@@ -580,3 +580,11 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 [imageflow-dotnet]: https://github.com/imazen/imageflow-dotnet
 [imageflow-node]: https://github.com/imazen/imageflow-node
 [imageflow-go]: https://github.com/imazen/imageflow-go
+
+### Breaking channel-access migration
+
+Use `zenfilters::PlaneMask` for custom `ChannelAccess` declarations.
+It selects the four filter working planes and replaces the dependency on the
+deprecated `zenpixels::PlaneMask`. The generic eight-plane constructors and raw
+bit accessors are retired; use `LUMA`, `CHROMA`, `ALPHA`, `ALL`, `NONE`,
+`union`, and `intersection` for filter access.
