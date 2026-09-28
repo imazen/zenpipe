@@ -1,10 +1,10 @@
 use crate::access::ChannelAccess;
+use crate::access::PlaneMask;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
 use crate::simd;
-use zenpixels::PlaneMask;
 
 /// Alpha channel scaling.
 ///

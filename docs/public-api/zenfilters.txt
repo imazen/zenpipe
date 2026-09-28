@@ -6,24 +6,24 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenfilters.txt 966 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 66 lines (74 hidden + 0 excluded-feature)
+# files: zenfilters.txt 976 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 68 lines (76 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                13
-#   pub types (struct/enum/trait/alias)       120
-#   pub consts/statics                         24
+#   pub types (struct/enum/trait/alias)       121
+#   pub consts/statics                         32
 #   free functions                             30
 #   inherent methods                          160
 #   struct fields                             360
 #   enum variants                             141
-#   trait roster entries (type × trait)       471
+#   trait roster entries (type × trait)       477
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                 112
+#   auto-trait-complete types                 113
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                          149
+#   (root)                          158
 #   analysis                         37
 #   filter_compat                    45
 #   filters                         435
@@ -35,7 +35,7 @@
 #   resize_pipeline                   2
 #   slider                           14
 
-## items (847 lines)
+## items (856 lines)
 
 pub mod zenfilters
 pub mod analysis
@@ -769,13 +769,13 @@ pub WorkingSpace::LinearRgb
 pub WorkingSpace::Oklab
 pub WorkingSpace::Srgb
 #[non_exhaustive] pub struct ChannelAccess
-pub ChannelAccess::reads: zenpixels::planar::PlaneMask
-pub ChannelAccess::writes: zenpixels::planar::PlaneMask
+pub ChannelAccess::reads: PlaneMask
+pub ChannelAccess::writes: PlaneMask
 pub const ChannelAccess::ALL: Self
 pub const ChannelAccess::CHROMA_ONLY: Self
 pub const ChannelAccess::L_AND_CHROMA: Self
 pub const ChannelAccess::L_ONLY: Self
-pub const fn ChannelAccess::new(zenpixels::planar::PlaneMask, zenpixels::planar::PlaneMask) -> Self
+pub const fn ChannelAccess::new(PlaneMask, PlaneMask) -> Self
 pub struct FilterContext
 pub fn FilterContext::analyze(&mut self, &OklabPlanes) -> &analysis::ImageAnalysis
 pub fn FilterContext::clear(&mut self)
@@ -867,6 +867,15 @@ pub PipelineConfig::primaries: zenpixels::descriptor::ColorPrimaries
 pub PipelineConfig::reference_white: f32
 pub PipelineConfig::reference_width: core::option::Option<u32>
 pub PipelineConfig::working_space: WorkingSpace
+pub struct PlaneMask(_)
+pub const PlaneMask::ALL: Self
+pub const PlaneMask::ALPHA: Self
+pub const PlaneMask::CHROMA: Self
+pub const PlaneMask::LUMA: Self
+pub const PlaneMask::NONE: Self
+pub const fn PlaneMask::intersection(self, Self) -> Self
+pub const fn PlaneMask::is_empty(self) -> bool
+pub const fn PlaneMask::union(self, Self) -> Self
 pub trait Filter: core::marker::Send + core::marker::Sync
 pub fn Filter::apply(&self, &mut OklabPlanes, &mut FilterContext)
 pub fn Filter::channel_access(&self) -> ChannelAccess
@@ -885,7 +894,7 @@ pub fn gather_oklab_to_srgb_u8(&OklabPlanes, &mut [u8], u32, &zenpixels_convert:
 pub fn scatter_srgb_u8_to_oklab(&[u8], &mut OklabPlanes, u32, &zenpixels_convert::gamut::GamutMatrix)
 pub fn scatter_to_oklab(&[f32], &mut OklabPlanes, u32, &zenpixels_convert::gamut::GamutMatrix, f32)
 
-## trait impls (114 types)
+## trait impls (115 types)
 
 ChannelAccess: Clone, Copy, Debug, Eq, PartialEq
 ConvenienceError: Debug, Display, Error, From<zenpixels_convert::error::ConvertError>
@@ -897,6 +906,7 @@ OklabPlanes: Clone, Debug
 Pipeline: PipelineBufferExt
 PipelineConfig: Clone, Debug, Default
 PipelineError: Debug, Display, Error
+PlaneMask: Clone, Copy, Debug, Eq, Hash, PartialEq
 PlaneSemantics: Clone, Copy, Debug, Eq, PartialEq
 ResizePhase: Clone, Copy, Debug, Eq, PartialEq
 WorkingSpace: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1005,7 +1015,7 @@ impl<F> metric_gate::QualityMetric for F where F: core::ops::function::Fn(&Oklab
 
 ## auto traits
 
-112 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+113 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Pipeline: !RefUnwindSafe !UnwindSafe
 masked::MaskedFilter: !RefUnwindSafe !UnwindSafe
 metric_gate::MetricGated<M>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

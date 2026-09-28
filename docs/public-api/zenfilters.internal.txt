@@ -12,13 +12,13 @@
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)         2
 #   free functions                             22
-#   inherent methods                           16
+#   inherent methods                           17
 #   struct fields                               3
-#   trait roster entries (type × trait)        21
+#   trait roster entries (type × trait)        22
 #   auto-trait-complete types                   1
 #
 # per-module pub lines:
-#   (root)                            6
+#   (root)                            7
 #   __bench_kernels                  16
 #   blur_internals                   14
 #   filter_compat                     1
@@ -26,9 +26,10 @@
 #   param_schema                      1
 #   presets                           1
 
-## items (45 lines)
+## items (46 lines)
 
 pub fn ChannelAccess::assert_fields_are_eq(&self)
+pub fn PlaneMask::assert_fields_are_eq(&self)
 pub fn PlaneSemantics::assert_fields_are_eq(&self)
 pub fn ResizePhase::assert_fields_are_eq(&self)
 pub fn WorkingSpace::assert_fields_are_eq(&self)
@@ -74,10 +75,11 @@ pub blur_internals::DericheCoefficients::b: f32
 pub blur_internals::DericheCoefficients::d: [f32; 3]
 pub blur_internals::GaussianKernel::radius: usize
 
-## trait impls (20 types)
+## trait impls (21 types)
 
 ChannelAccess: TrivialClone
 GamutMapping: TrivialClone
+PlaneMask: TrivialClone
 PlaneSemantics: TrivialClone
 ResizePhase: TrivialClone
 WorkingSpace: TrivialClone

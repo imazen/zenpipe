@@ -1,4 +1,43 @@
-use zenpixels::PlaneMask;
+/// Selection of the filter pipeline's own four working planes.
+///
+/// Plane zero is Oklab lightness (red in an RGB working space), planes one
+/// and two are Oklab chroma (green/blue in RGB), and plane three is alpha.
+/// This mask carries no YUV layout, subsampling, or video sample semantics.
+///
+/// ```
+/// use zenfilters::{ChannelAccess, PlaneMask};
+/// let access = ChannelAccess::new(PlaneMask::ALL,
+///     PlaneMask::LUMA.union(PlaneMask::ALPHA));
+/// assert!(access.writes.intersection(PlaneMask::CHROMA).is_empty());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PlaneMask(u8);
+
+impl PlaneMask {
+    /// All four working planes, including alpha.
+    pub const ALL: Self = Self(0b1111);
+    /// No working planes.
+    pub const NONE: Self = Self(0);
+    /// First color plane: Oklab lightness or RGB red.
+    pub const LUMA: Self = Self(0b0001);
+    /// Second and third color planes: Oklab chroma or RGB green/blue.
+    pub const CHROMA: Self = Self(0b0110);
+    /// Alpha coverage plane.
+    pub const ALPHA: Self = Self(0b1000);
+
+    /// Select planes present in either mask.
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// Select planes present in both masks.
+    pub const fn intersection(self, other: Self) -> Self {
+        Self(self.0 & other.0)
+    }
+    /// Whether the selection is empty.
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
 
 /// Declares which Oklab planes a filter reads and writes.
 ///
