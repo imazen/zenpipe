@@ -48,8 +48,8 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "afc2ccbb0857bc9736
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 # zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
@@ -58,7 +58,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main is 0.4.0 (the breaking API batch zenjxl 0.3.0 needs);
 # crates.io tops out at 0.3.10.
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "3aea2ed4e5bd5841852e1ce461b0930df17d5fb0" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 # zenwebp main is 0.5.0 (Pattern B error boundary, zencodec always-on);
 # the last unyanked crates.io release is 0.4.4.
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb" }

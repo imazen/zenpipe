@@ -1657,7 +1657,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=3aea2ed4e5bd5841852e1ce461b0930df17d5fb0#3aea2ed4e5bd5841852e1ce461b0930df17d5fb0"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -1678,7 +1678,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=3aea2ed4e5bd5841852e1ce461b0930df17d5fb0#3aea2ed4e5bd5841852e1ce461b0930df17d5fb0"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1688,7 +1688,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=3aea2ed4e5bd5841852e1ce461b0930df17d5fb0#3aea2ed4e5bd5841852e1ce461b0930df17d5fb0"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
 dependencies = [
  "archmage",
  "paste",
@@ -1761,7 +1761,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=3ece79f38aa306311c94324ae8c0c2310a2b2f82#3ece79f38aa306311c94324ae8c0c2310a2b2f82"
+source = "git+https://github.com/imazen/zenpixels?rev=29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6#29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1772,7 +1772,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=3ece79f38aa306311c94324ae8c0c2310a2b2f82#3ece79f38aa306311c94324ae8c0c2310a2b2f82"
+source = "git+https://github.com/imazen/zenpixels?rev=29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6#29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6"
 dependencies = [
  "archmage",
  "bytemuck",

@@ -31,7 +31,7 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "afc2ccbb0857bc9736
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa7cbc73d67e6d489d4860" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "3aea2ed4e5bd5841852e1ce461b0930df17d5fb0" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb" }
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "27393eef995aea329cfbc1df5cac5e3f7346b4cb" }
 zennode = { git = "https://github.com/imazen/zennode" }
@@ -58,8 +58,8 @@ heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121d
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 

@@ -67,8 +67,8 @@ zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
 # zencodec is patched above to the coordinated shared pixel/timing contract.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "29d63e3265ba5545bc6e6bbbd6a3846c3516e6d6" }
 # ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
 # route heic's ReconstructHdr path calls); crates.io 0.5.0 predates it. Locked
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
@@ -82,7 +82,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
 # uses; 0.3.10 on crates.io predates it (same version number, older content).
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "3aea2ed4e5bd5841852e1ce461b0930df17d5fb0" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 # zenwebp main is 0.5.0 (unreleased pre-bump; last unyanked crates.io release
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
