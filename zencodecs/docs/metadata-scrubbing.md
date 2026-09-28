@@ -160,3 +160,85 @@ replacement for a general RDF editor. The runtime boundary lets an application
 supply a different editor without changing or recompiling the codec dependency
 chain. Core audit/diff does not require this editor and remains available even
 when an edit is refused.
+
+## Validation recorded for this PR
+
+- 207 zencodecs library tests and 16 metadata-conformance tests passed with
+  `metadata,std,cms,jpeg-ultrahdr,jxl-encode,jxl-decode,png,webp,gif`.
+- 25 dedicated scrub tests passed with those features; 14 also pass with only
+  `metadata` enabled. Native JPEG HDR reconstruction is byte-identical in its
+  floating-point output; native JXL gain-map samples/parameters and base pixels
+  survive; PNG PQ/HLG U16 and every APNG frame/timing survive.
+- 10 standalone runtime-service tests passed, including XMP arrays/language
+  qualifiers/nested structures/escaping, duplicate/DTD/rebinding refusal,
+  gain-map packet merging/re-editing, known-ICC recognition, and zlib/Brotli
+  truncation and expansion bounds.
+- Clippy with `-D warnings` passed for the codec library and scrub tests with
+  the integration features above, and for the standalone adapter's own targets.
+  The minimal codec feature combinations still emit existing unused/dead-code
+  warnings in dispatch paths; the adapter's dependency build shows those warnings.
+- Both standalone fuzz workspaces pass `cargo check --all-targets --locked`.
+- Public API snapshots regenerated and checked successfully. Rust formatting, whitespace,
+  and decoder pin agreement checks passed.
+- AddressSanitizer/libFuzzer smoke run: **8,039,872 executions in 61 seconds**, no
+  crash. Includes container framing seeds and bounded mutation/accounting checks.
+  This is a smoke run, not evidence of exhaustive security coverage.
+
+Reproduction:
+
+```sh
+cargo test -p zencodecs --no-default-features \
+  --features metadata,std,cms,jpeg-ultrahdr,jxl-encode,jxl-decode,png,webp,gif \
+  --lib --test metadata_conformance --test metadata_scrub
+cargo test -p zencodecs --no-default-features --features metadata --test metadata_scrub
+cargo test --manifest-path tools/metadata-services/Cargo.toml
+cargo test --manifest-path apidoc/Cargo.toml
+(cd zencodecs && cargo +nightly fuzz run fuzz_metadata_scrub \
+  --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=65536)
+```
+
+Supporting integration checks: zencodec workspace tests and API snapshots;
+1,166 zenjpeg library tests (three ignored) with UltraHDR and its API snapshots;
+zenpixels-convert known-profile tests and API snapshots. No crates were published
+and no PR was merged as part of this implementation.
+
+## Compile measurements (2026-09-28)
+
+Three fresh-target, serial `cargo build --lib --offline -j4` runs per case,
+with incremental compilation and compiler wrappers disabled. Fetch is untimed.
+These are debug-build measurements on AMD Ryzen 9 9950X3D 16-Core Processor; rustc 1.98.1 (48a229cea 2026-09-01).
+
+| Feature set | Before median | Enabled median | Normal packages (incl. root) | Longest normal path (edges) |
+|---|---:|---:|---:|---:|
+| minimal | 3.961s | 4.006s | 29 → 29 | 9 → 9 |
+| jpeg-hdr | 8.224s | 8.212s | 46 → 46 | 11 → 11 |
+| jxl | 9.986s | 9.985s | 47 → 47 | 11 → 11 |
+| png | 5.251s | 5.135s | 33 → 33 | 10 → 10 |
+
+With metadata disabled, the new minimal build is 4.017s.
+The standalone runtime-services application is 8.264s
+(59 normal packages, longest path 12 edges including the application root).
+That is an absolute application build time, not the incremental cost of its editor.
+Library warm builds are 0.10–0.14s in these runs. The small positive/negative
+differences do not establish a speedup or significant regression.
+
+The baseline is the integrated metadata parent #84 (`4537a9e7ba1f`), after
+combining earlier #128/#210 metadata work with the coordinated media graph.
+This comparison isolates the new scrubber and known-profile helper; it does not
+credit or hide earlier dependency changes. The earlier JPEG metadata integration
+already enabled the shared namespace-aware XMP reader. The new `metadata` feature
+adds no dependencies or depth. The pixel pin advances from #78 to the known-profile
+helper in #79; all other tested pins are identical.
+
+Measured implementation: `ecb1fd52e2b238df09479e3b43280d7a57e25d52` (retained in this PR history).
+Subsequent commits update documentation, API snapshots and standalone locks.
+Raw runs, toolchain and host details: [metadata-compile-20260928.json](metadata-compile-20260928.json).
+
+```sh
+python3 scripts/measure-metadata-scrub.py \
+  --before 4537a9e7ba1f --after ecb1fd52e2b238df09479e3b43280d7a57e25d52 \
+  --work /tmp/metadata-build-comparison \
+  --only minimal-before minimal-after-off minimal-after-on \
+         jpeg-hdr-before jpeg-hdr-after-on jxl-before jxl-after-on \
+         png-before png-after-on runtime-services
+```
