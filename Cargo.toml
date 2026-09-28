@@ -291,12 +291,14 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # applies from the top-level workspace — git consumers of zenpipe that enable
 # features needing these crates must mirror the relevant entries.
 [patch.crates-io]
+# Cross-repo display metadata stack; use one zencodec source throughout the graph.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "06b5954cbd9d15282509011aab8f8efa0d8973dd" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "835bdb9ace15000065626b864b30dbdd3dc10db1" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
-heic = { git = "https://github.com/imazen/heic" }
+heic = { git = "https://github.com/imazen/heic", rev = "bdee7181eff59d2a42ee76e81b0e7123347dcedb" }
 # zentiff main is 0.1.2 on zencodec 0.1.26 (the zencodec decode/encode adapter +
 # heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
 # (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
@@ -305,16 +307,13 @@ zentiff = { git = "https://github.com/imazen/zenextras" }
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-# `zencodec` itself is NOT patched: the registry 0.1.26 carries the two-level
+# The zencodec metadata stack is temporarily pinned above; registry 0.1.26 carries the two-level
 # CodecError/CategorizedError taxonomy every codec pin below is built against.
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
-# ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
-# route heic's ReconstructHdr path calls); crates.io 0.5.0 predates it. Locked
-# at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
-# resolves to 0.6.x would no longer satisfy heic's `^0.5.0`, stranding it on the
-# boost-less registry 0.5.0. zenjpeg 0.9.0 + zencodecs use registry 0.6.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+# Hardened Apple MakerNote extraction from the display-metadata stack; exact
+# revision shared with HEIC. zenjpeg and zencodecs use the 0.6 API.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "d77976b4eb0a8c12909722a12183ca3e586b15a5" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl" }

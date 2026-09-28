@@ -55,6 +55,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     quality: Option<f32>,
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
+    source_metadata: &zencodec::Metadata,
     stop: Option<&zencodec::StopToken>,
 ) -> crate::error::Result<crate::encode::EncodeOutput> {
     use imgref::{Img, ImgExt as _};
@@ -118,7 +119,10 @@ pub(crate) fn encode_with_precomputed_gainmap(
 
     // 6. Encode the base image through the normal trait-based path
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-    let job = enc.job();
+    let job = enc.job().with_metadata_policy(
+        source_metadata.clone(),
+        zencodec::MetadataPolicy::PreserveExact,
+    );
     let encoder = job
         .encoder()
         .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Jxl, e)))?;

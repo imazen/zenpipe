@@ -854,6 +854,17 @@ impl<'a> EncodeRequest<'a> {
         let speed_limits = self.speed_limits();
         let limits = speed_limits.as_ref().or(self.limits);
 
+        #[cfg(feature = "jpeg-ultrahdr")]
+        let gain_map_source_metadata = if self.gain_map_source.is_some() {
+            let mut source = self.metadata.clone().unwrap_or_else(Metadata::none);
+            if let Some(cicp) = self.cicp {
+                source.cicp = Some(cicp);
+            }
+            crate::dispatch::fold_orientation_into_exif(source, format)
+        } else {
+            Metadata::none()
+        };
+
         let params = EncodeParams {
             quality: Some(resolved_quality),
             effort,
@@ -894,6 +905,30 @@ impl<'a> EncodeRequest<'a> {
         if let Some(crate::gainmap::GainMapSource::Precomputed { gain_map, metadata }) =
             &self.gain_map_source
         {
+            // Coarse privacy gates still apply on the specialized path. The
+            // retention guard rejects a gate that would alter rendering.
+            let mut fields = self.metadata_policy.fields();
+            if let Some(policy) = self.encode_policy {
+                if !policy.resolve_icc(true) {
+                    fields.icc = zencodec::IccRetention::Drop;
+                }
+                if !policy.resolve_exif(true) {
+                    fields.exif = zencodec::exif::ExifPolicy::DISCARD_ALL;
+                }
+                if !policy.resolve_xmp(true) {
+                    fields.xmp = zencodec::Retention::Discard;
+                }
+            }
+            let retained = zencodec::display_metadata::filter_for_gain_map(
+                &gain_map_source_metadata,
+                metadata,
+                &MetadataPolicy::Custom(fields),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "gain-map metadata retention: {e}"
+                )))
+            })?;
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
@@ -912,6 +947,7 @@ impl<'a> EncodeRequest<'a> {
                     self.codec_config,
                     gain_map,
                     metadata,
+                    &retained,
                     self.stop,
                 );
             }
@@ -925,6 +961,7 @@ impl<'a> EncodeRequest<'a> {
                     Some(resolved_quality),
                     gain_map,
                     metadata,
+                    &retained,
                     self.stop.as_ref(),
                 );
             }
@@ -940,6 +977,7 @@ impl<'a> EncodeRequest<'a> {
                     self.codec_config,
                     gain_map,
                     metadata,
+                    &retained,
                     limits,
                     self.stop.as_ref(),
                 );
