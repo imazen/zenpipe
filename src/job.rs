@@ -379,6 +379,8 @@ pub struct ImageJob<'a> {
     metadata_policy: MetadataPolicy,
     /// Resource limits.
     limits: Option<Limits>,
+    /// One deadline shared by every stage of the current run.
+    job_stop: Option<zencodec::StopToken>,
     /// Codec registry (which formats are enabled).
     registry: zencodecs::AllowedFormats,
     /// Codec config overrides.
@@ -406,6 +408,7 @@ impl<'a> ImageJob<'a> {
             gain_map_mode: GainMapMode::default(),
             metadata_policy: MetadataPolicy::default(),
             limits: None,
+            job_stop: None,
             registry: zencodecs::AllowedFormats::all(),
             codec_config: None,
             trace_config: None,
@@ -638,7 +641,12 @@ impl<'a> ImageJob<'a> {
     /// Execute the job: probe → decode → CMS → pipeline → encode.
     ///
     /// Returns a [`JobResult`] with encoded outputs and decode metadata.
-    pub fn run(self) -> crate::PipeResult<JobResult> {
+    pub fn run(mut self) -> crate::PipeResult<JobResult> {
+        self.job_stop = self
+            .limits
+            .as_ref()
+            .and_then(Limits::to_deadline)
+            .map(zencodec::StopToken::new);
         // 1. Get primary input bytes.
         let input_bytes = match self.io.get(&self.decode_io_id) {
             Some(IoSlot::Input(data)) => data,
@@ -722,7 +730,7 @@ impl<'a> ImageJob<'a> {
         if image_info.is_animation() && !wants_single_frame {
             let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
             let deadline = self.deadline();
-            let stop: Option<zencodec::StopToken> = deadline.map(zencodec::StopToken::new);
+            let stop = deadline;
             let (hint_q, hint_e) = decision_hint_overrides(&decision);
             if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
                 input_bytes,
@@ -899,12 +907,10 @@ impl<'a> ImageJob<'a> {
         })
     }
 
-    /// Wall-clock deadline from `limits.max_duration`, if configured.
-    ///
-    /// Created at use — the dominant cost (pipeline execute + encode) starts
-    /// right after, so the budget effectively covers the streaming phase.
-    fn deadline(&self) -> Option<crate::limits::Deadline> {
-        self.limits.as_ref().and_then(|l| l.to_deadline())
+    /// Clone the deadline established at run entry. Codec fallback and later
+    /// pipeline stages must not restart the job's duration budget.
+    fn deadline(&self) -> Option<zencodec::StopToken> {
+        self.job_stop.clone()
     }
 }
 
@@ -1202,7 +1208,7 @@ impl<'a> ImageJob<'a> {
         // a single decode call (e.g. a multi-second AV1/JXL frame) runs
         // uncancellable between `source.next()` polls without it.
         if let Some(deadline) = self.deadline() {
-            request = request.with_stop(zencodec::StopToken::new(deadline));
+            request = request.with_stop(deadline);
         }
 
         match request.build_streaming_decoder() {
@@ -1218,7 +1224,7 @@ impl<'a> ImageJob<'a> {
                     fallback = fallback.with_limits(cl);
                 }
                 if let Some(deadline) = self.deadline() {
-                    fallback = fallback.with_stop(zencodec::StopToken::new(deadline));
+                    fallback = fallback.with_stop(deadline);
                 }
                 let decoded = at_crate!(fallback.decode_full_frame())
                     .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
@@ -1256,7 +1262,7 @@ impl<'a> ImageJob<'a> {
             request = request.with_limits(cl);
         }
         if let Some(deadline) = self.deadline() {
-            request = request.with_stop(zencodec::StopToken::new(deadline));
+            request = request.with_stop(deadline);
         }
         let decoded =
             at_crate!(request.decode_full_frame()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
@@ -1292,7 +1298,7 @@ impl<'a> ImageJob<'a> {
             request = request.with_limits(cl);
         }
         if let Some(deadline) = self.deadline() {
-            request = request.with_stop(zencodec::StopToken::new(deadline));
+            request = request.with_stop(deadline);
         }
 
         let (decoded, gain_map) =
@@ -1539,7 +1545,7 @@ impl<'a> ImageJob<'a> {
             encode_request = encode_request.with_limits(cl);
         }
         if let Some(deadline) = self.deadline() {
-            encode_request = encode_request.with_stop(zencodec::StopToken::new(deadline));
+            encode_request = encode_request.with_stop(deadline);
         }
 
         // Prepare gain map data for re-embedding (if sidecar was preserved).
@@ -1659,7 +1665,7 @@ impl<'a> ImageJob<'a> {
                     oneshot_request = oneshot_request.with_limits(cl);
                 }
                 if let Some(deadline) = self.deadline() {
-                    oneshot_request = oneshot_request.with_stop(zencodec::StopToken::new(deadline));
+                    oneshot_request = oneshot_request.with_stop(deadline);
                 }
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
@@ -1874,6 +1880,21 @@ mod tests {
     }
 
     // ── Error paths ──
+
+    #[test]
+    fn deadline_is_shared_instead_of_restarted_for_each_stage() {
+        use enough::Stop;
+        let mut job = ImageJob::new()
+            .with_limits(Limits::NONE.with_max_duration(core::time::Duration::from_secs(3600)));
+        // Model a job whose original deadline has already expired. Asking for
+        // the token at another stage must not grant a fresh hour.
+        job.job_stop = Some(zencodec::StopToken::new(crate::limits::Deadline::new(
+            core::time::Duration::ZERO,
+        )));
+        for _ in 0..3 {
+            assert!(job.deadline().unwrap().check().is_err());
+        }
+    }
 
     #[test]
     fn run_with_no_input_returns_error() {
