@@ -273,6 +273,7 @@ pub fn transcode(
     // mislabeled sRGB. `None` for sRGB-class sources (the encoder's default).
     #[allow(unused_mut)] // Mutated by the optional CMS conversion.
     let mut src_cicp = decoded.info().source_color.cicp;
+    let source_color = decoded.info().source_color.clone();
 
     // Step 2: Determine metadata to embed
     #[allow(unused_mut)] // Mutated by the optional CMS conversion.
@@ -316,9 +317,33 @@ pub fn transcode(
                         "sRGB conversion cannot preserve an unchanged gain map; select SupplementPolicy::Strip".into()
                     )));
                 }
+                // The decoded descriptor is only a best-effort label (PNG8
+                // decoders label RGBA8 as sRGB by convention). Attach the
+                // authoritative source color — ICC or CICP per
+                // `color_authority` — so the CMS converts e.g. embedded Adobe
+                // RGB instead of assuming the pixels are already sRGB, and so
+                // malformed ICC bytes fail here instead of being silently
+                // dropped by the metadata clearing below.
+                let buffer = if buffer.color_context().is_none()
+                    && (source_color.cicp.is_some() || source_color.icc_profile.is_some())
+                {
+                    buffer
+                        .with_color_context(alloc::sync::Arc::new(source_color.to_color_context()))
+                } else {
+                    buffer
+                };
+                let origin = match (&source_color.icc_profile, source_color.cicp) {
+                    (Some(icc), Some(cicp)) => {
+                        zenpixels::ColorOrigin::from_icc_and_cicp(icc.clone(), cicp)
+                    }
+                    (Some(icc), None) => zenpixels::ColorOrigin::from_icc(icc.clone()),
+                    (None, Some(cicp)) => zenpixels::ColorOrigin::from_cicp(cicp),
+                    (None, None) => zenpixels::ColorOrigin::assumed(),
+                }
+                .with_color_authority(source_color.color_authority);
                 let ready = zenpixels_convert::finalize_for_output_with(
                     &buffer,
-                    &zenpixels::ColorOrigin::assumed(),
+                    &origin,
                     zenpixels_convert::output::OutputProfile::Named(zenpixels::Cicp::SRGB),
                     zenpixels::PixelFormat::Rgba8,
                     Some(&zenpixels_convert::cms_moxcms::MoxCms),

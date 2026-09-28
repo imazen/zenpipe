@@ -94,11 +94,11 @@ fn gif_no_icc_returned_after_round_trip() {
 }
 
 #[test]
-fn gif_metadata_with_icc_input_silently_drops() {
-    // GIF doesn't have an ICC chunk. Passing a Metadata::with_icc to
-    // the encoder should not error — it should silently drop the ICC.
-    // (Failing here would mean the encoder rejected metadata it can't
-    // store, which would be over-strict.)
+fn gif_metadata_with_icc_input_is_rejected() {
+    // GIF carries no color metadata, and silently dropping an ICC profile
+    // would mislabel the palette output as sRGB. The encoder rejects
+    // conflicting color metadata — callers resolve it first (transcode with
+    // TranscodeColor::Srgb8) or drop it explicitly via Metadata::none().
     let img = rgba8_image(16, 16);
     let icc = vec![0u8; 256];
     let meta = Metadata::none().with_icc(icc);
@@ -109,9 +109,17 @@ fn gif_metadata_with_icc_input_silently_drops() {
         .with_metadata(meta)
         .encode(typed.erase(), true);
     assert!(
-        result.is_ok(),
-        "GIF encoder must accept (and silently drop) unsupported metadata"
+        result.is_err(),
+        "GIF encoder must reject ICC metadata it cannot represent"
     );
+
+    // The same pixels with the color metadata explicitly dropped must encode.
+    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
+    EncodeRequest::new(ImageFormat::Gif)
+        .with_quality(75.0)
+        .with_metadata(Metadata::none())
+        .encode(typed.erase(), true)
+        .expect("GIF encode without color metadata");
 }
 
 // ─── Negative gain map ───────────────────────────────────────────────────
