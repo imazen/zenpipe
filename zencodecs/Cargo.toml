@@ -134,6 +134,8 @@ fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 rayon = "1"
 
 [features]
+# Encoded metadata inspection/rewrite; no new dependency. Pixel codecs remain optional.
+metadata = []
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
 std = []
 
@@ -158,7 +160,7 @@ transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core"]
+jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
@@ -180,7 +182,7 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 # LosslessConfig::encode_jpeg_transcode (jxl-encoder `jpeg-reencoding`, pulled by
 # zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
-heic-decode = ["dep:heic"]  # pure-Rust HEIC/HEIF decode via the `heic` crate (zenpipe#43)
+heic-decode = ["dep:heic", "zenpixels-convert/hdr-experimental"]  # pure-Rust HEIC/HEIF decode via the `heic` crate (zenpipe#43)
 tiff = ["dep:zentiff"]  # zentiff decode/encode adapter (git-patched main; zenpipe#43)
 svg = ["dep:zensvg"]  # SVG/SVGZ rasterization via zensvg (resvg); zenpipe#1
 jp2-decode = ["dep:zenjp2"]

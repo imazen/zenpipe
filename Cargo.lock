@@ -5053,8 +5053,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f28f6b891b1dbf95d31feb5805078a582707c561#f28f6b891b1dbf95d31feb5805078a582707c561"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -5064,8 +5064,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f28f6b891b1dbf95d31feb5805078a582707c561#f28f6b891b1dbf95d31feb5805078a582707c561"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
 dependencies = [
  "archmage",
  "bytemuck",

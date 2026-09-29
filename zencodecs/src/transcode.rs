@@ -282,13 +282,7 @@ pub fn transcode(
         Some(m) => m,
         None => {
             // Roundtrip metadata from source via probe
-            match crate::info::from_bytes_with_registry(data, registry) {
-                Ok(info) => info.metadata(),
-                Err(_) => {
-                    // No metadata to roundtrip — proceed without it
-                    zencodec::Metadata::none()
-                }
-            }
+            crate::info::from_bytes_with_registry(data, registry)?.metadata()
         }
     };
 
