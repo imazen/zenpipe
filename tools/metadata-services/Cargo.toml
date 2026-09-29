@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 zencodecs = { path = "../../zencodecs", default-features = false, features = ["std", "jpeg", "metadata"] }
 zencodec = { version = ">=0.1.26, <0.3.0", features = ["xmp"] }
-zenpixels-convert = { version = ">=0.2.10, <0.4.0", default-features = false }
+zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 xmpkit = { version = "=0.1.6", default-features = false, features = ["core"] }
 roxmltree = { version = "0.21", default-features = false, features = ["positions"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
@@ -26,8 +26,8 @@ zencodec = { git = "https://github.com/imazen/zencodec", rev = "27cfae5d4de24bfb
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "ab83a51284ac231661120bc9fc014991be0f4db7" }
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa7cbc73d67e6d489d4860" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }

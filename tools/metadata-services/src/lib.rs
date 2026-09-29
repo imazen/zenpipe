@@ -207,9 +207,14 @@ impl Services for PublishingServices {
         if icc.len() > limit {
             return Err(Error::Limit("ICC bytes"));
         }
-        Ok(zenpixels_convert::icc_profiles::normalize_known_icc(icc)
-            .filter(|&canonical| canonical != icc)
-            .map(<[u8]>::to_vec))
+        // The application owns conversion policy; no CMS dependency enters zencodecs.
+        // This bounded profile copy is explicit and never touches image pixels.
+        let target = zenpixels_convert::OutputProfile::Icc(icc.into()).normalize_known_icc();
+        stop.check().map_err(|_| Error::Cancelled)?;
+        let zenpixels_convert::OutputProfile::Icc(normalized) = target else {
+            unreachable!("normalization preserves ICC target kind")
+        };
+        Ok((normalized.as_ref() != icc).then(|| normalized.to_vec()))
     }
     fn decompress(
         &self,

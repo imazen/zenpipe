@@ -69,9 +69,8 @@ pub fn transcode_to_hdr_pq_png(
 ) -> crate::error::Result<Option<alloc::vec::Vec<u8>>> {
     use crate::CodecError;
     use whereat::{ResultAtExt, at};
+    use zencodec::OrientationHint;
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-    use zencodec::{Cicp, ContentLightLevel, OrientationHint};
-    use zenpixels::PixelDescriptor;
 
     // Decode the SDR base first: gates on gain-map presence (avoids a wasted
     // reconstruct on non-HDR input) and resolves the container primaries.
@@ -81,35 +80,18 @@ pub fn transcode_to_hdr_pq_png(
     if !base.info().supplements.gain_map {
         return Ok(None);
     }
-    // Resolved CICP primaries (1 BT.709/sRGB, 9 BT.2020, 12 Display P3),
-    // defaulting to sRGB when unsignaled.
-    let primaries = match base.info().source_color.cicp.map(|c| c.color_primaries) {
-        Some(9) => 9,
-        Some(12) => 12,
-        _ => 1,
-    };
-
-    // Reconstruct HDR (linear float), display-oriented — PNG can't carry an
-    // orientation tag, so the rotation must be baked into the pixels.
+    // Reconstruct HDR (linear float), display-oriented for this encoder path.
     let hdr = crate::DecodeRequest::new(data)
         .with_registry(registry)
         .with_orientation(OrientationHint::Correct)
         .reconstruct_hdr(target_headroom)
         .decode_full_frame()?;
 
-    // PQ (ST 2084) quantize. The diffuse-white anchor travels with the pixels
-    // (`ColorContext.diffuse_white`), set by the reconstruction.
-    let pq = zenpixels_convert::hdr::quantize_to(hdr.pixels(), PixelDescriptor::RGB16_BT2100_PQ)
-        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("PQ quantize: {e}"))))?;
-
-    // Content light level: per-pixel literal max (CTA-861.3-A stills). `measure`
-    // returns None for non-float buffers (already filtered above by reconstruct).
-    #[allow(deprecated)]
-    let cll = ContentLightLevel::measure(hdr.pixels(), zenpixels::hdr::DiffuseWhite::BT2408);
+    let (pq, cicp, cll) = prepare_hdr_png(hdr.pixels())?;
 
     // PNG with cICP (resolved primaries + PQ transfer 16) and cLLI.
     let png = zenpng::PngEncoderConfig::new()
-        .with_cicp(Some(Cicp::new(primaries, 16, 0, true)))
+        .with_cicp(Some(cicp))
         .with_content_light_level(cll)
         .job()
         .encoder()
@@ -392,5 +374,88 @@ mod tests {
                 assert_eq!(metadata.channels[0].max, 2.0);
             }
         }
+    }
+}
+
+#[cfg(all(
+    feature = "png",
+    any(feature = "jpeg-ultrahdr", feature = "heic-decode")
+))]
+fn prepare_hdr_png(
+    pixels: zenpixels::PixelSlice<'_>,
+) -> crate::error::Result<(
+    zenpixels::PixelBuffer,
+    zencodec::Cicp,
+    Option<zenpixels::hdr::ContentLightLevel>,
+)> {
+    use crate::CodecError;
+    use whereat::at;
+    use zenpixels::{
+        PixelDescriptor,
+        hdr::{ContentLightLevel, DiffuseWhite},
+    };
+    use zenpixels_convert::hdr::measure::{CllMeasure, LightLevelMethod};
+    // PQ (ST 2084) quantize. The diffuse-white anchor travels with the pixels
+    // (`ColorContext.diffuse_white`), set by the reconstruction.
+    // Reconstruction may change the working primaries. Use current pixels,
+    // not source-file provenance, for both conversion and output tags.
+    let primaries = pixels.descriptor().primaries;
+    let primaries_code = primaries.to_cicp().ok_or_else(|| {
+        at!(CodecError::InvalidInput(
+            "reconstructed HDR has unresolved primaries".into()
+        ))
+    })?;
+    let target = PixelDescriptor::RGB16_BT2100_PQ.with_primaries(primaries);
+    let pq = zenpixels_convert::hdr::quantize_to(pixels.clone(), target)
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("PQ quantize: {e}"))))?;
+
+    // Explicit full scan, with the same luminance anchor used by quantization.
+    let white = pixels
+        .color_context()
+        .and_then(|c| c.diffuse_white)
+        .unwrap_or(DiffuseWhite::BT2408);
+    let cll = ContentLightLevel::measure_max(pixels, white, LightLevelMethod::MaxRgb);
+
+    Ok((pq, zencodec::Cicp::new(primaries_code, 16, 0, true), cll))
+}
+
+#[cfg(all(
+    test,
+    feature = "png",
+    any(feature = "jpeg-ultrahdr", feature = "heic-decode")
+))]
+mod finalization_tests {
+    use super::prepare_hdr_png;
+    use zenpixels::{
+        Cicp, ColorContext, ColorPrimaries, PixelBuffer, PixelDescriptor, hdr::DiffuseWhite,
+    };
+    #[test]
+    fn hdr_png_uses_current_primaries_and_the_quantizers_white_anchor() {
+        let descriptor = PixelDescriptor::RGBF32_LINEAR.with_primaries(ColorPrimaries::DisplayP3);
+        let bytes = [1.0_f32, 0.5, 0.25]
+            .into_iter()
+            .flat_map(f32::to_ne_bytes)
+            .collect();
+        let buffer = PixelBuffer::from_vec(bytes, 1, 1, descriptor)
+            .unwrap()
+            .with_color_context(alloc::sync::Arc::new(
+                ColorContext::from_cicp(Cicp::new(12, 8, 0, true))
+                    .with_diffuse_white(DiffuseWhite::new(100.0)),
+            ));
+        let (pq, cicp, cll) = prepare_hdr_png(buffer.as_slice()).unwrap();
+        assert_eq!(pq.descriptor().primaries, ColorPrimaries::DisplayP3);
+        assert_eq!(cicp, Cicp::new(12, 16, 0, true));
+        let cll = cll.unwrap();
+        assert_eq!(cll.max_content_light_level, 100);
+        assert_eq!(cll.max_frame_average_light_level, 100);
+    }
+    #[test]
+    fn hdr_png_refuses_to_guess_unknown_primaries() {
+        let buffer = PixelBuffer::new(
+            1,
+            1,
+            PixelDescriptor::RGBF32_LINEAR.with_primaries(ColorPrimaries::Unknown),
+        );
+        assert!(prepare_hdr_png(buffer.as_slice()).is_err());
     }
 }
