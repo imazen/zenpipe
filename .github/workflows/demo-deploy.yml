@@ -25,7 +25,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -42,7 +42,7 @@ jobs:
         # the crate side is pinned rather than floating). Bump both together.
         run: cargo install wasm-bindgen-cli --version 0.2.123
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: imazen/zen-workspace
           path: zen-workspace
@@ -99,16 +99,16 @@ jobs:
           cp -r demo/pkg _site/pkg
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       # Also deploy to Vercel (with COOP/COEP headers for SharedArrayBuffer)
       - name: Deploy to Vercel

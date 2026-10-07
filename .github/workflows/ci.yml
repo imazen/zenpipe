@@ -75,7 +75,7 @@ jobs:
     name: Decoder pin agreement
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Self-test the check (it must fail on each defect)
         run: python3 scripts/check-decoder-pins.py --self-test
       - name: Check every manifest and lockfile agrees
@@ -85,7 +85,7 @@ jobs:
     name: Public API snapshots
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
       - uses: dtolnay/rust-toolchain@stable
       - uses: imazen/zen-workspace/.github/actions/setup@main
@@ -115,7 +115,7 @@ jobs:
     env:
       CROSS_CONTAINER_OPTS: -v ${{ github.workspace }}/..:${{ github.workspace }}/..
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
