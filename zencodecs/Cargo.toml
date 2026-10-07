@@ -13,12 +13,12 @@ exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".super
 
 [dependencies]
 # Core (always available)
-enough = "0.4"
-whereat = "0.1.4"
-thiserror = { version = "2.0", default-features = false }
-rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
-imgref = "1.12"
-bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
+enough = "0.4.4"
+whereat = "0.1.5"
+thiserror = { version = "2.0.20", default-features = false }
+rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
+imgref = "1.12.3"
+bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
 zencodec = { version = ">=0.1.26, <0.3.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
@@ -32,7 +32,7 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", optional = true }
 zenanalyze-api = { version = "0.1.0", optional = true, default-features = false }
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false, features = ["imgref"] }
 zenpixels-convert = { version = ">=0.2.10, <0.4.0", features = ["imgref"] }
-linear-srgb = { version = "0.6.3", default-features = false }
+linear-srgb = { version = "0.6.12", default-features = false }
 
 # Codecs (all optional, feature-gated)
 # zenjpeg 0.9.0 (git main) dropped the no-op `decoder`/`trellis` features —
@@ -126,16 +126,16 @@ zensim = { version = "0.3.0", optional = true, default-features = false, feature
 # runner image (`No CMAKE_ASM_NASM_COMPILER could be found` — GitHub's Intel
 # macOS image ships no nasm, and zen-workspace's setup action installs it on
 # Linux only). Nothing in src/ or tests/ touches turbojpeg; only the example.
-turbojpeg = { version = "1.4", optional = true }
+turbojpeg = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
-png = "0.18"
+png = "0.18.1"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
 # git patch; CI paths it to the sibling clone.
 zensim-regress = { version = "0.4.0" }
-codec-corpus = "1"
+codec-corpus = "1.1.0"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
-rayon = "1"
+rayon = "1.12.0"
 
 [features]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]

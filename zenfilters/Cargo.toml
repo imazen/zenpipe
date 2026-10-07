@@ -34,24 +34,24 @@ local-vips = ["local-fixtures"]
 local-darktable = ["local-fixtures"]
 
 [dependencies]
-archmage = { version = "0.9.17", features = ["avx512"] }
+archmage = { version = "0.9.29", features = ["avx512"] }
 enough = "0.4.4"
-serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
-bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
-linear-srgb = { version = "0.6.8" }
-magetypes = { version = "0.9.17" }
-rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
+bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
+linear-srgb = { version = "0.6.12" }
+magetypes = { version = "0.9.29" }
+rgb = { version = "0.8.53", default-features = false, features = ["bytemuck"], optional = true }
 zenpixels = { version = ">=0.2.10, <0.4.0", features = ["planar"] }
 whereat = { version = "0.1.5" }
-zennode = { version = "0.1", default-features = false, features = ["derive"], optional = true }
+zennode = { version = "0.1.1", default-features = false, features = ["derive"], optional = true }
 zenpixels-convert = { version = ">=0.2.15, <0.4.0", features = ["hdr-experimental"] }
-zenquant = { version = "0.1.2", default-features = false, optional = true }
+zenquant = { version = "0.1.3", default-features = false, optional = true }
 
 [dev-dependencies]
-imgref = "1.12"
-palette = { version = "0.7", default-features = false, features = ["std"] }
-rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
+imgref = "1.12.3"
+palette = { version = "0.7.7", default-features = false, features = ["std"] }
+rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
 almost-enough = "0.4.4"
 # 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
 # git patch, same shape as zencodecs' zensim dep. CI paths it to the sibling clone.
@@ -67,15 +67,15 @@ zencodecs = { workspace = true, features = ["std", "jpeg", "png", "webp"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # zenraw disabled — core2 crate fully yanked, breaks rawler→libflate chain
 # zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
-zenbench = { version = "0.1.2", features = ["criterion-compat"] }
+zenbench = { version = "0.1.10", features = ["criterion-compat"] }
 # DEV-only: lets benches/kernel_tiers.rs disable the baseline SIMD token (NEON
 # on aarch64) so the "scalar" arm is real rather than a second measurement of
 # the SIMD path. Feature unification applies this to test/bench builds only.
-archmage = { version = "0.9.17", features = ["testable_dispatch"] }
-libblur = { version = "0.23", default-features = true }
-zenresize = { version = "0.2.1", default-features = false, features = ["std"] }
-image = "0.25"
-codec-corpus = "1.0.3"
+archmage = { version = "0.9.29", features = ["testable_dispatch"] }
+libblur = { version = "0.24.0", default-features = true }
+zenresize = { version = "0.2.2", default-features = false, features = ["std"] }
+image = "0.25.9"
+codec-corpus = "1.1.0"
 
 [[example]]
 name = "blur_bench"
