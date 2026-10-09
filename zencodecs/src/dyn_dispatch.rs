@@ -53,7 +53,7 @@ pub(crate) struct DecodeParams<'a> {
 // Build a Box<dyn DynDecoderConfig> for a format
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_dyn_decoder_config(
+pub(crate) fn build_dyn_decoder_config(
     format: ImageFormat,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
@@ -89,6 +89,21 @@ fn build_dyn_decoder_config(
         }
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
+}
+
+/// Structural inventory through the format's decoder (see
+/// [`crate::inventory`]). `Ok(None)` when that decoder doesn't implement it.
+pub(crate) fn dyn_inventory(
+    format: ImageFormat,
+    data: &[u8],
+    limits: Option<&Limits>,
+) -> Result<Option<zencodec::inventory::Inventory>> {
+    let config = build_dyn_decoder_config(format, None, limits)?;
+    let mut job = config.dyn_job();
+    if let Some(lim) = limits {
+        job.set_limits(to_resource_limits(lim));
+    }
+    job.inventory(data).map_err(|e| wrap_boxed(format, e))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

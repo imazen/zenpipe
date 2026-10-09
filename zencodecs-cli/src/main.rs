@@ -32,6 +32,23 @@ enum Cmd {
     Convert(ConvertArgs),
     /// Probe an image: detected format + dimensions + supplements, as JSON.
     Probe { input: PathBuf },
+    /// List every structural part of each file (segments, chunks, boxes, item
+    /// extents, trailers, gaps) and what the decoder does with it.
+    Inventory(InventoryArgs),
+}
+
+#[derive(Args)]
+struct InventoryArgs {
+    /// Files, or directories to walk recursively.
+    #[arg(required = true)]
+    inputs: Vec<PathBuf>,
+    /// Tab-separated output, one row per part, for corpus audits.
+    #[arg(long)]
+    tsv: bool,
+    /// Only parts the decoder does not consume (plus a status row per file
+    /// that has none, or no inventory).
+    #[arg(long)]
+    unconsumed: bool,
 }
 
 #[derive(Args)]
@@ -136,6 +153,7 @@ fn run(cli: Cli) -> Result<(), String> {
     match cli.cmd {
         Cmd::Convert(a) => convert(a),
         Cmd::Probe { input } => probe_cmd(&input),
+        Cmd::Inventory(a) => inventory_cmd(&a),
     }
 }
 
@@ -280,6 +298,130 @@ fn probe_cmd(input: &Path) -> Result<(), String> {
         "{{\"format\":\"{}\",\"width\":{},\"height\":{},\"gain_map\":{},\"depth_map\":{}}}",
         format_name, info.width, info.height, info.supplements.gain_map, info.supplements.depth_map
     );
+    Ok(())
+}
+
+fn collect_files(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let meta = std::fs::symlink_metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if meta.is_dir() {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(path)
+            .map_err(|e| format!("{}: {e}", path.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
+        entries.sort();
+        for entry in entries {
+            collect_files(&entry, out)?;
+        }
+    } else if meta.is_file() {
+        out.push(path.to_path_buf());
+    }
+    Ok(())
+}
+
+/// One TSV field: tabs and line breaks become spaces.
+fn tsv_field(s: &str) -> String {
+    s.replace(['\t', '\n', '\r'], " ")
+}
+
+fn inventory_cmd(a: &InventoryArgs) -> Result<(), String> {
+    use zencodecs::inventory::{Inventory, PartId};
+    let mut files = Vec::new();
+    for input in &a.inputs {
+        collect_files(input, &mut files)?;
+    }
+    if a.tsv {
+        println!("file\toffset\tlength\tdepth\tkind\ttag\tdisposition\tlabel\tdetail");
+    }
+    fn walk(inv: &Inventory, parent: Option<PartId>, depth: usize, out: &mut Vec<(PartId, usize)>) {
+        for id in inv.children(parent) {
+            out.push((id, depth));
+            walk(inv, Some(id), depth + 1, out);
+        }
+    }
+    for file in &files {
+        let name = file.display().to_string();
+        let status = |what: &str, detail: &str| {
+            if a.tsv {
+                println!(
+                    "{}\t-\t-\t-\tfile\t-\t{what}\t-\t{}",
+                    tsv_field(&name),
+                    tsv_field(detail)
+                );
+            } else {
+                println!("{name}: {what} {detail}");
+            }
+        };
+        let data = match std::fs::read(file) {
+            Ok(d) => d,
+            Err(e) => {
+                status("error", &e.to_string());
+                continue;
+            }
+        };
+        let inv = match zencodecs::inventory::inventory(&data, &AllowedFormats::all()) {
+            Ok(Some(inv)) => inv,
+            Ok(None) => {
+                status("unsupported", "this format's decoder has no inventory yet");
+                continue;
+            }
+            Err(e) => {
+                status("error", &e.to_string());
+                continue;
+            }
+        };
+        if let Err(e) = inv.validate() {
+            status("invalid-inventory", &e.to_string());
+        }
+        let mut order = Vec::new();
+        walk(&inv, None, 0, &mut order);
+        let shown: Vec<_> = order
+            .into_iter()
+            .filter(|(id, _)| {
+                !a.unconsumed || inv.get(*id).is_some_and(|p| !p.disposition.is_consumed())
+            })
+            .collect();
+        if a.unconsumed && shown.is_empty() {
+            status("clean", "every byte is consumed");
+            continue;
+        }
+        if !a.tsv {
+            if a.unconsumed {
+                println!("{name}:");
+            } else {
+                println!("{name}:\n{inv}");
+                continue;
+            }
+        }
+        for (id, depth) in shown {
+            let Some(p) = inv.get(id) else { continue };
+            let label = p.label.as_deref().unwrap_or("-");
+            let detail = p.detail.as_deref().unwrap_or("-");
+            if a.tsv {
+                println!(
+                    "{}\t{}\t{}\t{depth}\t{}\t{}\t{}\t{}\t{}",
+                    tsv_field(&name),
+                    p.range.start,
+                    p.len(),
+                    p.kind.name(),
+                    tsv_field(&p.tag.to_string()),
+                    p.disposition,
+                    tsv_field(label),
+                    tsv_field(detail)
+                );
+            } else {
+                println!(
+                    "  {:>10} {:>10}  {:width$}{} {} {} {label:?} ({detail})",
+                    p.range.start,
+                    p.len(),
+                    "",
+                    p.kind.name(),
+                    p.tag,
+                    p.disposition,
+                    width = depth * 2
+                );
+            }
+        }
+    }
     Ok(())
 }
 
