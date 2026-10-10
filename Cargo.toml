@@ -330,7 +330,10 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenwebp#106
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenpng#32
+# zenpng main uses zenflate's unreleased PNG strip API (imazen/zenflate#10, main
+# 0.4.1); registry zenflate 0.4.0 lacks `zenflate::png`. TEMPORARY with the above.
+zenflate = { git = "https://github.com/imazen/zenflate" }
 # zencodec feat/inventory (imazen/zencodec#133): the structural-inventory API
 # (`zencodec::inventory`, `DecodeJob::inventory`). TEMPORARY: swap for the
 # released zencodec before this merges; the codec inventory branches are patched
