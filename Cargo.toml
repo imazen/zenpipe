@@ -327,7 +327,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
 # optional feature to a required dep (zenwebp#69).
-zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenwebp#106
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
 zenpng = { git = "https://github.com/imazen/zenpng" }
@@ -423,7 +423,7 @@ zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
 # Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
 # predates both changes.
-zengif = { git = "https://github.com/imazen/zengif" }
+zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zengif#23
 # zenavif main is 0.1.7 (zencodec 0.1.26 two-level taxonomy, `zencodec`
 # adapter always-on — no `zencodec` feature any more); crates.io tops out at
 # 0.1.6 (pre-taxonomy). The imazen/zenavif repo is a workspace that also
