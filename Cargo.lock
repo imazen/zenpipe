@@ -4512,7 +4512,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
  "archmage",
  "garb",
@@ -4823,7 +4823,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg#e7c53d2e36914989585791b504a957064e0e8d91"
+source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#21fcb3f76082454399c6c781a49c61bdb19a59b0"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -4841,12 +4841,12 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core 0.6.0",
  "whereat",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
  "zentone",
- "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg)",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory)",
 ]
 
 [[package]]
@@ -5471,9 +5471,10 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg#e7c53d2e36914989585791b504a957064e0e8d91"
+source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#21fcb3f76082454399c6c781a49c61bdb19a59b0"
 dependencies = [
  "archmage",
+ "imgref",
  "libm",
  "linear-srgb",
  "magetypes",
@@ -5604,8 +5605,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core 0.5.3",
 ]
-
-[[patch.unused]]
-name = "zenanalyze"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
