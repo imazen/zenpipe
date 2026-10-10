@@ -322,7 +322,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", branch = "feat/inventory" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
 # uses; 0.3.10 on crates.io predates it (same version number, older content).
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", branch = "feat/lean-scan" } # TEMPORARY: zenjxl#24 needs imazen/zenjxl-decoder#62 (codestream_length, lean scan)
 # zenwebp main is 0.5.0 (unreleased pre-bump; last unyanked crates.io release
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
