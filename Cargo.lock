@@ -5196,7 +5196,7 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#0323f78bc19330c81af0032381f51317f030386d"
+source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#5686d3abcea7c4f0aed24d95db8fb2e940d43358"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5350,7 +5350,7 @@ dependencies = [
 [[package]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-zentiff#f03d6435273dc72c5a389647bed1ac12ea6970f8"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-zentiff#28bb52c4f1fed8efa7326c83d20e095f9a77e9d7"
 dependencies = [
  "bytemuck",
  "enough",
