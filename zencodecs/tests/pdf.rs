@@ -51,3 +51,20 @@ fn pdf_garbage_does_not_panic() {
     let _ = DecodeRequest::new(bytes).probe();
     let _ = DecodeRequest::new(bytes).decode_full_frame();
 }
+
+/// The structural inventory reaches zenpdf although PDF decode bypasses the
+/// dyn decoder table: it exists, tiles the file, and finds page content.
+#[test]
+fn pdf_inventory_dispatches_to_zenpdf() {
+    let inv = zencodecs::inventory::inventory(TEST_PDF, &zencodecs::AllowedFormats::all())
+        .expect("PDF inventory failed")
+        .expect("zenpdf declares inventories");
+    inv.validate().unwrap_or_else(|e| panic!("{e}\n{inv}"));
+    assert_eq!(inv.input_len(), TEST_PDF.len() as u64);
+    assert!(
+        inv.parts()
+            .iter()
+            .any(|p| p.disposition == zencodecs::inventory::Disposition::ImageData),
+        "no image data\n{inv}"
+    );
+}

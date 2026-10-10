@@ -121,6 +121,17 @@ check-pins:
     python3 scripts/check-decoder-pins.py --self-test
     python3 scripts/check-decoder-pins.py
 
+# Structural-inventory audit of a directory tree: every byte of every image file, and what the
+# decoder does with it. Writes <out>/inventory.tsv (unconsumed parts only), <out>/summary.md and
+# <out>/walkers.tsv (the exact walker commits from Cargo.lock), and logs peak RSS.
+inventory-audit dir out:
+    mkdir -p {{out}}
+    cargo build --release -p zencodecs-cli --features zencodecs/tiff,zencodecs/svg,zencodecs/pdf-decode,zencodecs/raw-decode,zencodecs/bitmaps-hdr,zencodecs/bitmaps-qoi,zencodecs/bitmaps-tga,zencodecs/avif-decode
+    python3 zencodecs-cli/scripts/inventory_walker_commits.py Cargo.lock > {{out}}/walkers.tsv
+    /usr/bin/time -v -o {{out}}/time.txt target/release/zencodecs inventory --tsv --unconsumed {{dir}} > {{out}}/inventory.tsv
+    python3 zencodecs-cli/scripts/summarize_inventory.py {{out}}/inventory.tsv --out {{out}}/summary.md
+    grep -E 'Maximum resident|Elapsed' {{out}}/time.txt
+
 # Run all CI checks locally
 ci: fmt-check clippy check-pins test fuzz-check fuzz-regression
 

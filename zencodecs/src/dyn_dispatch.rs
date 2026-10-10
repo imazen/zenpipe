@@ -53,7 +53,7 @@ pub(crate) struct DecodeParams<'a> {
 // Build a Box<dyn DynDecoderConfig> for a format
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_dyn_decoder_config(
+pub(crate) fn build_dyn_decoder_config(
     format: ImageFormat,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
@@ -89,6 +89,37 @@ fn build_dyn_decoder_config(
         }
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
     }
+}
+
+/// Structural inventory through the format's decoder (see
+/// [`crate::inventory`]). `Ok(None)` when that decoder doesn't implement it.
+pub(crate) fn dyn_inventory(
+    format: ImageFormat,
+    data: &[u8],
+    limits: Option<&Limits>,
+) -> Result<Option<zencodec::inventory::Inventory>> {
+    let config = inventory_decoder_config(format, limits)?;
+    let mut job = config.dyn_job();
+    if let Some(lim) = limits {
+        job.set_limits(to_resource_limits(lim));
+    }
+    job.inventory(data).map_err(|e| wrap_boxed(format, e))
+}
+
+/// The decoder config whose job carries `format`'s inventory. PDF decodes
+/// through `codecs::pdf` (page rendering) rather than the dyn decoder table,
+/// but zenpdf's zencodec config implements the inventory like any other.
+fn inventory_decoder_config(
+    format: ImageFormat,
+    limits: Option<&Limits>,
+) -> Result<Box<dyn DynDecoderConfig>> {
+    #[cfg(feature = "pdf-decode")]
+    if let ImageFormat::Custom(def) = format
+        && def.name == "pdf"
+    {
+        return Ok(Box::new(zenpdf::PdfDecoderConfig::new()));
+    }
+    build_dyn_decoder_config(format, None, limits)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
