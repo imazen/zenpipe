@@ -479,7 +479,7 @@ impl<'a> DecodeRequest<'a> {
             info.height,
             zenpixels::PixelDescriptor::RGBA8_SRGB,
         );
-        let est = crate::estimate::estimate_decode(format, &image, &ComputeEnvironment::new());
+        let est = crate::estimate::estimate_decode(format, &image, &ComputeEnvironment::conservative());
         Ok((image, est))
     }
 
