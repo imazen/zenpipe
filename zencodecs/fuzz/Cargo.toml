@@ -54,7 +54,7 @@ zencodec = { git = "https://github.com/imazen/zencodec", branch = "feat/inventor
 # ^0.1.7, and the repo-root [patch.crates-io] does not reach this separate
 # fuzz workspace. Use the same 0.1.7 git revision as the production adapter;
 # current sibling main is 0.2.0 and cannot satisfy this requirement.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444" }
 # Unpublished mains the root [patch.crates-io] pins (see its comments):
 # zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
 # zenjxl + zenjxl-decoder (mode-aware orientation API). Mirrored here because
@@ -66,7 +66,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # zenavif-parse 0.7.0 is a member of the imazen/zenavif workspace (the
 # standalone repo is archived), pinned to the same revision as the decoder.
-zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
+zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444" }
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 zenbitmaps = { path = "../../../zenbitmaps" }

@@ -38,6 +38,7 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # regenerates this section via ci-prep at build time; local sibling lockstep
 # is opt-in via `cargo superwork patch`.
 [patch.crates-io]
+zencodec = { git = "https://github.com/imazen/zencodec", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zencodec#133 (zencodecs needs >=0.1.27)
 # One entry per git-form entry at the workspace root (see the rationale
 # comments there); keep the two tables in sync.
 # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
@@ -81,7 +82,7 @@ zenpdf = { git = "https://github.com/imazen/zenextras" }
 # rav1d-safe decoder (see the root manifest). This crate's committed lock had
 # fallen back to the REGISTRY at zenavif 0.1.6 while this entry floated, i.e.
 # the patch was declared but not reflected in the resolved graph at all.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg

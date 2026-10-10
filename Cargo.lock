@@ -2823,45 +2823,10 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
-dependencies = [
- "aligned",
- "aligned-vec",
- "zerocopy",
-]
-
-[[package]]
-name = "rav1d-disjoint-mut"
-version = "0.3.1"
 source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
 dependencies = [
  "aligned",
  "aligned-vec",
- "zerocopy",
-]
-
-[[package]]
-name = "rav1d-safe"
-version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
-dependencies = [
- "aligned",
- "archmage",
- "assert_matches",
- "atomig",
- "bitflags",
- "cc",
- "cfg-if",
- "enough",
- "nasm-rs",
- "parking_lot",
- "paste",
- "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
- "raw-cpuid",
- "safe_unaligned_simd",
- "strum",
- "to_method",
- "whereat",
  "zerocopy",
 ]
 
@@ -2881,7 +2846,7 @@ dependencies = [
  "nasm-rs",
  "parking_lot",
  "paste",
- "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515)",
+ "rav1d-disjoint-mut",
  "raw-cpuid",
  "safe_unaligned_simd",
  "strum",
@@ -4551,33 +4516,6 @@ source = "git+https://github.com/imazen/zenanalyze#c69977eec07d9f0e4d05a64c5ec52
 
 [[package]]
 name = "zenavif"
-version = "0.1.7"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
-dependencies = [
- "almost-enough",
- "archmage",
- "bytemuck",
- "enough",
- "imgref",
- "linear-srgb",
- "log",
- "magetypes",
- "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
- "rgb",
- "safe_unaligned_simd",
- "thiserror 2.0.21",
- "ultrahdr-core 0.5.0",
- "whereat",
- "yuv",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
- "zencodec",
- "zenpixels",
- "zenpixels-convert",
- "zenravif 0.2.0 (git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41)",
-]
-
-[[package]]
-name = "zenavif"
 version = "0.2.0"
 dependencies = [
  "almost-enough",
@@ -4588,7 +4526,7 @@ dependencies = [
  "linear-srgb",
  "log",
  "magetypes",
- "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515)",
+ "rav1d-safe",
  "rgb",
  "safe_unaligned_simd",
  "serde_json",
@@ -4603,7 +4541,34 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpredict 0.2.0",
- "zenravif 0.2.0 (git+https://github.com/imazen/cavif-rs?rev=7f55b540fdf40ee9b37a7060c8d327747e842345)",
+ "zenravif",
+]
+
+[[package]]
+name = "zenavif"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444#5fe084a3404f764bedd553f1a9b389605f6ed444"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb",
+ "log",
+ "magetypes",
+ "rav1d-safe",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror 2.0.21",
+ "ultrahdr-core 0.5.0",
+ "whereat",
+ "yuv",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444)",
+ "zencodec",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenravif",
 ]
 
 [[package]]
@@ -4624,7 +4589,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
+source = "git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444#5fe084a3404f764bedd553f1a9b389605f6ed444"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4641,15 +4606,6 @@ dependencies = [
 name = "zenavif-serialize"
 version = "0.2.0"
 source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
-dependencies = [
- "arrayvec 0.7.8",
- "whereat",
-]
-
-[[package]]
-name = "zenavif-serialize"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d025ece47da74cbd74c245302bd45bbf8e"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4726,8 +4682,8 @@ dependencies = [
  "ultrahdr-core 0.6.0",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.1.7",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444)",
  "zenbitmaps",
  "zencodec",
  "zengif",
@@ -5011,8 +4967,8 @@ dependencies = [
  "rgb",
  "serde_json",
  "whereat",
- "zenavif 0.1.7",
  "zenavif 0.2.0",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=5fe084a3404f764bedd553f1a9b389605f6ed444)",
  "zenbench",
  "zenbitmaps",
  "zenblend",
@@ -5223,39 +5179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenrav1e"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037553434efb57ecbf4414c8b49922ba3e4"
-dependencies = [
- "aligned-vec",
- "arbitrary",
- "arg_enum_proc_macro",
- "arrayvec 0.7.8",
- "av1-grain",
- "bitstream-io",
- "built",
- "cfg-if",
- "enough",
- "interpolate_name",
- "itertools",
- "libfuzzer-sys",
- "log",
- "maybe-rayon",
- "noop_proc_macro",
- "num-derive 0.4.2",
- "num-traits",
- "pastey",
- "profiling",
- "rand 0.9.4",
- "rand_chacha",
- "simd_helpers",
- "thiserror 2.0.21",
- "v_frame 0.3.9",
- "wasm-bindgen",
- "whereat",
-]
-
-[[package]]
 name = "zenravif"
 version = "0.2.0"
 source = "git+https://github.com/imazen/cavif-rs?rev=7f55b540fdf40ee9b37a7060c8d327747e842345#7f55b540fdf40ee9b37a7060c8d327747e842345"
@@ -5266,23 +5189,8 @@ dependencies = [
  "quick-error",
  "rgb",
  "whereat",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90)",
- "zenrav1e 0.2.0 (git+https://github.com/imazen/zenrav1e?rev=1447c200fd083916c69ac72c1335079ba4624b2e)",
-]
-
-[[package]]
-name = "zenravif"
-version = "0.2.0"
-source = "git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6e7395fad67c87ddab676c4df59575a41"
-dependencies = [
- "almost-enough",
- "imgref",
- "loop9",
- "quick-error",
- "rgb",
- "whereat",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e)",
- "zenrav1e 0.2.0 (git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4)",
+ "zenavif-serialize",
+ "zenrav1e",
 ]
 
 [[package]]
