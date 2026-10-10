@@ -87,7 +87,7 @@ zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
 # rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
-zensvg = { git = "https://github.com/imazen/zenextras", optional = true }
+zensvg = { git = "https://github.com/imazen/zenextras", branch = "feat/inventory-docs", optional = true } # TEMPORARY: inventory PR imazen/zenextras#33
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL

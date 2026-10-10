@@ -296,11 +296,11 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenjpeg#221
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
-heic = { git = "https://github.com/imazen/heic" }
+heic = { git = "https://github.com/imazen/heic", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/heic#57
 # zentiff main is 0.1.2 on zencodec 0.1.26 (the zencodec decode/encode adapter +
 # heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
 # (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
-zentiff = { git = "https://github.com/imazen/zenextras" }
+zentiff = { git = "https://github.com/imazen/zenextras", branch = "feat/inventory-zentiff" } # TEMPORARY: inventory PR imazen/zenextras#30
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
@@ -317,7 +317,7 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
-zenjxl = { git = "https://github.com/imazen/zenjxl" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenjxl#24
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
@@ -421,7 +421,7 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # zenbitmaps main is 0.2.0 (At<BitmapError> error wrapper + 120 MP default pixel cap
 # + 16-bit ASCII PNM roundtrip fix, fuzz zenbitmaps#7/#10); crates.io tops out at 0.1.5.
 # Powers the bitmaps-* (BMP / PNM / farbfeld) decode path (zenpipe#50).
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenbitmaps#23
 # zengif main (0.7.3, unreleased-beyond-tag content) adopted the zencodec
 # Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
@@ -504,10 +504,10 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
-zenraw = { git = "https://github.com/imazen/zenraw" }
+zenraw = { git = "https://github.com/imazen/zenraw", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenraw#20
 # zenpdf: registry 0.2.0 predates the taxonomy entirely; zenextras main is on
 # zencodec 0.1.26. Powers `zencodecs/pdf-decode`.
-zenpdf = { git = "https://github.com/imazen/zenextras" }
+zenpdf = { git = "https://github.com/imazen/zenextras", branch = "feat/inventory-docs" } # TEMPORARY: inventory PR imazen/zenextras#33
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]
