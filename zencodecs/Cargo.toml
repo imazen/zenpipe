@@ -78,7 +78,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "bf54f40c9f43044747d4b4dea55e03e241bb7a2f", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to

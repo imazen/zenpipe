@@ -82,7 +82,7 @@ zenpdf = { git = "https://github.com/imazen/zenextras" }
 # rav1d-safe decoder (see the root manifest). This crate's committed lock had
 # fallen back to the REGISTRY at zenavif 0.1.6 while this entry floated, i.e.
 # the patch was declared but not reflected in the resolved graph at all.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "bf54f40c9f43044747d4b4dea55e03e241bb7a2f" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg

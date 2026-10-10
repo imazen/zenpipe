@@ -451,9 +451,9 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 # through: zenavif carries a git-rev dep on rav1d-safe on its own dep line, so
 # `[patch.crates-io] rav1d-safe` here would substitute NOTHING (patch replaces
 # registry sources only, and no registry rav1d-safe requirement exists in this
-# graph). Pinning zenavif is what actually fixes the decoder. zenavif 5fe084a3
-# (its inventory PR head; TEMPORARY, imazen/zenavif#61) selects rav1d-safe
-# e73811f5.
+# graph). Pinning zenavif is what actually fixes the decoder. zenavif bf54f40c
+# (its inventory PR head after review round 2; TEMPORARY, imazen/zenavif#61)
+# selects rav1d-safe e73811f5.
 #
 # WHAT FLOATS IF YOU DELETE `rev`: every fresh resolve re-picks imazen/zenavif
 # main, and the decoder underneath it moves with no edit to any manifest and
@@ -477,6 +477,12 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 #   x86_64 (dev):            2 passed (decode_valid, invalid_no_panic), 135 s
 #   aarch64 (Neoverse-N1):   2 passed (decode_valid, invalid_no_panic), 568 s
 #
+# Moved to zenavif bf54f40c (same rav1d-safe e73811f5) on 2026-10-10 after the
+# same command passed again:
+#
+#   x86_64 (dev):            2 passed, 135.96 s
+#   aarch64 (Neoverse-N1):   2 passed, 527.82 s
+#
 # Re-run it on both architectures before moving this pin; AVIF decode is not
 # covered by CI here (no job enables `avif-decode`).
 #
@@ -486,7 +492,7 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 # the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
 # so you get two zenavif-parse instances and its `At<Error>` stops unifying.
 # `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "5fe084a3404f764bedd553f1a9b389605f6ed444" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "bf54f40c9f43044747d4b4dea55e03e241bb7a2f" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenraw#20
