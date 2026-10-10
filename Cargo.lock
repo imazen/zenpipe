@@ -4927,7 +4927,7 @@ dependencies = [
 [[package]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#f7c1b5205c38b00441bb46af0239abed7e5b610b"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#0bf4a034799c438ccdf5517e85ed6d5acaa89217"
 dependencies = [
  "flate2",
  "hayro",
@@ -5196,7 +5196,7 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#8793c27e03303049f702ce220a27502ea6214056"
+source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#0323f78bc19330c81af0032381f51317f030386d"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5331,11 +5331,15 @@ dependencies = [
 [[package]]
 name = "zensvg"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#f7c1b5205c38b00441bb46af0239abed7e5b610b"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#0bf4a034799c438ccdf5517e85ed6d5acaa89217"
 dependencies = [
+ "data-url",
  "enough",
  "flate2",
+ "imagesize",
  "resvg",
+ "simplecss",
+ "svgtypes",
  "tiny-skia",
  "usvg",
  "whereat",
