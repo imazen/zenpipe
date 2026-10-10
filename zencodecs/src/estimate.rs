@@ -275,7 +275,8 @@ pub fn plan_encode_effort(
     image: &ImageCharacteristics,
     budget: &EncodeBudget,
 ) -> Result<EffortPlan> {
-    let compute = ComputeEnvironment::conservative().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
+    let compute =
+        ComputeEnvironment::conservative().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
 
     // 1) Estimate at the quality's own effort (codec default when None).
     let base = estimate_encode(format, quality, codec_config, image, &compute)?;
