@@ -13,6 +13,11 @@ detail) and writes a Markdown summary:
   PII, private chunks and trailers;
 - the files with the most unconsumed bytes.
 
+Byte totals per disposition and per file count each byte once: an unconsumed
+part nested inside another unconsumed part is subtracted from its parent, so
+the totals partition the unconsumed bytes by their innermost disposition. The
+per-unit table reports each unit's full length.
+
 Labels and details are printed as found (they come from the files). Nothing
 is decoded or interpreted here.
 """
@@ -38,6 +43,23 @@ def main():
     files = set()
     ext = collections.Counter()
 
+    def flush(rows):
+        """Own bytes of each unconsumed part of one file: its length minus the
+        lengths of the unconsumed parts directly inside it."""
+        rows.sort(key=lambda t: (t[0], -t[1]))
+        own = [n for (_, n, _, _) in rows]
+        stack = []  # indices of open unconsumed parts
+        for i, (start, n, _, _) in enumerate(rows):
+            while stack and start >= rows[stack[-1]][0] + rows[stack[-1]][1]:
+                stack.pop()
+            if stack:
+                own[stack[-1]] -= n
+            stack.append(i)
+        for (start, n, disp, path), o in zip(rows, own):
+            by_disp[disp][1] += o
+            per_file[path] += o
+
+    pending = collections.defaultdict(list)  # path -> [(offset, length, disposition, path)]
     with open(a.tsv, newline="") as f:
         r = csv.DictReader(f, delimiter="\t")
         for row in r:
@@ -53,8 +75,7 @@ def main():
                 continue
             n = int(row["length"])
             by_disp[disp][0] += 1
-            by_disp[disp][1] += n
-            per_file[path] += n
+            pending[path].append((int(row["offset"]), n, disp, path))
             key = (row["kind"], row["tag"], row["label"])
             s = sigs[key]
             s["files"].add(path)
@@ -63,6 +84,9 @@ def main():
             s["disp"][disp] += 1
             if s["example"] is None:
                 s["example"] = f"{path} @ {row['offset']} ({row['detail']})"
+
+    for rows in pending.values():
+        flush(rows)
 
     out = sys.stdout if a.out == "-" else open(a.out, "w")
     w = lambda s="": print(s, file=out)
@@ -73,11 +97,11 @@ def main():
     w("\n| file status | files |\n|---|--:|")
     for s_, c in status.most_common():
         w(f"| {s_} | {c} |")
-    w("\n## Unconsumed parts by disposition\n\n| disposition | parts | bytes |\n|---|--:|--:|")
+    w("\n## Unconsumed parts by disposition\n\nBytes count each byte once, under its innermost unconsumed part.\n\n| disposition | parts | bytes |\n|---|--:|--:|")
     for d, (p, b) in sorted(by_disp.items(), key=lambda kv: -kv[1][1]):
         w(f"| {d} | {p} | {b} |")
     w("\n## Distinct unconsumed units (read these for PII)\n")
-    w("| kind | tag | label | files | parts | bytes | dispositions | example |\n|---|---|---|--:|--:|--:|---|---|")
+    w("| kind | tag | label | files | parts | bytes (part lengths) | dispositions | example |\n|---|---|---|--:|--:|--:|---|---|")
     for (kind, tag, label), s in sorted(sigs.items(), key=lambda kv: (-len(kv[1]["files"]), -kv[1]["bytes"])):
         disps = ", ".join(f"{k}×{v}" for k, v in s["disp"].most_common())
         lab = label.replace("|", "\\|")
