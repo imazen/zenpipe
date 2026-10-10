@@ -31,6 +31,24 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   below for the `zenanalyze-api` resolution failure that blocked it at
   the time this entry was first written, and what it actually was.
 
+#### Fixed (deadline → codec requests, 2026-09-27)
+
+- **The `ImageJob` deadline now reaches `DecodeRequest`/`EncodeRequest`, not
+  just the strip loop.** `execute_with_stop` already polled between strips and
+  `transcode_animated_nodes` between frames, but every `zencodecs` request was
+  built without a stop token — so a single codec call (a slow AV1 frame, a JXL
+  container decode, a one-shot encode) ran uncancellable until it returned,
+  however far past the deadline that took. `deadline()` is now attached via
+  `DecodeRequest::with_stop`/`EncodeRequest::with_stop` on all eight request
+  sites: streaming decode, full-frame decode fallback, HDR reconstruction,
+  gain-map extraction, streaming encode, one-shot encode fallback, and both
+  animation decode + encode inside `transcode_animated_nodes` (whose `stop`
+  parameter changed from `Option<&dyn enough::Stop>` to
+  `Option<zencodec::StopToken>` so the owned token can be cloned into both
+  requests while the pipeline loop keeps its borrowed per-frame check). A
+  regression test asserts an expired deadline surfaces as the codec's own
+  "operation cancelled" rather than the strip loop's `PipeError::Cancelled`.
+
 #### Fixed (dependency unification, 2026-09-04)
 
 - **`zenanalyze-api` resolves to exactly ONE instance again — the graph
