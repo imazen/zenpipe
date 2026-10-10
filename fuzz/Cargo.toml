@@ -21,6 +21,7 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
+zencodec = { git = "https://github.com/imazen/zencodec", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zencodec#133 (zencodecs needs >=0.1.27)
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without

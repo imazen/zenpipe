@@ -49,6 +49,7 @@ members = ["."]
 # This standalone fuzz workspace does not inherit the root patch table.
 # Keep its decoder/parser source aligned with zencodecs' direct parser pin.
 [patch.crates-io]
+zencodec = { git = "https://github.com/imazen/zencodec", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zencodec#133 (zencodecs needs >=0.1.27)
 # zenavif 0.1.7 (registry 0.1.7 is yanked): zencodecs' avif-decode requires
 # ^0.1.7, and the repo-root [patch.crates-io] does not reach this separate
 # fuzz workspace. Use the same 0.1.7 git revision as the production adapter;
