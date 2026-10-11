@@ -774,7 +774,7 @@ impl<'a> EncodeRequest<'a> {
             &self.quality_intent(),
             self.codec_config,
             &image,
-            &ComputeEnvironment::new(),
+            &ComputeEnvironment::conservative(),
         )
     }
 
@@ -844,7 +844,7 @@ impl<'a> EncodeRequest<'a> {
                 &self.quality_intent(),
                 self.codec_config,
                 &image,
-                &ComputeEnvironment::new(),
+                &ComputeEnvironment::conservative(),
             )?;
             check_estimate_against_limits(&est, &image, limits)?;
         }

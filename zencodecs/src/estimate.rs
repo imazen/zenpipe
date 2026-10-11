@@ -275,7 +275,8 @@ pub fn plan_encode_effort(
     image: &ImageCharacteristics,
     budget: &EncodeBudget,
 ) -> Result<EffortPlan> {
-    let compute = ComputeEnvironment::new().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
+    let compute =
+        ComputeEnvironment::conservative().with_cores(budget.cores.unwrap_or(1).max(1) as usize);
 
     // 1) Estimate at the quality's own effort (codec default when None).
     let base = estimate_encode(format, quality, codec_config, image, &compute)?;
@@ -331,7 +332,7 @@ mod tests {
     fn encode_decode_estimate_buffer_dominates_until_models_ship() {
         let q = QualityIntent::from_quality(75.0);
         let c = chars(1000, 1000);
-        let env = ComputeEnvironment::new().with_cores(4);
+        let env = ComputeEnvironment::conservative().with_cores(4);
         let enc = estimate_encode(ImageFormat::WebP, &q, None, &c, &env).unwrap();
         let dec = estimate_decode(ImageFormat::WebP, &c, &env);
         let (avg, max) = peak_job_bytes(&dec, &enc, &c);
@@ -346,7 +347,7 @@ mod tests {
     #[test]
     fn unsupported_encode_format_errors() {
         let c = chars(64, 64);
-        let env = ComputeEnvironment::new();
+        let env = ComputeEnvironment::conservative();
         // Pnm has no encoder wired → error.
         assert!(
             estimate_encode(
@@ -363,7 +364,7 @@ mod tests {
     #[test]
     fn limits_gate_rejects_when_buffer_exceeds_else_passes() {
         let c = chars(2000, 2000); // 16 MB frame buffer
-        let env = ComputeEnvironment::new();
+        let env = ComputeEnvironment::conservative();
         let enc = estimate_encode(
             ImageFormat::WebP,
             &QualityIntent::from_quality(75.0),
@@ -446,7 +447,7 @@ mod pdf_tests {
         // to unknown() fails when the backend provides an estimate.
         use zencodec::decode::DecoderConfig;
         let c = ImageCharacteristics::new(64, 64, zenpixels::PixelDescriptor::RGBA8_SRGB);
-        let env = ComputeEnvironment::new();
+        let env = ComputeEnvironment::conservative();
         let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
         let direct = zenpdf::PdfDecoderConfig::new().estimate_decode_resources(&c, &env);
         assert_eq!(est, direct);

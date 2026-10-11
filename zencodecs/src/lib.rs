@@ -146,6 +146,7 @@ mod format_set;
 pub mod gainmap;
 mod info;
 pub mod intent;
+pub mod inventory;
 mod limits;
 mod macros;
 #[cfg(feature = "picker")]
