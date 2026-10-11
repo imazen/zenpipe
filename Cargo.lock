@@ -784,7 +784,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -865,7 +865,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3124,7 +3124,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3544,7 +3544,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4772,7 +4772,7 @@ dependencies = [
 [[package]]
 name = "zenflate"
 version = "0.4.1"
-source = "git+https://github.com/imazen/zenflate?branch=feat%2Fdeflate-scan#b77a80ecc98524b9570de6d0e9d0829a7538898c"
+source = "git+https://github.com/imazen/zenflate?branch=feat%2Fdeflate-scan#0fa809a999889913a5fa9c1103337c6728d9b067"
 dependencies = [
  "archmage",
  "enough",
@@ -5077,7 +5077,7 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng?branch=feat%2Finventory#db07e8af93b6c1b5787cfc6744c8a1558c04da23"
+source = "git+https://github.com/imazen/zenpng?branch=feat%2Finventory#bfa9b0567bc45c0066a8bd39fa0607387cfa0291"
 dependencies = [
  "almost-enough",
  "archmage",
