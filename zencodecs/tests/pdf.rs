@@ -64,7 +64,7 @@ fn pdf_inventory_dispatches_to_zenpdf() {
     assert!(
         inv.parts()
             .iter()
-            .any(|p| p.disposition == zencodecs::inventory::Disposition::ImageData),
+            .any(|p| p.disposition() == zencodecs::inventory::Disposition::ImageData),
         "no image data\n{inv}"
     );
 }

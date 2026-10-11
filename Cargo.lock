@@ -784,7 +784,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -865,7 +865,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1329,7 +1329,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?branch=feat%2Finventory#40bc89ff7a05006e7c64a8e34264b12475e0d2cc"
+source = "git+https://github.com/imazen/heic?branch=feat%2Finventory#628ebc3056dcc8392d7f8761cb726e899e472de9"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1350,7 +1350,7 @@ dependencies = [
 [[package]]
 name = "heic-core"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?branch=feat%2Finventory#40bc89ff7a05006e7c64a8e34264b12475e0d2cc"
+source = "git+https://github.com/imazen/heic?branch=feat%2Finventory#628ebc3056dcc8392d7f8761cb726e899e472de9"
 dependencies = [
  "archmage",
  "enough",
@@ -3124,7 +3124,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3544,7 +3544,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4547,7 +4547,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f#bf54f40c9f43044747d4b4dea55e03e241bb7a2f"
+source = "git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4#d2f17783e39b9e13521cc7491f7d3c5657f29fc4"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4564,7 +4564,7 @@ dependencies = [
  "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -4589,7 +4589,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f#bf54f40c9f43044747d4b4dea55e03e241bb7a2f"
+source = "git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4#d2f17783e39b9e13521cc7491f7d3c5657f29fc4"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4628,7 +4628,7 @@ dependencies = [
 [[package]]
 name = "zenbitmaps"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenbitmaps?branch=feat%2Finventory#c7264c1702bf54a91d6394c937ea82ce6be0e52d"
+source = "git+https://github.com/imazen/zenbitmaps?branch=feat%2Finventory#4c383dbf47c622f200b1df94f26ec4423386f564"
 dependencies = [
  "enough",
  "imgref",
@@ -4654,7 +4654,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#413fc6e8c1ee62502b67943d379aa439bfb07ddf"
+source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#71b1f8d4d536f3e218f17094b0b001d0db452e0b"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4682,8 +4682,8 @@ dependencies = [
  "ultrahdr-core 0.6.0",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f)",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4)",
  "zenbitmaps",
  "zencodec",
  "zengif",
@@ -4772,16 +4772,24 @@ dependencies = [
 [[package]]
 name = "zenflate"
 version = "0.4.1"
-source = "git+https://github.com/imazen/zenflate#9f8684bf789297bb8bf043bc9d43f2c3b6f5dae2"
+source = "git+https://github.com/imazen/zenflate?branch=feat%2Fdeflate-scan#b77a80ecc98524b9570de6d0e9d0829a7538898c"
 dependencies = [
  "archmage",
  "enough",
 ]
 
 [[package]]
+name = "zenflate"
+version = "0.4.1"
+source = "git+https://github.com/imazen/zenflate#9f8684bf789297bb8bf043bc9d43f2c3b6f5dae2"
+dependencies = [
+ "enough",
+]
+
+[[package]]
 name = "zengif"
 version = "0.8.0"
-source = "git+https://github.com/imazen/zengif?branch=feat%2Finventory#54685d926557c41f22a4caece3bca28cc19c7818"
+source = "git+https://github.com/imazen/zengif?branch=feat%2Finventory#36c7ff1ddae01cdb8fcc803d5b77db0478e1834b"
 dependencies = [
  "bytemuck",
  "enough",
@@ -4799,9 +4807,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenifd"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-zentiff#601682d365d7b8d772bb045f45bb554005f41fb1"
+dependencies = [
+ "zencodec",
+]
+
+[[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#171deec95093c4fc13b1d652175b43662c4d2e7f"
+source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#2c9639748490c4ce60d4507932708c96c62743ac"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -4830,7 +4846,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?branch=feat%2Finventory#b00edfe23477f2fa3fee8f1c612006f53b19ffd8"
+source = "git+https://github.com/imazen/zenjxl?branch=feat%2Finventory#3fa2837f046150e585013e951e8ae7c6333ec7b7"
 dependencies = [
  "enough",
  "imgref",
@@ -4927,7 +4943,7 @@ dependencies = [
 [[package]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#0bf4a034799c438ccdf5517e85ed6d5acaa89217"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#56214382b7f35474798103994bb17fbf9e387803"
 dependencies = [
  "flate2",
  "hayro",
@@ -4968,7 +4984,7 @@ dependencies = [
  "serde_json",
  "whereat",
  "zenavif 0.2.0",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4)",
  "zenbench",
  "zenbitmaps",
  "zenblend",
@@ -5061,7 +5077,7 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng?branch=feat%2Finventory#0a5457006c4fa32452418535fc8e404a3e0af69b"
+source = "git+https://github.com/imazen/zenpng?branch=feat%2Finventory#db07e8af93b6c1b5787cfc6744c8a1558c04da23"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -5077,7 +5093,7 @@ dependencies = [
  "thiserror 2.0.21",
  "whereat",
  "zencodec",
- "zenflate 0.4.1",
+ "zenflate 0.4.1 (git+https://github.com/imazen/zenflate?branch=feat%2Fdeflate-scan)",
  "zenpixels",
  "zenpixels-convert",
  "zenquant 0.1.3",
@@ -5196,7 +5212,7 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#5686d3abcea7c4f0aed24d95db8fb2e940d43358"
+source = "git+https://github.com/imazen/zenraw?branch=feat%2Finventory#3f8bc711e9bb463a1f42c26331bf7d6bba4096dd"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5209,6 +5225,7 @@ dependencies = [
  "thiserror 2.0.21",
  "whereat",
  "zencodec",
+ "zenifd",
  "zenpixels",
 ]
 
@@ -5282,7 +5299,7 @@ source = "git+https://github.com/imazen/zensally#a8888d08c6d4bd1fe0969cdce40da6c
 dependencies = [
  "anyhow",
  "enough",
- "zenflate 0.4.1",
+ "zenflate 0.4.1 (git+https://github.com/imazen/zenflate)",
  "zensally",
  "zentract-api",
 ]
@@ -5331,7 +5348,7 @@ dependencies = [
 [[package]]
 name = "zensvg"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#0bf4a034799c438ccdf5517e85ed6d5acaa89217"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-docs#56214382b7f35474798103994bb17fbf9e387803"
 dependencies = [
  "data-url",
  "enough",
@@ -5350,7 +5367,7 @@ dependencies = [
 [[package]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-zentiff#28bb52c4f1fed8efa7326c83d20e095f9a77e9d7"
+source = "git+https://github.com/imazen/zenextras?branch=feat%2Finventory-zentiff#601682d365d7b8d772bb045f45bb554005f41fb1"
 dependencies = [
  "bytemuck",
  "enough",
@@ -5358,6 +5375,7 @@ dependencies = [
  "tiff 0.11.3",
  "whereat",
  "zencodec",
+ "zenifd",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -5392,7 +5410,7 @@ source = "git+https://github.com/imazen/zentract#5f33cefc0c8f2c47c35a64113ef550f
 [[package]]
 name = "zenwebp"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenwebp?branch=feat%2Finventory#daf2d72381a31c081ba441bab6f17b061891bd62"
+source = "git+https://github.com/imazen/zenwebp?branch=feat%2Finventory#cd09b5bde59cbf9772624f62ed0fe4b7abac8b04"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5429,7 +5447,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#171deec95093c4fc13b1d652175b43662c4d2e7f"
+source = "git+https://github.com/imazen/zenjpeg?branch=feat%2Finventory#2c9639748490c4ce60d4507932708c96c62743ac"
 dependencies = [
  "archmage",
  "imgref",

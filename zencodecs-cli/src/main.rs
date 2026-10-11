@@ -377,7 +377,7 @@ fn inventory_cmd(a: &InventoryArgs) -> Result<(), String> {
         let shown: Vec<_> = order
             .into_iter()
             .filter(|(id, _)| {
-                !a.unconsumed || inv.get(*id).is_some_and(|p| !p.disposition.is_consumed())
+                !a.unconsumed || inv.get(*id).is_some_and(|p| !p.disposition().is_consumed())
             })
             .collect();
         if a.unconsumed && shown.is_empty() {
@@ -394,29 +394,29 @@ fn inventory_cmd(a: &InventoryArgs) -> Result<(), String> {
         }
         for (id, depth) in shown {
             let Some(p) = inv.get(id) else { continue };
-            let label = p.label.as_deref().unwrap_or("-");
-            let detail = p.detail.as_deref().unwrap_or("-");
+            let label = p.label().unwrap_or("-");
+            let detail = p.detail().unwrap_or("-");
             if a.tsv {
                 println!(
                     "{}\t{}\t{}\t{depth}\t{}\t{}\t{}\t{}\t{}",
                     tsv_field(&name),
-                    p.range.start,
+                    p.range().start,
                     p.len(),
-                    p.kind.name(),
-                    tsv_field(&p.tag.to_string()),
-                    p.disposition,
+                    p.kind().name(),
+                    tsv_field(&p.tag().to_string()),
+                    p.disposition(),
                     tsv_field(label),
                     tsv_field(detail)
                 );
             } else {
                 println!(
                     "  {:>10} {:>10}  {:width$}{} {} {} {label:?} ({detail})",
-                    p.range.start,
+                    p.range().start,
                     p.len(),
                     "",
-                    p.kind.name(),
-                    p.tag,
-                    p.disposition,
+                    p.kind().name(),
+                    p.tag(),
+                    p.disposition(),
                     width = depth * 2
                 );
             }

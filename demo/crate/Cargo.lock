@@ -1283,7 +1283,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f#bf54f40c9f43044747d4b4dea55e03e241bb7a2f"
+source = "git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4#d2f17783e39b9e13521cc7491f7d3c5657f29fc4"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1310,7 +1310,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=bf54f40c9f43044747d4b4dea55e03e241bb7a2f#bf54f40c9f43044747d4b4dea55e03e241bb7a2f"
+source = "git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4#d2f17783e39b9e13521cc7491f7d3c5657f29fc4"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1361,7 +1361,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#b631eb286576df9179facdc0f2bfb2124c55e178"
+source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#71b1f8d4d536f3e218f17094b0b001d0db452e0b"
 dependencies = [
  "almost-enough",
  "enough",

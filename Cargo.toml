@@ -333,7 +333,8 @@ zenwebp = { git = "https://github.com/imazen/zenwebp", branch = "feat/inventory"
 zenpng = { git = "https://github.com/imazen/zenpng", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenpng#32
 # zenpng main uses zenflate's unreleased PNG strip API (imazen/zenflate#10, main
 # 0.4.1); registry zenflate 0.4.0 lacks `zenflate::png`. TEMPORARY with the above.
-zenflate = { git = "https://github.com/imazen/zenflate" }
+# zenpng#32's inventory uses zenflate's stream-end scan (imazen/zenflate#15). TEMPORARY.
+zenflate = { git = "https://github.com/imazen/zenflate", branch = "feat/deflate-scan" }
 # zencodec feat/inventory (imazen/zencodec#133): the structural-inventory API
 # (`zencodec::inventory`, `DecodeJob::inventory`). TEMPORARY: swap for the
 # released zencodec before this merges; the codec inventory branches are patched
@@ -477,8 +478,10 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 #   x86_64 (dev):            2 passed (decode_valid, invalid_no_panic), 135 s
 #   aarch64 (Neoverse-N1):   2 passed (decode_valid, invalid_no_panic), 568 s
 #
-# Moved to zenavif bf54f40c (same rav1d-safe e73811f5) on 2026-10-10 after the
-# same command passed again:
+# Moved to zenavif d2f17783 on 2026-10-10: its src/ is byte-identical to
+# bf54f40c (only tests, fuzz targets and lockfiles changed, for zencodec#135),
+# so the bf54f40c result below carries over. Moved to bf54f40c (same
+# rav1d-safe e73811f5) on 2026-10-10 after the same command passed again:
 #
 #   x86_64 (dev):            2 passed, 135.96 s
 #   aarch64 (Neoverse-N1):   2 passed, 527.82 s
@@ -492,7 +495,7 @@ zengif = { git = "https://github.com/imazen/zengif", branch = "feat/inventory" }
 # the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
 # so you get two zenavif-parse instances and its `At<Error>` stops unifying.
 # `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "bf54f40c9f43044747d4b4dea55e03e241bb7a2f" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "d2f17783e39b9e13521cc7491f7d3c5657f29fc4" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw", branch = "feat/inventory" } # TEMPORARY: inventory PR imazen/zenraw#20

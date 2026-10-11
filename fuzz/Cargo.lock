@@ -530,7 +530,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#4e8db570a864cf97e50c37815237830f6504b3c1"
+source = "git+https://github.com/imazen/zencodec?branch=feat%2Finventory#71b1f8d4d536f3e218f17094b0b001d0db452e0b"
 dependencies = [
  "almost-enough",
  "enough",
@@ -870,8 +870,8 @@ source = "git+https://github.com/imazen/jxl-encoder#5f40694e45c4cc3b6c57c3fa5d81
 
 [[patch.unused]]
 name = "zenavif"
-version = "0.1.7"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=d2f17783e39b9e13521cc7491f7d3c5657f29fc4#d2f17783e39b9e13521cc7491f7d3c5657f29fc4"
 
 [[patch.unused]]
 name = "zenbitmaps"

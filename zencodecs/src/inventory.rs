@@ -99,7 +99,7 @@ mod tests {
                     assert!(
                         inv.parts()
                             .iter()
-                            .any(|p| p.disposition == Disposition::ImageData),
+                            .any(|p| p.disposition() == Disposition::ImageData),
                         "{format}: no image data\n{inv}"
                     );
                     let mut junk = bytes.clone();
@@ -114,8 +114,8 @@ mod tests {
                         let leaf = !inv
                             .parts()
                             .iter()
-                            .any(|c| c.parent.map(|x| x.index()) == Some(i));
-                        leaf && p.range.end > tail && p.disposition.is_consumed()
+                            .any(|c| c.parent().map(|x| x.index()) == Some(i));
+                        leaf && p.range().end > tail && p.disposition().is_consumed()
                     });
                     assert!(
                         !tail_consumed,
