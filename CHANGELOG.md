@@ -1082,6 +1082,20 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+- No released metadata API break is introduced by this extraction: the scrub API is unreleased. Its shared result types now belong to zencodec. The unreleased PNG/JXL scrub routes require their codec features, matching JPEG.
+
+#### Metadata integration
+
+- Reuse the inventory dispatch and CLI from PR 89. The default-enabled `inventory` feature weakly enables walkers only for selected codecs; direct codec users retain default-off walkers. Convenience dispatch preserves its proposed `Option` result for unavailable support, while codec jobs retain typed unsupported errors.
+- Add optional `avif-svt` and `avif-aom` feature forwarding for the native AVIF backends.
+
+- Move JPEG, PNG/APNG and JXL container planners to their codec crates; zencodecs retains a thin dispatcher and reexports zencodec request result/service types. Standalone codec users need neither zencodecs nor zenpipe.
+- Delegate gain-map retention to zenmeta without exposing zenmeta types in this API. Optional application services retain timeout reasons as well as cancellation.
+- Preserve the original scrub test assertions under the corresponding codec features; verify the combined path and the metadata-only build without codecs.
+
+
 #### Changed
 
 - **Metadata conformance: AVIF CICP re-verified, `cicp` split into two

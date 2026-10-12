@@ -97,7 +97,7 @@ The default-off `metadata` feature provides `metadata::ScrubRequest`: validate a
 rewrite, inspect its carrier report, then stream borrowed output chunks. JPEG,
 JPEG gain maps, JXL containers, and PNG/APNG SDR/HDR are supported without pixel
 passes. ICC remains opaque; optional XMP editing and known-profile normalization
-use application-supplied runtime services. See [contracts, examples and limits](https://github.com/imazen/zenpipe/blob/feat/metadata-scrub-contract/zencodecs/docs/metadata-scrubbing.md).
+use application-supplied runtime services. See [contracts, examples and limits](docs/metadata-scrubbing.md).
 
 ### Probing
 

@@ -921,7 +921,7 @@ impl<'a> EncodeRequest<'a> {
                     fields.xmp = zencodec::Retention::Discard;
                 }
             }
-            let retained = zencodec::display_metadata::filter_for_gain_map(
+            let retained = zenmeta::display::filter_for_gain_map(
                 &gain_map_source_metadata,
                 metadata,
                 &MetadataPolicy::Custom(fields),

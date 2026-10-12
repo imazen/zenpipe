@@ -37,6 +37,8 @@ sources`.
 
 ## Known Bugs
 
+- Metadata service callback regression (2026-10-12): compression and XML writers erased a one-shot timeout as a generic service error. The I/O adapters now preserve the typed cause; `writer_callbacks_preserve_one_shot_timeout_reasons` exercises every callback position in both paths.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly

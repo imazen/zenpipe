@@ -38,42 +38,44 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # regenerates this section via ci-prep at build time; local sibling lockstep
 # is opt-in via `cargo superwork patch`.
 [patch.crates-io]
+zenflate = { git = "https://github.com/imazen/zenflate", rev = "43c10e3d04275dae8801802b63fb99176e94b70d" }
+zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "27cfae5d4de24bfb20d2005d77daf4ac9ff05f39" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "a81daf7605dc63074d4a39757e7b4399057d4a8f" }
 # One entry per git-form entry at the workspace root (see the rationale
 # comments there); keep the two tables in sync.
 # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "ab83a51284ac231661120bc9fc014991be0f4db7" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "9a5694d4edcd600a377b03a20afad3970a02046b" }
 # heic main is 0.2.0 (zencodec decode adapter); crates.io tops out at 0.1.6.
-heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
+heic = { git = "https://github.com/imazen/heic", rev = "6c30bf2545d86e34a734607f0d938291dfc1405b" }
 # zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "02c49bc5bf60c76d702322c2e089ad204a02228b" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "561849318d6839f478fa7cbc73d67e6d489d4860" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "78c64c7e01529125a209405b0e98d196e860e254" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main is 0.4.0 (the breaking API batch zenjxl 0.3.0 needs);
 # crates.io tops out at 0.3.10.
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f27c5c6fb56b76c952d88aa7d5231a06f7e49b51" }
 # zenwebp main is 0.5.0 (Pattern B error boundary, zencodec always-on);
 # the last unyanked crates.io release is 0.4.4.
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "d12fe2bb767461c8740938cf209527dd25ff0cbc" }
 # zenpng main is 0.2.0; the published 0.1.4 predates the orientation sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "27393eef995aea329cfbc1df5cac5e3f7346b4cb" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "5bd6610354f66e48d18608060e9663db78a60f1f" }
 # zenbitmaps main is 0.2.0 (At<BitmapError>); crates.io tops out at 0.1.5.
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "adc96ccad471a2d4c1b5fe9821f91b249580f300" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "72c13f57ab77e7185e4d28b6b82faaaf1901e4fa" }
 # zengif main is 0.8.0 (Pattern B error boundary, zencodec always-on).
-zengif = { git = "https://github.com/imazen/zengif", rev = "1d91101ae53b92833124087624f2f0238fabd760" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "10f96266692e1698d735e7ba56e38feabca2402e" }
 # zenraw / zenpdf: registry 0.2.0 of both predates the CategorizedError
 # taxonomy; their mains are on zencodec 0.1.26.
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "c3e02d987fd0b7dbb4de79709ecb304bfcbda382" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
 # Same tested decoder revision as the root, enforced by check-decoder-pins.py.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "b777fa12a92059d3d50c0bfa12e30d2b10502df6" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "ce9378c5553953e2aba95e0ae89e595e80ec994e" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg

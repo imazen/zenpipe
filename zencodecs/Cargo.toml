@@ -20,6 +20,7 @@ rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
 zencodec = { version = ">=0.1.26, <0.3.0" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "a81daf7605dc63074d4a39757e7b4399057d4a8f", default-features = false, optional = true }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -73,7 +74,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "b777fa12a92059d3d50c0bfa12e30d2b10502df6", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "ce9378c5553953e2aba95e0ae89e595e80ec994e", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
@@ -82,8 +83,8 @@ zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
 # rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
-zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd", optional = true }
-zensvg = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd", optional = true }
+zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3", optional = true }
+zensvg = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3", optional = true }
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -134,9 +135,11 @@ fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 rayon = "1"
 
 [features]
-# Encoded metadata inspection/rewrite; no new dependency. Pixel codecs remain optional.
-metadata = []
-default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
+# Encoded metadata rewriting delegates to enabled codecs.
+metadata = ["zenjpeg?/metadata-rewrite", "zenpng?/metadata-rewrite", "zenjxl?/metadata-rewrite"]
+default = ["inventory", "jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
+# Inventory walkers are optional per codec; the dispatch convenience enables them by default.
+inventory = ["zenjpeg?/inventory", "zenpng?/inventory", "zenwebp?/inventory", "zengif?/inventory", "zenavif?/inventory", "zenjxl?/inventory", "heic?/inventory", "zentiff?/inventory", "zenraw?/inventory", "zenbitmaps?/inventory", "zenpdf?/inventory", "zensvg?/inventory", "zenjp2?/inventory"]
 std = []
 
 # Content-aware auto-format selection via an injected MLP (zenpicker over
@@ -160,7 +163,7 @@ transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
+jpeg-ultrahdr = ["dep:zenmeta", "jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
@@ -169,6 +172,8 @@ gif-imagequant = ["gif", "zengif/imagequant"]
 png = ["dep:zenpng"]
 png-zenquant = ["png", "zenpng/quantize"]
 avif-decode = ["dep:zenavif"]
+avif-svt = ["avif-encode", "zenavif/zenav1-svt"]
+avif-aom = ["avif-encode", "zenavif/zenav1-aom-encode"]
 avif-encode = ["dep:zenavif", "zenavif/encode", "dep:zenavif-parse"]
 jxl-decode = ["dep:zenjxl", "zenjxl/decode"]
 jxl-encode = ["dep:zenjxl", "zenjxl/encode"]

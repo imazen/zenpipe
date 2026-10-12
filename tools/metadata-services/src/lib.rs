@@ -1,11 +1,25 @@
 //! Application-side metadata services. The codec does not depend on this crate.
 //! This runnable example wires xmpkit, bounded decompression, and exact known ICC
-//! normalization through zencodecs' runtime Services interface.
+//! normalization through zencodec's runtime Services interface.
 use enough::Stop;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use xmpkit::XmpMeta;
-use zencodecs::metadata::{Compression, Error, Services};
+use zencodec::metadata_rewrite::{Compression, Error, Services};
+fn stop_error(reason: enough::StopReason) -> Error {
+    match reason {
+        enough::StopReason::Cancelled => Error::Cancelled,
+        other => Error::Stopped(other),
+    }
+}
+// Preserve typed callback failures through adapters that require io::Error.
+fn io_error(error: std::io::Error, context: &'static str) -> Error {
+    error
+        .get_ref()
+        .and_then(|cause| cause.downcast_ref::<Error>())
+        .cloned()
+        .unwrap_or(Error::Service(context))
+}
 const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const DC: &str = "http://purl.org/dc/elements/1.1/";
 const RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
@@ -13,7 +27,7 @@ const RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
 /// Bounded XML preflight before giving the packet to an RDF editor.
 /// Xmpkit 0.1.6 is not a hardened XML boundary: bound bytes/nodes/depth,
 /// reject DTDs, alternate subjects, duplicate properties and prefix rebinding.
-/// Inspection can still show unsupported packets using zencodec::metadata_audit.
+/// Inspection can still show unsupported packets using zenmeta::audit.
 fn preflight(xml: &str, limit: usize) -> Result<(), Error> {
     if xml.len() > limit {
         return Err(Error::Limit("XMP bytes"));
@@ -117,7 +131,7 @@ impl Services for PublishingServices {
         limit: usize,
         stop: &dyn Stop,
     ) -> Result<Option<Vec<u8>>, Error> {
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         if !self.keep_rights {
             return Ok(None);
         }
@@ -194,7 +208,7 @@ impl Services for PublishingServices {
                 }
             }
         }
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         Ok(Some(output.into_bytes()))
     }
     fn normalize_icc(
@@ -203,14 +217,14 @@ impl Services for PublishingServices {
         limit: usize,
         stop: &dyn Stop,
     ) -> Result<Option<Vec<u8>>, Error> {
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         if icc.len() > limit {
             return Err(Error::Limit("ICC bytes"));
         }
         // The application owns conversion policy; no CMS dependency enters zencodecs.
         // This bounded profile copy is explicit and never touches image pixels.
         let target = zenpixels_convert::OutputProfile::Icc(icc.into()).normalize_known_icc();
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         let zenpixels_convert::OutputProfile::Icc(normalized) = target else {
             unreachable!("normalization preserves ICC target kind")
         };
@@ -242,7 +256,7 @@ impl Services for PublishingServices {
         if data.len() > limit {
             return Err(Error::Limit("metadata compression input"));
         }
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         // PNG ICC is the only compression producer in the current rewrite API.
         if kind != Compression::Zlib {
             return Err(Error::Unsupported("example Brotli encoder"));
@@ -255,10 +269,10 @@ impl Services for PublishingServices {
         let mut encoder = flate2::write::ZlibEncoder::new(writer, flate2::Compression::fast());
         encoder
             .write_all(data)
-            .map_err(|_| Error::Service("bounded metadata compression"))?;
+            .map_err(|error| io_error(error, "bounded metadata compression"))?;
         Ok(encoder
             .finish()
-            .map_err(|_| Error::Service("metadata compression"))?
+            .map_err(|error| io_error(error, "metadata compression"))?
             .bytes)
     }
 }
@@ -266,7 +280,7 @@ fn read_bounded(mut reader: impl Read, limit: usize, stop: &dyn Stop) -> Result<
     let mut out = Vec::new();
     let mut buf = [0; 4096];
     loop {
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         // Read one byte past the remaining budget at most, detecting excess
         // without materializing attacker-controlled decompressed output first.
         let capacity = (limit - out.len()).saturating_add(1).min(buf.len());
@@ -292,13 +306,13 @@ impl Write for BoundedWriter<'_> {
     fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
         self.stop
             .check()
-            .map_err(|_| std::io::Error::other("cancelled"))?;
+            .map_err(|reason| std::io::Error::other(stop_error(reason)))?;
         if b.len() > self.limit - self.bytes.len() {
-            return Err(std::io::Error::other("metadata limit"));
+            return Err(std::io::Error::other(Error::Limit("metadata output")));
         }
         self.bytes
             .try_reserve(b.len())
-            .map_err(std::io::Error::other)?;
+            .map_err(|_| std::io::Error::other(Error::Allocation))?;
         self.bytes.extend_from_slice(b);
         Ok(b.len())
     }
@@ -453,7 +467,7 @@ fn merge_packets(a: &[u8], b: &[u8], limit: usize, stop: &dyn Stop) -> Result<Ve
         stop,
     };
     let mut writer = quick_xml::Writer::new(writer);
-    let map = |_| Error::Service("bounded XML serialization");
+    let map = |error| io_error(error, "bounded XML serialization");
     let mut root = BytesStart::new("rdf:RDF");
     let declarations: Vec<_> = prefixes
         .iter()
@@ -469,16 +483,12 @@ fn merge_packets(a: &[u8], b: &[u8], limit: usize, stop: &dyn Stop) -> Result<Ve
         prefixes: &BTreeMap<String, String>,
         writer: &mut quick_xml::Writer<BoundedWriter<'_>>,
     ) -> Result<(), Error> {
-        writer
-            .get_ref()
-            .stop
-            .check()
-            .map_err(|_| Error::Cancelled)?;
+        writer.get_ref().stop.check().map_err(stop_error)?;
         let name = |uri: Option<&str>, local: &str| match uri {
             Some(uri) => format!("{}:{local}", prefixes[uri]),
             None => local.to_string(),
         };
-        let map = |_| Error::Service("bounded XML serialization");
+        let map = |error| io_error(error, "bounded XML serialization");
         if n.is_element() {
             let tag = name(n.tag_name().namespace(), n.tag_name().name());
             let attrs: Vec<_> = n
@@ -555,7 +565,7 @@ fn inflate_zlib(data: &[u8], limit: usize, stop: &dyn Stop) -> Result<Vec<u8>, E
     let mut out = Vec::new();
     let mut buf = [0; 4096];
     loop {
-        stop.check().map_err(|_| Error::Cancelled)?;
+        stop.check().map_err(stop_error)?;
         let before_in = decoder.total_in();
         let before_out = decoder.total_out();
         let capacity = (limit - out.len()).saturating_add(1).min(buf.len());
@@ -589,6 +599,54 @@ mod integration_tests {
     use super::*;
     const REQUIRED: &str = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:hdrgm="http://ns.adobe.com/hdr-gain-map/1.0/" hdrgm:Version="1.0" hdrgm:GainMapMax="2.0"/></rdf:RDF>"#;
     #[test]
+    fn writer_callbacks_preserve_one_shot_timeout_reasons() {
+        struct StopOnce {
+            calls: std::sync::atomic::AtomicUsize,
+            at: usize,
+        }
+        impl enough::Stop for StopOnce {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                if self
+                    .calls
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    == self.at
+                {
+                    Err(enough::StopReason::TimedOut)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        let service = PublishingServices::default();
+        for merge in [false, true] {
+            let run = |stop: &dyn enough::Stop| {
+                if merge {
+                    service.merge_xmp(br#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about=""/></rdf:RDF>"#, REQUIRED.as_bytes(), 1 << 20, stop)
+                } else {
+                    service.compress(Compression::Zlib, &[42; 8192], 1 << 20, stop)
+                }
+            };
+            let count = StopOnce {
+                calls: 0.into(),
+                at: usize::MAX,
+            };
+            run(&count).unwrap();
+            let calls = count.calls.load(std::sync::atomic::Ordering::Relaxed);
+            assert!(calls > 1);
+            for at in 0..calls {
+                let stop = StopOnce {
+                    calls: 0.into(),
+                    at,
+                };
+                assert_eq!(
+                    run(&stop).unwrap_err(),
+                    Error::Stopped(enough::StopReason::TimedOut),
+                    "merge={merge}, check={at}"
+                );
+            }
+        }
+    }
+    #[test]
     fn merge_keeps_required_signals_and_rights_language_qualifiers() {
         let service = PublishingServices { keep_rights: true };
         let description = service
@@ -608,7 +666,7 @@ mod integration_tests {
             )
             .unwrap();
         let merged = std::str::from_utf8(&merged).unwrap();
-        let packet = zencodec::xmp::Packet::parse(merged).unwrap();
+        let packet = zenmeta::xmp::Packet::parse(merged).unwrap();
         assert_eq!(
             packet
                 .property("http://ns.adobe.com/hdr-gain-map/1.0/", "GainMapMax")

@@ -68,7 +68,7 @@ pub fn transcode_to_hdr_pq_png(
     target_headroom: Option<f32>,
 ) -> crate::error::Result<Option<alloc::vec::Vec<u8>>> {
     use crate::CodecError;
-    use whereat::{ResultAtExt, at};
+    use whereat::ResultAtExt;
     use zencodec::OrientationHint;
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
 

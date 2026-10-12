@@ -139,3 +139,28 @@ arm-codec-integration-audit:
 # Explicitly opt into real AVIF corpus tests; retain per-test output.
 arm-avif-corpus-audit:
     CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test corpus -- --ignored avif --show-output
+
+# Shared contracts through codec-owned rewriting; retains the original scrub cases.
+metadata-dispatch-check:
+    cargo test -p zencodecs --no-default-features --features metadata,jpeg-ultrahdr,jxl-encode,jxl-decode,png --test metadata_scrub
+    cargo check -p zencodecs --no-default-features --features metadata
+    cargo clippy -p zencodecs --no-default-features --features metadata,jpeg-ultrahdr,jxl-encode,jxl-decode,png --lib -- -D warnings
+
+metadata-services-check:
+    cargo test --manifest-path tools/metadata-services/Cargo.toml
+    cargo check --manifest-path tools/metadata-services/Cargo.toml --features cli
+
+# Validate the complete remote codec graph and optional AV1 backends.
+metadata-codec-graph-check:
+    cargo check -p zencodecs --features all,metadata,tiff,pdf-decode,avif-svt,avif-aom
+
+metadata-inventory-dispatch-check:
+    cargo test -p zencodecs --no-default-features --features inventory,jpeg,png,webp,gif,avif-encode,avif-decode,jxl-encode,jxl-decode --lib inventory::tests
+    cargo check -p zencodecs-cli
+
+metadata-final-api-check:
+    cargo test -p zencodecs --features inventory,pdf-decode --test pdf pdf_inventory_dispatches_to_zenpdf
+    cargo clippy -p zencodecs --features inventory,metadata --lib -- -D warnings
+    cargo fmt -p zencodecs -p zencodecs-cli --check
+    python3 scripts/check-decoder-pins.py
+    just api-doc
