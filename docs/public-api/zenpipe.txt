@@ -1390,7 +1390,7 @@ codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
 limits::AllocationTracker: !Freeze
-ops::RowConverterOp: !RefUnwindSafe !UnwindSafe
+ops::RowConverterOp: !Freeze !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe
 orchestrate::StreamingOutput: !RefUnwindSafe !Sync !UnwindSafe

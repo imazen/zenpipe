@@ -60,8 +60,8 @@ heic = { git = "https://github.com/imazen/heic", rev = "6c30bf2545d86e34a734607f
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "c3e02d987fd0b7dbb4de79709ecb304bfcbda382" }
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7ae0981fbe4ed7228d44dbdc303f0dcedd2d0692" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "02c49bc5bf60c76d702322c2e089ad204a02228b" }
 

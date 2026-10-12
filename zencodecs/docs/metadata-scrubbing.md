@@ -278,3 +278,8 @@ error. Input/part limits and cancellation failures are propagated as errors.
 `avif-svt` and `avif-aom` explicitly enable those native encoder backends. The
 combined metadata graph check includes both, without changing default backend
 selection. Generic metadata services can still compile without zencodecs.
+
+Registry audit on 2026-10-12: the crates.io API returned HTTP 404 for both
+`zencodecs` and `zenpipe`. These proposed dispatcher/rewrite APIs have no
+published crate baseline to break. Codec and zencodec release comparisons
+remain separate audits; local version headings do not establish a release.

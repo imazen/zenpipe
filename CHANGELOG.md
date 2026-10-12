@@ -7,6 +7,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed
+- Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
+- CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
+
 #### Added (AVIF auto-tuning consumer, 2026-09-04)
 
 - **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam

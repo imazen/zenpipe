@@ -6,11 +6,27 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- No registry baseline exists for zencodecs (crates.io API returned 404 on
+  2026-10-12). The proposed scrub API now uses zencodec-owned result/service
+  types and codec feature gates; no zenmeta types appear in public signatures.
+
+### Added
+
+- Reuse PR89 inventory dispatch and CLI. `inventory` is default-enabled in
+  zencodecs and weakly enables only the selected codec walkers. Direct codec
+  defaults stay unchanged. The proposed convenience API retains `Option` for
+  absent capability; codec jobs expose the shared typed unsupported error.
+- Add optional `avif-svt` and `avif-aom` forwarding; backend selection is unchanged.
+
+
 - Add default-off `metadata::ScrubRequest` for bounded, auditable encoded JPEG,
   gain-map JPEG, JXL and PNG/APNG metadata rewrites. Borrow image payloads and
   preserve rendering signals; explicit services handle XMP and compressed
   metadata. JPEG reconstruction removal and known ICC normalization are opt-in.
-  No arbitrary ICC sanitization or new metadata-feature dependencies.
+  No arbitrary ICC sanitization. Container planning delegates to codec crates;
+  generic analysis uses zenmeta and shared contracts remain in zencodec.
 - Propagate transcode metadata-probe errors instead of treating them as absent
   metadata.
 

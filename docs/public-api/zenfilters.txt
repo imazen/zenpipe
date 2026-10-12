@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenfilters.txt 976 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 68 lines (76 hidden + 0 excluded-feature)
+# files: zenfilters.txt 977 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 68 lines (76 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -19,8 +19,8 @@
 #   enum variants                             141
 #   trait roster entries (type × trait)       477
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                 113
-#   auto-trait exceptions                       3
+#   auto-trait-complete types                 112
+#   auto-trait exceptions                       4
 #
 # per-module pub lines:
 #   (root)                          158
@@ -1015,7 +1015,8 @@ impl<F> metric_gate::QualityMetric for F where F: core::ops::function::Fn(&Oklab
 
 ## auto traits
 
-113 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+112 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+ConvenienceError: !RefUnwindSafe !UnwindSafe
 Pipeline: !RefUnwindSafe !UnwindSafe
 masked::MaskedFilter: !RefUnwindSafe !UnwindSafe
 metric_gate::MetricGated<M>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

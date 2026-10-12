@@ -164,3 +164,9 @@ metadata-final-api-check:
     cargo fmt -p zencodecs -p zencodecs-cli --check
     python3 scripts/check-decoder-pins.py
     just api-doc
+
+metadata-consumer-regression-check:
+    cargo test -p zenfilters --lib
+    cargo check --manifest-path demo/crate/Cargo.toml
+    cargo check --manifest-path zencodecs/fuzz/Cargo.toml --bin fuzz_metadata_scrub
+    actionlint .github/workflows/ci.yml .github/workflows/demo-deploy.yml
