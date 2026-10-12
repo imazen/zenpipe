@@ -867,7 +867,7 @@ dependencies = [
  "hayro-cmap",
  "hayro-syntax",
  "kurbo",
- "moxcms 0.8.1",
+ "moxcms",
  "phf",
  "rustc-hash",
  "siphasher",
@@ -995,7 +995,7 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
- "moxcms 0.8.1",
+ "moxcms",
  "num-traits",
  "png",
  "zune-core",
@@ -1489,16 +1489,6 @@ name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
-dependencies = [
- "num-traits",
- "pxfm",
-]
-
-[[package]]
-name = "moxcms"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "396077b717181ce3f9a6b66739b269b82d756be5ec0f76be0bc40a7c51775830"
 dependencies = [
  "num-traits",
  "pxfm",
@@ -3204,7 +3194,7 @@ dependencies = [
  "heic",
  "imgref",
  "linear-srgb",
- "moxcms 0.9.1",
+ "moxcms",
  "rgb",
  "thiserror",
  "ultrahdr-core",
@@ -3284,7 +3274,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=9a5694d4edcd600a377b03a20afad3970a02046b#9a5694d4edcd600a377b03a20afad3970a02046b"
+source = "git+https://github.com/imazen/zenjpeg?rev=7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e#7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -3308,7 +3298,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zentone",
- "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=9a5694d4edcd600a377b03a20afad3970a02046b)",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e)",
 ]
 
 [[package]]
@@ -3397,7 +3387,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
+source = "git+https://github.com/imazen/zenpixels?rev=c6ca855703e08378d84ee48d86bed1fc792a96fd#c6ca855703e08378d84ee48d86bed1fc792a96fd"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -3408,7 +3398,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
+source = "git+https://github.com/imazen/zenpixels?rev=c6ca855703e08378d84ee48d86bed1fc792a96fd#c6ca855703e08378d84ee48d86bed1fc792a96fd"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -3417,7 +3407,7 @@ dependencies = [
  "linear-srgb",
  "lz4_flex",
  "magetypes",
- "moxcms 0.9.1",
+ "moxcms",
  "once_cell",
  "paste",
  "rgb",
@@ -3636,7 +3626,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=9a5694d4edcd600a377b03a20afad3970a02046b#9a5694d4edcd600a377b03a20afad3970a02046b"
+source = "git+https://github.com/imazen/zenjpeg?rev=7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e#7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e"
 dependencies = [
  "archmage",
  "imgref",

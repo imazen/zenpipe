@@ -594,7 +594,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=9a5694d4edcd600a377b03a20afad3970a02046b#9a5694d4edcd600a377b03a20afad3970a02046b"
+source = "git+https://github.com/imazen/zenjpeg?rev=7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e#7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -649,7 +649,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
+source = "git+https://github.com/imazen/zenpixels?rev=c6ca855703e08378d84ee48d86bed1fc792a96fd#c6ca855703e08378d84ee48d86bed1fc792a96fd"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=0d74f5eb91d985b877d92210020bb96f233fcc0b#0d74f5eb91d985b877d92210020bb96f233fcc0b"
+source = "git+https://github.com/imazen/zenpixels?rev=c6ca855703e08378d84ee48d86bed1fc792a96fd#c6ca855703e08378d84ee48d86bed1fc792a96fd"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=9a5694d4edcd600a377b03a20afad3970a02046b#9a5694d4edcd600a377b03a20afad3970a02046b"
+source = "git+https://github.com/imazen/zenjpeg?rev=7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e#7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e"
 dependencies = [
  "archmage",
  "imgref",
@@ -773,7 +773,7 @@ source = "git+https://github.com/imazen/zengif?rev=10f96266692e1698d735e7ba56e38
 [[patch.unused]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=f27c5c6fb56b76c952d88aa7d5231a06f7e49b51#f27c5c6fb56b76c952d88aa7d5231a06f7e49b51"
 
 [[patch.unused]]
 name = "zennode"

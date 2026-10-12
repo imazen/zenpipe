@@ -25,7 +25,7 @@ zenflate = { git = "https://github.com/imazen/zenflate", rev = "43c10e3d04275dae
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "a81daf7605dc63074d4a39757e7b4399057d4a8f" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "9a5694d4edcd600a377b03a20afad3970a02046b" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
@@ -60,8 +60,8 @@ heic = { git = "https://github.com/imazen/heic", rev = "6c30bf2545d86e34a734607f
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "c3e02d987fd0b7dbb4de79709ecb304bfcbda382" }
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0d74f5eb91d985b877d92210020bb96f233fcc0b" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "02c49bc5bf60c76d702322c2e089ad204a02228b" }
 

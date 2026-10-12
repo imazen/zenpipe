@@ -8,6 +8,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- Advance JPEG metadata integration to `7cf22c68`: preserve default embedded
+  MPF compatibility, synchronize EXIF/policy/inventory handling, and reconstruct
+  ISO/aliased-XMP HDR with correct color. Complete legacy single-chunk ICC
+  profiles remain readable by default, with strict validation still available. The coordinated zenpixels pin includes
+  the independently checked real-world Display P3 ICC recognition fix.
 - Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
 - CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
 
