@@ -20,7 +20,7 @@ rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
 imgref = "1.12.3"
 bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
 zencodec = { version = ">=0.1.26, <0.3.0" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "a81daf7605dc63074d4a39757e7b4399057d4a8f", default-features = false, optional = true }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd", default-features = false, optional = true }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -74,7 +74,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "ce9378c5553953e2aba95e0ae89e595e80ec994e", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "728baa30c78972a1eac70f9203411b6e778c029f", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
@@ -83,8 +83,8 @@ zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
 # rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
-zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3", optional = true }
-zensvg = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3", optional = true }
+zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd", optional = true }
+zensvg = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd", optional = true }
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -126,6 +126,7 @@ zensim = { version = "0.3.0", optional = true, default-features = false, feature
 turbojpeg = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd" }
 png = "0.18.1"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
 # git patch; CI paths it to the sibling clone.
@@ -300,3 +301,7 @@ required-features = ["jpeg", "webp", "png", "gif"]
 
 # [patch.crates-io] moved to workspace root Cargo.toml
 
+
+[[test]]
+name = "operation_matrix"
+required-features = ["std", "cms", "jpeg", "png", "webp", "gif-zenquant"]

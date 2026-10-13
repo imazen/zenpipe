@@ -74,11 +74,11 @@ from pathlib import Path
 # in this repo names it: it is selected transitively by whichever zenavif rev is
 # pinned. It IS checked in lockfiles, which is where its rev becomes visible.
 EXPECTED = {
-    "https://github.com/imazen/zencodec": "a81daf7605dc63074d4a39757e7b4399057d4a8f",
-    "https://github.com/imazen/zenjpeg": "7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e",
+    "https://github.com/imazen/zencodec": "4fda439133d465246174b55f62426dc54ef204dd",
+    "https://github.com/imazen/zenjpeg": "4448f42eccb033e70eabbc87c47eac9b15d4da54",
     "https://github.com/imazen/zenpixels": "c6ca855703e08378d84ee48d86bed1fc792a96fd",
-    "https://github.com/imazen/zengif": "4f88c49b1e8ea92ccb32163c4822bda923c6d55e",
-    "https://github.com/imazen/zenavif": "ce9378c5553953e2aba95e0ae89e595e80ec994e",
+    "https://github.com/imazen/zengif": "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004",
+    "https://github.com/imazen/zenavif": "728baa30c78972a1eac70f9203411b6e778c029f",
     "https://github.com/imazen/rav1d-safe": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
 }
 

@@ -53,17 +53,17 @@ zenflate = { git = "https://github.com/imazen/zenflate", rev = "43c10e3d04275dae
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
 # Coordinated shared pixel contracts for the 0.3 migration.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "a81daf7605dc63074d4a39757e7b4399057d4a8f" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "7cf22c683f92b53d334d4e1236ecfd99f0a8cd5e" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4448f42eccb033e70eabbc87c47eac9b15d4da54" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
-heic = { git = "https://github.com/imazen/heic", rev = "6c30bf2545d86e34a734607f0d938291dfc1405b" }
+heic = { git = "https://github.com/imazen/heic", rev = "83e8a85c83e0b7db806a6a55d2137e6edf1ea60d" }
 # zentiff main is 0.1.2 on zencodec 0.1.26 (the zencodec decode/encode adapter +
 # heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
 # (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so the `heic` edge (which pulls them) can be
 # locked. `paths` overrides can't lock a crate newly depended-on by a git dep
@@ -76,10 +76,10 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "c6ca85
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
 # resolves to 0.6.x would no longer satisfy heic's `^0.5.0`, stranding it on the
 # boost-less registry 0.5.0. zenjpeg 0.9.0 + zencodecs use registry 0.6.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "02c49bc5bf60c76d702322c2e089ad204a02228b" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "e2148a30755ab690317939cca193574e1bcfbbc0" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "78c64c7e01529125a209405b0e98d196e860e254" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "df4892fdc041a8e0dc27310de54bd1b028a4d9f3" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main has the mode-aware orientation API zenjxl main's adapter
@@ -89,10 +89,10 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f27c
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
 # optional feature to a required dep (zenwebp#69).
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "d12fe2bb767461c8740938cf209527dd25ff0cbc" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "1ab08de1dbaf4e1c5b18ff5bf9b5d13f74e4be60" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "5bd6610354f66e48d18608060e9663db78a60f1f" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "52acca5aac297e3781845a57396e581c4f44a6b0" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }
@@ -175,25 +175,25 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # zenbitmaps main is 0.2.0 (At<BitmapError> error wrapper + 120 MP default pixel cap
 # + 16-bit ASCII PNM roundtrip fix, fuzz zenbitmaps#7/#10); crates.io tops out at 0.1.5.
 # Powers the bitmaps-* (BMP / PNM / farbfeld) decode path (zenpipe#50).
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "72c13f57ab77e7185e4d28b6b82faaaf1901e4fa" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "77e4840d5f17b10a3a4c6ad35bd56e7dceba5a4b" }
 # zengif main (0.7.3, unreleased-beyond-tag content) adopted the zencodec
 # Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
 # predates both changes.
-zengif = { git = "https://github.com/imazen/zengif", rev = "4f88c49b1e8ea92ccb32163c4822bda923c6d55e" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004" }
 # Coordinated animation/native-12/color contract. This directly selects the
 # managed rav1d-safe decoder; a registry patch cannot replace a git dependency.
 # The former ARM film-grain blocker (rav1d-safe#526) was fixed by #527,
 # commit 83fa5d3edd5137f1b0b1d981625c0ba28ae79a49, an ancestor of the selected
 # dfd01e32. All manifests and authoritative lockfiles must agree; run
 # scripts/check-decoder-pins.py after resolving any workspace.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "ce9378c5553953e2aba95e0ae89e595e80ec994e" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "728baa30c78972a1eac70f9203411b6e778c029f" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "c3e02d987fd0b7dbb4de79709ecb304bfcbda382" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "f8322a00db314f94f63fd0473c1845821d8987b3" }
 # zenpdf: registry 0.2.0 predates the taxonomy entirely; zenextras main is on
 # zencodec 0.1.26. Powers `zencodecs/pdf-decode`.
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "2be9bcde317ed31c82f03b91664c3d64a01161c3" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [profile.release]
