@@ -185,3 +185,7 @@ metadata-gif-consumer-check:
 
 metadata-codec-ci-check:
     cargo test -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets
+
+metadata-pin-check:
+    python3 scripts/check-decoder-pins.py --self-test
+    python3 scripts/check-decoder-pins.py

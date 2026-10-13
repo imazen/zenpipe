@@ -301,3 +301,8 @@ API snapshots use nightly-2026-10-12 in both `just api-doc` and CI. Compiler
 changes to hidden Eq helpers and standard-library Arc paths are recorded
 separately from source API changes. The [shared migration report](https://github.com/imazen/zencodec/blob/main/docs/zenmeta-migration.md)
 tracks parser ownership, published compatibility and remaining design findings.
+
+`just metadata-pin-check` now guards the shared metadata, JPEG, GIF and pixel
+revisions alongside AVIF. Its self-tests inject lock drift and registry fallback
+for each metadata package so a correct parser fix cannot disappear from a
+standalone demo, service or fuzz workspace through dependency skew.

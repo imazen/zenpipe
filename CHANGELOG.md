@@ -8,6 +8,8 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- Extend the existing dependency pin guard to zencodec/zenmeta, JPEG, GIF and
+  pixel/color crates. Standalone consumer locks must share the tested revisions.
 - Pin public-API snapshot generation to nightly-2026-10-12 locally and in CI.
   Regenerated differences are derived Eq helpers, standard-library Arc paths
   and Self spelling; this toolchain change adds no crate API.
