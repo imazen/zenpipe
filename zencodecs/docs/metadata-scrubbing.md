@@ -283,3 +283,21 @@ Registry audit on 2026-10-12: the crates.io API returned HTTP 404 for both
 `zencodecs` and `zenpipe`. These proposed dispatcher/rewrite APIs have no
 published crate baseline to break. Codec and zencodec release comparisons
 remain separate audits; local version headings do not establish a release.
+
+## Integration validation (2026-10-13)
+
+The coordinated graph uses JPEG `7cf22c68`, shared ICC recognition through
+zenpixels `c6ca8557`, and GIF `4f88c49b`. The JPEG revision preserves bounded
+embedded MPF images and complete legacy single-chunk ICC profiles by default,
+while strict decoding and rewrite planning retain explicit rejection. HDR
+reconstruction selects ISO before XMP and converts output gamut afterwards.
+
+GIF rejects retained ICC or non-sRGB CICP; explicit conversion to sRGB remains
+accepted. The unchanged GIF capability and Adobe RGB transcode tests pass.
+`just metadata-codec-ci-check` exercises the complete CI codec feature set.
+`just metadata-codec-graph-check` also compiles optional SVT and AOM backends.
+
+API snapshots use nightly-2026-10-12 in both `just api-doc` and CI. Compiler
+changes to hidden Eq helpers and standard-library Arc paths are recorded
+separately from source API changes. The [shared migration report](https://github.com/imazen/zencodec/blob/main/docs/zenmeta-migration.md)
+tracks parser ownership, published compatibility and remaining design findings.
