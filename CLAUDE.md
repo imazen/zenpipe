@@ -37,6 +37,10 @@ sources`.
 
 ## Known Bugs
 
+- Metadata integration CI exposed deprecated SIMD constructors in zenfilters.
+  The token-suffixed 0.9.30 calls preserve operations; validate both native and
+  aarch64 builds with `just metadata-filter-ci-check`.
+
 - Metadata service callback regression (2026-10-12): compression and XML writers erased a one-shot timeout as a generic service error. The I/O adapters now preserve the typed cause; `writer_callbacks_preserve_one_shot_timeout_reasons` exercises every callback position in both paths.
 
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares

@@ -8,6 +8,8 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- Update zenfilters SIMD constructor calls to magetypes 0.9.30 token-suffixed
+  methods, retaining arithmetic and fixing workspace warnings-as-errors CI.
 - Advance JPEG metadata integration to `7cf22c68`: preserve default embedded
   MPF compatibility, synchronize EXIF/policy/inventory handling, and reconstruct
   ISO/aliased-XMP HDR with correct color. Complete legacy single-chunk ICC

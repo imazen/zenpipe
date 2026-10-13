@@ -170,3 +170,10 @@ metadata-consumer-regression-check:
     cargo check --manifest-path demo/crate/Cargo.toml
     cargo check --manifest-path zencodecs/fuzz/Cargo.toml --bin fuzz_metadata_scrub
     actionlint .github/workflows/ci.yml .github/workflows/demo-deploy.yml
+
+# Match the SIMD feature configuration exercised by workspace CI.
+metadata-filter-ci-check:
+    cargo test -p zenfilters --lib
+    cargo clippy -p zenfilters --all-targets -- -D warnings
+    cargo check -p zenfilters --target aarch64-unknown-linux-gnu
+    cargo fmt -p zenfilters --check
