@@ -8,6 +8,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- Pin public-API snapshot generation to nightly-2026-10-12 locally and in CI.
+  Regenerated differences are derived Eq helpers, standard-library Arc paths
+  and Self spelling; this toolchain change adds no crate API.
 - Pin zengif `38984a62` to retain the existing ICC-rejection contract in
   still and animation encoding; the original GIF capability assertion passes.
 - Update zenfilters SIMD constructor calls to magetypes 0.9.30 token-suffixed

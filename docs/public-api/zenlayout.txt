@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenlayout.txt 632 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 53 lines (53 hidden + 0 excluded-feature)
+# files: zenlayout.txt 632 lines (supported surface) | zenlayout.features.txt 164 added (features: riapi,smart-crop,std,svg) | zenlayout.internal.txt 44 lines (44 hidden + 0 excluded-feature)
 
 ## summary
 #

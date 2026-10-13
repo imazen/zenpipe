@@ -91,7 +91,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
+      - uses: dtolnay/rust-toolchain@master # pinned rustdoc JSON for public-api
+        with:
+          toolchain: nightly-2026-10-12
       - uses: dtolnay/rust-toolchain@stable
       - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
         with:
@@ -103,6 +105,7 @@ jobs:
         run: cargo test --manifest-path apidoc/Cargo.toml
         env:
           ZEN_API_DOC: check
+          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-12
 
   # 32-bit coverage. i686 is a primary target: it is where `usize` narrowing
   # bugs show up (stride/offset arithmetic that silently fits in 64 bits, byte

@@ -37,6 +37,10 @@ sources`.
 
 ## Known Bugs
 
+- API snapshots differed between the old local tracking nightly and CI nightly.
+  `just api-doc` and CI now pin nightly-2026-10-12; changing that pin requires
+  reviewing generated compiler/standard-library spelling changes separately.
+
 - Metadata integration CI exposed deprecated SIMD constructors in zenfilters.
   The token-suffixed 0.9.30 calls preserve operations; validate both native and
   aarch64 builds with `just metadata-filter-ci-check`.

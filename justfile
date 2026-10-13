@@ -72,15 +72,15 @@ clippy:
 # is never built or run by plain `cargo test` or any CI job.
 fmt:
     cargo fmt --all
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC=check ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Check formatting
 fmt-check:
@@ -182,3 +182,6 @@ metadata-gif-consumer-check:
     cargo test -p zencodecs --test gif_capability
     cargo test -p zencodecs --lib animation
     cargo clippy -p zencodecs --lib -- -D warnings
+
+metadata-codec-ci-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets
