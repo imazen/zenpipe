@@ -177,3 +177,8 @@ metadata-filter-ci-check:
     cargo clippy -p zenfilters --all-targets -- -D warnings
     cargo check -p zenfilters --target aarch64-unknown-linux-gnu
     cargo fmt -p zenfilters --check
+
+metadata-gif-consumer-check:
+    cargo test -p zencodecs --test gif_capability
+    cargo test -p zencodecs --lib animation
+    cargo clippy -p zencodecs --lib -- -D warnings
