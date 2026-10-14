@@ -3,11 +3,11 @@
 #
 # For each image under <corpus-root>, mirroring the tree into <out-dir>:
 #   * PNG            → copied verbatim as <stem>.sdr.png (it already IS its SDR rendition)
-#   * JPEG / HEIC    → <stem>.sdr.png  (display-oriented, cICP-tagged SDR base)
+#   * JPEG          → <stem>.sdr.png  (display-oriented, cICP-tagged SDR base)
 #   * gain-map source→ <stem>.hdr.png  (BT.2100 PQ HDR reconstruction, cICP + cLLI)
 #
 # Verified pixel-identical (ImageMagick AE=0) to the corpus-convert reference on
-# Apple/Samsung HEIC (SDR+HDR, oriented) and JPEG. The CLI auto-orients by default
+# Gain-map JPEG (SDR+HDR, oriented). The CLI auto-orients by default
 # and carries the resolved source color (e.g. Apple Display-P3) onto the SDR cICP.
 #
 # Usage: convert-hdr-corpus.sh <zencodecs-bin> <corpus-root> <out-dir>

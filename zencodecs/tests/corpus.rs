@@ -892,7 +892,7 @@ fn corpus_avif_invalid_no_panic() {
 }
 
 // ===========================================================================
-// HEIC — decode conformance corpus
+// Container-stills decode conformance corpus
 // ===========================================================================
 
 #[test]
@@ -902,7 +902,7 @@ fn corpus_heic_decode_valid() {
     let c = corpus();
     let dir = c.get("heic-conformance/valid").unwrap();
 
-    // Recursively find all HEIC/HEIF files
+    // Recursively find all container-stills files
     let mut files = Vec::new();
     fn walk_heic(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -920,7 +920,7 @@ fn corpus_heic_decode_valid() {
     }
     walk_heic(&dir, &mut files);
     files.sort();
-    assert!(!files.is_empty(), "no HEIC files found");
+    assert!(!files.is_empty(), "no stills files found");
 
     let mut ok = 0;
     let mut fail = Vec::new();
@@ -940,11 +940,11 @@ fn corpus_heic_decode_valid() {
             }
         }
     }
-    eprintln!("HEIC conformance: {ok}/{} succeeded", files.len());
+    eprintln!("Stills conformance: {ok}/{} succeeded", files.len());
     if !fail.is_empty() {
         eprintln!("Failures ({}):\n  {}", fail.len(), fail.join("\n  "));
     }
-    assert!(ok > 0, "no HEIC files decoded");
+    assert!(ok > 0, "no stills files decoded");
 }
 
 #[test]
@@ -956,7 +956,7 @@ fn corpus_heic_invalid_no_panic() {
     let files = collect_files(&dir, &["heic", "heif"]);
 
     if files.is_empty() {
-        eprintln!("no invalid HEIC files (skipping)");
+        eprintln!("no invalid stills files (skipping)");
         return;
     }
 
@@ -965,7 +965,7 @@ fn corpus_heic_invalid_no_panic() {
         let _ = DecodeRequest::new(&data).decode_full_frame();
     }
     eprintln!(
-        "HEIC invalid: {} files processed without panic",
+        "Invalid stills: {} files processed without panic",
         files.len()
     );
 }

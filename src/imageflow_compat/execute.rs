@@ -1070,7 +1070,7 @@ fn decode_to_source_frame(
 }
 
 /// Build a streaming decode source. Tries row-level streaming first
-/// (JPEG, PNG, GIF, AVIF, HEIC), falls back to full-frame + MaterializedSource.
+/// (JPEG, PNG, GIF, AVIF), falls back to full-frame + MaterializedSource.
 /// JPEG decode config: use libjpeg-compatible chroma upsampling for v2 parity.
 ///
 /// zenjpeg defaults to Triangle (jpegli-style) upsampling which produces

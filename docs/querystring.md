@@ -8,15 +8,6 @@ All supported querystring keys for image processing URLs.
 ?w=800&h=600&mode=crop&format=webp&qp=high&accept.webp=true
 ```
 
-### [Decode Heic](nodes/heic-decode.md)
-
-| Key | Aliases | Type | Description |
-|-----|---------|------|-------------|
-| `heic.gain_map` | — | boolean | Extract Gain Map |
-| `heic.depth` | — | boolean | Extract Depth Map |
-| `heic.mattes` | — | boolean | Placeholder — not yet wired to the decoder. |
-| `heic.thumbnail` | — | boolean | Placeholder — not yet wired to the decoder. |
-
 ### [Avif Encode](nodes/zenavif-encode.md)
 
 | Key | Aliases | Type | Description |

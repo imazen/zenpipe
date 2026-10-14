@@ -42,7 +42,7 @@ pub use zenjpeg::ultrahdr::GainMap;
 // Re-export zencodec gain map types.
 pub use zencodec::gainmap::{GainMapChannel, GainMapParams, GainMapPresence};
 
-/// Transcode a gain-map source (HEIC / Ultra-HDR JPEG) to a BT.2100 **PQ**
+/// Transcode a gain-map source (Ultra-HDR JPEG) to a BT.2100 **PQ**
 /// (ST 2084) PNG carrying `cICP` + `cLLI`.
 ///
 /// Decodes the source's HDR reconstruction (linear float — full reconstruction
@@ -55,8 +55,8 @@ pub use zencodec::gainmap::{GainMapChannel, GainMapParams, GainMapPresence};
 /// Returns `Ok(None)` when the source carries no gain map (nothing to
 /// reconstruct — the caller should fall back to a plain SDR transcode).
 ///
-/// Requires `png` plus a gain-map-capable decoder (`jpeg-ultrahdr` and/or
-/// `heic-decode`). This is the rendition step `hdr-corpus-convert` needs from
+/// Requires `png` plus a gain-map-capable decoder (see the codec feature
+/// flags). This is the rendition step `hdr-corpus-convert` needs from
 /// the library so the tool can collapse to a CLI invocation (zenpipe#68).
 #[cfg(all(
     feature = "png",

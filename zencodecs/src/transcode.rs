@@ -71,7 +71,7 @@ pub struct TranscodeOptions {
     /// metadata tag). Set [`OrientationHint::Correct`] to bake it — required for
     /// targets that can't carry an orientation tag (e.g. PNG) and the right
     /// choice for display-ready output. Only affects the pixel-decode path
-    /// (JPEG/HEIC sources); coefficient-domain transcodes are unaffected.
+    /// (JPEG sources); coefficient-domain transcodes are unaffected.
     pub orientation: zencodec::OrientationHint,
 }
 
@@ -247,10 +247,10 @@ pub fn transcode(
     };
 
     // Carry the resolved source color through to the encoder so it emits the right
-    // cICP. Apple HEIC's "unspecified nclx + ICC ⇒ Display P3" resolves into
+    // cICP. Unspecified-nclx + ICC ⇒ Display P3 resolves into
     // `source_color`, NOT the EXIF/ICC metadata roundtripped below, and the pixel
     // descriptor's color-space enum can't represent an arbitrary ICC-resolved primary
-    // set — so without this explicit carrier a wide-gamut HEIC→PNG is silently
+    // set — so without this explicit carrier a wide-gamut source→PNG is silently
     // mislabeled sRGB. `None` for sRGB-class sources (the encoder's default).
     let src_cicp = decoded.info().source_color.cicp;
 

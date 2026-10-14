@@ -77,7 +77,7 @@ copy_glob "$ZEN_DIR/zenjxl-decoder/resources/test/*.jxl" "jxl"
 # Also check worktree copies
 copy_glob "$ZEN_DIR/zenjxl-decoder/.claude/worktrees/*/zenjxl-decoder/resources/test/*.jxl" "jxl"
 
-# HEIC seeds
+# Container-stills seeds
 copy_seeds "$ZEN_DIR/heic/fuzz/corpus/fuzz_probe" "heic"
 copy_glob "$ZEN_DIR/heic/tests/fixtures/*.heic" "heic"
 copy_glob "$ZEN_DIR/heic/tests/fixtures/*.heif" "heic"
