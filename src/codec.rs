@@ -193,11 +193,25 @@ impl Source for DecoderSource<'_> {
 /// Receives pixel strips, converts them to [`PixelSlice`]s, and pushes
 /// rows into the encoder. Call [`take_output()`](EncoderSink::take_output)
 /// after [`finish()`](crate::Sink::finish) to retrieve the encoded bytes.
+///
+/// To send bytes while the pipeline runs (an HTTP response, a socket, a
+/// multipart upload), call [`begin`](Self::begin) with the image size before
+/// the first strip and either attach a writer with
+/// [`with_writer`](Self::with_writer), which receives every byte as soon as
+/// the encoder has it, or drain [`pending_output`](Self::pending_output)
+/// yourself. `begin` returns the encoder's
+/// [`OutputTiming`](zencodec::encode::OutputTiming): whether its bytes stream
+/// at all with this configuration, and how many rows it holds back.
 pub struct EncoderSink<'a> {
     encoder: Option<Box<dyn DynEncoder + Send + 'a>>,
     output: Option<zencodec::encode::EncodeOutput>,
     descriptor: PixelDescriptor,
+    writer: Option<Writer<'a>>,
+    timing: Option<zencodec::encode::OutputTiming>,
 }
+
+/// Receives encoded bytes as they become available.
+type Writer<'a> = Box<dyn FnMut(&[u8]) -> crate::PipeResult<()> + Send + 'a>;
 
 impl<'a> EncoderSink<'a> {
     /// Create an `EncoderSink` from a dyn encoder.
@@ -209,7 +223,73 @@ impl<'a> EncoderSink<'a> {
             encoder: Some(encoder),
             output: None,
             descriptor: format,
+            writer: None,
+            timing: None,
         }
+    }
+
+    /// Send encoded bytes to `writer` as soon as the encoder has them: after
+    /// every strip and, at [`finish`](crate::Sink::finish), the rest (then
+    /// [`take_output`](Self::take_output) returns an empty output). Without
+    /// [`begin`](Self::begin), or with an encoder whose timing is
+    /// [`AT_FINISH`](zencodec::encode::OutputTiming::AT_FINISH), everything
+    /// arrives at `finish`.
+    pub fn with_writer(
+        mut self,
+        writer: impl FnMut(&[u8]) -> crate::PipeResult<()> + Send + 'a,
+    ) -> Self {
+        self.writer = Some(Box::new(writer));
+        self
+    }
+
+    /// Declare the image to the encoder before the first strip
+    /// ([`DynEncoder::begin`]) and return when its bytes will arrive.
+    pub fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> crate::PipeResult<zencodec::encode::OutputTiming> {
+        let encoder = self
+            .encoder
+            .as_mut()
+            .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
+        let timing = encoder
+            .begin(width, height, self.descriptor)
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
+        self.timing = Some(timing);
+        self.drain()?;
+        Ok(timing)
+    }
+
+    /// What [`begin`](Self::begin) reported, if it was called.
+    pub fn output_timing(&self) -> Option<zencodec::encode::OutputTiming> {
+        self.timing
+    }
+
+    /// Encoded bytes ready to send (see [`DynEncoder::pending_output`]);
+    /// always empty with a writer attached, which takes them at once.
+    pub fn pending_output(&self) -> &[u8] {
+        self.encoder.as_ref().map_or(&[], |e| e.pending_output())
+    }
+
+    /// Mark the first `n` pending bytes as sent.
+    pub fn consume_output(&mut self, n: usize) {
+        if let Some(e) = self.encoder.as_mut() {
+            e.consume_output(n);
+        }
+    }
+
+    /// Hand every pending byte to the writer, if there is one.
+    fn drain(&mut self) -> crate::PipeResult<()> {
+        if let (Some(writer), Some(encoder)) = (self.writer.as_mut(), self.encoder.as_mut()) {
+            let pending = encoder.pending_output();
+            if !pending.is_empty() {
+                let n = pending.len();
+                writer(pending)?;
+                encoder.consume_output(n);
+            }
+        }
+        Ok(())
     }
 
     /// Take the encoded output after [`finish()`](crate::Sink::finish).
@@ -250,7 +330,8 @@ impl crate::Sink for EncoderSink<'_> {
 
         encoder
             .push_rows(pixels)
-            .map_err(|e| at!(PipeError::Op(e.to_string())))
+            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
+        self.drain()
     }
 
     fn finish(&mut self) -> crate::PipeResult<()> {
@@ -259,10 +340,17 @@ impl crate::Sink for EncoderSink<'_> {
             .take()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        let output = encoder
+        let mut output = encoder
             .finish()
             .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
+        if let Some(writer) = self.writer.as_mut() {
+            writer(output.data())?;
+            // The bytes went to the writer; keep what describes them.
+            output = zencodec::encode::EncodeOutput::new(Vec::new(), output.format())
+                .with_mime_type(output.mime_type())
+                .with_extension(output.extension());
+        }
         self.output = Some(output);
         Ok(())
     }

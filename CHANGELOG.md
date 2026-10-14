@@ -702,6 +702,15 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Added
+- **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
+  `begin(width, height)` declares the image to the encoder and returns its
+  `OutputTiming`; `with_writer(..)` receives every byte as soon as the encoder
+  has it (after each strip, the rest at `finish`, `take_output` then empty);
+  `pending_output()` / `consume_output()` for callers that drain themselves.
+  A pipeline can now feed an HTTP response or upload while it runs
+  (`tests/streaming_output.rs`).
+
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
 - **The sink's own pass is 23–29 % faster** with byte-identical output

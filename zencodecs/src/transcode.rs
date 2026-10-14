@@ -637,6 +637,11 @@ pub fn reconstruct_jpeg_from_jxl(jxl: &[u8]) -> Result<Option<Vec<u8>>> {
 pub struct TranscodeSink<'a> {
     encoder: Option<Box<dyn DynEncoder + 'a>>,
     supported: &'static [PixelDescriptor],
+    /// What the encoder's `begin` reported (set when the decoder declared
+    /// the image).
+    timing: Option<zencodec::encode::OutputTiming>,
+    /// Receives encoded bytes as soon as the encoder has them.
+    writer: Option<TranscodeWriter<'a>>,
     /// Scratch buffer for receiving decoded rows from the decoder.
     /// The decoder writes into this via `provide_next_buffer`, and
     /// we forward it to the encoder on the *next* call (or on finish).
@@ -644,6 +649,11 @@ pub struct TranscodeSink<'a> {
     /// Metadata for the pending (written but not yet forwarded) strip.
     pending: Option<PendingStrip>,
 }
+
+/// Receives encoded bytes as they become available (see
+/// [`TranscodeSink::with_writer`]).
+pub type TranscodeWriter<'a> =
+    Box<dyn FnMut(&[u8]) -> core::result::Result<(), SinkError> + Send + 'a>;
 
 /// Metadata for a strip that the decoder has written but we haven't
 /// forwarded to the encoder yet.
@@ -663,9 +673,57 @@ impl<'a> TranscodeSink<'a> {
         Self {
             encoder: Some(encoder),
             supported,
+            timing: None,
+            writer: None,
             strip_buf: Vec::new(),
             pending: None,
         }
+    }
+
+    /// Send encoded bytes to `writer` as soon as the encoder has them: after
+    /// every strip and, at [`finish_encode`](Self::finish_encode), the rest
+    /// (which then returns an empty output). The decoder's `begin` declares
+    /// the image to the encoder, so an encoder whose
+    /// [`OutputTiming`](zencodec::encode::OutputTiming) streams writes its
+    /// header before the first row.
+    pub fn with_writer(
+        mut self,
+        writer: impl FnMut(&[u8]) -> core::result::Result<(), SinkError> + Send + 'a,
+    ) -> Self {
+        self.writer = Some(Box::new(writer));
+        self
+    }
+
+    /// What the encoder's `begin` reported, once the decoder has declared
+    /// the image.
+    pub fn output_timing(&self) -> Option<zencodec::encode::OutputTiming> {
+        self.timing
+    }
+
+    /// Encoded bytes ready to send (see [`DynEncoder::pending_output`]);
+    /// always empty with a writer attached, which takes them at once.
+    pub fn pending_output(&self) -> &[u8] {
+        self.encoder.as_ref().map_or(&[], |e| e.pending_output())
+    }
+
+    /// Mark the first `n` pending bytes as sent.
+    pub fn consume_output(&mut self, n: usize) {
+        if let Some(e) = self.encoder.as_mut() {
+            e.consume_output(n);
+        }
+    }
+
+    /// Hand every pending byte to the writer, if there is one.
+    fn drain(&mut self) -> core::result::Result<(), SinkError> {
+        if let (Some(writer), Some(encoder)) = (self.writer.as_mut(), self.encoder.as_mut()) {
+            let pending = encoder.pending_output();
+            if !pending.is_empty() {
+                let n = pending.len();
+                writer(pending)?;
+                encoder.consume_output(n);
+            }
+        }
+        Ok(())
     }
 
     /// Finalize encoding and return the output.
@@ -682,7 +740,15 @@ impl<'a> TranscodeSink<'a> {
                 .ok_or_else(|| -> Box<dyn core::error::Error + Send + Sync> {
                     "encoder already finished".into()
                 })?;
-        encoder.finish()
+        let mut output = encoder.finish()?;
+        if let Some(writer) = self.writer.as_mut() {
+            writer(output.data())?;
+            // The bytes went to the writer; keep what describes them.
+            output = EncodeOutput::new(Vec::new(), output.format())
+                .with_mime_type(output.mime_type())
+                .with_extension(output.extension());
+        }
+        Ok(output)
     }
 
     /// Forward the pending strip (if any) to the encoder.
@@ -714,20 +780,44 @@ impl<'a> TranscodeSink<'a> {
 
         encoder
             .push_rows(adapted.as_slice())
-            .map_err(|e| -> SinkError { alloc::format!("push_rows: {e}").into() })
+            .map_err(|e| -> SinkError { alloc::format!("push_rows: {e}").into() })?;
+        self.drain()
     }
 }
 
 impl DecodeRowSink for TranscodeSink<'_> {
     fn begin(
         &mut self,
-        _width: u32,
-        _height: u32,
-        _descriptor: PixelDescriptor,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
     ) -> core::result::Result<(), SinkError> {
         self.pending = None;
         self.strip_buf.clear();
-        Ok(())
+        // Declare the image to the encoder in the descriptor the strips will
+        // arrive in after adaptation: adapt one pixel through the same
+        // function the strips go through, so the two cannot disagree.
+        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
+        let target = zenpixels_convert::adapt::adapt_for_encode_cow(
+            &one,
+            descriptor,
+            1,
+            1,
+            one.len(),
+            self.supported,
+        )
+        .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?
+        .as_slice()
+        .descriptor();
+        let encoder = self
+            .encoder
+            .as_mut()
+            .ok_or_else(|| -> SinkError { "encoder already finished".into() })?;
+        let timing = encoder
+            .begin(width, height, target)
+            .map_err(|e| -> SinkError { alloc::format!("begin: {e}").into() })?;
+        self.timing = Some(timing);
+        self.drain()
     }
 
     fn provide_next_buffer(

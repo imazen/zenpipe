@@ -202,6 +202,7 @@ pub use select::{FormatPicker, select_format_from_intent, select_format_from_int
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,
+    TranscodeWriter,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;

@@ -6,6 +6,18 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **`TranscodeSink` streams encoded bytes** (needs zencodec PR 149's
+  `OutputTiming`): the decoder's `begin` is forwarded to the encoder
+  (`DynEncoder::begin`) with the descriptor the strips are adapted to (found by
+  adapting one pixel through the same `adapt_for_encode_cow`, so the two cannot
+  disagree); `output_timing()`, `pending_output()` / `consume_output()`, and
+  `with_writer(..)` (a `TranscodeWriter` receiving every byte as the encoder
+  has it, with `finish_encode` then returning an empty output). An encoder
+  whose timing streams (zenjpeg with fixed tables, zenpng effort 0 or strips,
+  zenbitmaps, IMIJ row groups) now sends bytes while the source is still being
+  decoded (`tests/transcode_streaming.rs`).
+
 ### Fixed
 - **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
   correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
