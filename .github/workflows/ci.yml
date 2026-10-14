@@ -17,16 +17,7 @@ jobs:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@6294a0dde3b9bd35f189f7bc262b5295c0173818
     with:
       sibling_overrides: false
-      # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
-      # of the SIMD tiers and the Apple linker are exercised together), and
-      # `macos-latest` is aarch64-only, so it has to be named explicitly. The
-      # reusable workflow dropped macOS from its DEFAULT list to cut Actions
-      # spend and documents `platforms` as the opt-back-in; this is that opt-in.
-      # `macos-26-intel` rather than `macos-15-intel` because zenpipe ships no
-      # binaries — nothing here needs the older SDK's deployment target.
-      # Everything else is the reusable workflow's default list, repeated
-      # verbatim because `platforms` replaces it wholesale rather than adding.
-      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-26-intel"]'
+      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
       # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
@@ -42,6 +33,7 @@ jobs:
         cargo clippy -p zeneditor --all-targets -- -D warnings
         cargo clippy -p zenfilters --all-targets -- -D warnings
       test_extra_runs: |
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom --test operation_matrix
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema
@@ -144,3 +136,29 @@ jobs:
         run: cross test -p zenlayout --target i686-unknown-linux-gnu --all-targets
       - name: Test zencodecs (no default features)
         run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features
+
+      - name: Test codec operation routes on i686
+        run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom --test operation_matrix
+
+  operation-oracles:
+    name: Codec operation matrix with independent readers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
+        with:
+          cache: 'false'
+          sibling-overrides: 'false'
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: sudo apt-get update && sudo apt-get install -y imagemagick libjxl-tools
+      - name: Inventory enabled and disabled, with explicit oracle executables
+        env:
+          ZEN_CODEC_MATRIX_MAGICK: convert
+          ZEN_CODEC_MATRIX_DJXL: djxl
+        run: |
+          just codec-operation-matrix
+          just codec-operation-matrix-inventory

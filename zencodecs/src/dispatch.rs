@@ -45,6 +45,7 @@ pub(crate) struct EncodeParams<'a> {
 /// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
 /// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
 /// orientation is *not* authoritative) are left alone.
+#[allow(deprecated)] // Preserve the published compatibility writer until core migration.
 pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
     use zencodec::exif::{Exif, TextEncoding};
     if meta.orientation == zencodec::Orientation::Identity

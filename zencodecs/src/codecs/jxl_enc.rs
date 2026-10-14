@@ -2,6 +2,7 @@
 
 use crate::config::CodecConfig;
 use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_config};
+use zencodec::encode::EncoderConfig as _;
 
 /// Build a JxlEncoderConfig from encoding params.
 pub(crate) fn build_encoding(
@@ -23,14 +24,14 @@ pub(crate) fn build_encoding(
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.codec_config).with_lossless(p.lossless),
         params,
     )
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.codec_config).with_lossless(p.lossless),
         params,
     )
 }

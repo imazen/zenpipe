@@ -37,6 +37,13 @@ sources`.
 
 ## Known Bugs
 
+- Operation-matrix regressions (2026-10-14): the JXL convenience path discarded
+  lossless requests, QOI/TGA were absent from the runtime allowlist, and enabling
+  RAW captured ordinary TIFF. The matrix checks exact samples and independent
+  readers across registered routes; RAW auto-detection now shares the core
+  registry's distinguishing signatures. Explicit RAW format selection remains
+  available for ambiguous files.
+
 - API snapshots differed between the old local tracking nightly and CI nightly.
   `just api-doc` and CI now pin nightly-2026-10-12; changing that pin requires
   reviewing generated compiler/standard-library spelling changes separately.
