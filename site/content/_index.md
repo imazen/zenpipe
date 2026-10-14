@@ -28,7 +28,7 @@ icon = "fa-solid fa-diagram-project"
 
 [[extra.features]]
 title = "14 Image Formats"
-desc = "JPEG, PNG, WebP, AVIF, JPEG XL, GIF, HEIC, TIFF, BMP, PNM, farbfeld, QOI, HDR, and TGA. Every codec is a pure-Rust zen crate with streaming decode and encode support."
+desc = "JPEG, PNG, WebP, AVIF, JPEG XL, GIF, TIFF, BMP, PNM, farbfeld, QOI, HDR, and TGA. Every codec is a pure-Rust zen crate with streaming decode and encode support."
 icon = "fa-solid fa-images"
 
 [[extra.features]]

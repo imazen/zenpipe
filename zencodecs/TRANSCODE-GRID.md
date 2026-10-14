@@ -109,7 +109,6 @@ worktree-only ML deps into zencodecs to light a cell early.
 | **WebP**  | picker · | picker · | picker auto_tune · | calib stopgap · |
 | **AVIF**  | picker · | picker · | picker · | calib stopgap · |
 | **JXL**   | coeff reconstruct(JBRD)→picker · | picker · | picker auto_tune · | passthrough/picker · |
-| **HEIC**  | picker · | picker · | picker auto_tune · | calib stopgap · |
 | **GIF** (animated) | first-frame · | animated WebP · | animated AVIF · | animated JXL · |
 | **RAW / DNG** | picker · | picker · | picker auto_tune · | calib stopgap · |
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
-description = "Unified image codec dispatch over the zen codecs (JPEG, PNG, WebP, GIF, AVIF, JXL, HEIC, TIFF, RAW, and more)"
+description = "Unified image codec dispatch over the zen codecs (JPEG, PNG, WebP, GIF, AVIF, JXL, TIFF, RAW, and more)"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "jpeg", "webp", "avif"]
 repository = "https://github.com/imazen/zenpipe"
@@ -58,8 +58,8 @@ zengif = { version = "0.8.0", optional = true }
 # of main). Its `encode` chain (zenravif 0.2.0 → zenrav1e 0.2.0, both
 # unpublished) is git-rev pinned end to end as of 2026-08-27.
 zenavif = { version = "0.1.7", optional = true }
-# Pure-Rust HEIC/HEIF decode (base SDR + gain-map HDR reconstruct via ultrahdr-core).
-# crates.io tops out at 0.1.6 (pre-adapter); patched to imazen/heic git main below.
+# Still-image container decode (base SDR + gain-map HDR reconstruct via ultrahdr-core).
+# crates.io tops out at 0.1.6 (pre-adapter); patched to git main below.
 heic = { version = "0.2.0", optional = true, default-features = false, features = ["backend-rust", "zencodec"] }
 # 0.7.0 (unpublished; registry 0.6.2): the version zenavif main depends on, as
 # its in-repo workspace member. A git dep on that SAME repo (not a registry
@@ -184,7 +184,7 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 # LosslessConfig::encode_jpeg_transcode (jxl-encoder `jpeg-reencoding`, pulled by
 # zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
-heic-decode = ["dep:heic"]  # pure-Rust HEIC/HEIF decode via the `heic` crate (zenpipe#43)
+heic-decode = ["dep:heic"]  # still-image container decode (zenpipe#43)
 tiff = ["dep:zentiff"]  # zentiff decode/encode adapter (git-patched main; zenpipe#43)
 svg = ["dep:zensvg"]  # SVG/SVGZ rasterization via zensvg (resvg); zenpipe#1
 jp2-decode = []  # stub — compile_error until a JPEG 2000 decoder is wired (zenpipe#43)

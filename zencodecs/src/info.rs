@@ -202,7 +202,7 @@ fn finalize_gain_map_presence(info: &mut ImageInfo) {
             info.supplements.gain_map = false;
         }
         // Formats that CAN contain gain maps — leave Unknown until decode
-        // (JPEG, AVIF, JXL, HEIC, RAW need full decode or deeper parsing)
+        // (JPEG, AVIF, JXL, RAW need full decode or deeper parsing)
         _ => {}
     }
 }
@@ -252,7 +252,7 @@ fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
 /// Set `source_color.cicp = Cicp::SRGB` when no ICC profile or CICP is present
 /// and the format's convention is to assume sRGB.
 ///
-/// Formats like AVIF, JXL, and HEIC always carry explicit CICP or ICC, so
+/// Formats like AVIF and JXL always carry explicit CICP or ICC, so
 /// this only applies to legacy formats (JPEG, PNG, WebP, GIF, BMP, PNM, Farbfeld).
 fn finalize_implicit_srgb(info: &mut ImageInfo) {
     // Skip if any color metadata is already present.
@@ -271,7 +271,7 @@ fn finalize_implicit_srgb(info: &mut ImageInfo) {
         | ImageFormat::Farbfeld => {
             info.source_color.cicp = Some(zenpixels::Cicp::SRGB);
         }
-        // AVIF, JXL, HEIC, TIFF, RAW: don't assume — these formats carry
+        // AVIF, JXL, TIFF, RAW: don't assume — these formats carry
         // explicit color metadata, and assuming sRGB would be wrong for HDR.
         _ => {}
     }

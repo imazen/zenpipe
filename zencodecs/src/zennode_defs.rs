@@ -513,9 +513,9 @@ impl Default for EncodeBmp {
     }
 }
 
-// ─── HEIC ───
+// ─── Container stills ───
 
-/// HEIC/HEIF decode node.
+/// Still-image container decode node.
 #[derive(Node, Clone, Debug)]
 #[node(id = "heic.decode", group = Decode, role = Decode)]
 #[node(tags("heic", "heif", "hdr", "depth"))]
@@ -873,7 +873,7 @@ pub static ALL: &[&dyn NodeDef] = &[
     &ENCODE_TIFF_NODE,
     // Codec — BMP
     &ENCODE_BMP_NODE,
-    // Codec — HEIC
+    // Codec — container stills
     &DECODE_HEIC_NODE,
     // Quantization
     &QUANTIZE_NODE,

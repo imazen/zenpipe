@@ -82,7 +82,7 @@ threading, hdr directives, compat security. Verified remaining:
   calibrated scale; exact native units plus the non-decision params
   (progressive, subsampling, quant tables, sharp_yuv, …) need per-codec
   `CodecConfig` boxes wired from encode nodes (zencodecs `config.rs` has
-  jpeg/webp/gif/png/avif boxes; JXL/TIFF/HEIC boxes don't exist yet).
+  jpeg/webp/gif/png/avif boxes; JXL/TIFF boxes don't exist yet).
 - **`AllocationTracker` is API-only by decision**: superseded by the
   orchestrate estimate gate + codec-level `ResourceLimits`; scheduled for
   removal in the pre-0.1 public-API sweep rather than wiring a duplicate

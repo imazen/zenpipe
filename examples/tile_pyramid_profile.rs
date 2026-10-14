@@ -251,7 +251,7 @@ fn parse_args() -> Option<Args> {
 ///   [`zenpipe::codec::DecoderSource`]): what JPEG / PNG / WebP / GIF cost.
 /// - `materialized` — a whole decoded frame in RAM: what `job.rs` falls back
 ///   to for every codec whose `streaming_decoder` is `Unsupported`
-///   (JXL, TIFF, AVIF, HEIC, RAW today).
+///   (JXL, TIFF, AVIF, RAW today).
 /// - `spool` — the frame written to a `TempFileSource` and replayed: what an
 ///   analysis barrier costs when the decode itself cannot be repeated.
 fn build_source(a: &Args) -> Box<dyn Source> {

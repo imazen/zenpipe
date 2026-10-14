@@ -296,7 +296,7 @@ impl<'a> EncodeRequest<'a> {
 
     /// Emit an explicit color signal (cICP) that the pixel descriptor's
     /// color-space enum can't represent — e.g. a source color resolved from an
-    /// ICC profile (Apple HEIC's "unspecified nclx + ICC ⇒ Display P3"), which
+    /// ICC profile (unspecified-nclx + ICC ⇒ Display P3), which
     /// lives in `ImageInfo::source_color`, not the descriptor. Without this the
     /// encoder falls back to the descriptor's color space and a wide-gamut image
     /// re-encoded to PNG is silently mislabeled sRGB.
