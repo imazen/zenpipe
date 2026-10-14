@@ -1128,7 +1128,7 @@ Three tabs at the bottom of the edit screen:
 Each tab replaces the bottom control area. The image stays full-screen above.
 
 ### 20.4 The Adjustment Dial
-Apple's vertical dial is more than a slider:
+The Apple Photos vertical dial is more than a slider:
 - **Circular motion**: feels like turning a physical knob
 - **Inertia**: flick and it keeps spinning briefly
 - **Tick marks**: visual ruler alongside the dial
@@ -1195,7 +1195,7 @@ For our implementation:
 | Warmth | `zenfilters.temperature` | |
 | Tint | `zenfilters.tint` | |
 | Sharpness | `zenfilters.sharpen` | |
-| Definition | `zenfilters.clarity` | Apple's "Definition" ≈ local contrast |
+| Definition | `zenfilters.clarity` | "Definition" (Apple Photos) ≈ local contrast |
 | Noise Reduction | `zenfilters.noise_reduction` | |
 | Vignette | `zenfilters.vignette` | |
 | Crop/Straighten | `zenfilters.rotate` + crop | |
