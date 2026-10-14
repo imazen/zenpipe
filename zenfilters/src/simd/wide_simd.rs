@@ -314,15 +314,15 @@ fn gaussian_blur_fir_generic<T: F32x8Backend + F32x8Convert + Copy>(
         padded.extend(core::iter::repeat_n(edge_r, radius));
 
         let out_row = &mut h_buf[y * w..(y + 1) * w];
-        let (out_chunks, out_tail) = V::<T>::partition_slice_mut(token, out_row);
+        let (out_chunks, out_tail) = V::<T>::partition_slice_mut_t(token, out_row);
 
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
-            let mut acc = V::<T>::zero(token);
+            let mut acc = V::<T>::zero_t(token);
             for (k, &weight) in kernel.weights().iter().enumerate() {
-                let wv = V::<T>::splat(token, weight);
+                let wv = V::<T>::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = padded[x + k..x + k + 8].try_into().unwrap();
-                let vals = V::<T>::load(token, src_chunk);
+                let vals = V::<T>::load_t(token, src_chunk);
                 acc = vals.mul_add(wv, acc);
             }
             acc.store(out_chunk);
@@ -342,16 +342,16 @@ fn gaussian_blur_fir_generic<T: F32x8Backend + F32x8Convert + Copy>(
     // Vertical pass
     for y in 0..h {
         let out_row = &mut dst[y * w..(y + 1) * w];
-        let (out_chunks, out_tail) = V::<T>::partition_slice_mut(token, out_row);
+        let (out_chunks, out_tail) = V::<T>::partition_slice_mut_t(token, out_row);
 
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
-            let mut acc = V::<T>::zero(token);
+            let mut acc = V::<T>::zero_t(token);
             for (k, &weight) in kernel.weights().iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
-                let wv = V::<T>::splat(token, weight);
+                let wv = V::<T>::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-                acc = V::<T>::load(token, src_chunk).mul_add(wv, acc);
+                acc = V::<T>::load_t(token, src_chunk).mul_add(wv, acc);
             }
             acc.store(out_chunk);
         }
@@ -396,7 +396,7 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
     let n = w * h;
     let stack_size = 2 * r + 1;
     let inv_div = 1.0 / ((r as f32 + 1.0) * (r as f32 + 1.0));
-    let inv_div_v = V::<T>::splat(token, inv_div);
+    let inv_div_v = V::<T>::splat_t(token, inv_div);
 
     let mut h_buf = ctx.take_f32(n);
     let mut stack_scratch = ctx.take_f32(stack_size);
@@ -415,12 +415,12 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
     for tile in 0..num_tiles {
         let x = tile * 8;
 
-        let mut sum = V::<T>::zero(token);
-        let mut sum_in = V::<T>::zero(token);
-        let mut sum_out = V::<T>::zero(token);
+        let mut sum = V::<T>::zero_t(token);
+        let mut sum_in = V::<T>::zero_t(token);
+        let mut sum_out = V::<T>::zero_t(token);
 
         let first: &[f32; 8] = h_buf[x..x + 8].try_into().unwrap();
-        let first_v = V::<T>::load(token, first);
+        let first_v = V::<T>::load_t(token, first);
         for sv in stack_v.iter_mut().take(r + 1) {
             *sv = first_v.to_array();
         }
@@ -429,21 +429,21 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             let offset = i - r;
             let sy = offset.min(h - 1);
             let chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-            *sv = V::<T>::load(token, chunk).to_array();
+            *sv = V::<T>::load_t(token, chunk).to_array();
         }
 
         for (i, sv) in stack_v.iter().enumerate().take(stack_size) {
             let dist = r.abs_diff(i);
-            let weight = V::<T>::splat(token, (r + 1 - dist) as f32);
-            let val = V::<T>::from_array(token, *sv);
+            let weight = V::<T>::splat_t(token, (r + 1 - dist) as f32);
+            let val = V::<T>::from_array_t(token, *sv);
             sum = val.mul_add(weight, sum);
         }
 
         for sv in stack_v.iter().take(r + 1) {
-            sum_out += V::<T>::from_array(token, *sv);
+            sum_out += V::<T>::from_array_t(token, *sv);
         }
         for sv in stack_v.iter().take(stack_size).skip(r + 1) {
-            sum_in += V::<T>::from_array(token, *sv);
+            sum_in += V::<T>::from_array_t(token, *sv);
         }
 
         let mut sp = 0usize;
@@ -453,12 +453,12 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             (sum * inv_div_v).store(out);
 
             sum -= sum_out;
-            let old_val = V::<T>::from_array(token, stack_v[sp]);
+            let old_val = V::<T>::from_array_t(token, stack_v[sp]);
             sum_out -= old_val;
 
             let new_y = (y + r + 1).min(h - 1);
             let new_chunk: &[f32; 8] = h_buf[new_y * w + x..new_y * w + x + 8].try_into().unwrap();
-            let new_val = V::<T>::load(token, new_chunk);
+            let new_val = V::<T>::load_t(token, new_chunk);
             stack_v[sp] = new_val.to_array();
             sum_in += new_val;
 
@@ -474,7 +474,7 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             } else {
                 sp + r
             };
-            let center_val = V::<T>::from_array(token, stack_v[center_idx]);
+            let center_val = V::<T>::from_array_t(token, stack_v[center_idx]);
             sum_out += center_val;
             sum_in -= center_val;
         }
@@ -1220,22 +1220,22 @@ fn fused_adjust_l_generic<T: F32x8Backend + F32x8Convert + Copy>(
 ) {
     type V<T> = GenericF32x8<T>;
 
-    let bp_v = V::<T>::splat(token, bp);
-    let inv_range_v = V::<T>::splat(token, inv_range);
-    let zero_v = V::<T>::zero(token);
-    let wp_exp_v = V::<T>::splat(token, wp_exp);
-    let cs_v = V::<T>::splat(token, contrast_scale);
-    let shadows_half = V::<T>::splat(token, shadows * 0.5);
-    let highlights_half = V::<T>::splat(token, highlights * 0.5);
-    let one_v = V::<T>::splat(token, 1.0);
-    let two_v = V::<T>::splat(token, 2.0);
-    let half_v = V::<T>::splat(token, 0.5);
-    let dc_v = V::<T>::splat(token, dehaze_contrast);
-    let dc_offset = V::<T>::splat(token, 0.5 * (1.0 - dehaze_contrast));
+    let bp_v = V::<T>::splat_t(token, bp);
+    let inv_range_v = V::<T>::splat_t(token, inv_range);
+    let zero_v = V::<T>::zero_t(token);
+    let wp_exp_v = V::<T>::splat_t(token, wp_exp);
+    let cs_v = V::<T>::splat_t(token, contrast_scale);
+    let shadows_half = V::<T>::splat_t(token, shadows * 0.5);
+    let highlights_half = V::<T>::splat_t(token, highlights * 0.5);
+    let one_v = V::<T>::splat_t(token, 1.0);
+    let two_v = V::<T>::splat_t(token, 2.0);
+    let half_v = V::<T>::splat_t(token, 0.5);
+    let dc_v = V::<T>::splat_t(token, dehaze_contrast);
+    let dc_offset = V::<T>::splat_t(token, 0.5 * (1.0 - dehaze_contrast));
 
-    let (chunks, tail) = V::<T>::partition_slice_mut(token, l);
+    let (chunks, tail) = V::<T>::partition_slice_mut_t(token, l);
     for chunk in chunks {
-        let mut v = V::<T>::load(token, &*chunk);
+        let mut v = V::<T>::load_t(token, &*chunk);
         v = ((v - bp_v) * inv_range_v).max(zero_v);
         v *= wp_exp_v;
         v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
@@ -1279,21 +1279,21 @@ fn fused_adjust_ab_generic<T: F32x8Backend + F32x8Convert + Copy>(
     type V<T> = GenericF32x8<T>;
     const MAX_CHROMA: f32 = 0.4;
 
-    let exp_v = V::<T>::splat(token, exposure_chroma);
-    let dc_v = V::<T>::splat(token, dehaze_chroma);
-    let temp_v = V::<T>::splat(token, temp_offset);
-    let tint_v = V::<T>::splat(token, tint_offset);
-    let sat_v = V::<T>::splat(token, sat);
-    let vib_v = V::<T>::splat(token, vib_amount);
-    let inv_mc = V::<T>::splat(token, 1.0 / MAX_CHROMA);
-    let one_v = V::<T>::splat(token, 1.0);
+    let exp_v = V::<T>::splat_t(token, exposure_chroma);
+    let dc_v = V::<T>::splat_t(token, dehaze_chroma);
+    let temp_v = V::<T>::splat_t(token, temp_offset);
+    let tint_v = V::<T>::splat_t(token, tint_offset);
+    let sat_v = V::<T>::splat_t(token, sat);
+    let vib_v = V::<T>::splat_t(token, vib_amount);
+    let inv_mc = V::<T>::splat_t(token, 1.0 / MAX_CHROMA);
+    let one_v = V::<T>::splat_t(token, 1.0);
 
-    let (a_chunks, a_tail) = V::<T>::partition_slice_mut(token, a);
-    let (b_chunks, b_tail) = V::<T>::partition_slice_mut(token, b);
+    let (a_chunks, a_tail) = V::<T>::partition_slice_mut_t(token, a);
+    let (b_chunks, b_tail) = V::<T>::partition_slice_mut_t(token, b);
 
     for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
-        let mut av = V::<T>::load(token, &*ac);
-        let mut bv = V::<T>::load(token, &*bc);
+        let mut av = V::<T>::load_t(token, &*ac);
+        let mut bv = V::<T>::load_t(token, &*bc);
         av *= exp_v;
         bv *= exp_v;
         av *= dc_v;
