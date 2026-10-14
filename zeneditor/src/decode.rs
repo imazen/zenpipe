@@ -128,7 +128,7 @@ pub fn browser_handles(format: zencodec::ImageFormat) -> bool {
 }
 
 /// List of non-browser formats this decoder supports (for UI display).
-/// heic/qoi/tga/hdr return when their zencodecs backends land (zenpipe#43).
+/// qoi/tga/hdr return when their zencodecs backends land (zenpipe#43).
 pub fn wasm_decode_formats() -> &'static [&'static str] {
     &["jxl", "avif", "bmp"]
 }

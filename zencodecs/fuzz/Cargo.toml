@@ -21,7 +21,7 @@ path = ".."
 # Use all decodable codecs + encoders that build.
 # Excluded: avif-encode (zenrav1e build error), jxl-encode (jxl-encoder build error)
 # Excluded: raw-decode-gainmap (requires jpeg-ultrahdr which needs std features)
-# Excluded: heic-decode, bitmaps-qoi, bitmaps-tga, bitmaps-hdr — these are
+# Excluded: bitmaps-qoi, bitmaps-tga, bitmaps-hdr — these are
 # `compile_error!` stubs in zencodecs (no backend wired yet, zenpipe#43);
 # enabling them only floods unresolved-item errors. Re-add each when its
 # backend lands.

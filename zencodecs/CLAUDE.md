@@ -116,7 +116,7 @@ zencodecs/
 │       ├── avif_enc.rs   # ravif adapter
 │       ├── jxl_dec.rs    # zenjxl decoder adapter
 │       ├── jxl_enc.rs    # jxl-encoder adapter
-│       ├── heic.rs       # heic-decoder adapter
+│       ├── heic.rs       # container-stills decode adapter
 │       ├── raw.rs        # zenraw RAW/DNG adapter (feature: raw-decode)
 │       ├── tiff.rs       # zentiff adapter (feature: tiff)
 │       ├── pnm.rs        # zenbitmaps PNM adapter
@@ -279,14 +279,14 @@ is retained (it references no depth types). See CHANGELOG.
 - 37 tests against real ICC profile files from skcms and Compact-ICC-Profiles
 
 ### What's NOT implemented yet
-- Pull-based streaming decode for JPEG/PNG (their StreamDec borrows input data so can't be 'static; use push_decode instead). GIF/AVIF/HEIC streaming decode works via build_streaming_decoder().
+- Pull-based streaming decode for JPEG/PNG (their StreamDec borrows input data so can't be 'static; use push_decode instead). GIF/AVIF streaming decode works via build_streaming_decoder().
 - Color management transforms (moxcms) — sRGB detection is done, CMS transforms are not
 - Fallback chains (structural pieces ready, needs multi-decoder-per-format registry)
 - Registry v2 entries with factories (deferred — current match-based dispatch works)
 - Gain map encode embedding (with_gain_map builder exists but doesn't wire to actual encode yet)
 - JPEG GDepth XMP depth extraction (requires XMP parsing in zenjpeg)
 - JPEG Android DDF depth extraction (requires container directory parsing)
-- HEIC auxiliary depth image extraction (requires heic-decoder auxid support)
+- Auxiliary depth image extraction (requires decoder aux-id support)
 
 ## Public API Spec (Design Intent)
 

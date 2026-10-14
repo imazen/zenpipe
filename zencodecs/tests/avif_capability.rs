@@ -174,7 +174,7 @@ fn build_minimal_exif_with_orientation(value: u16) -> Vec<u8> {
     v
 }
 
-/// AVIF stores EXIF in an `Exif` HEIF item. The whole metadata
+/// AVIF stores EXIF in an `Exif` container item. The whole metadata
 /// pipeline (zencodecs → zenavif → ravif → zenavif-serialize) does
 /// pass the bytes through, AND the encoded AVIF *does* contain the
 /// "Exif" 4-byte box type at the right place — so the item is
@@ -217,7 +217,7 @@ fn avif_exif_round_trip_preserves_blob() {
 }
 
 /// Positive test: when the caller sets `Metadata::orientation` directly,
-/// AVIF translates it through irot/imir HEIF transforms on encode and
+/// AVIF translates it through irot/imir container transforms on encode and
 /// decoder reads it back into `info.orientation`.
 #[cfg(feature = "avif-encode")]
 #[test]
@@ -243,7 +243,7 @@ fn avif_explicit_orientation_round_trips_via_irot() {
     );
 }
 
-/// AVIF's preferred way to convey orientation is the `irot` / `imir` HEIF
+/// AVIF's preferred way to convey orientation is the `irot` / `imir` container
 /// transform boxes, not the EXIF Orientation tag. zencodec's
 /// `Metadata::orientation` field IS the explicit channel for this.
 ///

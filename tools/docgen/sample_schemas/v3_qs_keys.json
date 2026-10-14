@@ -41,7 +41,7 @@
           }
         }
       ],
-      "label": "Decode Heic"
+      "label": "Decode Container"
     },
     "zenavif.encode": {
       "keys": [

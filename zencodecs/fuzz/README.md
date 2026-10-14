@@ -88,7 +88,7 @@ Optional (requires gsutil):
 ## Dictionary
 
 `multiformat.dict` contains magic bytes and structural tokens for all 15+
-supported formats: JPEG, PNG, GIF, WebP, AVIF, HEIC, JXL, TIFF, BMP, PNM,
+supported formats: JPEG, PNG, GIF, WebP, AVIF, JXL, TIFF, BMP, PNM,
 PAM, QOI, Farbfeld, TGA, Radiance HDR, and EXIF.
 
 ## Security goals

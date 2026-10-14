@@ -60,7 +60,6 @@
 | GIF   | — | ✅ native | ✅ |
 | JXL   | ✅ zenjxl-decoder | ❌ Chrome | ✅ |
 | AVIF  | ✅ zenavif | ✅ Chrome/Safari | ✅ |
-| HEIC  | ⬜ heic crate (pure Rust, on crates.io) | ✅ Safari only | ⬜ |
 
 ### 2.3 Metadata Preservation ⬜
 - ICC profile passthrough (decode → pipeline → encode)
@@ -338,10 +337,6 @@ During any interaction (drag, zoom, slider change), the user always sees the fil
 - SVG optimization feature
 - Registered in zencodecs as a decoder
 - Can be used as text overlay source (render SVG → composite)
-
-### 9.5 HEIC Decode ⬜
-- Pure Rust `heic` crate (on crates.io)
-- Add to decode.rs alongside JXL/AVIF
 
 ### 9.6 Display P3 Canvas ⬜
 - Detect `canvas.getContext('2d', { colorSpace: 'display-p3' })` support
@@ -825,7 +820,7 @@ Pipeline should preserve bit depth when possible:
 | ICC profile | ✅ all codecs | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
 | EXIF | ✅ JPEG/AVIF/JXL | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
 | XMP | ✅ JPEG/JXL | ⬜ on Editor struct | ⬜ per-codec passthrough | Needs wiring |
-| CICP | ✅ AVIF/JXL/HEIC | ⬜ on Editor struct | ⬜ per-codec signaling | Needs wiring |
+| CICP | ✅ AVIF/JXL | ⬜ on Editor struct | ⬜ per-codec signaling | Needs wiring |
 | Gain map params | ✅ all gainmap codecs | ⬜ sidecar tracking | ⬜ re-embedding | Needs wiring |
 | Mastering display info | ✅ JXL/AVIF | ⬜ passthrough | ⬜ re-embedding | Needs wiring |
 | Orientation (EXIF tag) | ✅ | ✅ applied in pipeline | ✅ cleared on encode | Working |
@@ -2322,7 +2317,6 @@ For filters without CSS approximation, 16ms (one frame from cache) is still impe
 | **zengif** | ✅ 0.7.1 | ✅ Animation | ✅ quantizr | ✅ GIF encode |
 | **zenjxl** | ✅ 0.1.1 | ✅ zenjxl-decoder | ✅ jxl-encoder | ✅ JXL encode + decode |
 | **zenavif** | ✅ 0.1.3 | ✅ rav1d-safe | ✅ zenrav1e | ✅ AVIF encode + decode |
-| **heic** | ✅ | ✅ SIMD | ❌ | ⬜ Future HEIC decode |
 | **zentiff** | ✅ | ✅ | ✅ | ⬜ Future TIFF support |
 | **zenbitmaps** | ✅ 0.1.3 | ✅ All | ✅ All | ⬜ BMP/QOI/TGA/PNM/HDR |
 | **zensvg** | ✅ | ✅ resvg+usvg | ❌ | ⬜ SVG/SVGZ render + text |

@@ -398,8 +398,8 @@ impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreaming
 ///
 /// Not all codecs support streaming decode with owned data. Codecs that
 /// require borrowed data (JPEG, PNG) or don't support row-level decode at
-/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF, AVIF,
-/// and HEIC support this path.
+/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF and AVIF
+/// support this path.
 pub(crate) fn dyn_streaming_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,

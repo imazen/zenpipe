@@ -60,7 +60,7 @@ const TRUNCATED_AVIF: &[u8] = &[
 /// JXL codestream magic (FF 0A) plus zeroed padding — truncated SizeHeader.
 const TRUNCATED_JXL: &[u8] = &[0xFF, 0x0A, 0x00, 0x00, 0x00, 0x00];
 
-/// Minimal HEIC ftyp box (major brand "heic"), nothing after it.
+/// Minimal truncated ftyp box (still-image brand), nothing after it.
 #[cfg(feature = "nodes-heic")]
 const TRUNCATED_HEIC: &[u8] = &[
     0x00, 0x00, 0x00, 0x18, b'f', b't', b'y', b'p', b'h', b'e', b'i', b'c', 0x00, 0x00, 0x00, 0x00,
@@ -146,7 +146,7 @@ fn jxl_trace_includes_zenjxl_and_boundaries() {
     assert_trace(run_job(TRUNCATED_JXL), &["zenjxl", "zencodecs", "zenpipe"]);
 }
 
-/// heic is instrumented.
+/// The still-image node is instrumented.
 #[cfg(feature = "nodes-heic")]
 #[test]
 fn heic_trace_includes_heic_and_boundaries() {
@@ -236,10 +236,10 @@ fn codec_errors_use_codec_variant_not_op_string() {
 
     #[cfg(feature = "nodes-heic")]
     {
-        let err = run_job(TRUNCATED_HEIC).expect_err("HEIC should fail");
+        let err = run_job(TRUNCATED_HEIC).expect_err("should fail");
         assert!(
             matches!(err.error(), PipeError::Codec(_)),
-            "HEIC: expected PipeError::Codec, got {:?}",
+            "expected PipeError::Codec, got {:?}",
             err.error()
         );
     }

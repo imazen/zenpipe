@@ -200,10 +200,10 @@ zenpipe transforms pixel data using that container data as input.
 | Supplement | Source formats | Container mechanism |
 |---|---|---|
 | Gain map | JPEG (UltraHDR MPF), AVIF (tmap), JXL (jhgm), DNG (MPF) | Secondary image + metadata |
-| Depth map | JPEG (MPF disparity), HEIC (auxl) | Auxiliary image |
-| Thumbnail | JPEG (JFIF APP0), HEIC (thmb), JXL (preview) | Embedded reduced image |
-| Portrait matte | HEIC (auxl, Apple URNs) | Auxiliary alpha plane |
-| Stereo pair | JPEG (MPF), HEIC (stereo) | Secondary image |
+| Depth map | JPEG (MPF disparity) | Auxiliary image |
+| Thumbnail | JPEG (JFIF APP0), JXL (preview) | Embedded reduced image |
+| Portrait matte | auxl (planned) | Auxiliary alpha plane |
+| Stereo pair | JPEG (MPF) | Secondary image |
 
 ### Supplement passthrough during transcode
 

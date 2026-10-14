@@ -32,13 +32,13 @@ zencodecs convert in.jpg out.webp --metadata web
 # Alpha → opaque: composite over a matte
 zencodecs convert in.png out.jpg  --matte 255,255,255
 
-# HDR rendition of a gain-map source (HEIC / Ultra-HDR JPEG): BT.2100 PQ PNG with cICP+cLLI
-zencodecs convert in.heic out-hdr.png --hdr
+# HDR rendition of a gain-map source (Ultra-HDR JPEG): BT.2100 PQ PNG with cICP+cLLI
+zencodecs convert in-gainmap.jpg out-hdr.png --hdr
 # …and the SDR base rendition of the same file (auto-oriented, Display P3 cICP kept)
-zencodecs convert in.heic out-sdr.png
+zencodecs convert in-gainmap.jpg out-sdr.png
 
 # Probe: format + dimensions + supplements, as JSON
-zencodecs probe in.heic
+zencodecs probe in-gainmap.jpg
 ```
 
 ## Flags (`convert`)
@@ -65,8 +65,7 @@ pixel-identical to it on the reference set).
 
 ## Supported formats
 
-Decode + encode: JPEG, PNG, WebP, JXL, GIF, BMP. Decode only: AVIF, HEIC (incl. Apple /
-Samsung gain-map HDR). Coefficient-domain (no pixel round-trip): JPEG↔JPEG recompress,
+Decode + encode: JPEG, PNG, WebP, JXL, GIF, BMP. Decode only: AVIF (incl. gain-map HDR). Coefficient-domain (no pixel round-trip): JPEG↔JPEG recompress,
 JPEG↔JXL lossless.
 
 `--hdr` targets BT.2100 PQ only; there is no HLG output mode. The `probe` JSON reports

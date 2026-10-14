@@ -2,7 +2,7 @@
 //!
 //! Two paths:
 //! - Browser-native formats (JPEG/PNG/WebP/GIF): browser decodes, skip WASM
-//! - Non-browser formats (JXL/AVIF/HEIC/BMP/QOI/TGA/HDR): zeneditor decodes
+//! - Non-browser formats (JXL/AVIF/BMP/QOI/TGA/HDR): zeneditor decodes
 //!
 //! The frontend's browser decode is an optional fast preview for initial
 //! startup. zeneditor::decode_native() is the authoritative decode path.

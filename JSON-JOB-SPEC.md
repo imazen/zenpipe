@@ -450,7 +450,7 @@ One call returns everything a client needs to feature-detect (all pieces exist i
   "revision": "0.1.0",
   "nodes":  { "...": "JSON Schema 2020-12 with $defs per node, x-zennode-* extensions" },
   "querystring": { "...": "key registry grouped by node" },
-  "codecs": { "decode": ["jpeg", "png", "webp", "gif", "avif", "jxl", "tiff", "bmp", "heic"],
+  "codecs": { "decode": ["jpeg", "png", "webp", "gif", "avif", "jxl", "tiff", "bmp"],
                "encode": ["jpeg", "png", "webp", "gif", "avif", "jxl", "tiff", "bmp"] },
   "features": ["animation", "gain_maps", "smart_crop", "imageflow_compat"]
 }

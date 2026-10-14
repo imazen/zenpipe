@@ -42,15 +42,15 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # comments there); keep the two tables in sync.
 # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
-# heic main is 0.2.0 (zencodec decode adapter); crates.io tops out at 0.1.6.
+# Container-stills backend main is 0.2.0 (zencodec decode adapter); crates.io tops out at 0.1.6.
 heic = { git = "https://github.com/imazen/heic" }
 # zentiff main is 0.1.2 on zencodec 0.1.26; crates.io 0.1.2 is pre-adapter.
 zentiff = { git = "https://github.com/imazen/zenextras" }
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
-# 0.5.0 + `full_reconstruction_boost` for heic's `^0.5` — the same rev the
+# 0.5.0 + `full_reconstruction_boost` for the backend's `^0.5` — the same rev the
 # workspace root's Cargo.lock holds (ultrahdr main is 0.6.0 and would no
-# longer satisfy heic). zenjpeg 0.9.0 / zencodecs use registry 0.6.0.
+# longer satisfy the backend). zenjpeg 0.9.0 / zencodecs use registry 0.6.0.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl" }

@@ -130,7 +130,7 @@ impl<'a> DecodeRequest<'a> {
 
     /// Request gain map extraction during decode.
     ///
-    /// When `true`, codecs that support gain maps (AVIF, JXL, HEIC) will
+    /// When `true`, codecs that support gain maps (AVIF, JXL) will
     /// extract and attach gain map data to the [`DecodeOutput`] extras.
     /// The JPEG UltraHDR path is unaffected — it extracts gain maps from
     /// MPF secondary images in a post-decode step.
@@ -171,8 +171,8 @@ impl<'a> DecodeRequest<'a> {
     ///   right choice for targets that can't carry an orientation tag (PNG) or
     ///   for display-ready output.
     ///
-    /// Currently honored by the JPEG and HEIC decoders (the EXIF-orientation
-    /// formats); other adapters ignore it (no stored orientation to bake).
+    /// Currently honored by the JPEG decoder (EXIF orientation);
+    /// other adapters ignore it (no stored orientation to bake).
     pub fn with_orientation(mut self, hint: OrientationHint) -> Self {
         self.orientation = hint;
         self
@@ -382,7 +382,7 @@ impl<'a> DecodeRequest<'a> {
     /// that don't support row-level decode at all (WebP, TIFF, bitmaps) also
     /// return an error.
     ///
-    /// Currently supported: GIF, AVIF, HEIC.
+    /// Currently supported: GIF, AVIF.
     ///
     /// # Example
     ///
@@ -518,7 +518,7 @@ impl<'a> DecodeRequest<'a> {
         self.check_decode_admission(format)?;
         let dp = self.decode_policy;
         // ReconstructHdr returns HDR pixels only from decoders that advertise the
-        // capability — JPEG UltraHDR and HEIC (Apple/Samsung gain maps); every
+        // capability — JPEG UltraHDR (gain maps); every
         // other format errors here rather than silently returning an SDR buffer
         // mislabeled as HDR.
         if matches!(self.gain_map_render, GainMapRender::ReconstructHdr { .. })
