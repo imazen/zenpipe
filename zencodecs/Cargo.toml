@@ -210,7 +210,7 @@ riapi = []
 zennode = ["dep:zennode"]
 
 # Color management
-cms = ["dep:moxcms"]
+cms = ["dep:moxcms", "zenpixels-convert/cms-moxcms"]
 moxcms = ["dep:moxcms"]  # alias for back-compat
 
 # All codecs

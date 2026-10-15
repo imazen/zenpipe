@@ -9,39 +9,29 @@
 
 ## summary
 #
-#   inherent methods                           21
+#   inherent methods                           12
 #   trait roster entries (type × trait)        32
 #
 # per-module pub lines:
-#   constraint                        5
-#   orientation                       1
-#   plan                             10
-#   riapi                             3
-#   smart_crop                        2
+#   constraint                        3
+#   plan                              7
+#   riapi                             1
+#   smart_crop                        1
 
-## items (21 lines)
+## items (12 lines)
 
-pub fn constraint::ConstraintMode::assert_fields_are_eq(&self)
 pub fn constraint::Layout::assert_fields_are_eq(&self)
-pub fn constraint::LayoutError::assert_fields_are_eq(&self)
 pub fn constraint::Rect::assert_fields_are_eq(&self)
 pub fn constraint::Size::assert_fields_are_eq(&self)
-pub fn orientation::Orientation::assert_fields_are_eq(&self)
 pub fn plan::Align::assert_fields_are_eq(&self)
 pub fn plan::CodecLayout::assert_fields_are_eq(&self)
 pub fn plan::DecoderOffer::assert_fields_are_eq(&self)
 pub fn plan::DecoderRequest::assert_fields_are_eq(&self)
-pub fn plan::FlipAxis::assert_fields_are_eq(&self)
 pub fn plan::OutputLimits::assert_fields_are_eq(&self)
 pub fn plan::Padding::assert_fields_are_eq(&self)
 pub fn plan::PlaneLayout::assert_fields_are_eq(&self)
-pub fn plan::Rotation::assert_fields_are_eq(&self)
-pub fn plan::Subsampling::assert_fields_are_eq(&self)
 pub fn riapi::ParseWarning::assert_fields_are_eq(&self)
-pub fn riapi::instructions::FitMode::assert_fields_are_eq(&self)
-pub fn riapi::instructions::ScaleMode::assert_fields_are_eq(&self)
 pub fn smart_crop::AspectRatio::assert_fields_are_eq(&self)
-pub fn smart_crop::CropMode::assert_fields_are_eq(&self)
 
 ## trait impls (32 types)
 

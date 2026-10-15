@@ -134,6 +134,7 @@ pub mod cms;
 pub mod codec_id;
 mod codecs;
 pub mod color;
+mod color_fit;
 pub mod config;
 pub mod decision;
 mod decode;
@@ -202,6 +203,7 @@ pub use select::{FormatPicker, select_format_from_intent, select_format_from_int
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeOptions, TranscodeOutput, TranscodeSink,
+    TranscodeWriter,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
