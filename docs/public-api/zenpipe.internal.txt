@@ -9,26 +9,21 @@
 
 ## summary
 #
-#   inherent methods                           11
+#   inherent methods                            8
 #   trait roster entries (type × trait)        12
 #
 # per-module pub lines:
-#   bridge                            1
-#   graph                             1
 #   sources                           1
 #   tiles                             3
-#   trace                             4
+#   trace                             3
 #   watermark                         1
 
-## items (11 lines)
+## items (8 lines)
 
-pub fn bridge::ordering::OptimizationLevel::assert_fields_are_eq(&self)
-pub fn graph::EdgeKind::assert_fields_are_eq(&self)
 pub fn sources::CanvasFill::assert_fields_are_eq(&self)
 pub fn tiles::LevelInfo::assert_fields_are_eq(&self)
 pub fn tiles::PyramidGeometry::assert_fields_are_eq(&self)
 pub fn tiles::TilePyramidConfig::assert_fields_are_eq(&self)
-pub fn trace::ExecutionPhase::assert_fields_are_eq(&self)
 pub fn trace::MemorySnapshot::assert_fields_are_eq(&self)
 pub fn trace::SlowestStrip::assert_fields_are_eq(&self)
 pub fn trace::StripEvent::assert_fields_are_eq(&self)

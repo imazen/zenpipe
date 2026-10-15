@@ -9,25 +9,20 @@
 
 ## summary
 #
-#   inherent methods                            7
+#   inherent methods                            4
 #   trait roster entries (type × trait)        11
 #
 # per-module pub lines:
 #   (root)                            1
-#   cms                               1
 #   codec_id                          1
-#   intent                            2
-#   speed                             1
+#   intent                            1
 #   transcode                         1
 
-## items (7 lines)
+## items (4 lines)
 
 pub fn FormatSet::assert_fields_are_eq(&self)
-pub fn cms::CmsMode::assert_fields_are_eq(&self)
 pub fn codec_id::CodecId::assert_fields_are_eq(&self)
-pub fn intent::BoolKeep::assert_fields_are_eq(&self)
 pub fn intent::FormatChoice::assert_fields_are_eq(&self)
-pub fn speed::EncodeSpeed::assert_fields_are_eq(&self)
 pub fn transcode::SupplementSet::assert_fields_are_eq(&self)
 
 ## trait impls (11 types)
