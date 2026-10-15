@@ -105,3 +105,32 @@ fn optimized_tables_write_once_at_finish() {
     assert_eq!(writes.len(), 1);
     assert_eq!(writes.concat(), plain(&jpeg, cfg));
 }
+
+#[test]
+fn take_pending_output_hands_over_the_bytes_without_a_writer() {
+    let jpeg = source_jpeg();
+    let cfg = JpegEncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter)
+        .with_progressive(false)
+        .with_huffman(false);
+    let mut source = decoder(&jpeg);
+    let mut sink = sink(cfg.clone());
+    assert!(
+        sink.begin(source.width(), source.height())
+            .unwrap()
+            .streams()
+    );
+    let mut out = Vec::new();
+    let mut chunks = 0;
+    while let Some(strip) = source.next().unwrap() {
+        sink.consume(&strip).unwrap();
+        let mut chunk = Vec::new();
+        sink.take_pending_output(&mut chunk);
+        assert!(sink.pending_output().is_empty());
+        chunks += usize::from(!chunk.is_empty());
+        out.extend_from_slice(&chunk);
+    }
+    sink.finish().unwrap();
+    out.extend_from_slice(sink.take_output().unwrap().data());
+    assert!(chunks > 1, "{chunks} chunks before finish");
+    assert_eq!(out, plain(&jpeg, cfg));
+}

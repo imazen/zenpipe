@@ -11,8 +11,9 @@ All notable changes to `zencodecs` are documented here. Format follows
   `OutputTiming`): the decoder's `begin` is forwarded to the encoder
   (`DynEncoder::begin`) with the descriptor the strips are adapted to (found by
   adapting one pixel through the same `adapt_for_encode_cow`, so the two cannot
-  disagree); `output_timing()`, `pending_output()` / `consume_output()`, and
-  `with_writer(..)` (a `TranscodeWriter` receiving every byte as the encoder
+  disagree); `output_timing()`, `pending_output()` / `consume_output()`,
+  `take_pending_output(&mut vec)` (hands over the encoder's buffer when `vec`
+  is empty), and `with_writer(..)` (a `TranscodeWriter` receiving every byte as the encoder
   has it, with `finish_encode` then returning an empty output). An encoder
   whose timing streams (zenjpeg with fixed tables, zenpng effort 0 or strips,
   zenbitmaps, IMIJ row groups) now sends bytes while the source is still being

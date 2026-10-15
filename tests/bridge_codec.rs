@@ -291,6 +291,29 @@ impl<E: zencodec::encode::Encoder + Send> zencodec::encode::DynEncoder for SendE
             .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
     }
 
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: zenpixels::PixelDescriptor,
+    ) -> Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        self.0
+            .begin(width, height, descriptor)
+            .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n)
+    }
+
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        self.0.take_output(into)
+    }
+
     fn push_rows(
         &mut self,
         rows: zenpixels::PixelSlice<'_>,

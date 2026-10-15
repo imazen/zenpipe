@@ -707,7 +707,10 @@ Three crates.io requirements block a newer release and were left alone on purpos
   `begin(width, height)` declares the image to the encoder and returns its
   `OutputTiming`; `with_writer(..)` receives every byte as soon as the encoder
   has it (after each strip, the rest at `finish`, `take_output` then empty);
-  `pending_output()` / `consume_output()` for callers that drain themselves.
+  `pending_output()` / `consume_output()` for callers that drain themselves,
+  and `take_pending_output(&mut vec)`, which hands over the encoder's buffer
+  when `vec` is empty (zencodec `take_output`; named apart from the existing
+  `take_output()`, which returns the finished output).
   A pipeline can now feed an HTTP response or upload while it runs
   (`tests/streaming_output.rs`).
 

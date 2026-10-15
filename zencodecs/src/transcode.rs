@@ -713,6 +713,15 @@ impl<'a> TranscodeSink<'a> {
         }
     }
 
+    /// Append every pending byte to `into` and mark it sent (see
+    /// [`DynEncoder::take_output`]): with `into` empty, encoders that keep
+    /// their output in an `OutputBuffer` hand over the buffer itself.
+    pub fn take_pending_output(&mut self, into: &mut Vec<u8>) {
+        if let Some(e) = self.encoder.as_mut() {
+            e.take_output(into);
+        }
+    }
+
     /// Hand every pending byte to the writer, if there is one.
     fn drain(&mut self) -> core::result::Result<(), SinkError> {
         if let (Some(writer), Some(encoder)) = (self.writer.as_mut(), self.encoder.as_mut()) {
