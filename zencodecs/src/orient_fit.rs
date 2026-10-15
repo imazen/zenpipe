@@ -35,7 +35,98 @@ pub(crate) fn upright(meta: Option<&Metadata>) -> (Orientation, Option<Metadata>
     {
         out.exif = Some(fixed.into());
     }
+    // XMP's `tiff:Orientation` mirrors the EXIF tag; readers that prefer
+    // XMP would otherwise rotate the upright pixels again.
+    if m.orientation != Orientation::Identity
+        && let Some(xmp) = &m.xmp
+        && let Some(fixed) = xmp_orientation_to_1(xmp)
+    {
+        out.xmp = Some(fixed.into());
+    }
     (m.orientation, Some(out))
+}
+
+/// Rewrite every single-digit `tiff:Orientation` value in an XMP packet to
+/// `1`, in either serialization (`tiff:Orientation="6"` or
+/// `<tiff:Orientation>6</tiff:Orientation>`). Same length, so a padded
+/// packet keeps its size. `None` when there is nothing to change.
+fn xmp_orientation_to_1(xmp: &[u8]) -> Option<alloc::vec::Vec<u8>> {
+    const NAME: &[u8] = b"tiff:Orientation";
+    let mut out = xmp.to_vec();
+    let mut changed = false;
+    let mut i = 0;
+    while let Some(at) = out[i..].windows(NAME.len()).position(|w| w == NAME) {
+        let mut j = i + at + NAME.len();
+        i = j;
+        let skip_ws = |j: &mut usize, b: &[u8]| {
+            while *j < b.len() && b[*j].is_ascii_whitespace() {
+                *j += 1;
+            }
+        };
+        skip_ws(&mut j, &out);
+        let digit = match out.get(j) {
+            // Attribute: `= "6"` or `= '6'`.
+            Some(b'=') => {
+                j += 1;
+                skip_ws(&mut j, &out);
+                match out.get(j) {
+                    Some(&q @ (b'"' | b'\'')) if out.get(j + 2) == Some(&q) => j + 1,
+                    _ => continue,
+                }
+            }
+            // Element: `>6<`, allowing whitespace around the digit.
+            Some(b'>') => {
+                j += 1;
+                skip_ws(&mut j, &out);
+                let d = j;
+                j += 1;
+                skip_ws(&mut j, &out);
+                if out.get(j) != Some(&b'<') {
+                    continue;
+                }
+                d
+            }
+            _ => continue,
+        };
+        if matches!(out.get(digit), Some(b'2'..=b'8')) {
+            out[digit] = b'1';
+            changed = true;
+        }
+    }
+    changed.then_some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::xmp_orientation_to_1;
+
+    #[test]
+    fn rewrites_both_xmp_serializations_and_keeps_the_length() {
+        let attr = br#"<rdf:Description tiff:Orientation="6" tiff:Make="x"/>"#;
+        let got = xmp_orientation_to_1(attr).unwrap();
+        assert_eq!(
+            got,
+            br#"<rdf:Description tiff:Orientation="1" tiff:Make="x"/>"#
+        );
+        let elem = b"<tiff:Orientation> 8 </tiff:Orientation>";
+        assert_eq!(
+            xmp_orientation_to_1(elem).unwrap(),
+            b"<tiff:Orientation> 1 </tiff:Orientation>"
+        );
+        let single = b"<x tiff:Orientation = '3'/>";
+        assert_eq!(
+            xmp_orientation_to_1(single).unwrap(),
+            b"<x tiff:Orientation = '1'/>"
+        );
+    }
+
+    #[test]
+    fn leaves_identity_and_other_text_alone() {
+        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="1"/>"#).is_none());
+        assert!(xmp_orientation_to_1(br#"<x exif:PixelXDimension="6"/>"#).is_none());
+        assert!(xmp_orientation_to_1(b"tiff:Orientation").is_none());
+        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="16"/>"#).is_none());
+    }
 }
 
 /// Apply `orientation` to `pixels`, or `None` when there is nothing to do.

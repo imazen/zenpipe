@@ -160,3 +160,23 @@ fn animation_encodes_write_every_frame_upright() {
         }
     }
 }
+
+#[test]
+fn xmp_orientation_is_rewritten_with_the_exif_tag() {
+    let px = source(0);
+    let xmp = br#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:tiff="http://ns.adobe.com/tiff/1.0/" tiff:Orientation="6"/></rdf:RDF></x:xmpmeta>"#;
+    let meta = Metadata::none()
+        .with_orientation(Orientation::Rotate90)
+        .with_xmp(xmp.to_vec());
+    let bytes = EncodeRequest::new(ImageFormat::Png)
+        .with_metadata(meta)
+        .encode(slice(&px), false)
+        .unwrap()
+        .into_vec();
+    let d = DecodeRequest::new(&bytes).decode_full_frame().unwrap();
+    let got = d.metadata().xmp.expect("XMP kept");
+    let text = core::str::from_utf8(&got).unwrap();
+    assert!(text.contains(r#"tiff:Orientation="1""#), "{text}");
+    assert_eq!(got.len(), xmp.len(), "same-length rewrite");
+    check_upright(&bytes, &displayed(&px, Orientation::Rotate90), "xmp");
+}
