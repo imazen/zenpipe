@@ -31,8 +31,14 @@ use zenpixels::{Cicp, ColorPrimaries, PixelDescriptor, PixelSlice, TransferFunct
 pub(crate) enum ColorFit {
     /// Encode the pixels and metadata unchanged.
     Keep,
-    /// Encode the pixels unchanged with this metadata.
+    /// Encode the pixels unchanged with this metadata; nothing about the
+    /// colour is lost (a redundant sRGB description dropped, or an ICC
+    /// replaced by the CICP it names).
     Metadata(Metadata),
+    /// Encode the pixels unchanged with this metadata, which drops a
+    /// description the output cannot reproduce: a profile that describes no
+    /// colour space, or (without `cms`) one only a CMS could convert.
+    Dropped(Metadata),
     /// Convert the pixels from `from` to sRGB and encode with `metadata`.
     ConvertToSrgb { from: Source, metadata: Metadata },
 }
@@ -53,7 +59,7 @@ fn is_srgb_cicp(c: Cicp) -> bool {
 fn convert(from: Source, metadata: Metadata) -> ColorFit {
     #[cfg(not(feature = "cms"))]
     if matches!(from, Source::Icc(_)) {
-        return ColorFit::Metadata(metadata);
+        return ColorFit::Dropped(metadata);
     }
     ColorFit::ConvertToSrgb { from, metadata }
 }
@@ -101,7 +107,7 @@ pub(crate) fn plan(metadata: Option<&Metadata>, caps: &EncodeCapabilities) -> Co
             return convert(Source::Icc(icc.clone()), out);
         }
         // The bytes describe no colour space.
-        return ColorFit::Metadata(out);
+        return ColorFit::Dropped(out);
     }
 
     // No ICC: CICP alone describes the pixels. An ICC carrier gets a profile
@@ -118,6 +124,24 @@ pub(crate) fn plan(metadata: Option<&Metadata>, caps: &EncodeCapabilities) -> Co
         return convert(Source::Cicp(cicp), out);
     }
     ColorFit::Keep
+}
+
+impl ColorFit {
+    /// Under [`EncodePolicy::strict`](zencodec::encode::EncodePolicy::strict),
+    /// refuse a fit that loses colour: a conversion or a dropped description.
+    pub(crate) fn check_strict(self, strict: bool) -> Result<Self, &'static str> {
+        match self {
+            ColorFit::ConvertToSrgb { .. } if strict => Err(
+                "the target format cannot carry the source colour description \
+                 (strict: refusing to convert the pixels to sRGB)",
+            ),
+            ColorFit::Dropped(_) if strict => Err(
+                "the target format cannot carry the source colour description \
+                 (strict: refusing to drop a profile that cannot be reproduced)",
+            ),
+            fit => Ok(fit),
+        }
+    }
 }
 
 /// The descriptor for pixels in `from`: a CICP source states primaries and
