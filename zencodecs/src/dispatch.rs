@@ -45,6 +45,10 @@ pub(crate) struct EncodeParams<'a> {
 /// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
 /// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
 /// orientation is *not* authoritative) are left alone.
+// `Exif::to_bytes` is deprecated on zencodec main in favour of
+// `zenmeta::exif::serialize`, but zenmeta is unpublished and the registry
+// zencodec 0.1.26 this crate builds against has no other writer.
+#[allow(deprecated)]
 pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
     use zencodec::exif::{Exif, TextEncoding};
     if meta.orientation == zencodec::Orientation::Identity
@@ -374,6 +378,7 @@ pub(crate) fn build_encoder<'a>(
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // `Exif::to_bytes`: see `fold_orientation_into_exif`.
 mod fold_tests {
     use super::*;
     use zencodec::Orientation;

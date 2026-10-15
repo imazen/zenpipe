@@ -150,6 +150,7 @@ impl Filter for MaskedFilter {
         // Users should scale the inner filter before wrapping it.
     }
 
+    #[allow(deprecated)] // `PlaneMask`: see `crate::access`.
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         let access = self.filter.channel_access();
         let w = planes.width;
