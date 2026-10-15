@@ -8,6 +8,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
 - Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
 - CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
 

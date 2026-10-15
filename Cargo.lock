@@ -24,6 +24,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
+name = "aho-corasick"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "aligned"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,9 +167,9 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
 name = "archmage"
-version = "0.9.29"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e3a17fc8196cce2902db52de7a21d4407971d080c01a0256037fcd3fc6e536e"
+checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -169,13 +178,13 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.29"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d0c10fb756a60ff9418d3e5dcd2b665c5914e32391d2523995d2c2c09237ac6"
+checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -457,7 +466,7 @@ checksum = "fc0e56a716f1e132ff6bf4bdac1c944a3fcdc1cae65f70a4a2a1ac3b401d2d1f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -480,9 +489,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.4.4"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad534f4357a5264cce5019c989cf66a4f0dc4e0d1b1d15f8aacec0ff7360273"
+checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -551,7 +560,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -768,7 +777,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -922,9 +931,9 @@ checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.11"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
+checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
 name = "flate2"
@@ -1056,6 +1065,21 @@ name = "gcd"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d758ba1b47b00caf47f24925c0074ecb20d6dfcffe7f6d53395c0465674841a"
+
+[[package]]
+name = "generator"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1be81b31c9ce4caf7f3178eeb90662bb1864d3ad363ec6bdada3201adff19c37"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "log",
+ "rustversion",
+ "windows-link 0.2.1",
+ "windows-result 0.4.1",
+]
 
 [[package]]
 name = "getrandom"
@@ -2017,6 +2041,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "loom"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
+dependencies = [
+ "cfg-if",
+ "generator",
+ "scoped-tls",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "loop9"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2044,12 +2081,22 @@ source = "git+https://github.com/DanielKeep/rust-custom-derive.git#1252f258cdb9b
 
 [[package]]
 name = "magetypes"
-version = "0.9.29"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb20fe6c3852ae9d38e328f9da0a77bdb6d2837f7c8cad0bda1b9bcf77c4e251"
+checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
 dependencies = [
  "archmage",
+ "libm",
  "rustversion",
+]
+
+[[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
 ]
 
 [[package]]
@@ -2213,6 +2260,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "nu-ansi-term"
+version = "0.50.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2751,28 +2807,20 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rav1d-disjoint-mut"
-version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
+version = "0.3.2"
+source = "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87"
 dependencies = [
  "aligned",
  "aligned-vec",
- "zerocopy",
-]
-
-[[package]]
-name = "rav1d-disjoint-mut"
-version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
-dependencies = [
- "aligned",
- "aligned-vec",
+ "loom",
+ "spin",
  "zerocopy",
 ]
 
 [[package]]
 name = "rav1d-safe"
 version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97#140f91450c3551c25a5699d12ded6d629ecf6d97"
+source = "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87"
 dependencies = [
  "aligned",
  "archmage",
@@ -2785,32 +2833,7 @@ dependencies = [
  "nasm-rs",
  "parking_lot",
  "paste",
- "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
- "raw-cpuid",
- "safe_unaligned_simd",
- "strum",
- "to_method",
- "whereat",
- "zerocopy",
-]
-
-[[package]]
-name = "rav1d-safe"
-version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
-dependencies = [
- "aligned",
- "archmage",
- "assert_matches",
- "atomig",
- "bitflags",
- "cc",
- "cfg-if",
- "enough",
- "nasm-rs",
- "parking_lot",
- "paste",
- "rav1d-disjoint-mut 0.3.1 (git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515)",
+ "rav1d-disjoint-mut",
  "raw-cpuid",
  "safe_unaligned_simd",
  "strum",
@@ -2984,10 +3007,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-automata"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
 name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "resvg"
@@ -3119,6 +3159,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9c874fb993656d484725d58fbfddb39dfcf98ebcadc1a1d09568aa6b39bafba"
 
 [[package]]
+name = "scoped-tls"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3193,7 +3239,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -3242,6 +3288,15 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "sharded-slab"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -3310,6 +3365,12 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+
+[[package]]
+name = "spin"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0134f9043ed38b087ac4f7d4af44c79e2c9e5094421fe3164f435ce585953b10"
 
 [[package]]
 name = "stable_deref_trait"
@@ -3445,9 +3506,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.4"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3532,7 +3593,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -3783,6 +3844,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+ "valuable",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
+dependencies = [
+ "matchers",
+ "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -4005,6 +4096,12 @@ dependencies = [
  "thiserror 2.0.20",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "vello_common"
@@ -4499,6 +4596,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
 dependencies = [
  "archmage",
  "garb",
@@ -4511,7 +4609,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
+source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
  "archmage",
  "garb",
@@ -4528,33 +4626,6 @@ source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf
 
 [[package]]
 name = "zenavif"
-version = "0.1.7"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
-dependencies = [
- "almost-enough",
- "archmage",
- "bytemuck",
- "enough",
- "imgref",
- "linear-srgb",
- "log",
- "magetypes",
- "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=140f91450c3551c25a5699d12ded6d629ecf6d97)",
- "rgb",
- "safe_unaligned_simd",
- "thiserror 2.0.20",
- "ultrahdr-core 0.5.0",
- "whereat",
- "yuv",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
- "zencodec",
- "zenpixels",
- "zenpixels-convert",
- "zenravif 0.2.0 (git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41)",
-]
-
-[[package]]
-name = "zenavif"
 version = "0.2.0"
 dependencies = [
  "almost-enough",
@@ -4565,22 +4636,49 @@ dependencies = [
  "linear-srgb",
  "log",
  "magetypes",
- "rav1d-safe 0.6.0 (git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515)",
+ "rav1d-safe",
  "rgb",
  "safe_unaligned_simd",
  "serde_json",
  "thiserror 2.0.20",
- "ultrahdr-core 0.5.0",
+ "ultrahdr-core 0.6.0",
  "whereat",
  "yuv",
- "zenanalyze 0.2.0",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze)",
  "zenanalyze-api",
  "zenavif-parse 0.7.0",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
  "zenpredict 0.2.0",
- "zenravif 0.2.0 (git+https://github.com/imazen/cavif-rs?rev=7f55b540fdf40ee9b37a7060c8d327747e842345)",
+ "zenravif",
+]
+
+[[package]]
+name = "zenavif"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77#c6c037c02bfdcc69daa03018b38b1b5a5151db77"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb",
+ "log",
+ "magetypes",
+ "rav1d-safe",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror 2.0.20",
+ "ultrahdr-core 0.6.0",
+ "whereat",
+ "yuv",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77)",
+ "zencodec",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenravif",
 ]
 
 [[package]]
@@ -4601,7 +4699,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
+source = "git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77#c6c037c02bfdcc69daa03018b38b1b5a5151db77"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4618,15 +4716,6 @@ dependencies = [
 name = "zenavif-serialize"
 version = "0.2.0"
 source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
-dependencies = [
- "arrayvec 0.7.8",
- "whereat",
-]
-
-[[package]]
-name = "zenavif-serialize"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d025ece47da74cbd74c245302bd45bbf8e"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4704,8 +4793,8 @@ dependencies = [
  "ultrahdr-core 0.6.0",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.1.7",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77)",
  "zenbitmaps",
  "zencodec",
  "zengif",
@@ -4718,7 +4807,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpng 0.2.0",
- "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze)",
+ "zenpredict 0.2.0",
  "zenraw",
  "zensim",
  "zensim-regress",
@@ -4968,7 +5057,7 @@ source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf
 dependencies = [
  "libm",
  "zenanalyze-api",
- "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze)",
+ "zenpredict 0.2.0",
 ]
 
 [[package]]
@@ -4989,8 +5078,8 @@ dependencies = [
  "rgb",
  "serde_json",
  "whereat",
- "zenavif 0.1.7",
  "zenavif 0.2.0",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77)",
  "zenbench",
  "zenbitmaps",
  "zenblend",
@@ -5107,16 +5196,6 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-dependencies = [
- "archmage",
- "bytemuck",
- "libm",
- "lz4_flex 0.11.6",
-]
-
-[[package]]
-name = "zenpredict"
-version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
  "archmage",
@@ -5153,40 +5232,7 @@ dependencies = [
 [[package]]
 name = "zenrav1e"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenrav1e?rev=1447c200fd083916c69ac72c1335079ba4624b2e#1447c200fd083916c69ac72c1335079ba4624b2e"
-dependencies = [
- "aligned-vec",
- "arbitrary",
- "arg_enum_proc_macro",
- "arrayvec 0.7.8",
- "av1-grain",
- "bitstream-io",
- "built",
- "cfg-if",
- "enough",
- "interpolate_name",
- "itertools",
- "libfuzzer-sys",
- "log",
- "maybe-rayon",
- "noop_proc_macro",
- "num-derive",
- "num-traits",
- "pastey",
- "profiling",
- "rand 0.9.4",
- "rand_chacha",
- "simd_helpers",
- "thiserror 2.0.20",
- "v_frame 0.3.9",
- "wasm-bindgen",
- "whereat",
-]
-
-[[package]]
-name = "zenrav1e"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037553434efb57ecbf4414c8b49922ba3e4"
+source = "git+https://github.com/imazen/zenrav1e?rev=9057c4bacf1d8a23974e32de09fd4446a1cc525a#9057c4bacf1d8a23974e32de09fd4446a1cc525a"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -5219,7 +5265,7 @@ dependencies = [
 [[package]]
 name = "zenravif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/cavif-rs?rev=7f55b540fdf40ee9b37a7060c8d327747e842345#7f55b540fdf40ee9b37a7060c8d327747e842345"
+source = "git+https://github.com/imazen/cavif-rs?rev=aac04acc5295b581eac7234ed96bac1553ce51e2#aac04acc5295b581eac7234ed96bac1553ce51e2"
 dependencies = [
  "almost-enough",
  "imgref",
@@ -5227,23 +5273,8 @@ dependencies = [
  "quick-error",
  "rgb",
  "whereat",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90)",
- "zenrav1e 0.2.0 (git+https://github.com/imazen/zenrav1e?rev=1447c200fd083916c69ac72c1335079ba4624b2e)",
-]
-
-[[package]]
-name = "zenravif"
-version = "0.2.0"
-source = "git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6e7395fad67c87ddab676c4df59575a41"
-dependencies = [
- "almost-enough",
- "imgref",
- "loop9",
- "quick-error",
- "rgb",
- "whereat",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e)",
- "zenrav1e 0.2.0 (git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4)",
+ "zenavif-serialize",
+ "zenrav1e",
 ]
 
 [[package]]
@@ -5536,7 +5567,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -5589,8 +5620,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core 0.5.3",
 ]
-
-[[patch.unused]]
-name = "zenanalyze"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#f7fe3435169716579670944d1b2cf1e0132c69db"
