@@ -53,6 +53,11 @@ members = ["."]
 # ^0.1.7, and the repo-root [patch.crates-io] does not reach this separate
 # fuzz workspace. Use the same 0.1.7 git revision as the production adapter;
 # current sibling main is 0.2.0 and cannot satisfy this requirement.
+# zencodec from the sibling clone (CI clones it; see fuzz.yml). Siblings pin
+# zencodec by git rev and bump it on their own schedule, so a rev here goes
+# stale; patching the registry AND the git source to one path keeps a single
+# zencodec whatever they pin.
+zencodec = { path = "../../../zencodec" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "11033c957df69dcf37a6820032ed2a64f2f6f213" }
 # Unpublished mains the root [patch.crates-io] pins (see its comments):
 # zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
@@ -157,3 +162,7 @@ path = "seed_corpus_tool.rs"
 test = false
 doc = false
 bench = false
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../../../zencodec" }
+zenmeta = { path = "../../../zencodec/zenmeta" }

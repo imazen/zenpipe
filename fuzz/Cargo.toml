@@ -21,6 +21,11 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
+# zencodec from the sibling clone (CI clones it; see fuzz.yml). Siblings pin
+# zencodec by git rev and bump it on their own schedule, so a rev here goes
+# stale; patching the registry AND the git source to one path keeps a single
+# zencodec whatever they pin.
+zencodec = { path = "../../zencodec" }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
@@ -80,3 +85,7 @@ doc = false
 name = "fuzz_job_transcode"
 path = "fuzz_targets/fuzz_job_transcode.rs"
 doc = false
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../../zencodec" }
+zenmeta = { path = "../../zencodec/zenmeta" }
