@@ -96,7 +96,6 @@ fn xmp_orientation_to_1(xmp: &[u8]) -> Option<alloc::vec::Vec<u8>> {
     changed.then_some(out)
 }
 
-
 /// Apply `orientation` to `pixels`, or `None` when there is nothing to do.
 pub(crate) fn orient(pixels: &PixelSlice<'_>, orientation: Orientation) -> Option<PixelBuffer> {
     (orientation != Orientation::Identity)
