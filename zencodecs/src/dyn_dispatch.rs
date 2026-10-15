@@ -588,7 +588,10 @@ pub(crate) fn dyn_animation_frame_encoder(
                 job = job.with_limits(to_resource_limits(lim));
             }
             if let Some(meta) = params.metadata {
-                job = job.with_metadata_policy(meta, params.metadata_policy);
+                job = job.with_metadata_policy(
+                    crate::color_fit::exif_color_space(meta),
+                    params.metadata_policy,
+                );
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);

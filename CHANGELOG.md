@@ -1102,6 +1102,12 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **EXIF ColorSpace follows the colour written:** `1` only when the encode
+  writes sRGB, `0xFFFF` otherwise, rewritten in place when the tag is present
+  (`color_fit::exif_color_space`, via `zencodec::helpers::set_exif_color_space`).
+  Readers that consult it treat `1` as sRGB whatever ICC is embedded
+  (imazen/zencodec#132). Test: `tests/exif_color_space.rs`.
+
 - **A pixel-format conversion that changes the colour space re-describes
   the pixels.** When the encoder can't take the input's pixel format and the
   one it can take has other primaries or another transfer (linear f32 or u16

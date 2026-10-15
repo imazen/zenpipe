@@ -232,3 +232,21 @@ pub(crate) fn fit_to_supported(
     out.cicp = Some(target_cicp);
     Ok(Some((converted, out)))
 }
+
+/// Keep an EXIF ColorSpace tag in step with the colour being written: `1`
+/// only for sRGB, `0xFFFF` otherwise. Readers that consult it treat `1` as
+/// sRGB whatever profile is embedded (imazen/zencodec#132). A blob without
+/// the tag is left alone.
+pub(crate) fn exif_color_space(mut meta: Metadata) -> Metadata {
+    let Some(exif) = meta.exif.as_deref() else {
+        return meta;
+    };
+    let srgb = meta.icc_profile.as_deref().is_none_or(|icc| {
+        zenpixels::icc::is_common_srgb(icc)
+            || zenpixels::icc::identify_common(icc).is_some_and(|id| id.is_srgb())
+    }) && meta.cicp.is_none_or(is_srgb_cicp);
+    if let Some(fixed) = zencodec::helpers::set_exif_color_space(exif, srgb) {
+        meta.exif = Some(fixed.into());
+    }
+    meta
+}
