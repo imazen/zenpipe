@@ -134,6 +134,7 @@ pub mod cms;
 pub mod codec_id;
 mod codecs;
 pub mod color;
+mod color_fit;
 pub mod config;
 pub mod decision;
 mod decode;

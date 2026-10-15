@@ -27,6 +27,19 @@ All notable changes to `zencodecs` are documented here. Format follows
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- Encoding into a format that cannot carry the source's colour description
+  no longer depends on the codec's reaction (zengif now refuses ICC it can't
+  keep). zencodecs fits the description first, in the one-shot and streaming
+  paths: a format that carries it keeps it; an sRGB description, or a
+  profile that describes no colour space, is dropped with the pixels
+  unchanged; an ICC profile naming a CICP space the format carries is
+  replaced by the CICP; otherwise the pixels are converted to sRGB (the
+  closest colour such a format describes) through
+  `zenpixels_convert::finalize_for_output_with` and the description is
+  dropped. Without the `cms` feature an ICC profile that needs a full CMS is
+  dropped instead of converted; `cms` now enables zenpixels-convert's
+  moxcms backend for it. `tests/color_fit.rs` checks the P3-to-sRGB pixels
+  exactly (PNM) and that streaming gives the one-shot file.
 - Streaming encode (`EncodeRequest::build_streaming_encoder`, and so
   `TranscodeSink`) failed with `row_level_encode` for codecs without
   row-level encode (GIF, AVIF, BMP). Such encoders are now wrapped in a

@@ -108,6 +108,28 @@ where
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
             use zencodec::encode::{EncodeJob as _, Encoder as _};
+            let format = C::format();
+            // Fit the colour description to what this format carries,
+            // converting the pixels when it can't carry theirs.
+            let (metadata, converted) = match crate::color_fit::plan(
+                params.metadata.as_ref(),
+                <C as zencodec::encode::EncoderConfig>::capabilities(),
+            ) {
+                crate::color_fit::ColorFit::Keep => (params.metadata.clone(), None),
+                crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
+                crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
+                    let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
+                        at!(CodecError::InvalidInput(alloc::format!(
+                            "converting to sRGB for {format:?}, which cannot carry the source colour: {e}"
+                        )))
+                    })?;
+                    (Some(metadata), Some(buf))
+                }
+            };
+            let pixels = match &converted {
+                Some(b) => b.as_slice(),
+                None => pixels,
+            };
             let config = build_config(&params);
             let mut job = config.job();
             if let Some(s) = params.stop {
@@ -116,13 +138,12 @@ where
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
-            if let Some(meta) = params.metadata {
+            if let Some(meta) = metadata {
                 job = job.with_metadata_policy(meta, params.metadata_policy);
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);
             }
-            let format = C::format();
             let enc = job
                 .encoder()
                 .map_err(|e| at!(CodecError::from_codec(format, e)))?;
@@ -308,7 +329,19 @@ where
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
-    if let Some(meta) = params.metadata {
+    // Fit the colour description to what this format carries; the pixels
+    // are converted strip by strip when it can't carry theirs.
+    let (metadata, convert_from) = match crate::color_fit::plan(
+        params.metadata.as_ref(),
+        <C as zencodec::encode::EncoderConfig>::capabilities(),
+    ) {
+        crate::color_fit::ColorFit::Keep => (params.metadata.clone(), None),
+        crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
+        crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
+            (Some(metadata), Some(from))
+        }
+    };
+    if let Some(meta) = metadata {
         job = job.with_metadata_policy(meta, params.metadata_policy);
     }
     if let Some(ep) = params.encode_policy {
@@ -318,6 +351,13 @@ where
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match convert_from {
+        Some(from) => Box::new(ColorConvertingEncoder {
+            inner: encoder,
+            from,
+        }),
+        None => encoder,
+    };
     // A codec without row-level encode still streams its input: rows are
     // collected and its one-shot encode runs at `finish`, so a streaming
     // transcode gives the same bytes as the one-shot one.
@@ -332,6 +372,106 @@ where
         supported: C::supported_descriptors(),
         format,
     })
+}
+
+/// Converts each strip to sRGB before the codec sees it, for a target that
+/// cannot carry the source colour (see `crate::color_fit`). The conversion is
+/// per pixel, so strip by strip gives what a whole-image conversion gives.
+struct ColorConvertingEncoder {
+    inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    from: crate::color_fit::Source,
+}
+
+impl ColorConvertingEncoder {
+    fn convert(
+        &self,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<zenpixels::PixelBuffer, zencodec::encode::BoxedError> {
+        crate::color_fit::convert_to_srgb(&pixels, &self.from).map_err(|e| e.into())
+    }
+}
+
+impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
+    fn preferred_strip_height(&self) -> u32 {
+        self.inner.preferred_strip_height()
+    }
+
+    fn encode(
+        self: Box<Self>,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let buf = self.convert(pixels)?;
+        self.inner.encode(buf.as_slice())
+    }
+
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &mut [u8],
+        _make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let pixels = PixelSlice::new(
+            data,
+            width,
+            height,
+            stride_pixels as usize * 4,
+            PixelDescriptor::RGBA8_SRGB,
+        )
+        .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        let buf = self.convert(pixels)?;
+        self.inner.encode(buf.as_slice())
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        // Declare the descriptor the converted strips will carry: convert
+        // one pixel through the same function.
+        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
+        let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        let target = self.convert(px)?.descriptor();
+        self.inner.begin(width, height, target)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.inner.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.inner.consume_output(n)
+    }
+
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.inner.take_output(into)
+    }
+
+    fn push_rows(
+        &mut self,
+        rows: PixelSlice<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        let buf = self.convert(rows)?;
+        self.inner.push_rows(buf.as_slice())
+    }
+
+    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.finish()
+    }
+
+    fn encode_from(
+        self: Box<Self>,
+        _source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        Err(
+            "encode_from is not available when the pixels need colour conversion; use push_rows"
+                .into(),
+        )
+    }
 }
 
 /// Row-level encode over a codec that only encodes whole images.
