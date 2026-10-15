@@ -1101,6 +1101,24 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **A pixel-format conversion that changes the colour space re-describes
+  the pixels.** When the encoder can't take the input's pixel format and the
+  one it can take has other primaries or another transfer (linear f32 or u16
+  into an 8/16-bit sRGB format, Display P3 into an sRGB-only format), the
+  encode converts from the colour the metadata describes to that format's
+  colour space and writes the matching CICP, dropping an ICC profile that no
+  longer applies (`color_fit::fit_to_supported`). Before, the caller's ICC or
+  CICP was written next to converted pixels, and formats with no colour
+  carrier converted twice (linear off by up to 70 of 255, P3 by 10). The
+  one-shot encoder now negotiates the pixel format after fitting the colour
+  (the closure in `build_from_config`), and `AnyEncoder::encode_pixels` fits
+  too. Streaming encodes are not covered: the encoder sees strips the
+  caller already adapted. `tests/color_adapt.rs` checks 36 lossless cells
+  (4 sources x PNG, AVIF, JXL, WebP, PNM, BMP, farbfeld, QOI, TGA) by
+  decoding each file by its own description; 19 failed before.
+- **JXL and AVIF honour `with_lossless(true)`.** Their builders dropped the
+  flag and encoded lossy; it now reaches the codec after quality.
+
 - **Re-encodes write upright pixels and orientation 1.** A non-identity
   `Metadata::orientation` (or EXIF Orientation tag) is applied to the
   pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming

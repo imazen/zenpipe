@@ -39,6 +39,8 @@ pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOu
 /// A built encoder: a closure that encodes pixels + its supported descriptors.
 pub(crate) struct BuiltEncoder<'a> {
     pub encoder: EncodeFn<'a>,
+    /// Read only by the gain-map encodes; the closure negotiates its own.
+    #[cfg_attr(not(feature = "jpeg-ultrahdr"), allow(dead_code))]
     pub supported: &'static [PixelDescriptor],
 }
 
@@ -67,6 +69,22 @@ where
                 Some(b) => b.as_slice(),
                 None => pixels,
             };
+            // A pixel-format change that changes the colour space converts
+            // from the described colour and re-describes the result.
+            let fitted = crate::color_fit::fit_to_supported(
+                &pixels,
+                upright.as_ref(),
+                C::supported_descriptors(),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "converting to a pixel format {format:?} accepts: {e}"
+                )))
+            })?;
+            let (pixels, upright) = match &fitted {
+                Some((b, m)) => (b.as_slice(), Some(m.clone())),
+                None => (pixels, upright),
+            };
             // Fit the colour description to what this format carries,
             // converting the pixels when it can't carry theirs.
             let (metadata, converted) = match crate::color_fit::plan(
@@ -88,6 +106,23 @@ where
                 Some(b) => b.as_slice(),
                 None => pixels,
             };
+            // Negotiate the cheapest pixel format the encoder accepts;
+            // zero-copy when it already accepts these pixels.
+            let bytes = pixels.contiguous_bytes();
+            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+                &bytes,
+                pixels.descriptor(),
+                pixels.width(),
+                pixels.rows(),
+                pixels.descriptor().aligned_stride(pixels.width()),
+                C::supported_descriptors(),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "pixel format negotiation: {e}"
+                )))
+            })?;
+            let pixels = adapted.as_slice();
             let config = build_config(&params);
             let mut job = config.job();
             if let Some(s) = params.stop {
@@ -200,6 +235,23 @@ where
         let pixels = match &oriented {
             Some(b) => b.as_slice(),
             None => pixels,
+        };
+        // A pixel-format change that changes the colour space converts from
+        // the described colour and re-describes the result.
+        let fitted = crate::color_fit::fit_to_supported(
+            &pixels,
+            metadata.as_ref(),
+            C::supported_descriptors(),
+        )
+        .map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "converting to a pixel format {:?} accepts: {e}",
+                C::format()
+            )))
+        })?;
+        let (pixels, metadata) = match &fitted {
+            Some((b, m)) => (b.as_slice(), Some(m.clone())),
+            None => (pixels, metadata),
         };
 
         // Negotiate pixel format -- convert input to something the encoder supports

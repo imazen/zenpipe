@@ -879,29 +879,43 @@ impl<'a> EncodeRequest<'a> {
 
         let built = crate::dispatch::build_encoder(format, params)?;
 
-        // Use zenpixels to negotiate the cheapest pixel format conversion.
-        // Returns Cow::Borrowed (zero-copy) when the input already matches
-        // one of the encoder's supported formats.
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        // The input as a pixel slice (zero-copy unless its stride isn't a
+        // whole number of pixels). The encoder negotiates the pixel format
+        // itself, after fitting the colour description to it.
+        let source = zenpixels_convert::adapt::adapt_for_encode_cow(
             data,
             descriptor,
             width,
             height,
             stride,
-            built.supported,
+            &[descriptor],
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(
-                "pixel format negotiation: {e}"
+                "pixel buffer: {e}"
             )))
         })?;
-        let pixel_slice = adapted.as_slice();
 
         // Check if we should embed a precomputed gain map
         #[cfg(feature = "jpeg-ultrahdr")]
         if let Some(crate::gainmap::GainMapSource::Precomputed { gain_map, metadata }) =
             &self.gain_map_source
         {
+            // Use zenpixels to negotiate the cheapest pixel format conversion.
+            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+                data,
+                descriptor,
+                width,
+                height,
+                stride,
+                built.supported,
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "pixel format negotiation: {e}"
+                )))
+            })?;
+            let pixel_slice = adapted.as_slice();
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
@@ -958,7 +972,7 @@ impl<'a> EncodeRequest<'a> {
             }));
         }
 
-        (built.encoder)(pixel_slice)
+        (built.encoder)(source.as_slice())
     }
 }
 
