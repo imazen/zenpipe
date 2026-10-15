@@ -50,29 +50,14 @@ jobs:
       - name: Install cargo-superwork
         run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
 
-      - name: Transform deps for CI
+      - name: Clone dependency repos (as CI does)
         run: |
-          # ci-prep regenerates [patch.crates-io] with git entries for every
-          # crate in Superwork.toml's patch_repos — including the zenjxl-decoder
-          # trio. (An inline injection of those three entries used to live here
-          # and produced a duplicate-key manifest once patch_repos gained them.)
-          cargo superwork ci-prep --config zen-workspace/Superwork.toml
-          rm -f Cargo.lock
-          # demo/crate builds standalone (workspace-excluded), and cargo only
-          # honors [patch.crates-io] from the build's OWN workspace root — the
-          # regenerated patches in the repo-root manifest are invisible to it.
-          # Replace demo/crate's committed dev-time path patches with the
-          # generated full-ecosystem git section (no hardcoded crate list).
-          python3 - <<'EOF'
-          import re
-          sec = re.compile(r'^\[patch\.crates-io\]\n(?:.*\n)*?(?=^\[|\Z)', re.M)
-          root = open('Cargo.toml').read()
-          m = sec.search(root)
-          assert m, "ci-prep left no [patch.crates-io] in the root manifest"
-          demo = sec.sub('', open('demo/crate/Cargo.toml').read()).rstrip('\n')
-          open('demo/crate/Cargo.toml', 'w').write(demo + '\n\n' + m.group(0))
-          print(f"mirrored {m.group(0).count(chr(10))} patch lines into demo/crate")
-          EOF
+          # The same resolution as ci.yml and fuzz.yml: every sibling at its
+          # head, every manifest (demo/crate included, --recursive) pathed to
+          # it. ci-prep's generated git patches could not express zenpipe's
+          # rev-pinned zenavif 0.1.7 decoder next to the 0.2.0 tuner, so the
+          # demo build resolved the yanked registry 0.1.7 and failed.
+          cargo superwork ci-clone --add-paths --recursive --config zen-workspace/Superwork.toml
           rm -f demo/crate/Cargo.lock
 
       - name: Build WASM (threaded, nightly)

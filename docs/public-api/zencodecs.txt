@@ -6,15 +6,15 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 738 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 18 lines (18 hidden + 0 excluded-feature)
+# files: zencodecs.txt 749 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 18 lines (18 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                21
-#   pub types (struct/enum/trait/alias)        55
+#   pub types (struct/enum/trait/alias)        57
 #   pub consts/statics                         10
 #   free functions                             37
-#   inherent methods                          254
+#   inherent methods                          264
 #   struct fields                             126
 #   enum variants                             115
 #   re-exports                                119
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          328
+#   (root)                          329
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -38,9 +38,9 @@
 #   select                           21
 #   speed                            17
 #   trace                            48
-#   transcode                        39
+#   transcode                        50
 
-## items (704 lines)
+## items (715 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -417,8 +417,13 @@ pub transcode::TranscodeOptions::supplements: transcode::SupplementPolicy
 pub transcode::TranscodeOutput::data: alloc::vec::Vec<u8>
 pub transcode::TranscodeOutput::format: zencodec::format::ImageFormat
 pub transcode::TranscodeOutput::mime_type: &'static str
+pub fn transcode::TranscodeSink<'a>::consume_output(&mut self, usize)
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
+pub fn transcode::TranscodeSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
+pub fn transcode::TranscodeSink<'a>::pending_output(&self) -> &[u8]
+pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn transcode::TranscodeSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a) -> Self
 pub enum BoolKeep [also: intent]
 pub BoolKeep::False
 pub BoolKeep::Keep
@@ -712,8 +717,13 @@ pub TranscodeOutput::data: alloc::vec::Vec<u8>
 pub TranscodeOutput::format: zencodec::format::ImageFormat
 pub TranscodeOutput::mime_type: &'static str
 pub struct TranscodeSink<'a> [also: transcode]
+pub fn transcode::TranscodeSink<'a>::consume_output(&mut self, usize)
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
+pub fn transcode::TranscodeSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
+pub fn transcode::TranscodeSink<'a>::pending_output(&self) -> &[u8]
+pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn transcode::TranscodeSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a) -> Self
 pub trait AnyEncoder: core::marker::Send + core::marker::Sync
 pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, core::option::Option<almost_enough::stop_token::StopToken>) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::encode_srgba8_imgref(&self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>, bool) -> Result<zencodec::output::EncodeOutput>
@@ -746,6 +756,7 @@ pub fn streaming_encoder(zencodec::format::ImageFormat, &decision::FormatDecisio
 pub fn transcode(&[u8], &decision::FormatDecision, &transcode::TranscodeOptions, &AllowedFormats) -> Result<transcode::TranscodeOutput> [also: transcode]
 pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::QualityTarget, &transcode::TranscodeOptions, &AllowedFormats) -> Result<transcode::TranscodeOutput> [also: transcode]
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
+pub type TranscodeWriter<'a> = alloc::boxed::Box<(dyn core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a)> [also: transcode]
 
 ## trait impls (26 types)
 
