@@ -21,6 +21,10 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
+# The streaming-encode API (DynEncoder::begin/pending_output, OutputTiming) is
+# on zencodec main only. Same rev zenjpeg and ultrahdr pin, so the graph holds
+# one zencodec; a floating `git` entry would be a second source.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "7cc3d3ec6b41103ee8398c30b1582ebdbb6df914" }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without

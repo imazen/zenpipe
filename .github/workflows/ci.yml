@@ -16,16 +16,11 @@ jobs:
   rust:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:
-      # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
-      # of the SIMD tiers and the Apple linker are exercised together), and
-      # `macos-latest` is aarch64-only, so it has to be named explicitly. The
-      # reusable workflow dropped macOS from its DEFAULT list to cut Actions
-      # spend and documents `platforms` as the opt-back-in; this is that opt-in.
-      # `macos-26-intel` rather than `macos-15-intel` because zenpipe ships no
-      # binaries — nothing here needs the older SDK's deployment target.
-      # Everything else is the reusable workflow's default list, repeated
-      # verbatim because `platforms` replaces it wholesale rather than adding.
-      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-26-intel"]'
+      # macOS runs on ARM64 only (`macos-latest`); Intel macOS lanes are not
+      # run. The reusable workflow's default list has no macOS, so it is named
+      # here. `platforms` replaces the default list wholesale, so the other
+      # entries repeat it verbatim.
+      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
       # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
