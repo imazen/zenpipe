@@ -1386,7 +1386,6 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?rev=7cc3d3ec6b41103ee8398c30b1582ebdbb6df914#7cc3d3ec6b41103ee8398c30b1582ebdbb6df914"
 dependencies = [
  "almost-enough",
  "enough",
@@ -1551,7 +1550,6 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=7cc3d3ec6b41103ee8398c30b1582ebdbb6df914#7cc3d3ec6b41103ee8398c30b1582ebdbb6df914"
 dependencies = [
  "roxmltree",
  "zencodec",
@@ -1593,12 +1591,13 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng#479a656e107e93660b141fc9de385ce4af0ae56d"
+source = "git+https://github.com/imazen/zenpng#8a9cd2836a01e8cb7b361cb331a887ae482390ce"
 dependencies = [
  "almost-enough",
  "archmage",
  "bytemuck",
  "enough",
+ "garb",
  "imgref",
  "linear-srgb",
  "magetypes",
