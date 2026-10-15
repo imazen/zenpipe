@@ -33,55 +33,6 @@ pub(crate) struct EncodeParams<'a> {
     pub cicp: Option<zencodec::Cicp>,
 }
 
-/// Fold `Metadata::orientation` into the EXIF blob for formats whose only
-/// orientation carrier is EXIF (zenpipe#36, gap 1).
-///
-/// JPEG, PNG, and WebP have no native orientation field; their decoders
-/// normalize the EXIF Orientation tag into `info.orientation`, so a caller
-/// who sets `Metadata::with_orientation(..)` with no EXIF blob would see the
-/// field silently dropped. When the field is non-identity: no blob → author
-/// a minimal TIFF with just the Orientation tag; a blob without the tag →
-/// insert it; a blob that already carries the tag → untouched (the codec
-/// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
-/// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
-/// orientation is *not* authoritative) are left alone.
-// `Exif::to_bytes` is deprecated on zencodec main in favour of
-// `zenmeta::exif::serialize`, but zenmeta is unpublished and the registry
-// zencodec 0.1.26 this crate builds against has no other writer.
-#[allow(deprecated)]
-pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
-    use zencodec::exif::{Exif, TextEncoding};
-    if meta.orientation == zencodec::Orientation::Identity
-        || !matches!(
-            format,
-            ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP
-        )
-    {
-        return meta;
-    }
-    let authored = match meta.exif.as_deref() {
-        None => {
-            let mut e = Exif::new(TextEncoding::Ascii);
-            e.set_orientation(meta.orientation);
-            Some(e.to_bytes())
-        }
-        Some(blob) => match Exif::parse(blob) {
-            // Tag present: the policy layer reconciles it to the field.
-            Some(e) if e.orientation().is_some() => None,
-            Some(mut e) => {
-                e.set_orientation(meta.orientation);
-                Some(e.to_bytes())
-            }
-            // Malformed blob: leave it to the codec's own handling.
-            None => None,
-        },
-    };
-    match authored {
-        Some(bytes) => meta.with_exif(bytes),
-        None => meta,
-    }
-}
-
 /// Type-erased one-shot encode closure.
 pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOutput> + 'a>;
 
@@ -109,13 +60,20 @@ where
         encoder: Box::new(move |pixels| {
             use zencodec::encode::{EncodeJob as _, Encoder as _};
             let format = C::format();
+            // Re-encodes write upright pixels and orientation 1.
+            let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+            let oriented = crate::orient_fit::orient(&pixels, orientation);
+            let pixels = match &oriented {
+                Some(b) => b.as_slice(),
+                None => pixels,
+            };
             // Fit the colour description to what this format carries,
             // converting the pixels when it can't carry theirs.
             let (metadata, converted) = match crate::color_fit::plan(
-                params.metadata.as_ref(),
+                upright.as_ref(),
                 <C as zencodec::encode::EncoderConfig>::capabilities(),
             ) {
-                crate::color_fit::ColorFit::Keep => (params.metadata.clone(), None),
+                crate::color_fit::ColorFit::Keep => (upright.clone(), None),
                 crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
                 crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
                     let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
@@ -236,6 +194,14 @@ where
     ) -> Result<EncodeOutput> {
         use zencodec::encode::{EncodeJob as _, Encoder as _};
 
+        // Re-encodes write upright pixels and orientation 1.
+        let (orientation, metadata) = crate::orient_fit::upright(metadata.as_ref());
+        let oriented = crate::orient_fit::orient(&pixels, orientation);
+        let pixels = match &oriented {
+            Some(b) => b.as_slice(),
+            None => pixels,
+        };
+
         // Negotiate pixel format -- convert input to something the encoder supports
         let pixel_data = pixels.contiguous_bytes();
         let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
@@ -258,9 +224,7 @@ where
             job = job.with_stop(s);
         }
         if let Some(m) = metadata {
-            // Type-erased convenience path carries no policy; embed verbatim
-            // (PreserveExact also reconciles a stale EXIF orientation tag).
-            let m = fold_orientation_into_exif(m, C::format());
+            // Type-erased convenience path carries no policy; embed verbatim.
             job = job.with_metadata_policy(m, zencodec::MetadataPolicy::PreserveExact);
         }
         if let Some(l) = limits {
@@ -329,13 +293,16 @@ where
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
+    // Re-encodes write upright pixels and orientation 1; rows are collected
+    // and oriented at `finish` when a rotation or flip is needed.
+    let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
     // Fit the colour description to what this format carries; the pixels
     // are converted strip by strip when it can't carry theirs.
     let (metadata, convert_from) = match crate::color_fit::plan(
-        params.metadata.as_ref(),
+        upright.as_ref(),
         <C as zencodec::encode::EncoderConfig>::capabilities(),
     ) {
-        crate::color_fit::ColorFit::Keep => (params.metadata.clone(), None),
+        crate::color_fit::ColorFit::Keep => (upright.clone(), None),
         crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
         crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
             (Some(metadata), Some(from))
@@ -361,8 +328,11 @@ where
     // A codec without row-level encode still streams its input: rows are
     // collected and its one-shot encode runs at `finish`, so a streaming
     // transcode gives the same bytes as the one-shot one.
+    // An orientation to apply needs the whole image, so it buffers too.
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
-        if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
+        if orientation != zencodec::Orientation::Identity {
+            Box::new(BufferedRowEncoder::new(encoder).with_orientation(orientation))
+        } else if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
             encoder
         } else {
             Box::new(BufferedRowEncoder::new(encoder))
@@ -483,6 +453,9 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 /// [`OutputTiming::AT_FINISH`]: zencodec::encode::OutputTiming::AT_FINISH
 struct BufferedRowEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    /// Applied to the collected image at `finish` (re-encodes are written
+    /// upright; see `crate::orient_fit`).
+    orientation: zencodec::Orientation,
     /// Width, declared height (if `begin` ran) and descriptor.
     image: Option<(u32, Option<u32>, PixelDescriptor)>,
     rows: alloc::vec::Vec<u8>,
@@ -493,10 +466,16 @@ impl BufferedRowEncoder {
     fn new(inner: Box<dyn zencodec::encode::DynEncoder + Send>) -> Self {
         Self {
             inner,
+            orientation: zencodec::Orientation::Identity,
             image: None,
             rows: alloc::vec::Vec::new(),
             filled: 0,
         }
+    }
+
+    fn with_orientation(mut self, orientation: zencodec::Orientation) -> Self {
+        self.orientation = orientation;
+        self
     }
 
     fn row_bytes(
@@ -597,7 +576,10 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         let row_bytes = Self::row_bytes(width, descriptor)?;
         let pixels = PixelSlice::new(&this.rows, width, this.filled, row_bytes, descriptor)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        this.inner.encode(pixels)
+        match crate::orient_fit::orient(&pixels, this.orientation) {
+            Some(oriented) => this.inner.encode(oriented.as_slice()),
+            None => this.inner.encode(pixels),
+        }
     }
 
     fn encode_from(
@@ -657,68 +639,5 @@ pub(crate) fn build_encoder<'a>(
         Tga => "bitmaps-tga" => Ok(crate::codecs::tga::build_trait_encoder(params)),
         Hdr => "bitmaps-hdr" => Ok(crate::codecs::hdr::build_trait_encoder(params));
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
-    }
-}
-
-#[cfg(test)]
-#[allow(deprecated)] // `Exif::to_bytes`: see `fold_orientation_into_exif`.
-mod fold_tests {
-    use super::*;
-    use zencodec::Orientation;
-    use zencodec::exif::Exif;
-
-    fn tag_of(meta: &Metadata) -> Option<Orientation> {
-        meta.exif
-            .as_deref()
-            .and_then(Exif::parse)
-            .and_then(|e| e.orientation())
-    }
-
-    #[test]
-    fn authors_a_blob_when_none_exists() {
-        let m = Metadata::none().with_orientation(Orientation::Rotate90);
-        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
-        assert_eq!(tag_of(&out), Some(Orientation::Rotate90));
-        assert_eq!(out.orientation, Orientation::Rotate90);
-    }
-
-    #[test]
-    fn inserts_the_tag_into_a_blob_that_lacks_it_and_keeps_other_fields() {
-        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
-        e.set_copyright("(c) test");
-        let m = Metadata::none()
-            .with_exif(e.to_bytes())
-            .with_orientation(Orientation::Rotate270);
-        let out = fold_orientation_into_exif(m, ImageFormat::Png);
-        assert_eq!(tag_of(&out), Some(Orientation::Rotate270));
-        let parsed = Exif::parse(out.exif.as_deref().unwrap()).unwrap();
-        assert_eq!(parsed.copyright().as_deref(), Some("(c) test"));
-    }
-
-    #[test]
-    fn leaves_identity_native_carriers_and_existing_tags_alone() {
-        // Identity: nothing to emit.
-        let m = Metadata::none();
-        assert!(
-            fold_orientation_into_exif(m, ImageFormat::WebP)
-                .exif
-                .is_none()
-        );
-        // AVIF carries orientation natively (irot/imir) — no EXIF authored.
-        let m = Metadata::none().with_orientation(Orientation::Rotate90);
-        assert!(
-            fold_orientation_into_exif(m, ImageFormat::Avif)
-                .exif
-                .is_none()
-        );
-        // Existing tag: blob byte-identical (reconciliation is the policy's job).
-        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
-        e.set_orientation(Orientation::Rotate180);
-        let blob = e.to_bytes();
-        let m = Metadata::none()
-            .with_exif(blob.clone())
-            .with_orientation(Orientation::Rotate90);
-        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
-        assert_eq!(out.exif.as_deref(), Some(blob.as_slice()));
     }
 }

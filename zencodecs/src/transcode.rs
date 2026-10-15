@@ -259,13 +259,19 @@ pub fn transcode(
         Some(m) => m,
         None => {
             // Roundtrip metadata from source via probe
-            match crate::info::from_bytes_with_registry(data, registry) {
+            let mut m = match crate::info::from_bytes_with_registry(data, registry) {
                 Ok(info) => info.metadata(),
                 Err(_) => {
                     // No metadata to roundtrip — proceed without it
                     zencodec::Metadata::none()
                 }
-            }
+            };
+            // The probe reports the source's orientation, but the decode may
+            // already have applied it (`OrientationHint::Correct`). What the
+            // encode must still apply is what the decode reports; carrying the
+            // probe's value would rotate the pixels twice.
+            m.orientation = decoded.info().orientation;
+            m
         }
     };
 

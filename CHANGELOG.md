@@ -1100,6 +1100,21 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **Re-encodes write upright pixels and orientation 1.** A non-identity
+  `Metadata::orientation` (or EXIF Orientation tag) is applied to the
+  pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming
+  (buffered and rotated at finish) and animation (canvas rotated, each
+  frame rotated on push). The field is written as `Identity` and the tag
+  rewritten to 1. Governed by the reader-compatibility matrix
+  (imazen/zencodec#132): no browser applies WebP EXIF orientation; WIC,
+  ImageMagick and WebKit on Linux ignore PNG `eXIf`; WIC's and ImageIO's
+  default decodes and `sips` ignore JPEG EXIF orientation; HEIF `imir`
+  reads opposite ways across editions. Replaces folding the field into
+  EXIF (`fold_orientation_into_exif`, removed) and AVIF `irot`/`imir`.
+  `transcode` no longer rotates twice: the probe metadata takes the
+  decoded orientation. Tests that expected the tag or `irot` to survive
+  now expect rotated dimensions and `Identity`.
+
 - **Metadata conformance: AVIF CICP re-verified, `cicp` split into two
   strengths** (zenpipe#36 gap 3): with zenavif git-main (11033c95)
   `Metadata::cicp` does reach the nclx `colr` box and comes back —

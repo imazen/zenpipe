@@ -459,25 +459,33 @@ impl<'a> EncodeRequest<'a> {
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
 
-        crate::dyn_dispatch::dyn_animation_frame_encoder(
+        // Frames are written upright, like a still (`crate::orient_fit`):
+        // the canvas is the rotated one and each frame is rotated on push.
+        let (orientation, metadata) = crate::orient_fit::upright(self.metadata.as_ref());
+        let (canvas_width, canvas_height) = orientation.output_dimensions(width, height);
+        let inner = crate::dyn_dispatch::dyn_animation_frame_encoder(
             format,
             crate::dyn_dispatch::AnimEncodeParams {
                 quality: Some(resolved_quality),
                 effort,
                 lossless: self.lossless,
-                metadata: self
-                    .metadata
-                    .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+                metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: speed_limits.as_ref().or(self.limits),
                 stop: self.stop,
                 encode_policy: self.encode_policy,
-                canvas_width: width,
-                canvas_height: height,
+                canvas_width,
+                canvas_height,
                 loop_count: None,
             },
-        )
+        )?;
+        if orientation == zencodec::Orientation::Identity {
+            return Ok(inner);
+        }
+        Ok(alloc::boxed::Box::new(
+            crate::orient_fit::OrientedAnimationEncoder { inner, orientation },
+        ))
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -561,9 +569,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self
-                .metadata
-                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+            // Orientation is baked into the pixels downstream
+            // (`crate::orient_fit`), not folded into EXIF.
+            metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
@@ -858,9 +866,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self
-                .metadata
-                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+            // Orientation is baked into the pixels downstream
+            // (`crate::orient_fit`), not folded into EXIF.
+            metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits,

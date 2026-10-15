@@ -149,6 +149,7 @@ mod info;
 pub mod intent;
 mod limits;
 mod macros;
+mod orient_fit;
 #[cfg(feature = "picker")]
 pub mod picker;
 pub mod pixel;
