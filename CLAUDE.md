@@ -55,7 +55,7 @@ sources`.
     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
     --test corpus -- --ignored avif
   ```
-- **zenavif is pinned to main `c6c037c0`** (rav1d-safe `dfd01e32`) since
+- **zenavif is pinned to main `5e493d39`** (rav1d-safe `dfd01e32`) since
   2026-10-15. The earlier hold at `11033c95` / rav1d-safe `140f9145` was for
   an aarch64 film-grain panic (rav1d-safe#526, closed 2026-09-06); the command
   above passes at the new pin on aarch64. Keep every zenavif rev in the repo

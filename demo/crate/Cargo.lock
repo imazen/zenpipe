@@ -1481,7 +1481,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77#c6c037c02bfdcc69daa03018b38b1b5a5151db77"
+source = "git+https://github.com/imazen/zenavif?rev=5e493d39bb0b1e60e79ef755d0734e5bc30313ac#5e493d39bb0b1e60e79ef755d0734e5bc30313ac"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1508,7 +1508,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=c6c037c02bfdcc69daa03018b38b1b5a5151db77#c6c037c02bfdcc69daa03018b38b1b5a5151db77"
+source = "git+https://github.com/imazen/zenavif?rev=5e493d39bb0b1e60e79ef755d0734e5bc30313ac#5e493d39bb0b1e60e79ef755d0734e5bc30313ac"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1805,7 +1805,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#8bec0afedb3f33d9006d76f022abf93e795ebc71"
+source = "git+https://github.com/imazen/zenpixels#e3fab915c70dc40ca6a28a42efd332e9cc633e0d"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1816,7 +1816,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#8bec0afedb3f33d9006d76f022abf93e795ebc71"
+source = "git+https://github.com/imazen/zenpixels#e3fab915c70dc40ca6a28a42efd332e9cc633e0d"
 dependencies = [
  "archmage",
  "bytemuck",

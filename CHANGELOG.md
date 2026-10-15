@@ -8,6 +8,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
+- zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
 - zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
 - Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
 - CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
@@ -1116,6 +1117,9 @@ Three crates.io requirements block a newer release and were left alone on purpos
   caller already adapted. `tests/color_adapt.rs` checks 36 lossless cells
   (4 sources x PNG, AVIF, JXL, WebP, PNM, BMP, farbfeld, QOI, TGA) by
   decoding each file by its own description; 19 failed before.
+- `transcode-iqa` builds against zensim 0.3: it enables zensim's
+  `deprecated-profiles` feature, which now gates profile A (the profile the
+  transcode-to-quality thresholds are calibrated on).
 - **JXL and AVIF honour `with_lossless(true)`.** Their builders dropped the
   flag and encoded lossy; it now reaches the codec after quality.
 
@@ -1124,7 +1128,7 @@ Three crates.io requirements block a newer release and were left alone on purpos
   pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming
   (buffered and rotated at finish) and animation (canvas rotated, each
   frame rotated on push). The field is written as `Identity` and the tag
-  rewritten to 1. Governed by the reader-compatibility matrix
+  rewritten to 1, and so is an XMP `tiff:Orientation` (same-length rewrite). Governed by the reader-compatibility matrix
   (imazen/zencodec#132): no browser applies WebP EXIF orientation; WIC,
   ImageMagick and WebKit on Linux ignore PNG `eXIf`; WIC's and ImageIO's
   default decodes and `sips` ignore JPEG EXIF orientation; HEIF `imir`
