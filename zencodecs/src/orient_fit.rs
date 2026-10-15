@@ -96,38 +96,6 @@ fn xmp_orientation_to_1(xmp: &[u8]) -> Option<alloc::vec::Vec<u8>> {
     changed.then_some(out)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::xmp_orientation_to_1;
-
-    #[test]
-    fn rewrites_both_xmp_serializations_and_keeps_the_length() {
-        let attr = br#"<rdf:Description tiff:Orientation="6" tiff:Make="x"/>"#;
-        let got = xmp_orientation_to_1(attr).unwrap();
-        assert_eq!(
-            got,
-            br#"<rdf:Description tiff:Orientation="1" tiff:Make="x"/>"#
-        );
-        let elem = b"<tiff:Orientation> 8 </tiff:Orientation>";
-        assert_eq!(
-            xmp_orientation_to_1(elem).unwrap(),
-            b"<tiff:Orientation> 1 </tiff:Orientation>"
-        );
-        let single = b"<x tiff:Orientation = '3'/>";
-        assert_eq!(
-            xmp_orientation_to_1(single).unwrap(),
-            b"<x tiff:Orientation = '1'/>"
-        );
-    }
-
-    #[test]
-    fn leaves_identity_and_other_text_alone() {
-        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="1"/>"#).is_none());
-        assert!(xmp_orientation_to_1(br#"<x exif:PixelXDimension="6"/>"#).is_none());
-        assert!(xmp_orientation_to_1(b"tiff:Orientation").is_none());
-        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="16"/>"#).is_none());
-    }
-}
 
 /// Apply `orientation` to `pixels`, or `None` when there is nothing to do.
 pub(crate) fn orient(pixels: &PixelSlice<'_>, orientation: Orientation) -> Option<PixelBuffer> {
@@ -228,5 +196,38 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
         stop: Option<&dyn zencodec::enough::Stop>,
     ) -> Result<zencodec::encode::EncodeOutput, BoxedError> {
         self.inner.finish(stop)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::xmp_orientation_to_1;
+
+    #[test]
+    fn rewrites_both_xmp_serializations_and_keeps_the_length() {
+        let attr = br#"<rdf:Description tiff:Orientation="6" tiff:Make="x"/>"#;
+        let got = xmp_orientation_to_1(attr).unwrap();
+        assert_eq!(
+            got,
+            br#"<rdf:Description tiff:Orientation="1" tiff:Make="x"/>"#
+        );
+        let elem = b"<tiff:Orientation> 8 </tiff:Orientation>";
+        assert_eq!(
+            xmp_orientation_to_1(elem).unwrap(),
+            b"<tiff:Orientation> 1 </tiff:Orientation>"
+        );
+        let single = b"<x tiff:Orientation = '3'/>";
+        assert_eq!(
+            xmp_orientation_to_1(single).unwrap(),
+            b"<x tiff:Orientation = '1'/>"
+        );
+    }
+
+    #[test]
+    fn leaves_identity_and_other_text_alone() {
+        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="1"/>"#).is_none());
+        assert!(xmp_orientation_to_1(br#"<x exif:PixelXDimension="6"/>"#).is_none());
+        assert!(xmp_orientation_to_1(b"tiff:Orientation").is_none());
+        assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="16"/>"#).is_none());
     }
 }
