@@ -7,6 +7,13 @@ All notable changes to `zencodecs` are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- `tests/transcode_matrix.rs`: every compiled-in format (opaque RGB8 and,
+  where the format carries alpha, translucent RGBA8 sources) transcoded into
+  every encodable format both one-shot and through `TranscodeSink`; outputs
+  must decode to identical pixels, and byte identity is reported. With
+  `jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr`: 22 sources x 12 targets,
+  264 cells, 257 byte-identical and 7 pixel-identical (lossless reductions
+  only a one-shot encode can choose). CI runs that set in release.
 - **`TranscodeSink` streams encoded bytes** (needs zencodec PR 149's
   `OutputTiming`): the decoder's `begin` is forwarded to the encoder
   (`DynEncoder::begin`) with the descriptor the strips are adapted to (found by
@@ -20,6 +27,15 @@ All notable changes to `zencodecs` are documented here. Format follows
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- Streaming encode (`EncodeRequest::build_streaming_encoder`, and so
+  `TranscodeSink`) failed with `row_level_encode` for codecs without
+  row-level encode (GIF, AVIF, BMP). Such encoders are now wrapped in a
+  buffering adapter that collects rows (fallibly allocated) and runs the
+  codec's one-shot `encode` at `finish`, so a streaming transcode gives the
+  one-shot bytes.
+- `AllowedFormats::all()` omitted QOI, TGA and HDR although their codecs
+  were compiled in (`bitmaps-qoi`, `bitmaps-tga`, `bitmaps-hdr`), so the
+  registry refused them.
 - **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
   correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
   bypass the registry entirely for Custom formats (fail-open — `none()` still let
