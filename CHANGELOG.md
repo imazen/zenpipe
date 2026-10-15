@@ -1102,6 +1102,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- Builds warning-free against zenpixels 0.2.17: `zenpixels::hdr::ContentLightLevel`
+  instead of the deprecated root alias, and `transcode-iqa`'s use of zensim
+  profile A (deprecated, but the thresholds are calibrated on it) is allowed
+  explicitly. `tests/color_adapt.rs` reads a decoded file's colour from the
+  buffer's attached context (matrix 0 for RGB), not `source_color`'s coded
+  YUV matrix, which zenpixels 0.2.17 rightly refuses as a current context.
+
 - **A pixel-format conversion that changes the colour space re-describes
   the pixels.** When the encoder can't take the input's pixel format and the
   one it can take has other primaries or another transfer (linear f32 or u16

@@ -513,6 +513,9 @@ fn recompress_jpeg_to_jxl(data: &[u8], quality: QualityTarget) -> Result<Transco
 
     // RelativeScorer = Fn(ref_rgb8, dist_rgb8, w, h) -> f32 over the packed RGB8
     // buffers zenjxl decodes internally. Higher zensim-A = better.
+    // Profile A is deprecated in zensim 0.3, but the thresholds this loop
+    // targets were calibrated on it; moving to B is a recalibration.
+    #[allow(deprecated)]
     let metric = Zensim::new(ZensimProfile::A);
     let scorer = move |r: &[u8], d: &[u8], w: u32, h: u32| -> f32 {
         let (pw, ph) = (w as usize, h as usize);
