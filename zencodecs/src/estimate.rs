@@ -58,11 +58,15 @@ pub fn estimate_encode(
                 .estimate_encode_resources(image, compute)
         }
         #[cfg(feature = "avif-encode")]
-        ImageFormat::Avif => crate::codecs::avif_enc::build_encoding(q, e, quality.lossless, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::Avif => {
+            crate::codecs::avif_enc::build_encoding(q, e, quality.lossless, codec_config)
+                .estimate_encode_resources(image, compute)
+        }
         #[cfg(feature = "jxl-encode")]
-        ImageFormat::Jxl => crate::codecs::jxl_enc::build_encoding(q, e, quality.lossless, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::Jxl => {
+            crate::codecs::jxl_enc::build_encoding(q, e, quality.lossless, codec_config)
+                .estimate_encode_resources(image, compute)
+        }
         #[cfg(feature = "gif")]
         ImageFormat::Gif => crate::codecs::gif::build_gif_encoding(codec_config)
             .estimate_encode_resources(image, compute),

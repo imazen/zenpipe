@@ -2076,9 +2076,9 @@ checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 
 [[package]]
 name = "lz4_flex"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
 
 [[package]]
 name = "macro-attr"
@@ -5135,8 +5135,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#3dbf24634fbd854e01d52f524ef87bac85e5507b"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -5146,15 +5146,15 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#3dbf24634fbd854e01d52f524ef87bac85e5507b"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "archmage",
  "bytemuck",
  "garb",
  "libm",
  "linear-srgb",
- "lz4_flex 0.13.1",
+ "lz4_flex 0.14.0",
  "magetypes",
  "moxcms 0.8.1",
  "once_cell",

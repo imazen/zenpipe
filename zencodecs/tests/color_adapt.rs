@@ -68,10 +68,15 @@ fn as_srgb8(buf: PixelBuffer, ctx: Option<ColorContext>) -> Vec<u8> {
     v
 }
 
-/// What the decoded file says its pixels are. A file with no colour
-/// description is read by convention: float samples (PFM) are linear BT.709,
-/// integer samples sRGB.
+/// What the decoded file says its pixels are: the colour context the
+/// decoder attached to the buffer (for RGB output it describes the RGB
+/// samples, matrix 0, not the coded YUV matrix `source_color` reports), else
+/// `source_color`. A file with no colour description is read by convention:
+/// float samples (PFM) are linear BT.709, integer samples sRGB.
 fn declared(d: &zencodecs::DecodeOutput) -> Option<ColorContext> {
+    if let Some(ctx) = d.pixels().color_context() {
+        return Some(ColorContext::clone(ctx));
+    }
     let c = &d.info().source_color;
     if let Some(icc) = &c.icc_profile {
         Some(ColorContext::from_icc(icc.clone()))
