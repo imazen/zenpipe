@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1361 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 23 lines (23 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1367 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       201
 #   pub consts/statics                         45
 #   free functions                             56
-#   inherent methods                          328
+#   inherent methods                          334
 #   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 21
@@ -27,7 +27,7 @@
 #   animation                        18
 #   bridge                           55
 #   cache                            30
-#   codec                             7
+#   codec                            13
 #   execute_layout                   15
 #   format                           12
 #   graph                           115
@@ -45,7 +45,7 @@
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1175 lines)
+## items (1181 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -155,9 +155,15 @@ pub struct codec::DecoderSource<'a>
 pub fn codec::DecoderSource<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>) -> PipeResult<Self>
 pub fn codec::DecoderSource<'a>::with_format(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>, format::PixelFormat) -> PipeResult<Self>
 pub struct codec::EncoderSink<'a>
+pub fn codec::EncoderSink<'a>::begin(&mut self, u32, u32) -> PipeResult<zencodec::output::OutputTiming>
+pub fn codec::EncoderSink<'a>::consume_output(&mut self, usize)
 pub fn codec::EncoderSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + core::marker::Send + 'a)>, format::PixelFormat) -> Self
+pub fn codec::EncoderSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
+pub fn codec::EncoderSink<'a>::pending_output(&self) -> &[u8]
 pub fn codec::EncoderSink<'a>::preferred_strip_height(&self) -> u32
 pub fn codec::EncoderSink<'a>::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
+pub fn codec::EncoderSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn codec::EncoderSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> PipeResult<()> + core::marker::Send + 'a) -> Self
 pub mod execute_layout
 pub fn execute_layout::canvas_color_to_pixel(&zenlayout::constraint::CanvasColor, zenpixels::descriptor::PixelDescriptor) -> alloc::vec::Vec<u8>
 pub fn execute_layout::config_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> zenresize::pixel::ResizeConfig
@@ -243,8 +249,8 @@ pub graph::NodeOp::FillRect::y1: u32
 pub graph::NodeOp::FillRect::y2: u32
 pub graph::NodeOp::Filter(zenfilters::pipeline::Pipeline)
 pub graph::NodeOp::IccTransform
-pub graph::NodeOp::IccTransform::dst_icc: alloc::sync::Arc<[u8]>
-pub graph::NodeOp::IccTransform::src_icc: alloc::sync::Arc<[u8]>
+pub graph::NodeOp::IccTransform::dst_icc: alloc::rcs::arc::Arc<[u8]>
+pub graph::NodeOp::IccTransform::src_icc: alloc::rcs::arc::Arc<[u8]>
 pub graph::NodeOp::Layout
 pub graph::NodeOp::Layout::filter: zenresize::filter::Filter
 pub graph::NodeOp::Layout::plan: zenlayout::plan::LayoutPlan
@@ -297,10 +303,10 @@ pub graph::SourceInfo::width: u32
 pub type graph::AnalyzeBuilder = alloc::boxed::Box<(dyn core::ops::function::FnOnce(sources::MaterializedSource, core::option::Option<trace::TraceAppender>) -> PipeResult<alloc::boxed::Box<dyn Source>> + core::marker::Send)>
 pub type graph::MaterializeTransform = alloc::boxed::Box<(dyn core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut format::PixelFormat) + core::marker::Send)>
 pub type graph::NodeId = usize
-pub type graph::TracedPipelineResult = PipeResult<(alloc::boxed::Box<dyn Source>, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>)>
+pub type graph::TracedPipelineResult = PipeResult<(alloc::boxed::Box<dyn Source>, alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>)>
 pub mod limits
 pub fn limits::AllocationGuard::bytes(&self) -> u64
-pub fn limits::AllocationTracker::allocate(&alloc::sync::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
+pub fn limits::AllocationTracker::allocate(&alloc::rcs::arc::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
 pub fn limits::AllocationTracker::allocation_count(&self) -> u64
 pub fn limits::AllocationTracker::check(&self, u64) -> PipeResult<()>
 pub fn limits::AllocationTracker::current_bytes(&self) -> u64
@@ -308,7 +314,7 @@ pub fn limits::AllocationTracker::limit_bytes(&self) -> u64
 pub fn limits::AllocationTracker::new(u64) -> Self
 pub fn limits::AllocationTracker::peak_bytes(&self) -> u64
 pub fn limits::AllocationTracker::remaining(&self) -> core::option::Option<u64>
-pub fn limits::AllocationTracker::try_allocate(&alloc::sync::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
+pub fn limits::AllocationTracker::try_allocate(&alloc::rcs::arc::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
 pub fn limits::AllocationTracker::unlimited() -> Self
 pub fn limits::Deadline::elapsed(&self) -> core::time::Duration
 pub fn limits::Deadline::is_expired(&self) -> bool
@@ -328,7 +334,7 @@ pub fn limits::Limits::check(&self, u32, u32, format::PixelFormat) -> PipeResult
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
-pub fn limits::Limits::to_allocation_tracker(self) -> alloc::sync::Arc<limits::AllocationTracker>
+pub fn limits::Limits::to_allocation_tracker(self) -> alloc::rcs::arc::Arc<limits::AllocationTracker>
 pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
 pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
@@ -463,8 +469,8 @@ pub fn sources::FilterSource::new(alloc::boxed::Box<dyn Source>, zenfilters::pip
 pub struct sources::FlipHSource
 pub fn sources::FlipHSource::new(alloc::boxed::Box<dyn Source>) -> Self
 pub struct sources::IccTransformSource
-pub fn sources::IccTransformSource::dst_icc(&self) -> &alloc::sync::Arc<[u8]>
-pub fn sources::IccTransformSource::from_transform(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<dyn zenpixels_convert::cms::RowTransform>, alloc::sync::Arc<[u8]>) -> Self
+pub fn sources::IccTransformSource::dst_icc(&self) -> &alloc::rcs::arc::Arc<[u8]>
+pub fn sources::IccTransformSource::from_transform(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<dyn zenpixels_convert::cms::RowTransform>, alloc::rcs::arc::Arc<[u8]>) -> Self
 pub fn sources::IccTransformSource::new<C: zenpixels_convert::cms::ColorManagement>(alloc::boxed::Box<dyn Source>, &[u8], &[u8], &C) -> PipeResult<Self>
 pub struct sources::MaskTransformSource
 pub fn sources::MaskTransformSource::new(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<(dyn zenblend::mask::MaskSource + core::marker::Send)>) -> PipeResult<Self>
@@ -504,9 +510,9 @@ pub fn sources::TempFileSource::rewind(&mut self)
 pub fn sources::TempFileSource::spool_dir() -> std::path::PathBuf
 pub struct sources::TracingSource
 pub fn sources::TracingSource::new(alloc::boxed::Box<dyn Source>, &trace::TraceEntry, core::option::Option<std::path::PathBuf>) -> Self
-pub fn sources::TracingSource::with_memory(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>, alloc::string::String, u64, alloc::string::String) -> Self
+pub fn sources::TracingSource::with_memory(self, alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>, alloc::string::String, u64, alloc::string::String) -> Self
 pub fn sources::TracingSource::with_strip_events(self, bool) -> Self
-pub fn sources::TracingSource::with_timing(self, alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>) -> Self
+pub fn sources::TracingSource::with_timing(self, alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>) -> Self
 pub struct sources::TransformSource
 pub fn sources::TransformSource::new(alloc::boxed::Box<dyn Source>) -> Self
 pub fn sources::TransformSource::push(self, impl ops::PixelOp + 'static) -> Self
@@ -608,7 +614,7 @@ pub fn tiles::TileWriter::finish(&mut self) -> PipeResult<()>
 pub fn tiles::TileWriter::write_tile(&mut self, tiles::TileRef<'_>) -> PipeResult<()>
 pub fn tiles::TileWriter::write_tile_row(&mut self, &[tiles::TileRef<'_>]) -> PipeResult<()>
 pub type tiles::StoredTile = (u32, u32, alloc::vec::Vec<u8>)
-pub type tiles::TileEncoder = alloc::sync::Arc<(dyn core::ops::function::Fn(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + core::marker::Sync)>
+pub type tiles::TileEncoder = alloc::rcs::arc::Arc<(dyn core::ops::function::Fn(tiles::TileRef<'_>) -> PipeResult<alloc::vec::Vec<u8>> + core::marker::Send + core::marker::Sync)>
 pub type tiles::TileKey = (u32, u32, u32)
 pub mod trace
 pub enum trace::ExecutionPhase
@@ -692,7 +698,7 @@ pub struct trace::PipelineTrace
 pub trace::PipelineTrace::compile_duration: core::option::Option<core::time::Duration>
 pub trace::PipelineTrace::edges: alloc::vec::Vec<trace::DagSnapshotEdge>
 pub trace::PipelineTrace::entries: alloc::vec::Vec<trace::TraceEntry>
-pub trace::PipelineTrace::memory: core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>>
+pub trace::PipelineTrace::memory: core::option::Option<alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::MemoryLedger>>>
 pub fn trace::PipelineTrace::implicit_count(&self) -> usize
 pub fn trace::PipelineTrace::is_empty(&self) -> bool
 pub fn trace::PipelineTrace::len(&self) -> usize
@@ -724,7 +730,7 @@ pub trace::StripEvent::rows: u32
 pub trace::StripEvent::strip_num: u32
 pub struct trace::TraceAppender
 pub fn trace::TraceAppender::add_note(&self, alloc::string::String)
-pub fn trace::TraceAppender::new(alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>) -> Self
+pub fn trace::TraceAppender::new(alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>) -> Self
 pub fn trace::TraceAppender::push_entry(&self, trace::TraceEntry)
 pub fn trace::TraceAppender::push_sub_node(&self, &str, alloc::string::String, &dyn Source)
 pub struct trace::TraceConfig
@@ -757,13 +763,13 @@ pub trace::TraceEntry::origin: core::option::Option<alloc::string::String>
 pub trace::TraceEntry::output_format: format::PixelFormat
 pub trace::TraceEntry::output_height: u32
 pub trace::TraceEntry::output_width: u32
-pub trace::TraceEntry::timing: core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>>
+pub trace::TraceEntry::timing: core::option::Option<alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>>
 pub trace::TraceEntry::trace_order: usize
 pub fn trace::TraceEntry::alpha_changed(&self) -> bool
 pub fn trace::TraceEntry::dims_changed(&self) -> bool
 pub fn trace::TraceEntry::format_changed(&self) -> bool
 pub struct trace::Tracer
-pub fn trace::Tracer::active(alloc::sync::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>, bool) -> Self
+pub fn trace::Tracer::active(alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>, bool) -> Self
 pub fn trace::Tracer::appender(&self) -> core::option::Option<trace::TraceAppender>
 pub fn trace::Tracer::ensure_format(&self, alloc::boxed::Box<dyn Source>, format::PixelFormat, &str) -> PipeResult<alloc::boxed::Box<dyn Source>>
 pub fn trace::Tracer::inactive() -> Self
@@ -1045,7 +1051,7 @@ pub PipeError::Resize(alloc::string::String)
 pub struct AllocationGuard [also: limits]
 pub fn limits::AllocationGuard::bytes(&self) -> u64
 pub struct AllocationTracker [also: limits]
-pub fn limits::AllocationTracker::allocate(&alloc::sync::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
+pub fn limits::AllocationTracker::allocate(&alloc::rcs::arc::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
 pub fn limits::AllocationTracker::allocation_count(&self) -> u64
 pub fn limits::AllocationTracker::check(&self, u64) -> PipeResult<()>
 pub fn limits::AllocationTracker::current_bytes(&self) -> u64
@@ -1053,7 +1059,7 @@ pub fn limits::AllocationTracker::limit_bytes(&self) -> u64
 pub fn limits::AllocationTracker::new(u64) -> Self
 pub fn limits::AllocationTracker::peak_bytes(&self) -> u64
 pub fn limits::AllocationTracker::remaining(&self) -> core::option::Option<u64>
-pub fn limits::AllocationTracker::try_allocate(&alloc::sync::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
+pub fn limits::AllocationTracker::try_allocate(&alloc::rcs::arc::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
 pub fn limits::AllocationTracker::unlimited() -> Self
 pub struct CacheSource [also: cache]
 pub struct CachedPixels [also: cache]
@@ -1102,7 +1108,7 @@ pub fn limits::Limits::check(&self, u32, u32, format::PixelFormat) -> PipeResult
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
-pub fn limits::Limits::to_allocation_tracker(self) -> alloc::sync::Arc<limits::AllocationTracker>
+pub fn limits::Limits::to_allocation_tracker(self) -> alloc::rcs::arc::Arc<limits::AllocationTracker>
 pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
 pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
@@ -1199,7 +1205,7 @@ pub fn StripBuf::reset(&mut self)
 pub fn StripBuf::row(&self, u32) -> &[u8]
 pub fn StripBuf::row_mut(&mut self, u32) -> &mut [u8]
 pub fn StripBuf::rows_filled(&self) -> u32
-pub fn StripBuf::set_color_context(&mut self, core::option::Option<alloc::sync::Arc<zenpixels::color::ColorContext>>)
+pub fn StripBuf::set_color_context(&mut self, core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>)
 pub fn StripBuf::stride(&self) -> usize
 pub fn StripBuf::try_new(u32, u32, format::PixelFormat) -> PipeResult<Self>
 pub fn StripBuf::try_reconfigure(&mut self, u32, u32, format::PixelFormat) -> PipeResult<()>
@@ -1390,7 +1396,7 @@ codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
 limits::AllocationTracker: !Freeze
-ops::RowConverterOp: !RefUnwindSafe !UnwindSafe
+ops::RowConverterOp: !Freeze !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe
 orchestrate::StreamingOutput: !RefUnwindSafe !Sync !UnwindSafe

@@ -69,7 +69,6 @@ graph LR
 
 | Node | Description | RIAPI Keys |
 |------|-------------|------------|
-| [Decode Heic](nodes/heic-decode.md) | HEIC/HEIF decode node. | `heic.thumbnail`, `heic.depth`, `heic.gain_map`, `heic.mattes` |
 | [Decode Jpeg](nodes/zenjpeg-decode.md) | JPEG decoder configuration. | `jpeg.orient`, `jpeg.auto_orient`, `jpeg.max_megapixels`, `jpeg.strictness` |
 | [Decode Jxl](nodes/zenjxl-decode.md) | JPEG XL decoder configuration. | `jxl.orient`, `jxl.nits` |
 | [Frame Select (RIAPI)](nodes/zenpipe-riapi-frame.md) | Select a specific frame from animated/multi-page images |  |

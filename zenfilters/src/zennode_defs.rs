@@ -929,8 +929,8 @@ impl Default for Clarity {
 ///
 /// Unlike clarity, brilliance adjusts each pixel relative to its local
 /// average -- lifting shadows and compressing highlights selectively.
-/// Produces natural dynamic range compression similar to Apple's
-/// Brilliance slider.
+/// Produces natural dynamic range compression similar to the Brilliance
+/// slider in Apple Photos.
 #[derive(Node, Clone, Debug)]
 #[node(id = "zenfilters.brilliance", group = Detail, role = Filter)]
 #[node(label = "Brilliance")]

@@ -11,7 +11,7 @@ use crate::simd;
 /// Unlike clarity (which adds high-pass), brilliance adjusts each pixel
 /// relative to its local average — lifting shadows and compressing highlights
 /// selectively. This produces a more natural "dynamic range compression"
-/// similar to Apple's Brilliance slider.
+/// similar to the Brilliance slider in Apple Photos.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]

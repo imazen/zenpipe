@@ -189,21 +189,24 @@ fn jpeg_no_icc_decodes_with_none_icc() {
 // ─── EXIF round-trip ──────────────────────────────────────────────────────
 
 #[test]
-fn jpeg_exif_orientation_round_trip() {
-    let img = rgb8_image(32, 32);
+fn jpeg_exif_orientation_is_baked() {
+    // A re-encode writes upright pixels and orientation 1: WIC's and
+    // ImageIO's default decodes and `sips` ignore JPEG EXIF orientation
+    // (imazen/zencodec#132). The EXIF blob is kept, its tag rewritten to 1.
+    let img = rgb8_image(32, 16);
     let exif = build_minimal_exif_with_orientation(6);
     let meta = Metadata::none().with_exif(exif);
 
     let bytes = encode_jpeg_with_meta(img.as_ref(), meta, 85.0);
     let decoded = decode_full(&bytes);
 
-    // Orientation appears as a structured field on info.
-    let extracted = decoded.info().orientation;
-    assert_ne!(
-        format!("{:?}", extracted),
-        "Identity",
-        "EXIF orientation 6 should not decode as Identity, got {:?}",
-        extracted
+    assert_eq!(decoded.info().orientation, zencodec::Orientation::Identity);
+    assert_eq!((decoded.width(), decoded.height()), (16, 32), "rotated 90°");
+    let blob = decoded.metadata().exif.expect("EXIF blob kept");
+    assert_eq!(
+        zencodec::helpers::parse_exif_orientation(&blob),
+        Some(zencodec::Orientation::Identity),
+        "the EXIF tag says 1 so no reader rotates again"
     );
 }
 

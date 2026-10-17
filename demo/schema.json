@@ -2,7 +2,7 @@
   "$defs": {
     "heic.decode": {
       "additionalProperties": false,
-      "description": "HEIC/HEIF decode node.",
+      "description": "Still-image container decode node.",
       "properties": {
         "decode_thumbnail": {
           "default": false,
@@ -47,7 +47,7 @@
           "x-zennode-slider": "linear"
         }
       },
-      "title": "Decode Heic",
+      "title": "Decode Container",
       "type": "object",
       "x-zennode-compat-version": 1,
       "x-zennode-format": {

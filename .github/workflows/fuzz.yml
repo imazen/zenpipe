@@ -50,11 +50,11 @@ jobs:
           # The root package's optional tuner still requires its path manifests
           # to exist, even though this fuzz configuration does not enable it.
           - workspace: fuzz
-            siblings: 'zenavif zenanalyze'
+            siblings: 'zenavif zenanalyze zencodec'
           # Codec path patches and the corpus seed tool still need sibling
           # checkouts. Decoder/parser now resolve through the production git pin.
           - workspace: zencodecs/fuzz
-            siblings: 'zenavif zenbitmaps zenjpeg zenanalyze ultrahdr'
+            siblings: 'zenavif zenbitmaps zenjpeg zenanalyze ultrahdr zencodec'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

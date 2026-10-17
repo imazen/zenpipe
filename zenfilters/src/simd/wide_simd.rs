@@ -55,10 +55,10 @@ fn srgb_u8_to_linear_x8(srgb: [u8; 8]) -> [f32; 8] {
 pub(super) fn scale_plane_simd(token: Token, plane: &mut [f32], factor: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let factor_v = f32x8::splat(token, factor);
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let factor_v = f32x8::splat_t(token, factor);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, chunk);
+        let v = f32x8::load_t(token, chunk);
         (v * factor_v).store(chunk);
     }
     for v in tail {
@@ -70,11 +70,11 @@ pub(super) fn scale_plane_simd(token: Token, plane: &mut [f32], factor: f32) {
 pub(super) fn scale_offset_plane_simd(token: Token, plane: &mut [f32], factor: f32, offset: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let factor_v = f32x8::splat(token, factor);
-    let offset_v = f32x8::splat(token, offset);
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let factor_v = f32x8::splat_t(token, factor);
+    let offset_v = f32x8::splat_t(token, offset);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, chunk);
+        let v = f32x8::load_t(token, chunk);
         // Deliberately NOT an FMA. `scale_plane` then `offset_plane` performs
         // two roundings (multiply, then add); a fused multiply-add performs
         // one and would give different — more accurate, but DIFFERENT — bits.
@@ -98,13 +98,13 @@ pub(super) fn scale_offset_clamp_plane_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let factor_v = f32x8::splat(token, factor);
-    let offset_v = f32x8::splat(token, offset);
-    let lo_v = f32x8::splat(token, lo);
-    let hi_v = f32x8::splat(token, hi);
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let factor_v = f32x8::splat_t(token, factor);
+    let offset_v = f32x8::splat_t(token, offset);
+    let lo_v = f32x8::splat_t(token, lo);
+    let hi_v = f32x8::splat_t(token, hi);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, chunk);
+        let v = f32x8::load_t(token, chunk);
         // Not an FMA — see scale_offset_plane_simd.
         let t = (v * factor_v) + offset_v;
         // Clamp written as explicit comparisons, matching `f32::clamp` by
@@ -135,10 +135,10 @@ pub(super) fn scale_offset_clamp_plane_simd(
 pub(super) fn offset_plane_simd(token: Token, plane: &mut [f32], offset: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let offset_v = f32x8::splat(token, offset);
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let offset_v = f32x8::splat_t(token, offset);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, chunk);
+        let v = f32x8::load_t(token, chunk);
         (v + offset_v).store(chunk);
     }
     for v in tail {
@@ -150,12 +150,12 @@ pub(super) fn offset_plane_simd(token: Token, plane: &mut [f32], offset: f32) {
 pub(super) fn power_contrast_plane_simd(token: Token, plane: &mut [f32], exp: f32, scale: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let scale_v = f32x8::splat(token, scale);
-    let zero_v = f32x8::zero(token);
+    let scale_v = f32x8::splat_t(token, scale);
+    let zero_v = f32x8::zero_t(token);
 
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, &*chunk);
+        let v = f32x8::load_t(token, &*chunk);
         let powered = v.max(zero_v).pow_lowp_unchecked(exp);
         (powered * scale_v).store(chunk);
     }
@@ -175,14 +175,14 @@ pub(super) fn sigmoid_tone_map_plane_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let one_v = f32x8::splat(token, 1.0);
-    let zero_v = f32x8::zero(token);
-    let bias_a_v = f32x8::splat(token, bias_a);
+    let one_v = f32x8::splat_t(token, 1.0);
+    let zero_v = f32x8::zero_t(token);
+    let bias_a_v = f32x8::splat_t(token, bias_a);
     let has_bias = bias_a.abs() > 1e-6;
 
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let mut x = f32x8::load(token, &*chunk).max(zero_v).min(one_v);
+        let mut x = f32x8::load_t(token, &*chunk).max(zero_v).min(one_v);
 
         if has_bias {
             let denom = (one_v - x).mul_add(bias_a_v, one_v);
@@ -190,7 +190,7 @@ pub(super) fn sigmoid_tone_map_plane_simd(
             x = x.max(zero_v).min(one_v);
         }
 
-        let x_safe = x.max(f32x8::splat(token, 1e-7));
+        let x_safe = x.max(f32x8::splat_t(token, 1e-7));
         let ratio = (one_v - x_safe) / x_safe;
         let powered = ratio.pow_lowp_unchecked(contrast);
         let result = one_v / (one_v + powered);
@@ -227,20 +227,20 @@ pub(super) fn unsharp_fuse_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let amount_v = f32x8::splat(token, amount);
-    let zero_v = f32x8::zero(token);
+    let amount_v = f32x8::splat_t(token, amount);
+    let zero_v = f32x8::zero_t(token);
 
-    let (src_chunks, _) = f32x8::partition_slice(token, src);
-    let (blur_chunks, _) = f32x8::partition_slice(token, blurred);
-    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst);
+    let (src_chunks, _) = f32x8::partition_slice_t(token, src);
+    let (blur_chunks, _) = f32x8::partition_slice_t(token, blurred);
+    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut_t(token, dst);
 
     for ((sc, bc), dc) in src_chunks
         .iter()
         .zip(blur_chunks.iter())
         .zip(dst_chunks.iter_mut())
     {
-        let orig = f32x8::load(token, sc);
-        let blur = f32x8::load(token, bc);
+        let orig = f32x8::load_t(token, sc);
+        let blur = f32x8::load_t(token, bc);
         let hp = orig - blur;
         hp.mul_add(amount_v, orig).max(zero_v).store(dc);
     }
@@ -314,15 +314,15 @@ fn gaussian_blur_fir_generic<T: F32x8Backend + F32x8Convert + Copy>(
         padded.extend(core::iter::repeat_n(edge_r, radius));
 
         let out_row = &mut h_buf[y * w..(y + 1) * w];
-        let (out_chunks, out_tail) = V::<T>::partition_slice_mut(token, out_row);
+        let (out_chunks, out_tail) = V::<T>::partition_slice_mut_t(token, out_row);
 
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
-            let mut acc = V::<T>::zero(token);
+            let mut acc = V::<T>::zero_t(token);
             for (k, &weight) in kernel.weights().iter().enumerate() {
-                let wv = V::<T>::splat(token, weight);
+                let wv = V::<T>::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = padded[x + k..x + k + 8].try_into().unwrap();
-                let vals = V::<T>::load(token, src_chunk);
+                let vals = V::<T>::load_t(token, src_chunk);
                 acc = vals.mul_add(wv, acc);
             }
             acc.store(out_chunk);
@@ -342,16 +342,16 @@ fn gaussian_blur_fir_generic<T: F32x8Backend + F32x8Convert + Copy>(
     // Vertical pass
     for y in 0..h {
         let out_row = &mut dst[y * w..(y + 1) * w];
-        let (out_chunks, out_tail) = V::<T>::partition_slice_mut(token, out_row);
+        let (out_chunks, out_tail) = V::<T>::partition_slice_mut_t(token, out_row);
 
         for (ci, out_chunk) in out_chunks.iter_mut().enumerate() {
             let x = ci * 8;
-            let mut acc = V::<T>::zero(token);
+            let mut acc = V::<T>::zero_t(token);
             for (k, &weight) in kernel.weights().iter().enumerate() {
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
-                let wv = V::<T>::splat(token, weight);
+                let wv = V::<T>::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-                acc = V::<T>::load(token, src_chunk).mul_add(wv, acc);
+                acc = V::<T>::load_t(token, src_chunk).mul_add(wv, acc);
             }
             acc.store(out_chunk);
         }
@@ -396,7 +396,7 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
     let n = w * h;
     let stack_size = 2 * r + 1;
     let inv_div = 1.0 / ((r as f32 + 1.0) * (r as f32 + 1.0));
-    let inv_div_v = V::<T>::splat(token, inv_div);
+    let inv_div_v = V::<T>::splat_t(token, inv_div);
 
     let mut h_buf = ctx.take_f32(n);
     let mut stack_scratch = ctx.take_f32(stack_size);
@@ -415,12 +415,12 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
     for tile in 0..num_tiles {
         let x = tile * 8;
 
-        let mut sum = V::<T>::zero(token);
-        let mut sum_in = V::<T>::zero(token);
-        let mut sum_out = V::<T>::zero(token);
+        let mut sum = V::<T>::zero_t(token);
+        let mut sum_in = V::<T>::zero_t(token);
+        let mut sum_out = V::<T>::zero_t(token);
 
         let first: &[f32; 8] = h_buf[x..x + 8].try_into().unwrap();
-        let first_v = V::<T>::load(token, first);
+        let first_v = V::<T>::load_t(token, first);
         for sv in stack_v.iter_mut().take(r + 1) {
             *sv = first_v.to_array();
         }
@@ -429,21 +429,21 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             let offset = i - r;
             let sy = offset.min(h - 1);
             let chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-            *sv = V::<T>::load(token, chunk).to_array();
+            *sv = V::<T>::load_t(token, chunk).to_array();
         }
 
         for (i, sv) in stack_v.iter().enumerate().take(stack_size) {
             let dist = r.abs_diff(i);
-            let weight = V::<T>::splat(token, (r + 1 - dist) as f32);
-            let val = V::<T>::from_array(token, *sv);
+            let weight = V::<T>::splat_t(token, (r + 1 - dist) as f32);
+            let val = V::<T>::from_array_t(token, *sv);
             sum = val.mul_add(weight, sum);
         }
 
         for sv in stack_v.iter().take(r + 1) {
-            sum_out += V::<T>::from_array(token, *sv);
+            sum_out += V::<T>::from_array_t(token, *sv);
         }
         for sv in stack_v.iter().take(stack_size).skip(r + 1) {
-            sum_in += V::<T>::from_array(token, *sv);
+            sum_in += V::<T>::from_array_t(token, *sv);
         }
 
         let mut sp = 0usize;
@@ -453,12 +453,12 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             (sum * inv_div_v).store(out);
 
             sum -= sum_out;
-            let old_val = V::<T>::from_array(token, stack_v[sp]);
+            let old_val = V::<T>::from_array_t(token, stack_v[sp]);
             sum_out -= old_val;
 
             let new_y = (y + r + 1).min(h - 1);
             let new_chunk: &[f32; 8] = h_buf[new_y * w + x..new_y * w + x + 8].try_into().unwrap();
-            let new_val = V::<T>::load(token, new_chunk);
+            let new_val = V::<T>::load_t(token, new_chunk);
             stack_v[sp] = new_val.to_array();
             sum_in += new_val;
 
@@ -474,7 +474,7 @@ fn stackblur_plane_generic<T: F32x8Backend + F32x8Convert + Copy>(
             } else {
                 sp + r
             };
-            let center_val = V::<T>::from_array(token, stack_v[center_idx]);
+            let center_val = V::<T>::from_array_t(token, stack_v[center_idx]);
             sum_out += center_val;
             sum_in -= center_val;
         }
@@ -520,25 +520,25 @@ pub(super) fn brilliance_apply_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let one = f32x8::splat(token, 1.0);
-    let two = f32x8::splat(token, 2.0);
-    let three = f32x8::splat(token, 3.0);
-    let min_avg = f32x8::splat(token, 0.001);
-    let zero = f32x8::zero(token);
-    let sa = f32x8::splat(token, shadow_str * amount);
-    let ha = f32x8::splat(token, highlight_str * amount);
+    let one = f32x8::splat_t(token, 1.0);
+    let two = f32x8::splat_t(token, 2.0);
+    let three = f32x8::splat_t(token, 3.0);
+    let min_avg = f32x8::splat_t(token, 0.001);
+    let zero = f32x8::zero_t(token);
+    let sa = f32x8::splat_t(token, shadow_str * amount);
+    let ha = f32x8::splat_t(token, highlight_str * amount);
 
-    let (src_chunks, _) = f32x8::partition_slice(token, src_l);
-    let (avg_chunks, _) = f32x8::partition_slice(token, avg_l);
-    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst_l);
+    let (src_chunks, _) = f32x8::partition_slice_t(token, src_l);
+    let (avg_chunks, _) = f32x8::partition_slice_t(token, avg_l);
+    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut_t(token, dst_l);
 
     for ((sc, ac), dc) in src_chunks
         .iter()
         .zip(avg_chunks.iter())
         .zip(dst_chunks.iter_mut())
     {
-        let l = f32x8::load(token, sc);
-        let avg = f32x8::load(token, ac).max(min_avg);
+        let l = f32x8::load_t(token, sc);
+        let avg = f32x8::load_t(token, ac).max(min_avg);
         let ratio = l / avg;
 
         let st = (one - ratio).max(zero).min(one);
@@ -591,27 +591,27 @@ pub(super) fn scatter_oklab_simd(
     let n = l_out.len();
     let ch = channels as usize;
 
-    let m1_00 = f32x8::splat(token, m1[0][0]);
-    let m1_01 = f32x8::splat(token, m1[0][1]);
-    let m1_02 = f32x8::splat(token, m1[0][2]);
-    let m1_10 = f32x8::splat(token, m1[1][0]);
-    let m1_11 = f32x8::splat(token, m1[1][1]);
-    let m1_12 = f32x8::splat(token, m1[1][2]);
-    let m1_20 = f32x8::splat(token, m1[2][0]);
-    let m1_21 = f32x8::splat(token, m1[2][1]);
-    let m1_22 = f32x8::splat(token, m1[2][2]);
+    let m1_00 = f32x8::splat_t(token, m1[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1[2][2]);
 
-    let m2_00 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
+    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
+    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
+    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
+    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
+    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
+    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
+    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
+    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
 
-    let inv_white_v = f32x8::splat(token, inv_white);
+    let inv_white_v = f32x8::splat_t(token, inv_white);
 
     let mut i = 0;
     while i + 8 <= n {
@@ -625,9 +625,9 @@ pub(super) fn scatter_oklab_simd(
             b_arr[j] = src[base + 2];
         }
 
-        let r = f32x8::from_array(token, r_arr) * inv_white_v;
-        let g = f32x8::from_array(token, g_arr) * inv_white_v;
-        let b = f32x8::from_array(token, b_arr) * inv_white_v;
+        let r = f32x8::from_array_t(token, r_arr) * inv_white_v;
+        let g = f32x8::from_array_t(token, g_arr) * inv_white_v;
+        let b = f32x8::from_array_t(token, b_arr) * inv_white_v;
 
         let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
         let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
@@ -679,37 +679,37 @@ pub(super) fn gather_oklab_simd(
     let n = l_in.len();
     let ch = channels as usize;
 
-    let im2_00 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
+    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
+    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
+    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
+    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
+    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
+    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
+    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
+    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
 
-    let im1_00 = f32x8::splat(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat(token, m1_inv[2][2]);
+    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
+    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
+    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
+    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
+    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
+    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
+    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
+    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
+    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
 
-    let white_v = f32x8::splat(token, reference_white);
-    let zero_v = f32x8::zero(token);
+    let white_v = f32x8::splat_t(token, reference_white);
+    let zero_v = f32x8::zero_t(token);
 
     let mut i = 0;
     while i + 8 <= n {
         let l_chunk: &[f32; 8] = l_in[i..i + 8].try_into().unwrap();
         let a_chunk: &[f32; 8] = a_in[i..i + 8].try_into().unwrap();
         let b_chunk: &[f32; 8] = b_in[i..i + 8].try_into().unwrap();
-        let lv = f32x8::load(token, l_chunk);
-        let av = f32x8::load(token, a_chunk);
-        let bv = f32x8::load(token, b_chunk);
+        let lv = f32x8::load_t(token, l_chunk);
+        let av = f32x8::load_t(token, a_chunk);
+        let bv = f32x8::load_t(token, b_chunk);
 
         let l_ = im2_00.mul_add(lv, im2_01.mul_add(av, im2_02 * bv));
         let m_ = im2_10.mul_add(lv, im2_11.mul_add(av, im2_12 * bv));
@@ -769,25 +769,25 @@ pub(super) fn scatter_srgb_u8_to_oklab_simd(
     let n = l_out.len();
     let ch = channels as usize;
 
-    let m1_00 = f32x8::splat(token, m1[0][0]);
-    let m1_01 = f32x8::splat(token, m1[0][1]);
-    let m1_02 = f32x8::splat(token, m1[0][2]);
-    let m1_10 = f32x8::splat(token, m1[1][0]);
-    let m1_11 = f32x8::splat(token, m1[1][1]);
-    let m1_12 = f32x8::splat(token, m1[1][2]);
-    let m1_20 = f32x8::splat(token, m1[2][0]);
-    let m1_21 = f32x8::splat(token, m1[2][1]);
-    let m1_22 = f32x8::splat(token, m1[2][2]);
+    let m1_00 = f32x8::splat_t(token, m1[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1[2][2]);
 
-    let m2_00 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
+    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
+    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
+    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
+    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
+    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
+    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
+    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
+    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
 
     let mut i = 0;
     while i + 8 <= n {
@@ -802,9 +802,9 @@ pub(super) fn scatter_srgb_u8_to_oklab_simd(
         }
 
         // LUT: sRGB u8 -> linear f32 (scalar, 8 lookups per channel)
-        let r = f32x8::from_array(token, srgb_u8_to_linear_x8(r_u8));
-        let g = f32x8::from_array(token, srgb_u8_to_linear_x8(g_u8));
-        let b = f32x8::from_array(token, srgb_u8_to_linear_x8(b_u8));
+        let r = f32x8::from_array_t(token, srgb_u8_to_linear_x8(r_u8));
+        let g = f32x8::from_array_t(token, srgb_u8_to_linear_x8(g_u8));
+        let b = f32x8::from_array_t(token, srgb_u8_to_linear_x8(b_u8));
 
         let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
         let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
@@ -855,34 +855,34 @@ pub(super) fn gather_oklab_to_srgb_u8_simd(
     let n = l_in.len();
     let ch = channels as usize;
 
-    let im2_00 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
+    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
+    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
+    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
+    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
+    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
+    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
+    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
+    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
 
-    let im1_00 = f32x8::splat(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat(token, m1_inv[2][2]);
+    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
+    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
+    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
+    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
+    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
+    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
+    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
+    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
+    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
 
     let mut i = 0;
     while i + 8 <= n {
         let l_chunk: &[f32; 8] = l_in[i..i + 8].try_into().unwrap();
         let a_chunk: &[f32; 8] = a_in[i..i + 8].try_into().unwrap();
         let b_chunk: &[f32; 8] = b_in[i..i + 8].try_into().unwrap();
-        let lv = f32x8::load(token, l_chunk);
-        let av = f32x8::load(token, a_chunk);
-        let bv = f32x8::load(token, b_chunk);
+        let lv = f32x8::load_t(token, l_chunk);
+        let av = f32x8::load_t(token, a_chunk);
+        let bv = f32x8::load_t(token, b_chunk);
 
         let l_ = im2_00.mul_add(lv, im2_01.mul_add(av, im2_02 * bv));
         let m_ = im2_10.mul_add(lv, im2_11.mul_add(av, im2_12 * bv));
@@ -926,13 +926,13 @@ pub(super) fn gather_oklab_to_srgb_u8_simd(
 pub(super) fn black_point_plane_simd(token: Token, plane: &mut [f32], bp: f32, inv_range: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let bp_v = f32x8::splat(token, bp);
-    let inv_range_v = f32x8::splat(token, inv_range);
-    let zero_v = f32x8::zero(token);
+    let bp_v = f32x8::splat_t(token, bp);
+    let inv_range_v = f32x8::splat_t(token, inv_range);
+    let zero_v = f32x8::zero_t(token);
 
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let v = f32x8::load(token, &*chunk);
+        let v = f32x8::load_t(token, &*chunk);
         ((v - bp_v) * inv_range_v).max(zero_v).store(chunk);
     }
     for v in tail {
@@ -944,16 +944,16 @@ pub(super) fn black_point_plane_simd(token: Token, plane: &mut [f32], bp: f32, i
 pub(super) fn hue_rotate_simd(token: Token, a: &mut [f32], b: &mut [f32], cos_r: f32, sin_r: f32) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let cos_v = f32x8::splat(token, cos_r);
-    let sin_v = f32x8::splat(token, sin_r);
-    let neg_sin_v = f32x8::splat(token, -sin_r);
+    let cos_v = f32x8::splat_t(token, cos_r);
+    let sin_v = f32x8::splat_t(token, sin_r);
+    let neg_sin_v = f32x8::splat_t(token, -sin_r);
 
-    let (a_chunks, a_tail) = f32x8::partition_slice_mut(token, a);
-    let (b_chunks, b_tail) = f32x8::partition_slice_mut(token, b);
+    let (a_chunks, a_tail) = f32x8::partition_slice_mut_t(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_mut_t(token, b);
 
     for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
-        let av = f32x8::load(token, &*ac);
-        let bv = f32x8::load(token, &*bc);
+        let av = f32x8::load_t(token, &*ac);
+        let bv = f32x8::load_t(token, &*bc);
         cos_v.mul_add(av, neg_sin_v * bv).store(ac);
         sin_v.mul_add(av, cos_v * bv).store(bc);
     }
@@ -974,16 +974,16 @@ pub(super) fn highlights_shadows_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let shadows_half = f32x8::splat(token, shadows * 0.5);
-    let highlights_half = f32x8::splat(token, highlights * 0.5);
-    let one_v = f32x8::splat(token, 1.0);
-    let two_v = f32x8::splat(token, 2.0);
-    let half_v = f32x8::splat(token, 0.5);
-    let zero_v = f32x8::zero(token);
+    let shadows_half = f32x8::splat_t(token, shadows * 0.5);
+    let highlights_half = f32x8::splat_t(token, highlights * 0.5);
+    let one_v = f32x8::splat_t(token, 1.0);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let half_v = f32x8::splat_t(token, 0.5);
+    let zero_v = f32x8::zero_t(token);
 
-    let (chunks, tail) = f32x8::partition_slice_mut(token, plane);
+    let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
-        let mut l = f32x8::load(token, &*chunk);
+        let mut l = f32x8::load_t(token, &*chunk);
         let sm = (one_v - l * two_v).max(zero_v);
         l = (sm * sm).mul_add(shadows_half, l);
         let hm = ((l - half_v) * two_v).max(zero_v).min(one_v);
@@ -1011,16 +1011,16 @@ pub(super) fn vibrance_simd(
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
     const MAX_CHROMA: f32 = 0.4;
-    let amount_v = f32x8::splat(token, amount);
-    let inv_max_chroma_v = f32x8::splat(token, 1.0 / MAX_CHROMA);
-    let one_v = f32x8::splat(token, 1.0);
+    let amount_v = f32x8::splat_t(token, amount);
+    let inv_max_chroma_v = f32x8::splat_t(token, 1.0 / MAX_CHROMA);
+    let one_v = f32x8::splat_t(token, 1.0);
 
-    let (a_chunks, a_tail) = f32x8::partition_slice_mut(token, a);
-    let (b_chunks, b_tail) = f32x8::partition_slice_mut(token, b);
+    let (a_chunks, a_tail) = f32x8::partition_slice_mut_t(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_mut_t(token, b);
 
     for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
-        let av = f32x8::load(token, &*ac);
-        let bv = f32x8::load(token, &*bc);
+        let av = f32x8::load_t(token, &*ac);
+        let bv = f32x8::load_t(token, &*bc);
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_max_chroma_v).min(one_v);
         let pf = (one_v - normalized).pow_lowp_unchecked(protection);
@@ -1054,7 +1054,7 @@ pub(super) fn subtract_planes_simd(token: Token, a: &[f32], b: &[f32], dst: &mut
         let av: &[f32; 8] = a[i..i + 8].try_into().unwrap();
         let bv: &[f32; 8] = b[i..i + 8].try_into().unwrap();
         let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
-        (f32x8::load(token, av) - f32x8::load(token, bv)).store(out);
+        (f32x8::load_t(token, av) - f32x8::load_t(token, bv)).store(out);
         i += 8;
     }
     for idx in i..n {
@@ -1071,7 +1071,7 @@ pub(super) fn square_plane_simd(token: Token, src: &[f32], dst: &mut [f32]) {
     while i + 8 <= n {
         let sv: &[f32; 8] = src[i..i + 8].try_into().unwrap();
         let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
-        let v = f32x8::load(token, sv);
+        let v = f32x8::load_t(token, sv);
         (v * v).store(out);
         i += 8;
     }
@@ -1094,22 +1094,22 @@ pub(super) fn wavelet_threshold_accumulate_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let thresh_v = f32x8::splat(token, threshold);
-    let neg_thresh_v = f32x8::splat(token, -threshold);
-    let zero_v = f32x8::zero(token);
+    let thresh_v = f32x8::splat_t(token, threshold);
+    let neg_thresh_v = f32x8::splat_t(token, -threshold);
+    let zero_v = f32x8::zero_t(token);
     let n = result.len();
     let mut i = 0;
     while i + 8 <= n {
         let c: &[f32; 8] = current[i..i + 8].try_into().unwrap();
         let s: &[f32; 8] = smooth[i..i + 8].try_into().unwrap();
         let r: &mut [f32; 8] = (&mut result[i..i + 8]).try_into().unwrap();
-        let detail = f32x8::load(token, c) - f32x8::load(token, s);
+        let detail = f32x8::load_t(token, c) - f32x8::load_t(token, s);
         let pos = (detail - thresh_v).max(zero_v);
         let neg = (detail + thresh_v).min(zero_v);
         let is_pos = detail.simd_gt(thresh_v);
         let is_neg = detail.simd_lt(neg_thresh_v);
         let thresholded = f32x8::blend(is_pos, pos, f32x8::blend(is_neg, neg, zero_v));
-        (f32x8::load(token, &*r) + thresholded).store(r);
+        (f32x8::load_t(token, &*r) + thresholded).store(r);
         i += 8;
     }
     for idx in i..n {
@@ -1128,14 +1128,14 @@ pub(super) fn wavelet_threshold_accumulate_simd(
 pub(super) fn add_clamped_simd(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let zero_v = f32x8::zero(token);
+    let zero_v = f32x8::zero_t(token);
     let n = dst.len();
     let mut i = 0;
     while i + 8 <= n {
         let av: &[f32; 8] = a[i..i + 8].try_into().unwrap();
         let bv: &[f32; 8] = b[i..i + 8].try_into().unwrap();
         let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
-        (f32x8::load(token, av) + f32x8::load(token, bv))
+        (f32x8::load_t(token, av) + f32x8::load_t(token, bv))
             .max(zero_v)
             .store(out);
         i += 8;
@@ -1158,11 +1158,11 @@ pub(super) fn adaptive_sharpen_apply_simd(
 ) {
     #[allow(non_camel_case_types)]
     type f32x8 = GenericF32x8<Token>;
-    let amount_v = f32x8::splat(token, amount);
-    let nf_v = f32x8::splat(token, noise_floor);
-    let mt_v = f32x8::splat(token, masking_threshold);
-    let zero_v = f32x8::zero(token);
-    let one_v = f32x8::splat(token, 1.0);
+    let amount_v = f32x8::splat_t(token, amount);
+    let nf_v = f32x8::splat_t(token, noise_floor);
+    let mt_v = f32x8::splat_t(token, masking_threshold);
+    let zero_v = f32x8::zero_t(token);
+    let one_v = f32x8::splat_t(token, 1.0);
     let has_masking = masking_threshold > 1e-8;
     let n = dst.len();
 
@@ -1173,9 +1173,9 @@ pub(super) fn adaptive_sharpen_apply_simd(
         let ev: &[f32; 8] = energy[i..i + 8].try_into().unwrap();
         let out: &mut [f32; 8] = (&mut dst[i..i + 8]).try_into().unwrap();
 
-        let l_val = f32x8::load(token, lv);
-        let d_val = f32x8::load(token, dv);
-        let e_val = f32x8::load(token, ev).max(zero_v).sqrt();
+        let l_val = f32x8::load_t(token, lv);
+        let d_val = f32x8::load_t(token, dv);
+        let e_val = f32x8::load_t(token, ev).max(zero_v).sqrt();
 
         let gate = e_val / (e_val + nf_v);
         let mask = if has_masking {
@@ -1220,22 +1220,22 @@ fn fused_adjust_l_generic<T: F32x8Backend + F32x8Convert + Copy>(
 ) {
     type V<T> = GenericF32x8<T>;
 
-    let bp_v = V::<T>::splat(token, bp);
-    let inv_range_v = V::<T>::splat(token, inv_range);
-    let zero_v = V::<T>::zero(token);
-    let wp_exp_v = V::<T>::splat(token, wp_exp);
-    let cs_v = V::<T>::splat(token, contrast_scale);
-    let shadows_half = V::<T>::splat(token, shadows * 0.5);
-    let highlights_half = V::<T>::splat(token, highlights * 0.5);
-    let one_v = V::<T>::splat(token, 1.0);
-    let two_v = V::<T>::splat(token, 2.0);
-    let half_v = V::<T>::splat(token, 0.5);
-    let dc_v = V::<T>::splat(token, dehaze_contrast);
-    let dc_offset = V::<T>::splat(token, 0.5 * (1.0 - dehaze_contrast));
+    let bp_v = V::<T>::splat_t(token, bp);
+    let inv_range_v = V::<T>::splat_t(token, inv_range);
+    let zero_v = V::<T>::zero_t(token);
+    let wp_exp_v = V::<T>::splat_t(token, wp_exp);
+    let cs_v = V::<T>::splat_t(token, contrast_scale);
+    let shadows_half = V::<T>::splat_t(token, shadows * 0.5);
+    let highlights_half = V::<T>::splat_t(token, highlights * 0.5);
+    let one_v = V::<T>::splat_t(token, 1.0);
+    let two_v = V::<T>::splat_t(token, 2.0);
+    let half_v = V::<T>::splat_t(token, 0.5);
+    let dc_v = V::<T>::splat_t(token, dehaze_contrast);
+    let dc_offset = V::<T>::splat_t(token, 0.5 * (1.0 - dehaze_contrast));
 
-    let (chunks, tail) = V::<T>::partition_slice_mut(token, l);
+    let (chunks, tail) = V::<T>::partition_slice_mut_t(token, l);
     for chunk in chunks {
-        let mut v = V::<T>::load(token, &*chunk);
+        let mut v = V::<T>::load_t(token, &*chunk);
         v = ((v - bp_v) * inv_range_v).max(zero_v);
         v *= wp_exp_v;
         v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
@@ -1279,21 +1279,21 @@ fn fused_adjust_ab_generic<T: F32x8Backend + F32x8Convert + Copy>(
     type V<T> = GenericF32x8<T>;
     const MAX_CHROMA: f32 = 0.4;
 
-    let exp_v = V::<T>::splat(token, exposure_chroma);
-    let dc_v = V::<T>::splat(token, dehaze_chroma);
-    let temp_v = V::<T>::splat(token, temp_offset);
-    let tint_v = V::<T>::splat(token, tint_offset);
-    let sat_v = V::<T>::splat(token, sat);
-    let vib_v = V::<T>::splat(token, vib_amount);
-    let inv_mc = V::<T>::splat(token, 1.0 / MAX_CHROMA);
-    let one_v = V::<T>::splat(token, 1.0);
+    let exp_v = V::<T>::splat_t(token, exposure_chroma);
+    let dc_v = V::<T>::splat_t(token, dehaze_chroma);
+    let temp_v = V::<T>::splat_t(token, temp_offset);
+    let tint_v = V::<T>::splat_t(token, tint_offset);
+    let sat_v = V::<T>::splat_t(token, sat);
+    let vib_v = V::<T>::splat_t(token, vib_amount);
+    let inv_mc = V::<T>::splat_t(token, 1.0 / MAX_CHROMA);
+    let one_v = V::<T>::splat_t(token, 1.0);
 
-    let (a_chunks, a_tail) = V::<T>::partition_slice_mut(token, a);
-    let (b_chunks, b_tail) = V::<T>::partition_slice_mut(token, b);
+    let (a_chunks, a_tail) = V::<T>::partition_slice_mut_t(token, a);
+    let (b_chunks, b_tail) = V::<T>::partition_slice_mut_t(token, b);
 
     for (ac, bc) in a_chunks.iter_mut().zip(b_chunks.iter_mut()) {
-        let mut av = V::<T>::load(token, &*ac);
-        let mut bv = V::<T>::load(token, &*bc);
+        let mut av = V::<T>::load_t(token, &*ac);
+        let mut bv = V::<T>::load_t(token, &*bc);
         av *= exp_v;
         bv *= exp_v;
         av *= dc_v;
@@ -1411,69 +1411,69 @@ pub(super) fn fused_interleaved_adjust_simd(
     let ch = channels as usize;
     let n = dst.len() / ch;
 
-    let m1_00 = f32x8::splat(token, m1[0][0]);
-    let m1_01 = f32x8::splat(token, m1[0][1]);
-    let m1_02 = f32x8::splat(token, m1[0][2]);
-    let m1_10 = f32x8::splat(token, m1[1][0]);
-    let m1_11 = f32x8::splat(token, m1[1][1]);
-    let m1_12 = f32x8::splat(token, m1[1][2]);
-    let m1_20 = f32x8::splat(token, m1[2][0]);
-    let m1_21 = f32x8::splat(token, m1[2][1]);
-    let m1_22 = f32x8::splat(token, m1[2][2]);
+    let m1_00 = f32x8::splat_t(token, m1[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1[2][2]);
 
-    let m2_00 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
+    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
+    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
+    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
+    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
+    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
+    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
+    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
+    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
 
-    let im2_00 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
+    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
+    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
+    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
+    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
+    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
+    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
+    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
+    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
 
-    let im1_00 = f32x8::splat(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat(token, m1_inv[2][2]);
+    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
+    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
+    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
+    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
+    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
+    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
+    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
+    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
+    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
 
-    let inv_white_v = f32x8::splat(token, inv_white);
-    let white_v = f32x8::splat(token, reference_white);
-    let zero_v = f32x8::zero(token);
+    let inv_white_v = f32x8::splat_t(token, inv_white);
+    let white_v = f32x8::splat_t(token, reference_white);
+    let zero_v = f32x8::zero_t(token);
 
-    let bp_v = f32x8::splat(token, bp);
-    let inv_range_v = f32x8::splat(token, inv_range);
-    let wp_exp_v = f32x8::splat(token, wp_exp);
-    let cs_v = f32x8::splat(token, contrast_scale);
-    let shadows_half = f32x8::splat(token, shadows * 0.5);
-    let highlights_half = f32x8::splat(token, highlights * 0.5);
-    let one_v = f32x8::splat(token, 1.0);
-    let two_v = f32x8::splat(token, 2.0);
-    let half_v = f32x8::splat(token, 0.5);
-    let dc_v = f32x8::splat(token, dehaze_contrast);
-    let dc_offset = f32x8::splat(token, 0.5 * (1.0 - dehaze_contrast));
+    let bp_v = f32x8::splat_t(token, bp);
+    let inv_range_v = f32x8::splat_t(token, inv_range);
+    let wp_exp_v = f32x8::splat_t(token, wp_exp);
+    let cs_v = f32x8::splat_t(token, contrast_scale);
+    let shadows_half = f32x8::splat_t(token, shadows * 0.5);
+    let highlights_half = f32x8::splat_t(token, highlights * 0.5);
+    let one_v = f32x8::splat_t(token, 1.0);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let half_v = f32x8::splat_t(token, 0.5);
+    let dc_v = f32x8::splat_t(token, dehaze_contrast);
+    let dc_offset = f32x8::splat_t(token, 0.5 * (1.0 - dehaze_contrast));
 
-    let exp_chroma_v = f32x8::splat(token, exposure_chroma);
-    let dc_chroma_v = f32x8::splat(token, dehaze_chroma);
-    let temp_v = f32x8::splat(token, temp_offset);
-    let tint_v = f32x8::splat(token, tint_offset);
-    let sat_v = f32x8::splat(token, sat);
-    let vib_v = f32x8::splat(token, vib_amount);
-    let inv_mc = f32x8::splat(token, 1.0 / 0.4);
+    let exp_chroma_v = f32x8::splat_t(token, exposure_chroma);
+    let dc_chroma_v = f32x8::splat_t(token, dehaze_chroma);
+    let temp_v = f32x8::splat_t(token, temp_offset);
+    let tint_v = f32x8::splat_t(token, tint_offset);
+    let sat_v = f32x8::splat_t(token, sat);
+    let vib_v = f32x8::splat_t(token, vib_amount);
+    let inv_mc = f32x8::splat_t(token, 1.0 / 0.4);
 
     let mut i = 0;
     while i + 8 <= n {
@@ -1487,9 +1487,9 @@ pub(super) fn fused_interleaved_adjust_simd(
             b_arr[j] = src[base + 2];
         }
 
-        let r = f32x8::from_array(token, r_arr) * inv_white_v;
-        let g = f32x8::from_array(token, g_arr) * inv_white_v;
-        let b = f32x8::from_array(token, b_arr) * inv_white_v;
+        let r = f32x8::from_array_t(token, r_arr) * inv_white_v;
+        let g = f32x8::from_array_t(token, g_arr) * inv_white_v;
+        let b = f32x8::from_array_t(token, b_arr) * inv_white_v;
 
         let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
         let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));

@@ -69,7 +69,7 @@ struct ConvertArgs {
     /// Matte color "R,G,B" for alpha→opaque (e.g. RGBA→JPEG). Default white.
     #[arg(long)]
     matte: Option<String>,
-    /// Reconstruct the HDR rendition (gain-map HEIC / Ultra-HDR JPEG only) to a
+    /// Reconstruct the HDR rendition (gain-map Ultra-HDR JPEG only) to a
     /// BT.2100 PQ PNG with cICP+cLLI, instead of the SDR base. Output is PNG.
     #[arg(long, conflicts_with_all = ["quality", "lossless", "target_quality", "format"])]
     hdr: bool,

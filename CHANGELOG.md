@@ -7,6 +7,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Changed
+- zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
+- zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
+- Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
+- CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
+
 #### Added (AVIF auto-tuning consumer, 2026-09-04)
 
 - **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam
@@ -698,6 +704,18 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Added
+- **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
+  `begin(width, height)` declares the image to the encoder and returns its
+  `OutputTiming`; `with_writer(..)` receives every byte as soon as the encoder
+  has it (after each strip, the rest at `finish`, `take_output` then empty);
+  `pending_output()` / `consume_output()` for callers that drain themselves,
+  and `take_pending_output(&mut vec)`, which hands over the encoder's buffer
+  when `vec` is empty (zencodec `take_output`; named apart from the existing
+  `take_output()`, which returns the finished output).
+  A pipeline can now feed an HTTP response or upload while it runs
+  (`tests/streaming_output.rs`).
+
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
 - **The sink's own pass is 23–29 % faster** with byte-identical output
@@ -1083,6 +1101,49 @@ Three crates.io requirements block a newer release and were left alone on purpos
 ### [Unreleased]
 
 #### Changed
+
+- Builds warning-free against zenpixels 0.2.17: `zenpixels::hdr::ContentLightLevel`
+  instead of the deprecated root alias, and `transcode-iqa`'s use of zensim
+  profile A (deprecated, but the thresholds are calibrated on it) is allowed
+  explicitly. `tests/color_adapt.rs` reads a decoded file's colour from the
+  buffer's attached context (matrix 0 for RGB), not `source_color`'s coded
+  YUV matrix, which zenpixels 0.2.17 rightly refuses as a current context.
+
+- **A pixel-format conversion that changes the colour space re-describes
+  the pixels.** When the encoder can't take the input's pixel format and the
+  one it can take has other primaries or another transfer (linear f32 or u16
+  into an 8/16-bit sRGB format, Display P3 into an sRGB-only format), the
+  encode converts from the colour the metadata describes to that format's
+  colour space and writes the matching CICP, dropping an ICC profile that no
+  longer applies (`color_fit::fit_to_supported`). Before, the caller's ICC or
+  CICP was written next to converted pixels, and formats with no colour
+  carrier converted twice (linear off by up to 70 of 255, P3 by 10). The
+  one-shot encoder now negotiates the pixel format after fitting the colour
+  (the closure in `build_from_config`), and `AnyEncoder::encode_pixels` fits
+  too. Streaming encodes are not covered: the encoder sees strips the
+  caller already adapted. `tests/color_adapt.rs` checks 36 lossless cells
+  (4 sources x PNG, AVIF, JXL, WebP, PNM, BMP, farbfeld, QOI, TGA) by
+  decoding each file by its own description; 19 failed before.
+- `transcode-iqa` builds against zensim 0.3: it enables zensim's
+  `deprecated-profiles` feature, which now gates profile A (the profile the
+  transcode-to-quality thresholds are calibrated on).
+- **JXL and AVIF honour `with_lossless(true)`.** Their builders dropped the
+  flag and encoded lossy; it now reaches the codec after quality.
+
+- **Re-encodes write upright pixels and orientation 1.** A non-identity
+  `Metadata::orientation` (or EXIF Orientation tag) is applied to the
+  pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming
+  (buffered and rotated at finish) and animation (canvas rotated, each
+  frame rotated on push). The field is written as `Identity` and the tag
+  rewritten to 1, and so is an XMP `tiff:Orientation` (same-length rewrite). Governed by the reader-compatibility matrix
+  (imazen/zencodec#132): no browser applies WebP EXIF orientation; WIC,
+  ImageMagick and WebKit on Linux ignore PNG `eXIf`; WIC's and ImageIO's
+  default decodes and `sips` ignore JPEG EXIF orientation; HEIF `imir`
+  reads opposite ways across editions. Replaces folding the field into
+  EXIF (`fold_orientation_into_exif`, removed) and AVIF `irot`/`imir`.
+  `transcode` no longer rotates twice: the probe metadata takes the
+  decoded orientation. Tests that expected the tag or `irot` to survive
+  now expect rotated dimensions and `Identity`.
 
 - **Metadata conformance: AVIF CICP re-verified, `cicp` split into two
   strengths** (zenpipe#36 gap 3): with zenavif git-main (11033c95)
