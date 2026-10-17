@@ -218,7 +218,7 @@ mod convenience;
 #[allow(clippy::manual_clamp)]
 pub mod srgb_filters;
 
-pub use access::ChannelAccess;
+pub use access::{ChannelAccess, PlaneMask};
 pub use blur::GaussianKernel;
 
 /// Internal blur functions exposed for benchmarking. Not part of the public API.

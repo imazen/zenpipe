@@ -159,3 +159,12 @@ Remaining gaps: blur/sharpen kernel radius convention (our `ceil(3σ)` vs IM's ~
 
 - zencodecs local build broken (missing `ImageFormat::Jp2` variant) — worktree strips it from dev-deps (same as CI via superwork)
 - Issue #5 (auto-filter banding) still open — needs two-pass architecture for strip processing
+
+## Filter mask ownership — 2026-09-28
+
+`PlaneMask` now belongs to zenfilters. It selects the four working
+planes in `OklabPlanes`; it is independent of YUV/video sample layout.
+`ChannelAccess` and custom alpha/masked filters use this local type. Replace
+imports of `zenpixels::PlaneMask` with `zenfilters::PlaneMask`.
+The crate no longer enables either legacy zenpixels `planar` feature, so the
+filter API can build against the final 0.2 bridge and the 0.3 removal.

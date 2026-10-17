@@ -1,11 +1,10 @@
 use crate::access::ChannelAccess;
+use crate::access::PlaneMask;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
 use crate::simd;
-#[allow(deprecated)] // `PlaneMask`: see `crate::access`.
-use zenpixels::PlaneMask;
 
 /// Alpha channel scaling.
 ///
@@ -27,7 +26,6 @@ impl Default for Alpha {
 }
 
 impl Filter for Alpha {
-    #[allow(deprecated)] // `PlaneMask`: see `crate::access`.
     fn channel_access(&self) -> ChannelAccess {
         ChannelAccess {
             reads: PlaneMask::ALPHA,

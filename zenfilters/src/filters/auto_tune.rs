@@ -846,9 +846,7 @@ mod tests {
     #[test]
     fn rule_based_brightens_dark_image() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.15; // very dark
-        }
+        planes.l.fill(0.15); // very dark
         let features = ImageFeatures::extract(&planes);
         let params = rule_based_tune(&features);
         assert!(
@@ -861,9 +859,7 @@ mod tests {
     #[test]
     fn rule_based_darkens_bright_image() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.85; // very bright
-        }
+        planes.l.fill(0.85); // very bright
         let features = ImageFeatures::extract(&planes);
         let params = rule_based_tune(&features);
         assert!(
@@ -914,13 +910,9 @@ mod tests {
     #[test]
     fn rule_based_corrects_color_cast() {
         let mut planes = OklabPlanes::new(64, 64);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         // Strong warm cast (high b = warm)
-        for v in &mut planes.b {
-            *v = 0.08;
-        }
+        planes.b.fill(0.08);
         let features = ImageFeatures::extract(&planes);
         let params = rule_based_tune(&features);
         assert!(
@@ -1062,9 +1054,7 @@ mod tests {
         }
 
         let mut planes = OklabPlanes::new(16, 16);
-        for v in &mut planes.l {
-            *v = 0.5;
-        }
+        planes.l.fill(0.5);
         let features = ImageFeatures::extract(&planes);
         let blend = model.predict_blend(&features, 3);
         // Blended exposure should be between 0 and 0.6

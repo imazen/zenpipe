@@ -150,7 +150,6 @@ impl Filter for MaskedFilter {
         // Users should scale the inner filter before wrapping it.
     }
 
-    #[allow(deprecated)] // `PlaneMask`: see `crate::access`.
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         let access = self.filter.channel_access();
         let w = planes.width;
@@ -161,11 +160,11 @@ impl Filter for MaskedFilter {
         // Check whether reads or writes touch luma/chroma using PlaneMask bit ops.
         let touches_luma = !access
             .writes
-            .intersection(zenpixels::PlaneMask::LUMA)
+            .intersection(crate::access::PlaneMask::LUMA)
             .is_empty();
         let touches_chroma = !access
             .writes
-            .intersection(zenpixels::PlaneMask::CHROMA)
+            .intersection(crate::access::PlaneMask::CHROMA)
             .is_empty();
 
         let save_l = if touches_luma {
