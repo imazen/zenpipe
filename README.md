@@ -272,6 +272,10 @@ channel type (U8/U16/F32), layout (RGB/RGBA), alpha mode
 (straight/premultiplied), transfer function (sRGB/linear/PQ/HLG),
 and color primaries (BT.709/P3/BT.2020).
 
+What third-party decoders, browsers and OS image stacks do with the
+orientation, colour and gain-map signals we write is measured in
+[docs/reader-compat.md](docs/reader-compat.md).
+
 ## Animation
 
 Frame-by-frame processing for animated GIF/WebP/PNG, via

@@ -7,6 +7,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+- `docs/reader-compat.md`: measured reader behaviour on orientation, colour
+  and gain-map signalling (compat-matrix round 14, 2026-10-17), with the
+  implications for zenpipe output and the run data it rests on.
+
 #### Changed
 - zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
 - zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
