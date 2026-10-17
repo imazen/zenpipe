@@ -55,14 +55,11 @@ sources`.
     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
     --test corpus -- --ignored avif
   ```
-- **The rav1d-safe pin is held back at `140f9145`** (via `zenavif 11033c95`)
-  while zenavif, ravif and zenmetrics are all on `66f58fa6`. Not neglect —
-  measured: at `66f58fa6` the command above fails 2 of 2 runs with a panic in
-  rav1d-safe's bounds-map guard on aarch64 (`filmgrain_arm.rs:1628` reserves
-  122880 B against a 3840 B ceiling under tile threading), then
-  `Option::unwrap()` on `None` at `thread_task.rs:534`. Filed as
-  **rav1d-safe#526**. Move the pin when that closes, and re-run the command
-  rather than assuming.
+- **zenavif is pinned to main `5e493d39`** (rav1d-safe `dfd01e32`) since
+  2026-10-15. The earlier hold at `11033c95` / rav1d-safe `140f9145` was for
+  an aarch64 film-grain panic (rav1d-safe#526, closed 2026-09-06); the command
+  above passes at the new pin on aarch64. Keep every zenavif rev in the repo
+  equal (`just check-pins`), and re-run the command when moving it.
 
 Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
 original list — animation per-frame routing, matte flatten, the two-engine

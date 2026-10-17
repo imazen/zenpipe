@@ -70,8 +70,9 @@ pub fn transcode_to_hdr_pq_png(
     use crate::CodecError;
     use whereat::{ResultAtExt, at};
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-    use zencodec::{Cicp, ContentLightLevel, OrientationHint};
+    use zencodec::{Cicp, OrientationHint};
     use zenpixels::PixelDescriptor;
+    use zenpixels::hdr::ContentLightLevel;
 
     // Decode the SDR base first: gates on gain-map presence (avoids a wasted
     // reconstruct on non-HDR input) and resolves the container primaries.

@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 749 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 18 lines (18 hidden + 0 excluded-feature)
+# files: zencodecs.txt 749 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 15 lines (15 hidden + 0 excluded-feature)
 
 ## summary
 #

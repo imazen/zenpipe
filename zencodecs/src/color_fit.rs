@@ -163,6 +163,17 @@ pub(crate) fn convert_to_srgb(
     pixels: &PixelSlice<'_>,
     from: &Source,
 ) -> Result<zenpixels::PixelBuffer, alloc::string::String> {
+    convert_to(pixels, from, Cicp::SRGB, pixels.descriptor())
+}
+
+/// Convert `pixels` from `from` to the colour space `to`, in `format`'s
+/// pixel format.
+fn convert_to(
+    pixels: &PixelSlice<'_>,
+    from: &Source,
+    to: Cicp,
+    format: PixelDescriptor,
+) -> Result<zenpixels::PixelBuffer, alloc::string::String> {
     use alloc::string::ToString;
     let desc = source_descriptor(pixels.descriptor(), from);
     let bytes = pixels.contiguous_bytes().into_owned();
@@ -187,10 +198,61 @@ pub(crate) fn convert_to_srgb(
     let ready = zenpixels_convert::finalize_for_output_with(
         &buffer,
         &origin,
-        zenpixels_convert::OutputProfile::Named(Cicp::SRGB),
-        desc.pixel_format(),
+        zenpixels_convert::OutputProfile::Named(to),
+        format.pixel_format(),
         cms,
     )
     .map_err(|e| e.to_string())?;
     Ok(ready.into_parts().0)
+}
+
+/// When the encoder can't take `pixels` as they are and the format it can
+/// take (the one `adapt_for_encode_cow` would pick) has other primaries or
+/// another transfer, converting there changes what colour the samples mean.
+/// A colour description in `metadata` would then describe the source, not
+/// the written pixels. So convert from the described colour to the target's
+/// colour space here and describe the result by its CICP (dropping an ICC
+/// profile that no longer applies). `None`: nothing to do, the pixels and
+/// metadata stand as they are.
+pub(crate) fn fit_to_supported(
+    pixels: &PixelSlice<'_>,
+    metadata: Option<&Metadata>,
+    supported: &[PixelDescriptor],
+) -> Result<Option<(zenpixels::PixelBuffer, Metadata)>, alloc::string::String> {
+    let Some(meta) = metadata else {
+        return Ok(None);
+    };
+    let source = match (&meta.icc_profile, meta.cicp) {
+        (Some(icc), _) => Source::Icc(icc.clone()),
+        (None, Some(c)) => Source::Cicp(c),
+        (None, None) => return Ok(None),
+    };
+    let desc = pixels.descriptor();
+    // `adapt_for_encode_cow` passes these through without converting.
+    if supported.contains(&desc) || desc.transfer() == TransferFunction::Unknown {
+        return Ok(None);
+    }
+    let Some(target) =
+        zenpixels_convert::best_match(desc, supported, zenpixels_convert::ConvertIntent::Fastest)
+    else {
+        return Ok(None);
+    };
+    if target.primaries == desc.primaries && target.transfer() == desc.transfer() {
+        return Ok(None);
+    }
+    let (Some(p), Some(t)) = (target.primaries.to_cicp(), target.transfer().to_cicp()) else {
+        return Ok(None);
+    };
+    let target_cicp = Cicp::new(p, t, 0, true);
+    // Without a CMS an ICC source can't be converted; it is dropped later
+    // with the pixels unchanged, as in `plan`.
+    #[cfg(not(feature = "cms"))]
+    if matches!(source, Source::Icc(_)) {
+        return Ok(None);
+    }
+    let converted = convert_to(pixels, &source, target_cicp, target)?;
+    let mut out = meta.clone();
+    out.icc_profile = None;
+    out.cicp = Some(target_cicp);
+    Ok(Some((converted, out)))
 }

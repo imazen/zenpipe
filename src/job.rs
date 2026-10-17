@@ -1404,10 +1404,11 @@ impl<'a> ImageJob<'a> {
 
         // Check if transform is needed via zencodecs CMS module.
         let transform_icc = if info.format == zencodec::ImageFormat::Png {
-            // PNG: check gAMA/cHRM/cICP chunks in raw data.
+            // PNG: the decoded colour (cICP over iCCP when both are present,
+            // PNG-3 §4.3, decided by the decoder's colour authority) first;
+            // the gAMA/cHRM/cICP chunks in the raw data are the fallback.
             let from_icc = zencodecs::cms::srgb_transform_icc(&info.source_color, None, cms_mode);
             let from_png = zencodecs::cms::png_srgb_transform_icc(raw_data, cms_mode);
-            // ICC profile takes precedence; PNG chunks are fallback.
             from_icc.or(from_png)
         } else {
             zencodecs::cms::srgb_transform_icc(&info.source_color, None, cms_mode)

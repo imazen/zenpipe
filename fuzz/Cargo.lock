@@ -735,8 +735,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#8f7ee871900b54a8c9c53feafeb7664a92b116f5"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -746,8 +746,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.16"
-source = "git+https://github.com/imazen/zenpixels#8f7ee871900b54a8c9c53feafeb7664a92b116f5"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -915,8 +915,8 @@ source = "git+https://github.com/imazen/ultrahdr?rev=031d4a2070a522f82bd02aee712
 
 [[patch.unused]]
 name = "zenavif"
-version = "0.1.7"
-source = "git+https://github.com/imazen/zenavif?rev=11033c957df69dcf37a6820032ed2a64f2f6f213#11033c957df69dcf37a6820032ed2a64f2f6f213"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=5e493d39bb0b1e60e79ef755d0734e5bc30313ac#5e493d39bb0b1e60e79ef755d0734e5bc30313ac"
 
 [[patch.unused]]
 name = "zenbitmaps"
