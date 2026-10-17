@@ -11,7 +11,7 @@
 #
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)         2
-#   free functions                             22
+#   free functions                             24
 #   inherent methods                            5
 #   struct fields                               3
 #   trait roster entries (type × trait)        22
@@ -19,15 +19,17 @@
 #
 # per-module pub lines:
 #   (root)                            4
-#   __bench_kernels                  16
+#   __bench_kernels                  18
 #   blur_internals                   14
 
-## items (34 lines)
+## items (36 lines)
 
 pub fn ChannelAccess::assert_fields_are_eq(&self)
 pub fn PlaneMask::assert_fields_are_eq(&self)
 pub fn __bench_kernels::adaptive_sharpen_apply(&[f32], &[f32], &[f32], &mut [f32], f32, f32, f32)
 pub fn __bench_kernels::brilliance_apply(&[f32], &[f32], &mut [f32], f32, f32, f32)
+pub fn __bench_kernels::deinterleave3(&[f32], &mut [f32], &mut [f32], &mut [f32])
+pub fn __bench_kernels::deinterleave4(&[f32], &mut [f32], &mut [f32], &mut [f32], &mut [f32])
 pub fn __bench_kernels::gather_oklab_to_srgb_u8(&[f32], &[f32], &[f32], &mut [u8], u32, &zenpixels_convert::gamut::GamutMatrix)
 pub fn __bench_kernels::highlights_shadows(&mut [f32], f32, f32)
 pub fn __bench_kernels::hue_rotate(&mut [f32], &mut [f32], f32, f32)

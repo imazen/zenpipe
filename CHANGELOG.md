@@ -1067,6 +1067,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **sRGB/linear-RGB passthrough scatter is 1.6–2.1× faster on x86-64.** The deinterleave
+  loops in `scatter_srgb_passthrough` are `#[autoversion(v3, neon, wasm128)]`, so the AVX2
+  build runs instead of the SSE2 baseline (a 349k-pixel RGB strip: 111.5 → 61.8 µs on Zen 5;
+  `benchmarks/scatter_passthrough_2026-10-17.txt`). No new dependency; supersedes #32's
+  garb route, which compiled the same loop the same way. Pixels unchanged
+  (`srgb_passthrough_matches_index_loop`). Not measured on aarch64, where NEON is baseline.
+
 - **`quality_validation` vs libvips re-measured on a second machine**
   (zenpipe#44): with Homebrew libvips 8.18.6 on macOS arm64 and the CID22
   corpus, all 21 corpus + vips tests pass; `saturation_boost_vs_vips`
