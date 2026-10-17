@@ -162,7 +162,7 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
     // 2. HDRToneMap (ISO 21496-1 style): full gain map parameters
     //
     // If HDRToneMap fields are present, use them directly.
-    // Otherwise, synthesize from Apple's headroom value.
+    // Otherwise, synthesize from the headroom value.
     let metadata = if gm_info.gain_map_max.is_some() || gm_info.alternate_headroom.is_some() {
         // ISO 21496-1 style metadata present — convert to GainMapMetadata
         // (= zencodec::GainMapParams, channels-based, since ultrahdr-core 0.5).

@@ -9,16 +9,16 @@ All data verified against source code as of 2026-03-25.
 
 ## Format Properties
 
-| | JPEG | PNG | WebP | GIF | AVIF | JXL | HEIC | TIFF | PNM | BMP | Farbfeld |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Lossy | Y | palette | Y | -- | Y | Y | Y | -- | -- | -- | -- |
-| Lossless | -- | Y | Y | Y | feat | Y | -- | Y | Y | Y | Y |
-| Alpha | -- | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
-| Animation | -- | APNG | Y | Y | feat | Y | -- | -- | -- | -- | -- |
-| Progressive | Y | Adam7 dec | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-| HDR (>8bit) | -- | 16 | -- | -- | 10/12 | f32 | 10 | f32 | f32 | -- | 16 |
-| Max depth | 8 | 16 | 8 | 8 | 12 | 32 | 10 | 32 | 32 | 8 | 16 |
-| Gray | Y | Y | -- | enc | -- | Y | -- | Y | Y | dec | -- |
+| | JPEG | PNG | WebP | GIF | AVIF | TIFF | PNM | BMP | Farbfeld |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Lossy | Y | palette | Y | -- | Y | -- | -- | -- | -- |
+| Lossless | -- | Y | Y | Y | feat | Y | Y | Y | Y |
+| Alpha | -- | Y | Y | Y | Y | Y | Y | Y | Y |
+| Animation | -- | APNG | Y | Y | feat | -- | -- | -- | -- |
+| Progressive | Y | Adam7 dec | -- | -- | -- | -- | -- | -- | -- |
+| HDR (>8bit) | -- | 16 | -- | -- | 10/12 | f32 | f32 | -- | 16 |
+| Max depth | 8 | 16 | 8 | 8 | 12 | 32 | 32 | 8 | 16 |
+| Gray | Y | Y | -- | enc | -- | Y | Y | dec | -- |
 
 "feat" = behind optional feature flag. "dec" = decode only. "enc" = encode only.
 "palette" = lossy via palette quantization, not pixel-level lossy compression.
@@ -29,26 +29,26 @@ All data verified against source code as of 2026-03-25.
 
 R = read (decode/probe), W = write (encode), -- = not supported by format.
 
-| | JPEG | PNG | WebP | GIF | AVIF | JXL | HEIC | TIFF | Bitmaps |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| ICC | R/W | R/W | R/W | -- | R/W | R/W | R | R | -- |
-| EXIF | R/W | R/W | R/W | -- | R/W | R/W | R | R | -- |
-| XMP | R/W | R/W | R/W | -- | R/W | R/W | R | R | -- |
-| CICP | -- | R/W | -- | -- | R/W | R/W | R | -- | -- |
-| Orientation | EXIF | -- | EXIF | -- | irot/imir | header | irot/imir | EXIF | -- |
-| Resolution | JFIF | pHYs | -- | -- | -- | -- | -- | tags | -- |
-| cLLi | -- | R/W | -- | -- | R/W | -- | R | -- | -- |
-| mDCv | -- | R/W | -- | -- | R/W | -- | R | -- | -- |
+| | JPEG | PNG | WebP | GIF | AVIF | TIFF | Bitmaps |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| ICC | R/W | R/W | R/W | -- | R/W | R | -- |
+| EXIF | R/W | R/W | R/W | -- | R/W | R | -- |
+| XMP | R/W | R/W | R/W | -- | R/W | R | -- |
+| CICP | -- | R/W | -- | -- | R/W | -- | -- |
+| Orientation | EXIF | -- | EXIF | -- | irot/imir | EXIF | -- |
+| Resolution | JFIF | pHYs | -- | -- | -- | tags | -- |
+| cLLi | -- | R/W | -- | -- | R/W | -- | -- |
+| mDCv | -- | R/W | -- | -- | R/W | -- | -- |
 
 ---
 
 ## Supplements & Sidecars
 
-| | JPEG | PNG | WebP | GIF | AVIF | JXL | HEIC | TIFF | Bitmaps |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Gain map | UltraHDR | -- | -- | -- | ISO 21496 | jhgm | Apple | -- | -- |
-| Depth map | -- | -- | -- | -- | -- | extra ch | Apple | -- | -- |
-| Multi-page | -- | -- | -- | -- | grid | -- | grid | IFDs | -- |
+| | JPEG | PNG | WebP | GIF | AVIF | TIFF | Bitmaps |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Gain map | UltraHDR | -- | -- | -- | ISO 21496 | -- | -- |
+| Depth map | -- | -- | -- | -- | -- | -- | -- |
+| Multi-page | -- | -- | -- | -- | grid | IFDs | -- |
 
 ---
 
@@ -64,7 +64,6 @@ Can the codec estimate the source encoding quality from headers alone?
 | GIF | N/A | Always lossless | -- | -- |
 | AVIF | Yes | AV1 base_q_idx from frame header via zenavif-parse | FromFrameHeader (reliable for still images) | 0-100 |
 | JXL | No | Headers don't expose butteraugli distance | -- | -- |
-| HEIC | No | Can't recover HEVC QP from container | -- | -- |
 | TIFF | N/A | Always lossless | -- | -- |
 | Bitmaps | N/A | Always lossless | -- | -- |
 
@@ -82,7 +81,6 @@ Can the codec determine if the source was losslessly encoded?
 | GIF | Yes | Always lossless (palette-indexed LZW) |
 | AVIF | Yes | Frame header: base_q_idx=0, all delta-q=0, no chroma subsampling |
 | JXL | Yes | `!xyb_encoded` — modular pathway = lossless, VarDCT = lossy |
-| HEIC | No | HEVC is always lossy |
 | TIFF | Yes | Always lossless (standard TIFF; JPEG-in-TIFF detectable via compression tag) |
 | Bitmaps | Yes | Always lossless |
 
@@ -119,7 +117,6 @@ generic 96 → speed 3 (slowest).
 | GIF | -- | No effort knob | (1,1) | -- |
 | AVIF | 0-10 | rav1e speed (inverted) | (1,256) | Real multi-threading |
 | JXL | 1-10 | Encoder effort | (1,65535) enc / (1,65535) dec | Encode: per-thread. Decode: rayon parallel via `threads` feature |
-| HEIC | -- | Decode only | (1,N) | Parallel tile decode behind feature |
 | TIFF | -- | No effort knob | (1,1) | -- |
 | Bitmaps | -- | No effort knob | (1,1) | -- |
 
@@ -135,7 +132,6 @@ generic 96 → speed 3 (slowest).
 | GIF | sRGB | sRGB | No | 8↔8 |
 | AVIF | sRGB, P3, BT.2020 | sRGB, PQ, HLG | Native (CICP) | 8↔8, 16↔16 |
 | JXL | Any (structured encoding) | sRGB, PQ, HLG, linear, any | Native | 8↔8, 16↔16, f32↔f32 |
-| HEIC | sRGB, BT.2020 (CICP) | sRGB, PQ, HLG | CICP | 10→16 |
 | TIFF | sRGB (via ICC) | sRGB, linear | ICC only | 8↔8, 16↔16, f32↔f32 |
 | PNM | sRGB assumed | sRGB, linear (PFM) | No | 8↔8, 16↔16, f32↔f32 |
 | BMP | sRGB | sRGB | No | 8↔8 |
@@ -263,11 +259,11 @@ What can be determined from probe (header-only parse)?
 | Has animation | Most codecs | GIF: block scan. WebP: VP8X. AVIF: container. PNG: acTL. JXL: header. |
 | Is lossless source | WebP, JXL, AVIF, format-based | WebP: bitstream type. JXL: xyb flag. AVIF: frame header QP+delta-q+subsampling. Others: inferred from format. |
 | Source quality | JPEG, WebP, AVIF | DQT tables, VP8 QP, AV1 base_q_idx from frame header |
-| HDR content | AVIF, JXL, HEIC, PNG | CICP transfer function (PQ/HLG detection) |
-| Gain map present | AVIF, JXL, HEIC, JPEG (UltraHDR) | Container-level detection |
-| Color primaries | AVIF, JXL, HEIC, PNG (CICP) | From CICP/NCLX signaling |
+| HDR content | AVIF, JXL, PNG | CICP transfer function (PQ/HLG detection) |
+| Gain map present | AVIF, JXL, JPEG (UltraHDR) | Container-level detection |
+| Color primaries | AVIF, JXL, PNG (CICP) | From CICP/NCLX signaling |
 | Bit depth | All codecs | From header / color type |
-| Orientation | JPEG, AVIF, JXL, HEIC, TIFF | EXIF tag 274, irot/imir, JXL header |
+| Orientation | JPEG, AVIF, JXL, TIFF | EXIF tag 274, irot/imir, JXL header |
 
 ---
 
@@ -281,7 +277,6 @@ What can be determined from probe (header-only parse)?
 | AVIF | JPEG (UltraHDR) | Yes | Extract tmap → encode as MPF secondary image |
 | JXL | AVIF | Yes | Extract jhgm → convert to tmap |
 | JXL | JPEG (UltraHDR) | Yes | Extract jhgm → encode as MPF secondary |
-| HEIC (Apple) | Any | Partial | Apple gain map format differs from ISO 21496-1 |
 | Any | PNG/WebP/GIF/TIFF/BMP | No | Target format has no gain map support |
 
 All gain map transcoding requires:

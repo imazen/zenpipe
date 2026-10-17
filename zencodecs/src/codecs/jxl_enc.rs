@@ -7,6 +7,7 @@ use crate::dispatch::{BuiltEncoder, EncodeParams, StreamingEncoder, build_from_c
 pub(crate) fn build_encoding(
     quality: Option<f32>,
     effort: Option<u32>,
+    lossless: bool,
     _codec_config: Option<&CodecConfig>,
 ) -> zenjxl::JxlEncoderConfig {
     use zencodec::encode::EncoderConfig;
@@ -18,19 +19,22 @@ pub(crate) fn build_encoding(
     if let Some(e) = effort {
         enc = enc.with_generic_effort(e as i32);
     }
+    if lossless {
+        enc = enc.with_lossless(true);
+    }
     enc
 }
 
 pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<'a> {
     build_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
         params,
     )
 }
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
-        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config),
         params,
     )
 }
@@ -113,7 +117,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let jhgm_payload = bundle.serialize();
 
     // 5. Build encoder config with gain map attached
-    let mut enc = build_encoding(quality, None, None);
+    let mut enc = build_encoding(quality, None, false, None);
     enc = enc.with_gain_map(jhgm_payload);
 
     // 6. Encode the base image through the normal trait-based path

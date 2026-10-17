@@ -6,7 +6,49 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- `tests/transcode_matrix.rs`: every compiled-in format (opaque RGB8 and,
+  where the format carries alpha, translucent RGBA8 sources) transcoded into
+  every encodable format both one-shot and through `TranscodeSink`; outputs
+  must decode to identical pixels, and byte identity is reported. With
+  `jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr`: 22 sources x 12 targets,
+  264 cells, 257 byte-identical and 7 pixel-identical (lossless reductions
+  only a one-shot encode can choose). CI runs that set in release.
+- **`TranscodeSink` streams encoded bytes** (needs zencodec PR 149's
+  `OutputTiming`): the decoder's `begin` is forwarded to the encoder
+  (`DynEncoder::begin`) with the descriptor the strips are adapted to (found by
+  adapting one pixel through the same `adapt_for_encode_cow`, so the two cannot
+  disagree); `output_timing()`, `pending_output()` / `consume_output()`,
+  `take_pending_output(&mut vec)` (hands over the encoder's buffer when `vec`
+  is empty), and `with_writer(..)` (a `TranscodeWriter` receiving every byte as the encoder
+  has it, with `finish_encode` then returning an empty output). An encoder
+  whose timing streams (zenjpeg with fixed tables, zenpng effort 0 or strips,
+  zenbitmaps, IMIJ row groups) now sends bytes while the source is still being
+  decoded (`tests/transcode_streaming.rs`).
+
 ### Fixed
+- Encoding into a format that cannot carry the source's colour description
+  no longer depends on the codec's reaction (zengif now refuses ICC it can't
+  keep). zencodecs fits the description first, in the one-shot and streaming
+  paths: a format that carries it keeps it; an sRGB description, or a
+  profile that describes no colour space, is dropped with the pixels
+  unchanged; an ICC profile naming a CICP space the format carries is
+  replaced by the CICP; otherwise the pixels are converted to sRGB (the
+  closest colour such a format describes) through
+  `zenpixels_convert::finalize_for_output_with` and the description is
+  dropped. Without the `cms` feature an ICC profile that needs a full CMS is
+  dropped instead of converted; `cms` now enables zenpixels-convert's
+  moxcms backend for it. `tests/color_fit.rs` checks the P3-to-sRGB pixels
+  exactly (PNM) and that streaming gives the one-shot file.
+- Streaming encode (`EncodeRequest::build_streaming_encoder`, and so
+  `TranscodeSink`) failed with `row_level_encode` for codecs without
+  row-level encode (GIF, AVIF, BMP). Such encoders are now wrapped in a
+  buffering adapter that collects rows (fallibly allocated) and runs the
+  codec's one-shot `encode` at `finish`, so a streaming transcode gives the
+  one-shot bytes.
+- `AllowedFormats::all()` omitted QOI, TGA and HDR although their codecs
+  were compiled in (`bitmaps-qoi`, `bitmaps-tga`, `bitmaps-hdr`), so the
+  registry refused them.
 - **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
   correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
   bypass the registry entirely for Custom formats (fail-open — `none()` still let

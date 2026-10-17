@@ -74,8 +74,8 @@ from pathlib import Path
 # in this repo names it: it is selected transitively by whichever zenavif rev is
 # pinned. It IS checked in lockfiles, which is where its rev becomes visible.
 EXPECTED = {
-    "https://github.com/imazen/zenavif": "11033c957df69dcf37a6820032ed2a64f2f6f213",
-    "https://github.com/imazen/rav1d-safe": "140f91450c3551c25a5699d12ded6d629ecf6d97",
+    "https://github.com/imazen/zenavif": "5e493d39bb0b1e60e79ef755d0734e5bc30313ac",
+    "https://github.com/imazen/rav1d-safe": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
 }
 
 # Packages that come from those repos, for lockfile checking. `zenavif-serialize`

@@ -16,16 +16,11 @@ jobs:
   rust:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:
-      # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
-      # of the SIMD tiers and the Apple linker are exercised together), and
-      # `macos-latest` is aarch64-only, so it has to be named explicitly. The
-      # reusable workflow dropped macOS from its DEFAULT list to cut Actions
-      # spend and documents `platforms` as the opt-back-in; this is that opt-in.
-      # `macos-26-intel` rather than `macos-15-intel` because zenpipe ships no
-      # binaries — nothing here needs the older SDK's deployment target.
-      # Everything else is the reusable workflow's default list, repeated
-      # verbatim because `platforms` replaces it wholesale rather than adding.
-      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-26-intel"]'
+      # macOS runs on ARM64 only (`macos-latest`); Intel macOS lanes are not
+      # run. The reusable workflow's default list has no macOS, so it is named
+      # here. `platforms` replaces the default list wholesale, so the other
+      # entries repeat it verbatim.
+      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
       # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
@@ -50,6 +45,7 @@ jobs:
         cargo test -p zeneditor --all-targets
         cargo test -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets
         cargo test -p zenfilters --all-targets
+        cargo test --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
 
   # Public-API surface snapshots (docs/public-api/) — the CI-free `apidoc/`
   # runner package (see its Cargo.toml), so this is the only job that ever
@@ -75,7 +71,7 @@ jobs:
     name: Decoder pin agreement
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Self-test the check (it must fail on each defect)
         run: python3 scripts/check-decoder-pins.py --self-test
       - name: Check every manifest and lockfile agrees
@@ -85,7 +81,7 @@ jobs:
     name: Public API snapshots
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
       - uses: dtolnay/rust-toolchain@stable
       - uses: imazen/zen-workspace/.github/actions/setup@main
@@ -115,7 +111,7 @@ jobs:
     env:
       CROSS_CONTAINER_OPTS: -v ${{ github.workspace }}/..:${{ github.workspace }}/..
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu

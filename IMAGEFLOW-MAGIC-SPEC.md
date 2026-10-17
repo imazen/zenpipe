@@ -343,7 +343,6 @@ pub fn apply_quirks(ops: &mut Vec<Operation>) {
 | QOI | ❌ | ✅ zenbitmaps | zenpipe-only format |
 | TGA | ✅ | ✅ zenbitmaps | |
 | HDR (Radiance) | ✅ | ✅ zenbitmaps | |
-| HEIC/HEIF | ✅ (delegate) | ✅ heic | Decode only |
 | RAW/DNG | ✅ (delegate) | ✅ zenraw | Multiple backends |
 | PDF | ✅ (Ghostscript) | ✅ zenpdf | Via hayro renderer |
 | SVG/SVGZ | ✅ (librsvg) | ✅ zensvg | resvg + usvg, text rendering, optimize |

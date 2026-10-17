@@ -181,13 +181,6 @@ All supported querystring keys for image processing URLs.
 |-----|---------|-------------|
 | `bmp.bits` | `bits` | Bit depth |
 
-### HEIC Decode
-
-| Key | Description |
-|-----|-------------|
-| `heic.gain_map` | Extract gain map |
-| `heic.depth` | Extract depth map |
-
 ### JPEG Decode
 
 | Key | Aliases | Description |

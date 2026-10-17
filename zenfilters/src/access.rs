@@ -1,3 +1,8 @@
+// `PlaneMask` is deprecated on zenpixels main (its planar API is being
+// retired). It is part of `ChannelAccess`'s public fields, so it stays until
+// zenpixels ships the replacement.
+#![allow(deprecated)]
+
 use zenpixels::PlaneMask;
 
 /// Declares which Oklab planes a filter reads and writes.

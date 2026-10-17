@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Demonstrates the goal of zenpipe#68: a batch image converter as a plain bash
 # script over `zencodecs` — no bespoke Rust. This is the shape `hdr-corpus-convert`
-# collapses to once the CLI gains HEIC decode + an `--hdr reconstruct` mode.
+# collapses to once the CLI gains an `--hdr reconstruct` mode.
 #
 # TODAY this handles the SDR / transcode majority (PNG/JPEG/WebP/AVIF/JXL).
-# The HDR (gain-map HEIC / Ultra-HDR-JPEG → PQ PNG) path is pending #68.
+# The HDR (gain-map JPEG → PQ PNG) path is pending #68.
 #
 # Usage: batch-convert.sh <zencodecs-bin> <src-dir> <out-dir> [<out-ext>]
 set -euo pipefail

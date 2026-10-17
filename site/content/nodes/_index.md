@@ -20,7 +20,6 @@ Decode → Orient & Crop → Resize & Layout → Filters → Composite → Quant
 | [Decode JPEG](zenjpeg-decode) | JPEG decoder with strictness levels and auto-orientation |
 | [Decode WebP](zenwebp-decode) | WebP decoder with upsampling control |
 | [Decode JXL](zenjxl-decode) | JPEG XL decoder with orientation and intensity target |
-| [Decode HEIC](heic-decode) | HEIC/HEIF decoder with gain map and depth extraction |
 | [Frame Select](zenpipe-riapi-frame) | RIAPI frame/page selection for multi-frame formats |
 
 ### 2. Orient & Crop (14 nodes)

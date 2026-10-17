@@ -8,7 +8,6 @@
 | **WEBP** | `image/webp` | webp | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **AVIF** | `image/avif` | avif | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **JXL** | `image/jxl` | jxl | ✅ | ✅ | ✅ | ✅ | ✅¹ |
-| **HEIC** | `image/heif` | heic, heif, hif | ✅ | — | — | ✅ | — |
 | **BMP** | `image/bmp` | bmp | ✅ | ✅ | — | ✅ | ✅ |
 | **TIFF** | `image/tiff` | tiff, tif | ✅ | ✅ | — | ✅ | ✅ |
 | **PNM** | `image/x-portable-anymap` | pnm, ppm, pgm, pbm, pam, pfm | ✅ | ✅ | — | ✅ | ✅ |
