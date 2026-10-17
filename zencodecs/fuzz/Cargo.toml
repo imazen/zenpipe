@@ -39,7 +39,7 @@ features = [
     "png", "png-zenquant", "avif-decode", "jxl-decode",
     "bitmaps", "bitmaps-bmp",
     "cms", "riapi",
-    "jpeg-ultrahdr",
+    "jpeg-ultrahdr", "metadata",
 ]
 
 # Prevent workspace interference
@@ -75,6 +75,14 @@ zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 zenbitmaps = { path = "../../../zenbitmaps" }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
+# heic main is 0.2.0; the registry 0.2.0 is yanked. Same entry as the root table.
+heic = { git = "https://github.com/imazen/heic" }
+# zencodecs' `inventory` feature names `zentiff?/inventory`, `zenraw?/inventory`
+# and `zenpdf?/inventory`; cargo checks those against every candidate, and the
+# registry releases predate the feature. Same entries as the root table.
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }
 # zenjpeg resolves `zenanalyze 0.2.0` through a [patch.crates-io] at the zenjpeg
 # WORKSPACE root; patched in by path to its member crate, that table never
 # applies, and the registry is frozen at 0.1.0 — so a fresh resolve here fails
@@ -152,6 +160,13 @@ bench = false
 [[bin]]
 name = "fuzz_select"
 path = "fuzz_targets/fuzz_select.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_metadata_scrub"
+path = "fuzz_targets/fuzz_metadata_scrub.rs"
 test = false
 doc = false
 bench = false

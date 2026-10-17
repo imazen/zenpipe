@@ -94,23 +94,39 @@ fn gif_no_icc_returned_after_round_trip() {
 }
 
 #[test]
-fn gif_metadata_with_icc_input_silently_drops() {
-    // GIF doesn't have an ICC chunk. Passing a Metadata::with_icc to
-    // the encoder should not error — it should silently drop the ICC.
-    // (Failing here would mean the encoder rejected metadata it can't
-    // store, which would be over-strict.)
+fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
+    // GIF carries no colour metadata. zencodecs fits the description before
+    // the codec runs (`color_fit`): a profile that describes no colour space
+    // is dropped with the pixels unchanged, and under `EncodePolicy::strict`
+    // the encode refuses instead of dropping it.
     let img = rgba8_image(16, 16);
-    let icc = vec![0u8; 256];
-    let meta = Metadata::none().with_icc(icc);
+    let meta = Metadata::none().with_icc(vec![0u8; 256]);
 
     let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
-    let result = EncodeRequest::new(ImageFormat::Gif)
+    let bytes = EncodeRequest::new(ImageFormat::Gif)
+        .with_quality(75.0)
+        .with_metadata(meta.clone())
+        .encode(typed.erase(), true)
+        .expect("default policy drops an unusable profile")
+        .into_vec();
+    assert!(
+        decode_full(&bytes)
+            .info()
+            .source_color
+            .icc_profile
+            .is_none(),
+        "GIF output must not claim an ICC profile"
+    );
+
+    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
+    let strict = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
         .with_metadata(meta)
+        .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
         .encode(typed.erase(), true);
     assert!(
-        result.is_ok(),
-        "GIF encoder must accept (and silently drop) unsupported metadata"
+        strict.is_err(),
+        "strict encode must refuse to drop a profile GIF cannot carry"
     );
 }
 

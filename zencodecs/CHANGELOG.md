@@ -6,7 +6,30 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- No registry baseline exists for zencodecs (crates.io API returned 404 on
+  2026-10-12). The proposed scrub API now uses zencodec-owned result/service
+  types and codec feature gates; no zenmeta types appear in public signatures.
+
 ### Added
+
+- Structural inventory dispatch and the `zencodecs inventory` CLI (from #89). `inventory` is default-enabled in
+  zencodecs and weakly enables only the selected codec walkers. Direct codec
+  defaults stay unchanged. The proposed convenience API retains `Option` for
+  absent capability; codec jobs expose the shared typed unsupported error.
+- Add optional `avif-svt` and `avif-aom` forwarding; backend selection is unchanged.
+- Add default-off `metadata::ScrubRequest` for bounded, auditable encoded JPEG,
+  gain-map JPEG, JXL and PNG/APNG metadata rewrites. Borrow image payloads and
+  preserve rendering signals; explicit services handle XMP and compressed
+  metadata. JPEG reconstruction removal and known ICC normalization are opt-in.
+  No arbitrary ICC sanitization. Container planning delegates to codec crates;
+  generic analysis uses zenmeta and shared contracts remain in zencodec.
+- Precomputed gain-map encodes now honor metadata retention and coarse privacy
+  gates. Forward filtered metadata to JPEG, JXL and AVIF instead of bypassing it.
+- JPEG retains EXIF orientation and requested attribution, emits ICC for supported
+  CICP, and regenerates gain-map discovery independently of source XMP. Requests
+  to preserve arbitrary source XMP refuse rather than silently discarding it.
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
   `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
   whose target cannot carry the source colour description fails
@@ -33,6 +56,8 @@ All notable changes to `zencodecs` are documented here. Format follows
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- Wire JPEG 2000 decoding through zenjp2 and include it in runtime allowlists.
+  Encoding remains unsupported.
 - Encoding into a format that cannot carry the source's colour description
   no longer depends on the codec's reaction (zengif now refuses ICC it can't
   keep). zencodecs fits the description first, in the one-shot and streaming
@@ -86,6 +111,10 @@ All notable changes to `zencodecs` are documented here. Format follows
   (ad2ab9e1).
 
 ### Added
+- Explicit `TranscodeColor::Srgb8` conversion using the current decoded color
+  context (`cms` feature), with HDR/rendering and unchanged-gain-map rejection.
+  `Preserve` remains the default. GIF rejects unresolved ICC/P3 color requests;
+  descriptive metadata without a carrier may still be dropped.
 - **`picker::route_format_from_offer` (the `picker-api` feature)** — a route-based format picker over
   the **shipped cross-codec router** (`zenpicker::default_route`: the f32 6-pairwise-discriminant
   lossy router + i8 auto-gate + lossless), masked to the candidate formats and **quality-aware**

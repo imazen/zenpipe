@@ -28,6 +28,14 @@ pub(crate) fn detect_raw_format(data: &[u8]) -> Option<zencodec::ImageFormat> {
     let classified = zenraw::classify(data);
     match classified {
         zenraw::FileFormat::Dng | zenraw::FileFormat::AppleDng => Some(dng_format()),
+        // zenraw accepts any TIFF header as a candidate. Auto-dispatch needs
+        // the shared registry's more specific RAW signature; otherwise enabling
+        // RAW steals ordinary TIFF images from the TIFF decoder.
+        zenraw::FileFormat::TiffRaw
+            if !(zencodec::ImageFormat::Raw.definition().unwrap().detect)(data) =>
+        {
+            None
+        }
         _ if classified.is_raw() => Some(raw_format()),
         _ => None,
     }

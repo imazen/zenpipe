@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 749 lines (supported surface) | zencodecs.features.txt 32 added (features: jxl-encode,cms) | zencodecs.internal.txt 15 lines (15 hidden + 0 excluded-feature)
+# files: zencodecs.txt 768 lines (supported surface) | zencodecs.features.txt 83 added (features: all,jp2-decode,metadata) | zencodecs.internal.txt 17 lines (17 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                21
-#   pub types (struct/enum/trait/alias)        57
+#   pub modules                                22
+#   pub types (struct/enum/trait/alias)        59
 #   pub consts/statics                         10
-#   free functions                             37
+#   free functions                             39
 #   inherent methods                          264
-#   struct fields                             126
-#   enum variants                             115
-#   re-exports                                119
-#   trait roster entries (type × trait)        96
+#   struct fields                             128
+#   enum variants                             119
+#   re-exports                                127
+#   trait roster entries (type × trait)       102
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                  23
+#   auto-trait-complete types                  24
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          329
+#   (root)                          334
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -32,15 +32,16 @@
 #   estimate                         16
 #   gainmap                           4
 #   intent                           32
+#   inventory                        10
 #   pixel                             8
 #   policy                           33
 #   quality                          54
 #   select                           21
 #   speed                            17
 #   trace                            48
-#   transcode                        50
+#   transcode                        54
 
-## items (715 lines)
+## items (733 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -270,6 +271,17 @@ pub intent::PerCodecHints::png: alloc::collections::btree::map::BTreeMap<alloc::
 pub intent::PerCodecHints::webp: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub fn intent::PerCodecHints::for_format(&self, zencodec::format::ImageFormat) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub fn intent::PerCodecHints::is_empty(&self) -> bool
+pub mod inventory
+pub use inventory::Disposition
+pub use inventory::Inventory
+pub use inventory::InventoryError
+pub use inventory::MetadataKind
+pub use inventory::Part
+pub use inventory::PartId
+pub use inventory::PartKind
+pub use inventory::PartTag
+pub fn inventory::inventory(&[u8], &AllowedFormats) -> Result<core::option::Option<zencodec::inventory::Inventory>>
+pub fn inventory::inventory_format(&[u8], zencodec::format::ImageFormat, core::option::Option<&zencodec::limits::ResourceLimits>) -> Result<core::option::Option<zencodec::inventory::Inventory>>
 pub mod pixel
 pub use pixel::Bgra
 pub use pixel::Gray
@@ -403,12 +415,15 @@ pub fn transcode::QualityTarget::score(self) -> f32
 pub transcode::SupplementPolicy::Only(transcode::SupplementSet)
 pub transcode::SupplementPolicy::Preserve
 pub transcode::SupplementPolicy::Strip
+pub transcode::TranscodeColor::Preserve
+pub transcode::TranscodeColor::Srgb8
 pub const transcode::SupplementSet::DEPTH_MAP: Self
 pub const transcode::SupplementSet::GAIN_MAP: Self
 pub const transcode::SupplementSet::THUMBNAIL: Self
 pub fn transcode::SupplementSet::contains(self, Self) -> bool
 pub fn transcode::SupplementSet::is_empty(self) -> bool
 pub fn transcode::SupplementSet::union(self, Self) -> Self
+pub transcode::TranscodeOptions::color: transcode::TranscodeColor
 pub transcode::TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub transcode::TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub transcode::TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
@@ -512,6 +527,9 @@ pub enum SupplementPolicy [also: transcode]
 pub SupplementPolicy::Only(transcode::SupplementSet)
 pub SupplementPolicy::Preserve
 pub SupplementPolicy::Strip
+#[non_exhaustive] pub enum TranscodeColor [also: transcode]
+pub TranscodeColor::Preserve
+pub TranscodeColor::Srgb8
 pub struct AllowedFormats
 pub fn AllowedFormats::all() -> Self
 pub fn AllowedFormats::can_decode(&self, zencodec::format::ImageFormat) -> bool
@@ -707,6 +725,7 @@ pub fn transcode::SupplementSet::contains(self, Self) -> bool
 pub fn transcode::SupplementSet::is_empty(self) -> bool
 pub fn transcode::SupplementSet::union(self, Self) -> Self
 pub struct TranscodeOptions [also: transcode]
+pub TranscodeOptions::color: transcode::TranscodeColor
 pub TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
@@ -758,7 +777,7 @@ pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::Qua
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
 pub type TranscodeWriter<'a> = alloc::boxed::Box<(dyn core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a)> [also: transcode]
 
-## trait impls (26 types)
+## trait impls (27 types)
 
 AllowedFormats: Clone, Copy, Debug, Default
 CodecError: Debug, Display, Error
@@ -782,6 +801,7 @@ trace::SelectionTrace: Clone, Debug, Default, Display
 transcode::QualityTarget: Clone, Copy, Debug, PartialEq
 transcode::SupplementPolicy: Clone, Copy, Debug, Default
 transcode::SupplementSet: BitOr, Clone, Copy, Debug, Eq, PartialEq
+transcode::TranscodeColor: Clone, Copy, Debug, Default, Eq, PartialEq
 transcode::TranscodeOptions: Clone, Debug, Default
 transcode::TranscodeOutput: Clone, Debug
 transcode::TranscodeSink<'_>: zencodec::sink::DecodeRowSink
@@ -790,7 +810,7 @@ impl<C> AnyEncoder for C where C: zencodec::traits::encoding::EncoderConfig, <<C
 
 ## auto traits
 
-23 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+24 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 EncodeRequest<'a>: !RefUnwindSafe !UnwindSafe

@@ -345,11 +345,20 @@ fn codecs() -> Vec<Support> {
 // ───────────────────────── encode/decode harness ─────────────────────────
 
 fn encode(c: &Support, meta: Metadata) -> Result<Vec<u8>, String> {
+    encode_with(c, meta, false)
+}
+
+/// `strict` sets `EncodePolicy::strict`: a colour description the target can
+/// only approximate fails instead of being fitted.
+fn encode_with(c: &Support, meta: Metadata, strict: bool) -> Result<Vec<u8>, String> {
     let rgb = rgb8_image(64, 48);
     let rgba = rgba8_image(64, 48);
-    let req = EncodeRequest::new(c.fmt)
+    let mut req = EncodeRequest::new(c.fmt)
         .with_quality(90.0)
         .with_metadata(meta);
+    if strict {
+        req = req.with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true));
+    }
     let out = if c.needs_rgba {
         let s: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(rgba.as_ref());
         req.encode(s.erase(), false)
@@ -507,21 +516,25 @@ fn icc_present_for_reencoding_codecs() {
     }
 }
 
-/// Codecs declaring `NotCarried` for ICC must report no profile.
+/// A codec without a color-profile carrier fits the description before
+/// encoding (`color_fit`): a profile that describes no colour space is dropped
+/// with the pixels unchanged, and `EncodePolicy::strict` refuses that instead.
+/// The output never claims a profile.
 #[test]
-fn icc_absent_when_not_carried() {
+fn gif_drops_unresolved_icc_unless_strict_and_emits_no_profile() {
     for c in codecs() {
-        if c.icc == Icc::NotCarried {
-            let icc = synthetic_icc(256);
-            let got = round_trip(&c, Metadata::none().with_icc(icc))
-                .info()
-                .source_color
-                .icc_profile
-                .is_some();
+        if c.fmt == ImageFormat::Gif {
+            let meta = Metadata::none().with_icc(synthetic_icc(256));
+            let bytes = encode(&c, meta.clone()).expect("default policy drops the profile");
+            let out = decode(&bytes).expect("decode");
+            assert!(out.info().source_color.icc_profile.is_none());
+            assert!(encode_with(&c, meta, true).is_err());
             assert!(
-                !got,
-                "[{}] declares no ICC carrier but a profile survived; update the table",
-                c.name
+                round_trip(&c, Metadata::none())
+                    .info()
+                    .source_color
+                    .icc_profile
+                    .is_none()
             );
         }
     }
@@ -632,9 +645,9 @@ fn transcode_forward(
         if let Some(x) = &m.xmp {
             fwd = fwd.with_xmp(x.clone());
         }
-        if let Some(icc) = &info.source_color.icc_profile {
-            fwd = fwd.with_icc(icc.clone());
-        }
+        // This helper re-encodes the fixed sRGB fixture, not the decoded pixels.
+        // Carry only the descriptive metadata under test. Actual pixel/color
+        // transcodes, including an ICC source into GIF, are in transcode_color.rs.
         fwd
     };
     // Re-encode the decoded pixels, as a real transcode does: a rotation the
@@ -746,9 +759,9 @@ fn clean_baseline_emits_no_exif_or_xmp() {
     }
 }
 
-/// A fully-populated `Metadata` of *valid* fields must never break encode or
-/// decode — including for containers with no metadata carriers (GIF), which
-/// must silently drop what they can't represent rather than erroring.
+/// Valid descriptive metadata must not break encode/decode. A format without
+/// a colour carrier (GIF) has its description fitted first (`color_fit`), so
+/// the encode succeeds there too.
 ///
 /// A valid ICC profile is included only under `cms` (it needs a real sRGB
 /// profile from moxcms). The synthetic ICC used elsewhere is intentionally
@@ -767,8 +780,9 @@ fn full_metadata_never_breaks_round_trip() {
         {
             meta = meta.with_icc(zencodecs::cms::srgb_icc_profile());
         }
-        let bytes = encode(&c, meta)
-            .unwrap_or_else(|e| panic!("[{}] full-metadata encode must not error: {e}", c.name));
+        let bytes = encode(&c, meta).unwrap_or_else(|e| {
+            panic!("[{}] supported metadata encode must not error: {e}", c.name)
+        });
         let out = decode(&bytes)
             .unwrap_or_else(|e| panic!("[{}] full-metadata decode must not error: {e}", c.name));
         // The Rotate90 in the metadata is baked: 64x48 comes back 48x64.

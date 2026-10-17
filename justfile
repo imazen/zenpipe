@@ -72,15 +72,15 @@ clippy:
 # is never built or run by plain `cargo test` or any CI job.
 fmt:
     cargo fmt --all
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC=check ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-12 cargo test --manifest-path apidoc/Cargo.toml
 
 # Check formatting
 fmt-check:
@@ -139,3 +139,80 @@ arm-codec-integration-audit:
 # Explicitly opt into real AVIF corpus tests; retain per-test output.
 arm-avif-corpus-audit:
     CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test corpus -- --ignored avif --show-output
+
+# Shared contracts through codec-owned rewriting; retains the original scrub cases.
+metadata-dispatch-check:
+    cargo test -p zencodecs --no-default-features --features metadata,jpeg-ultrahdr,jxl-encode,jxl-decode,png --test metadata_scrub
+    cargo check -p zencodecs --no-default-features --features metadata
+    cargo clippy -p zencodecs --no-default-features --features metadata,jpeg-ultrahdr,jxl-encode,jxl-decode,png --lib -- -D warnings
+
+metadata-services-check:
+    cargo test --manifest-path tools/metadata-services/Cargo.toml
+    cargo check --manifest-path tools/metadata-services/Cargo.toml --features cli
+
+# Validate the complete remote codec graph and optional AV1 backends.
+metadata-codec-graph-check:
+    cargo check -p zencodecs --features all,metadata,tiff,pdf-decode,avif-svt,avif-aom
+
+metadata-inventory-dispatch-check:
+    cargo test -p zencodecs --no-default-features --features inventory,jpeg,png,webp,gif,avif-encode,avif-decode,jxl-encode,jxl-decode --lib inventory::tests
+    cargo check -p zencodecs-cli
+
+metadata-final-api-check:
+    cargo test -p zencodecs --features inventory,pdf-decode --test pdf pdf_inventory_dispatches_to_zenpdf
+    cargo clippy -p zencodecs --features inventory,metadata --lib -- -D warnings
+    cargo fmt -p zencodecs -p zencodecs-cli --check
+    python3 scripts/check-decoder-pins.py
+    just api-doc
+
+metadata-consumer-regression-check:
+    cargo test -p zenfilters --lib
+    cargo check --manifest-path demo/crate/Cargo.toml
+    cargo check --manifest-path zencodecs/fuzz/Cargo.toml --bin fuzz_metadata_scrub
+    actionlint .github/workflows/ci.yml .github/workflows/demo-deploy.yml
+
+# Match the SIMD feature configuration exercised by workspace CI.
+metadata-filter-ci-check:
+    cargo test -p zenfilters --lib
+    cargo clippy -p zenfilters --all-targets -- -D warnings
+    cargo check -p zenfilters --target aarch64-unknown-linux-gnu
+    cargo fmt -p zenfilters --check
+
+metadata-gif-consumer-check:
+    cargo test -p zencodecs --test gif_capability
+    cargo test -p zencodecs --lib animation
+    cargo clippy -p zencodecs --lib -- -D warnings
+
+metadata-codec-ci-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets
+
+metadata-pin-check:
+    python3 scripts/check-decoder-pins.py --self-test
+    python3 scripts/check-decoder-pins.py
+
+# Finite all-pairs catalog; ZEN_CODEC_MATRIX_REPORT optionally saves TSV output.
+codec-operation-matrix:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode --test operation_matrix -- --nocapture
+
+# Caller enables independent readers; missing programs fail the test.
+codec-operation-matrix-oracles:
+    ZEN_CODEC_MATRIX_MAGICK=magick ZEN_CODEC_MATRIX_DJXL=djxl just codec-operation-matrix
+
+codec-operation-matrix-inventory:
+    cargo test -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- --nocapture
+
+codec-operation-matrix-check:
+    just codec-operation-matrix
+    cargo clippy -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- -D warnings
+    cargo clippy -p zenfilters --target aarch64-unknown-linux-gnu --all-targets -- -D warnings
+
+metadata-resolve-locks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for manifest in demo/crate/Cargo.toml fuzz/Cargo.toml tools/metadata-services/Cargo.toml zencodecs/fuzz/Cargo.toml; do
+        cargo metadata --manifest-path "$manifest" --format-version 1 > /dev/null
+    done
+    just metadata-pin-check
+
+metadata-arm-clippy:
+    cargo clippy -p zenfilters --target aarch64-unknown-linux-gnu --all-targets -- -D warnings

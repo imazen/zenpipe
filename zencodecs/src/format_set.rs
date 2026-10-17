@@ -73,6 +73,7 @@ impl FormatSet {
             ImageFormat::Dng => Some(1 << 17),
             ImageFormat::Raw => Some(1 << 18),
             ImageFormat::Svg => Some(1 << 19),
+            ImageFormat::Jp2 => Some(1 << 20),
             // Not representable — see the type docs. `Unknown` and `Custom`
             // are spelled out so adding an upstream variant is a visible gap
             // in review rather than an invisible fall-through.
@@ -83,7 +84,7 @@ impl FormatSet {
 
     /// Every named format, in bit order. Keep in sync with [`bit`](Self::bit) —
     /// `all_named_formats_are_representable` fails if an entry has no bit.
-    const ALL_FORMATS: [ImageFormat; 20] = [
+    const ALL_FORMATS: [ImageFormat; 21] = [
         ImageFormat::Jpeg,
         ImageFormat::WebP,
         ImageFormat::Gif,
@@ -104,6 +105,7 @@ impl FormatSet {
         ImageFormat::Dng,
         ImageFormat::Raw,
         ImageFormat::Svg,
+        ImageFormat::Jp2,
     ];
 
     /// All known (named) formats.
@@ -256,8 +258,8 @@ mod tests {
             assert!(FormatSet::all().contains(f), "all() excludes {f:?}");
             assert_eq!(FormatSet::EMPTY.with(f).len(), 1, "{f:?} bit collides");
         }
-        // Bits must be distinct: 20 formats -> 20 set bits.
-        assert_eq!(FormatSet::all().len(), 20);
+        // Bits must be distinct: 21 formats -> 21 set bits.
+        assert_eq!(FormatSet::all().len(), 21);
     }
 
     /// The formats that regressed: wired codecs (`codecs/{qoi,tga,hdr}.rs`)

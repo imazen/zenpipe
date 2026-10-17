@@ -1002,6 +1002,19 @@ Three crates.io requirements block a newer release and were left alone on purpos
 ### [Unreleased]
 
 #### Added
+- A finite operation catalog generates every ordered pair for registered still
+  encoder configurations, including three AVIF backends. It checks fidelity
+  preference selection and actual lossless samples, padded RGB rows, independent
+  readers, and enabled/disabled inventory with typed input-limit errors.
+
+#### Fixed
+- Forward explicit JXL lossless requests on both one-shot and streaming paths.
+- Include QOI/TGA in the compiled runtime allowlist.
+- Use the shared RAW signature detector to keep ordinary TIFF on the TIFF path
+  when RAW decoding is enabled. Explicit RAW requests remain available.
+
+
+#### Added
 
 - **`--lossless-if-cheaper [FACTOR]`** (#68): the last unchecked CLI item —
   encodes lossless and lossy, keeps lossless when it is at most FACTOR×
@@ -1070,6 +1083,11 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixed
+
+- Use token-suffixed SIMD constructors in the generic ARM path, preserving
+  arithmetic while satisfying warnings-as-errors Clippy on ARM targets.
+
 #### Changed
 
 - **sRGB/linear-RGB passthrough scatter is 1.6–2.1× faster on x86-64.** The deinterleave
@@ -1129,6 +1147,35 @@ Three crates.io requirements block a newer release and were left alone on purpos
 ## zencodecs
 
 ### [Unreleased]
+
+#### Added
+
+- Executable operation matrix across 15 configurations and all 675 ordered RGB8
+  routes, checked fidelity selection, inventory enabled/disabled, independent
+  readers, distinct animation frames, typed timing refusals, and structural
+  prefix oracles. Scope and unexecuted axes: `zencodecs/docs/operation-matrix.md`.
+
+#### Fixed
+
+- Forward lossless requests through both JXL convenience encoder builders.
+- Include QOI, TGA and Radiance HDR in compiled runtime format allowlists.
+- Share core RAW signature discrimination so enabling RAW does not claim plain TIFF.
+- Align consumer codec pins, including AVIF quantization/fidelity fixes and
+  WebP/PNG typed-error cause preservation; resolve each standalone lockfile.
+
+#### QUEUED BREAKING CHANGES
+
+- No released metadata API break is introduced by this extraction: the scrub API is unreleased. Its shared result types now belong to zencodec. The unreleased PNG/JXL scrub routes require their codec features, matching JPEG.
+
+#### Metadata integration
+
+- Reuse the inventory dispatch and CLI from PR 89. The default-enabled `inventory` feature weakly enables walkers only for selected codecs; direct codec users retain default-off walkers. Convenience dispatch preserves its proposed `Option` result for unavailable support, while codec jobs retain typed unsupported errors.
+- Add optional `avif-svt` and `avif-aom` feature forwarding for the native AVIF backends.
+
+- Move JPEG, PNG/APNG and JXL container planners to their codec crates; zencodecs retains a thin dispatcher and reexports zencodec request result/service types. Standalone codec users need neither zencodecs nor zenpipe.
+- Delegate gain-map retention to zenmeta without exposing zenmeta types in this API. Optional application services retain timeout reasons as well as cancellation.
+- Preserve the original scrub test assertions under the corresponding codec features; verify the combined path and the metadata-only build without codecs.
+
 
 #### Changed
 
