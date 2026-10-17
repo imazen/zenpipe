@@ -214,14 +214,27 @@ fn external_rgb(format: ImageFormat, data: &[u8]) -> Result<Option<Vec<u8>>, Str
     let (kind, input) = if format == ImageFormat::Jxl {
         let djxl = std::env::var_os("ZEN_CODEC_MATRIX_DJXL")
             .ok_or("set ZEN_CODEC_MATRIX_DJXL for JXL oracle")?;
-        (
-            "pnm:-",
-            run(
-                &djxl,
-                &["-", "-", "--output_format", "ppm", "--quiet"],
-                data,
-            )?,
+        // Files, not pipes: older djxl releases (Ubuntu's libjxl-tools) take
+        // neither stdin/stdout nor `--output_format`; all infer PPM from the
+        // output extension.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+        let input = dir.join(format!("oracle-{}-{n}.jxl", std::process::id()));
+        let output = input.with_extension("ppm");
+        std::fs::write(&input, data).map_err(|e| e.to_string())?;
+        let decoded = run(
+            &djxl,
+            &[
+                input.to_str().ok_or("non-UTF-8 temp path")?,
+                output.to_str().ok_or("non-UTF-8 temp path")?,
+            ],
+            &[],
         )
+        .and_then(|_| std::fs::read(&output).map_err(|e| e.to_string()));
+        let _ = std::fs::remove_file(&input);
+        let _ = std::fs::remove_file(&output);
+        ("pnm:-", decoded?)
     } else {
         let kind = match format {
             ImageFormat::Jpeg => "jpeg:-",
