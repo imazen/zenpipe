@@ -165,3 +165,50 @@ fn a_format_that_carries_the_description_keeps_pixels_and_description() {
         "PNG keeps a P3 description: {color:?}"
     );
 }
+
+fn strict() -> zencodec::encode::EncodePolicy {
+    zencodec::encode::EncodePolicy::none().with_strict(true)
+}
+
+#[test]
+fn strict_refuses_a_fit_that_loses_colour() {
+    let px = pixels();
+    let junk: Vec<u8> = (0..256u32).map(|i| (i * 31) as u8).collect();
+    for meta in [
+        Metadata::none().with_cicp(Cicp::DISPLAY_P3),
+        Metadata::none().with_icc(junk),
+    ] {
+        let err = EncodeRequest::new(ImageFormat::Pnm)
+            .with_metadata(meta.clone())
+            .with_encode_policy(strict())
+            .encode(slice(&px), false)
+            .expect_err("strict must refuse");
+        assert!(format!("{err}").contains("strict"), "{err}");
+        let err = EncodeRequest::new(ImageFormat::Pnm)
+            .with_metadata(meta)
+            .with_encode_policy(strict())
+            .build_streaming_encoder(W, H)
+            .err()
+            .expect("strict must refuse the streaming encoder too");
+        assert!(format!("{err}").contains("strict"), "{err}");
+    }
+}
+
+#[test]
+fn strict_allows_fits_that_lose_nothing() {
+    let px = pixels();
+    // sRGB into a format without a carrier: dropping it loses nothing.
+    let bytes = EncodeRequest::new(ImageFormat::Pnm)
+        .with_metadata(Metadata::none().with_cicp(Cicp::SRGB))
+        .with_encode_policy(strict())
+        .encode(slice(&px), false)
+        .unwrap()
+        .into_vec();
+    assert_eq!(decoded_rgb(&bytes), px);
+    // P3 into a format that carries it.
+    EncodeRequest::new(ImageFormat::Png)
+        .with_metadata(Metadata::none().with_cicp(Cicp::DISPLAY_P3))
+        .with_encode_policy(strict())
+        .encode(slice(&px), false)
+        .unwrap();
+}

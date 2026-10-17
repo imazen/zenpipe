@@ -87,12 +87,19 @@ where
             };
             // Fit the colour description to what this format carries,
             // converting the pixels when it can't carry theirs.
-            let (metadata, converted) = match crate::color_fit::plan(
+            let strict = params
+                .encode_policy
+                .is_some_and(|p| p.resolve_strict(false));
+            let fit = crate::color_fit::plan(
                 upright.as_ref(),
                 <C as zencodec::encode::EncoderConfig>::capabilities(),
-            ) {
+            )
+            .check_strict(strict)
+            .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
+            let (metadata, converted) = match fit {
                 crate::color_fit::ColorFit::Keep => (upright.clone(), None),
-                crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
+                crate::color_fit::ColorFit::Metadata(m)
+                | crate::color_fit::ColorFit::Dropped(m) => (Some(m), None),
                 crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
                     let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
                         at!(CodecError::InvalidInput(alloc::format!(
@@ -350,12 +357,25 @@ where
     let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
     // Fit the colour description to what this format carries; the pixels
     // are converted strip by strip when it can't carry theirs.
-    let (metadata, convert_from) = match crate::color_fit::plan(
+    let strict = params
+        .encode_policy
+        .is_some_and(|p| p.resolve_strict(false));
+    let fit = crate::color_fit::plan(
         upright.as_ref(),
         <C as zencodec::encode::EncoderConfig>::capabilities(),
-    ) {
+    )
+    .check_strict(strict)
+    .map_err(|detail| {
+        at!(CodecError::UnsupportedOperation {
+            format: C::format(),
+            detail
+        })
+    })?;
+    let (metadata, convert_from) = match fit {
         crate::color_fit::ColorFit::Keep => (upright.clone(), None),
-        crate::color_fit::ColorFit::Metadata(m) => (Some(m), None),
+        crate::color_fit::ColorFit::Metadata(m) | crate::color_fit::ColorFit::Dropped(m) => {
+            (Some(m), None)
+        }
         crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
             (Some(metadata), Some(from))
         }

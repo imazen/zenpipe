@@ -7,6 +7,12 @@ All notable changes to `zencodecs` are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- `EncodePolicy::strict` (zencodec) is honoured for colour: with
+  `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
+  whose target cannot carry the source colour description fails
+  (`UnsupportedOperation`) instead of converting the pixels to sRGB or
+  dropping a profile it cannot reproduce. Fits that lose nothing (an sRGB
+  description dropped, an ICC replaced by its CICP) still succeed.
 - `tests/transcode_matrix.rs`: every compiled-in format (opaque RGB8 and,
   where the format carries alpha, translucent RGBA8 sources) transcoded into
   every encodable format both one-shot and through `TranscodeSink`; outputs
