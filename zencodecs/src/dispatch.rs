@@ -139,7 +139,10 @@ where
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
             if let Some(meta) = metadata {
-                job = job.with_metadata_policy(meta, params.metadata_policy);
+                job = job.with_metadata_policy(
+                    crate::color_fit::exif_color_space(meta),
+                    params.metadata_policy,
+                );
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);
@@ -284,7 +287,10 @@ where
         }
         if let Some(m) = metadata {
             // Type-erased convenience path carries no policy; embed verbatim.
-            job = job.with_metadata_policy(m, zencodec::MetadataPolicy::PreserveExact);
+            job = job.with_metadata_policy(
+                crate::color_fit::exif_color_space(m),
+                zencodec::MetadataPolicy::PreserveExact,
+            );
         }
         if let Some(l) = limits {
             job = job.with_limits(crate::limits::to_resource_limits(l));
@@ -381,7 +387,10 @@ where
         }
     };
     if let Some(meta) = metadata {
-        job = job.with_metadata_policy(meta, params.metadata_policy);
+        job = job.with_metadata_policy(
+            crate::color_fit::exif_color_space(meta),
+            params.metadata_policy,
+        );
     }
     if let Some(ep) = params.encode_policy {
         job = job.with_policy(ep);

@@ -1120,6 +1120,12 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **EXIF ColorSpace follows the colour written:** `1` only when the encode
+  writes sRGB, `0xFFFF` otherwise, rewritten in place when the tag is present
+  (`color_fit::exif_color_space`, via `zencodec::helpers::set_exif_color_space`).
+  Readers that consult it treat `1` as sRGB whatever ICC is embedded
+  (imazen/zencodec#132). Test: `tests/exif_color_space.rs`.
+
 - Builds warning-free against zenpixels 0.2.17: `zenpixels::hdr::ContentLightLevel`
   instead of the deprecated root alias, and `transcode-iqa`'s use of zensim
   profile A (deprecated, but the thresholds are calibrated on it) is allowed
