@@ -162,6 +162,10 @@ pub mod riapi_parse;
 mod row_contract;
 pub mod select;
 pub mod speed;
+#[cfg(feature = "tonemap")]
+mod tonemap;
+#[cfg(feature = "tonemap")]
+pub use tonemap::ToneMapPolicy;
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]
