@@ -4831,6 +4831,7 @@ dependencies = [
  "zensim-regress",
  "zensvg",
  "zentiff",
+ "zentone",
  "zenwebp",
 ]
 
