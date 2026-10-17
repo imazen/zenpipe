@@ -8,21 +8,8 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Changed
-- Extend the existing dependency pin guard to zencodec/zenmeta, JPEG, GIF and
-  pixel/color crates. Standalone consumer locks must share the tested revisions.
-- Pin public-API snapshot generation to nightly-2026-10-12 locally and in CI.
-  Regenerated differences are derived Eq helpers, standard-library Arc paths
-  and Self spelling; this toolchain change adds no crate API.
-- Pin zengif `4f88c49b` to retain the existing ICC-rejection contract in
-  still and animation encoding. Explicit sRGB CICP remains accepted after
-  conversion; original GIF capability and exact transcode-pixel assertions pass.
-- Update zenfilters SIMD constructor calls to magetypes 0.9.30 token-suffixed
-  methods, retaining arithmetic and fixing workspace warnings-as-errors CI.
-- Advance JPEG metadata integration to `7cf22c68`: preserve default embedded
-  MPF compatibility, synchronize EXIF/policy/inventory handling, and reconstruct
-  ISO/aliased-XMP HDR with correct color. Complete legacy single-chunk ICC
-  profiles remain readable by default, with strict validation still available. The coordinated zenpixels pin includes
-  the independently checked real-world Display P3 ICC recognition fix.
+- zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
+- zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
 - Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
 - CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
 
@@ -45,6 +32,24 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   The feature builds and all 4 of its tests pass; see the Fixed entry
   below for the `zenanalyze-api` resolution failure that blocked it at
   the time this entry was first written, and what it actually was.
+
+#### Fixed (deadline → codec requests, 2026-09-27)
+
+- **The `ImageJob` deadline now reaches `DecodeRequest`/`EncodeRequest`, not
+  just the strip loop.** `execute_with_stop` already polled between strips and
+  `transcode_animated_nodes` between frames, but every `zencodecs` request was
+  built without a stop token — so a single codec call (a slow AV1 frame, a JXL
+  container decode, a one-shot encode) ran uncancellable until it returned,
+  however far past the deadline that took. `deadline()` is now attached via
+  `DecodeRequest::with_stop`/`EncodeRequest::with_stop` on all eight request
+  sites: streaming decode, full-frame decode fallback, HDR reconstruction,
+  gain-map extraction, streaming encode, one-shot encode fallback, and both
+  animation decode + encode inside `transcode_animated_nodes` (whose `stop`
+  parameter changed from `Option<&dyn enough::Stop>` to
+  `Option<zencodec::StopToken>` so the owned token can be cloned into both
+  requests while the pipeline loop keeps its borrowed per-frame check). A
+  regression test asserts an expired deadline surfaces as the codec's own
+  "operation cancelled" rather than the strip loop's `PipeError::Cancelled`.
 
 #### Fixed (dependency unification, 2026-09-04)
 
@@ -717,6 +722,18 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Added
+- **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
+  `begin(width, height)` declares the image to the encoder and returns its
+  `OutputTiming`; `with_writer(..)` receives every byte as soon as the encoder
+  has it (after each strip, the rest at `finish`, `take_output` then empty);
+  `pending_output()` / `consume_output()` for callers that drain themselves,
+  and `take_pending_output(&mut vec)`, which hands over the encoder's buffer
+  when `vec` is empty (zencodec `take_output`; named apart from the existing
+  `take_output()`, which returns the finished output).
+  A pipeline can now feed an HTTP response or upload while it runs
+  (`tests/streaming_output.rs`).
+
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
 - **The sink's own pass is 23–29 % faster** with byte-identical output
@@ -1068,6 +1085,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Changed
 
+- **sRGB/linear-RGB passthrough scatter is 1.6–2.1× faster on x86-64.** The deinterleave
+  loops in `scatter_srgb_passthrough` are `#[autoversion(v3, neon, wasm128)]`, so the AVX2
+  build runs instead of the SSE2 baseline (a 349k-pixel RGB strip: 111.5 → 61.8 µs on Zen 5;
+  `benchmarks/scatter_passthrough_2026-10-17.txt`). No new dependency; supersedes #32's
+  garb route, which compiled the same loop the same way. Pixels unchanged
+  (`srgb_passthrough_matches_index_loop`). Not measured on aarch64, where NEON is baseline.
+
 - **`quality_validation` vs libvips re-measured on a second machine**
   (zenpipe#44): with Homebrew libvips 8.18.6 on macOS arm64 and the CID22
   corpus, all 21 corpus + vips tests pass; `saturation_boost_vs_vips`
@@ -1149,6 +1173,55 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 
 #### Changed
+
+- **EXIF ColorSpace follows the colour written:** `1` only when the encode
+  writes sRGB, `0xFFFF` otherwise, rewritten in place when the tag is present
+  (`color_fit::exif_color_space`, via `zencodec::helpers::set_exif_color_space`).
+  Readers that consult it treat `1` as sRGB whatever ICC is embedded
+  (imazen/zencodec#132). Test: `tests/exif_color_space.rs`.
+
+- Builds warning-free against zenpixels 0.2.17: `zenpixels::hdr::ContentLightLevel`
+  instead of the deprecated root alias, and `transcode-iqa`'s use of zensim
+  profile A (deprecated, but the thresholds are calibrated on it) is allowed
+  explicitly. `tests/color_adapt.rs` reads a decoded file's colour from the
+  buffer's attached context (matrix 0 for RGB), not `source_color`'s coded
+  YUV matrix, which zenpixels 0.2.17 rightly refuses as a current context.
+
+- **A pixel-format conversion that changes the colour space re-describes
+  the pixels.** When the encoder can't take the input's pixel format and the
+  one it can take has other primaries or another transfer (linear f32 or u16
+  into an 8/16-bit sRGB format, Display P3 into an sRGB-only format), the
+  encode converts from the colour the metadata describes to that format's
+  colour space and writes the matching CICP, dropping an ICC profile that no
+  longer applies (`color_fit::fit_to_supported`). Before, the caller's ICC or
+  CICP was written next to converted pixels, and formats with no colour
+  carrier converted twice (linear off by up to 70 of 255, P3 by 10). The
+  one-shot encoder now negotiates the pixel format after fitting the colour
+  (the closure in `build_from_config`), and `AnyEncoder::encode_pixels` fits
+  too. Streaming encodes are not covered: the encoder sees strips the
+  caller already adapted. `tests/color_adapt.rs` checks 36 lossless cells
+  (4 sources x PNG, AVIF, JXL, WebP, PNM, BMP, farbfeld, QOI, TGA) by
+  decoding each file by its own description; 19 failed before.
+- `transcode-iqa` builds against zensim 0.3: it enables zensim's
+  `deprecated-profiles` feature, which now gates profile A (the profile the
+  transcode-to-quality thresholds are calibrated on).
+- **JXL and AVIF honour `with_lossless(true)`.** Their builders dropped the
+  flag and encoded lossy; it now reaches the codec after quality.
+
+- **Re-encodes write upright pixels and orientation 1.** A non-identity
+  `Metadata::orientation` (or EXIF Orientation tag) is applied to the
+  pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming
+  (buffered and rotated at finish) and animation (canvas rotated, each
+  frame rotated on push). The field is written as `Identity` and the tag
+  rewritten to 1, and so is an XMP `tiff:Orientation` (same-length rewrite). Governed by the reader-compatibility matrix
+  (imazen/zencodec#132): no browser applies WebP EXIF orientation; WIC,
+  ImageMagick and WebKit on Linux ignore PNG `eXIf`; WIC's and ImageIO's
+  default decodes and `sips` ignore JPEG EXIF orientation; HEIF `imir`
+  reads opposite ways across editions. Replaces folding the field into
+  EXIF (`fold_orientation_into_exif`, removed) and AVIF `irot`/`imir`.
+  `transcode` no longer rotates twice: the probe metadata takes the
+  decoded orientation. Tests that expected the tag or `irot` to survive
+  now expect rotated dimensions and `Identity`.
 
 - **Metadata conformance: AVIF CICP re-verified, `cicp` split into two
   strengths** (zenpipe#36 gap 3): with zenavif git-main (11033c95)

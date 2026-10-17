@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail if coordinated codec/metadata git deps float, disagree, or sit dead.
+"""Fail if this repo's AVIF-decoder git deps float, disagree, or sit dead.
 
 WHY THIS EXISTS
 ---------------
@@ -74,20 +74,13 @@ from pathlib import Path
 # in this repo names it: it is selected transitively by whichever zenavif rev is
 # pinned. It IS checked in lockfiles, which is where its rev becomes visible.
 EXPECTED = {
-    "https://github.com/imazen/zencodec": "4fda439133d465246174b55f62426dc54ef204dd",
-    "https://github.com/imazen/zenjpeg": "4448f42eccb033e70eabbc87c47eac9b15d4da54",
-    "https://github.com/imazen/zenpixels": "c6ca855703e08378d84ee48d86bed1fc792a96fd",
-    "https://github.com/imazen/zengif": "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004",
-    "https://github.com/imazen/zenavif": "728baa30c78972a1eac70f9203411b6e778c029f",
+    "https://github.com/imazen/zenavif": "5e493d39bb0b1e60e79ef755d0734e5bc30313ac",
     "https://github.com/imazen/rav1d-safe": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
 }
 
 # Packages that come from those repos, for lockfile checking. `zenavif-serialize`
 # lives in its own archived repo and is pinned separately, so it is not here.
-TRACKED_PACKAGES = {
-    "zenavif", "zenavif-parse", "rav1d-safe", "zencodec", "zenmeta",
-    "zenjpeg", "zenpixels", "zenpixels-convert", "zengif",
-}
+TRACKED_PACKAGES = {"zenavif", "zenavif-parse", "rav1d-safe"}
 
 SKIP_DIRS = {"target", ".git", ".jj", "node_modules", ".github"}
 
@@ -460,24 +453,6 @@ _CASES = [
         False,
     ),
 ]
-
-
-for package, repository in [
-    ("zencodec", "zencodec"), ("zenmeta", "zencodec"),
-    ("zenjpeg", "zenjpeg"), ("zenpixels", "zenpixels"),
-    ("zenpixels-convert", "zenpixels"), ("zengif", "zengif"),
-]:
-    url = f"https://github.com/imazen/{repository}"
-    revision = EXPECTED[url]
-    manifest = _CLEAN_MANIFEST.replace("zenavif", package).replace(
-        f"https://github.com/imazen/{package}", url
-    ).replace(GOOD_AVIF, revision)
-    lock = f'[[package]]\nname = "{package}"\nversion = "0.1.0"\nsource = "git+{url}?rev={revision}#{revision}"\n'
-    _CASES.extend([
-        (f"{package}: aligned metadata graph", manifest, lock, False),
-        (f"{package}: divergent consumer lock", manifest, lock.replace(revision, "0" * 40), True),
-        (f"{package}: registry fallback", manifest, lock.replace(f"git+{url}?rev={revision}#{revision}", "registry+https://github.com/rust-lang/crates.io-index"), True),
-    ])
 
 
 def self_test(workdir: Path) -> int:

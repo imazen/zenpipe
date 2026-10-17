@@ -398,8 +398,8 @@ impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreaming
 ///
 /// Not all codecs support streaming decode with owned data. Codecs that
 /// require borrowed data (JPEG, PNG) or don't support row-level decode at
-/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF, AVIF,
-/// and HEIC support this path.
+/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF and AVIF
+/// support this path.
 pub(crate) fn dyn_streaming_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,
@@ -588,7 +588,10 @@ pub(crate) fn dyn_animation_frame_encoder(
                 job = job.with_limits(to_resource_limits(lim));
             }
             if let Some(meta) = params.metadata {
-                job = job.with_metadata_policy(meta, params.metadata_policy);
+                job = job.with_metadata_policy(
+                    crate::color_fit::exif_color_space(meta),
+                    params.metadata_policy,
+                );
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);

@@ -329,6 +329,12 @@ pub fn synthesize_icc_from_cicp(cicp: zencodec::Cicp) -> Option<Vec<u8>> {
 /// Returns `Some((src_icc, dst_icc))` when a transform is needed, or `None`
 /// when the source is already sRGB (no transform needed).
 ///
+/// When both an ICC profile and CICP are present, the decoder's
+/// [`color_authority`](zencodec::decode::SourceColor::color_authority) decides
+/// which one describes the pixels: a PNG's cICP outranks its iCCP (PNG 3rd
+/// edition §4.3), as Chromium, Firefox, ImageIO and zen's decode do
+/// (reader-compatibility matrix, imazen/zencodec#132).
+///
 /// For PNG sources, also checks gAMA/cHRM/cICP chunks if no ICC profile is
 /// embedded.
 pub fn srgb_transform_icc(
@@ -337,6 +343,19 @@ pub fn srgb_transform_icc(
     mode: CmsMode,
 ) -> Option<(Vec<u8>, Vec<u8>)> {
     let dst_icc = srgb_icc_profile();
+
+    // 0. CICP declared authoritative over an ICC that is also present.
+    if source_color.color_authority == zencodec::ColorAuthority::Cicp
+        && let Some(cicp_val) = source_color.cicp
+    {
+        if cicp_val.color_primaries == 1 && cicp_val.transfer_characteristics == 13 {
+            return None; // sRGB via CICP
+        }
+        if let Some(src_icc) = synthesize_icc_from_cicp(cicp_val) {
+            return Some((src_icc, dst_icc));
+        }
+        // A CICP no profile can be built for: fall back to the ICC.
+    }
 
     // 1. Try embedded ICC profile.
     if let Some(icc) = &source_color.icc_profile
@@ -429,6 +448,39 @@ pub fn png_srgb_transform_icc_ex(data: &[u8], honor_gama_only: bool) -> Option<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A PNG whose cICP (Display P3) and iCCP (Adobe RGB) disagree converts
+    /// from the cICP, as PNG-3 §4.3 orders and zen's decode reports through
+    /// the colour authority; with ICC authority the ICC is used.
+    #[test]
+    fn cicp_authority_outranks_a_disagreeing_icc() {
+        use zencodec::{Cicp, ColorAuthority};
+        let adobe = zenpixels_convert::icc_profiles::ADOBE_RGB.to_vec();
+        let both = zencodec::decode::SourceColor::default()
+            .with_cicp(Cicp::DISPLAY_P3)
+            .with_icc_profile(adobe.clone());
+        let (src, _) = srgb_transform_icc(
+            &both.clone().with_color_authority(ColorAuthority::Cicp),
+            None,
+            CmsMode::SceneReferred,
+        )
+        .expect("P3 needs a transform");
+        assert_eq!(src, synthesize_icc_from_cicp(Cicp::DISPLAY_P3).unwrap());
+        assert_ne!(src, adobe);
+        let (src, _) = srgb_transform_icc(
+            &both.with_color_authority(ColorAuthority::Icc),
+            None,
+            CmsMode::SceneReferred,
+        )
+        .expect("Adobe RGB needs a transform");
+        assert_eq!(src, adobe);
+        // A CICP authority that says sRGB needs no transform, whatever the ICC.
+        let srgb = zencodec::decode::SourceColor::default()
+            .with_cicp(Cicp::SRGB)
+            .with_icc_profile(zenpixels_convert::icc_profiles::ADOBE_RGB.to_vec())
+            .with_color_authority(ColorAuthority::Cicp);
+        assert!(srgb_transform_icc(&srgb, None, CmsMode::SceneReferred).is_none());
+    }
 
     #[test]
     fn srgb_icc_profile_is_valid() {

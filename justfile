@@ -192,18 +192,18 @@ metadata-pin-check:
 
 # Finite all-pairs catalog; ZEN_CODEC_MATRIX_REPORT optionally saves TSV output.
 codec-operation-matrix:
-    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom --test operation_matrix -- --nocapture
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode --test operation_matrix -- --nocapture
 
 # Caller enables independent readers; missing programs fail the test.
 codec-operation-matrix-oracles:
     ZEN_CODEC_MATRIX_MAGICK=magick ZEN_CODEC_MATRIX_DJXL=djxl just codec-operation-matrix
 
 codec-operation-matrix-inventory:
-    cargo test -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom,heic-decode,raw-decode --test operation_matrix -- --nocapture
+    cargo test -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- --nocapture
 
 codec-operation-matrix-check:
     just codec-operation-matrix
-    cargo clippy -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom,heic-decode,raw-decode --test operation_matrix -- -D warnings
+    cargo clippy -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- -D warnings
     cargo clippy -p zenfilters --target aarch64-unknown-linux-gnu --all-targets -- -D warnings
 
 metadata-resolve-locks:

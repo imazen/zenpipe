@@ -32,7 +32,7 @@
 //!
 //! # Everything here is imazen-native
 //!
-//! zencodecs decode (jpeg/heic/png/avif/jxl, gain maps, cICP) -> zenresize
+//! zencodecs decode (jpeg/png/avif/jxl, gain maps, cICP) -> zenresize
 //! linear-light resample -> zencodecs PNG encode carrying cICP through. No
 //! foreign imaging library, and in particular no cICP-splicing post-pass: the
 //! 2026-06 HDR renderer needed one because it went through the `image` crate.
@@ -117,8 +117,8 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
 
     // Reconcile the descriptor with the source's own colour before doing
     // anything with it. A decoder can hand back pixels whose descriptor says
-    // BT.709 while the container's cICP says Display-P3 -- measured on the
-    // corpus HEICs -- and then the resample linearizes with one story while the
+    // BT.709 while the container's cICP says Display-P3 -- measured on corpus
+    // stills -- and then the resample linearizes with one story while the
     // file gets written with the other. The container is the authority on what
     // the colour IS, so it wins here and descriptor and tag agree from this
     // point on.

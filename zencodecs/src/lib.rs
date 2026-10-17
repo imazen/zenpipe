@@ -124,6 +124,7 @@ pub mod cms;
 pub mod codec_id;
 mod codecs;
 pub mod color;
+mod color_fit;
 pub mod config;
 pub mod decision;
 mod decode;
@@ -141,6 +142,7 @@ mod limits;
 mod macros;
 #[cfg(feature = "metadata")]
 pub mod metadata;
+mod orient_fit;
 #[cfg(feature = "picker")]
 pub mod picker;
 pub mod pixel;
@@ -195,7 +197,7 @@ pub use select::{FormatPicker, select_format_from_intent, select_format_from_int
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeColor, TranscodeOptions, TranscodeOutput,
-    TranscodeSink,
+    TranscodeSink, TranscodeWriter,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;

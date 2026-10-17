@@ -50,8 +50,8 @@ pub enum CodecId {
     /// jxl-encoder encoder
     JxlEncoderEncode,
 
-    // HEIC
-    /// heic decoder
+    // Container stills
+    /// container-stills decoder
     HeicDecode,
 
     // RAW/DNG

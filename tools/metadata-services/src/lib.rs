@@ -30,7 +30,16 @@ const RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
 /// Inspection can still show unsupported packets using zenmeta::audit.
 fn preflight(xml: &str, limit: usize) -> Result<(), Error> {
     if xml.len() > limit {
-        return Err(Error::Limit("XMP bytes"));
+        return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
+    }
+    // roxmltree recurses once per open element before the depth check below
+    // can run; zenmeta bounds nesting before parsing. Only its budget verdict
+    // is used here; the editor-specific checks follow.
+    if matches!(
+        zenmeta::xmp::Packet::parse(xml),
+        Err(zenmeta::xmp::Error::Limit)
+    ) {
+        return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
     }
     let doc = roxmltree::Document::parse_with_options(
         xml,
@@ -57,7 +66,7 @@ fn preflight(xml: &str, limit: usize) -> Result<(), Error> {
     }
     for n in doc.descendants().filter(|n| n.is_element()) {
         if n.ancestors().take(66).count() > 65 {
-            return Err(Error::Limit("XMP depth"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
         }
         for ns in n.namespaces() {
             if let Some(old) = bindings.insert(ns.name(), ns.uri())
@@ -219,7 +228,7 @@ impl Services for PublishingServices {
     ) -> Result<Option<Vec<u8>>, Error> {
         stop.check().map_err(stop_error)?;
         if icc.len() > limit {
-            return Err(Error::Limit("ICC bytes"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
         }
         // The application owns conversion policy; no CMS dependency enters zencodecs.
         // This bounded profile copy is explicit and never touches image pixels.
@@ -254,7 +263,7 @@ impl Services for PublishingServices {
         stop: &dyn Stop,
     ) -> Result<Vec<u8>, Error> {
         if data.len() > limit {
-            return Err(Error::Limit("metadata compression input"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
         }
         stop.check().map_err(stop_error)?;
         // PNG ICC is the only compression producer in the current rewrite API.
@@ -291,7 +300,7 @@ fn read_bounded(mut reader: impl Read, limit: usize, stop: &dyn Stop) -> Result<
             return Ok(out);
         }
         if n > limit - out.len() {
-            return Err(Error::Limit("expanded metadata"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
         }
         out.try_reserve(n).map_err(|_| Error::Allocation)?;
         out.extend_from_slice(&buf[..n]);
@@ -308,7 +317,9 @@ impl Write for BoundedWriter<'_> {
             .check()
             .map_err(|reason| std::io::Error::other(stop_error(reason)))?;
         if b.len() > self.limit - self.bytes.len() {
-            return Err(std::io::Error::other(Error::Limit("metadata output")));
+            return Err(std::io::Error::other(Error::Limit(
+                zencodec::LimitKind::MetadataRewriteSize,
+            )));
         }
         self.bytes
             .try_reserve(b.len())
@@ -555,7 +566,7 @@ fn check_brotli_window(data: &[u8], limit: usize) -> Result<(), Error> {
         }
     };
     if (1usize << bits) > limit.clamp(65536, 4 << 20) {
-        return Err(Error::Limit("Brotli history window"));
+        return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
     }
     Ok(())
 }
@@ -578,7 +589,7 @@ fn inflate_zlib(data: &[u8], limit: usize, stop: &dyn Stop) -> Result<Vec<u8>, E
             .map_err(|_| Error::Malformed("zlib metadata"))?;
         let n = (decoder.total_out() - before_out) as usize;
         if n > limit - out.len() {
-            return Err(Error::Limit("expanded metadata"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataSize));
         }
         out.try_reserve(n).map_err(|_| Error::Allocation)?;
         out.extend_from_slice(&buf[..n]);

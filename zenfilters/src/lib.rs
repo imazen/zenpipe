@@ -117,6 +117,12 @@ mod simd;
 pub mod __bench_kernels {
     use zenpixels_convert::gamut::GamutMatrix;
 
+    pub fn deinterleave3(src: &[f32], r: &mut [f32], g: &mut [f32], b: &mut [f32]) {
+        crate::scatter_gather::deinterleave3(src, r, g, b)
+    }
+    pub fn deinterleave4(src: &[f32], r: &mut [f32], g: &mut [f32], b: &mut [f32], a: &mut [f32]) {
+        crate::scatter_gather::deinterleave4(src, r, g, b, a)
+    }
     pub fn scale_plane(p: &mut [f32], f: f32) {
         crate::simd::scale_plane(p, f)
     }

@@ -37,23 +37,6 @@ sources`.
 
 ## Known Bugs
 
-- Operation-matrix regressions (2026-10-14): the JXL convenience path discarded
-  lossless requests, QOI/TGA were absent from the runtime allowlist, and enabling
-  RAW captured ordinary TIFF. The matrix checks exact samples and independent
-  readers across registered routes; RAW auto-detection now shares the core
-  registry's distinguishing signatures. Explicit RAW format selection remains
-  available for ambiguous files.
-
-- API snapshots differed between the old local tracking nightly and CI nightly.
-  `just api-doc` and CI now pin nightly-2026-10-12; changing that pin requires
-  reviewing generated compiler/standard-library spelling changes separately.
-
-- Metadata integration CI exposed deprecated SIMD constructors in zenfilters.
-  The token-suffixed 0.9.30 calls preserve operations; validate both native and
-  aarch64 builds with `just metadata-filter-ci-check`.
-
-- Metadata service callback regression (2026-10-12): compression and XML writers erased a one-shot timeout as a generic service error. The I/O adapters now preserve the typed cause; `writer_callbacks_preserve_one_shot_timeout_reasons` exercises every callback position in both paths.
-
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly
@@ -72,13 +55,11 @@ sources`.
     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
     --test corpus -- --ignored avif
   ```
-- **The coordinated media dependency pin advances to `rav1d-safe dfd01e32`**
-  via `zenavif b777fa12`. The former aarch64 film-grain reservation blocker
-  **rav1d-safe#526** closed with **#527**, commit `83fa5d3edd5137f1b0b1d981625c0ba28ae79a49`,
-  an ancestor of this pin. Keep all root/demo/fuzz manifests and authoritative
-  locks consistent; the pin checker rejects drift. Re-run the corpus command
-  above for decoder changes; x86 validation does not replace the upstream ARM
-  conformance evidence.
+- **zenavif is pinned to main `5e493d39`** (rav1d-safe `dfd01e32`) since
+  2026-10-15. The earlier hold at `11033c95` / rav1d-safe `140f9145` was for
+  an aarch64 film-grain panic (rav1d-safe#526, closed 2026-09-06); the command
+  above passes at the new pin on aarch64. Keep every zenavif rev in the repo
+  equal (`just check-pins`), and re-run the command when moving it.
 
 Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
 original list — animation per-frame routing, matte flatten, the two-engine
@@ -98,7 +79,7 @@ threading, hdr directives, compat security. Verified remaining:
   calibrated scale; exact native units plus the non-decision params
   (progressive, subsampling, quant tables, sharp_yuv, …) need per-codec
   `CodecConfig` boxes wired from encode nodes (zencodecs `config.rs` has
-  jpeg/webp/gif/png/avif boxes; JXL/TIFF/HEIC boxes don't exist yet).
+  jpeg/webp/gif/png/avif boxes; JXL/TIFF boxes don't exist yet).
 - **`AllocationTracker` is API-only by decision**: superseded by the
   orchestrate estimate gate + codec-level `ResourceLimits`; scheduled for
   removal in the pre-0.1 public-API sweep rather than wiring a duplicate

@@ -18,7 +18,6 @@ Legend: **✓** working + tested / **○** working but no test / **-** stub / **
 | GIF | ✓ | 8 | × | × | × | × | × | × | × | × |
 | AVIF | ✓ | 8 / 10 / 12 (U16 buffer) | ✓ | ✓ | ✓ | ✓ | ✓ (tmap AV1 OBU) | - (auxl stub) | ✓ (CICP carries) | ✓ (Rec.2020 via CICP) |
 | JXL | ✓ | 8 / 10 / 12 / f32 | ✓ | ✓ | ✓ | ✓ | ✓ (jhgm — **inverse** direction) | × | ✓ | ✓ (Rec.2020 / P3) |
-| HEIC | - | - | - | - | - | - | - | - (stub) | - | - |
 | RAW/DNG | ✓ | 16 / f32 | ✓ | × (DNG color matrices) | ✓ (DNG tags) | ✓ | ✓ (Apple ProRAW MPF) | × | × | ✓ (camera primaries) |
 | TIFF | ○ | 16 | ○ | × | ○ | ○ | × | × | × | × |
 | BMP | ✓ | 8 / 16 | × | × | × | × | × | × | × | × |
@@ -35,7 +34,6 @@ Legend: **✓** working + tested / **○** working but no test / **-** stub / **
 | GIF | ✓ | 8 | × | × | × | × | × | × | × |
 | AVIF | ✓ | 8 (10/12 not surfaced) | ○ | ○ (auto colr box) | ○ | ○ | **✓** `encode_with_precomputed_gainmap` (tmap) | - (8-bit only via trait) | ○ (via CICP) |
 | JXL | ✓ | 8 / HDR | ○ | ○ | ○ | ○ | **✓** `encode_with_precomputed_gainmap` (jhgm, inverse) | ✓ (HDR primary mode) | ○ |
-| HEIC | × | - | - | - | - | - | - | - | - |
 | RAW/DNG | × | × | × | × | × | × | × | × | × |
 | TIFF | ○ | 8 / 16 | ○ | × | ○ | ○ | × | × | × |
 | BMP | ✓ | 8 / 32 | × | × | × | × | × | × | × |
@@ -148,12 +146,6 @@ Already substantial coverage in `tests/ultrahdr.rs` (12 tests) and
 - Farbfeld 16-bit round-trip — verify bit depth preserved
 - All have no metadata; assert that any provided metadata is dropped without error
 
-### Tier 3 — HEIC (blocked, just stubs)
-
-#### `tests/heic_capability.rs`
-- All tests `#[ignore]` with a note explaining heic-decoder isn't cloned locally
-- Stub each capability so they activate when the feature lands
-
 ### Tier 4 — Cross-codec / pipeline-level (will fail today, document gaps)
 
 #### `tests/cross_codec_gainmap.rs`
@@ -217,4 +209,4 @@ Fixtures go in `tests/images/` (already exists for some codecs). New:
 - `tests/images/p3_gradient.jpg` — JPEG with Display-P3 ICC
 - `tests/images/rec2020_pq.avif` — synthetic AVIF Rec.2020 PQ
 - `tests/images/jxl_hdr_inverse.jxl` — JXL with jhgm gain map
-- `tests/images/iphone17_ampf.dng` — AMPF sample (already in /mnt/v/heic/)
+- `tests/images/iphone17_ampf.dng` — AMPF sample

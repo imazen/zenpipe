@@ -94,32 +94,40 @@ fn gif_no_icc_returned_after_round_trip() {
 }
 
 #[test]
-fn gif_metadata_with_icc_input_is_rejected() {
-    // GIF carries no color metadata, and silently dropping an ICC profile
-    // would mislabel the palette output as sRGB. The encoder rejects
-    // conflicting color metadata — callers resolve it first (transcode with
-    // TranscodeColor::Srgb8) or drop it explicitly via Metadata::none().
+fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
+    // GIF carries no colour metadata. zencodecs fits the description before
+    // the codec runs (`color_fit`): a profile that describes no colour space
+    // is dropped with the pixels unchanged, and under `EncodePolicy::strict`
+    // the encode refuses instead of dropping it.
     let img = rgba8_image(16, 16);
-    let icc = vec![0u8; 256];
-    let meta = Metadata::none().with_icc(icc);
+    let meta = Metadata::none().with_icc(vec![0u8; 256]);
 
     let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
-    let result = EncodeRequest::new(ImageFormat::Gif)
+    let bytes = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
-        .with_metadata(meta)
-        .encode(typed.erase(), true);
+        .with_metadata(meta.clone())
+        .encode(typed.erase(), true)
+        .expect("default policy drops an unusable profile")
+        .into_vec();
     assert!(
-        result.is_err(),
-        "GIF encoder must reject ICC metadata it cannot represent"
+        decode_full(&bytes)
+            .info()
+            .source_color
+            .icc_profile
+            .is_none(),
+        "GIF output must not claim an ICC profile"
     );
 
-    // The same pixels with the color metadata explicitly dropped must encode.
     let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
-    EncodeRequest::new(ImageFormat::Gif)
+    let strict = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
-        .with_metadata(Metadata::none())
-        .encode(typed.erase(), true)
-        .expect("GIF encode without color metadata");
+        .with_metadata(meta)
+        .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
+        .encode(typed.erase(), true);
+    assert!(
+        strict.is_err(),
+        "strict encode must refuse to drop a profile GIF cannot carry"
+    );
 }
 
 // ─── Negative gain map ───────────────────────────────────────────────────

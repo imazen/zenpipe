@@ -21,43 +21,45 @@ required-features = ["cli"]
 [dependencies]
 zencodecs = { path = "../../zencodecs", optional = true, default-features = false, features = ["std", "jpeg", "metadata"] }
 zencodec = { version = ">=0.1.26, <0.3.0" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd", default-features = false, features = ["xmp"] }
+zenmeta = { git = "https://github.com/imazen/zencodec", default-features = false, features = ["xmp"] }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 xmpkit = { version = "=0.1.6", default-features = false, features = ["core"] }
-roxmltree = { version = "0.21", default-features = false, features = ["positions"] }
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-brotli = "8"
-quick-xml = "0.38"
-enough = "0.4"
+roxmltree = { version = "0.21.1", default-features = false, features = ["positions"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+brotli = "8.0.4"
+quick-xml = "0.38.4"
+enough = "0.4.4"
 
+# Mirrors the workspace root table (cargo honours [patch] only from the
+# building workspace root; this harness is its own workspace).
 [patch.crates-io]
-zenflate = { git = "https://github.com/imazen/zenflate", rev = "43c10e3d04275dae8801802b63fb99176e94b70d" }
-zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
-zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4448f42eccb033e70eabbc87c47eac9b15d4da54" }
-heic = { git = "https://github.com/imazen/heic", rev = "83e8a85c83e0b7db806a6a55d2137e6edf1ea60d" }
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "e2148a30755ab690317939cca193574e1bcfbbc0" }
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "df4892fdc041a8e0dc27310de54bd1b028a4d9f3" }
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f27c5c6fb56b76c952d88aa7d5231a06f7e49b51" }
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "1ab08de1dbaf4e1c5b18ff5bf9b5d13f74e4be60" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "52acca5aac297e3781845a57396e581c4f44a6b0" }
+# The same git source as zenmeta, so its in-repo `zencodec` path dependency and
+# the registry requirement of every codec unify into one zencodec.
+zencodec = { git = "https://github.com/imazen/zencodec" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+heic = { git = "https://github.com/imazen/heic" }
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenpixels = { git = "https://github.com/imazen/zenpixels" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenpng = { git = "https://github.com/imazen/zenpng" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
-zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+zensim = { git = "https://github.com/imazen/zensim" }
+zensim-regress = { git = "https://github.com/imazen/zensim" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+zenpredict = { git = "https://github.com/imazen/zenanalyze" }
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "77e4840d5f17b10a3a4c6ad35bd56e7dceba5a4b" }
-zengif = { git = "https://github.com/imazen/zengif", rev = "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004" }
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "728baa30c78972a1eac70f9203411b6e778c029f" }
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "f8322a00db314f94f63fd0473c1845821d8987b3" }
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+zengif = { git = "https://github.com/imazen/zengif" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }

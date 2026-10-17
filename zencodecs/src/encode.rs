@@ -298,7 +298,7 @@ impl<'a> EncodeRequest<'a> {
 
     /// Emit an explicit color signal (cICP) that the pixel descriptor's
     /// color-space enum can't represent — e.g. a source color resolved from an
-    /// ICC profile (Apple HEIC's "unspecified nclx + ICC ⇒ Display P3"), which
+    /// ICC profile (unspecified-nclx + ICC ⇒ Display P3), which
     /// lives in `ImageInfo::source_color`, not the descriptor. Without this the
     /// encoder falls back to the descriptor's color space and a wide-gamut image
     /// re-encoded to PNG is silently mislabeled sRGB.
@@ -461,25 +461,33 @@ impl<'a> EncodeRequest<'a> {
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
 
-        crate::dyn_dispatch::dyn_animation_frame_encoder(
+        // Frames are written upright, like a still (`crate::orient_fit`):
+        // the canvas is the rotated one and each frame is rotated on push.
+        let (orientation, metadata) = crate::orient_fit::upright(self.metadata.as_ref());
+        let (canvas_width, canvas_height) = orientation.output_dimensions(width, height);
+        let inner = crate::dyn_dispatch::dyn_animation_frame_encoder(
             format,
             crate::dyn_dispatch::AnimEncodeParams {
                 quality: Some(resolved_quality),
                 effort,
                 lossless: self.lossless,
-                metadata: self
-                    .metadata
-                    .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+                metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: speed_limits.as_ref().or(self.limits),
                 stop: self.stop,
                 encode_policy: self.encode_policy,
-                canvas_width: width,
-                canvas_height: height,
+                canvas_width,
+                canvas_height,
                 loop_count: None,
             },
-        )
+        )?;
+        if orientation == zencodec::Orientation::Identity {
+            return Ok(inner);
+        }
+        Ok(alloc::boxed::Box::new(
+            crate::orient_fit::OrientedAnimationEncoder { inner, orientation },
+        ))
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -563,9 +571,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self
-                .metadata
-                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+            // Orientation is baked into the pixels downstream
+            // (`crate::orient_fit`), not folded into EXIF.
+            metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
@@ -871,9 +879,9 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
-            metadata: self
-                .metadata
-                .map(|m| crate::dispatch::fold_orientation_into_exif(m, format)),
+            // Orientation is baked into the pixels downstream
+            // (`crate::orient_fit`), not folded into EXIF.
+            metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits,
@@ -884,23 +892,22 @@ impl<'a> EncodeRequest<'a> {
 
         let built = crate::dispatch::build_encoder(format, params)?;
 
-        // Use zenpixels to negotiate the cheapest pixel format conversion.
-        // Returns Cow::Borrowed (zero-copy) when the input already matches
-        // one of the encoder's supported formats.
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        // The input as a pixel slice (zero-copy unless its stride isn't a
+        // whole number of pixels). The encoder negotiates the pixel format
+        // itself, after fitting the colour description to it.
+        let source = zenpixels_convert::adapt::adapt_for_encode_cow(
             data,
             descriptor,
             width,
             height,
             stride,
-            built.supported,
+            &[descriptor],
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(
-                "pixel format negotiation: {e}"
+                "pixel buffer: {e}"
             )))
         })?;
-        let pixel_slice = adapted.as_slice();
 
         // Check if we should embed a precomputed gain map
         #[cfg(feature = "jpeg-ultrahdr")]
@@ -931,6 +938,22 @@ impl<'a> EncodeRequest<'a> {
                     "gain-map metadata retention: {e}"
                 )))
             })?;
+            // Use zenpixels to negotiate the cheapest pixel format conversion.
+            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+                data,
+                descriptor,
+                width,
+                height,
+                stride,
+                built.supported,
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "pixel format negotiation: {e}"
+                )))
+            })?;
+            let pixel_slice = adapted.as_slice();
+
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
@@ -990,7 +1013,7 @@ impl<'a> EncodeRequest<'a> {
             }));
         }
 
-        (built.encoder)(pixel_slice)
+        (built.encoder)(source.as_slice())
     }
 }
 

@@ -77,7 +77,7 @@ zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 # Reached through zenjpeg (gain-map/UltraHDR types). Rev-pinned to 0.5.0 for
 # the same reason the repo-root table pins it: ultrahdr main is 0.6.0, and a
 # floating patch would stop satisfying the `^0.5` requirement on this edge.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "e2148a30755ab690317939cca193574e1bcfbbc0" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
 # zenpixels' sibling crate; registry 0.2.10 predates the zenpixels main that
 # `zenpixels = { path = ... }` below resolves to, so it has to move with it.
 # Path, matching that entry: a git source here pulls zenpixels through its own

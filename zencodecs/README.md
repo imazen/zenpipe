@@ -8,7 +8,6 @@ format-specific zen codecs:
 [zengif](https://github.com/imazen/zengif),
 [zenavif](https://github.com/imazen/zenavif),
 [zenjxl](https://github.com/imazen/zenjxl),
-[heic](https://github.com/imazen/heic),
 [zentiff](https://github.com/imazen/zentiff),
 [zenbitmaps](https://github.com/imazen/zenbitmaps),
 [zenraw](https://github.com/imazen/zenraw), and
@@ -200,7 +199,6 @@ Every codec is feature-gated. Enable only what you need:
 | `jxl-jpeg-reconstruct` | zenjxl-decoder | Yes | — | Lossless JXL→JPEG reconstruction (JBRD / brunsli-parity) |
 | `jpeg-jxl-transcode` | zenjxl | — | — | Lossless byte-exact JPEG→JXL transcode (+ reconstruct) |
 | `transcode-iqa` | zensim + zenjxl | — | — | Quality-targeted transcode (`transcode_to_quality`) |
-| `heic-decode` | heic | Yes | No | Pure-Rust HEIC/HEIF (base SDR + gain-map HDR) |
 | `tiff` | zentiff | Yes | Yes | |
 | `bitmaps` | zenbitmaps | Yes | Yes | PNM/PAM/PFM, BMP, farbfeld |
 | `bitmaps-bmp` | zenbitmaps | Yes | Yes | BMP only |
@@ -252,7 +250,7 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
 | Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
@@ -280,7 +278,6 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 [zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
 [jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
-[heic]: https://github.com/imazen/heic
 [zentiff]: https://github.com/imazen/zenextras
 [zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras

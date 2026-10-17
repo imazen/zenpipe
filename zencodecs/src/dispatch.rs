@@ -45,7 +45,11 @@ pub(crate) struct EncodeParams<'a> {
 /// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
 /// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
 /// orientation is *not* authoritative) are left alone.
-#[allow(deprecated)] // Preserve the published compatibility writer until core migration.
+///
+/// Only the precomputed gain-map path uses it: that path encodes the caller's
+/// pixels and gain map unrotated. Ordinary encodes bake orientation into the
+/// pixels instead (`crate::orient_fit`).
+#[cfg(feature = "jpeg-ultrahdr")]
 pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
     use zencodec::exif::{Exif, TextEncoding};
     if meta.orientation == zencodec::Orientation::Identity
@@ -60,14 +64,14 @@ pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) ->
         None => {
             let mut e = Exif::new(TextEncoding::Ascii);
             e.set_orientation(meta.orientation);
-            Some(e.to_bytes())
+            Some(zenmeta::exif::serialize(&e))
         }
         Some(blob) => match Exif::parse(blob) {
             // Tag present: the policy layer reconciles it to the field.
             Some(e) if e.orientation().is_some() => None,
             Some(mut e) => {
                 e.set_orientation(meta.orientation);
-                Some(e.to_bytes())
+                Some(zenmeta::exif::serialize(&e))
             }
             // Malformed blob: leave it to the codec's own handling.
             None => None,
@@ -85,6 +89,8 @@ pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOu
 /// A built encoder: a closure that encodes pixels + its supported descriptors.
 pub(crate) struct BuiltEncoder<'a> {
     pub encoder: EncodeFn<'a>,
+    /// Read only by the gain-map encodes; the closure negotiates its own.
+    #[cfg_attr(not(feature = "jpeg-ultrahdr"), allow(dead_code))]
     pub supported: &'static [PixelDescriptor],
 }
 
@@ -105,6 +111,75 @@ where
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
             use zencodec::encode::{EncodeJob as _, Encoder as _};
+            let format = C::format();
+            // Re-encodes write upright pixels and orientation 1.
+            let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+            let oriented = crate::orient_fit::orient(&pixels, orientation);
+            let pixels = match &oriented {
+                Some(b) => b.as_slice(),
+                None => pixels,
+            };
+            // A pixel-format change that changes the colour space converts
+            // from the described colour and re-describes the result.
+            let fitted = crate::color_fit::fit_to_supported(
+                &pixels,
+                upright.as_ref(),
+                C::supported_descriptors(),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "converting to a pixel format {format:?} accepts: {e}"
+                )))
+            })?;
+            let (pixels, upright) = match &fitted {
+                Some((b, m)) => (b.as_slice(), Some(m.clone())),
+                None => (pixels, upright),
+            };
+            // Fit the colour description to what this format carries,
+            // converting the pixels when it can't carry theirs.
+            let strict = params
+                .encode_policy
+                .is_some_and(|p| p.resolve_strict(false));
+            let fit = crate::color_fit::plan(
+                upright.as_ref(),
+                <C as zencodec::encode::EncoderConfig>::capabilities(),
+            )
+            .check_strict(strict)
+            .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
+            let (metadata, converted) = match fit {
+                crate::color_fit::ColorFit::Keep => (upright.clone(), None),
+                crate::color_fit::ColorFit::Metadata(m)
+                | crate::color_fit::ColorFit::Dropped(m) => (Some(m), None),
+                crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
+                    let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
+                        at!(CodecError::InvalidInput(alloc::format!(
+                            "converting to sRGB for {format:?}, which cannot carry the source colour: {e}"
+                        )))
+                    })?;
+                    (Some(metadata), Some(buf))
+                }
+            };
+            let pixels = match &converted {
+                Some(b) => b.as_slice(),
+                None => pixels,
+            };
+            // Negotiate the cheapest pixel format the encoder accepts;
+            // zero-copy when it already accepts these pixels.
+            let bytes = pixels.contiguous_bytes();
+            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+                &bytes,
+                pixels.descriptor(),
+                pixels.width(),
+                pixels.rows(),
+                pixels.descriptor().aligned_stride(pixels.width()),
+                C::supported_descriptors(),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "pixel format negotiation: {e}"
+                )))
+            })?;
+            let pixels = adapted.as_slice();
             let config = build_config(&params);
             let mut job = config.job();
             if let Some(s) = params.stop {
@@ -113,13 +188,15 @@ where
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
-            if let Some(meta) = params.metadata {
-                job = job.with_metadata_policy(meta, params.metadata_policy);
+            if let Some(meta) = metadata {
+                job = job.with_metadata_policy(
+                    crate::color_fit::exif_color_space(meta),
+                    params.metadata_policy,
+                );
             }
             if let Some(ep) = params.encode_policy {
                 job = job.with_policy(ep);
             }
-            let format = C::format();
             let enc = job
                 .encoder()
                 .map_err(|e| at!(CodecError::from_codec(format, e)))?;
@@ -212,6 +289,31 @@ where
     ) -> Result<EncodeOutput> {
         use zencodec::encode::{EncodeJob as _, Encoder as _};
 
+        // Re-encodes write upright pixels and orientation 1.
+        let (orientation, metadata) = crate::orient_fit::upright(metadata.as_ref());
+        let oriented = crate::orient_fit::orient(&pixels, orientation);
+        let pixels = match &oriented {
+            Some(b) => b.as_slice(),
+            None => pixels,
+        };
+        // A pixel-format change that changes the colour space converts from
+        // the described colour and re-describes the result.
+        let fitted = crate::color_fit::fit_to_supported(
+            &pixels,
+            metadata.as_ref(),
+            C::supported_descriptors(),
+        )
+        .map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "converting to a pixel format {:?} accepts: {e}",
+                C::format()
+            )))
+        })?;
+        let (pixels, metadata) = match &fitted {
+            Some((b, m)) => (b.as_slice(), Some(m.clone())),
+            None => (pixels, metadata),
+        };
+
         // Negotiate pixel format -- convert input to something the encoder supports
         let pixel_data = pixels.contiguous_bytes();
         let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
@@ -234,10 +336,11 @@ where
             job = job.with_stop(s);
         }
         if let Some(m) = metadata {
-            // Type-erased convenience path carries no policy; embed verbatim
-            // (PreserveExact also reconciles a stale EXIF orientation tag).
-            let m = fold_orientation_into_exif(m, C::format());
-            job = job.with_metadata_policy(m, zencodec::MetadataPolicy::PreserveExact);
+            // Type-erased convenience path carries no policy; embed verbatim.
+            job = job.with_metadata_policy(
+                crate::color_fit::exif_color_space(m),
+                zencodec::MetadataPolicy::PreserveExact,
+            );
         }
         if let Some(l) = limits {
             job = job.with_limits(crate::limits::to_resource_limits(l));
@@ -305,8 +408,39 @@ where
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
-    if let Some(meta) = params.metadata {
-        job = job.with_metadata_policy(meta, params.metadata_policy);
+    // Re-encodes write upright pixels and orientation 1; rows are collected
+    // and oriented at `finish` when a rotation or flip is needed.
+    let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+    // Fit the colour description to what this format carries; the pixels
+    // are converted strip by strip when it can't carry theirs.
+    let strict = params
+        .encode_policy
+        .is_some_and(|p| p.resolve_strict(false));
+    let fit = crate::color_fit::plan(
+        upright.as_ref(),
+        <C as zencodec::encode::EncoderConfig>::capabilities(),
+    )
+    .check_strict(strict)
+    .map_err(|detail| {
+        at!(CodecError::UnsupportedOperation {
+            format: C::format(),
+            detail
+        })
+    })?;
+    let (metadata, convert_from) = match fit {
+        crate::color_fit::ColorFit::Keep => (upright.clone(), None),
+        crate::color_fit::ColorFit::Metadata(m) | crate::color_fit::ColorFit::Dropped(m) => {
+            (Some(m), None)
+        }
+        crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
+            (Some(metadata), Some(from))
+        }
+    };
+    if let Some(meta) = metadata {
+        job = job.with_metadata_policy(
+            crate::color_fit::exif_color_space(meta),
+            params.metadata_policy,
+        );
     }
     if let Some(ep) = params.encode_policy {
         job = job.with_policy(ep);
@@ -315,11 +449,276 @@ where
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match convert_from {
+        Some(from) => Box::new(ColorConvertingEncoder {
+            inner: encoder,
+            from,
+        }),
+        None => encoder,
+    };
+    // A codec without row-level encode still streams its input: rows are
+    // collected and its one-shot encode runs at `finish`, so a streaming
+    // transcode gives the same bytes as the one-shot one.
+    // An orientation to apply needs the whole image, so it buffers too.
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
+        if orientation != zencodec::Orientation::Identity {
+            Box::new(BufferedRowEncoder::new(encoder).with_orientation(orientation))
+        } else if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
+            encoder
+        } else {
+            Box::new(BufferedRowEncoder::new(encoder))
+        };
     Ok(StreamingEncoder {
         encoder,
         supported: C::supported_descriptors(),
         format,
     })
+}
+
+/// Converts each strip to sRGB before the codec sees it, for a target that
+/// cannot carry the source colour (see `crate::color_fit`). The conversion is
+/// per pixel, so strip by strip gives what a whole-image conversion gives.
+struct ColorConvertingEncoder {
+    inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    from: crate::color_fit::Source,
+}
+
+impl ColorConvertingEncoder {
+    fn convert(
+        &self,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<zenpixels::PixelBuffer, zencodec::encode::BoxedError> {
+        crate::color_fit::convert_to_srgb(&pixels, &self.from).map_err(|e| e.into())
+    }
+}
+
+impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
+    fn preferred_strip_height(&self) -> u32 {
+        self.inner.preferred_strip_height()
+    }
+
+    fn encode(
+        self: Box<Self>,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let buf = self.convert(pixels)?;
+        self.inner.encode(buf.as_slice())
+    }
+
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &mut [u8],
+        _make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let pixels = PixelSlice::new(
+            data,
+            width,
+            height,
+            stride_pixels as usize * 4,
+            PixelDescriptor::RGBA8_SRGB,
+        )
+        .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        let buf = self.convert(pixels)?;
+        self.inner.encode(buf.as_slice())
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        // Declare the descriptor the converted strips will carry: convert
+        // one pixel through the same function.
+        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
+        let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        let target = self.convert(px)?.descriptor();
+        self.inner.begin(width, height, target)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.inner.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.inner.consume_output(n)
+    }
+
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.inner.take_output(into)
+    }
+
+    fn push_rows(
+        &mut self,
+        rows: PixelSlice<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        let buf = self.convert(rows)?;
+        self.inner.push_rows(buf.as_slice())
+    }
+
+    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.finish()
+    }
+
+    fn encode_from(
+        self: Box<Self>,
+        _source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        Err(
+            "encode_from is not available when the pixels need colour conversion; use push_rows"
+                .into(),
+        )
+    }
+}
+
+/// Row-level encode over a codec that only encodes whole images.
+///
+/// `begin` and `push_rows` collect tightly packed rows (allocated
+/// fallibly); `finish` hands them to the codec's one-shot `encode`. Output
+/// arrives at `finish` ([`OutputTiming::AT_FINISH`]).
+///
+/// [`OutputTiming::AT_FINISH`]: zencodec::encode::OutputTiming::AT_FINISH
+struct BufferedRowEncoder {
+    inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    /// Applied to the collected image at `finish` (re-encodes are written
+    /// upright; see `crate::orient_fit`).
+    orientation: zencodec::Orientation,
+    /// Width, declared height (if `begin` ran) and descriptor.
+    image: Option<(u32, Option<u32>, PixelDescriptor)>,
+    rows: alloc::vec::Vec<u8>,
+    filled: u32,
+}
+
+impl BufferedRowEncoder {
+    fn new(inner: Box<dyn zencodec::encode::DynEncoder + Send>) -> Self {
+        Self {
+            inner,
+            orientation: zencodec::Orientation::Identity,
+            image: None,
+            rows: alloc::vec::Vec::new(),
+            filled: 0,
+        }
+    }
+
+    fn with_orientation(mut self, orientation: zencodec::Orientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    fn row_bytes(
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> core::result::Result<usize, zencodec::encode::BoxedError> {
+        (width as usize)
+            .checked_mul(descriptor.bytes_per_pixel())
+            .ok_or_else(|| "row size overflows usize".into())
+    }
+}
+
+impl zencodec::encode::DynEncoder for BufferedRowEncoder {
+    fn preferred_strip_height(&self) -> u32 {
+        self.inner.preferred_strip_height()
+    }
+
+    fn encode(
+        self: Box<Self>,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.encode(pixels)
+    }
+
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &mut [u8],
+        make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner
+            .encode_srgba8(data, make_opaque, width, height, stride_pixels)
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        if self.image.is_some() {
+            return Err("begin after rows were pushed".into());
+        }
+        let total = Self::row_bytes(width, descriptor)?
+            .checked_mul(height as usize)
+            .ok_or("image size overflows usize")?;
+        self.rows
+            .try_reserve_exact(total)
+            .map_err(|_| -> zencodec::encode::BoxedError {
+                "row buffer allocation failed".into()
+            })?;
+        self.image = Some((width, Some(height), descriptor));
+        Ok(zencodec::encode::OutputTiming::AT_FINISH)
+    }
+
+    fn push_rows(
+        &mut self,
+        rows: PixelSlice<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        let (width, height, descriptor) =
+            *self
+                .image
+                .get_or_insert((rows.width(), None, rows.descriptor()));
+        if rows.width() != width || rows.descriptor() != descriptor {
+            return Err("rows differ in width or pixel format from the image".into());
+        }
+        let filled = self
+            .filled
+            .checked_add(rows.rows())
+            .ok_or("row count overflows u32")?;
+        if height.is_some_and(|h| filled > h) {
+            return Err("more rows than the declared height".into());
+        }
+        let row_bytes = Self::row_bytes(width, descriptor)?;
+        let add = row_bytes
+            .checked_mul(rows.rows() as usize)
+            .ok_or("strip size overflows usize")?;
+        self.rows
+            .try_reserve(add)
+            .map_err(|_| -> zencodec::encode::BoxedError {
+                "row buffer allocation failed".into()
+            })?;
+        for y in 0..rows.rows() {
+            self.rows.extend_from_slice(&rows.row(y)[..row_bytes]);
+        }
+        self.filled = filled;
+        Ok(())
+    }
+
+    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let this = *self;
+        let (width, height, descriptor) = this.image.ok_or("finish before any rows")?;
+        if height.is_some_and(|h| h != this.filled) {
+            return Err("fewer rows than the declared height".into());
+        }
+        let row_bytes = Self::row_bytes(width, descriptor)?;
+        let pixels = PixelSlice::new(&this.rows, width, this.filled, row_bytes, descriptor)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        match crate::orient_fit::orient(&pixels, this.orientation) {
+            Some(oriented) => this.inner.encode(oriented.as_slice()),
+            None => this.inner.encode(pixels),
+        }
+    }
+
+    fn encode_from(
+        self: Box<Self>,
+        source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.encode_from(source)
+    }
 }
 
 /// Build a streaming encoder for the specified format.
@@ -371,67 +770,5 @@ pub(crate) fn build_encoder<'a>(
         Tga => "bitmaps-tga" => Ok(crate::codecs::tga::build_trait_encoder(params)),
         Hdr => "bitmaps-hdr" => Ok(crate::codecs::hdr::build_trait_encoder(params));
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
-    }
-}
-
-#[cfg(test)]
-mod fold_tests {
-    use super::*;
-    use zencodec::Orientation;
-    use zencodec::exif::Exif;
-
-    fn tag_of(meta: &Metadata) -> Option<Orientation> {
-        meta.exif
-            .as_deref()
-            .and_then(Exif::parse)
-            .and_then(|e| e.orientation())
-    }
-
-    #[test]
-    fn authors_a_blob_when_none_exists() {
-        let m = Metadata::none().with_orientation(Orientation::Rotate90);
-        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
-        assert_eq!(tag_of(&out), Some(Orientation::Rotate90));
-        assert_eq!(out.orientation, Orientation::Rotate90);
-    }
-
-    #[test]
-    fn inserts_the_tag_into_a_blob_that_lacks_it_and_keeps_other_fields() {
-        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
-        e.set_copyright("(c) test");
-        let m = Metadata::none()
-            .with_exif(e.to_bytes())
-            .with_orientation(Orientation::Rotate270);
-        let out = fold_orientation_into_exif(m, ImageFormat::Png);
-        assert_eq!(tag_of(&out), Some(Orientation::Rotate270));
-        let parsed = Exif::parse(out.exif.as_deref().unwrap()).unwrap();
-        assert_eq!(parsed.copyright().as_deref(), Some("(c) test"));
-    }
-
-    #[test]
-    fn leaves_identity_native_carriers_and_existing_tags_alone() {
-        // Identity: nothing to emit.
-        let m = Metadata::none();
-        assert!(
-            fold_orientation_into_exif(m, ImageFormat::WebP)
-                .exif
-                .is_none()
-        );
-        // AVIF carries orientation natively (irot/imir) — no EXIF authored.
-        let m = Metadata::none().with_orientation(Orientation::Rotate90);
-        assert!(
-            fold_orientation_into_exif(m, ImageFormat::Avif)
-                .exif
-                .is_none()
-        );
-        // Existing tag: blob byte-identical (reconciliation is the policy's job).
-        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
-        e.set_orientation(Orientation::Rotate180);
-        let blob = e.to_bytes();
-        let m = Metadata::none()
-            .with_exif(blob.clone())
-            .with_orientation(Orientation::Rotate90);
-        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
-        assert_eq!(out.exif.as_deref(), Some(blob.as_slice()));
     }
 }

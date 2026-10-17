@@ -116,7 +116,7 @@ imageflow semantics cited from `imageflow_riapi/src/ir4/parsing.rs` (parse) and
 | `down.colorspace`, `up.colorspace` | independent down/up working spaces `srgb/linear/gamma` (`parsing.rs:531-532`) | ⚠️ both keys alias **one** param (`zennode_defs.rs:643`) — cannot set down≠up |
 | `decoder.min_precise_scaling_ratio` | IDCT/preshrink threshold, default 2.1 (`mod.rs:164`) | ❌ native (generic `decode` node's `min_size` param has no kv) · 🔁 compat parses it, but see §6 — the hints are dropped downstream |
 | `frame`/`page` | `SelectFrame` (`mod.rs:201-203`) | ✅ adapter (`zennode_defs.rs:1391-1398`) |
-| `jpeg.strictness`, `jpeg.orient`, `jpeg.max_megapixels`, `webp.upsampling`, `webp.dithering`, `jxl.orient`, `jxl.nits`, `heic.*` | — | ➕ per-codec decode knobs (querystring.md) |
+| `jpeg.strictness`, `jpeg.orient`, `jpeg.max_megapixels`, `webp.upsampling`, `webp.dithering`, `jxl.orient`, `jxl.nits` | — | ➕ per-codec decode knobs (querystring.md) |
 
 ### 3.4 Resize quality & sharpening
 
@@ -289,14 +289,14 @@ through per-frame pipelines (or refuse loudly) before parity is claimable.
 ## 7. Codec-level state relevant to parity (zencodecs @ this rev)
 
 - Wired: JPEG, PNG, WebP, GIF, AVIF (enc+dec), JXL (dec default, enc
-  feature-gated), TIFF, HEIC (dec), RAW/DNG (dec), PDF (dec, page 0), BMP/PNM/
+  feature-gated), TIFF, RAW/DNG (dec), PDF (dec, page 0), BMP/PNM/
   Farbfeld. Stubbed with `compile_error!`: QOI, TGA, HDR-radiance, SVG, JP2
   (`zencodecs/src/lib.rs:123-140`).
 - Animation encode dispatch: GIF, WebP, APNG only
   (`zencodecs/src/dyn_dispatch.rs:476-500`); AVIF animation types exist in
   zenavif but aren't dispatched.
 - `CodecConfig` native-config boxes exist for jpeg/webp/gif/png/avif(3 scalars)/
-  raw — **no JXL/TIFF/HEIC boxes**, and the TIFF adapter threads no knobs
+  raw — **no JXL/TIFF boxes**, and the TIFF adapter threads no knobs
   (`zencodecs/src/config.rs:116-169`, `codecs/tiff.rs`).
 - HDR `reconstruct_hdr` honored end-to-end only for JPEG today.
 - Metric-targeted encoding exists beneath the intent layer: zencodec
@@ -353,7 +353,7 @@ above maps to exactly one workstream.
   querystrings + v1 JSON jobs run through imageflow and zenpipe; assert
   geometry/canvas/format identically and pixels within threshold; wire into CI.
   Without this, every ⚠️ above stays "believed fixed."
-- **W10 — Codec option wiring (M).** JXL/TIFF/HEIC/AVIF-full `CodecConfig`
+- **W10 — Codec option wiring (M).** JXL/TIFF/AVIF-full `CodecConfig`
   boxes; TIFF adapter knobs; stub-format decisions (QOI/TGA/HDR at minimum —
   native configs already exist in zenbitmaps).
 

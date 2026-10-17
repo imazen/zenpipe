@@ -34,7 +34,7 @@ local-vips = ["local-fixtures"]
 local-darktable = ["local-fixtures"]
 
 [dependencies]
-archmage = { version = "0.9.29", features = ["avx512"] }
+archmage = { version = "0.9.30", features = ["avx512"] }
 enough = "0.4.4"
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
@@ -71,9 +71,9 @@ zenbench = { version = "0.1.10", features = ["criterion-compat"] }
 # DEV-only: lets benches/kernel_tiers.rs disable the baseline SIMD token (NEON
 # on aarch64) so the "scalar" arm is real rather than a second measurement of
 # the SIMD path. Feature unification applies this to test/bench builds only.
-archmage = { version = "0.9.29", features = ["testable_dispatch"] }
+archmage = { version = "0.9.30", features = ["testable_dispatch"] }
 libblur = { version = "0.24.0", default-features = true }
-zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
+zenresize = { version = "0.2.2", default-features = false, features = ["std"] }
 image = "0.25.9"
 codec-corpus = "1.1.0"
 
@@ -157,4 +157,8 @@ delete_sections = ["patch.crates-io"]
 
 [[bench]]
 name = "kernel_tiers"
+harness = false
+
+[[bench]]
+name = "scatter_passthrough"
 harness = false

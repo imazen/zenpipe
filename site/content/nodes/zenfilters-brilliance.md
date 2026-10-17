@@ -13,7 +13,7 @@ group = "detail"
 stage = "Filters"
 +++
 
-Adaptive local contrast based on local average luminance.  Unlike clarity, brilliance adjusts each pixel relative to its local average -- lifting shadows and compressing highlights selectively. Produces natural dynamic range compression similar to Apple's Brilliance slider.
+Adaptive local contrast based on local average luminance.  Unlike clarity, brilliance adjusts each pixel relative to its local average -- lifting shadows and compressing highlights selectively. Produces natural dynamic range compression similar to the Brilliance slider in Apple Photos.
 
 ## Parameters
 

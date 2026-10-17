@@ -57,6 +57,7 @@ mod jpeg {
         let mut exif = zencodec::exif::Exif::new(zencodec::exif::TextEncoding::Ascii);
         exif.set_orientation(zencodec::Orientation::Rotate90);
         exif.set_artist("SECRET-PERSON");
+        #[allow(deprecated)] // zenmeta (its replacement) is not a dev-dependency here
         let tiff = exif.to_bytes();
         let exif = if tiff.starts_with(b"Exif\0\0") {
             tiff

@@ -12,8 +12,10 @@
 //!   - ICC profile blob (byte-equal for verbatim embedders; present-after-decode
 //!     for re-encoding codecs like JXL)
 //!   - EXIF blob survival (`metadata().exif`)
-//!   - EXIF orientation tag → normalized `info.orientation`
-//!   - `Metadata::with_orientation` → emitted → normalized `info.orientation`
+//!   - EXIF orientation tag and `Metadata::with_orientation` → baked: the
+//!     encode writes upright pixels and orientation 1 (imazen/zencodec#132:
+//!     orientation metadata is ignored by too many readers), so the decode
+//!     reports `Identity` with the dimensions rotated
 //!   - XMP packet (marker preserved via `metadata().xmp`)
 //!   - CICP color signaling (`source_color.cicp` round-trip), in two
 //!     strengths: `cicp_color` (primaries + transfer + range — what the
@@ -206,9 +208,10 @@ struct Support {
     needs_rgba: bool,
     icc: Icc,
     exif_blob: V,
-    /// EXIF orientation tag resolves to a non-Identity `info.orientation`.
+    /// An EXIF orientation tag in the encode's metadata reaches the pixels:
+    /// the decode reports `Identity` with the dimensions rotated.
     orient_from_exif: V,
-    /// `Metadata::with_orientation` is emitted and resolves on decode.
+    /// `Metadata::with_orientation` reaches the pixels the same way.
     orient_from_field: V,
     xmp: V,
     /// Full `Cicp` equality (primaries, transfer, matrix, range).
@@ -219,13 +222,6 @@ struct Support {
 }
 
 // Recurring gap descriptions (each maps to a line item in GAP_TRACKING).
-// The orientation gaps now only apply to the cfg-gated JXL entry.
-#[cfg_attr(not(feature = "jxl-encode"), allow(dead_code))]
-const G_ORIENT_FIELD: &str = "Metadata::orientation not emitted to the format's carrier (AVIF irot does; \
-     JPEG/PNG/WebP fold it into EXIF since zenpipe#36 gap 1); JXL's codestream orientation is not written";
-#[cfg_attr(not(feature = "jxl-encode"), allow(dead_code))]
-const G_ORIENT_EXIF_NORM: &str = "carries the EXIF blob but does not normalize its orientation tag into info.orientation \
-     (JPEG/WebP/AVIF do)";
 #[cfg_attr(not(feature = "avif-encode"), allow(dead_code))]
 const G_CICP_MATRIX_CODEC_OWNED: &str = "Metadata::cicp primaries/transfer/range DO round-trip through the nclx colr box \
      (see cicp_color), but matrix_coefficients comes back as the matrix the codec coded with \
@@ -250,9 +246,7 @@ fn codecs() -> Vec<Support> {
         icc: Icc::ByteEqual,
         exif_blob: V::Ok,
         orient_from_exif: V::Ok,
-        // Promoted Gap → Ok (zenpipe#36 gap 1): zencodecs folds
-        // Metadata::orientation into the EXIF blob for EXIF-only carriers.
-        orient_from_field: V::Ok,
+        orient_from_field: V::Ok, // baked
         xmp: V::Ok,
         cicp: V::NotCarried, // JFIF/EXIF JPEG has no standard CICP carrier; color via ICC
         cicp_color: V::NotCarried,
@@ -268,8 +262,7 @@ fn codecs() -> Vec<Support> {
         // Promoted Gap → Ok 2026-06-11: zenpng now normalizes the eXIf
         // orientation tag into info.orientation on decode.
         orient_from_exif: V::Ok,
-        // Promoted Gap → Ok (zenpipe#36 gap 1): orientation folded into eXIf.
-        orient_from_field: V::Ok,
+        orient_from_field: V::Ok, // baked
         xmp: V::Ok,
         cicp: V::Ok, // cICP chunk
         cicp_color: V::Ok,
@@ -283,8 +276,7 @@ fn codecs() -> Vec<Support> {
         icc: Icc::ByteEqual,
         exif_blob: V::Ok,
         orient_from_exif: V::Ok,
-        // Promoted Gap → Ok (zenpipe#36 gap 1): orientation folded into EXIF.
-        orient_from_field: V::Ok,
+        orient_from_field: V::Ok, // baked
         xmp: V::Ok,
         cicp: V::NotCarried, // VP8X has no CICP; color via ICC
         cicp_color: V::NotCarried,
@@ -297,8 +289,10 @@ fn codecs() -> Vec<Support> {
         needs_rgba: true,
         icc: Icc::NotCarried,
         exif_blob: V::NotCarried,
-        orient_from_exif: V::NotCarried,
-        orient_from_field: V::NotCarried,
+        // No orientation carrier, but re-encodes bake orientation into the
+        // pixels, so it reaches them anyway.
+        orient_from_exif: V::Ok,
+        orient_from_field: V::Ok,
         xmp: V::NotCarried,
         cicp: V::NotCarried,
         cicp_color: V::NotCarried,
@@ -316,7 +310,7 @@ fn codecs() -> Vec<Support> {
         // `check` flagged the fix.
         exif_blob: V::Ok,
         orient_from_exif: V::Ok,
-        orient_from_field: V::Ok, // irot/imir
+        orient_from_field: V::Ok, // baked (no irot/imir written)
         xmp: V::Ok,
         // Verified 2026-08-28 (zenavif git-main 11033c95): Metadata::cicp
         // reaches the nclx colr box and comes back — primaries 12, transfer
@@ -333,8 +327,9 @@ fn codecs() -> Vec<Support> {
         needs_rgba: false,
         icc: Icc::PresentReencoded,
         exif_blob: V::Ok,
-        orient_from_exif: V::Gap(G_ORIENT_EXIF_NORM),
-        orient_from_field: V::Gap(G_ORIENT_FIELD),
+        // Baked, so the missing codestream orientation setter no longer matters.
+        orient_from_exif: V::Ok,
+        orient_from_field: V::Ok,
         xmp: V::Ok,
         // Metadata::cicp now drives the JXL codestream enum color encoding
         // (zencodec::resolve_color_emit under ColorPolicy::Balanced); a redundant
@@ -350,11 +345,20 @@ fn codecs() -> Vec<Support> {
 // ───────────────────────── encode/decode harness ─────────────────────────
 
 fn encode(c: &Support, meta: Metadata) -> Result<Vec<u8>, String> {
+    encode_with(c, meta, false)
+}
+
+/// `strict` sets `EncodePolicy::strict`: a colour description the target can
+/// only approximate fails instead of being fitted.
+fn encode_with(c: &Support, meta: Metadata, strict: bool) -> Result<Vec<u8>, String> {
     let rgb = rgb8_image(64, 48);
     let rgba = rgba8_image(64, 48);
-    let req = EncodeRequest::new(c.fmt)
+    let mut req = EncodeRequest::new(c.fmt)
         .with_quality(90.0)
         .with_metadata(meta);
+    if strict {
+        req = req.with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true));
+    }
     let out = if c.needs_rgba {
         let s: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(rgba.as_ref());
         req.encode(s.erase(), false)
@@ -400,15 +404,21 @@ fn obs_exif_blob(c: &Support) -> bool {
         .unwrap_or(false)
 }
 
+/// The rotation reached the pixels: orientation 1 and the 64x48 fixture
+/// rotated to 48x64.
+fn baked_rotate90(d: &zencodecs::DecodeOutput) -> bool {
+    d.info().orientation == Orientation::Identity && (d.info().width, d.info().height) == (48, 64)
+}
+
 fn obs_orient_from_exif(c: &Support) -> bool {
     try_round_trip(c, Metadata::none().with_exif(exif_with_orientation(6)))
-        .map(|d| d.info().orientation != Orientation::Identity)
+        .map(|d| baked_rotate90(&d))
         .unwrap_or(false)
 }
 
 fn obs_orient_from_field(c: &Support) -> bool {
     try_round_trip(c, Metadata::none().with_orientation(Orientation::Rotate90))
-        .map(|d| d.info().orientation == Orientation::Rotate90)
+        .map(|d| baked_rotate90(&d))
         .unwrap_or(false)
 }
 
@@ -506,13 +516,19 @@ fn icc_present_for_reencoding_codecs() {
     }
 }
 
-/// A codec without a color-profile carrier must reject unresolved ICC colors,
-/// rather than discard the description and silently label the samples sRGB.
+/// A codec without a color-profile carrier fits the description before
+/// encoding (`color_fit`): a profile that describes no colour space is dropped
+/// with the pixels unchanged, and `EncodePolicy::strict` refuses that instead.
+/// The output never claims a profile.
 #[test]
-fn gif_rejects_unresolved_icc_and_emits_no_profile_for_srgb() {
+fn gif_drops_unresolved_icc_unless_strict_and_emits_no_profile() {
     for c in codecs() {
         if c.fmt == ImageFormat::Gif {
-            assert!(encode(&c, Metadata::none().with_icc(synthetic_icc(256))).is_err());
+            let meta = Metadata::none().with_icc(synthetic_icc(256));
+            let bytes = encode(&c, meta.clone()).expect("default policy drops the profile");
+            let out = decode(&bytes).expect("decode");
+            assert!(out.info().source_color.icc_profile.is_none());
+            assert!(encode_with(&c, meta, true).is_err());
             assert!(
                 round_trip(&c, Metadata::none())
                     .info()
@@ -634,7 +650,15 @@ fn transcode_forward(
         // transcodes, including an ICC source into GIF, are in transcode_color.rs.
         fwd
     };
-    decode(&encode(dst, fwd).ok()?).ok()
+    // Re-encode the decoded pixels, as a real transcode does: a rotation the
+    // source encode baked is in them.
+    let bytes = EncodeRequest::new(dst.fmt)
+        .with_quality(90.0)
+        .with_metadata(fwd)
+        .encode(decoded.pixels(), decoded.has_alpha())
+        .ok()?
+        .into_vec();
+    decode(&bytes).ok()
 }
 
 /// Copyright must survive transcoding *between* any two EXIF-carrying codecs —
@@ -680,36 +704,13 @@ fn transcode_transfers_copyright_between_exif_codecs() {
     }
 }
 
-/// Predict whether `info.orientation == Rotate90` survives `src → dst`
-/// transcoding given [`transcode_forward`] carries *both* the normalized
-/// orientation field and the source's preserved EXIF blob.
-///
-/// The destination recovers orientation by either route:
-///   - **field route** — dst emits `Metadata::orientation` to its carrier and
-///     re-reads it (`orient_from_field`), and the source supplied a non-Identity
-///     field (it normalized the input EXIF: `orient_from_exif`).
-///   - **blob route** — the source kept the orientation-bearing EXIF blob
-///     (`exif_blob`) and dst *normalizes* an incoming orientation tag
-///     (`orient_from_exif`). Note dst need not *preserve* the blob — AVIF reads
-///     orientation from an incoming EXIF blob (`orient_from_exif == Ok`) yet
-///     drops the raw blob (`exif_blob == Gap`), and orientation still transfers.
-fn predict_orientation_transfer(src: &Support, dst: &Support) -> bool {
-    let src_field = src.orient_from_exif == V::Ok; // src.info.orientation is set
-    let src_blob = src.exif_blob == V::Ok; // orientation tag survives in forwarded blob
-    let via_field = dst.orient_from_field == V::Ok && src_field;
-    let via_blob = dst.orient_from_exif == V::Ok && src_blob;
-    via_field || via_blob
-}
-
-/// Full orientation-transfer matrix. For every ordered codec pair, transcoding
-/// an EXIF-orientation=6 image must preserve orientation exactly when
-/// [`predict_orientation_transfer`] says it should. This pins the real
-/// cross-codec behavior — orientation transfers between jpeg/png/webp/avif
-/// (blob and/or field routes) but is lost into jxl (carries the blob but
-/// doesn't normalize it, and the codestream orientation isn't written — see
-/// `G_ORIENT_EXIF_NORM` / `G_ORIENT_FIELD`).
+/// For every ordered codec pair, transcoding an EXIF-orientation=6 image
+/// keeps the rotation: the first encode bakes it into the pixels, so the
+/// final decode is upright (orientation 1) at the rotated size. Before
+/// re-encodes baked orientation this depended on which carriers each side
+/// honoured, and was lost into JXL.
 #[test]
-fn transcode_orientation_transfer_matches_carrier_support() {
+fn transcode_keeps_the_rotation_through_every_pair() {
     let all = codecs();
     for src in &all {
         for dst in &all {
@@ -722,14 +723,14 @@ fn transcode_orientation_transfer_matches_carrier_support() {
                 Metadata::none().with_exif(exif_with_orientation(6)),
             )
             .unwrap_or_else(|| panic!("[{}→{}] transcode failed", src.name, dst.name));
-            let preserved = out.info().orientation == Orientation::Rotate90;
-            assert_eq!(
-                preserved,
-                predict_orientation_transfer(src, dst),
-                "[{}→{}] orientation-transfer behavior changed — re-derive the verdict \
-                 table and predictor ({GAP_TRACKING})",
+            assert!(
+                baked_rotate90(&out),
+                "[{}→{}] rotation lost: {:?} {}x{}",
                 src.name,
                 dst.name,
+                out.info().orientation,
+                out.info().width,
+                out.info().height
             );
         }
     }
@@ -758,9 +759,9 @@ fn clean_baseline_emits_no_exif_or_xmp() {
     }
 }
 
-/// Valid descriptive metadata must not break encode/decode. Color signaling
-/// needs an actual carrier or conversion: GIF rejects the P3/ICC request, then
-/// accepts descriptive metadata on known sRGB pixels.
+/// Valid descriptive metadata must not break encode/decode. A format without
+/// a colour carrier (GIF) has its description fitted first (`color_fit`), so
+/// the encode succeeds there too.
 ///
 /// A valid ICC profile is included only under `cms` (it needs a real sRGB
 /// profile from moxcms). The synthetic ICC used elsewhere is intentionally
@@ -779,21 +780,14 @@ fn full_metadata_never_breaks_round_trip() {
         {
             meta = meta.with_icc(zencodecs::cms::srgb_icc_profile());
         }
-        if c.fmt == ImageFormat::Gif {
-            assert!(
-                encode(&c, meta.clone()).is_err(),
-                "GIF must not discard unresolved color"
-            );
-            meta.icc_profile = None;
-            meta.cicp = None;
-        }
         let bytes = encode(&c, meta).unwrap_or_else(|e| {
             panic!("[{}] supported metadata encode must not error: {e}", c.name)
         });
         let out = decode(&bytes)
             .unwrap_or_else(|e| panic!("[{}] full-metadata decode must not error: {e}", c.name));
-        assert_eq!(out.info().width, 64, "[{}] width preserved", c.name);
-        assert_eq!(out.info().height, 48, "[{}] height preserved", c.name);
+        // The Rotate90 in the metadata is baked: 64x48 comes back 48x64.
+        assert_eq!(out.info().width, 48, "[{}] width rotated", c.name);
+        assert_eq!(out.info().height, 64, "[{}] height rotated", c.name);
     }
 }
 

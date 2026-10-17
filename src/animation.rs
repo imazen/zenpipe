@@ -186,9 +186,14 @@ impl FrameSource {
                 }
 
                 self.y = 0;
+                // `duration_ms` is deprecated on zencodec main for exact
+                // `duration()`, which registry zencodec 0.1.26 lacks;
+                // `FrameInfo` and `push_frame` carry milliseconds today.
+                #[allow(deprecated)]
+                let duration_ms = owned.duration_ms();
                 self.frame_info = Some(FrameInfo {
                     index: owned.frame_index(),
-                    duration_ms: owned.duration_ms(),
+                    duration_ms,
                 });
             }
             None => {

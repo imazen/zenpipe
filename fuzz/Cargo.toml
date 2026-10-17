@@ -18,28 +18,29 @@ arbitrary = { version = "1", features = ["derive"] }
 zenpipe = { path = "..", features = ["job", "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif"] }
 zencodecs = { path = "../zencodecs", default-features = false }
 
-# Replicate the parent workspace's patch table so transitive deps
+# Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
-zenflate = { git = "https://github.com/imazen/zenflate", rev = "43c10e3d04275dae8801802b63fb99176e94b70d" }
-zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
-zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "4fda439133d465246174b55f62426dc54ef204dd" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4448f42eccb033e70eabbc87c47eac9b15d4da54" }
+# zencodec from the sibling clone (CI clones it; see fuzz.yml). Siblings pin
+# zencodec by git rev and bump it on their own schedule, so a rev here goes
+# stale; patching the registry AND the git source to one path keeps a single
+# zencodec whatever they pin.
+zencodec = { path = "../../zencodec" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
 # manifest for the full rationale.
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "df4892fdc041a8e0dc27310de54bd1b028a4d9f3" }
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f27c5c6fb56b76c952d88aa7d5231a06f7e49b51" }
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "1ab08de1dbaf4e1c5b18ff5bf9b5d13f74e4be60" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "52acca5aac297e3781845a57396e581c4f44a6b0" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+zenjxl = { git = "https://github.com/imazen/zenjxl" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
+zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenpng = { git = "https://github.com/imazen/zenpng" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+zensim = { git = "https://github.com/imazen/zensim" }
+zensim-regress = { git = "https://github.com/imazen/zensim" }
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
@@ -52,18 +53,23 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # workspace binds a local sibling checkout, so a git source adds no second copy
 # of any crate and needs nothing cloned. Each is removable the moment its crate
 # publishes the version zenpipe asks for.
-zengif = { git = "https://github.com/imazen/zengif", rev = "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004" }
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "77e4840d5f17b10a3a4c6ad35bd56e7dceba5a4b" }
-# Same tested decoder revision as the root, enforced by check-decoder-pins.py.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "728baa30c78972a1eac70f9203411b6e778c029f" }
-heic = { git = "https://github.com/imazen/heic", rev = "83e8a85c83e0b7db806a6a55d2137e6edf1ea60d" }
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "f8322a00db314f94f63fd0473c1845821d8987b3" }
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "6fc67f967fdc4fcec62638ca353a3153d3bc9efd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "c6ca855703e08378d84ee48d86bed1fc792a96fd" }
-# Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "e2148a30755ab690317939cca193574e1bcfbbc0" }
+zengif = { git = "https://github.com/imazen/zengif" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+# Rev-pinned to the same rev as the root table's entry — it is what fixes the
+# rav1d-safe decoder (see the root manifest for the full rationale). This
+# workspace's committed lock had drifted to a DIFFERENT zenavif (7d950f1c)
+# than the root's (11033c95) while both entries floated.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
+heic = { git = "https://github.com/imazen/heic" }
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }
+zenpixels = { git = "https://github.com/imazen/zenpixels" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
+# Rev-pinned to 0.5.0 exactly as demo/crate pins it: ultrahdr main is 0.6.0,
+# and a floating patch would stop satisfying the decode backend's `^0.5.0`, stranding it on
+# the boost-less registry 0.5.0.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
 
 # Override zenresize's git dep on zenlayout to use the workspace copy
 # (mirrors the root manifest's source-replacement patch).
@@ -79,3 +85,7 @@ doc = false
 name = "fuzz_job_transcode"
 path = "fuzz_targets/fuzz_job_transcode.rs"
 doc = false
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../../zencodec" }
+zenmeta = { path = "../../zencodec/zenmeta" }

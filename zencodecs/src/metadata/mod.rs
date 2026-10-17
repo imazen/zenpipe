@@ -70,8 +70,18 @@ impl<'a> ScrubRequest<'a> {
         self
     }
     /// Validate and plan the entire rewrite before any output is emitted.
+    ///
+    /// Cancellation and the input budget are checked here, before format
+    /// detection; the codec's planner repeats them through zenmeta and also
+    /// checks that required services were supplied.
     pub fn plan(&self) -> Result<Plan<'a>, Error> {
-        self.request.validate()?;
+        self.request.stop().check().map_err(|reason| match reason {
+            enough::StopReason::Cancelled => Error::Cancelled,
+            other => Error::Stopped(other),
+        })?;
+        if self.request.input().len() > self.request.max_input() {
+            return Err(Error::Limit(zencodec::LimitKind::InputSize));
+        }
         #[cfg(feature = "png")]
         if self.request.input().starts_with(b"\x89PNG\r\n\x1a\n") {
             return zenpng::metadata::rewrite(&self.request);

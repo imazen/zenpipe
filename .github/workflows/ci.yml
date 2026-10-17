@@ -14,9 +14,12 @@ concurrency:
 
 jobs:
   rust:
-    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@6294a0dde3b9bd35f189f7bc262b5295c0173818
+    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:
-      sibling_overrides: false
+      # macOS runs on ARM64 only (`macos-latest`); Intel macOS lanes are not
+      # run. The reusable workflow's default list has no macOS, so it is named
+      # here. `platforms` replaces the default list wholesale, so the other
+      # entries repeat it verbatim.
       platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
@@ -32,8 +35,12 @@ jobs:
         cargo clippy -p zencodecs --no-default-features --all-targets -- -D warnings
         cargo clippy -p zeneditor --all-targets -- -D warnings
         cargo clippy -p zenfilters --all-targets -- -D warnings
+      # operation_matrix leaves out `tiff` (zentiff on zenextras main uses
+      # image-tiff's `encoder::DeflateLevel`, which the fork's main no longer
+      # has) and `avif-svt`/`avif-aom` (zenavif main does not build against
+      # the current zenav1-svt/zenav1-aom mains until zenavif#48/#49 land).
       test_extra_runs: |
-        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom --test operation_matrix
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode --test operation_matrix
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema
@@ -47,6 +54,7 @@ jobs:
         cargo test -p zencodecs --no-default-features --features inventory,jpeg,png,webp,gif,avif-encode,avif-decode,jxl-encode,jxl-decode --lib inventory::tests
         cargo test -p zencodecs --no-default-features --features std,inventory,pdf-decode --test pdf pdf_inventory_dispatches_to_zenpdf
         cargo test -p zenfilters --all-targets
+        cargo test --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
 
   # Public-API surface snapshots (docs/public-api/) — the CI-free `apidoc/`
   # runner package (see its Cargo.toml), so this is the only job that ever
@@ -83,21 +91,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@master # pinned rustdoc JSON for public-api
-        with:
-          toolchain: nightly-2026-10-12
+      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
+      - uses: imazen/zen-workspace/.github/actions/setup@main
         with:
           cache: 'false'
-          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
 
       - name: Check committed API snapshots are current
         run: cargo test --manifest-path apidoc/Cargo.toml
         env:
           ZEN_API_DOC: check
-          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-12
 
   # 32-bit coverage. i686 is a primary target: it is where `usize` narrowing
   # bugs show up (stride/offset arithmetic that silently fits in 64 bits, byte
@@ -120,10 +124,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
-      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
+      - uses: imazen/zen-workspace/.github/actions/setup@main
         with:
           cache: 'false'
-          sibling-overrides: 'false'
       - uses: taiki-e/install-action@v2
         with:
           tool: cross
@@ -138,7 +141,7 @@ jobs:
         run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features
 
       - name: Test codec operation routes on i686
-        run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,tiff,jxl-encode,jxl-decode,avif-encode,avif-decode,avif-svt,avif-aom --test operation_matrix
+        run: cross test -p zencodecs --target i686-unknown-linux-gnu --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode --test operation_matrix
 
   operation-oracles:
     name: Codec operation matrix with independent readers
@@ -146,10 +149,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
+      - uses: imazen/zen-workspace/.github/actions/setup@main
         with:
           cache: 'false'
-          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
@@ -159,6 +161,9 @@ jobs:
         env:
           ZEN_CODEC_MATRIX_MAGICK: convert
           ZEN_CODEC_MATRIX_DJXL: djxl
+          # Ubuntu's ImageMagick 6 has no farbfeld or QOI delegate; those
+          # formats are reported UNEXECUTED rather than read by it.
+          ZEN_CODEC_MATRIX_ORACLE_FORMATS: jpeg,png,webp,gif,avif,jxl,pnm,bmp,tga,tiff,hdr
         run: |
           just codec-operation-matrix
           just codec-operation-matrix-inventory

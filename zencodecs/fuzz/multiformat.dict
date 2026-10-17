@@ -40,7 +40,7 @@
 "ANIM"
 "ANMF"
 
-# AVIF / HEIC (ISOBMFF)
+# AVIF (ISOBMFF)
 "ftyp"
 "ftypavif"
 "ftypavis"

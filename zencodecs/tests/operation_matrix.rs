@@ -156,12 +156,41 @@ fn avif_backend(name: &'static str, backend: zenavif::Av1Backend) -> Entry {
     e
 }
 
+/// The name `ZEN_CODEC_MATRIX_ORACLE_FORMATS` uses for `format`.
+fn oracle_name(format: ImageFormat) -> &'static str {
+    match format {
+        ImageFormat::Jpeg => "jpeg",
+        ImageFormat::Png => "png",
+        ImageFormat::WebP => "webp",
+        ImageFormat::Gif => "gif",
+        ImageFormat::Avif => "avif",
+        ImageFormat::Jxl => "jxl",
+        ImageFormat::Pnm => "pnm",
+        ImageFormat::Farbfeld => "farbfeld",
+        ImageFormat::Bmp => "bmp",
+        ImageFormat::Qoi => "qoi",
+        ImageFormat::Tga => "tga",
+        ImageFormat::Tiff => "tiff",
+        ImageFormat::Hdr => "hdr",
+        _ => "unknown",
+    }
+}
+
 fn external_rgb(format: ImageFormat, data: &[u8]) -> Result<Option<Vec<u8>>, String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let Some(magick) = std::env::var_os("ZEN_CODEC_MATRIX_MAGICK") else {
         return Ok(None);
     };
+    // The caller names the formats its installed readers decode (for example,
+    // Ubuntu's ImageMagick 6 has no farbfeld or QOI delegate). Unset means all.
+    if let Ok(list) = std::env::var("ZEN_CODEC_MATRIX_ORACLE_FORMATS")
+        && !list
+            .split(',')
+            .any(|name| name.trim().eq_ignore_ascii_case(oracle_name(format)))
+    {
+        return Ok(None);
+    }
     fn run(program: &std::ffi::OsStr, args: &[&str], input: &[u8]) -> Result<Vec<u8>, String> {
         let mut child = Command::new(program)
             .args(args)
@@ -511,7 +540,7 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
                 ),
                 Ok(None) => (
                     "UNEXECUTED",
-                    "caller did not enable external readers".into(),
+                    "caller did not enable an external reader for this format".into(),
                 ),
                 Err(e) => ("FAIL", e),
             };
