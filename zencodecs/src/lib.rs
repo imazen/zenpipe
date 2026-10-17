@@ -161,6 +161,8 @@ mod registry;
 pub mod riapi_parse;
 pub mod select;
 pub mod speed;
+#[cfg(feature = "tonemap")]
+mod tonemap;
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]
