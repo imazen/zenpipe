@@ -1147,6 +1147,10 @@ None.
 
 ### [Unreleased]
 
+#### Added
+
+- **`tonemap` capability**: `EncodeRequest::with_tone_map_policy(ToneMapPolicy::Bt2408)` explicitly authorizes HDR (PQ/HLG) rendering to sRGB 8-bit for SDR-only targets. The feature alone preserves existing behavior; strict policy refuses conversion. BT.2408 uses 203-nit SDR white; PQ peak is MaxCLL, else mastering peak, else 1000 nits on both one-shot and streaming paths. HLG uses the 1000-nit reference display. Descriptor-only HDR conversion also clears HDR luminance metadata. zentone is pinned to 0.1.0. Supersedes #48 and #100 (1d42383b); tests: `zencodecs/tests/tonemap.rs`. Explicit opacity and descriptor alpha padding are retained during rendering.
+
 #### Changed
 
 - **EXIF ColorSpace follows the colour written:** `1` only when the encode

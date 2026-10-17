@@ -280,3 +280,18 @@ test-streaming-seam:
 # Schema fixtures must use the caller's configured temporary directory.
 test-schema-export:
     cargo test --locked --features zennode,json-schema --lib schema_export
+
+# Explicit HDR rendering, chunk parity, color precedence and strict-policy gates.
+test-tonemap-policy:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib tonemap
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test tonemap --test color_fit
+
+clippy-tonemap-policy:
+    cd "{{env_var('HOME')}}/tmp" && cargo clippy --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib --test tonemap --test color_fit -- -D warnings
+
+# Exercise cfg boundaries and preexisting color fitting alongside rendering.
+test-tonemap-modes:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test color_fit
+    cd "{{env_var('HOME')}}/tmp" && cargo check --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features tonemap
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --doc
