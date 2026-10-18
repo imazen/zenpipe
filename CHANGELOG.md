@@ -728,6 +728,10 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixed
+
+- Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
+
 #### Added
 - **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
   `begin(width, height)` declares the image to the encoder and returns its

@@ -41,6 +41,7 @@ None.
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- `TranscodeSink` drops its encoder and owned writer after an encode/write failure and cannot finalize that incomplete file. A rejected second declaration leaves the pending decoded strip intact.
 - Encoding into a format that cannot carry the source's colour description
   no longer depends on the codec's reaction (zengif now refuses ICC it can't
   keep). zencodecs fits the description first, in the one-shot and streaming
