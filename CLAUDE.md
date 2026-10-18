@@ -37,6 +37,8 @@ sources`.
 
 ## Known Bugs
 
+- Streaming output regressions fixed in the post-landing review: encoder/writer errors could still be finalized or retried, and buffered row fallback did not enforce protocol state or admission limits. Regression coverage is in `tests/sink_output_contract.rs`, `zencodecs/tests/transcode_output_contract.rs`, and `zencodecs/tests/buffered_encode_contract.rs`. The dispatch byte matrix is separate from pixel-equivalence coverage.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly

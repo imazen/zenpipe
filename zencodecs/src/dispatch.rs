@@ -412,11 +412,17 @@ where
     // An orientation to apply needs the whole image, so it buffers too.
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
         if orientation != zencodec::Orientation::Identity {
-            Box::new(BufferedRowEncoder::new(encoder).with_orientation(orientation))
+            Box::new(
+                BufferedRowEncoder::new(encoder, params.limits.copied().unwrap_or_default())
+                    .with_orientation(orientation),
+            )
         } else if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
             encoder
         } else {
-            Box::new(BufferedRowEncoder::new(encoder))
+            Box::new(BufferedRowEncoder::new(
+                encoder,
+                params.limits.copied().unwrap_or_default(),
+            ))
         };
     Ok(StreamingEncoder {
         encoder,
@@ -534,6 +540,8 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 /// [`OutputTiming::AT_FINISH`]: zencodec::encode::OutputTiming::AT_FINISH
 struct BufferedRowEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    limits: Limits,
+    failed: bool,
     /// Applied to the collected image at `finish` (re-encodes are written
     /// upright; see `crate::orient_fit`).
     orientation: zencodec::Orientation,
@@ -544,9 +552,11 @@ struct BufferedRowEncoder {
 }
 
 impl BufferedRowEncoder {
-    fn new(inner: Box<dyn zencodec::encode::DynEncoder + Send>) -> Self {
+    fn new(inner: Box<dyn zencodec::encode::DynEncoder + Send>, limits: Limits) -> Self {
         Self {
             inner,
+            limits,
+            failed: false,
             orientation: zencodec::Orientation::Identity,
             image: None,
             rows: alloc::vec::Vec::new(),
@@ -578,6 +588,9 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         self: Box<Self>,
         pixels: PixelSlice<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        if self.image.is_some() || self.failed {
+            return Err("one-shot encode after row encoding started".into());
+        }
         self.inner.encode(pixels)
     }
 
@@ -589,6 +602,9 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         height: u32,
         stride_pixels: u32,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        if self.image.is_some() || self.failed {
+            return Err("one-shot encode after row encoding started".into());
+        }
         self.inner
             .encode_srgba8(data, make_opaque, width, height, stride_pixels)
     }
@@ -599,12 +615,14 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         height: u32,
         descriptor: PixelDescriptor,
     ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
-        if self.image.is_some() {
-            return Err("begin after rows were pushed".into());
+        if self.image.is_some() || self.failed {
+            return Err("begin after an earlier declaration or rows".into());
         }
+        self.limits.check_dimensions(width, height)?;
         let total = Self::row_bytes(width, descriptor)?
             .checked_mul(height as usize)
             .ok_or("image size overflows usize")?;
+        self.limits.check_memory(total as u64)?;
         self.rows
             .try_reserve_exact(total)
             .map_err(|_| -> zencodec::encode::BoxedError {
@@ -618,38 +636,57 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         &mut self,
         rows: PixelSlice<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
-        let (width, height, descriptor) =
-            *self
-                .image
-                .get_or_insert((rows.width(), None, rows.descriptor()));
-        if rows.width() != width || rows.descriptor() != descriptor {
-            return Err("rows differ in width or pixel format from the image".into());
+        if self.failed {
+            return Err("row encoding already failed".into());
         }
-        let filled = self
-            .filled
-            .checked_add(rows.rows())
-            .ok_or("row count overflows u32")?;
-        if height.is_some_and(|h| filled > h) {
-            return Err("more rows than the declared height".into());
+        let result = (|| {
+            let (width, height, descriptor) =
+                *self
+                    .image
+                    .get_or_insert((rows.width(), None, rows.descriptor()));
+            if rows.width() != width || rows.descriptor() != descriptor {
+                return Err("rows differ in width or pixel format from the image".into());
+            }
+            let filled = self
+                .filled
+                .checked_add(rows.rows())
+                .ok_or("row count overflows u32")?;
+            if height.is_some_and(|h| filled > h) {
+                return Err("more rows than the declared height".into());
+            }
+            self.limits.check_dimensions(width, filled)?;
+            let row_bytes = Self::row_bytes(width, descriptor)?;
+            let add = row_bytes
+                .checked_mul(rows.rows() as usize)
+                .ok_or("strip size overflows usize")?;
+            let total = self
+                .rows
+                .len()
+                .checked_add(add)
+                .ok_or("image size overflows usize")?;
+            self.limits.check_memory(total as u64)?;
+            self.rows
+                .try_reserve(add)
+                .map_err(|_| -> zencodec::encode::BoxedError {
+                    "row buffer allocation failed".into()
+                })?;
+            for y in 0..rows.rows() {
+                self.rows.extend_from_slice(&rows.row(y)[..row_bytes]);
+            }
+            self.filled = filled;
+            Ok(())
+        })();
+        if result.is_err() {
+            self.failed = true;
         }
-        let row_bytes = Self::row_bytes(width, descriptor)?;
-        let add = row_bytes
-            .checked_mul(rows.rows() as usize)
-            .ok_or("strip size overflows usize")?;
-        self.rows
-            .try_reserve(add)
-            .map_err(|_| -> zencodec::encode::BoxedError {
-                "row buffer allocation failed".into()
-            })?;
-        for y in 0..rows.rows() {
-            self.rows.extend_from_slice(&rows.row(y)[..row_bytes]);
-        }
-        self.filled = filled;
-        Ok(())
+        result
     }
 
     fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         let this = *self;
+        if this.failed {
+            return Err("row encoding already failed".into());
+        }
         let (width, height, descriptor) = this.image.ok_or("finish before any rows")?;
         if height.is_some_and(|h| h != this.filled) {
             return Err("fewer rows than the declared height".into());
@@ -657,16 +694,21 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         let row_bytes = Self::row_bytes(width, descriptor)?;
         let pixels = PixelSlice::new(&this.rows, width, this.filled, row_bytes, descriptor)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        match crate::orient_fit::orient(&pixels, this.orientation) {
+        let output = match crate::orient_fit::orient(&pixels, this.orientation) {
             Some(oriented) => this.inner.encode(oriented.as_slice()),
             None => this.inner.encode(pixels),
-        }
+        }?;
+        this.limits.check_output_size(output.len() as u64)?;
+        Ok(output)
     }
 
     fn encode_from(
         self: Box<Self>,
         source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        if self.image.is_some() || self.failed {
+            return Err("pull encode after row encoding started".into());
+        }
         self.inner.encode_from(source)
     }
 }

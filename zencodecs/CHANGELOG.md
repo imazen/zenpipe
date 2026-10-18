@@ -41,6 +41,7 @@ None.
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- Buffered row fallback rejects one-shot/pull encoding after a declaration or rows, checks dimensions and row-buffer memory before allocation, counts the final output against the whole-file limit, and cannot recover a failed push into a successful file.
 - `TranscodeSink` drops its encoder and owned writer after an encode/write failure and cannot finalize that incomplete file. A rejected second declaration leaves the pending decoded strip intact.
 - Encoding into a format that cannot carry the source's colour description
   no longer depends on the codec's reaction (zengif now refuses ICC it can't
