@@ -199,7 +199,18 @@ streaming-filter-tests:
 
 streaming-transcode-matrix:
     just streaming-disk-floor
-    cargo test --locked --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
+
+# Exercise explicit HDR-to-GIF clipping and native refusal with a small graph.
+test-hdr-gif:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr --test transcode_matrix
+
+# Independent ImageMagick pixel oracle; missing tools fail this explicit gate.
+test-hdr-gif-oracle:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr,local-fixtures --test transcode_matrix hdr_white_to_gif
+
+clippy-hdr-gif:
+    cd "{{env_var('HOME')}}/tmp" && cargo clippy --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr --test transcode_matrix -- -D warnings
 
 streaming-clippy-gate:
     just clippy

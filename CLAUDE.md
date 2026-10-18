@@ -43,7 +43,7 @@ sources`.
   images and strips. The feature alone retains the existing encode contract.
   Validation commands: `just test-tonemap-policy`, `just clippy-tonemap-policy`.
 
-- Open: the existing `transcode_matrix::every_decodable_format_transcodes_to_every_encodable_format_both_ways` HDR/rgb8-to-GIF cell fails because Radiance RGBE reconstruction can exceed the finite SDR range required by GIF. Both paths refuse it. An explicit HDR-to-SDR input policy requires review; keep the existing matrix expectations unchanged.
+- Fixed: `transcode_matrix` explicitly chooses sRGB8 clipping for HDR-to-GIF in both paths, since RGBE reconstruction can exceed GIF's finite SDR range. All source/target cells and success/pixel-identity assertions remain. A white RGBE regression requires native refusal and clipped white output; `just test-hdr-gif` and `just clippy-hdr-gif` pass. `just test-hdr-gif-oracle` checks both outputs' pixels with ImageMagick. Encoder defaults and public APIs are unchanged.
 
 - Dispatched native row encoders could accept repeated declarations or one-shot encoding after begin, and empty WebP/AVIF inputs could panic. The private row guard validates declarations, counts emitted bytes, poisons failed pushes, and matches begin/encode empty-canvas acceptance with the same typed validation error or identical finished bytes. `zencodecs/tests/streamed_bytes.rs` covers the enabled encoders. Rotated buffered encodes apply dimension limits to the output canvas.
 
