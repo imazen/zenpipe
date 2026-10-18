@@ -82,6 +82,8 @@ where
                 Some(b) => b.as_slice(),
                 None => pixels,
             };
+            crate::row_contract::check_dimensions(format, pixels.width(), pixels.rows())
+                .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
             // A pixel-format change that changes the colour space converts
             // from the described colour and re-describes the result.
             let fitted = crate::color_fit::fit_to_supported(
@@ -434,6 +436,12 @@ where
                 params.limits.copied().unwrap_or_default(),
             ))
         };
+    let encoder = Box::new(crate::row_contract::RowEncoder::new(
+        encoder,
+        format,
+        params.limits.copied().unwrap_or_else(Limits::none),
+        orientation,
+    ));
     Ok(StreamingEncoder {
         encoder,
         supported: C::supported_descriptors(),
@@ -628,7 +636,8 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         if self.image.is_some() || self.failed {
             return Err("begin after an earlier declaration or rows".into());
         }
-        self.limits.check_dimensions(width, height)?;
+        let (out_width, out_height) = self.orientation.output_dimensions(width, height);
+        self.limits.check_dimensions(out_width, out_height)?;
         let total = Self::row_bytes(width, descriptor)?
             .checked_mul(height as usize)
             .ok_or("image size overflows usize")?;
@@ -664,7 +673,8 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
             if height.is_some_and(|h| filled > h) {
                 return Err("more rows than the declared height".into());
             }
-            self.limits.check_dimensions(width, filled)?;
+            let (out_width, out_height) = self.orientation.output_dimensions(width, filled);
+            self.limits.check_dimensions(out_width, out_height)?;
             let row_bytes = Self::row_bytes(width, descriptor)?;
             let add = row_bytes
                 .checked_mul(rows.rows() as usize)

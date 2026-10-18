@@ -42,6 +42,7 @@ None.
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
+- Dispatched row encoders enforce declaration/row state, whole-file output budgets, and matching empty-canvas refusal or bytes in both paths. Rotated buffered encodes apply dimension limits to the output canvas.
 - Strict one-shot encodes validate the original color description before pixel negotiation can replace it with sRGB metadata, matching the streaming rejection.
 - One-shot encoding accepts valid strided views without trailing padding after the final row.
 - Buffered row fallback rejects one-shot/pull encoding after a declaration or rows, checks dimensions and row-buffer memory before allocation, counts the final output against the whole-file limit, and cannot recover a failed push into a successful file.

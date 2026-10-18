@@ -159,6 +159,7 @@ pub(crate) mod quality_calibration;
 mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
+mod row_contract;
 pub mod select;
 pub mod speed;
 pub mod trace;

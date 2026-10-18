@@ -332,3 +332,149 @@ fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
         }
     }
 }
+
+#[test]
+fn empty_canvas_declaration_matches_the_native_one_shot_path() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    let mut failures = Vec::new();
+    for format in AllowedFormats::all().encodable_formats() {
+        let make = || {
+            EncodeRequest::new(format)
+                .build_streaming_encoder(W, H)
+                .unwrap()
+        };
+        let supported = make().supported;
+        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+            &[0, 0, 0],
+            PixelDescriptor::RGB8_SRGB,
+            1,
+            1,
+            3,
+            supported,
+        )
+        .unwrap();
+        let descriptor = adapted.as_slice().descriptor();
+        for (width, height) in [(0, H), (W, 0)] {
+            let empty = PixelSlice::new(
+                &[],
+                width,
+                height,
+                width as usize * descriptor.bytes_per_pixel(),
+                descriptor,
+            )
+            .unwrap();
+            let one = catch_unwind(AssertUnwindSafe(|| make().encoder.encode(empty.clone())));
+            let mut enc = make().encoder;
+            let begin = catch_unwind(AssertUnwindSafe(|| enc.begin(width, height, descriptor)));
+            match (one, begin) {
+                (Ok(one), Ok(begin)) => {
+                    assert_eq!(
+                        one.is_ok(),
+                        begin.is_ok(),
+                        "{format:?} {width}x{height}: begin/encode acceptance differs"
+                    );
+                    if let (Err(one), Err(begin)) = (&one, &begin) {
+                        let one = one
+                            .downcast_ref::<zencodecs::CodecError>()
+                            .expect("one-shot refusal retains its typed validation error");
+                        let begin = begin
+                            .downcast_ref::<zencodecs::CodecError>()
+                            .expect("begin refusal retains its typed validation error");
+                        match (one, begin) {
+                            (
+                                zencodecs::CodecError::InvalidInput(a),
+                                zencodecs::CodecError::InvalidInput(b),
+                            ) => assert_eq!(
+                                a, b,
+                                "{format:?} {width}x{height}: refusal details differ"
+                            ),
+                            _ => panic!("{format:?}: different typed refusals: {one:?}, {begin:?}"),
+                        }
+                    }
+                    if let (Ok(one), Ok(timing)) = (&one, &begin) {
+                        assert_eq!(*timing, zencodec::encode::OutputTiming::AT_FINISH);
+                        assert!(enc.pending_output().is_empty());
+                        if height > 0 {
+                            enc.push_rows(empty.clone()).unwrap();
+                        }
+                        let streamed = enc.finish().unwrap();
+                        assert_eq!(streamed.data(), one.data(), "{format:?} empty bytes");
+                        continue;
+                    }
+                    if begin.is_err() {
+                        assert!(
+                            enc.begin(W, H, descriptor).is_ok(),
+                            "failed begin changed {format:?}"
+                        );
+                    }
+                }
+                _ => failures.push(format!("{format:?} {width}x{height}: encoder panicked")),
+            }
+        }
+    }
+    assert!(failures.is_empty(), "empty canvas contract: {failures:#?}");
+}
+
+#[test]
+fn every_dispatched_encoder_enforces_row_protocol() {
+    for format in AllowedFormats::all().encodable_formats() {
+        let make = || {
+            EncodeRequest::new(format)
+                .with_quality(85.0)
+                .build_streaming_encoder(W, H)
+                .unwrap()
+        };
+        let (data, descriptor) = pixels(false);
+        let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
+        let supported = make().supported;
+        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+            &data, descriptor, W, H, stride, supported,
+        )
+        .unwrap();
+        let pixels = adapted.as_slice();
+        let mut enc = make().encoder;
+        enc.begin(W, H, pixels.descriptor()).unwrap();
+        let pending = enc.pending_output().to_vec();
+        assert!(
+            enc.begin(W, H, pixels.descriptor()).is_err(),
+            "{format:?} accepted a second begin"
+        );
+        assert_eq!(
+            enc.pending_output(),
+            pending,
+            "{format:?} changed a rejected declaration"
+        );
+        assert!(
+            enc.encode(pixels.clone()).is_err(),
+            "{format:?} accepted encode after begin"
+        );
+
+        let mut enc = make().encoder;
+        enc.begin(W, H, pixels.descriptor()).unwrap();
+        assert!(enc.finish().is_err(), "{format:?} accepted missing rows");
+
+        let mut enc = make().encoder;
+        enc.begin(W, H, pixels.descriptor()).unwrap();
+        enc.push_rows(pixels.clone()).unwrap();
+        let extra = PixelSlice::new(
+            pixels.row(0),
+            W,
+            1,
+            pixels.row(0).len(),
+            pixels.descriptor(),
+        )
+        .unwrap();
+        assert!(
+            enc.push_rows(extra).is_err(),
+            "{format:?} accepted extra rows"
+        );
+        assert!(
+            enc.pending_output().is_empty(),
+            "{format:?} exposes output after failure"
+        );
+        assert!(
+            enc.finish().is_err(),
+            "{format:?} completed after a failed push"
+        );
+    }
+}
