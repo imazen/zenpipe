@@ -280,3 +280,7 @@ test-streaming-seam:
 # Schema fixtures must use the caller's configured temporary directory.
 test-schema-export:
     cargo test --locked --features zennode,json-schema --lib schema_export
+
+# Selected native encoder settings override the generic preference.
+test-streaming-preference:
+    cargo test --locked -p zencodecs --test prefer_streaming

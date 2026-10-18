@@ -18,6 +18,7 @@ pub(crate) struct EncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
     pub lossless: bool,
+    pub prefer_streaming: bool,
     pub metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` at the codec boundary via
     /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
@@ -142,7 +143,14 @@ where
                 )))
             })?;
             let pixels = adapted.as_slice();
-            let config = build_config(&params);
+            let mut config = build_config(&params);
+            if params.prefer_streaming
+                && !params
+                    .codec_config
+                    .is_some_and(|c| c.has_encode_override(C::format()))
+            {
+                config = config.with_prefer_streaming(true);
+            }
             let mut job = config.job();
             if let Some(s) = params.stop {
                 job = job.with_stop(s);
@@ -362,7 +370,14 @@ where
     <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
 {
     use zencodec::encode::EncodeJob as _;
-    let config = build_config(&params);
+    let mut config = build_config(&params);
+    if params.prefer_streaming
+        && !params
+            .codec_config
+            .is_some_and(|c| c.has_encode_override(C::format()))
+    {
+        config = config.with_prefer_streaming(true);
+    }
     let mut job = config.job();
     if let Some(s) = params.stop {
         job = job.with_stop(s);
