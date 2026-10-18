@@ -732,6 +732,7 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Fixed
 
+- Schema fixture export respects the configured temporary directory.
 - Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
 
 #### Added
