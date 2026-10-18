@@ -15,6 +15,7 @@ None.
 - Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
 
 ### Added
+- All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions.
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
   `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
   whose target cannot carry the source colour description fails

@@ -26,6 +26,7 @@ jobs:
           repository: imazen/zenavif
           ref: 3be52e05d7bba4ca615bee0a065985d609766be3
           path: _ci/zenavif
+          persist-credentials: false
       - run: mv _ci/zenavif ../zenavif
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -42,6 +43,7 @@ jobs:
           cargo test --locked
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked -p zencodecs --features cms --test color_adapt
+          cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes
           cargo test --locked -p zencodecs --test explicit_jpeg_config
           cargo test --locked -p zencodecs --test animation_streamed_bytes
           cargo test --locked -p zencodecs --test strided_encode

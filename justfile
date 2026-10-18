@@ -240,3 +240,11 @@ streaming-local-tail:
         if ! just "$recipe"; then result=1; fi
     done
     exit "$result"
+
+# Complete-file byte identity for all dispatched encoders.
+test-dispatched-output:
+    cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes -- --nocapture
+
+# Independent reader smoke tests; missing tools fail this explicit opt-in gate.
+test-dispatched-oracle:
+    cargo test --locked -p zencodecs --features local-fixtures,jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes independent_decoders_read_every_streamed_format -- --nocapture
