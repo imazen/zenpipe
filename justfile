@@ -64,8 +64,8 @@ tile-profile out="benchmarks/tile_pyramid_profile_$(date +%Y-%m-%d).tsv":
 
 # Run clippy
 clippy:
-    cargo clippy --all-targets -- -D warnings
-    cargo clippy --all-targets --no-default-features -- -D warnings
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo clippy --locked --all-targets --no-default-features -- -D warnings
 
 # Format code + regenerate the public-API surface snapshots (docs/public-api/).
 # The snapshot runner lives in the workspace-excluded apidoc/ package, so it
@@ -139,3 +139,104 @@ arm-codec-integration-audit:
 # Explicitly opt into real AVIF corpus tests; retain per-test output.
 arm-avif-corpus-audit:
     CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test corpus -- --ignored avif --show-output
+
+# Test the dependency graph committed here without sibling source overrides.
+check-streaming-pins:
+    python3 scripts/check-streaming-pins.py --self-test
+    python3 scripts/check-streaming-pins.py
+    just check-pins
+
+test-explicit-jpeg-config:
+    cargo test --locked -p zencodecs --test explicit_jpeg_config
+
+test-animation-output:
+    cargo test --locked -p zencodecs --test animation_streamed_bytes -- --nocapture
+
+test-strided-encode:
+    cargo test --locked -p zencodecs --test strided_encode
+
+test-encode-color-description:
+    cargo test --locked -p zencodecs --features cms --test color_adapt
+
+test-standalone-wasm:
+    cargo check --locked --manifest-path demo/crate/Cargo.toml --target wasm32-unknown-unknown
+    cargo check --locked --manifest-path wasm-size-shim/Cargo.toml --target wasm32-unknown-unknown --lib
+
+# Match the reused CI's feature/package checks, preserving every failure.
+streaming-local-matrix:
+    #!/usr/bin/env bash
+    result=0
+    for recipe in streaming-root-tests streaming-codec-tests streaming-filter-tests streaming-transcode-matrix; do
+        if ! just "$recipe"; then result=1; fi
+    done
+    exit "$result"
+
+streaming-root-tests:
+    just streaming-disk-floor
+    cargo test --locked --all-targets
+    just streaming-disk-floor
+    cargo test --locked --all-targets --no-default-features
+    just streaming-disk-floor
+    cargo test --locked --features zennode
+    just streaming-disk-floor
+    cargo test --locked --features zennode,json-schema
+    just streaming-disk-floor
+    cargo test --locked -p zenlayout --all-targets
+    just streaming-disk-floor
+    cargo test --locked -p zeneditor --all-targets
+
+streaming-codec-tests:
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --all-targets
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --features std,pdf-decode --lib pdf_
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets --no-fail-fast
+
+streaming-filter-tests:
+    just streaming-disk-floor
+    cargo test --locked -p zenfilters --all-targets
+
+streaming-transcode-matrix:
+    just streaming-disk-floor
+    cargo test --locked --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
+
+streaming-clippy-gate:
+    just clippy
+    just streaming-disk-floor
+    cargo clippy --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zencodecs --no-default-features --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zenlayout --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zeneditor --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zenfilters --all-targets -- -D warnings
+
+streaming-doc-baseline:
+    cargo doc --locked --no-deps -p zenpipe -p zencodecs
+    cargo test --locked --doc -p zenpipe -p zencodecs
+
+# Compare unpublished crates with an explicit reviewed source export.
+semver-against baseline:
+    cargo semver-checks check-release -p zenpipe --baseline-root "{{baseline}}" --default-features
+    cargo semver-checks check-release -p zencodecs --baseline-root "{{baseline}}" --default-features --features jxl-encode,cms
+
+# Keep the shared-machine matrix above its disk-space floor.
+streaming-disk-floor:
+    python3 -c 'import shutil, sys; from pathlib import Path; free = shutil.disk_usage(Path.home()).free; print("available disk bytes:", free); sys.exit(0 if free >= 8 * 1024**3 else "below the 8 GiB floor; reclaim inactive Cargo output first")'
+
+# Check strict color before and after format negotiation, with and without CMS.
+test-strict-color:
+    cargo test --locked -p zencodecs --test color_fit
+    cargo test --locked -p zencodecs --features cms --test color_fit
+
+# Complete only the matrix commands stopped by the disk-space floor.
+streaming-local-tail:
+    #!/usr/bin/env bash
+    result=0
+    for recipe in streaming-filter-tests streaming-transcode-matrix; do
+        if ! just "$recipe"; then result=1; fi
+    done
+    exit "$result"

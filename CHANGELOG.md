@@ -13,6 +13,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   implications for zenpipe output and the run data it rests on.
 
 #### Changed
+- All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides.
 - Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
 - Production and fuzz graphs pin the streaming interface to zencodec `023a65c7` and zenjpeg `8aa966ab`. Fuzz manifests use git sources instead of sibling zencodec/codec checkouts; the WebP lock moves to `c4b6614e`, restoring byte-identical RGB one-shot and row encodes.
 - zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).

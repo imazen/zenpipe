@@ -13,6 +13,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  locked-graph:
+    name: Committed dependency graph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Cargo loads this optional path dependency's manifest even when the
+      # tuner feature is disabled. No source overrides or superwork setup:
+      # this job must exercise the committed lock and git revision pins.
+      - uses: actions/checkout@v7
+        with:
+          repository: imazen/zenavif
+          ref: 3be52e05d7bba4ca615bee0a065985d609766be3
+          path: _ci/zenavif
+      - run: mv _ci/zenavif ../zenavif
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: committed-graph
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+      - run: python3 scripts/check-streaming-pins.py --self-test
+      - run: python3 scripts/check-streaming-pins.py
+      - name: Locked tests and strict lint
+        run: |
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked -p zencodecs --features cms --test color_adapt
+          cargo test --locked -p zencodecs --test explicit_jpeg_config
+          cargo test --locked -p zencodecs --test animation_streamed_bytes
+          cargo test --locked -p zencodecs --test strided_encode
+          cargo check --locked --manifest-path fuzz/Cargo.toml
+          cargo check --locked --manifest-path zencodecs/fuzz/Cargo.toml
+      - name: Standalone WASM packages
+        run: |
+          cargo check --locked --manifest-path demo/crate/Cargo.toml --target wasm32-unknown-unknown
+          cargo check --locked --manifest-path wasm-size-shim/Cargo.toml --target wasm32-unknown-unknown --lib
+
   rust:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
     with:
