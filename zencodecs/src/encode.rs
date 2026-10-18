@@ -49,6 +49,7 @@ pub struct EncodeRequest<'a> {
     /// `Fastest`, sequential threading) at build time. `effort` wins.
     speed: Option<EncodeSpeed>,
     lossless: bool,
+    prefer_streaming: bool,
     limits: Option<&'a Limits>,
     stop: Option<StopToken>,
     metadata: Option<Metadata>,
@@ -85,6 +86,7 @@ impl<'a> EncodeRequest<'a> {
             effort: None,
             speed: None,
             lossless: false,
+            prefer_streaming: false,
             limits: None,
             stop: None,
             metadata: None,
@@ -114,6 +116,7 @@ impl<'a> EncodeRequest<'a> {
             effort: None,
             speed: None,
             lossless: false,
+            prefer_streaming: false,
             limits: None,
             stop: None,
             metadata: None,
@@ -146,6 +149,16 @@ impl<'a> EncodeRequest<'a> {
     /// Set quality (0-100).
     pub fn with_quality(mut self, quality: f32) -> Self {
         self.quality = Some(quality);
+        self
+    }
+
+    /// Prefer incremental encoded output when the codec supports it.
+    ///
+    /// Explicit encoder settings in [`crate::config::CodecConfig`] take precedence. This is
+    /// a preference: call `begin` on the built encoder and inspect its timing
+    /// to learn whether that particular configuration streams.
+    pub fn with_prefer_streaming(mut self, prefer: bool) -> Self {
+        self.prefer_streaming = prefer;
         self
     }
 
@@ -485,6 +498,7 @@ impl<'a> EncodeRequest<'a> {
                 quality: Some(resolved_quality),
                 effort,
                 lossless: self.lossless,
+                prefer_streaming: self.prefer_streaming,
                 metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
@@ -585,6 +599,7 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
+            prefer_streaming: self.prefer_streaming,
             // Orientation is baked into the pixels downstream
             // (`crate::orient_fit`), not folded into EXIF.
             metadata: self.metadata,
@@ -876,6 +891,7 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
+            prefer_streaming: self.prefer_streaming,
             // Orientation is baked into the pixels downstream
             // (`crate::orient_fit`), not folded into EXIF.
             metadata: self.metadata,

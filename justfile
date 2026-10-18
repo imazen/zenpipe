@@ -295,3 +295,11 @@ test-tonemap-modes:
     cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test color_fit
     cd "{{env_var('HOME')}}/tmp" && cargo check --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features tonemap
     cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --doc
+
+# Selected native encoder settings override the generic preference.
+test-streaming-preference:
+    cargo test --locked -p zencodecs --test prefer_streaming
+
+# Verify the policy adapter and the independently merged streaming preference.
+test-tonemap-integration: test-tonemap-policy clippy-tonemap-policy
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test prefer_streaming
