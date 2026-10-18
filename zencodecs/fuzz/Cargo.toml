@@ -54,7 +54,7 @@ members = ["."]
 # fuzz workspace. Use the same 0.1.7 git revision as the production adapter;
 # current sibling main is 0.2.0 and cannot satisfy this requirement.
 # Use the same streaming interface revision as the production workspace.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "802952b773368f589254a7d434f570790e3f3635" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
 # Unpublished mains the root [patch.crates-io] pins (see its comments):
 # zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
@@ -62,7 +62,7 @@ zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e7
 # this fuzz workspace resolves on its own.
 zengif = { git = "https://github.com/imazen/zengif" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # zenavif-parse 0.7.0 is a member of the imazen/zenavif workspace (the
@@ -71,7 +71,7 @@ zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a8740bded03fab2eec267323bff9df2f67a1d" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # zenjpeg resolves `zenanalyze 0.2.0` through a [patch.crates-io] at the zenjpeg
 # WORKSPACE root; when consumed as a dependency that table never
 # applies, and the registry is frozen at 0.1.0 — so a fresh resolve here fails

@@ -293,10 +293,10 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 [patch.crates-io]
 # Streaming encode output is not available in the published 0.1.26 API.
 # Match zenjpeg's direct zencodec dependency so its trait types unify.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "802952b773368f589254a7d434f570790e3f3635" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a8740bded03fab2eec267323bff9df2f67a1d" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # Container-stills backend main is 0.2.0 (the zencodec decode adapter + unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers the container-stills decode feature.
 heic = { git = "https://github.com/imazen/heic" }
@@ -330,7 +330,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

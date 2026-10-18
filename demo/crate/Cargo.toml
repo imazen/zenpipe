@@ -35,8 +35,8 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 
 [patch.crates-io]
 # Share the production graph without external sibling source overrides.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "802952b773368f589254a7d434f570790e3f3635" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a8740bded03fab2eec267323bff9df2f67a1d" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 heic = { git = "https://github.com/imazen/heic", rev = "8d40c94e018082f4bffcfc688dfbb8e83925a1b0" }
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "f3b191a74fc08be3f611ade89bd5b9c22f34d2b5" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
@@ -46,7 +46,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "9226d3a32cfd82f6c079
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cd9a7325f97f5e178863d867c81b694cd8b169aa" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f1faec70e41b0c1f31e9db3d2142071bf02d08d5" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "cfccd88f77cce5836c25bb70534fa49e4a5cd3c0" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
 zennode = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
 zennode-derive = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }

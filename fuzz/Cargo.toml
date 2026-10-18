@@ -22,8 +22,8 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
 # Use the same streaming interface revision as the production workspace.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "802952b773368f589254a7d434f570790e3f3635" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a8740bded03fab2eec267323bff9df2f67a1d" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
@@ -33,7 +33,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zensim = { git = "https://github.com/imazen/zensim" }
