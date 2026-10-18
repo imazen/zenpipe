@@ -37,6 +37,12 @@ sources`.
 
 ## Known Bugs
 
+- HDR rendering on PR100 required an explicit per-request policy and a common
+  missing-peak fallback. The proposed `tonemap` followup uses
+  `ToneMapPolicy::Bt2408` and the same metadata-or-1000-nit peak for whole
+  images and strips. The feature alone retains the existing encode contract.
+  Validation commands: `just test-tonemap-policy`, `just clippy-tonemap-policy`.
+
 - Open: the existing `transcode_matrix::every_decodable_format_transcodes_to_every_encodable_format_both_ways` HDR/rgb8-to-GIF cell fails because Radiance RGBE reconstruction can exceed the finite SDR range required by GIF. Both paths refuse it. An explicit HDR-to-SDR input policy requires review; keep the existing matrix expectations unchanged.
 
 - Dispatched native row encoders could accept repeated declarations or one-shot encoding after begin, and empty WebP/AVIF inputs could panic. The private row guard validates declarations, counts emitted bytes, poisons failed pushes, and matches begin/encode empty-canvas acceptance with the same typed validation error or identical finished bytes. `zencodecs/tests/streamed_bytes.rs` covers the enabled encoders. Rotated buffered encodes apply dimension limits to the output canvas.

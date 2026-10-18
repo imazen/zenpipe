@@ -60,6 +60,8 @@ pub struct EncodeRequest<'a> {
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
+    #[cfg(feature = "tonemap")]
+    tone_map_policy: crate::ToneMapPolicy,
     image_facts: Option<ImageFacts>,
     /// Explicit color signal to emit when the pixel descriptor can't carry it
     /// (e.g. an ICC-resolved source primary set). PNG-only today. See
@@ -93,6 +95,8 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -121,6 +125,8 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -128,6 +134,16 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(feature = "jpeg-ultrahdr")]
             gain_map_source: None,
         }
+    }
+
+    /// Authorize HDR to SDR rendering for still-image one-shot and row encodes.
+    /// Compiling `tonemap`
+    /// alone preserves the existing encode behavior. Strict encode policy
+    /// still refuses irreversible conversion. HDR-capable targets retain HDR.
+    #[cfg(feature = "tonemap")]
+    pub fn with_tone_map_policy(mut self, policy: crate::ToneMapPolicy) -> Self {
+        self.tone_map_policy = policy;
+        self
     }
 
     /// Set quality (0-100).
@@ -592,6 +608,8 @@ impl<'a> EncodeRequest<'a> {
             limits: speed_limits.as_ref().or(self.limits),
             stop: self.stop,
             encode_policy: self.encode_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
         };
 
@@ -882,6 +900,8 @@ impl<'a> EncodeRequest<'a> {
             limits,
             stop: self.stop.clone(),
             encode_policy: self.encode_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
         };
 

@@ -27,6 +27,8 @@ pub(crate) struct EncodeParams<'a> {
     pub limits: Option<&'a Limits>,
     pub stop: Option<StopToken>,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
+    #[cfg(feature = "tonemap")]
+    pub tone_map_policy: crate::ToneMapPolicy,
     /// Explicit color signal to emit (e.g. a source `source_color` resolved from
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
     /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
@@ -85,6 +87,27 @@ where
             };
             crate::row_contract::check_dimensions(format, pixels.width(), pixels.rows())
                 .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+            // HDR pixels into a target that carries neither HDR nor CICP are
+            // tone-mapped to sRGB first (see `crate::tonemap`); the fitting
+            // below then sees sRGB pixels.
+            #[cfg(feature = "tonemap")]
+            let toned = crate::tonemap::one_shot(
+                &pixels,
+                upright.as_ref(),
+                <C as zencodec::encode::EncoderConfig>::capabilities(),
+                params.tone_map_policy,
+                strict,
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "tone mapping HDR for {format:?}: {e}"
+                )))
+            })?;
+            #[cfg(feature = "tonemap")]
+            let (pixels, upright) = match &toned {
+                Some((b, m)) => (b.as_slice(), m.clone()),
+                None => (pixels, upright),
+            };
             // A pixel-format change that changes the colour space converts
             // from the described colour and re-describes the result.
             let fitted = crate::color_fit::fit_to_supported(
@@ -340,8 +363,9 @@ pub struct StreamingEncoder {
     /// `DynEncoder: Send` (zencodec 0.1.4+), so this can be moved across threads
     /// or used in `zenpipe::codec::EncoderSink`.
     pub encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
-    /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
-    /// Pass to `adapt_for_encode_cow` to pick the cheapest conversion.
+    /// Pixel formats accepted by this encoder and its conversion adapters.
+    /// Pass to `adapt_for_encode_cow` to pick the cheapest conversion. A tone-map
+    /// adapter advertises HDR inputs so rendering happens before SDR negotiation.
     pub supported: &'static [PixelDescriptor],
     /// The resolved output format.
     pub format: ImageFormat,
@@ -388,11 +412,36 @@ where
     // Re-encodes write upright pixels and orientation 1; rows are collected
     // and oriented at `finish` when a rotation or flip is needed.
     let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
-    // Fit the colour description to what this format carries; the pixels
-    // are converted strip by strip when it can't carry theirs.
     let strict = params
         .encode_policy
         .is_some_and(|p| p.resolve_strict(false));
+    if strict {
+        crate::color_fit::plan(upright.as_ref(), C::capabilities())
+            .check_strict(true)
+            .map_err(|detail| {
+                at!(CodecError::UnsupportedOperation {
+                    format: C::format(),
+                    detail
+                })
+            })?;
+    }
+    // HDR strips into a target that carries neither HDR nor CICP are
+    // tone-mapped to sRGB (see `crate::tonemap`). A strip can't be measured
+    // up front, so the content peak comes from the metadata or the default.
+    #[cfg(feature = "tonemap")]
+    let tone_map = crate::tonemap::plan(
+        upright.as_ref(),
+        <C as zencodec::encode::EncoderConfig>::capabilities(),
+        params.tone_map_policy,
+        strict,
+    );
+    #[cfg(feature = "tonemap")]
+    let upright = match &tone_map {
+        Some(plan) => plan.metadata.clone(),
+        None => upright,
+    };
+    // Fit the colour description to what this format carries; the pixels
+    // are converted strip by strip when it can't carry theirs.
     let fit = crate::color_fit::plan(
         upright.as_ref(),
         <C as zencodec::encode::EncoderConfig>::capabilities(),
@@ -451,6 +500,23 @@ where
                 params.limits.copied().unwrap_or_default(),
             ))
         };
+    #[cfg(feature = "tonemap")]
+    let supported = if tone_map.is_some() {
+        crate::tonemap::STREAMING_INPUTS
+    } else {
+        C::supported_descriptors()
+    };
+    #[cfg(not(feature = "tonemap"))]
+    let supported = C::supported_descriptors();
+    #[cfg(feature = "tonemap")]
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match tone_map {
+        Some(plan) => Box::new(ToneMappingEncoder {
+            inner: encoder,
+            plan,
+            supported: C::supported_descriptors(),
+        }),
+        None => encoder,
+    };
     let encoder = Box::new(crate::row_contract::RowEncoder::new(
         encoder,
         format,
@@ -459,7 +525,7 @@ where
     ));
     Ok(StreamingEncoder {
         encoder,
-        supported: C::supported_descriptors(),
+        supported,
         format,
     })
 }
@@ -561,6 +627,156 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
             "encode_from is not available when the pixels need colour conversion; use push_rows"
                 .into(),
         )
+    }
+}
+
+/// Tone-maps each HDR strip to sRGB before the codec sees it, for a target
+/// that carries neither HDR nor CICP (see `crate::tonemap`). Tone mapping is
+/// per pixel, so strip by strip gives what a whole-image tone map with the
+/// same content peak gives. Strips that aren't HDR pass through unchanged.
+#[cfg(feature = "tonemap")]
+struct ToneMappingEncoder {
+    inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+    plan: crate::tonemap::ToneMapPlan,
+    supported: &'static [PixelDescriptor],
+}
+
+/// Render before adapting to the native codec's formats. Both operations
+/// retain the original row stride until an actual conversion is needed.
+#[cfg(feature = "tonemap")]
+fn with_tone_mapped<R>(
+    plan: &crate::tonemap::ToneMapPlan,
+    pixels: PixelSlice<'_>,
+    supported: &[PixelDescriptor],
+    consume: impl FnOnce(PixelSlice<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
+) -> core::result::Result<R, zencodec::encode::BoxedError> {
+    let toned = match plan.source_for(pixels.descriptor()) {
+        Some(source) => {
+            let source = source?;
+            Some(crate::tonemap::tone_map_to_srgb8(
+                &pixels,
+                source,
+                plan.peak(source),
+            )?)
+        }
+        None => None,
+    };
+    let pixels = toned.as_ref().map_or(pixels, |b| b.as_slice());
+    let bytes = pixels.contiguous_bytes();
+    let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        &bytes,
+        pixels.descriptor(),
+        pixels.width(),
+        pixels.rows(),
+        pixels.descriptor().aligned_stride(pixels.width()),
+        supported,
+    )
+    .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e}").into() })?;
+    consume(adapted.as_slice())
+}
+
+#[cfg(feature = "tonemap")]
+impl zencodec::encode::DynEncoder for ToneMappingEncoder {
+    fn preferred_strip_height(&self) -> u32 {
+        self.inner.preferred_strip_height()
+    }
+
+    fn encode(
+        self: Box<Self>,
+        pixels: PixelSlice<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let Self {
+            inner,
+            plan,
+            supported,
+        } = *self;
+        with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
+    }
+
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &mut [u8],
+        make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        // Metadata remains authoritative; U8 HDR samples must be refused.
+        if let Some(source) = self.plan.source_for(PixelDescriptor::RGBA8_SRGB) {
+            source?;
+            return Err("tone mapping reads f32 or U16 samples, not U8".into());
+        }
+        let stride = (stride_pixels as usize)
+            .checked_mul(4)
+            .ok_or("sRGBA8 stride overflows")?;
+        // Validate before touching caller memory, including the valid case
+        // where the last row omits trailing padding.
+        PixelSlice::new(data, width, height, stride, PixelDescriptor::RGBA8_SRGB)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        if make_opaque {
+            for y in 0..height as usize {
+                for p in data[y * stride..y * stride + width as usize * 4]
+                    .as_chunks_mut::<4>()
+                    .0
+                {
+                    p[3] = 255;
+                }
+            }
+        }
+        // Native codecs need not accept AlphaMode::Undefined. Materializing
+        // opaque alpha honors the request while keeping a supported descriptor.
+        let pixels = PixelSlice::new(data, width, height, stride, PixelDescriptor::RGBA8_SRGB)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        let Self {
+            inner,
+            plan,
+            supported,
+        } = *self;
+        with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
+        let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        with_tone_mapped(&self.plan, px, self.supported, |p| {
+            self.inner.begin(width, height, p.descriptor())
+        })
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.inner.pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.inner.consume_output(n)
+    }
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.inner.take_output(into)
+    }
+
+    fn push_rows(
+        &mut self,
+        rows: PixelSlice<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        with_tone_mapped(&self.plan, rows, self.supported, |p| {
+            self.inner.push_rows(p)
+        })
+    }
+
+    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.finish()
+    }
+
+    fn encode_from(
+        self: Box<Self>,
+        _source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        Err("encode_from is not available when HDR pixels need tone mapping; use push_rows".into())
     }
 }
 
