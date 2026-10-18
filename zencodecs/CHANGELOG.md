@@ -15,7 +15,7 @@ None.
 - Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
 
 ### Added
-- `EncodeRequest::with_prefer_streaming(bool)` forwards the incremental-output preference to still and animation dispatch while preserving explicit selected-codec encoder settings.
+- `EncodeRequest::with_prefer_streaming(bool)` forwards the incremental-output preference to still and animation dispatch while preserving explicit selected-codec encoder settings (4f17e09a017e).
 - GIF, WebP and APNG animation files retain identical bytes under uneven and owned-buffer drains (315c23f5).
 - All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions (204850b8). Tiny whole-file caps also bound early refusals (86d8e06b).
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
