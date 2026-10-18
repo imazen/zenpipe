@@ -64,6 +64,19 @@ where
             let format = C::format();
             // Re-encodes write upright pixels and orientation 1.
             let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+            let strict = params
+                .encode_policy
+                .is_some_and(|p| p.resolve_strict(false));
+            // Check the original colour description before pixel negotiation
+            // can replace it with the converted samples' sRGB description.
+            if strict {
+                crate::color_fit::plan(
+                    upright.as_ref(),
+                    <C as zencodec::encode::EncoderConfig>::capabilities(),
+                )
+                .check_strict(true)
+                .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
+            }
             let oriented = crate::orient_fit::orient(&pixels, orientation);
             let pixels = match &oriented {
                 Some(b) => b.as_slice(),
@@ -87,9 +100,6 @@ where
             };
             // Fit the colour description to what this format carries,
             // converting the pixels when it can't carry theirs.
-            let strict = params
-                .encode_policy
-                .is_some_and(|p| p.resolve_strict(false));
             let fit = crate::color_fit::plan(
                 upright.as_ref(),
                 <C as zencodec::encode::EncoderConfig>::capabilities(),

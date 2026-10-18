@@ -37,6 +37,8 @@ sources`.
 
 ## Known Bugs
 
+- Fixed: strict one-shot encoding checked color policy after pixel-format negotiation, which could convert Display P3 to sRGB and make an otherwise forbidden fit look harmless. The check now runs against the original description first. `strict_refuses_conversion_when_descriptor_matches_source_color` reproduces the earlier successful 146-byte PNM and requires rejection in both paths.
+
 - Fixed in the streaming audit: the old PNG pin stored linear-float input as sRGB bytes while retaining a linear CICP tag. `zencodecs/tests/color_adapt.rs` measured a maximum byte error of 70; the current PNG pin includes its transfer-tag correction. This test passes against the committed graph.
 
 - Fixed in the streaming audit: `EncodeRequest::encode` rebuilt a validated row view through an adapter that required final-row padding. Passing the validated `PixelSlice` into dispatch preserves short final rows. `zencodecs/tests/strided_encode.rs` compares packed, padded and short-final-row inputs.
