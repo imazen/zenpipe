@@ -28,9 +28,9 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.28"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "802588500749f8792342d51afe283f42a7ab6baeb3c5334b62c3c48855a2ec20"
+checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -39,13 +39,13 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.28"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6e6c957fc425c4e22da4abc86b3341df09672079df466de138b6b0608a6cfd2"
+checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -71,7 +71,7 @@ checksum = "fc0e56a716f1e132ff6bf4bdac1c944a3fcdc1cae65f70a4a2a1ac3b401d2d1f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -81,22 +81,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
-name = "cfg-if"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
-
-[[package]]
-name = "crunchy"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
-
-[[package]]
 name = "enough"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
+checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "equator"
@@ -151,17 +139,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "half"
-version = "2.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
-dependencies = [
- "cfg-if",
- "crunchy",
- "zerocopy",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -170,6 +147,24 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "foldhash",
+]
+
+[[package]]
+name = "how-far"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "090dfeab9752b8574ff7b6fcfc96af46f4e4fc5b2cd0a3462e6d419b076eb7d1"
+dependencies = [
+ "enough",
 ]
 
 [[package]]
@@ -198,17 +193,18 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
 
 [[package]]
 name = "magetypes"
-version = "0.9.28"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b3e01b6a29880b694607d95eb01da6bf71a291c545a560c5255c26e02a35413"
+checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
 dependencies = [
  "archmage",
+ "libm",
  "rustversion",
 ]
 
@@ -290,19 +286,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
-
-[[package]]
-name = "safe_arch"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42c6efa15875e6ecb39ca61fb0b0c1a40b84fac5a5ffe71eef7d1000c8eb3f5f"
-dependencies = [
- "bytemuck",
-]
 
 [[package]]
 name = "safe_unaligned_simd"
@@ -329,9 +325,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.4"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -355,7 +351,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -375,15 +371,15 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "ultrahdr-core"
-version = "0.5.0"
-source = "git+https://github.com/imazen/ultrahdr?rev=031d4a2070a522f82bd02aee712a2806a2c17bbd#031d4a2070a522f82bd02aee712a2806a2c17bbd"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af411a89dd994324c442cea3fa0ded10aac0550cadb9a5cb2ba03c9596a4ed05"
 dependencies = [
  "bytemuck",
  "enough",
- "half",
  "linear-srgb",
  "thiserror",
- "wide",
+ "whereat",
  "zencodec",
  "zenpixels",
 ]
@@ -399,7 +395,7 @@ name = "wasm-size-shim"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "hashbrown",
+ "hashbrown 0.16.1",
  "imgref",
  "rgb",
  "zenblend",
@@ -428,16 +424,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
 
 [[package]]
-name = "wide"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cf05ca94c9fba0c51316899caa1d1e74a064fc310a5efa7375e614343d415be"
-dependencies = [
- "bytemuck",
- "safe_arch",
-]
-
-[[package]]
 name = "winarm-cpufeatures"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,7 +432,7 @@ checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#6b080abf84ae2407bc7f2b127940404b3adb70b0"
+source = "git+https://github.com/imazen/zenanalyze?rev=f7fe3435169716579670944d1b2cf1e0132c69db#f7fe3435169716579670944d1b2cf1e0132c69db"
 dependencies = [
  "archmage",
  "garb",
@@ -469,10 +455,12 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.26"
+version = "0.1.27"
+source = "git+https://github.com/imazen/zencodec?rev=802952b773368f589254a7d434f570790e3f3635#802952b773368f589254a7d434f570790e3f3635"
 dependencies = [
  "almost-enough",
  "enough",
+ "how-far",
  "whereat",
  "zenpixels",
 ]
@@ -522,6 +510,7 @@ dependencies = [
 [[package]]
 name = "zengif"
 version = "0.8.0"
+source = "git+https://github.com/imazen/zengif?rev=469a893fcbce40d96b8602560390e79891bc5d3d#469a893fcbce40d96b8602560390e79891bc5d3d"
 dependencies = [
  "bytemuck",
  "enough",
@@ -539,6 +528,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
+source = "git+https://github.com/imazen/zenjpeg?rev=c73a8740bded03fab2eec267323bff9df2f67a1d#c73a8740bded03fab2eec267323bff9df2f67a1d"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -557,9 +547,10 @@ dependencies = [
  "whereat",
  "zenanalyze",
  "zencodec",
+ "zenmeta",
  "zenpixels",
  "zenpixels-convert",
- "zenyuv 0.1.3",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=c73a8740bded03fab2eec267323bff9df2f67a1d)",
 ]
 
 [[package]]
@@ -571,8 +562,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenmeta"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zencodec?rev=802952b773368f589254a7d434f570790e3f3635#802952b773368f589254a7d434f570790e3f3635"
+dependencies = [
+ "roxmltree",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
 name = "zennode"
 version = "0.1.1"
+source = "git+https://github.com/imazen/zennode?rev=3ed1181c28829595170dcaaa1f4d57dc016a43b8#3ed1181c28829595170dcaaa1f4d57dc016a43b8"
 dependencies = [
  "zennode-derive",
 ]
@@ -580,6 +582,7 @@ dependencies = [
 [[package]]
 name = "zennode-derive"
 version = "0.1.1"
+source = "git+https://github.com/imazen/zennode?rev=3ed1181c28829595170dcaaa1f4d57dc016a43b8#3ed1181c28829595170dcaaa1f4d57dc016a43b8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -592,7 +595,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "enough",
- "hashbrown",
+ "hashbrown 0.16.1",
  "linear-srgb",
  "moxcms",
  "whereat",
@@ -610,7 +613,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.16"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=1d3ddd2131b22e9e3754c765d4ce45ce3901de59#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -620,7 +624,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.16"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=1d3ddd2131b22e9e3754c765d4ce45ce3901de59#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -640,6 +645,7 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
+source = "git+https://github.com/imazen/zenpng?rev=cfccd88f77cce5836c25bb70534fa49e4a5cd3c0#cfccd88f77cce5836c25bb70534fa49e4a5cd3c0"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -696,13 +702,14 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.5.0"
+source = "git+https://github.com/imazen/zenwebp?rev=b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f#b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f"
 dependencies = [
  "archmage",
  "bytemuck",
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown",
+ "hashbrown 0.17.1",
  "libm",
  "linear-srgb",
  "magetypes",
@@ -719,17 +726,6 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-dependencies = [
- "archmage",
- "libm",
- "linear-srgb",
- "magetypes",
- "safe_unaligned_simd",
-]
-
-[[package]]
-name = "zenyuv"
-version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6eca8f745696b57918b5529772fa7d0c112a07c86269277928bae2fd1d7aabae"
 dependencies = [
@@ -741,21 +737,104 @@ dependencies = [
 ]
 
 [[package]]
-name = "zerocopy"
-version = "0.8.56"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "556764e583adb45a9f8d413c2a147fa7e8d821e48e12b14fd560b607998b75eb"
+name = "zenyuv"
+version = "0.1.3"
+source = "git+https://github.com/imazen/zenjpeg?rev=c73a8740bded03fab2eec267323bff9df2f67a1d#c73a8740bded03fab2eec267323bff9df2f67a1d"
 dependencies = [
- "zerocopy-derive",
+ "archmage",
+ "imgref",
+ "libm",
+ "linear-srgb",
+ "magetypes",
+ "safe_unaligned_simd",
 ]
 
-[[package]]
-name = "zerocopy-derive"
-version = "0.8.56"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ab42fc20575779bd240faa45f94a74256f755c0fa9e89f0ede20d91d0cdfc1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
+[[patch.unused]]
+name = "heic"
+version = "0.2.0"
+source = "git+https://github.com/imazen/heic?rev=8d40c94e018082f4bffcfc688dfbb8e83925a1b0#8d40c94e018082f4bffcfc688dfbb8e83925a1b0"
+
+[[patch.unused]]
+name = "imageflow_riapi"
+version = "0.1.0"
+source = "git+https://github.com/imazen/imageflow?rev=7a969464777800d990e92d08cdfb4d0fbea75a9c#7a969464777800d990e92d08cdfb4d0fbea75a9c"
+
+[[patch.unused]]
+name = "imageflow_types"
+version = "0.1.0"
+source = "git+https://github.com/imazen/imageflow?rev=7a969464777800d990e92d08cdfb4d0fbea75a9c#7a969464777800d990e92d08cdfb4d0fbea75a9c"
+
+[[patch.unused]]
+name = "jxl-encoder"
+version = "0.3.2"
+source = "git+https://github.com/imazen/jxl-encoder?rev=cd9a7325f97f5e178863d867c81b694cd8b169aa#cd9a7325f97f5e178863d867c81b694cd8b169aa"
+
+[[patch.unused]]
+name = "ultrahdr-core"
+version = "0.5.0"
+source = "git+https://github.com/imazen/ultrahdr?rev=031d4a2070a522f82bd02aee712a2806a2c17bbd#031d4a2070a522f82bd02aee712a2806a2c17bbd"
+
+[[patch.unused]]
+name = "zenanalyze-api"
+version = "0.1.1"
+source = "git+https://github.com/imazen/zenanalyze?rev=f7fe3435169716579670944d1b2cf1e0132c69db#f7fe3435169716579670944d1b2cf1e0132c69db"
+
+[[patch.unused]]
+name = "zenavif"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=5e493d39bb0b1e60e79ef755d0734e5bc30313ac#5e493d39bb0b1e60e79ef755d0734e5bc30313ac"
+
+[[patch.unused]]
+name = "zenbitmaps"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenbitmaps?rev=fa16691e485ecf7dbd6cdbd93810afebbad89c9a#fa16691e485ecf7dbd6cdbd93810afebbad89c9a"
+
+[[patch.unused]]
+name = "zenjxl"
+version = "0.3.0"
+source = "git+https://github.com/imazen/zenjxl?rev=9226d3a32cfd82f6c079f2921a8237f4ae05ee24#9226d3a32cfd82f6c079f2921a8237f4ae05ee24"
+
+[[patch.unused]]
+name = "zenjxl-decoder"
+version = "0.4.0"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5#f1faec70e41b0c1f31e9db3d2142071bf02d08d5"
+
+[[patch.unused]]
+name = "zenpdf"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenextras?rev=f3b191a74fc08be3f611ade89bd5b9c22f34d2b5#f3b191a74fc08be3f611ade89bd5b9c22f34d2b5"
+
+[[patch.unused]]
+name = "zenpredict"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze#f0903489300aea240ffae2e3f1359f8f2b9a0ba4"
+
+[[patch.unused]]
+name = "zenraw"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenraw?rev=a6b78e93c46e32df4eb1bc9066f494a036b36031#a6b78e93c46e32df4eb1bc9066f494a036b36031"
+
+[[patch.unused]]
+name = "zensally"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zensally?rev=47a023370763d11466306625124eed66770afc76#47a023370763d11466306625124eed66770afc76"
+
+[[patch.unused]]
+name = "zensally-zentract"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zensally?rev=47a023370763d11466306625124eed66770afc76#47a023370763d11466306625124eed66770afc76"
+
+[[patch.unused]]
+name = "zensim"
+version = "0.3.0"
+source = "git+https://github.com/imazen/zensim?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
+
+[[patch.unused]]
+name = "zensim-regress"
+version = "0.4.0"
+source = "git+https://github.com/imazen/zensim?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
+
+[[patch.unused]]
+name = "zentiff"
+version = "0.1.2"
+source = "git+https://github.com/imazen/zenextras?rev=f3b191a74fc08be3f611ade89bd5b9c22f34d2b5#f3b191a74fc08be3f611ade89bd5b9c22f34d2b5"
