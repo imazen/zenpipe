@@ -7,13 +7,18 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+None.
+
 #### Added
+- Portable standalone fuzz/WASM dependency graphs and committed-source checks (83b02437, 771c6c27); workspace JSON API comparisons for unpublished dependencies (56166c80). Complete local CI benchmark captures retain their command and source provenance (6159a7c2).
 - `docs/reader-compat.md`: measured reader behaviour on orientation, colour
   and gain-map signalling (compat-matrix round 14, 2026-10-17), with the
   implications for zenpipe output and the run data it rests on.
 
 #### Changed
-- All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides.
+- All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides (a6ac4c2a, ae99e340).
 - Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
 - Production and fuzz graphs pin the streaming interface to zencodec `023a65c7` and zenjpeg `8aa966ab`. Fuzz manifests use git sources instead of sibling zencodec/codec checkouts; the WebP lock moves to `c4b6614e`, restoring byte-identical RGB one-shot and row encodes.
 - zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
@@ -730,9 +735,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+None.
+
 #### Fixed
 
-- Schema fixture export respects the configured temporary directory.
+- Schema fixture export respects the configured temporary directory (9dccbaa3).
 - Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
 
 #### Added

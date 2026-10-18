@@ -37,6 +37,8 @@ sources`.
 
 ## Known Bugs
 
+- Open: the existing `transcode_matrix::every_decodable_format_transcodes_to_every_encodable_format_both_ways` HDR/rgb8-to-GIF cell fails because Radiance RGBE reconstruction can exceed the finite SDR range required by GIF. Both paths refuse it. An explicit HDR-to-SDR input policy requires review; keep the existing matrix expectations unchanged.
+
 - Dispatched native row encoders could accept repeated declarations or one-shot encoding after begin, and empty WebP/AVIF inputs could panic. The private row guard validates declarations, counts emitted bytes, poisons failed pushes, and matches begin/encode empty-canvas acceptance with the same typed validation error or identical finished bytes. `zencodecs/tests/streamed_bytes.rs` covers the enabled encoders. Rotated buffered encodes apply dimension limits to the output canvas.
 
 - Fixed: strict one-shot encoding checked color policy after pixel-format negotiation, which could convert Display P3 to sRGB and make an otherwise forbidden fit look harmless. The check now runs against the original description first. `strict_refuses_conversion_when_descriptor_matches_source_color` reproduces the earlier successful 146-byte PNM and requires rejection in both paths.
@@ -110,3 +112,7 @@ threading, hdr directives, compat security. Verified remaining:
   extend the generator, then regenerate. (`docs/querystring.md:159` /
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
+
+### Comparing unpublished API surfaces
+
+`just semver-against <reviewed-source-export>` builds stable-toolchain rustdoc JSON inside the actual workspaces and compares the resulting API graphs at patch level. This preserves root git patches for unpublished dependencies that a synthetic outer workspace loses. `just test-streaming-seam`, `just test-dispatched-output`, and `just streaming-clippy-gate` exercise the dispatched row and transport contract.

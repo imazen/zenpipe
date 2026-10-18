@@ -15,7 +15,8 @@ None.
 - Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
 
 ### Added
-- All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions.
+- GIF, WebP and APNG animation files retain identical bytes under uneven and owned-buffer drains (315c23f5).
+- All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions (204850b8). Tiny whole-file caps also bound early refusals (86d8e06b).
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
   `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
   whose target cannot carry the source colour description fails
@@ -42,9 +43,9 @@ None.
   decoded (`tests/transcode_streaming.rs`).
 
 ### Fixed
-- Dispatched row encoders enforce declaration/row state, whole-file output budgets, and matching empty-canvas refusal or bytes in both paths. Rotated buffered encodes apply dimension limits to the output canvas.
-- Strict one-shot encodes validate the original color description before pixel negotiation can replace it with sRGB metadata, matching the streaming rejection.
-- One-shot encoding accepts valid strided views without trailing padding after the final row.
+- Dispatched row encoders enforce declaration/row state, whole-file output budgets, and matching empty-canvas refusal or bytes in both paths. Rotated buffered encodes apply dimension limits to the output canvas (de1e0d66).
+- Strict one-shot encodes validate the original color description before pixel negotiation can replace it with sRGB metadata, matching the streaming rejection (08a0f60a).
+- One-shot encoding accepts valid strided views without trailing padding after the final row (cc128515).
 - Buffered row fallback rejects one-shot/pull encoding after a declaration or rows, checks dimensions and row-buffer memory before allocation, counts the final output against the whole-file limit, and cannot recover a failed push into a successful file.
 - `TranscodeSink` drops its encoder and owned writer after an encode/write failure and cannot finalize that incomplete file. A rejected second declaration leaves the pending decoded strip intact.
 - Encoding into a format that cannot carry the source's colour description
