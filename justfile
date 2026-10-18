@@ -220,8 +220,7 @@ streaming-doc-baseline:
 
 # Compare unpublished crates with an explicit reviewed source export.
 semver-against baseline:
-    cargo semver-checks check-release -p zenpipe --baseline-root "{{baseline}}" --default-features
-    cargo semver-checks check-release -p zencodecs --baseline-root "{{baseline}}" --default-features --features jxl-encode,cms
+    just semver-json-against "{{baseline}}" "{{env_var('HOME')}}/tmp/zenpipe-semver"
 
 # Keep the shared-machine matrix above its disk-space floor.
 streaming-disk-floor:
@@ -252,3 +251,28 @@ test-dispatched-oracle:
 # Include limits smaller than an encoder header.
 test-dispatched-output-limits:
     cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes output_budgets -- --nocapture
+
+# Preserve root patches when unpublished dependencies prevent an outer-workspace build.
+semver-json-against baseline out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{out}}"
+    for which in baseline current; do
+        source="{{baseline}}"
+        if [ "$which" = current ]; then source="$PWD"; fi
+        for package in zenpipe zencodecs; do
+            just streaming-disk-floor
+            features=()
+            if [ "$package" = zencodecs ]; then features=(--features jxl-encode,cms); fi
+            RUSTC_BOOTSTRAP=1 cargo +stable rustdoc --locked --manifest-path "$source/Cargo.toml" -p "$package" --lib "${features[@]}" -- -Z unstable-options --output-format json --cap-lints allow
+            cp "$CARGO_TARGET_DIR/doc/$package.json" "{{out}}/$which-$package.json"
+        done
+    done
+    for package in zenpipe zencodecs; do
+        cargo semver-checks check-release --current-rustdoc "{{out}}/current-$package.json" --baseline-rustdoc "{{out}}/baseline-$package.json" --release-type patch
+    done
+
+# Sink aborts, buffered fallback, strided views and explicit native configuration.
+test-streaming-seam:
+    cargo test --locked --test sink_output_contract
+    cargo test --locked -p zencodecs --test transcode_output_contract --test buffered_encode_contract --test strided_encode --test explicit_jpeg_config
