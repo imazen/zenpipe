@@ -1,0 +1,31 @@
+# CI-equivalent validation capture, 2026-10-18 UTC
+# Command: cargo test --locked --all-targets
+# CPU: Apple M4 Pro (arm64); macOS 27.0; rustc 1.99.0 (b940084d7 2026-09-28).
+# Profile: test (unoptimized); CARGO_BUILD_JOBS=1; CARGO_INCREMENTAL=0;
+# RAYON_NUM_THREADS=2; OMP_NUM_THREADS=2; RUST_TEST_THREADS=2.
+# Existing benchmark workloads; these data accompany validation, without an optimization comparison.
+# Original artifact: zenbench-1792295560-75a7.txt
+# Resource scope: the entire associated validation command, including compilation and tests.
+# Native BSD time maximum resident set size: 585629696 bytes.
+# macOS min-avail below is the wrapper's free+inactive+speculative page proxy.
+# run-heavy: done rc=1 511s | peak-RSS 0.55GiB | min-avail 13432MiB | peak-load 7.09
+# Benchmark Rust sources and Cargo inputs match public code baseline cc12851504b83b1ad52d90c063b154fe3a32a08f.
+# Its printed git revision includes only additional CI, script and documentation changes.
+
+# zenbench results (complete)
+# git: 1be4c1f547c5f9a29a7b63c31a0b7671fe766222
+# 2026-10-18T03:56:02Z
+#
+# Re-read this file instead of re-running the benchmark.
+# Formats:  cargo bench -- --format=llm|csv|md|json
+# Env var:  ZENBENCH_FORMAT=llm cargo bench
+# Disable:  ZENBENCH_NO_SAVE=1 cargo bench
+#
+# Fields: group | benchmark | vs_base comparison | min mean median mad | throughput | n cv rounds calls
+#
+group=session_4k_drain benchmark=full_pipeline  |  vs_base=baseline  |  min=2.08s mean=2.09s median=2.08s mad=2.35ms  |  throughput=0.48 images/s  |  n=5 cv=0.8% rounds=5 calls=1 mean_ci=[2.08s 2.11s] cold=2.09s
+group=session_4k_drain benchmark=cached_suffix  |  vs_base_pct=-98.03 ci=[-98.24% -97.90%] significant=true effect=-662.09 p=1.0000  |  min=40.98ms mean=41.16ms median=41.12ms mad=45.47µs  |  throughput=24.30 images/s  |  n=5 cv=0.5% rounds=5 calls=1 mean_ci=[41.04ms 41.33ms] cold=41.01ms
+group=session_4k_bmp benchmark=full_pipeline_bmp  |  vs_base=baseline  |  min=2.13s mean=2.14s median=2.15s mad=6.32ms  |  throughput=0.47 images/s  |  n=5 cv=0.7% rounds=5 calls=1 mean_ci=[2.13s 2.15s] cold=2.13s
+group=session_4k_bmp benchmark=cached_suffix_bmp  |  vs_base_pct=-95.95 ci=[-96.40% -95.51%] significant=true effect=-204.84 p=1.0000  |  min=85.16ms mean=86.78ms median=85.94ms mad=1.15ms  |  throughput=11.52 images/s  |  n=5 cv=2.0% rounds=5 calls=1 mean_ci=[85.45ms 88.12ms] cold=86.46ms
+group=session_multi_filter benchmark=10x_full  |  vs_base=baseline  |  min=20.89s mean=20.93s median=20.91s mad=27.62ms  |  throughput=0.48 images/s  |  n=4 cv=0.2% rounds=4 calls=1 mean_ci=[20.90s 20.97s] cold=20.94s
+group=session_multi_filter benchmark=10x_cached  |  vs_base_pct=-88.24 ci=[-88.48% -88.02%] significant=true effect=-534.90 p=1.0000  |  min=2.45s mean=2.46s median=2.45s mad=1.72ms  |  throughput=4.06 images/s  |  n=4 cv=0.7% rounds=4 calls=1 mean_ci=[2.45s 2.48s] cold=2.45s

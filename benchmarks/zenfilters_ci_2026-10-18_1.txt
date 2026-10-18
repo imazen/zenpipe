@@ -1,0 +1,37 @@
+# CI-equivalent validation capture, 2026-10-18 UTC
+# Command: cargo test --locked --all-targets -p zenfilters
+# CPU: Apple M4 Pro (arm64); macOS 27.0; rustc 1.99.0 (b940084d7 2026-09-28).
+# Profile: test (unoptimized); CARGO_BUILD_JOBS=1; CARGO_INCREMENTAL=0;
+# RAYON_NUM_THREADS=2; OMP_NUM_THREADS=2; RUST_TEST_THREADS=2.
+# Existing benchmark workloads; these data accompany validation, without an optimization comparison.
+# Original artifact: zenbench-1792296462-b61f.txt
+# Resource scope: the entire associated validation command, including compilation and tests.
+# Native BSD time maximum resident set size: 836780032 bytes.
+# macOS min-avail below is the wrapper's free+inactive+speculative page proxy.
+# run-heavy: done rc=1 1097s | peak-RSS 0.78GiB | min-avail 14490MiB | peak-load 4.99
+
+# zenbench results (complete)
+# git: 08a0f60a58b9efc12e327af3c9f897385b68e05c
+# 2026-10-18T04:07:42Z
+#
+# Re-read this file instead of re-running the benchmark.
+# Formats:  cargo bench -- --format=llm|csv|md|json
+# Env var:  ZENBENCH_FORMAT=llm cargo bench
+# Disable:  ZENBENCH_NO_SAVE=1 cargo bench
+#
+# Fields: group | benchmark | vs_base comparison | min mean median mad | throughput | n cv rounds calls
+#
+group=film_look_generation benchmark=portra  |  vs_base=baseline  |  min=149.33ms mean=151.14ms median=150.50ms mad=1.10ms  |  n=20 cv=0.8% rounds=0 calls=0 mean_ci=[150.62ms 151.67ms] timer_ticks=0 (resolution-limited)
+group=film_look_generation benchmark=kodachrome  |  min=149.48ms mean=150.52ms median=150.30ms mad=679.25µs  |  n=20 cv=0.6% rounds=0 calls=0 mean_ci=[150.15ms 150.96ms] timer_ticks=0 (resolution-limited)
+group=film_look_generation benchmark=velvia  |  min=149.70ms mean=151.06ms median=150.84ms mad=1.07ms  |  n=20 cv=0.7% rounds=0 calls=0 mean_ci=[150.64ms 151.52ms] timer_ticks=0 (resolution-limited)
+group=film_look_generation benchmark=cyberpunk_neon  |  min=149.92ms mean=151.12ms median=151.00ms mad=1.00ms  |  n=20 cv=0.5% rounds=0 calls=0 mean_ci=[150.78ms 151.48ms] timer_ticks=0 (resolution-limited)
+group=film_look_generation benchmark=desert_crush  |  min=149.68ms mean=150.26ms median=150.23ms mad=592.08µs  |  n=20 cv=0.3% rounds=0 calls=0 mean_ci=[150.07ms 150.46ms] timer_ticks=0 (resolution-limited)
+group=film_look_apply benchmark=portra_256x256  |  vs_base=baseline  |  min=101.09ms mean=103.88ms median=103.86ms mad=958.38µs  |  n=100 cv=1.1% rounds=0 calls=0 mean_ci=[103.66ms 104.11ms] timer_ticks=0 (resolution-limited)
+group=film_look_apply benchmark=velvia_256x256  |  min=99.80ms mean=103.23ms median=103.50ms mad=1.13ms  |  n=100 cv=1.0% rounds=0 calls=0 mean_ci=[103.02ms 103.44ms] timer_ticks=0 (resolution-limited)
+group=film_look_apply benchmark=noir_256x256  |  min=100.22ms mean=103.18ms median=102.89ms mad=1.36ms  |  n=100 cv=1.7% rounds=0 calls=0 mean_ci=[102.85ms 103.52ms] timer_ticks=0 (resolution-limited)
+group=film_look_apply benchmark=cyberpunk_neon_256x256  |  min=101.04ms mean=104.28ms median=103.96ms mad=1.31ms  |  n=100 cv=1.7% rounds=0 calls=0 mean_ci=[103.94ms 104.62ms] timer_ticks=0 (resolution-limited)
+group=film_look_apply benchmark=blockbuster_256x256  |  min=100.85ms mean=103.64ms median=103.66ms mad=1.15ms  |  n=100 cv=1.2% rounds=0 calls=0 mean_ci=[103.40ms 103.89ms] timer_ticks=0 (resolution-limited)
+group=tensor_decompose benchmark=17cube_rank5  |  vs_base=baseline  |  min=93.62ms mean=94.59ms median=94.20ms mad=715.01µs  |  n=10 cv=1.0% rounds=0 calls=0 mean_ci=[94.08ms 95.15ms] timer_ticks=0 (resolution-limited)
+group=tensor_decompose benchmark=17cube_rank8  |  min=149.54ms mean=150.44ms median=150.40ms mad=322.74µs  |  n=10 cv=0.4% rounds=0 calls=0 mean_ci=[150.12ms 150.81ms] timer_ticks=0 (resolution-limited)
+group=tensor_decompose benchmark=17cube_rank12  |  min=224.17ms mean=225.54ms median=225.14ms mad=905.78µs  |  n=10 cv=0.5% rounds=0 calls=0 mean_ci=[224.93ms 226.28ms] timer_ticks=0 (resolution-limited)
+group=tensor_lookup benchmark=rank8_65k_lookups  |  vs_base=baseline  |  min=92.64ms mean=95.56ms median=95.40ms mad=892.86µs  |  n=100 cv=1.4% rounds=0 calls=0 mean_ci=[95.30ms 95.82ms] timer_ticks=0 (resolution-limited)
