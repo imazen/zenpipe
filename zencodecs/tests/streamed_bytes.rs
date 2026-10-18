@@ -284,3 +284,51 @@ fn output_limit_includes_bytes_already_sent_for_every_codec() {
         }
     }
 }
+
+#[test]
+fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
+    use zencodec::encode::{BoxedError, EncodeOutput};
+    for format in AllowedFormats::all().encodable_formats() {
+        let (data, descriptor) = pixels(false);
+        let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
+        let pixels = PixelSlice::new(&data, W, H, stride, descriptor).unwrap();
+        let full = EncodeRequest::new(format)
+            .with_quality(85.0)
+            .encode(pixels.clone(), false)
+            .unwrap();
+        assert!(full.len() > 7, "{format:?} fixture fits a tiny budget");
+        for cap in [0, 1, 7] {
+            let limits = zencodecs::Limits::none().with_max_output(cap as u64);
+            let bytes = Arc::new(Mutex::new(Vec::new()));
+            let out = bytes.clone();
+            let result = (|| -> Result<EncodeOutput, BoxedError> {
+                let se = EncodeRequest::new(format)
+                    .with_quality(85.0)
+                    .with_limits(&limits)
+                    .build_streaming_encoder(W, H)?;
+                let mut sink = TranscodeSink::new(se.encoder, se.supported).with_writer(move |b| {
+                    out.lock().unwrap().extend_from_slice(b);
+                    Ok(())
+                });
+                sink.begin(W, H, descriptor)?;
+                for y in (0..H).step_by(7) {
+                    let rows = 7.min(H - y);
+                    let mut next = sink.provide_next_buffer(y, rows, W, descriptor)?;
+                    for r in 0..rows {
+                        next.row_mut(r).copy_from_slice(pixels.row(y + r));
+                    }
+                }
+                sink.finish()?;
+                sink.finish_encode()
+            })();
+            assert!(
+                result.is_err(),
+                "{format:?} completed with a {cap}-byte budget"
+            );
+            assert!(
+                bytes.lock().unwrap().len() <= cap,
+                "{format:?} exceeded its {cap}-byte transport budget"
+            );
+        }
+    }
+}

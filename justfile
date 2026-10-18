@@ -248,3 +248,7 @@ test-dispatched-output:
 # Independent reader smoke tests; missing tools fail this explicit opt-in gate.
 test-dispatched-oracle:
     cargo test --locked -p zencodecs --features local-fixtures,jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes independent_decoders_read_every_streamed_format -- --nocapture
+
+# Include limits smaller than an encoder header.
+test-dispatched-output-limits:
+    cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes output_budgets -- --nocapture
