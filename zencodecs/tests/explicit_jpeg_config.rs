@@ -35,3 +35,38 @@ fn native_scan_and_entropy_settings_are_preserved() {
         "dispatch changed the caller's native JPEG scan or entropy configuration"
     );
 }
+
+#[test]
+fn short_fixed_table_canvas_keeps_the_complete_file_until_finish() {
+    for height in [1, 7] {
+        let width = 17;
+        let overrides = CodecConfig::default().with_jpeg_encoder(
+            EncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter)
+                .progressive(false)
+                .huffman(false),
+        );
+        let make = || EncodeRequest::new(ImageFormat::Jpeg).with_codec_config(&overrides);
+        let data: Vec<u8> = (0..width * height * 3).map(|i| (i * 37) as u8).collect();
+        let pixels = PixelSlice::new(
+            &data,
+            width,
+            height,
+            width as usize * 3,
+            PixelDescriptor::RGB8_SRGB,
+        )
+        .unwrap();
+        let whole = make().encode(pixels.clone(), false).unwrap();
+        let mut encoder = make()
+            .build_streaming_encoder(width, height)
+            .unwrap()
+            .encoder;
+        assert_eq!(
+            encoder.begin(width, height, pixels.descriptor()).unwrap(),
+            zencodec::encode::OutputTiming::AT_FINISH
+        );
+        assert!(encoder.pending_output().is_empty());
+        encoder.push_rows(pixels).unwrap();
+        assert!(encoder.pending_output().is_empty());
+        assert_eq!(encoder.finish().unwrap().data(), whole.data());
+    }
+}

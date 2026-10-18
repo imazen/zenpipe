@@ -276,3 +276,7 @@ semver-json-against baseline out:
 test-streaming-seam:
     cargo test --locked --test sink_output_contract
     cargo test --locked -p zencodecs --test transcode_output_contract --test buffered_encode_contract --test strided_encode --test explicit_jpeg_config
+
+# Schema fixtures must use the caller's configured temporary directory.
+test-schema-export:
+    cargo test --locked --features zennode,json-schema --lib schema_export

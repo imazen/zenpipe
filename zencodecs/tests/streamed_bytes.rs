@@ -449,6 +449,30 @@ fn every_dispatched_encoder_enforces_row_protocol() {
             "{format:?} accepted encode after begin"
         );
 
+        let other_descriptor = if pixels.descriptor() == PixelDescriptor::RGB8_SRGB {
+            PixelDescriptor::RGBA8_SRGB
+        } else {
+            PixelDescriptor::RGB8_SRGB
+        };
+        for (width, descriptor) in [(W - 1, pixels.descriptor()), (W, other_descriptor)] {
+            let data = vec![0; width as usize * descriptor.bytes_per_pixel()];
+            let wrong = PixelSlice::new(&data, width, 1, data.len(), descriptor).unwrap();
+            let mut enc = make().encoder;
+            enc.begin(W, H, pixels.descriptor()).unwrap();
+            assert!(
+                enc.push_rows(wrong).is_err(),
+                "{format:?} accepted a different row layout"
+            );
+            assert!(
+                enc.pending_output().is_empty(),
+                "{format:?} exposes a failed file"
+            );
+            assert!(
+                enc.finish().is_err(),
+                "{format:?} completed after a layout error"
+            );
+        }
+
         let mut enc = make().encoder;
         enc.begin(W, H, pixels.descriptor()).unwrap();
         assert!(enc.finish().is_err(), "{format:?} accepted missing rows");
