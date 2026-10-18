@@ -10,6 +10,10 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 None.
 
+### Fixed
+
+- The HDR-to-GIF transcode matrix explicitly selects the same sRGB8 clipping for whole images and strips, retaining every cell and pixel-identity assertion. Native over-range float refusal and clipped white pixels have regression coverage and an independent decoder gate (1573c8da).
+
 ### Changed
 
 - Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
