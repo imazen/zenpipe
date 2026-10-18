@@ -1135,6 +1135,10 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Added
+
+- **`tonemap` feature**: an HDR (PQ/HLG) source encoded to a target that carries neither HDR nor CICP (JPEG, WebP, GIF, BMP, TIFF) is tone-mapped to sRGB 8-bit instead of having its HDR code values read as sRGB, or failing when `color_fit` converts. ITU-R BT.2408 EETF (zentone) onto a 203-nit SDR white; BT.709, Display P3 and BT.2020 primaries; f32 and U16 RGB/RGBA. PQ content peak: MaxCLL, else the mastering peak, else (one-shot only) the measured brightest sample, else 1000 nits; streaming encodes can't measure, so with no metadata they use 1000 nits. HLG goes through the BT.2100 OOTF for the 1000-nit reference display. PNG, AVIF, JPEG XL, HEIC and PNM/PFM keep the HDR pixels. Supersedes #48. Tests: `tests/tonemap.rs`.
+
 #### Changed
 
 - **EXIF ColorSpace follows the colour written:** `1` only when the encode
