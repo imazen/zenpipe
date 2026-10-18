@@ -267,7 +267,7 @@ bytemuck = { version = "1.25.2", default-features = false, features = ["extern_c
 linear-srgb = { version = "0.6.12", default-features = false }
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false }
 zenpixels-convert = { version = ">=0.2.10, <0.4.0", default-features = false }
-zencodec = { version = ">=0.1.26, <0.3.0", default-features = false }
+zencodec = { version = ">=0.1.27, <0.3.0", default-features = false }
 # ── Serialization ──
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
@@ -291,9 +291,12 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # applies from the top-level workspace — git consumers of zenpipe that enable
 # features needing these crates must mirror the relevant entries.
 [patch.crates-io]
+# Streaming encode output is not available in the published 0.1.26 API.
+# Match zenjpeg's direct zencodec dependency so its trait types unify.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "023a65c738a87042b2d305d7e2019f6c8842d3fe" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8aa966ab36ebf943ea51dcabe69e029ea2e6a621" }
 # Container-stills backend main is 0.2.0 (the zencodec decode adapter + unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers the container-stills decode feature.
 heic = { git = "https://github.com/imazen/heic" }
@@ -304,8 +307,6 @@ zentiff = { git = "https://github.com/imazen/zenextras" }
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so new git-dep edges can be locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-# `zencodec` itself is NOT patched: the registry 0.1.26 carries the two-level
-# CodecError/CategorizedError taxonomy every codec pin below is built against.
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost

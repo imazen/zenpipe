@@ -14,7 +14,7 @@ enough = "0.4.3"
 
 zencodec = ">=0.1.26, <0.3.0"
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false }
-codec-corpus = { path = "../../../codec-corpus/crate" }
+codec-corpus = "1.1.0"
 
 [dependencies.zencodecs]
 path = ".."
@@ -53,11 +53,8 @@ members = ["."]
 # ^0.1.7, and the repo-root [patch.crates-io] does not reach this separate
 # fuzz workspace. Use the same 0.1.7 git revision as the production adapter;
 # current sibling main is 0.2.0 and cannot satisfy this requirement.
-# zencodec from the sibling clone (CI clones it; see fuzz.yml). Siblings pin
-# zencodec by git rev and bump it on their own schedule, so a rev here goes
-# stale; patching the registry AND the git source to one path keeps a single
-# zencodec whatever they pin.
-zencodec = { path = "../../../zencodec" }
+# Use the same streaming interface revision as the production workspace.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "023a65c738a87042b2d305d7e2019f6c8842d3fe" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
 # Unpublished mains the root [patch.crates-io] pins (see its comments):
 # zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
@@ -73,18 +70,16 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
-zenbitmaps = { path = "../../../zenbitmaps" }
-zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8aa966ab36ebf943ea51dcabe69e029ea2e6a621" }
 # zenjpeg resolves `zenanalyze 0.2.0` through a [patch.crates-io] at the zenjpeg
-# WORKSPACE root; patched in by path to its member crate, that table never
+# WORKSPACE root; when consumed as a dependency that table never
 # applies, and the registry is frozen at 0.1.0 — so a fresh resolve here fails
 # with "failed to select a version for the requirement `zenanalyze = ^0.2.0`".
-# Path (not git) to match every other sibling patch in this fuzz workspace.
-zenanalyze = { path = "../../../zenanalyze" }
-# Needed by the jpeg-ultrahdr feature (gain-map decode). As a real path-patch
-# its `zencodec = { workspace = true }` resolves against its own workspace root
-# (~/work/zen/ultrahdr/Cargo.toml).
-ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+# Match the 0.5.x reconstruction patch in the other fuzz workspace.
+# The 0.6.x gain-map encoder continues to resolve from the registry.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
 # zenrav1e needs no entry: zenavif → zenravif → zenrav1e are git-rev deps on
 # their own dep lines (no registry requirement exists), so a patch here is
 # reported unused.
@@ -162,7 +157,3 @@ path = "seed_corpus_tool.rs"
 test = false
 doc = false
 bench = false
-
-[patch."https://github.com/imazen/zencodec"]
-zencodec = { path = "../../../zencodec" }
-zenmeta = { path = "../../../zencodec/zenmeta" }

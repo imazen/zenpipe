@@ -6,6 +6,14 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+None.
+
+### Changed
+
+- Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
+
 ### Added
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
   `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
