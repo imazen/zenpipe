@@ -37,6 +37,9 @@ sources`.
 
 ## Known Bugs
 
+- 2026-10-19: the locked AVIF cohort loses Display-P3 primaries in `metadata_conformance::cicp_color_signaling_without_matrix` (12/13/0/full becomes 2/13/6/full). The unchanged test passes against the current-main encoder/decoder cohort with 12/13/6/full. The responsible dependency has not been isolated; [zenpipe issue 103](https://github.com/imazen/zenpipe/issues/103) tracks the pin refresh.
+- 2026-10-19: floating-point HDR input to TIFF fails with the default integer predictor on both one-shot and streaming paths. The 264-cell streaming matrix retains this failing case; [zenextras issue 52](https://github.com/imazen/zenextras/issues/52) tracks the codec fix.
+
 - Fixed during metadata integration: the operation catalog still called the legacy
   unsupported-timing checker for GIF after its adapter gained rational timing.
   It now asserts the advertised capability and checks exact 10/20 ms frame
