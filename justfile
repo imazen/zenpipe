@@ -64,8 +64,8 @@ tile-profile out="benchmarks/tile_pyramid_profile_$(date +%Y-%m-%d).tsv":
 
 # Run clippy
 clippy:
-    cargo clippy --all-targets -- -D warnings
-    cargo clippy --all-targets --no-default-features -- -D warnings
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo clippy --locked --all-targets --no-default-features -- -D warnings
 
 # Format code + regenerate the public-API surface snapshots (docs/public-api/).
 # The snapshot runner lives in the workspace-excluded apidoc/ package, so it
@@ -216,3 +216,210 @@ metadata-resolve-locks:
 
 metadata-arm-clippy:
     cargo clippy -p zenfilters --target aarch64-unknown-linux-gnu --all-targets -- -D warnings
+# Test the dependency graph committed here without sibling source overrides.
+check-streaming-pins:
+    python3 scripts/check-streaming-pins.py --self-test
+    python3 scripts/check-streaming-pins.py
+    just check-pins
+
+test-explicit-jpeg-config:
+    cargo test --locked -p zencodecs --test explicit_jpeg_config
+
+test-animation-output:
+    cargo test --locked -p zencodecs --test animation_streamed_bytes -- --nocapture
+
+test-strided-encode:
+    cargo test --locked -p zencodecs --test strided_encode
+
+test-encode-color-description:
+    cargo test --locked -p zencodecs --features cms --test color_adapt
+
+test-standalone-wasm:
+    cargo check --locked --manifest-path demo/crate/Cargo.toml --target wasm32-unknown-unknown
+    cargo check --locked --manifest-path wasm-size-shim/Cargo.toml --target wasm32-unknown-unknown --lib
+
+# Match the reused CI's feature/package checks, preserving every failure.
+streaming-local-matrix:
+    #!/usr/bin/env bash
+    result=0
+    for recipe in streaming-root-tests streaming-codec-tests streaming-filter-tests streaming-transcode-matrix; do
+        if ! just "$recipe"; then result=1; fi
+    done
+    exit "$result"
+
+streaming-root-tests:
+    just streaming-disk-floor
+    cargo test --locked --all-targets
+    just streaming-disk-floor
+    cargo test --locked --all-targets --no-default-features
+    just streaming-disk-floor
+    cargo test --locked --features zennode
+    just streaming-disk-floor
+    cargo test --locked --features zennode,json-schema
+    just streaming-disk-floor
+    cargo test --locked -p zenlayout --all-targets
+    just streaming-disk-floor
+    cargo test --locked -p zeneditor --all-targets
+
+streaming-codec-tests:
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --all-targets
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --features std,pdf-decode --lib pdf_
+    just streaming-disk-floor
+    cargo test --locked -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap --all-targets --no-fail-fast
+
+streaming-filter-tests:
+    just streaming-disk-floor
+    cargo test --locked -p zenfilters --all-targets
+
+streaming-transcode-matrix:
+    just streaming-disk-floor
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked --release -p zencodecs --features jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test transcode_matrix
+
+# Exercise explicit HDR-to-GIF clipping and native refusal with a small graph.
+test-hdr-gif:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr --test transcode_matrix
+
+# Independent ImageMagick pixel oracle; missing tools fail this explicit gate.
+test-hdr-gif-oracle:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr,local-fixtures --test transcode_matrix hdr_white_to_gif
+
+clippy-hdr-gif:
+    cd "{{env_var('HOME')}}/tmp" && cargo clippy --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,jpeg,png,webp,gif,gif-zenquant,bitmaps-hdr --test transcode_matrix -- -D warnings
+
+streaming-clippy-gate:
+    just clippy
+    just streaming-disk-floor
+    cargo clippy --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zencodecs --no-default-features --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zenlayout --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zeneditor --all-targets -- -D warnings
+    just streaming-disk-floor
+    cargo clippy --locked -p zenfilters --all-targets -- -D warnings
+
+streaming-doc-baseline:
+    cargo doc --locked --no-deps -p zenpipe -p zencodecs
+    cargo test --locked --doc -p zenpipe -p zencodecs
+
+# Compare unpublished crates with an explicit reviewed source export.
+semver-against baseline:
+    just semver-json-against "{{baseline}}" "{{env_var('HOME')}}/tmp/zenpipe-semver"
+
+# Keep the shared-machine matrix above its disk-space floor.
+streaming-disk-floor:
+    python3 -c 'import shutil, sys; from pathlib import Path; free = shutil.disk_usage(Path.home()).free; print("available disk bytes:", free); sys.exit(0 if free >= 8 * 1024**3 else "below the 8 GiB floor; reclaim inactive Cargo output first")'
+
+# Check strict color before and after format negotiation, with and without CMS.
+test-strict-color:
+    cargo test --locked -p zencodecs --test color_fit
+    cargo test --locked -p zencodecs --features cms --test color_fit
+
+# Complete only the matrix commands stopped by the disk-space floor.
+streaming-local-tail:
+    #!/usr/bin/env bash
+    result=0
+    for recipe in streaming-filter-tests streaming-transcode-matrix; do
+        if ! just "$recipe"; then result=1; fi
+    done
+    exit "$result"
+
+# Complete-file byte identity for all dispatched encoders.
+test-dispatched-output:
+    cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes -- --nocapture
+
+# Independent reader smoke tests; missing tools fail this explicit opt-in gate.
+test-dispatched-oracle:
+    cargo test --locked -p zencodecs --features local-fixtures,jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes independent_decoders_read_every_streamed_format -- --nocapture
+
+# Include limits smaller than an encoder header.
+test-dispatched-output-limits:
+    cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes output_budgets -- --nocapture
+
+# Preserve root patches when unpublished dependencies prevent an outer-workspace build.
+semver-json-against baseline out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{out}}"
+    for which in baseline current; do
+        source="{{baseline}}"
+        if [ "$which" = current ]; then source="$PWD"; fi
+        for package in zenpipe zencodecs; do
+            just streaming-disk-floor
+            features=()
+            if [ "$package" = zencodecs ]; then features=(--features jxl-encode,cms); fi
+            RUSTC_BOOTSTRAP=1 cargo +stable rustdoc --locked --manifest-path "$source/Cargo.toml" -p "$package" --lib "${features[@]}" -- -Z unstable-options --output-format json --cap-lints allow
+            cp "$CARGO_TARGET_DIR/doc/$package.json" "{{out}}/$which-$package.json"
+        done
+    done
+    for package in zenpipe zencodecs; do
+        cargo semver-checks check-release --current-rustdoc "{{out}}/current-$package.json" --baseline-rustdoc "{{out}}/baseline-$package.json" --release-type patch
+    done
+
+# Sink aborts, buffered fallback, strided views and explicit native configuration.
+test-streaming-seam:
+    cargo test --locked --test sink_output_contract
+    cargo test --locked -p zencodecs --test transcode_output_contract --test buffered_encode_contract --test strided_encode --test explicit_jpeg_config
+
+# Schema fixtures must use the caller's configured temporary directory.
+test-schema-export:
+    cargo test --locked --features zennode,json-schema --lib schema_export
+
+# Explicit HDR rendering, chunk parity, color precedence and strict-policy gates.
+test-tonemap-policy:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib tonemap
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test tonemap --test color_fit
+
+clippy-tonemap-policy:
+    cd "{{env_var('HOME')}}/tmp" && cargo clippy --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib --test tonemap --test color_fit -- -D warnings
+
+# Exercise cfg boundaries and preexisting color fitting alongside rendering.
+test-tonemap-modes:
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --lib
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test color_fit
+    cd "{{env_var('HOME')}}/tmp" && cargo check --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features tonemap
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --doc
+
+# Selected native encoder settings override the generic preference.
+test-streaming-preference:
+    cargo test --locked -p zencodecs --test prefer_streaming
+
+# Verify the policy adapter and the independently merged streaming preference.
+test-tonemap-integration: test-tonemap-policy clippy-tonemap-policy
+    cd "{{env_var('HOME')}}/tmp" && cargo test --manifest-path "{{justfile_directory()}}/Cargo.toml" --locked -p zencodecs --no-default-features --features std,cms,tonemap,bitmaps-bmp,png,gif,gif-zenquant,jpeg,webp --test prefer_streaming
+
+# Merge verification combines metadata integration with main's newer behavior gates.
+metadata-merge-check:
+    cargo fmt -p zenpipe -p zencodecs -p zenfilters -p zenlayout -p zenpipe-cmd -p zeneditor -p zencodecs-cli --check
+    just metadata-dispatch-check
+    just test-streaming-preference
+    just test-tonemap-integration
+    just metadata-services-check
+    just metadata-inventory-dispatch-check
+    just check-streaming-pins
+
+metadata-merge-resolve:
+    cargo metadata --format-version 1 > /dev/null
+    cargo metadata --manifest-path tools/metadata-services/Cargo.toml --format-version 1 > /dev/null
+    cargo metadata --manifest-path zencodecs/fuzz/Cargo.toml --format-version 1 > /dev/null
+    cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null
+    cargo metadata --manifest-path demo/crate/Cargo.toml --format-version 1 > /dev/null
+    cargo metadata --manifest-path wasm-size-shim/Cargo.toml --format-version 1 > /dev/null
+    cargo fmt -p zenpipe -p zencodecs -p zenfilters -p zenlayout -p zenpipe-cmd -p zeneditor -p zencodecs-cli
+
+# Advance only the codec sources whose inventory/metadata adapters are integrated.
+metadata-merge-update-codecs:
+    cargo update -p heic -p zenraw -p zenjxl -p jxl-encoder -p zenjxl-decoder -p zentiff -p zenpdf -p zenbitmaps -p zenpng -p ultrahdr-core
+    just metadata-merge-resolve
+
+# Default-feature and minimal builds keep the merged dispatch graph checked.
+metadata-merge-workspace-check:
+    just api-doc
+    just api-doc-check
+    just test
+    just clippy
+    cargo check --locked --manifest-path fuzz/Cargo.toml
+    cargo check --locked --manifest-path zencodecs/fuzz/Cargo.toml

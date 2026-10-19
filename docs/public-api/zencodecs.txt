@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 768 lines (supported surface) | zencodecs.features.txt 83 added (features: all,jp2-decode,metadata) | zencodecs.internal.txt 17 lines (17 hidden + 0 excluded-feature)
+# files: zencodecs.txt 769 lines (supported surface) | zencodecs.features.txt 88 added (features: all,jp2-decode,metadata,tonemap) | zencodecs.internal.txt 18 lines (18 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)        59
 #   pub consts/statics                         10
 #   free functions                             39
-#   inherent methods                          264
+#   inherent methods                          265
 #   struct fields                             128
 #   enum variants                             119
 #   re-exports                                127
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          334
+#   (root)                          335
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -41,7 +41,7 @@
 #   trace                            48
 #   transcode                        54
 
-## items (733 lines)
+## items (734 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -627,6 +627,7 @@ pub fn EncodeRequest<'a>::with_lossless(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_metadata(self, zencodec::metadata::Metadata) -> Self
 pub fn EncodeRequest<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
 pub fn EncodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
+pub fn EncodeRequest<'a>::with_prefer_streaming(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_quality_profile(self, quality::QualityProfile) -> Self
 pub fn EncodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self

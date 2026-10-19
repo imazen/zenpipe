@@ -267,7 +267,7 @@ bytemuck = { version = "1.25.2", default-features = false, features = ["extern_c
 linear-srgb = { version = "0.6.12", default-features = false }
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false }
 zenpixels-convert = { version = ">=0.2.10, <0.4.0", default-features = false }
-zencodec = { version = ">=0.1.26, <0.3.0", default-features = false }
+zencodec = { version = ">=0.1.27, <0.3.0", default-features = false }
 # ── Serialization ──
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
@@ -291,9 +291,12 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # applies from the top-level workspace — git consumers of zenpipe that enable
 # features needing these crates must mirror the relevant entries.
 [patch.crates-io]
+# Streaming encode output is not available in the published 0.1.26 API.
+# Match zenjpeg's direct zencodec dependency so its trait types unify.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
 # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
 # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # Container-stills backend main is 0.2.0 (the zencodec decode adapter + unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers the container-stills decode feature.
 heic = { git = "https://github.com/imazen/heic" }
@@ -304,8 +307,6 @@ zentiff = { git = "https://github.com/imazen/zenextras" }
 # zenpixels(-convert) 0.2.15 — formerly a local `paths` override in
 # .cargo/config.toml, moved here so new git-dep edges can be locked. `paths` overrides can't lock a crate newly depended-on by a git dep
 # ("non-locked list"); `[patch]` can. Tracks the same git mains the override did.
-# `zencodec` itself is NOT patched: the registry 0.1.26 carries the two-level
-# CodecError/CategorizedError taxonomy every codec pin below is built against.
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # ultrahdr-core 0.5.x with `full_reconstruction_boost` (the canonical f32 boost
@@ -313,7 +314,7 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
 # resolves to 0.6.x would no longer satisfy the backend's `^0.5.0`, stranding it on the
 # boost-less registry 0.5.0. zenjpeg 0.9.0 + zencodecs use registry 0.6.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
@@ -326,10 +327,10 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
 # optional feature to a required dep (zenwebp#69).
-zenwebp = { git = "https://github.com/imazen/zenwebp" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

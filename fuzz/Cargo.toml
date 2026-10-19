@@ -21,12 +21,9 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
-# zencodec from the sibling clone (CI clones it; see fuzz.yml). Siblings pin
-# zencodec by git rev and bump it on their own schedule, so a rev here goes
-# stale; patching the registry AND the git source to one path keeps a single
-# zencodec whatever they pin.
-zencodec = { path = "../../zencodec" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+# Use the same streaming interface revision as the production workspace.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
@@ -35,8 +32,8 @@ zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
-zenwebp = { git = "https://github.com/imazen/zenwebp" }
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zensim = { git = "https://github.com/imazen/zensim" }
@@ -69,7 +66,7 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # Rev-pinned to 0.5.0 exactly as demo/crate pins it: ultrahdr main is 0.6.0,
 # and a floating patch would stop satisfying the decode backend's `^0.5.0`, stranding it on
 # the boost-less registry 0.5.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
 
 # Override zenresize's git dep on zenlayout to use the workspace copy
 # (mirrors the root manifest's source-replacement patch).
@@ -85,7 +82,3 @@ doc = false
 name = "fuzz_job_transcode"
 path = "fuzz_targets/fuzz_job_transcode.rs"
 doc = false
-
-[patch."https://github.com/imazen/zencodec"]
-zencodec = { path = "../../zencodec" }
-zenmeta = { path = "../../zencodec/zenmeta" }

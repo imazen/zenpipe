@@ -11,7 +11,7 @@
 #
 #   inherent methods                            4
 #   re-exports                                  2
-#   trait roster entries (type × trait)        11
+#   trait roster entries (type × trait)        12
 #
 # per-module pub lines:
 #   (root)                            1
@@ -29,10 +29,11 @@ pub fn transcode::SupplementSet::assert_fields_are_eq(&self)
 pub use config::jpeg::ultrahdr::RowDecoder
 pub use config::jpeg::ultrahdr::RowEncoder
 
-## trait impls (11 types)
+## trait impls (12 types)
 
 AllowedFormats: TrivialClone
 FormatSet: TrivialClone
+ToneMapPolicy: TrivialClone
 codec_id::CodecId: TrivialClone
 intent::BoolKeep: TrivialClone
 intent::FormatChoice: TrivialClone

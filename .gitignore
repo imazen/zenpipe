@@ -52,6 +52,7 @@ Thumbs.db
 # package) are tracked.
 /docs/*
 !/docs/public-api/
+!/docs/reader-compat.md
 
 # Tooling noise
 .superwork/

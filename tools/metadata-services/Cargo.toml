@@ -21,7 +21,7 @@ required-features = ["cli"]
 [dependencies]
 zencodecs = { path = "../../zencodecs", optional = true, default-features = false, features = ["std", "jpeg", "metadata"] }
 zencodec = { version = ">=0.1.26, <0.3.0" }
-zenmeta = { git = "https://github.com/imazen/zencodec", default-features = false, features = ["xmp"] }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc", default-features = false, features = ["xmp"] }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 xmpkit = { version = "=0.1.6", default-features = false, features = ["core"] }
 roxmltree = { version = "0.21.1", default-features = false, features = ["positions"] }
@@ -33,20 +33,18 @@ enough = "0.4.4"
 # Mirrors the workspace root table (cargo honours [patch] only from the
 # building workspace root; this harness is its own workspace).
 [patch.crates-io]
-# The same git source as zenmeta, so its in-repo `zencodec` path dependency and
-# the registry requirement of every codec unify into one zencodec.
-zencodec = { git = "https://github.com/imazen/zencodec" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 heic = { git = "https://github.com/imazen/heic" }
 zentiff = { git = "https://github.com/imazen/zenextras" }
 zenpixels = { git = "https://github.com/imazen/zenpixels" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
-zenwebp = { git = "https://github.com/imazen/zenwebp" }
-zenpng = { git = "https://github.com/imazen/zenpng" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zensim = { git = "https://github.com/imazen/zensim" }

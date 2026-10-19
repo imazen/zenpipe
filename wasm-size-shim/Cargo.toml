@@ -24,8 +24,8 @@ zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
 zenlayout = { path = "../zenlayout" }
 zenblend = { version = "0.1.2", default-features = false }
 zenfilters = { path = "../zenfilters" }
-zencodec = { version = ">=0.1.26, <0.3.0" }
-zenpixels = { path = "../../zenpixels/zenpixels" }
+zencodec = { version = ">=0.1.27, <0.3.0" }
+zenpixels = { version = "0.2.17" }
 hashbrown = "0.16"
 rgb = "0.8"
 bytemuck = { version = "1", features = ["derive"] }
@@ -33,12 +33,12 @@ imgref = "1"
 
 # Codecs
 # zenjpeg 0.9.0 dropped the no-op `trellis` feature (trellis is always compiled now).
-zenjpeg = { path = "../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
+zenjpeg = { version = "0.9.0", default-features = false, features = ["zencodec"] }
 # zengif main made `zencodec` a required dep (no longer a feature; imazen/zengif#13).
-zengif = { path = "../../zengif", default-features = false, features = ["std", "quantizr"] }
-zenpng = { path = "../../zenpng" }
+zengif = { version = "0.8.0", default-features = false, features = ["std", "quantizr"] }
+zenpng = { version = "0.2.0" }
 # zenwebp main made `zencodec` a required dep (no longer a feature; zenwebp#69).
-zenwebp = { path = "../../zenwebp" }
+zenwebp = { version = "0.5.0" }
 # zenavif: rav1d API change (lossless/base_q_idx fields removed from AV1Metadata)
 # zenavif = { path = "../../zenavif", features = ["zencodec"] }
 # zenjxl: API mismatch with published zencodec (parse_iso21496_jpeg renamed)
@@ -50,44 +50,38 @@ zenwebp = { path = "../../zenwebp" }
 
 
 [patch.crates-io]
-# `zenpipe = { path = ".." }` drags zenpipe's whole OPTIONAL dep set into
-# resolution (cargo resolves optional deps whether or not their feature is on),
-# and most of those crates' current versions are unpublished. So every one of
-# them needs an entry here or a fresh resolve dies at the first unmet registry
-# requirement — which is what took the WASM Benchmark workflow red on
-# 2026-08-27 ("failed to select a version for the requirement
-# `zenjpeg = ^0.9.0`", registry tops out at 0.8.4).
-#
-# Form matters. For a crate this manifest ALSO path-deps directly (zenjpeg,
-# zengif, zenpng, zenwebp above), the entry must be the SAME path, or the graph
-# ends up with two instances of it and the shared zencodec types stop unifying.
-# For everything else, git — the wasm-bench workflow clones a fixed list of
-# siblings and a git source needs no clone at all.
-zenjpeg = { path = "../../zenjpeg/zenjpeg" }
-zengif = { path = "../../zengif" }
-zenpng = { path = "../../zenpng" }
-zenwebp = { path = "../../zenwebp" }
-# zenjpeg is a direct path dep above, so its own workspace-root
-# [patch.crates-io] (where `zenanalyze 0.2.0` resolves) never applies here, and
-# the registry is frozen at 0.1.0. Without this a fresh resolve fails with
-# "failed to select a version for the requirement `zenanalyze = ^0.2.0`".
-# Git, not path: zenanalyze is not in the wasm-bench clone list, and it is not
-# a direct dep here, so there is no instance to unify with.
-zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
-# Reached through zenjpeg (gain-map/UltraHDR types). Rev-pinned to 0.5.0 for
-# the same reason the repo-root table pins it: ultrahdr main is 0.6.0, and a
-# floating patch would stop satisfying the `^0.5` requirement on this edge.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
-# zenpixels' sibling crate; registry 0.2.10 predates the zenpixels main that
-# `zenpixels = { path = ... }` below resolves to, so it has to move with it.
-# Path, matching that entry: a git source here pulls zenpixels through its own
-# internal dep and the graph ends up with two zenpixels, at which point
-# `PixelDescriptor` / `PixelSlice` stop unifying across zencodecs (E0308).
-zenpixels-convert = { path = "../../zenpixels/zenpixels-convert" }
-zennode = { path = "../../zennode/zennode" }
-zennode-derive = { path = "../../zennode/zennode-derive" }
-zenpixels = { path = "../../zenpixels/zenpixels" }
-zencodec = { path = "../../zencodec" }
+# Share the production graph without external sibling source overrides.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
+heic = { git = "https://github.com/imazen/heic", rev = "8d40c94e018082f4bffcfc688dfbb8e83925a1b0" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "f3b191a74fc08be3f611ade89bd5b9c22f34d2b5" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "9226d3a32cfd82f6c079f2921a8237f4ae05ee24" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cd9a7325f97f5e178863d867c81b694cd8b169aa" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f1faec70e41b0c1f31e9db3d2142071bf02d08d5" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
+zennode = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
+zennode-derive = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
+zensim = { git = "https://github.com/imazen/zensim", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
+zensim-regress = { git = "https://github.com/imazen/zensim", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "f7fe3435169716579670944d1b2cf1e0132c69db" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "f7fe3435169716579670944d1b2cf1e0132c69db" }
+zenpredict = { git = "https://github.com/imazen/zenanalyze" }
+imageflow_types = { git = "https://github.com/imazen/imageflow", rev = "7a969464777800d990e92d08cdfb4d0fbea75a9c" }
+imageflow_riapi = { git = "https://github.com/imazen/imageflow", rev = "7a969464777800d990e92d08cdfb4d0fbea75a9c" }
+zensally = { git = "https://github.com/imazen/zensally", rev = "47a023370763d11466306625124eed66770afc76" }
+zensally-zentract = { git = "https://github.com/imazen/zensally", rev = "47a023370763d11466306625124eed66770afc76" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "fa16691e485ecf7dbd6cdbd93810afebbad89c9a" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "a6b78e93c46e32df4eb1bc9066f494a036b36031" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "f3b191a74fc08be3f611ade89bd5b9c22f34d2b5" }
+
+[patch."https://github.com/imazen/zenlayout.git"]
+zenlayout = { path = "../zenlayout" }
 
 [profile.release]
 lto = true

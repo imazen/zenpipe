@@ -13,6 +13,11 @@
 //! only choose after seeing the whole image (PNM writing RGB for opaque RGBA),
 //! which a streaming encode cannot, so bytes may differ where pixels may not.
 //! The matrix covers whatever codec features are enabled and prints its table.
+//!
+//! The HDR-to-GIF cell explicitly clips to sRGB8 in both paths: RGBE can
+//! reconstruct SDR white above 1.0, whereas GIF's native float input requires
+//! finite SDR in 0..1. The separate regression below keeps native refusal
+//! covered; clipping is a caller choice, not an encoder default.
 
 // Needs at least two codecs; the CI run with `--no-default-features` has none.
 #![cfg(all(feature = "jpeg", feature = "png"))]
@@ -72,34 +77,161 @@ fn encode_source(format: ImageFormat, alpha: bool) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("{e}"))
 }
 
-fn one_shot(src: &[u8], target: ImageFormat) -> Result<Vec<u8>, String> {
+#[derive(Clone, Copy)]
+enum InputPolicy {
+    Native,
+    ClipToSrgb8,
+}
+
+impl InputPolicy {
+    fn for_pair(source: ImageFormat, target: ImageFormat) -> Self {
+        if source == ImageFormat::Hdr && target == ImageFormat::Gif {
+            Self::ClipToSrgb8
+        } else {
+            Self::Native
+        }
+    }
+
+    fn supported(self, native: &'static [PixelDescriptor]) -> &'static [PixelDescriptor] {
+        match self {
+            Self::Native => native,
+            Self::ClipToSrgb8 => {
+                assert!(native.contains(&PixelDescriptor::RGB8_SRGB));
+                &[PixelDescriptor::RGB8_SRGB]
+            }
+        }
+    }
+}
+
+fn one_shot(src: &[u8], target: ImageFormat, input_policy: InputPolicy) -> Result<Vec<u8>, String> {
     let dec = DecodeRequest::new(src)
         .decode_full_frame()
         .map_err(|e| format!("decode: {e}"))?;
-    EncodeRequest::new(target)
-        .with_quality(85.0)
-        .encode(dec.pixels(), dec.has_alpha())
-        .map(|o| o.into_vec())
-        .map_err(|e| format!("encode: {e}"))
+    let encode = |pixels| {
+        EncodeRequest::new(target)
+            .with_quality(85.0)
+            .encode(pixels, dec.has_alpha())
+            .map(|o| o.into_vec())
+            .map_err(|e| format!("encode: {e}"))
+    };
+    match input_policy {
+        InputPolicy::Native => encode(dec.pixels()),
+        InputPolicy::ClipToSrgb8 => {
+            let pixels = dec.pixels();
+            let bytes = pixels.contiguous_bytes();
+            // Select the same conversion that TranscodeSink applies per strip.
+            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+                &bytes,
+                pixels.descriptor(),
+                pixels.width(),
+                pixels.rows(),
+                pixels.width() as usize * pixels.descriptor().bytes_per_pixel(),
+                &[PixelDescriptor::RGB8_SRGB],
+            )
+            .map_err(|e| format!("clip to sRGB8: {e}"))?;
+            encode(adapted.as_slice())
+        }
+    }
 }
 
-fn streaming(src: &[u8], target: ImageFormat) -> Result<Vec<u8>, String> {
+fn streaming(
+    src: &[u8],
+    target: ImageFormat,
+    input_policy: InputPolicy,
+) -> Result<Vec<u8>, String> {
     let se = EncodeRequest::new(target)
         .with_quality(85.0)
         .build_streaming_encoder(W, H)
         .map_err(|e| format!("build: {e}"))?;
     let got: Arc<Mutex<Vec<u8>>> = Arc::default();
     let sink_out = got.clone();
-    let mut sink = TranscodeSink::new(se.encoder, se.supported).with_writer(move |b| {
-        sink_out.lock().unwrap().extend_from_slice(b);
-        Ok(())
-    });
+    let mut sink = TranscodeSink::new(se.encoder, input_policy.supported(se.supported))
+        .with_writer(move |b| {
+            sink_out.lock().unwrap().extend_from_slice(b);
+            Ok(())
+        });
     DecodeRequest::new(src)
         .push_decode(&mut sink)
         .map_err(|e| format!("push_decode: {e}"))?;
     sink.finish_encode().map_err(|e| format!("finish: {e}"))?;
     let bytes = core::mem::take(&mut *got.lock().unwrap());
     Ok(bytes)
+}
+
+#[test]
+#[cfg(all(feature = "bitmaps-hdr", feature = "gif"))]
+fn hdr_white_to_gif_requires_explicit_clipping_in_both_paths() {
+    let white = vec![255; (W * H * 3) as usize];
+    let pixels = PixelSlice::new(&white, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let source = EncodeRequest::new(ImageFormat::Hdr)
+        .encode(pixels, false)
+        .unwrap();
+    let decoded = DecodeRequest::new(source.data())
+        .decode_full_frame()
+        .unwrap();
+    assert_eq!(
+        decoded.descriptor().channel_type(),
+        zenpixels::ChannelType::F32
+    );
+    assert!(matches!(
+        decoded.descriptor().layout(),
+        zenpixels::ChannelLayout::Rgb | zenpixels::ChannelLayout::Rgba
+    ));
+    let pixels = decoded.pixels();
+    // The materialized decoder may add opaque alpha; inspect RGB separately.
+    for y in 0..H {
+        for pixel in pixels
+            .row(y)
+            .chunks_exact(decoded.descriptor().bytes_per_pixel())
+        {
+            for sample in pixel[..12].as_chunks::<4>().0 {
+                let value = f32::from_ne_bytes(*sample);
+                assert!(value.is_finite() && value > 1.0);
+            }
+            if decoded.descriptor().layout() == zenpixels::ChannelLayout::Rgba {
+                assert_eq!(f32::from_ne_bytes(pixel[12..16].try_into().unwrap()), 1.0);
+            }
+        }
+    }
+
+    for result in [
+        one_shot(source.data(), ImageFormat::Gif, InputPolicy::Native),
+        streaming(source.data(), ImageFormat::Gif, InputPolicy::Native),
+    ] {
+        let error = result.expect_err("native GIF input must refuse over-range RGBE white");
+        assert!(error.contains("finite SDR in 0..1"), "{error}");
+    }
+
+    for bytes in [
+        one_shot(source.data(), ImageFormat::Gif, InputPolicy::ClipToSrgb8).unwrap(),
+        streaming(source.data(), ImageFormat::Gif, InputPolicy::ClipToSrgb8).unwrap(),
+    ] {
+        #[cfg(feature = "local-fixtures")]
+        {
+            use std::io::Write;
+            use std::process::{Command, Stdio};
+            let mut child = Command::new("magick")
+                .args(["GIF:-", "-depth", "8", "RGB:-"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("install ImageMagick for the explicit HDR/GIF oracle gate");
+            child.stdin.take().unwrap().write_all(&bytes).unwrap();
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout.len(), (W * H * 3) as usize);
+            assert!(output.stdout.iter().all(|&v| v == 255));
+        }
+        match decoded_pixels(&bytes).unwrap() {
+            Pixels::Int(samples) => assert!(samples.iter().all(|&v| v == 65535)),
+            Pixels::Float(_) => panic!("GIF must decode to integer samples"),
+        }
+    }
 }
 
 /// Decoded pixels in a comparable form: integer samples widened to RGBA16
@@ -228,7 +360,11 @@ fn every_decodable_format_transcodes_to_every_encodable_format_both_ways() {
                 }
             };
             for &t in &encodable {
-                let cell = match (one_shot(&src, t), streaming(&src, t)) {
+                let input_policy = InputPolicy::for_pair(s, t);
+                let cell = match (
+                    one_shot(&src, t, input_policy),
+                    streaming(&src, t, input_policy),
+                ) {
                     (Ok(a), Ok(b)) => match (decoded_pixels(&a), decoded_pixels(&b)) {
                         (Ok(_), Ok(_)) if a == b => Cell::Same(a.len()),
                         (Ok(pa), Ok(pb)) if pa == pb => Cell::SamePixels {

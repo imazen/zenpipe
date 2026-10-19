@@ -37,6 +37,24 @@ sources`.
 
 ## Known Bugs
 
+- HDR rendering on PR100 required an explicit per-request policy and a common
+  missing-peak fallback. The proposed `tonemap` followup uses
+  `ToneMapPolicy::Bt2408` and the same metadata-or-1000-nit peak for whole
+  images and strips. The feature alone retains the existing encode contract.
+  Validation commands: `just test-tonemap-policy`, `just clippy-tonemap-policy`.
+
+- Fixed: `transcode_matrix` explicitly chooses sRGB8 clipping for HDR-to-GIF in both paths, since RGBE reconstruction can exceed GIF's finite SDR range. All source/target cells and success/pixel-identity assertions remain. A white RGBE regression requires native refusal and clipped white output; `just test-hdr-gif` and `just clippy-hdr-gif` pass. `just test-hdr-gif-oracle` checks both outputs' pixels with ImageMagick. Encoder defaults and public APIs are unchanged.
+
+- Dispatched native row encoders could accept repeated declarations or one-shot encoding after begin, and empty WebP/AVIF inputs could panic. The private row guard validates declarations, counts emitted bytes, poisons failed pushes, and matches begin/encode empty-canvas acceptance with the same typed validation error or identical finished bytes. `zencodecs/tests/streamed_bytes.rs` covers the enabled encoders. Rotated buffered encodes apply dimension limits to the output canvas.
+
+- Fixed: strict one-shot encoding checked color policy after pixel-format negotiation, which could convert Display P3 to sRGB and make an otherwise forbidden fit look harmless. The check now runs against the original description first. `strict_refuses_conversion_when_descriptor_matches_source_color` reproduces the earlier successful 146-byte PNM and requires rejection in both paths.
+
+- Fixed in the streaming audit: the old PNG pin stored linear-float input as sRGB bytes while retaining a linear CICP tag. `zencodecs/tests/color_adapt.rs` measured a maximum byte error of 70; the current PNG pin includes its transfer-tag correction. This test passes against the committed graph.
+
+- Fixed in the streaming audit: `EncodeRequest::encode` rebuilt a validated row view through an adapter that required final-row padding. Passing the validated `PixelSlice` into dispatch preserves short final rows. `zencodecs/tests/strided_encode.rs` compares packed, padded and short-final-row inputs.
+
+- Streaming output regressions fixed in the post-landing review: encoder/writer errors could still be finalized or retried, and buffered row fallback did not enforce protocol state or admission limits. Regression coverage is in `tests/sink_output_contract.rs`, `zencodecs/tests/transcode_output_contract.rs`, and `zencodecs/tests/buffered_encode_contract.rs`. The dispatch byte matrix is separate from pixel-equivalence coverage.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly
@@ -100,3 +118,7 @@ threading, hdr directives, compat security. Verified remaining:
   extend the generator, then regenerate. (`docs/querystring.md:159` /
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
+
+### Comparing unpublished API surfaces
+
+`just semver-against <reviewed-source-export>` builds stable-toolchain rustdoc JSON inside the actual workspaces and compares the resulting API graphs at patch level. This preserves root git patches for unpublished dependencies that a synthetic outer workspace loses. `just test-streaming-seam`, `just test-dispatched-output`, and `just streaming-clippy-gate` exercise the dispatched row and transport contract.

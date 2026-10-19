@@ -49,6 +49,7 @@ pub struct EncodeRequest<'a> {
     /// `Fastest`, sequential threading) at build time. `effort` wins.
     speed: Option<EncodeSpeed>,
     lossless: bool,
+    prefer_streaming: bool,
     limits: Option<&'a Limits>,
     stop: Option<StopToken>,
     metadata: Option<Metadata>,
@@ -59,6 +60,8 @@ pub struct EncodeRequest<'a> {
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
+    #[cfg(feature = "tonemap")]
+    tone_map_policy: crate::ToneMapPolicy,
     image_facts: Option<ImageFacts>,
     /// Explicit color signal to emit when the pixel descriptor can't carry it
     /// (e.g. an ICC-resolved source primary set). PNG-only today. See
@@ -83,6 +86,7 @@ impl<'a> EncodeRequest<'a> {
             effort: None,
             speed: None,
             lossless: false,
+            prefer_streaming: false,
             limits: None,
             stop: None,
             metadata: None,
@@ -91,6 +95,8 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -110,6 +116,7 @@ impl<'a> EncodeRequest<'a> {
             effort: None,
             speed: None,
             lossless: false,
+            prefer_streaming: false,
             limits: None,
             stop: None,
             metadata: None,
@@ -118,6 +125,8 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -127,9 +136,29 @@ impl<'a> EncodeRequest<'a> {
         }
     }
 
+    /// Authorize HDR to SDR rendering for still-image one-shot and row encodes.
+    /// Compiling `tonemap`
+    /// alone preserves the existing encode behavior. Strict encode policy
+    /// still refuses irreversible conversion. HDR-capable targets retain HDR.
+    #[cfg(feature = "tonemap")]
+    pub fn with_tone_map_policy(mut self, policy: crate::ToneMapPolicy) -> Self {
+        self.tone_map_policy = policy;
+        self
+    }
+
     /// Set quality (0-100).
     pub fn with_quality(mut self, quality: f32) -> Self {
         self.quality = Some(quality);
+        self
+    }
+
+    /// Prefer incremental encoded output when the codec supports it.
+    ///
+    /// Explicit encoder settings in [`crate::config::CodecConfig`] take precedence. This is
+    /// a preference: call `begin` on the built encoder and inspect its timing
+    /// to learn whether that particular configuration streams.
+    pub fn with_prefer_streaming(mut self, prefer: bool) -> Self {
+        self.prefer_streaming = prefer;
         self
     }
 
@@ -471,6 +500,7 @@ impl<'a> EncodeRequest<'a> {
                 quality: Some(resolved_quality),
                 effort,
                 lossless: self.lossless,
+                prefer_streaming: self.prefer_streaming,
                 metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
@@ -571,6 +601,7 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
+            prefer_streaming: self.prefer_streaming,
             // Orientation is baked into the pixels downstream
             // (`crate::orient_fit`), not folded into EXIF.
             metadata: self.metadata,
@@ -579,6 +610,8 @@ impl<'a> EncodeRequest<'a> {
             limits: speed_limits.as_ref().or(self.limits),
             stop: self.stop,
             encode_policy: self.encode_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
         };
 
@@ -606,14 +639,7 @@ impl<'a> EncodeRequest<'a> {
         pixels: zenpixels::PixelSlice<'_>,
         has_meaningful_alpha: bool,
     ) -> Result<EncodeOutput> {
-        self.encode_dispatch(
-            pixels.as_strided_bytes(),
-            pixels.descriptor(),
-            pixels.width(),
-            pixels.rows(),
-            pixels.stride(),
-            has_meaningful_alpha,
-        )
+        self.encode_dispatch(pixels, has_meaningful_alpha)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -832,13 +858,12 @@ impl<'a> EncodeRequest<'a> {
     /// negotiate pixel format via zenpixels → encode.
     fn encode_dispatch(
         self,
-        data: &[u8],
-        descriptor: PixelDescriptor,
-        width: u32,
-        height: u32,
-        stride: usize,
+        pixels: zenpixels::PixelSlice<'_>,
         has_alpha: bool,
     ) -> Result<EncodeOutput> {
+        let descriptor = pixels.descriptor();
+        let width = pixels.width();
+        let height = pixels.rows();
         let format = self.resolve_encode_format(width, height, has_alpha)?;
 
         // Pre-flight memory admission: when Limits::max_memory_bytes is set, reject
@@ -879,6 +904,7 @@ impl<'a> EncodeRequest<'a> {
             quality: Some(resolved_quality),
             effort,
             lossless: self.lossless,
+            prefer_streaming: self.prefer_streaming,
             // Orientation is baked into the pixels downstream
             // (`crate::orient_fit`), not folded into EXIF.
             metadata: self.metadata,
@@ -887,27 +913,15 @@ impl<'a> EncodeRequest<'a> {
             limits,
             stop: self.stop.clone(),
             encode_policy: self.encode_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
         };
 
         let built = crate::dispatch::build_encoder(format, params)?;
 
-        // The input as a pixel slice (zero-copy unless its stride isn't a
-        // whole number of pixels). The encoder negotiates the pixel format
-        // itself, after fitting the colour description to it.
-        let source = zenpixels_convert::adapt::adapt_for_encode_cow(
-            data,
-            descriptor,
-            width,
-            height,
-            stride,
-            &[descriptor],
-        )
-        .map_err(|e| {
-            at!(CodecError::InvalidInput(alloc::format!(
-                "pixel buffer: {e}"
-            )))
-        })?;
+        // Preserve the validated row view, including inputs whose final
+        // row omits trailing padding. Dispatch negotiates formats per row.
 
         // Check if we should embed a precomputed gain map
         #[cfg(feature = "jpeg-ultrahdr")]
@@ -939,12 +953,15 @@ impl<'a> EncodeRequest<'a> {
                 )))
             })?;
             // Use zenpixels to negotiate the cheapest pixel format conversion.
+            // The adaptation helper owns a complete rectangular buffer;
+            // pack strided views first, borrowing the tightly packed case.
+            let data = pixels.contiguous_bytes();
             let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-                data,
+                &data,
                 descriptor,
                 width,
                 height,
-                stride,
+                descriptor.aligned_stride(width),
                 built.supported,
             )
             .map_err(|e| {
@@ -1013,7 +1030,7 @@ impl<'a> EncodeRequest<'a> {
             }));
         }
 
-        (built.encoder)(source.as_slice())
+        (built.encoder)(pixels)
     }
 }
 

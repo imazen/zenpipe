@@ -560,6 +560,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
     pub lossless: bool,
+    pub prefer_streaming: bool,
     pub metadata: Option<crate::Metadata>,
     /// Retention policy applied to `metadata` at the codec boundary.
     pub metadata_policy: zencodec::MetadataPolicy,
@@ -579,7 +580,14 @@ pub(crate) fn dyn_animation_frame_encoder(
 ) -> Result<Box<dyn zencodec::encode::DynAnimationFrameEncoder>> {
     macro_rules! build_ffe {
         ($config:expr) => {{
-            let config = $config;
+            let mut config = $config;
+            if params.prefer_streaming
+                && !params
+                    .codec_config
+                    .is_some_and(|c| c.has_encode_override(format))
+            {
+                config = config.with_prefer_streaming(true);
+            }
             let mut job = config.job();
             if let Some(s) = params.stop {
                 job = job.with_stop(s);

@@ -7,7 +7,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Added
+- Portable standalone fuzz/WASM dependency graphs and committed-source checks (83b02437, 771c6c27); workspace JSON API comparisons for unpublished dependencies (56166c80). Complete local CI benchmark captures retain their command and source provenance (6159a7c2).
+- `docs/reader-compat.md`: measured reader behaviour on orientation, colour
+  and gain-map signalling (compat-matrix round 14, 2026-10-17), with the
+  implications for zenpipe output and the run data it rests on.
+
 #### Changed
+- Metadata integration shares zencodec `d327434b` across dispatch, services and standalone graphs. PNG `fb055396` and ultrahdr `a834b2cc` retain that same contract; precomputed gain-map filtering composes with main's strided adaptation, streaming preference and explicit HDR policy.
+- All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides (a6ac4c2a, ae99e340).
+- Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
+- Production and fuzz graphs pin the streaming interface to zencodec `023a65c7` and zenjpeg `8aa966ab`. Fuzz manifests use git sources instead of sibling zencodec/codec checkouts; the WebP lock moves to `c4b6614e`, restoring byte-identical RGB one-shot and row encodes.
 - zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
 - zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
 - Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
@@ -722,6 +736,15 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Fixed
+
+- Schema fixture export respects the configured temporary directory (9dccbaa3).
+- Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
+
 #### Added
 - **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
   `begin(width, height)` declares the image to the encoder and returns its
@@ -1171,6 +1194,9 @@ Three crates.io requirements block a newer release and were left alone on purpos
 - Delegate gain-map retention to zenmeta without exposing zenmeta types in this API. Optional application services retain timeout reasons as well as cancellation.
 - Preserve the original scrub test assertions under the corresponding codec features; verify the combined path and the metadata-only build without codecs.
 
+#### Added
+
+- **`tonemap` capability**: `EncodeRequest::with_tone_map_policy(ToneMapPolicy::Bt2408)` explicitly authorizes HDR (PQ/HLG) rendering to sRGB 8-bit for SDR-only targets. The feature alone preserves existing behavior; strict policy refuses conversion. BT.2408 uses 203-nit SDR white; PQ peak is MaxCLL, else mastering peak, else 1000 nits on both one-shot and streaming paths. HLG uses the 1000-nit reference display. Descriptor-only HDR conversion also clears HDR luminance metadata. zentone is pinned to 0.1.0. Supersedes #48 and #100 (1d42383b); tests: `zencodecs/tests/tonemap.rs`. Explicit opacity and descriptor alpha padding are retained during rendering.
 
 #### Changed
 

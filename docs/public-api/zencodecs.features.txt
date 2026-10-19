@@ -1,5 +1,5 @@
 # zencodecs public API — additions from non-default features
-# features: all,jp2-decode,metadata
+# features: all,jp2-decode,metadata,tonemap
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -10,23 +10,23 @@
 ## summary
 #
 #   pub modules                                 3
-#   pub types (struct/enum/trait/alias)         5
+#   pub types (struct/enum/trait/alias)         6
 #   free functions                              3
-#   inherent methods                           23
+#   inherent methods                           24
 #   struct fields                              13
-#   enum variants                               2
+#   enum variants                               4
 #   re-exports                                 33
-#   trait roster entries (type × trait)         3
-#   auto-trait-complete types                   2
+#   trait roster entries (type × trait)         9
+#   auto-trait-complete types                   3
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           28
+#   (root)                           32
 #   config                           20
 #   gainmap                          16
 #   metadata                         18
 
-## items (79 lines)
+## items (83 lines)
 
 pub use GainMap
 pub use GainMapMetadata
@@ -91,6 +91,9 @@ pub enum GainMapSource<'a> [also: gainmap]
 pub GainMapSource::Precomputed
 pub GainMapSource::Precomputed::gain_map: &'a ultrahdr_core::types::GainMap
 pub GainMapSource::Precomputed::metadata: &'a ultrahdr_core::types::GainMapMetadata
+#[non_exhaustive] pub enum ToneMapPolicy
+pub ToneMapPolicy::Bt2408
+pub ToneMapPolicy::Preserve
 pub fn DecodeRequest<'a>::decode_gain_map(self) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
 pub fn DecodeRequest<'a>::extract_raw_preview(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn DecodeRequest<'a>::read_raw_metadata(&self) -> core::option::Option<zenraw::exif::ExifMetadata>
@@ -105,15 +108,17 @@ pub fn EncodeRequest<'a>::encode_ultrahdr_rgb_f32(self, imgref::ImgRef<'_, rgb::
 pub fn EncodeRequest<'a>::encode_ultrahdr_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::with_gain_map(self, gainmap::GainMapSource<'a>) -> Self
 pub fn EncodeRequest<'a>::with_gainmap_quality(self, f32) -> Self
+pub fn EncodeRequest<'a>::with_tone_map_policy(self, ToneMapPolicy) -> Self
 pub fn decode_gain_map(&[u8], &AllowedFormats) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
 pub fn transcode_to_hdr_pq_png(&[u8], &AllowedFormats, core::option::Option<f32>) -> Result<core::option::Option<alloc::vec::Vec<u8>>> [also: gainmap]
 
-## trait impls (2 types)
+## trait impls (3 types)
 
+ToneMapPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 gainmap::DecodedGainMap: Clone, Debug
 metadata::ScrubRequest<'a>: Clone
 
 ## auto traits
 
-2 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+3 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 metadata::ScrubRequest<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

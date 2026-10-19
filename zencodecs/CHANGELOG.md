@@ -30,6 +30,28 @@ All notable changes to `zencodecs` are documented here. Format follows
 - JPEG retains EXIF orientation and requested attribution, emits ICC for supported
   CICP, and regenerates gain-map discovery independently of source XMP. Requests
   to preserve arbitrary source XMP refuse rather than silently discarding it.
+
+### Fixed
+
+- The HDR-to-GIF transcode matrix explicitly selects the same sRGB8 clipping for whole images and strips, retaining every cell and pixel-identity assertion. Native over-range float refusal and clipped white pixels have regression coverage and an independent decoder gate (1573c8da).
+
+### Changed
+
+- Metadata services and codec adapters use one zencodec `d327434b` source. Gain-map retention preserves the newer strided-input adaptation and explicit HDR policy.
+
+- Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
+
+### Added
+- Feature-gated `ToneMapPolicy` and `EncodeRequest::with_tone_map_policy`
+  authorize BT.2408 HDR-to-SDR rendering per still-image request. PQ peak is
+  MaxCLL, else mastering luminance, else the same 1000-nit fallback for
+  one-shot and streamed rows. Strict policy refuses conversion; the feature
+  alone keeps existing behavior. Descriptor-only conversion clears HDR
+  luminance metadata and respects explicit opaque/padding alpha. The implementation
+  pins zentone 0.1.0 (1d42383b).
+- `EncodeRequest::with_prefer_streaming(bool)` forwards the incremental-output preference to still and animation dispatch while preserving explicit selected-codec encoder settings (4f17e09a017e).
+- GIF, WebP and APNG animation files retain identical bytes under uneven and owned-buffer drains (315c23f5).
+- All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions (204850b8). Tiny whole-file caps also bound early refusals (86d8e06b).
 - `EncodePolicy::strict` (zencodec) is honoured for colour: with
   `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
   whose target cannot carry the source colour description fails
@@ -58,6 +80,11 @@ All notable changes to `zencodecs` are documented here. Format follows
 ### Fixed
 - Wire JPEG 2000 decoding through zenjp2 and include it in runtime allowlists.
   Encoding remains unsupported.
+- Dispatched row encoders enforce declaration/row state, whole-file output budgets, and matching empty-canvas refusal or bytes in both paths. Rotated buffered encodes apply dimension limits to the output canvas (de1e0d66).
+- Strict one-shot encodes validate the original color description before pixel negotiation can replace it with sRGB metadata, matching the streaming rejection (08a0f60a).
+- One-shot encoding accepts valid strided views without trailing padding after the final row (cc128515).
+- Buffered row fallback rejects one-shot/pull encoding after a declaration or rows, checks dimensions and row-buffer memory before allocation, counts the final output against the whole-file limit, and cannot recover a failed push into a successful file.
+- `TranscodeSink` drops its encoder and owned writer after an encode/write failure and cannot finalize that incomplete file. A rejected second declaration leaves the pending decoded strip intact.
 - Encoding into a format that cannot carry the source's colour description
   no longer depends on the codec's reaction (zengif now refuses ICC it can't
   keep). zencodecs fits the description first, in the one-shot and streaming

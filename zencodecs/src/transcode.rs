@@ -715,6 +715,12 @@ pub fn reconstruct_jpeg_from_jxl(jxl: &[u8]) -> Result<Option<Vec<u8>>> {
 /// Created via [`TranscodeSink::new`] with a [`StreamingEncoder`] from
 /// [`EncodeRequest::build_streaming_encoder`].
 ///
+/// On a decoder, encoder, or writer error after bytes have been sent, abort
+/// the transport and discard the partial file. Never call `finish_encode`
+/// after `push_decode` fails. An encoder or writer failure releases the
+/// encoder and writer; a transport borrowed by the writer must be aborted
+/// by its owner.
+///
 /// [`StreamingEncoder`]: crate::dispatch::StreamingEncoder
 /// [`EncodeRequest::build_streaming_encoder`]: crate::EncodeRequest::build_streaming_encoder
 ///
@@ -823,15 +829,28 @@ impl<'a> TranscodeSink<'a> {
 
     /// Hand every pending byte to the writer, if there is one.
     fn drain(&mut self) -> core::result::Result<(), SinkError> {
-        if let (Some(writer), Some(encoder)) = (self.writer.as_mut(), self.encoder.as_mut()) {
-            let pending = encoder.pending_output();
-            if !pending.is_empty() {
-                let n = pending.len();
-                writer(pending)?;
-                encoder.consume_output(n);
-            }
+        let result =
+            if let (Some(writer), Some(encoder)) = (self.writer.as_mut(), self.encoder.as_mut()) {
+                let pending = encoder.pending_output();
+                if !pending.is_empty() {
+                    let n = pending.len();
+                    writer(pending).map(|()| encoder.consume_output(n))
+                } else {
+                    Ok(())
+                }
+            } else {
+                Ok(())
+            };
+        if result.is_err() {
+            self.abort();
         }
-        Ok(())
+        result
+    }
+
+    fn abort(&mut self) {
+        self.encoder = None;
+        self.writer = None;
+        self.pending = None;
     }
 
     /// Finalize encoding and return the output.
@@ -861,6 +880,17 @@ impl<'a> TranscodeSink<'a> {
 
     /// Forward the pending strip (if any) to the encoder.
     fn flush_pending(&mut self) -> core::result::Result<(), SinkError> {
+        if self.encoder.is_none() {
+            return Err("encoder already finished or failed".into());
+        }
+        let result = self.flush_pending_inner();
+        if result.is_err() {
+            self.abort();
+        }
+        result
+    }
+
+    fn flush_pending_inner(&mut self) -> core::result::Result<(), SinkError> {
         let pending = match self.pending.take() {
             Some(p) => p,
             None => return Ok(()),
@@ -900,6 +930,9 @@ impl DecodeRowSink for TranscodeSink<'_> {
         height: u32,
         descriptor: PixelDescriptor,
     ) -> core::result::Result<(), SinkError> {
+        if self.timing.is_some() || self.pending.is_some() {
+            return Err("begin after an earlier declaration or rows".into());
+        }
         self.pending = None;
         self.strip_buf.clear();
         // Declare the image to the encoder in the descriptor the strips will

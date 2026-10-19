@@ -212,3 +212,25 @@ fn strict_allows_fits_that_lose_nothing() {
         .encode(slice(&px), false)
         .unwrap();
 }
+
+#[test]
+fn strict_refuses_conversion_when_descriptor_matches_source_color() {
+    let px = pixels();
+    let descriptor =
+        PixelDescriptor::RGB8_SRGB.with_primaries(zenpixels::ColorPrimaries::DisplayP3);
+    let source = PixelSlice::new(&px, W, H, W as usize * 3, descriptor).unwrap();
+    let make = || {
+        EncodeRequest::new(ImageFormat::Pnm)
+            .with_metadata(Metadata::none().with_cicp(Cicp::DISPLAY_P3))
+            .with_encode_policy(strict())
+    };
+    let err = make()
+        .encode(source, false)
+        .expect_err("strict must refuse before pixel-format conversion");
+    assert!(format!("{err}").contains("strict"), "{err}");
+    let err = make()
+        .build_streaming_encoder(W, H)
+        .err()
+        .expect("streaming must make the same strict decision");
+    assert!(format!("{err}").contains("strict"), "{err}");
+}

@@ -19,10 +19,10 @@ thiserror = { version = "2.0.20", default-features = false }
 rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
 imgref = "1.12.3"
 bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = ">=0.1.26, <0.3.0" }
 # Shared metadata engine (inspection, rewrite planning, gain-map retention).
 # Unpublished member of the zencodec repo; CI paths it to the sibling clone.
-zenmeta = { git = "https://github.com/imazen/zencodec", default-features = false, optional = true }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc", default-features = false, optional = true }
+zencodec = { version = ">=0.1.27, <0.3.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -36,6 +36,9 @@ zenanalyze-api = { version = "0.1.0", optional = true, default-features = false 
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false, features = ["imgref"] }
 zenpixels-convert = { version = ">=0.2.10, <0.4.0", features = ["imgref"] }
 linear-srgb = { version = "0.6.12", default-features = false }
+# HDR -> SDR tone mapping (BT.2408 EETF) for targets that carry neither HDR
+# nor CICP. Optional: pulled only by the `tonemap` feature.
+zentone = { version = "=0.1.0", optional = true, default-features = false }
 
 # Codecs (all optional, feature-gated)
 # zenjpeg 0.9.0 (git main) dropped the no-op `decoder`/`trellis` features —
@@ -137,7 +140,7 @@ turbojpeg = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
 # Shared codec conformance checks (operation matrix, metadata contracts).
-zencodec-testkit = { git = "https://github.com/imazen/zencodec" }
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
 png = "0.18.1"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
 # git patch; CI paths it to the sibling clone.
@@ -153,6 +156,13 @@ default = ["inventory", "jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenqu
 # Inventory walkers are optional per codec; the dispatch convenience enables them by default.
 inventory = ["zenjpeg?/inventory", "zenpng?/inventory", "zenwebp?/inventory", "zengif?/inventory", "zenavif?/inventory", "zenjxl?/inventory", "heic?/inventory", "zentiff?/inventory", "zenraw?/inventory", "zenbitmaps?/inventory", "zenpdf?/inventory", "zensvg?/inventory", "zenjp2?/inventory"]
 std = []
+
+# Tone-map HDR (PQ/HLG) sources to sRGB when encoding to a target that
+# carries neither HDR nor CICP (JPEG, WebP, GIF, BMP, TIFF), when explicitly
+# authorized by EncodeRequest::with_tone_map_policy, instead of
+# writing HDR code values a reader shows as sRGB. ITU-R BT.2408 EETF with
+# the 203-nit reference white as SDR white. See `src/tonemap.rs`.
+tonemap = ["dep:zentone", "linear-srgb/transfer"]
 
 # Content-aware auto-format selection via an injected MLP (zenpicker over
 # zenanalyze features) — provides `MlpFormatPicker`, a `FormatPicker` impl.
@@ -229,7 +239,7 @@ cms = ["dep:moxcms", "zenpixels-convert/cms-moxcms"]
 moxcms = ["dep:moxcms", "zenpixels-convert/cms-moxcms"]  # alias for back-compat
 
 # All codecs
-all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap"]
+all = ["jpeg", "jpeg-ultrahdr", "webp", "gif", "gif-zenquant", "gif-quantizr", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "jxl-encode", "heic-decode", "bitmaps-bmp", "raw-decode", "raw-decode-exif", "raw-decode-xmp", "raw-decode-gainmap", "tonemap"]
 
 # Calibration harness (all lossy encoders). Also gates `dep:turbojpeg`, the
 # mozjpeg reference encoder the harness compares against — see its declaration
