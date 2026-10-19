@@ -423,3 +423,14 @@ metadata-merge-workspace-check:
     just clippy
     cargo check --locked --manifest-path fuzz/Cargo.toml
     cargo check --locked --manifest-path zencodecs/fuzz/Cargo.toml
+
+# Run the merged CI codec feature set and both independent-reader catalogs.
+metadata-merge-codec-check:
+    cargo test --locked -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp,raw-decode,raw-decode-exif,raw-decode-xmp,raw-decode-gainmap,tonemap --all-targets
+    just codec-operation-matrix-oracles
+    ZEN_CODEC_MATRIX_MAGICK=magick ZEN_CODEC_MATRIX_DJXL=djxl just codec-operation-matrix-inventory
+    just test-standalone-wasm
+
+metadata-merge-matrix-lint:
+    cargo fmt -p zencodecs --check
+    cargo clippy --locked -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- -D warnings

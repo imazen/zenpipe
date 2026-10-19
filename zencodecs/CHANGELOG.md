@@ -33,6 +33,8 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ### Fixed
 
+- Exercise GIF's advertised rational animation timing in the operation catalog, including exact representable delays, typed rejection and preservation of the accepted frames.
+
 - The HDR-to-GIF transcode matrix explicitly selects the same sRGB8 clipping for whole images and strips, retaining every cell and pixel-identity assertion. Native over-range float refusal and clipped white pixels have regression coverage and an independent decoder gate (1573c8da).
 
 ### Changed

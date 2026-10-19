@@ -696,12 +696,14 @@ fn animation_order_exact_timing_and_typed_refusal() {
             expected: Ok((FrameDuration::from_millis(20), b.clone())),
         },
     ];
-    // GIF currently advertises legacy timing only. Verify typed refusal and
-    // intact legacy frames rather than requiring an unadvertised operation.
-    zencodec_testkit::check_animation_timing_unsupported(
+    // GIF now supports exact rational timing on its centisecond grid.
+    // Keep the same typed rejection and frame-preservation cases as WebP.
+    assert!(<zencodecs::GifEncoderConfig as EncoderConfig>::capabilities().animation_timing());
+    check_animation_cases(
         zencodecs::GifEncoderConfig::new(),
         zencodecs::GifDecoderConfig::new(),
-        a.clone(),
+        true,
+        &cases,
     )
     .unwrap();
     check_animation_cases(
