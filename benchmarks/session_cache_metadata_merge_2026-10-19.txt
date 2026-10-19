@@ -1,0 +1,26 @@
+# Diagnostic run invoked by workspace tests; no performance conclusion.
+# Repository: imazen/zenpipe; host: dev; date: 2026-10-19
+# Input tree: bcb6f71918ea73680d0b93544e24f1170c001575 (jj merge change nszplrvz).
+# The embedded git line names the first merge parent, not the working tree.
+# Command: flock ~/tmp/locks/dev-build.lock ~/work/claudehints/scripts/run-heavy --jobs 8 -- just metadata-merge-workspace-check
+# Environment: TMPDIR=~/tmp CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0
+# The session_cache benchmark ran as part of cargo test --all-targets in the debug profile.
+# Full gate resource result: run-heavy: done rc=0 204s | peak-RSS 0.79GiB | min-avail 44875MiB | peak-load 2.50
+
+# zenbench results (complete)
+# git: b7a891dec0b644fe0692e825e90f2e6bea78bbba
+# 2026-10-19T08:38:48Z
+#
+# Re-read this file instead of re-running the benchmark.
+# Formats:  cargo bench -- --format=llm|csv|md|json
+# Env var:  ZENBENCH_FORMAT=llm cargo bench
+# Disable:  ZENBENCH_NO_SAVE=1 cargo bench
+#
+# Fields: group | benchmark | vs_base comparison | min mean median mad | throughput | n cv rounds calls
+#
+group=session_4k_drain benchmark=full_pipeline  |  vs_base=baseline  |  min=915.16ms mean=919.50ms median=919.70ms mad=4.20ms  |  throughput=1.09 images/s  |  n=6 cv=0.4% rounds=6 calls=1 mean_ci=[917.14ms 921.82ms] cold=928.09ms
+group=session_4k_drain benchmark=cached_suffix  |  vs_base_pct=-97.54 ci=[-97.78% -97.29%] significant=true effect=-389.62 p=1.0000  |  min=22.47ms mean=22.63ms median=22.54ms mad=60.41µs  |  throughput=44.19 images/s  |  n=6 cv=1.1% rounds=6 calls=1 mean_ci=[22.51ms 22.83ms] cold=22.63ms
+group=session_4k_bmp benchmark=full_pipeline_bmp  |  vs_base=baseline  |  min=937.63ms mean=942.39ms median=943.12ms mad=970.19µs  |  throughput=1.06 images/s  |  n=6 cv=0.3% rounds=6 calls=1 mean_ci=[940.35ms 943.81ms] cold=937.33ms
+group=session_4k_bmp benchmark=cached_suffix_bmp  |  vs_base_pct=-94.95 ci=[-95.04% -94.88%] significant=true effect=-1432.05 p=1.0000  |  min=47.25ms mean=47.55ms median=47.54ms mad=307.69µs  |  throughput=21.03 images/s  |  n=6 cv=0.6% rounds=6 calls=1 mean_ci=[47.36ms 47.76ms] cold=46.72ms
+group=session_multi_filter benchmark=10x_full  |  vs_base=baseline  |  min=9.16s mean=9.19s median=9.20s mad=9.74ms  |  throughput=1.09 images/s  |  n=5 cv=0.2% rounds=5 calls=1 mean_ci=[9.17s 9.21s] cold=9.24s
+group=session_multi_filter benchmark=10x_cached  |  vs_base_pct=-87.80 ci=[-87.95% -87.62%] significant=true effect=-563.86 p=1.0000  |  min=1.12s mean=1.12s median=1.12s mad=687.33µs  |  throughput=8.92 images/s  |  n=5 cv=0.2% rounds=5 calls=1 mean_ci=[1.12s 1.12s] cold=1.12s

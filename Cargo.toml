@@ -314,7 +314,7 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels" }
 # at 031d4a20 (0.5.0) on purpose: ultrahdr main is now 0.6.0, and a patch that
 # resolves to 0.6.x would no longer satisfy the backend's `^0.5.0`, stranding it on the
 # boost-less registry 0.5.0. zenjpeg 0.9.0 + zencodecs use registry 0.6.0.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
 # zenjxl main carries the `jpeg-lossy` feature (JPEG→JXL coefficient-domain
 # transcode); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
@@ -330,7 +330,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

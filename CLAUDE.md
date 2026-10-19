@@ -37,6 +37,12 @@ sources`.
 
 ## Known Bugs
 
+- Fixed during metadata integration: the operation catalog still called the legacy
+  unsupported-timing checker for GIF after its adapter gained rational timing.
+  It now asserts the advertised capability and checks exact 10/20 ms frame
+  durations, pixel order and typed rejection of 1/3 second through both generic
+  and erased encoders. The rejected frame must not mutate the animation.
+
 - HDR rendering on PR100 required an explicit per-request policy and a common
   missing-peak fallback. The proposed `tonemap` followup uses
   `ToneMapPolicy::Bt2408` and the same metadata-or-1000-nit peak for whole

@@ -39,7 +39,7 @@ features = [
     "png", "png-zenquant", "avif-decode", "jxl-decode",
     "bitmaps", "bitmaps-bmp",
     "cms", "riapi",
-    "jpeg-ultrahdr",
+    "jpeg-ultrahdr", "metadata",
 ]
 
 # Prevent workspace interference
@@ -62,7 +62,7 @@ zenavif = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e7
 # this fuzz workspace resolves on its own.
 zengif = { git = "https://github.com/imazen/zengif" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec56ddc9301d5e1ed10a8e99f" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "e4f4ed3e1dbb55b001b8b9f812599fa4f76ccba8" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 zenjxl = { git = "https://github.com/imazen/zenjxl" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # zenavif-parse 0.7.0 is a member of the imazen/zenavif workspace (the
@@ -70,6 +70,14 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "5e493d39bb0b1e60e79ef755d0734e5bc30313ac" }
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
+# heic main is 0.2.0; the registry 0.2.0 is yanked. Same entry as the root table.
+heic = { git = "https://github.com/imazen/heic" }
+# zencodecs' `inventory` feature names `zentiff?/inventory`, `zenraw?/inventory`
+# and `zenpdf?/inventory`; cargo checks those against every candidate, and the
+# registry releases predate the feature. Same entries as the root table.
+zentiff = { git = "https://github.com/imazen/zenextras" }
+zenraw = { git = "https://github.com/imazen/zenraw" }
+zenpdf = { git = "https://github.com/imazen/zenextras" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d1e3ddadbaddfe672b9cdfc" }
 # zenjpeg resolves `zenanalyze 0.2.0` through a [patch.crates-io] at the zenjpeg
@@ -79,7 +87,7 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4196fa93d422bc367d
 zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 # Match the 0.5.x reconstruction patch in the other fuzz workspace.
 # The 0.6.x gain-map encoder continues to resolve from the registry.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "031d4a2070a522f82bd02aee712a2806a2c17bbd" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "a834b2ccedc2b99b1fec3200365f00127a6baea6" }
 # zenrav1e needs no entry: zenavif → zenravif → zenrav1e are git-rev deps on
 # their own dep lines (no registry requirement exists), so a patch here is
 # reported unused.
@@ -147,6 +155,13 @@ bench = false
 [[bin]]
 name = "fuzz_select"
 path = "fuzz_targets/fuzz_select.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_metadata_scrub"
+path = "fuzz_targets/fuzz_metadata_scrub.rs"
 test = false
 doc = false
 bench = false

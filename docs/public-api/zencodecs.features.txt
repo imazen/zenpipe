@@ -1,5 +1,5 @@
 # zencodecs public API — additions from non-default features
-# features: jxl-encode,cms
+# features: all,jp2-decode,metadata,tonemap
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -9,56 +9,116 @@
 
 ## summary
 #
-#   pub modules                                 1
-#   pub types (struct/enum/trait/alias)         4
-#   free functions                              9
-#   struct fields                              10
-#   enum variants                               5
-#   re-exports                                  2
+#   pub modules                                 3
+#   pub types (struct/enum/trait/alias)         6
+#   free functions                              3
+#   inherent methods                           24
+#   struct fields                              13
+#   enum variants                               4
+#   re-exports                                 33
 #   trait roster entries (type × trait)         9
-#   auto-trait-complete types                   2
+#   auto-trait-complete types                   3
+#   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           13
-#   cms                              18
+#   (root)                           32
+#   config                           20
+#   gainmap                          16
+#   metadata                         18
 
-## items (29 lines)
+## items (83 lines)
 
+pub use GainMap
+pub use GainMapMetadata
+pub use HeicDecodeJob
+pub use HeicDecoderConfig
 pub use JxlEncodeJob
 pub use JxlEncoderConfig
-pub mod cms
-pub cms::CmsMode::Compat
-pub cms::CmsMode::SceneReferred
-pub cms::PngColorInfo::chromaticities: core::option::Option<[u32; 8]>
-pub cms::PngColorInfo::cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub cms::PngColorInfo::gamma: core::option::Option<u32>
-pub cms::PngColorInfo::has_iccp_chunk: bool
-pub cms::PngColorInfo::has_srgb_chunk: bool
-pub fn cms::is_srgb_for_mode(&[u8], cms::CmsMode) -> bool
-pub fn cms::is_srgb_icc_structural(&[u8]) -> bool
-pub fn cms::parse_png_color_chunks(&[u8]) -> cms::PngColorInfo
-pub fn cms::png_srgb_transform_icc(&[u8], cms::CmsMode) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
-pub fn cms::png_srgb_transform_icc_ex(&[u8], bool) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
-pub fn cms::srgb_icc_profile() -> alloc::vec::Vec<u8>
-pub fn cms::srgb_transform_icc(&zencodec::info::SourceColor, core::option::Option<&[u8]>, cms::CmsMode) -> core::option::Option<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
-pub fn cms::synthesize_icc_from_cicp(zenpixels::cicp::Cicp) -> core::option::Option<alloc::vec::Vec<u8>>
-pub fn cms::synthesize_icc_from_gama(u32, &core::option::Option<[u32; 8]>) -> core::option::Option<alloc::vec::Vec<u8>>
-pub enum CmsMode [also: cms]
-pub CmsMode::Compat
-pub CmsMode::SceneReferred
-pub CodecError::ColorManagement(alloc::string::String)
-pub struct PngColorInfo [also: cms]
-pub PngColorInfo::chromaticities: core::option::Option<[u32; 8]>
-pub PngColorInfo::cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub PngColorInfo::gamma: core::option::Option<u32>
-pub PngColorInfo::has_iccp_chunk: bool
-pub PngColorInfo::has_srgb_chunk: bool
+pub use RawDecodeConfig
+pub use RawDecoderConfig
+pub use UltraHdrExtras
+pub mod config::jpeg::ultrahdr
+pub use config::jpeg::ultrahdr::AdaptiveTonemapper
+pub use config::jpeg::ultrahdr::GainMap
+pub use config::jpeg::ultrahdr::GainMapConfig
+pub use config::jpeg::ultrahdr::GainMapMetadata
+pub use config::jpeg::ultrahdr::ToneMapConfig
+pub use config::jpeg::ultrahdr::UhdrColorGamut
+pub use config::jpeg::ultrahdr::UhdrColorTransfer
+pub use config::jpeg::ultrahdr::UhdrPixelFormat
+pub use config::jpeg::ultrahdr::UhdrRawImage
+pub use config::jpeg::ultrahdr::UltraHdrExtras
+pub use config::jpeg::ultrahdr::create_hdr_reconstructor
+pub use config::jpeg::ultrahdr::encode_ultrahdr
+pub use config::jpeg::ultrahdr::encode_ultrahdr_with_tonemapper
+pub use config::jpeg::ultrahdr::encode_with_gainmap
+pub mod config::raw
+pub use config::raw::DemosaicMethod
+pub use config::raw::RawDecodeConfig
+pub config::CodecConfig::raw_decoder: core::option::Option<alloc::boxed::Box<zenraw::decode::RawDecodeConfig>>
+pub fn config::CodecConfig::with_raw_decoder(self, zenraw::decode::RawDecodeConfig) -> Self
+pub use gainmap::GainMap
+pub use gainmap::GainMapMetadata
+pub gainmap::GainMapSource::Precomputed
+pub gainmap::GainMapSource::Precomputed::gain_map: &'a ultrahdr_core::types::GainMap
+pub gainmap::GainMapSource::Precomputed::metadata: &'a ultrahdr_core::types::GainMapMetadata
+pub gainmap::DecodedGainMap::base_is_hdr: bool
+pub gainmap::DecodedGainMap::gain_map: ultrahdr_core::types::GainMap
+pub gainmap::DecodedGainMap::metadata: ultrahdr_core::types::GainMapMetadata
+pub gainmap::DecodedGainMap::source_format: zencodec::format::ImageFormat
+pub fn gainmap::DecodedGainMap::params(&self) -> zencodec::gainmap::GainMapParams
+pub fn gainmap::DecodedGainMap::to_gain_map_info(&self) -> zencodec::gainmap::GainMapInfo
+pub mod metadata
+pub use metadata::Action
+pub use metadata::Compression
+pub use metadata::Entry
+pub use metadata::Error
+pub use metadata::Plan
+pub use metadata::Services
+pub struct metadata::ScrubRequest<'a>
+pub fn metadata::ScrubRequest<'a>::new(&'a [u8]) -> Self
+pub fn metadata::ScrubRequest<'a>::plan(&self) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>
+pub fn metadata::ScrubRequest<'a>::with_byte_limits(self, usize, usize) -> Self
+pub fn metadata::ScrubRequest<'a>::with_carrier_limit(self, usize) -> Self
+pub fn metadata::ScrubRequest<'a>::with_icc_normalization(self, bool) -> Self
+pub fn metadata::ScrubRequest<'a>::with_jpeg_reconstruction_removal(self, bool) -> Self
+pub fn metadata::ScrubRequest<'a>::with_metadata_limit(self, usize) -> Self
+pub fn metadata::ScrubRequest<'a>::with_policy(self, zencodec::metadata::MetadataPolicy) -> Self
+pub fn metadata::ScrubRequest<'a>::with_services(self, &'a dyn zencodec::metadata_rewrite::Services) -> Self
+pub fn metadata::ScrubRequest<'a>::with_stop(self, &'a dyn enough::Stop) -> Self
+pub fn metadata::ScrubRequest<'a>::with_xmp_editing(self, bool) -> Self
+pub enum GainMapSource<'a> [also: gainmap]
+pub GainMapSource::Precomputed
+pub GainMapSource::Precomputed::gain_map: &'a ultrahdr_core::types::GainMap
+pub GainMapSource::Precomputed::metadata: &'a ultrahdr_core::types::GainMapMetadata
+#[non_exhaustive] pub enum ToneMapPolicy
+pub ToneMapPolicy::Bt2408
+pub ToneMapPolicy::Preserve
+pub fn DecodeRequest<'a>::decode_gain_map(self) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
+pub fn DecodeRequest<'a>::extract_raw_preview(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn DecodeRequest<'a>::read_raw_metadata(&self) -> core::option::Option<zenraw::exif::ExifMetadata>
+pub struct DecodedGainMap [also: gainmap]
+pub DecodedGainMap::base_is_hdr: bool
+pub DecodedGainMap::gain_map: ultrahdr_core::types::GainMap
+pub DecodedGainMap::metadata: ultrahdr_core::types::GainMapMetadata
+pub DecodedGainMap::source_format: zencodec::format::ImageFormat
+pub fn gainmap::DecodedGainMap::params(&self) -> zencodec::gainmap::GainMapParams
+pub fn gainmap::DecodedGainMap::to_gain_map_info(&self) -> zencodec::gainmap::GainMapInfo
+pub fn EncodeRequest<'a>::encode_ultrahdr_rgb_f32(self, imgref::ImgRef<'_, rgb::formats::rgb::Rgb<f32>>) -> Result<zencodec::output::EncodeOutput>
+pub fn EncodeRequest<'a>::encode_ultrahdr_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
+pub fn EncodeRequest<'a>::with_gain_map(self, gainmap::GainMapSource<'a>) -> Self
+pub fn EncodeRequest<'a>::with_gainmap_quality(self, f32) -> Self
+pub fn EncodeRequest<'a>::with_tone_map_policy(self, ToneMapPolicy) -> Self
+pub fn decode_gain_map(&[u8], &AllowedFormats) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
+pub fn transcode_to_hdr_pq_png(&[u8], &AllowedFormats, core::option::Option<f32>) -> Result<core::option::Option<alloc::vec::Vec<u8>>> [also: gainmap]
 
-## trait impls (2 types)
+## trait impls (3 types)
 
-cms::CmsMode: Clone, Copy, Debug, Default, Eq, PartialEq
-cms::PngColorInfo: Clone, Debug, Default
+ToneMapPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+gainmap::DecodedGainMap: Clone, Debug
+metadata::ScrubRequest<'a>: Clone
 
 ## auto traits
 
-2 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+3 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+metadata::ScrubRequest<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

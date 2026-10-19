@@ -36,6 +36,56 @@ pub(crate) struct EncodeParams<'a> {
     pub cicp: Option<zencodec::Cicp>,
 }
 
+/// Fold `Metadata::orientation` into the EXIF blob for formats whose only
+/// orientation carrier is EXIF (zenpipe#36, gap 1).
+///
+/// JPEG, PNG, and WebP have no native orientation field; their decoders
+/// normalize the EXIF Orientation tag into `info.orientation`, so a caller
+/// who sets `Metadata::with_orientation(..)` with no EXIF blob would see the
+/// field silently dropped. When the field is non-identity: no blob → author
+/// a minimal TIFF with just the Orientation tag; a blob without the tag →
+/// insert it; a blob that already carries the tag → untouched (the codec
+/// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
+/// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
+/// orientation is *not* authoritative) are left alone.
+///
+/// Only the precomputed gain-map path uses it: that path encodes the caller's
+/// pixels and gain map unrotated. Ordinary encodes bake orientation into the
+/// pixels instead (`crate::orient_fit`).
+#[cfg(feature = "jpeg-ultrahdr")]
+pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
+    use zencodec::exif::{Exif, TextEncoding};
+    if meta.orientation == zencodec::Orientation::Identity
+        || !matches!(
+            format,
+            ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP
+        )
+    {
+        return meta;
+    }
+    let authored = match meta.exif.as_deref() {
+        None => {
+            let mut e = Exif::new(TextEncoding::Ascii);
+            e.set_orientation(meta.orientation);
+            Some(zenmeta::exif::serialize(&e))
+        }
+        Some(blob) => match Exif::parse(blob) {
+            // Tag present: the policy layer reconciles it to the field.
+            Some(e) if e.orientation().is_some() => None,
+            Some(mut e) => {
+                e.set_orientation(meta.orientation);
+                Some(zenmeta::exif::serialize(&e))
+            }
+            // Malformed blob: leave it to the codec's own handling.
+            None => None,
+        },
+    };
+    match authored {
+        Some(bytes) => meta.with_exif(bytes),
+        None => meta,
+    }
+}
+
 /// Type-erased one-shot encode closure.
 pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOutput> + 'a>;
 

@@ -223,9 +223,11 @@ impl<'a> EncodeRequest<'a> {
 
     /// Set metadata to embed in the output (ICC profile, EXIF, XMP).
     ///
-    /// Not all formats support all metadata types. Unsupported metadata
-    /// is silently ignored — GIF ignores all metadata, AVIF encode only
-    /// supports EXIF, etc.
+    /// Not all formats carry every metadata type. Descriptive metadata may be
+    /// omitted; unsupported color signaling can be rejected to avoid changing
+    /// the meaning of the pixels. This method does not convert colors. Use an
+    /// explicit pixel conversion before encoding to a restricted format such
+    /// as GIF, or select `TranscodeColor::Srgb8` in the high-level transcode API.
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self
@@ -808,7 +810,7 @@ impl<'a> EncodeRequest<'a> {
             &self.quality_intent(),
             self.codec_config,
             &image,
-            &ComputeEnvironment::default(),
+            &ComputeEnvironment::conservative(),
         )
     }
 
@@ -877,7 +879,7 @@ impl<'a> EncodeRequest<'a> {
                 &self.quality_intent(),
                 self.codec_config,
                 &image,
-                &ComputeEnvironment::default(),
+                &ComputeEnvironment::conservative(),
             )?;
             check_estimate_against_limits(&est, &image, limits)?;
         }
@@ -886,6 +888,17 @@ impl<'a> EncodeRequest<'a> {
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
         let limits = speed_limits.as_ref().or(self.limits);
+
+        #[cfg(feature = "jpeg-ultrahdr")]
+        let gain_map_source_metadata = if self.gain_map_source.is_some() {
+            let mut source = self.metadata.clone().unwrap_or_else(Metadata::none);
+            if let Some(cicp) = self.cicp {
+                source.cicp = Some(cicp);
+            }
+            crate::dispatch::fold_orientation_into_exif(source, format)
+        } else {
+            Metadata::none()
+        };
 
         let params = EncodeParams {
             quality: Some(resolved_quality),
@@ -915,6 +928,31 @@ impl<'a> EncodeRequest<'a> {
         if let Some(crate::gainmap::GainMapSource::Precomputed { gain_map, metadata }) =
             &self.gain_map_source
         {
+            // Coarse privacy gates still apply on the specialized path. The
+            // retention guard rejects a gate that would alter rendering.
+            let mut fields = self.metadata_policy.fields();
+            if let Some(policy) = self.encode_policy {
+                if !policy.resolve_icc(true) {
+                    fields.icc = zencodec::IccRetention::Drop;
+                }
+                if !policy.resolve_exif(true) {
+                    fields.exif = zencodec::exif::ExifPolicy::DISCARD_ALL;
+                }
+                if !policy.resolve_xmp(true) {
+                    fields.xmp = zencodec::Retention::Discard;
+                }
+            }
+            let retained = zenmeta::display::filter_for_gain_map(
+                &gain_map_source_metadata,
+                metadata,
+                &MetadataPolicy::Custom(fields),
+            )
+            .map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "gain-map metadata retention: {e}"
+                )))
+            })?;
+            // Use zenpixels to negotiate the cheapest pixel format conversion.
             // The adaptation helper owns a complete rectangular buffer;
             // pack strided views first, borrowing the tightly packed case.
             let data = pixels.contiguous_bytes();
@@ -932,6 +970,7 @@ impl<'a> EncodeRequest<'a> {
                 )))
             })?;
             let pixel_slice = adapted.as_slice();
+
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
@@ -950,6 +989,7 @@ impl<'a> EncodeRequest<'a> {
                     self.codec_config,
                     gain_map,
                     metadata,
+                    &retained,
                     self.stop,
                 );
             }
@@ -963,6 +1003,7 @@ impl<'a> EncodeRequest<'a> {
                     Some(resolved_quality),
                     gain_map,
                     metadata,
+                    &retained,
                     self.stop.as_ref(),
                 );
             }
@@ -978,6 +1019,7 @@ impl<'a> EncodeRequest<'a> {
                     self.codec_config,
                     gain_map,
                     metadata,
+                    &retained,
                     limits,
                     self.stop.as_ref(),
                 );
