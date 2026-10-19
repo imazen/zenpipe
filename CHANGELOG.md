@@ -18,7 +18,7 @@ None.
   implications for zenpipe output and the run data it rests on.
 
 #### Changed
-- Metadata integration shares zencodec `d327434b` across dispatch, services and standalone graphs. PNG `fb055396` and ultrahdr `a834b2cc` retain that same contract; precomputed gain-map filtering composes with main's strided adaptation, streaming preference and explicit HDR policy.
+- Metadata integration shares zencodec `d327434b` across dispatch, services and standalone graphs. PNG `fb055396` and ultrahdr `a834b2cc` retain that same contract; precomputed gain-map filtering composes with main's strided adaptation, streaming preference and explicit HDR policy (2f07d845).
 - All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides (a6ac4c2a, ae99e340).
 - Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
 - Production and fuzz graphs pin the streaming interface to zencodec `023a65c7` and zenjpeg `8aa966ab`. Fuzz manifests use git sources instead of sibling zencodec/codec checkouts; the WebP lock moves to `c4b6614e`, restoring byte-identical RGB one-shot and row encodes.

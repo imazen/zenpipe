@@ -434,3 +434,15 @@ metadata-merge-codec-check:
 metadata-merge-matrix-lint:
     cargo fmt -p zencodecs --check
     cargo clippy --locked -p zencodecs --no-default-features --features std,cms,inventory,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode,heic-decode,raw-decode --test operation_matrix -- -D warnings
+
+# Inspect a run without printing its complete step log.
+ci-status run repo="imazen/zenpipe":
+    gh run view "{{run}}" -R "{{repo}}" --json status,conclusion,jobs --jq '{status,conclusion,jobs:[.jobs[] | {id:.databaseId,name,status,conclusion}]}'
+
+# Stream CI progress to a caller-owned log when waiting for a required gate.
+ci-watch run repo="imazen/zenpipe":
+    gh run watch "{{run}}" -R "{{repo}}" --interval 30 --exit-status
+
+# Use a fresh output path to preserve prior diagnostic captures.
+ci-job-log job out repo="imazen/zenpipe":
+    gh api "repos/{{repo}}/actions/jobs/{{job}}/logs" --allow-escape-sequences > "{{out}}"

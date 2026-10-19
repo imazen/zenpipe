@@ -33,13 +33,13 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ### Fixed
 
-- Exercise GIF's advertised rational animation timing in the operation catalog, including exact representable delays, typed rejection and preservation of the accepted frames.
+- Exercise GIF's advertised rational animation timing in the operation catalog, including exact representable delays, typed rejection and preservation of the accepted frames (2e74cf3d).
 
 - The HDR-to-GIF transcode matrix explicitly selects the same sRGB8 clipping for whole images and strips, retaining every cell and pixel-identity assertion. Native over-range float refusal and clipped white pixels have regression coverage and an independent decoder gate (1573c8da).
 
 ### Changed
 
-- Metadata services and codec adapters use one zencodec `d327434b` source. Gain-map retention preserves the newer strided-input adaptation and explicit HDR policy.
+- Metadata services and codec adapters use one zencodec `d327434b` source. Gain-map retention preserves the newer strided-input adaptation and explicit HDR policy (2f07d845).
 
 - Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
 
