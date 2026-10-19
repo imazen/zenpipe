@@ -446,3 +446,10 @@ ci-watch run repo="imazen/zenpipe":
 # Use a fresh output path to preserve prior diagnostic captures.
 ci-job-log job out repo="imazen/zenpipe":
     gh api "repos/{{repo}}/actions/jobs/{{job}}/logs" --allow-escape-sequences > "{{out}}"
+
+# Verify file/stdin inventory parity and the RAW-capable audit binary.
+inventory-cli-check:
+    cargo fmt -p zencodecs-cli --check
+    cargo clippy --locked -p zencodecs-cli --all-targets -- -D warnings
+    cargo test --locked -p zencodecs-cli --test cli
+    cargo build --locked -p zencodecs-cli --features zencodecs/raw-decode

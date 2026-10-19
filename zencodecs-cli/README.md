@@ -70,3 +70,16 @@ JPEG↔JXL lossless.
 
 `--hdr` targets BT.2100 PQ only; there is no HLG output mode. The `probe` JSON reports
 `gain_map` / `depth_map` presence but not the HDR transfer of the reconstructed rendition.
+
+## Inventory
+
+List the structural parts of files or directories, or read one encoded image
+from standard input with `-`:
+
+```sh
+zencodecs inventory --tsv image.png
+cat image.png | zencodecs inventory --tsv -
+```
+
+TSV rows label standard input `-`. Directory entries are sorted; stdin appears
+at its position among the supplied inputs. Standard input may appear once.

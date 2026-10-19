@@ -12,6 +12,8 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 None.
 
 #### Added
+
+- The inventory CLI reads one encoded image from stdin with `-`; the audit gate checks multi-chunk input parity and builds with RAW inventory enabled.
 - Portable standalone fuzz/WASM dependency graphs and committed-source checks (83b02437, 771c6c27); workspace JSON API comparisons for unpublished dependencies (56166c80). Complete local CI benchmark captures retain their command and source provenance (6159a7c2).
 - `docs/reader-compat.md`: measured reader behaviour on orientation, colour
   and gain-map signalling (compat-matrix round 14, 2026-10-17), with the

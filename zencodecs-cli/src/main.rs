@@ -6,6 +6,7 @@
 //! conversion) can be a `find` + per-file invocation instead of bespoke Rust.
 //! Tracking: imazen/zenpipe#68.
 
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -39,7 +40,7 @@ enum Cmd {
 
 #[derive(Args)]
 struct InventoryArgs {
-    /// Files, or directories to walk recursively.
+    /// Files, directories to walk recursively, or - for one image on stdin.
     #[arg(required = true)]
     inputs: Vec<PathBuf>,
     /// Tab-separated output, one row per part, for corpus audits.
@@ -323,11 +324,40 @@ fn tsv_field(s: &str) -> String {
     s.replace(['\t', '\n', '\r'], " ")
 }
 
+fn inventory_stdin() -> io::Result<Vec<u8>> {
+    let mut input = io::stdin().lock();
+    let mut data = Vec::new();
+    let mut chunk = [0; 64 * 1024];
+    loop {
+        let len = match input.read(&mut chunk) {
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            other => other?,
+        };
+        if len == 0 {
+            return Ok(data);
+        }
+        data.try_reserve(len).map_err(io::Error::other)?;
+        data.extend_from_slice(&chunk[..len]);
+    }
+}
+
 fn inventory_cmd(a: &InventoryArgs) -> Result<(), String> {
     use zencodecs::inventory::{Inventory, PartId};
+    if a.inputs
+        .iter()
+        .filter(|p| p.as_path() == Path::new("-"))
+        .count()
+        > 1
+    {
+        return Err("inventory accepts standard input only once".into());
+    }
     let mut files = Vec::new();
     for input in &a.inputs {
-        collect_files(input, &mut files)?;
+        if input == Path::new("-") {
+            files.push(input.clone());
+        } else {
+            collect_files(input, &mut files)?;
+        }
     }
     if a.tsv {
         println!("file\toffset\tlength\tdepth\tkind\ttag\tdisposition\tlabel\tdetail");
@@ -351,7 +381,11 @@ fn inventory_cmd(a: &InventoryArgs) -> Result<(), String> {
                 println!("{name}: {what} {detail}");
             }
         };
-        let data = match std::fs::read(file) {
+        let data = match if file == Path::new("-") {
+            inventory_stdin()
+        } else {
+            std::fs::read(file)
+        } {
             Ok(d) => d,
             Err(e) => {
                 status("error", &e.to_string());

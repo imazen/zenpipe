@@ -1,7 +1,8 @@
 //! End-to-end checks of the `zencodecs` binary (zenpipe#68).
 
+use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn bin() -> Command {
     Command::new(env!("CARGO_BIN_EXE_zencodecs"))
@@ -15,7 +16,10 @@ fn scratch(name: &str) -> PathBuf {
 
 /// A 48×48 RGB PNG with enough texture that lossy WebP is not pixel-exact.
 fn noisy_png() -> Vec<u8> {
-    let (w, h) = (48u32, 48u32);
+    noisy_png_sized(48, 48)
+}
+
+fn noisy_png_sized(w: u32, h: u32) -> Vec<u8> {
     let stride = w as usize * 3;
     let mut px = vec![0u8; stride * h as usize];
     let mut seed = 0x2545_F491u32;
@@ -109,4 +113,51 @@ fn probe_emits_json() {
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.contains("\"format\":\"png\""), "{s}");
     assert!(s.contains("\"width\":48"), "{s}");
+}
+
+#[test]
+fn inventory_stdin_matches_file_parts() {
+    let png = noisy_png_sized(256, 128);
+    assert!(png.len() > 64 * 1024, "exercise multiple input chunks");
+    let input = scratch("inventory-in.png");
+    std::fs::write(&input, &png).unwrap();
+    let file = bin()
+        .args(["inventory", "--tsv"])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(file.status.success());
+    let mut child = bin()
+        .args(["inventory", "--tsv", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&png).unwrap();
+    let stdin = child.wait_with_output().unwrap();
+    assert!(stdin.status.success(), "{:?}", stdin.stderr);
+    let file = String::from_utf8(file.stdout).unwrap();
+    let stdin = String::from_utf8(stdin.stdout).unwrap();
+    let normalize = |text: &str| -> Vec<String> {
+        text.lines()
+            .map(|line| line.split_once('\t').expect("TSV row").1.to_owned())
+            .collect()
+    };
+    assert_eq!(normalize(&stdin), normalize(&file));
+    assert!(stdin.lines().skip(1).all(|line| line.starts_with("-\t")));
+    assert!(stdin
+        .lines()
+        .any(|line| line.contains("\tIDAT\timage-data\t")));
+}
+
+#[test]
+fn inventory_rejects_repeated_stdin() {
+    let out = bin()
+        .args(["inventory", "-", "-"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8(out.stderr).unwrap().contains("only once"));
 }

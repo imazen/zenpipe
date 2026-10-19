@@ -14,6 +14,8 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ### Added
 
+- The inventory CLI accepts one `-` input for encoded bytes on stdin, with fallible buffer growth and the same part rows as file input.
+
 - Structural inventory dispatch and the `zencodecs inventory` CLI (from #89). `inventory` is default-enabled in
   zencodecs and weakly enables only the selected codec walkers. Direct codec
   defaults stay unchanged. The proposed convenience API retains `Option` for
