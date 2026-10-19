@@ -7,6 +7,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+### Current-main verification
+
+- Admit zentone 0.2 alongside 0.1 and record the scoped Git-main override (`9e0731ff`). Tone-map integration tests, strict lint and doctests pass. The current-main CICP probe passes; locked AVIF primaries and floating-point TIFF findings remain tracked in issues 103 and zenextras 52, with assertions unchanged. Corpus inventory recipes retain all unsupported IMI results for issue zqi 73.
+
 #### QUEUED BREAKING CHANGES
 
 None.
