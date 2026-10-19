@@ -453,3 +453,25 @@ inventory-cli-check:
     cargo clippy --locked -p zencodecs-cli --all-targets -- -D warnings
     cargo test --locked -p zencodecs-cli --test cli
     cargo build --locked -p zencodecs-cli --features zencodecs/raw-decode
+
+# Corpus finalization: production source pins, disabled features and native adapters.
+corpus-codec-check:
+    just streaming-codec-tests
+    just metadata-inventory-dispatch-check
+    cargo test --locked -p zencodecs --no-fail-fast --features std,cms,inventory,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga
+    cargo test --locked -p zencodecs-cli --test inventory_stdin
+
+metadata-cicp-diagnostic:
+    cargo test --locked -p zencodecs --features std,cms,inventory,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test metadata_conformance cicp_color_signaling_without_matrix -- --nocapture
+
+# Standalone verification against a recorded current-main source graph.
+current-main-inventory-build manifest config:
+    cargo build --release --locked --manifest-path {{quote(manifest)}} --config {{quote(config)}}
+
+current-main-metadata-check manifest config:
+    cargo test --release --locked --manifest-path {{quote(manifest)}} --config {{quote(config)}} --test current_main_metadata cicp_color_signaling_without_matrix -- --nocapture
+
+# Caller holds the shared heavy-work lock. The route reader sanitizes native metadata in memory.
+current-main-corpus-inventory manifest config list output:
+    just current-main-inventory-build {{quote(manifest)}} {{quote(config)}}
+    python3 "{{justfile_directory()}}/../imazen-26/tools/metadata-loss-audit/inventory_routes.py" {{quote(list)}} {{quote(output)}} --inventory "{{parent_directory(manifest)}}/target/release/zencodecs" --inventory-commit 841a171c63933a66bd834fab5cbfe0086908cf34 --workers 2

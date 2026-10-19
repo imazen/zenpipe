@@ -385,7 +385,16 @@ fn round_trip(c: &Support, meta: Metadata) -> zencodecs::DecodeOutput {
 /// answer (e.g. JXL rejects a malformed ICC stream by design). Regressions are
 /// still caught: a `V::Ok` dimension dropping to `false` trips its assertion.
 fn try_round_trip(c: &Support, meta: Metadata) -> Option<zencodecs::DecodeOutput> {
-    decode(&encode(c, meta).ok()?).ok()
+    let bytes = encode(c, meta)
+        .inspect_err(|error| {
+            eprintln!("[{}] metadata probe encode: {error}", c.name);
+        })
+        .ok()?;
+    decode(&bytes)
+        .inspect_err(|error| {
+            eprintln!("[{}] metadata probe decode: {error}", c.name);
+        })
+        .ok()
 }
 
 // ───────────────────────── per-dimension observers ─────────────────────────
@@ -447,6 +456,7 @@ fn obs_cicp_color(c: &Support) -> bool {
     try_round_trip(c, Metadata::none().with_cicp(want))
         .and_then(|d| d.info().source_color.cicp)
         .map(|got| {
+            eprintln!("[{}] CICP color: wanted {want:?}, decoded {got:?}", c.name);
             got.color_primaries == want.color_primaries
                 && got.transfer_characteristics == want.transfer_characteristics
                 && got.full_range == want.full_range

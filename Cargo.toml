@@ -291,6 +291,8 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 # applies from the top-level workspace — git consumers of zenpipe that enable
 # features needing these crates must mirror the relevant entries.
 [patch.crates-io]
+# Current tone mapper; the adapter also accepts the compatible stable release.
+zentone = { git = "https://github.com/imazen/zentone", branch = "main" }
 # Streaming encode output is not available in the published 0.1.26 API.
 # Match zenjpeg's direct zencodec dependency so its trait types unify.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
