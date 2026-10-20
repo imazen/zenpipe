@@ -37,6 +37,16 @@ sources`.
 
 ## Known Bugs
 
+### Windows session-cache benchmark stack overflow (2026-10-19)
+
+Both Windows x64 and ARM64 full test jobs abort in the debug all-target
+`session_cache` benchmark after JPEG generation and zenbench calibration,
+with `STATUS_STACK_OVERFLOW`. This occurs at both 47695c06 and 5adaa204;
+the overflowing stack frame has not been identified. Track the finding in
+[issue 104](https://github.com/imazen/zenpipe/issues/104). No test, workload,
+stack-size setting or expectation was changed to bypass it.
+
+
 - 2026-10-19: the locked AVIF cohort loses Display-P3 primaries in `metadata_conformance::cicp_color_signaling_without_matrix` (12/13/0/full becomes 2/13/6/full). The unchanged test passes against the current-main encoder/decoder cohort with 12/13/6/full. The responsible dependency has not been isolated; [zenpipe issue 103](https://github.com/imazen/zenpipe/issues/103) tracks the pin refresh.
 - 2026-10-19: floating-point HDR input to TIFF fails with the default integer predictor on both one-shot and streaming paths. The 264-cell streaming matrix retains this failing case; [zenextras issue 52](https://github.com/imazen/zenextras/issues/52) tracks the codec fix.
 
