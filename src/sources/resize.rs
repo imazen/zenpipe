@@ -33,8 +33,96 @@ pub struct ResizeSource {
     buf: StripBuf,
     format: PixelFormat,
     y: u32,
+    pending: PendingRows<u8>,
     input_exhausted: bool,
     finished: bool,
+}
+
+/// Rows of an upstream strip the resizer could not take yet.
+///
+/// The ring buffer is sized for a 16-row batch, but the [`Source`] contract
+/// does not bound upstream strip height (a decoder or a materialized frame may
+/// hand over the whole image at once). Rows are pushed one at a time with
+/// output drained in between; when the output strip is full while the resizer
+/// still holds undrained output, the rest of the upstream strip is copied here
+/// and pushed on the next pull.
+struct PendingRows<T> {
+    data: alloc::vec::Vec<T>,
+    row_len: usize,
+    next: usize,
+}
+
+impl<T: Copy> PendingRows<T> {
+    fn new() -> Self {
+        Self {
+            data: alloc::vec::Vec::new(),
+            row_len: 0,
+            next: 0,
+        }
+    }
+
+    fn peek(&self) -> Option<&[T]> {
+        let start = self.next * self.row_len;
+        if self.row_len == 0 || start >= self.data.len() {
+            return None;
+        }
+        Some(&self.data[start..start + self.row_len])
+    }
+
+    fn advance(&mut self) {
+        self.next += 1;
+        if self.next * self.row_len >= self.data.len() {
+            self.data.clear();
+            self.next = 0;
+        }
+    }
+
+    fn stash<'a>(&mut self, rows: impl Iterator<Item = &'a [T]>)
+    where
+        T: 'a,
+    {
+        self.data.clear();
+        self.next = 0;
+        for row in rows {
+            self.row_len = row.len();
+            self.data.extend_from_slice(row);
+        }
+    }
+}
+
+/// Drain ready RGBA8 output rows into `buf`; `true` when the resizer holds
+/// no undrained output, so the next input row cannot overflow its ring.
+fn drain_u8(
+    resizer: &mut zenresize::StreamingResize,
+    buf: &mut StripBuf,
+    strip_height: u32,
+) -> bool {
+    while buf.rows_filled() < strip_height {
+        match resizer.next_output_row() {
+            Some(row) => {
+                buf.push_row(row);
+            }
+            None => break,
+        }
+    }
+    resizer.output_rows_available() == 0
+}
+
+/// [`drain_u8`] for the f32 path.
+fn drain_f32(
+    resizer: &mut zenresize::StreamingResize,
+    buf: &mut StripBuf,
+    strip_height: u32,
+) -> bool {
+    while buf.rows_filled() < strip_height {
+        match resizer.next_output_row_f32() {
+            Some(row) => {
+                buf.push_row(bytemuck::cast_slice(row));
+            }
+            None => break,
+        }
+    }
+    resizer.output_rows_available() == 0
 }
 
 /// Working formats [`ResizeSource`] accepts: 4-byte/pixel RGBA, sRGB or
@@ -88,6 +176,7 @@ impl ResizeSource {
             buf: StripBuf::new(out_w, sh, fmt),
             format: fmt,
             y: 0,
+            pending: PendingRows::new(),
             input_exhausted: false,
             finished: false,
         })
@@ -125,14 +214,29 @@ impl ResizeSource {
             buf: StripBuf::new(out_w, sh, fmt),
             format: fmt,
             y: 0,
+            pending: PendingRows::new(),
             input_exhausted: false,
             finished: false,
         })
     }
 
-    /// Pull a strip from upstream and push all its rows directly into the
-    /// resizer. No intermediate copy.
+    /// Push input rows into the resizer: rows left over from the previous
+    /// upstream strip first, else a new upstream strip. Rows go straight from
+    /// the upstream strip; only rows that cannot be pushed before the output
+    /// strip fills are copied (see [`PendingRows`]).
     fn push_upstream_strip(&mut self) -> crate::PipeResult<bool> {
+        if self.pending.peek().is_some() {
+            while let Some(row) = self.pending.peek() {
+                if !drain_u8(&mut self.resizer, &mut self.buf, self.strip_height) {
+                    break;
+                }
+                self.resizer
+                    .push_row(row)
+                    .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
+                self.pending.advance();
+            }
+            return Ok(true);
+        }
         if self.input_exhausted {
             return Ok(false);
         }
@@ -144,9 +248,12 @@ impl ResizeSource {
         };
 
         for r in 0..strip.rows() {
-            let row = strip.row(r);
+            if !drain_u8(&mut self.resizer, &mut self.buf, self.strip_height) {
+                self.pending.stash((r..strip.rows()).map(|r| strip.row(r)));
+                break;
+            }
             self.resizer
-                .push_row(row)
+                .push_row(strip.row(r))
                 .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
         }
 
@@ -155,13 +262,7 @@ impl ResizeSource {
 
     /// Drain available output rows into the buffer.
     fn drain_output(&mut self) {
-        while self.buf.rows_filled() < self.strip_height {
-            if let Some(row) = self.resizer.next_output_row() {
-                self.buf.push_row(row);
-            } else {
-                break;
-            }
-        }
+        drain_u8(&mut self.resizer, &mut self.buf, self.strip_height);
     }
 }
 
@@ -248,6 +349,7 @@ pub struct ResizeF32Source {
     strip_height: u32,
     buf: StripBuf,
     y: u32,
+    pending: PendingRows<f32>,
     input_exhausted: bool,
     finished: bool,
 }
@@ -282,15 +384,29 @@ impl ResizeF32Source {
             strip_height: sh,
             buf: StripBuf::new(out_w, sh, format::RGBAF32_LINEAR),
             y: 0,
+            pending: PendingRows::new(),
             input_exhausted: false,
             finished: false,
         })
     }
 
-    /// Pull a strip from upstream and push all its rows directly into the
-    /// resizer. No intermediate copy — strip.data borrows self.upstream
-    /// while self.resizer is a disjoint field.
+    /// Push input rows into the resizer, as [`ResizeSource`] does. Rows go
+    /// straight from the upstream strip (strip.data borrows self.upstream
+    /// while self.resizer is a disjoint field); only rows that cannot be
+    /// pushed before the output strip fills are copied.
     fn push_upstream_strip(&mut self) -> crate::PipeResult<bool> {
+        if self.pending.peek().is_some() {
+            while let Some(row) = self.pending.peek() {
+                if !drain_f32(&mut self.resizer, &mut self.buf, self.strip_height) {
+                    break;
+                }
+                self.resizer
+                    .push_row_f32(row)
+                    .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
+                self.pending.advance();
+            }
+            return Ok(true);
+        }
         if self.input_exhausted {
             return Ok(false);
         }
@@ -301,14 +417,14 @@ impl ResizeF32Source {
             return Ok(false);
         };
 
-        // Push all rows directly from the upstream strip into the resizer.
-        // NLL allows this: strip.data borrows *self.upstream, push_row_f32
-        // borrows self.resizer — disjoint fields.
         for r in 0..strip.rows() {
-            let row = strip.row(r);
-            let row_f32: &[f32] = bytemuck::cast_slice(row);
+            if !drain_f32(&mut self.resizer, &mut self.buf, self.strip_height) {
+                self.pending
+                    .stash((r..strip.rows()).map(|r| bytemuck::cast_slice(strip.row(r))));
+                break;
+            }
             self.resizer
-                .push_row_f32(row_f32)
+                .push_row_f32(bytemuck::cast_slice(strip.row(r)))
                 .map_err(|e| at!(PipeError::Resize(e.to_string())))?;
         }
 
@@ -316,14 +432,7 @@ impl ResizeF32Source {
     }
 
     fn drain_output(&mut self) {
-        while self.buf.rows_filled() < self.strip_height {
-            if let Some(row_f32) = self.resizer.next_output_row_f32() {
-                let row_u8: &[u8] = bytemuck::cast_slice(row_f32);
-                self.buf.push_row(row_u8);
-            } else {
-                break;
-            }
-        }
+        drain_f32(&mut self.resizer, &mut self.buf, self.strip_height);
     }
 }
 
