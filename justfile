@@ -6,6 +6,13 @@ test:
     cargo test --all-targets
     cargo test --all-targets --no-default-features
 
+# Parallel test run across binaries. Excludes benches: zenbench binaries do not
+# answer nextest's `--list` probe and would run full benchmarks. Doctests run
+# separately because nextest does not run them.
+nextest:
+    cargo nextest run --workspace --lib --bins --tests --examples
+    cargo test --workspace --doc
+
 # Tests reading dev-workstation-only fixtures (sibling jpegli-cpp ICC
 # profiles, /mnt/v corpora) — gated behind zencodecs `local-fixtures`.
 test-local-fixtures:
