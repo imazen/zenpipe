@@ -3799,6 +3799,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7c4ceeeca15c8384bbc3e011dbd8fccb7f068a440b752b7d9b32ceb0ca0e2e8"
 
 [[package]]
+name = "tokio"
+version = "1.54.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
+dependencies = [
+ "bytes",
+ "pin-project-lite",
+ "tokio-macros",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
 name = "toml"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4697,7 +4719,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?rev=14726d9125b0468ecb70025631d749495dda278b#14726d9125b0468ecb70025631d749495dda278b"
+source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4709,7 +4731,7 @@ dependencies = [
 [[package]]
 name = "zencodec-coroutine"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=14726d9125b0468ecb70025631d749495dda278b#14726d9125b0468ecb70025631d749495dda278b"
+source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
 dependencies = [
  "enough",
  "spin",
@@ -4720,10 +4742,11 @@ dependencies = [
 [[package]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=14726d9125b0468ecb70025631d749495dda278b#14726d9125b0468ecb70025631d749495dda278b"
+source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
 dependencies = [
  "enough",
  "how-far",
+ "tokio",
  "zencodec",
  "zenpixels",
 ]
@@ -4883,7 +4906,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=686b0e2733af1f4831e781a6b5ed46727beaad80#686b0e2733af1f4831e781a6b5ed46727beaad80"
+source = "git+https://github.com/imazen/zenjpeg?rev=af8eee81dd1b8147af4b206871903d788408cec9#af8eee81dd1b8147af4b206871903d788408cec9"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -4908,7 +4931,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zentone",
- "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=686b0e2733af1f4831e781a6b5ed46727beaad80)",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=af8eee81dd1b8147af4b206871903d788408cec9)",
 ]
 
 [[package]]
@@ -4991,7 +5014,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=14726d9125b0468ecb70025631d749495dda278b#14726d9125b0468ecb70025631d749495dda278b"
+source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
 dependencies = [
  "roxmltree 0.21.1",
  "zencodec",
@@ -5446,7 +5469,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=686b0e2733af1f4831e781a6b5ed46727beaad80#686b0e2733af1f4831e781a6b5ed46727beaad80"
+source = "git+https://github.com/imazen/zenjpeg?rev=af8eee81dd1b8147af4b206871903d788408cec9#af8eee81dd1b8147af4b206871903d788408cec9"
 dependencies = [
  "archmage",
  "imgref",
