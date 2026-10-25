@@ -37,6 +37,12 @@ sources`.
 
 ## Known Bugs
 
+- Fixed during native PNG qualification (2026-10-25): a 97x65 source could
+  deliver a 65-row native batch to an admitted 64-row transcode strip and fail
+  with `StripGeometry`. The sink now advertises its capacity; shared coroutine
+  delivery splits batches. 97x65/257 RGB8 and RGBA16 retain exact independent
+  samples with 1/3/64-row buffers (`just checked-transcode-async-check`).
+
 - Fixed in the checked-transcode review (2026-10-25): default PNG color emission
   could add derived cICP beside a retained Display P3 ICC, changing authority.
   The adapter now supplies checked verbatim defaults without overriding required

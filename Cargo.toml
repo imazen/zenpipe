@@ -267,9 +267,9 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
 # Reviewed shared operation and coupled-transcode contracts (zencodec PR 168).
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "78fe667c0532c87c0401a5fd28b03ebace713844" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "939d5628b5abfd7e55f5e926278cfe38678c9a38" }
 # Controlled interpretation and profile-tagged byte encode (zenjpeg PR 240).
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c9f82fc040a50e64fec88379c8add863e2ab3f50" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "02fa386631845cc08543090abb3fd1ba2da31012" }
 # heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
@@ -297,7 +297,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "f6ac25390ac47f4aa7c4cb0a8c83adec92d94f78" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "3046bd77d1bae58516ee760043a444af087ee3c7" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

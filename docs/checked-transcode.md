@@ -231,3 +231,17 @@ run-heavy: done rc=0 21s | peak-RSS 0.53GiB | min-avail 17073MiB | peak-load 0.4
 ```
 
 This is a validation-process receipt, not a codec workspace or speed bound.
+
+### Native batches and admitted strips
+
+The sink now advertises the configured `with_strip_rows` capacity. The shared
+coroutine delivery path divides larger native batches before borrowing buffers;
+it does not grow the admitted rows. Native RGB8 and RGBA16 PNGs at 97x65 and
+97x257 retain exact samples with 1-, 3- and 64-row destination strips. This
+fixes the larger guide fixture's `StripGeometry` failure. Native batch and codec
+workspace sizes remain separate from the adapter's strip allowance.
+
+The complete native integration and strict Clippy/API checks pass with core
+`939d5628`, PNG `3046bd77` and JPEG `02fa3866` (`just checked-color-integration`,
+rc=0, 34 s; run-heavy peak RSS 0.72 GiB, minimum available 15496 MiB, peak
+load 1.02). The root and four standalone dependency graphs agree.

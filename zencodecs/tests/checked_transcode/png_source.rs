@@ -3,7 +3,14 @@ use super::*;
 use zencodec::encode::{EncodePolicy, Fidelity};
 
 pub(super) fn png_fixture(descriptor: PixelDescriptor, profile: bool) -> (Vec<u8>, Vec<u8>) {
-    let (w, h) = (7, 5);
+    png_fixture_sized(descriptor, profile, 7, 5)
+}
+fn png_fixture_sized(
+    descriptor: PixelDescriptor,
+    profile: bool,
+    w: u32,
+    h: u32,
+) -> (Vec<u8>, Vec<u8>) {
     let row = w as usize * descriptor.bytes_per_pixel();
     let padding = descriptor.bytes_per_pixel() * 3;
     let mut raw = vec![0xe7; (row + padding) * h as usize];
@@ -37,6 +44,32 @@ pub(super) fn png_fixture(descriptor: PixelDescriptor, profile: bool) -> (Vec<u8
         .data()
         .to_vec();
     (bytes, expected)
+}
+
+#[test]
+fn native_png_batches_fit_independently_admitted_transcode_strips() {
+    let codecs = codecs();
+    for descriptor in [PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA16_SRGB] {
+        for height in [65, 257] {
+            let (input, expected) = png_fixture_sized(descriptor, false, 97, height);
+            for strip in [1, 3, 64] {
+                let budget = StorageBudget::new(2 * 1024 * 1024, 16);
+                let output = TranscodeRequest::new(ImageFormat::Png)
+                    .with_fidelity(Fidelity::Lossless)
+                    .with_strip_rows(strip)
+                    .with_storage(budget.clone())
+                    .transcode(&codecs, &input)
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "{descriptor:?}, height={height}, strip={strip}: {}",
+                            explain(&e)
+                        )
+                    });
+                assert_eq!(oracle(output.data()), expected);
+                assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+            }
+        }
+    }
 }
 fn oracle(bytes: &[u8]) -> Vec<u8> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));

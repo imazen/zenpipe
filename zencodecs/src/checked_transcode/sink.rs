@@ -146,6 +146,13 @@ impl Destination {
     }
 }
 impl DecodeRowSink for Destination {
+    fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
+        self.0
+            .as_ref()
+            .and_then(|run| core::num::NonZeroU32::new(run.rows.max_rows))
+            .unwrap_or(core::num::NonZeroU32::MIN)
+    }
+
     fn begin(
         &mut self,
         width: u32,
