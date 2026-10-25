@@ -502,3 +502,8 @@ delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]
 # patches above exist for bare-clone/registry resolution and would only make
 # every CI job fetch those repos redundantly (ci-lint convention).
 delete_sections = ["patch.crates-io"]
+
+# Dependencies (the codecs) build optimized in dev/test; workspace members stay
+# at opt-level 0. Debug assertions and overflow checks are unchanged.
+[profile.dev.package."*"]
+opt-level = 2
