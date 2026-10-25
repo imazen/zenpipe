@@ -51,6 +51,7 @@ Thumbs.db
 # (docs/public-api/, regenerated via `just api-doc` — the apidoc/ runner
 # package) are tracked.
 /docs/*
+!/docs/checked-transcode.md
 !/docs/public-api/
 
 # Tooling noise

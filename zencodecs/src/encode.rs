@@ -921,7 +921,7 @@ impl<'a> EncodeRequest<'a> {
                     fields.xmp = zencodec::Retention::Discard;
                 }
             }
-            let retained = zencodec::display_metadata::filter_for_gain_map(
+            let retained = zenmeta::display::filter_for_gain_map(
                 &gain_map_source_metadata,
                 metadata,
                 &MetadataPolicy::Custom(fields),
@@ -997,8 +997,12 @@ impl<'a> EncodeRequest<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "webp")]
     use alloc::vec;
-    use rgb::{Rgb, Rgba};
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
+    use rgb::Rgb;
+    #[cfg(feature = "webp")]
+    use rgb::Rgba;
 
     #[test]
     fn builder_pattern() {

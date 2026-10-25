@@ -13,7 +13,7 @@ const RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
 /// Bounded XML preflight before giving the packet to an RDF editor.
 /// Xmpkit 0.1.6 is not a hardened XML boundary: bound bytes/nodes/depth,
 /// reject DTDs, alternate subjects, duplicate properties and prefix rebinding.
-/// Inspection can still show unsupported packets using zencodec::metadata_audit.
+/// Inspection can still show unsupported packets using zenmeta::audit.
 fn preflight(xml: &str, limit: usize) -> Result<(), Error> {
     if xml.len() > limit {
         return Err(Error::Limit("XMP bytes"));
@@ -608,7 +608,7 @@ mod integration_tests {
             )
             .unwrap();
         let merged = std::str::from_utf8(&merged).unwrap();
-        let packet = zencodec::xmp::Packet::parse(merged).unwrap();
+        let packet = zenmeta::xmp::Packet::parse(merged).unwrap();
         assert_eq!(
             packet
                 .property("http://ns.adobe.com/hdr-gain-map/1.0/", "GainMapMax")

@@ -464,3 +464,7 @@ pub use transcode::transcode_jpeg_to_jxl_lossless;
 /// )?;
 /// ```
 pub use transcode::{QualityTarget, transcode, transcode_to_quality};
+
+/// Checked pixel transcoding through the shared fallible policy resolver.
+#[cfg(feature = "checked-transcode")]
+pub mod checked_transcode;

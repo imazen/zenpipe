@@ -479,7 +479,7 @@ mod metadata_retention_tests {
         exif.set_artist("PUBLIC-ARTIST");
         exif.set_orientation(Orientation::Rotate90);
         let meta = Metadata::none()
-            .with_exif(exif.to_bytes())
+            .with_exif(zenmeta::exif::serialize(&exif))
             .with_orientation(Orientation::Rotate90)
             .with_xmp(b"PRIVATE-XMP".to_vec())
             .with_cicp(zencodec::Cicp::SRGB);

@@ -17,16 +17,8 @@ jobs:
     uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@6294a0dde3b9bd35f189f7bc262b5295c0173818
     with:
       sibling_overrides: false
-      # macOS Intel is a mandatory lane (x86_64 macOS is the only place several
-      # of the SIMD tiers and the Apple linker are exercised together), and
-      # `macos-latest` is aarch64-only, so it has to be named explicitly. The
-      # reusable workflow dropped macOS from its DEFAULT list to cut Actions
-      # spend and documents `platforms` as the opt-back-in; this is that opt-in.
-      # `macos-26-intel` rather than `macos-15-intel` because zenpipe ships no
-      # binaries — nothing here needs the older SDK's deployment target.
-      # Everything else is the reusable workflow's default list, repeated
-      # verbatim because `platforms` replaces it wholesale rather than adding.
-      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-26-intel"]'
+      # macOS runs on ARM64; preserve the other platform lanes.
+      platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
       # imazen/zen-workspace's rust-ci.yml), so put per-package checks that
@@ -36,12 +28,14 @@ jobs:
       # feature and runs via `just test-zenfilters-quality` on a workstation
       # (zenpipe#44) — it used to self-skip on CI and pass without testing.
       clippy_extra_runs: |
+        cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
         cargo clippy --all-targets --no-default-features -- -D warnings
         cargo clippy -p zenlayout --all-targets -- -D warnings
         cargo clippy -p zencodecs --no-default-features --all-targets -- -D warnings
         cargo clippy -p zeneditor --all-targets -- -D warnings
         cargo clippy -p zenfilters --all-targets -- -D warnings
       test_extra_runs: |
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --test checked_transcode --locked
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema

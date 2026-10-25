@@ -12,27 +12,20 @@
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)         2
 #   free functions                             22
-#   inherent methods                           17
+#   inherent methods                            5
 #   struct fields                               3
 #   trait roster entries (type × trait)        22
 #   auto-trait-complete types                   1
 #
 # per-module pub lines:
-#   (root)                            7
+#   (root)                            4
 #   __bench_kernels                  16
 #   blur_internals                   14
-#   filter_compat                     1
-#   filters                           6
-#   param_schema                      1
-#   presets                           1
 
-## items (46 lines)
+## items (34 lines)
 
 pub fn ChannelAccess::assert_fields_are_eq(&self)
 pub fn PlaneMask::assert_fields_are_eq(&self)
-pub fn PlaneSemantics::assert_fields_are_eq(&self)
-pub fn ResizePhase::assert_fields_are_eq(&self)
-pub fn WorkingSpace::assert_fields_are_eq(&self)
 pub fn __bench_kernels::adaptive_sharpen_apply(&[f32], &[f32], &[f32], &mut [f32], f32, f32, f32)
 pub fn __bench_kernels::brilliance_apply(&[f32], &[f32], &mut [f32], f32, f32, f32)
 pub fn __bench_kernels::gather_oklab_to_srgb_u8(&[f32], &[f32], &[f32], &mut [u8], u32, &zenpixels_convert::gamut::GamutMatrix)
@@ -49,7 +42,7 @@ pub fn __bench_kernels::square_plane(&[f32], &mut [f32])
 pub fn __bench_kernels::subtract_planes(&[f32], &[f32], &mut [f32])
 pub fn __bench_kernels::unsharp_fuse(&[f32], &[f32], &mut [f32], f32)
 pub fn __bench_kernels::vibrance(&mut [f32], &mut [f32], f32, f32)
-pub fn blur_internals::DericheCoefficients::clone(&self) -> blur_internals::DericheCoefficients
+pub fn blur_internals::DericheCoefficients::clone(&self) -> Self
 pub fn blur_internals::DericheCoefficients::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn blur_internals::DericheCoefficients::new(f32) -> Self
 pub fn blur_internals::deriche_blur_plane(&[f32], &mut [f32], u32, u32, &blur_internals::DericheCoefficients, &mut FilterContext)
@@ -58,15 +51,6 @@ pub fn blur_internals::gaussian_blur_plane_scalar(&[f32], &mut [f32], u32, u32, 
 pub fn blur_internals::kernel_sigma(&GaussianKernel) -> f32
 pub fn blur_internals::sigma_to_stackblur_radius(f32) -> u32
 pub fn blur_internals::stackblur_plane(&[f32], &mut [f32], u32, u32, u32, &mut FilterContext)
-pub fn filter_compat::FilterTag::assert_fields_are_eq(&self)
-pub fn filters::ConvolveTarget::assert_fields_are_eq(&self)
-pub fn filters::EdgeMode::assert_fields_are_eq(&self)
-pub fn filters::FilmPreset::assert_fields_are_eq(&self)
-pub fn filters::MorphOp::assert_fields_are_eq(&self)
-pub fn filters::WarpInterpolation::assert_fields_are_eq(&self)
-pub fn filters::cat16::AdaptationTarget::assert_fields_are_eq(&self)
-pub fn param_schema::FilterGroup::assert_fields_are_eq(&self)
-pub fn presets::PresetCategory::assert_fields_are_eq(&self)
 pub mod __bench_kernels
 pub mod blur_internals
 pub struct blur_internals::DericheCoefficients

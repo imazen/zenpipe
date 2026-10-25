@@ -429,13 +429,13 @@ impl<'a> ScrubRequest<'a> {
         exif::validate(self, bytes)?;
         let exif = zencodec::exif::Exif::parse(bytes).ok_or(Error::Malformed("EXIF"))?;
         let orientation = exif.orientation().unwrap_or(Orientation::Identity);
-        let filtered = exif.filtered(&self.policy.fields().exif);
+        let filtered = zenmeta::exif::filter(&exif, &self.policy.fields().exif);
         if filtered.orientation().unwrap_or(Orientation::Identity) != orientation {
             return Err(Error::Unsupported(
                 "removing orientation requires explicit pixel transformation",
             ));
         }
-        Ok(filtered.to_bytes())
+        Ok(zenmeta::exif::serialize(&filtered))
     }
 }
 

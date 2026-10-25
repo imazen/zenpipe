@@ -12,6 +12,8 @@ readme = "README.crates.md"
 exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/", "benchmarks/", "docs/", "*.zst"]
 
 [dependencies]
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "14726d9125b0468ecb70025631d749495dda278b", optional = true, default-features = false }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "14726d9125b0468ecb70025631d749495dda278b", optional = true }
 # Core (always available)
 enough = "0.4"
 whereat = "0.1.4"
@@ -19,7 +21,7 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = ">=0.1.26, <0.3.0" }
+zencodec = { version = ">=0.1.27, <0.3.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -31,7 +33,7 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 # registry crate, so the `zenanalyze_api` types unify to one instance.
 zenanalyze-api = { version = "0.1.0", optional = true, default-features = false }
 zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = ">=0.2.10, <0.4.0", features = ["imgref"] }
+zenpixels-convert = { version = ">=0.2.17, <0.4.0", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
 # Codecs (all optional, feature-gated)
@@ -73,7 +75,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "b777fa12a92059d3d50c0bfa12e30d2b10502df6", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
 # crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
@@ -134,10 +136,12 @@ fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 rayon = "1"
 
 [features]
-# Encoded metadata inspection/rewrite; no new dependency. Pixel codecs remain optional.
-metadata = []
+# Joint resolver path; requires qualified controlled native decoders.
+checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-decode", "zenpixels-convert/icc-db"]
+# Encoded metadata inspection/rewrite services. Pixel codecs remain optional.
+metadata = ["dep:zenmeta", "zenmeta/xmp"]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
-std = []
+std = ["zencodec-io?/std", "zenmeta?/std"]
 
 # Content-aware auto-format selection via an injected MLP (zenpicker over
 # zenanalyze features) — provides `MlpFormatPicker`, a `FormatPicker` impl.
@@ -160,7 +164,7 @@ transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
+jpeg-ultrahdr = ["dep:zenmeta", "jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
@@ -295,3 +299,11 @@ required-features = ["jpeg", "webp", "png", "gif"]
 
 # [patch.crates-io] moved to workspace root Cargo.toml
 
+
+[[test]]
+name = "checked_transcode"
+required-features = ["checked-transcode", "jpeg", "png", "cms"]
+
+[[example]]
+name = "checked_transcode"
+required-features = ["std", "cms", "jpeg", "png", "checked-transcode"]
