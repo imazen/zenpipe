@@ -215,3 +215,9 @@ checked-transcode-arm-clippy:
 session-stack-check:
     cargo clippy --bench session_cache --locked -- -D warnings
     cargo test --bench session_cache --locked -- --group=session_4k_drain
+
+# Qualify color handoff after resolving all pinned application graphs.
+checked-color-integration:
+    just checked-transcode-locks
+    just checked-transcode-async-check
+    just api-doc

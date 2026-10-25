@@ -180,3 +180,25 @@ just checked-transcode-async-check
 just api-doc
 run-heavy: done rc=0 34s | peak-RSS 0.73GiB | min-avail 16926MiB | peak-load 0.90
 ```
+
+## Prepared color and decoded precision (2026-10-25)
+
+Adapter defaults now ask the checked encoder to emit the prepared color carriers
+verbatim. Explicit request fields, or inherited registry fields, take priority.
+Unsupported required fields fail during preparation, before source input.
+A supplied Display P3 ICC consequently stays authoritative when transcoding
+JPEG to PNG, instead of adding a derived cICP tag.
+
+Output precision is checked against the inspection decoder's native output
+descriptor, with no requested upconversion. PNG palette indices can use fewer
+than eight bits while still representing exact eight-bit RGB values. Comparing
+index width against channel precision falsely refused that lossless case. The
+regression exercises actual packed PNG output and compares all expanded samples
+with the decoded JPEG using both native and independent PNG readers. It does
+not claim content-dependent fidelity from a descriptor alone.
+
+Validation: native sync/async routes, required-policy precedence, metadata
+violations, source/callback errors, cancellation and owner cleanup passed with
+strict library/example/test Clippy (`just checked-transcode-async-check`). The
+API snapshot gate also passed. This adds a second inspection query on completed
+output; its parsing cost is not yet measured.

@@ -37,6 +37,13 @@ sources`.
 
 ## Known Bugs
 
+- Fixed in the checked-transcode review (2026-10-25): default PNG color emission
+  could add derived cICP beside a retained Display P3 ICC, changing authority.
+  The adapter now supplies checked verbatim defaults without overriding required
+  policy fields. Packed PNG palette index width also no longer masquerades as
+  decoded channel precision. The native regression compares expanded pixels
+  against an independent PNG reader; `just checked-transcode-async-check`.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly

@@ -491,7 +491,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
+source = "git+https://github.com/imazen/zencodec?rev=78fe667c0532c87c0401a5fd28b03ebace713844#78fe667c0532c87c0401a5fd28b03ebace713844"
 dependencies = [
  "almost-enough",
  "enough",
@@ -503,7 +503,7 @@ dependencies = [
 [[package]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
+source = "git+https://github.com/imazen/zencodec?rev=78fe667c0532c87c0401a5fd28b03ebace713844#78fe667c0532c87c0401a5fd28b03ebace713844"
 dependencies = [
  "enough",
  "how-far",
@@ -549,7 +549,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=af8eee81dd1b8147af4b206871903d788408cec9#af8eee81dd1b8147af4b206871903d788408cec9"
+source = "git+https://github.com/imazen/zenjpeg?rev=c9f82fc040a50e64fec88379c8add863e2ab3f50#c9f82fc040a50e64fec88379c8add863e2ab3f50"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -577,7 +577,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba#b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba"
+source = "git+https://github.com/imazen/zencodec?rev=78fe667c0532c87c0401a5fd28b03ebace713844#78fe667c0532c87c0401a5fd28b03ebace713844"
 dependencies = [
  "roxmltree",
  "zencodec",
@@ -617,7 +617,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=af8eee81dd1b8147af4b206871903d788408cec9#af8eee81dd1b8147af4b206871903d788408cec9"
+source = "git+https://github.com/imazen/zenjpeg?rev=c9f82fc040a50e64fec88379c8add863e2ab3f50#c9f82fc040a50e64fec88379c8add863e2ab3f50"
 dependencies = [
  "archmage",
  "imgref",
@@ -695,7 +695,7 @@ source = "git+https://github.com/imazen/zenextras?rev=109a9ec367278a93751f7701f8
 [[patch.unused]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng?rev=2802f8ee9ae5444b61c4b8f9da51645365bb1fd5#2802f8ee9ae5444b61c4b8f9da51645365bb1fd5"
+source = "git+https://github.com/imazen/zenpng?rev=53861c95b5a2f982d0494f07242765c2ccf6729a#53861c95b5a2f982d0494f07242765c2ccf6729a"
 
 [[patch.unused]]
 name = "zenpredict"

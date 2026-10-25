@@ -1087,6 +1087,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixed
+
+- Checked transcodes preserve the prepared color carriers through native JPEG/PNG
+  checked policy defaults while explicit caller requirements win. Output
+  precision uses native decoded samples rather than packed palette index width.
+
+
 #### Added
 
 - Default-off `checked-transcode`: one stored request executes prepared conversion, metadata and encoder routes through the shared fallible resolver. Slice/file/range input, explicit opaque-profile policy, admitted row storage and output postconditions are exercised with native JPEG/PNG and independent pixel readback. Native workspace and encoded allocation remain unqualified; see `docs/checked-transcode.md`.

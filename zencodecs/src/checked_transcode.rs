@@ -187,7 +187,10 @@ impl<'a> TranscodeRequest<'a> {
     pub fn new(format: ImageFormat) -> Self {
         Self {
             decode: operation::DecodeRequest::new(),
-            encode: operation::EncodeRequest::new(format),
+            encode: operation::EncodeRequest::new(format).with_policy_defaults(
+                zencodec::encode::EncodePolicy::none()
+                    .with_color(zencodec::ColorEmitPolicy::Verbatim),
+            ),
             format,
             output: None,
             metadata: MetadataTransfer::PreserveReported,
@@ -413,13 +416,18 @@ fn requires_alpha(descriptor: PixelDescriptor) -> bool {
         Some(zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied)
     )
 }
-fn verify_output(actual: &ImageInfo, expected: &ExpectedOutput) -> Result<(), Cause> {
+fn verify_output(
+    actual: &ImageInfo,
+    decoded: &zencodec::decode::OutputInfo,
+    expected: &ExpectedOutput,
+) -> Result<(), Cause> {
     let (width, height, descriptor) = (expected.width, expected.height, expected.descriptor);
     if expected.resolution.is_some() && actual.resolution != expected.resolution {
         return Err(Refusal::PhysicalResolution.into());
     }
     let expected = &expected.metadata;
     if (actual.width, actual.height) != (width, height)
+        || (decoded.width, decoded.height) != (width, height)
         || actual.orientation != expected.orientation
     {
         return Err(Refusal::GeometryOrOrientation.into());
@@ -427,8 +435,11 @@ fn verify_output(actual: &ImageInfo, expected: &ExpectedOutput) -> Result<(), Ca
     if requires_alpha(descriptor) && !actual.has_alpha {
         return Err(Refusal::AlphaRetention.into());
     }
-    let required_depth = (descriptor.channel_type().byte_size() * 8) as u8;
-    if actual.source_color.bit_depth != Some(required_depth) {
+    // Packed indices are not color-channel precision. For example, a one-bit
+    // PNG palette can preserve arbitrary eight-bit RGB values exactly. Inspect
+    // the decoder's native sample representation, without format preferences
+    // that could hide a precision loss by requesting an upconversion.
+    if decoded.native_format.channel_type() != descriptor.channel_type() {
         return Err(Refusal::OutputPrecision.into());
     }
     let meta = actual.metadata();

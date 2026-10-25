@@ -293,6 +293,12 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
         retained.cicp = metadata.cicp;
         Self(self.0.with_metadata(retained))
     }
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::encode::EncodePolicy,
+    ) -> Result<(), zencodec::UnsupportedOperation> {
+        self.0.try_set_policy(policy)
+    }
     fn encoder(self) -> Result<Self::Enc, Self::Error> {
         self.0.encoder()
     }
@@ -519,3 +525,80 @@ fn reported_physical_resolution_cannot_silently_disappear() {
 #[cfg(feature = "checked-transcode-async")]
 #[path = "checked_transcode/async_source.rs"]
 mod asynchronous;
+
+#[test]
+fn default_p3_preservation_keeps_authority_and_required_policies_still_win() {
+    use zencodec::decode::{DecodeJob, DecoderConfig};
+    use zencodec::{ColorAuthority, UnsupportedOperation, encode::EncodePolicy};
+    use zenpixels_convert::icc_profiles::DISPLAY_P3_V4;
+    let bytes = [19, 31, 63].repeat(17 * 9);
+    let codecs = codecs();
+    for progressive in [false, true] {
+        let input = jpeg_config(progressive)
+            .job()
+            .with_metadata_policy(
+                Metadata::none().with_icc(DISPLAY_P3_V4),
+                MetadataPolicy::PreserveExact,
+            )
+            .encoder()
+            .unwrap()
+            .encode(PixelSlice::new(&bytes, 17, 9, 51, PixelDescriptor::RGB8_SRGB).unwrap())
+            .unwrap();
+        let expected = codecs.decode(input.data()).unwrap();
+        let output = TranscodeRequest::new(ImageFormat::Png)
+            .transcode(&codecs, input.data())
+            .unwrap_or_else(|error| panic!("{}", explain(&error)));
+        let info = zenpng::PngDecoderConfig::new()
+            .job()
+            .probe_full(output.data())
+            .unwrap();
+        assert_eq!(info.source_color.color_authority, ColorAuthority::Icc);
+        assert_eq!(
+            info.source_color.icc_profile.as_deref(),
+            Some(DISPLAY_P3_V4)
+        );
+        assert!(info.source_color.cicp.is_none());
+        assert!(
+            info.source_color.bit_depth.unwrap() < 8,
+            "exercise packed palette indices"
+        );
+        let mut oracle = png::Decoder::new(Cursor::new(output.data()));
+        oracle.set_transformations(png::Transformations::EXPAND);
+        let mut oracle = oracle.read_info().unwrap();
+        let mut raw = vec![0; oracle.output_buffer_size().unwrap()];
+        let frame = oracle.next_frame(&mut raw).unwrap();
+        assert_eq!(
+            (frame.color_type, frame.bit_depth),
+            (png::ColorType::Rgb, png::BitDepth::Eight)
+        );
+        assert_eq!(frame.buffer_size(), 17 * 9 * 3);
+        for y in 0..9 {
+            assert_eq!(&raw[y as usize * 51..][..51], expected.pixels().row(y));
+        }
+        let actual = codecs.decode(output.data()).unwrap();
+        for y in 0..9 {
+            assert_eq!(actual.pixels().row(y), expected.pixels().row(y));
+        }
+        // Conflicting required fields are not replaced by the adapter default.
+        // This codec has not qualified the strict/embed fields, so even an
+        // invalid source is rejected at preparation with the policy cause.
+        for required in [
+            EncodePolicy::none().with_strict(true),
+            EncodePolicy::none().with_embed_icc(false),
+        ] {
+            for request in [
+                TranscodeRequest::new(ImageFormat::Png),
+                TranscodeRequest::new(ImageFormat::Png).with_encode_policy(required),
+            ] {
+                let error = request
+                    .transcode(&codecs.clone().with_encode_policy(required), b"invalid")
+                    .unwrap_err();
+                assert_eq!(error.error().stage(), Stage::Prepare);
+                assert_eq!(
+                    zencodec::find_cause::<UnsupportedOperation>(&error),
+                    Some(&UnsupportedOperation::EncodePolicy)
+                );
+            }
+        }
+    }
+}

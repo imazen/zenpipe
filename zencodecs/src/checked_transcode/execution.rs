@@ -262,11 +262,10 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
             .into());
         }
         let expected = self.expected.take().ok_or(Refusal::MissingRoute)?;
-        let actual = self
-            .codecs
-            .decode_job(self.request.format)?
-            .probe_full(encoded.data())?;
-        verify_output(&actual, &expected)?;
+        let inspector = self.codecs.decode_job(self.request.format)?;
+        let actual = inspector.probe_full(encoded.data())?;
+        let decoded = inspector.output_info(encoded.data())?;
+        verify_output(&actual, &decoded, &expected)?;
         self.codecs
             .stop()
             .check()
