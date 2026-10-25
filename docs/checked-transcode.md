@@ -40,7 +40,7 @@ use zenpixels_convert::{OutputProfile, cms_moxcms::MoxCms};
 let codecs = CodecSet::new()
     .with_decoder(zenjpeg::JpegDecoderConfig::new())
     .with_decoder(zenpng::PngDecoderConfig::new())
-    .with_encoder(zenpng::PngEncoderConfig::new());
+    .with_send_encoder(zenpng::PngEncoderConfig::new());
 let request = TranscodeRequest::new(ImageFormat::Png)
     .with_cms(&MoxCms)
     .with_output(OutputProfile::Named(Cicp::SRGB), PixelFormat::Rgb8,
@@ -85,8 +85,20 @@ best-effort rewrite that could report a false guarantee.
 `zencodec_io::ReadAtCursor`. `FileReadAt` provides disk input; object-store/HTTP
 adapters can retain batched range reads in their source implementation. Driver
 admission and read sizes are set with `with_io_options(DriveOptions)`.
-No second seek hierarchy is required. This entry point is synchronous; a native
-async transcode adapter remains separate work.
+No second seek hierarchy is required. The `checked-transcode-async` feature adds `transcode_async` and
+`transcode_async_with` over the existing `zencodec_io::tokio_io::AsyncSource`.
+Register encoders with `CodecSet::with_send_encoder` to retain their concrete
+job's Send guarantee across I/O waits. A legacy registration refuses before
+reading input; it remains usable for synchronous requests.
+Both use the same execution state, policy choices and output checks as the
+synchronous calls. I/O waits do not repeat policy decisions. Dropping a pending
+future releases its admitted source and row owners.
+
+Async source reads run on the polling task; native decode, conversion and encode
+steps also run there. `DriveOptions::work_quota` yields between whole steps and
+cannot preempt a codec step. A CPU-heavy configuration needs a suitable worker
+runtime. The default-policy future is Send when its source is Send. This is
+async byte demand, not proof of small native working memory or short CPU steps.
 
 The current JPEG controlled decoder retains the complete compressed source
 before its final interpretation decision. Small driver read sizes do not make
@@ -153,3 +165,18 @@ The filter dependency migration also passed its library/integration correctness
 tests and all-target Clippy. Its all-target test invocation entered development
 benchmarks after the tests; that benchmark phase was interrupted, and supplies
 no performance result. No existing test assertions were relaxed.
+
+Async validation at zencodec `b28a659e` and zenjpeg `af8eee81` uses delayed
+one-byte/7-byte/97-byte sources with both known and unknown length. Each produces
+the same bytes as the verified synchronous operation and chooses its route once.
+It also checks native source traces, callback refusal, cancellation, dropped
+pending futures, zero-read admission refusal and transferable registration. A
+compile-time Send assertion covers the complete default-policy future. The
+root and four standalone dependency graphs resolve the coordinated revisions.
+
+```text
+just checked-transcode-locks
+just checked-transcode-async-check
+just api-doc
+run-heavy: done rc=0 34s | peak-RSS 0.73GiB | min-avail 16926MiB | peak-load 0.90
+```

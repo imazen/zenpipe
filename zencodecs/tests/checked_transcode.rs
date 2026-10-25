@@ -67,8 +67,8 @@ fn codecs() -> CodecSet {
     CodecSet::new()
         .with_decoder(JpegDecoderConfig::new())
         .with_decoder(zenpng::PngDecoderConfig::new())
-        .with_encoder(jpeg_config(false))
-        .with_encoder(zenpng::PngEncoderConfig::new())
+        .with_send_encoder(jpeg_config(false))
+        .with_send_encoder(zenpng::PngEncoderConfig::new())
 }
 fn request<'a>(budget: StorageBudget) -> TranscodeRequest<'a> {
     TranscodeRequest::new(ImageFormat::Png)
@@ -515,3 +515,7 @@ fn reported_physical_resolution_cannot_silently_disappear() {
         .transcode(&codecs, &input)
         .unwrap();
 }
+
+#[cfg(feature = "checked-transcode-async")]
+#[path = "checked_transcode/async_source.rs"]
+mod asynchronous;

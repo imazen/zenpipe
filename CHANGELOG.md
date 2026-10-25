@@ -1090,7 +1090,7 @@ Three crates.io requirements block a newer release and were left alone on purpos
 #### Added
 
 - Default-off `checked-transcode`: one stored request executes prepared conversion, metadata and encoder routes through the shared fallible resolver. Slice/file/range input, explicit opaque-profile policy, admitted row storage and output postconditions are exercised with native JPEG/PNG and independent pixel readback. Native workspace and encoded allocation remain unqualified; see `docs/checked-transcode.md`.
-
+- `checked-transcode-async` drives the same checked execution over AsyncSource; short/pending reads, native errors, drop/cancellation cleanup and pre-read admission are tested. CPU work remains on the polling task with between-step fairness.
 
 #### Changed
 

@@ -12,8 +12,8 @@ readme = "README.crates.md"
 exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/", "benchmarks/", "docs/", "*.zst"]
 
 [dependencies]
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "14726d9125b0468ecb70025631d749495dda278b", optional = true, default-features = false }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "14726d9125b0468ecb70025631d749495dda278b", optional = true }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba", optional = true, default-features = false }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "b28a659e0e6db7c934d6386d4ce3d5868fdfa0ba", optional = true }
 # Core (always available)
 enough = "0.4"
 whereat = "0.1.4"
@@ -137,6 +137,7 @@ rayon = "1"
 
 [features]
 # Joint resolver path; requires qualified controlled native decoders.
+checked-transcode-async = ["checked-transcode", "std", "zencodec-io/tokio"]
 checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-decode", "zenpixels-convert/icc-db"]
 # Encoded metadata inspection/rewrite services. Pixel codecs remain optional.
 metadata = ["dep:zenmeta", "zenmeta/xmp"]

@@ -24,6 +24,9 @@ use zencodec_io::{
 use zenpixels::{ColorOrigin, ConvertOptions, PixelDescriptor, PixelFormat};
 use zenpixels_convert::{OutputPlan, OutputProfile, cms::PluggableCms};
 
+#[cfg(feature = "checked-transcode-async")]
+mod asynchronous;
+mod execution;
 mod sink;
 use sink::{Destination, PreparedRows};
 
@@ -329,211 +332,23 @@ impl<'a> TranscodeRequest<'a> {
         R: PolicyResolver + ?Sized,
         F: FnMut(&mut Held<'_>, &dyn enough::Stop) -> Result<Yield<ControlledEvent>, Cause>,
     {
-        let mut report = OperationReport::default();
-        let mut stage = Stage::Prepare;
-        let mut run = || -> Result<EncodeOutput, Cause> {
-            if self.strip_rows == 0 {
-                return Err(Refusal::InvalidStripRows.into());
-            }
-            // Validate destination registration and configuration before reading
-            // a non-replayable source. Native encoder construction waits for selection.
-            if codecs.decoder_for(self.format).is_none() {
-                return Err(zencodec::CodecSetError::NoDecoder(self.format).into());
-            }
-            let mut prepared_jobs = Some(self.encode.prepare(codecs)?);
-            let decoder = self.decode.start_controlled(codecs, self.storage.clone())?;
+        let mut execution = execution::Execution::<operation::PreparedEncode>::new(self, codecs);
+        let result = (|| {
+            let decoder = execution.prepare()?;
             let mut destination = Destination::default();
             let mut held = ControlledStepper::new(decoder, &mut destination);
-            let mut expected = None;
-            let mut final_seen = false;
             loop {
-                stage = Stage::Decode;
-                match next(&mut held, codecs.stop()).inspect_err(|error| {
-                    if matches!(
-                        zencodec::find_cause::<
-                            zencodec::decode::StepError<zencodec::decode::ErasedError>,
-                        >(error.as_ref()),
-                        Some(zencodec::decode::StepError::Sink(_))
-                    ) {
-                        stage = Stage::Encode;
-                    }
-                })? {
-                    Yield::Output(ControlledEvent::Suspended(boundary)) => {
-                        if boundary.facts().state != InterpretationState::Final {
-                            stage = Stage::Policy;
-                            let (action, record) = operation::resolve_boundary(
-                                boundary,
-                                resolver,
-                                self.preset,
-                                codecs.stop(),
-                            )
-                            .inspect_err(|e| {
-                                report.record(e.error().record());
-                            })?;
-                            report.record(record);
-                            held.resume(boundary.id(), action, codecs.stop())?;
-                            continue;
-                        }
-                        if final_seen {
-                            return Err(Refusal::RepeatedInterpretation.into());
-                        }
-                        final_seen = true;
-                        stage = Stage::Plan;
-                        let info = held.info().ok_or(Refusal::MissingImageInfo)?;
-                        require_primary(info)?;
-                        let descriptor = boundary
-                            .facts()
-                            .descriptor
-                            .ok_or(Refusal::MissingDescriptor)?;
-                        if matches!(
-                            descriptor.transfer(),
-                            zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
-                        ) || info
-                            .source_color
-                            .cicp
-                            .is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
-                        {
-                            return Err(Refusal::HdrRendering.into());
-                        }
-                        let current = Arc::new(info.source_color.to_color_context());
-                        let origin = origin(info);
-                        let (profile, output_format, options) = self.output.clone().unwrap_or((
-                            OutputProfile::SameAsOrigin,
-                            descriptor.pixel_format(),
-                            ConvertOptions::forbid_lossy(),
-                        ));
-                        let mut conversion = OutputPlan::new(
-                            descriptor,
-                            Some(current.clone()),
-                            &origin,
-                            profile,
-                            output_format,
-                            &options,
-                            self.cms,
-                        )?;
-                        conversion.prepare(info.width)?;
-                        let output_descriptor = conversion.output_descriptor();
-                        if !output_descriptor.channel_type().is_integer() {
-                            return Err(Refusal::UnqualifiedSampleType.into());
-                        }
-                        if requires_alpha(output_descriptor)
-                            && !codecs
-                                .encoder_for(self.format)
-                                .ok_or(zencodec::CodecSetError::NoEncoder(self.format))?
-                                .capabilities()
-                                .native_alpha()
-                        {
-                            return Err(Refusal::AlphaRetention.into());
-                        }
-                        let metadata =
-                            output_metadata(info, &conversion, self.metadata, self.format)?;
-                        let prepared = prepared_jobs
-                            .take()
-                            .ok_or(Refusal::RepeatedInterpretation)?;
-                        let mut jobs = Vec::new();
-                        jobs.try_reserve_exact(prepared.len())?;
-                        for prepared in prepared {
-                            let offer = prepared.offer();
-                            let mut job = prepared.into_job();
-                            // Retention is an explicit request choice. Bind the
-                            // actual carriers before the joint resolver runs.
-                            #[allow(deprecated)]
-                            job.set_metadata(metadata.clone());
-                            jobs.push((offer, job));
-                        }
-                        let rows = PreparedRows::new(
-                            info,
-                            descriptor,
-                            current,
-                            conversion,
-                            self.strip_rows,
-                            &self.storage,
-                        )?;
-                        let mut offers = Vec::new();
-                        offers.try_reserve_exact(jobs.len())?;
-                        for job in &jobs {
-                            let mut offer =
-                                TranscodeOffer::new(job.0, rows.output_descriptor(), self.metadata);
-                            offer.retains_opaque_profile = metadata.icc_profile.is_some()
-                                && metadata.icc_profile == info.source_color.icc_profile;
-                            // These buffers are shared by all fidelity alternatives;
-                            // each route retains this same allocation after selection.
-                            offer.admitted_bytes = rows.admitted_bytes();
-                            offers.push(offer);
-                        }
-                        stage = Stage::Policy;
-                        let (selected, record) = operation::resolve_transcode(
-                            boundary,
-                            &offers,
-                            resolver,
-                            self.preset,
-                            codecs.stop(),
-                        )
-                        .inspect_err(|e| {
-                            report.record(e.error().record());
-                        })?;
-                        report.record(record);
-                        let (_, job) = jobs.swap_remove(selected);
-                        drop(jobs);
-                        stage = Stage::Encode;
-                        let expectation = ExpectedOutput {
-                            metadata,
-                            width: info.width,
-                            height: info.height,
-                            descriptor: output_descriptor,
-                            resolution: if self.metadata == MetadataTransfer::PreserveReported {
-                                info.resolution
-                            } else {
-                                None
-                            },
-                        };
-                        let encoder = job.into_encoder()?;
-                        held.sink_mut().install(rows, encoder)?;
-                        expected = Some(expectation);
-                        held.resume(
-                            boundary.id(),
-                            BoundaryAction::AdoptInterpretation,
-                            codecs.stop(),
-                        )?;
-                    }
-                    Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => break,
-                    Yield::Output(ControlledEvent::Decode(_)) => {}
-                    _ => return Err(Refusal::UnexpectedProgress.into()),
+                execution.before_step();
+                let event = next(&mut held, codecs.stop())
+                    .inspect_err(|error| execution.step_error(error))?;
+                if execution.advance(&mut held, event, resolver)? {
+                    break;
                 }
             }
             drop(held);
-            stage = Stage::Encode;
-            let encoded = destination.finish_encoder()?;
-            stage = Stage::Verify;
-            codecs
-                .stop()
-                .check()
-                .map_err(operation::OperationError::Stopped)?;
-            if encoded.data().len() > self.output_limit {
-                return Err(Refusal::OutputLimit {
-                    actual: encoded.data().len(),
-                    limit: self.output_limit,
-                }
-                .into());
-            }
-            let expected = expected.ok_or(Refusal::MissingRoute)?;
-            let actual = codecs.decode_job(self.format)?.probe_full(encoded.data())?;
-            verify_output(&actual, &expected)?;
-            codecs
-                .stop()
-                .check()
-                .map_err(operation::OperationError::Stopped)?;
-            Ok(encoded)
-        };
-        match run() {
-            Ok(output) => Ok(Outcome::from_parts(output, report)),
-            Err(cause) => Err(At::wrap(Error {
-                stage,
-                report: Box::new(report),
-                cause,
-            })
-            .at_named("checked pixel transcode")),
-        }
+            execution.finish(destination)
+        })();
+        execution.outcome(result)
     }
 }
 
