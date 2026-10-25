@@ -167,7 +167,7 @@ fn drain(mut source: Box<dyn Source>) -> u32 {
 
 // ─── Benchmarks ───
 
-zenbench::main!(|suite| {
+fn register(suite: &mut zenbench::Suite) {
     // Force JPEG generation before benchmarks start.
     eprintln!(
         "Generated 4K JPEG: {} KB ({SRC_W}x{SRC_H})",
@@ -396,4 +396,25 @@ zenbench::main!(|suite| {
             })
         });
     });
-});
+}
+
+mod benchmark_entry {
+    zenbench::main!(super::register);
+    pub(super) fn run() {
+        main();
+    }
+}
+
+fn main() {
+    // Windows executable main threads have a smaller stack than the Rust test
+    // workers that exercise this pipeline. Reserve the same 8 MiB on every OS
+    // so debug-mode benchmark validation can run the complete nested pipeline.
+    // The benchmark bodies, assertions and zenbench process options are unchanged.
+    std::thread::Builder::new()
+        .name("session-cache-benchmark".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(benchmark_entry::run)
+        .expect("start benchmark worker")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}

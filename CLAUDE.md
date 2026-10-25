@@ -108,3 +108,13 @@ threading, hdr directives, compat security. Verified remaining:
 The JPEG/PNG/CMS-only configuration exposed an unused decoder-factory limits
 parameter when WebP was disabled. The parameter remains forwarded in the WebP
 arm; `just checked-transcode-baseline` verifies this smaller configuration.
+
+### Session benchmark main-thread stack (2026-10-25)
+
+Windows x64 and ARM64 CI reached `benches/session_cache.rs` after the ordinary
+correctness tests, then the standalone benchmark executable overflowed its main
+thread stack before reporting a sample. The benchmark now enters through a named
+worker with an explicit 8 MiB stack reservation on every platform; all benchmark
+bodies, assertions and zenbench process options are retained. This is a reservation,
+not a measured live-memory bound for the codecs. `just session-stack-check` runs
+the nested decode/crop/resize/filter path; Windows execution remains a CI gate.

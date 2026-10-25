@@ -1,0 +1,15 @@
+# Correctness execution only. Parent: 0d8bcd6ebc6e2bc460f87fa09741d5e8bb07f42b
+# Command: just session-stack-check (debug benchmark, explicit worker stack)
+# zenbench results (complete)
+# git: unknown
+# 2026-10-25T19:21:09Z
+#
+# Re-read this file instead of re-running the benchmark.
+# Formats:  cargo bench -- --format=llm|csv|md|json
+# Env var:  ZENBENCH_FORMAT=llm cargo bench
+# Disable:  ZENBENCH_NO_SAVE=1 cargo bench
+#
+# Fields: group | benchmark | vs_base comparison | min mean median mad | throughput | n cv rounds calls
+#
+group=session_4k_drain benchmark=full_pipeline  |  vs_base=baseline  |  min=1.48s mean=1.49s median=1.50s mad=10.12ms  |  throughput=0.67 images/s  |  n=4 cv=1.0% rounds=4 calls=1 mean_ci=[1.48s 1.51s] cold=1.46s
+group=session_4k_drain benchmark=cached_suffix  |  vs_base_pct=-97.63 ci=[-98.40% -96.70%] significant=true effect=-144.47 p=1.0000  |  min=35.35ms mean=35.46ms median=35.43ms mad=66.99µs  |  throughput=28.20 images/s  |  n=4 cv=0.3% rounds=4 calls=1 mean_ci=[35.37ms 35.58ms] cold=35.40ms
