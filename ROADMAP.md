@@ -128,6 +128,29 @@ source; every encoded file is read back by an independent decoder.
 - Run each adapter's `zencodec-testkit` checks from zencodecs too, so the
   dispatch layer is held to the same contracts as the codecs.
 
+### Test wall time (measured 2026-10-25)
+
+Measured on a 20-thread machine, 2,308 tests over libs, bins, tests and
+examples:
+- Dependencies at opt-level 0 made test execution 99 s under nextest (177 s
+  sequential under `cargo test`), 97 s of it one test (`transcode_matrix`).
+  Dependencies now build at opt-level 2 with checks unchanged: 8.5 s, same
+  results. One-time cost: 143 s.
+- `cargo test --all-targets` also runs the four zenbench benches as full
+  debug benchmarks: 53 s, 95 s, 136 s, and `kernel_tiers` from 126 s to over
+  1,200 s depending on load. They are most of the suite's wall time, their
+  debug numbers mean nothing, and `session_cache` is the Windows stack
+  overflow (#104).
+- nextest cannot list them: zenbench's `main!` ignores `--list --format terse`
+  and runs the benchmark, so `just nextest` excludes benches.
+
+Next: give zenbench a test mode, as criterion has. Under `cargo test`
+(no `--bench`), run each benchmark body once; answer `--list`/`--exact` in
+libtest's format so nextest runs each body as a test. Coverage stays the same
+(every body still executes), and the minutes go away. Combining the 84
+integration test binaries into a few would then cut link time; measure link
+time per binary with `cargo build --timings` before doing it.
+
 ### P2. Adopt the new abstractions
 
 In order of user-visible payoff:

@@ -24,6 +24,7 @@ None.
   implications for zenpipe output and the run data it rests on.
 
 #### Changed
+- Dependencies build at opt-level 2 in dev and test builds; workspace members stay at 0 and checks are unchanged. Test execution under nextest: 99.0 s to 8.5 s, identical results. `just nextest` runs the suite in parallel (benches excluded); CI now runs zenpipe's tests with `job,nodes-all`.
 - Metadata integration shares zencodec `d327434b` across dispatch, services and standalone graphs. PNG `fb055396` and ultrahdr `a834b2cc` retain that same contract; precomputed gain-map filtering composes with main's strided adaptation, streaming preference and explicit HDR policy (2f07d845).
 - All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides (a6ac4c2a, ae99e340).
 - Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
