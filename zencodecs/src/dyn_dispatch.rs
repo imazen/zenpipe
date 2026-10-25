@@ -56,12 +56,12 @@ pub(crate) struct DecodeParams<'a> {
 fn build_dyn_decoder_config(
     format: ImageFormat,
     codec_config: Option<&CodecConfig>,
-    limits: Option<&Limits>,
+    _limits: Option<&Limits>,
 ) -> Result<Box<dyn DynDecoderConfig>> {
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => Ok(Box::new(build_jpeg_decoder(codec_config))),
-        WebP => "webp" => Ok(Box::new(build_webp_decoder(codec_config, limits))),
+        WebP => "webp" => Ok(Box::new(build_webp_decoder(codec_config, _limits))),
         Gif => "gif" => Ok(Box::new(zengif::GifDecoderConfig::new())),
         Png => "png" => Ok(Box::new(zenpng::PngDecoderConfig::new())),
         Avif => "avif-decode" => Ok(Box::new(build_avif_decoder(codec_config))),

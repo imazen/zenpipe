@@ -7,6 +7,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (2026-10-25)
+
+- The JPEG/PNG/CMS-only zencodecs build remains warning-free when WebP
+  is disabled; its decoder factory still forwards limits whenever WebP is enabled.
+
 #### Added (AVIF auto-tuning consumer, 2026-09-04)
 
 - **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam

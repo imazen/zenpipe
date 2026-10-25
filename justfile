@@ -139,3 +139,7 @@ arm-codec-integration-audit:
 # Explicitly opt into real AVIF corpus tests; retain per-test output.
 arm-avif-corpus-audit:
     CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test corpus -- --ignored avif --show-output
+
+# Minimal checked-transcode feature combination must remain warning-free.
+checked-transcode-baseline:
+    cargo clippy -p zencodecs --no-default-features --features std,cms,metadata,jpeg,png --lib -- -D warnings

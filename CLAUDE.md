@@ -102,3 +102,9 @@ threading, hdr directives, compat security. Verified remaining:
   extend the generator, then regenerate. (`docs/querystring.md:159` /
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
+
+## Known Bugs: optional decoder limits warning (fixed 2026-10-25)
+
+The JPEG/PNG/CMS-only configuration exposed an unused decoder-factory limits
+parameter when WebP was disabled. The parameter remains forwarded in the WebP
+arm; `just checked-transcode-baseline` verifies this smaller configuration.
