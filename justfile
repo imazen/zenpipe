@@ -226,3 +226,7 @@ checked-color-integration:
     just checked-transcode-locks
     just checked-transcode-async-check
     just api-doc
+
+# Run in an export; verifies one local review zencodec across registry/git edges.
+checked-transcode-review-check codec:
+    python3 scripts/check-review-codec.py "{{codec}}"

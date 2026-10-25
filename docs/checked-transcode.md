@@ -296,3 +296,20 @@ application metadata services and both standalone fuzz graphs.
 ```text
 run-heavy: done rc=0 43s | peak-RSS 0.72GiB | min-avail 15248MiB | peak-load 1.30
 ```
+
+### Opaque-profile evidence migration
+
+The adapter explicitly records whether its prepared metadata retains the source
+profile. The review zencodec API represents unknown evidence separately; strict
+profile exclusion refuses that unknown state. The assignment and native tests
+accept both the pinned boolean shape and the review optional evidence shape, so
+codec pin updates can proceed together without another adapter rewrite. This is
+not an inspection guarantee for unknown or nested container data.
+
+Validation on 2026-10-27: `just checked-transcode-async-check` passed all 22
+native cases and strict lint against the committed pins. In an exported tree,
+`just checked-transcode-review-check <zencodec-export>` passed the same cases
+and lint against zencodec `f384e4c7`. The recipe verifies exactly one local
+zencodec in the resolved graph and restores the export's manifest/config/lock.
+It catches the duplicate-type problem that a partial git-pin update introduces.
+No zenpixels change was required for this migration.

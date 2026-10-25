@@ -229,8 +229,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 for job in &jobs {
                     let mut offer =
                         TranscodeOffer::new(job.0, rows.output_descriptor(), self.request.metadata);
-                    offer.retains_opaque_profile = metadata.icc_profile.is_some()
-                        && metadata.icc_profile == info.source_color.icc_profile;
+                    // Accept both pinned bool and review Option<bool> evidence;
+                    // the latter must be explicitly known, never left unknown.
+                    #[allow(clippy::useless_conversion)]
+                    let retained = (metadata.icc_profile.is_some()
+                        && metadata.icc_profile == info.source_color.icc_profile)
+                        .into();
+                    offer.retains_opaque_profile = retained;
                     // These buffers are shared by all fidelity alternatives;
                     // each route retains this same allocation after selection.
                     offer.admitted_bytes = rows.admitted_bytes();

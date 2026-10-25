@@ -1085,6 +1085,12 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ## zencodecs
 
+### Checked transcode review integration (2026-10-27)
+
+- Supply explicit opaque-profile retention evidence to the checked resolver.
+  The shared offer now defaults to unknown; profile exclusion cannot be inferred
+  from missing evidence. Preserve native retain/discard regression expectations.
+
 ### [Unreleased]
 
 #### Fixed

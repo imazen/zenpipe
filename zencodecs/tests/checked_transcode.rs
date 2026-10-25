@@ -129,7 +129,10 @@ fn native_jpeg_to_png_matches_separate_cms_and_png_oracles() {
                     joint += 1;
                     assert_eq!((facts.width, facts.height), (WIDTH, HEIGHT));
                     for choice in choices.iter() {
-                        assert!(!choice.value().retains_opaque_profile);
+                        assert_eq!(
+                            profile_evidence(choice.value().retains_opaque_profile),
+                            Some(false)
+                        );
                         assert_eq!(choice.value().workspace_upper_bound, None);
                         assert!(choice.value().admitted_bytes > 0);
                         assert!(budget.reserved_bytes() >= choice.value().admitted_bytes);
@@ -177,7 +180,11 @@ fn opaque_profile_policy_is_explicit_and_refusal_releases_all_managed_owners() {
             At<Infallible>,
         > {
             if let Question::Transcode { choices, .. } = question {
-                assert!(choices.iter().all(|c| c.value().retains_opaque_profile));
+                assert!(
+                    choices
+                        .iter()
+                        .all(|c| profile_evidence(c.value().retains_opaque_profile) == Some(true))
+                );
                 return Ok(Decision::decline(Decline::ApplicationRule));
             }
             Ok(Decision::UsePreset)
@@ -610,3 +617,8 @@ mod png_source;
 
 #[path = "checked_transcode/resolution.rs"]
 mod resolution;
+
+// Keep the same evidence assertion across the pinned and review API shapes.
+fn profile_evidence(value: impl Into<Option<bool>>) -> Option<bool> {
+    value.into()
+}
