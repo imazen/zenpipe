@@ -40,7 +40,7 @@ serde = { version = "1", default-features = false, features = ["derive", "alloc"
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
 linear-srgb = { version = "0.6.8" }
-magetypes = { version = "0.9.17" }
+magetypes = { version = "0.9.30" }
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
 zenpixels = { version = ">=0.2.10, <0.4.0" }
 whereat = { version = "0.1.5" }
