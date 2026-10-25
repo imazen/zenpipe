@@ -20,7 +20,7 @@ use crate::limits::to_resource_limits;
 use crate::macros::dispatch_format;
 use crate::trace::{SelectionStep, SelectionTrace};
 use crate::{CodecError, ImageFormat, Limits, StopToken};
-use whereat::{ResultAtExt, at, at_crate};
+use whereat::at;
 use zencodec::decode::{DecodeJob as _, DecoderConfig as _, DynDecoderConfig, OutputInfo};
 
 /// Wrap a BoxedError from a codec into a CodecError.
@@ -28,6 +28,7 @@ fn wrap_boxed(format: ImageFormat, e: zencodec::decode::BoxedError) -> whereat::
     at!(CodecError::Codec { format, source: e })
 }
 
+#[cfg(any(feature = "gif", feature = "webp", feature = "png"))]
 fn wrap_enc_boxed(format: ImageFormat, e: zencodec::encode::BoxedError) -> whereat::At<CodecError> {
     at!(CodecError::Codec { format, source: e })
 }
@@ -127,8 +128,10 @@ pub(crate) fn dyn_push_decode(
         }};
     }
     // For codecs that return At<E> (instrumented crates: zengif, zenpng, zenwebp, etc.).
+    #[allow(unused_macros)] // Feature subsets may have no instrumented decoder.
     macro_rules! push_dec_at {
         ($config:expr) => {{
+            use whereat::ResultAtExt as _;
             let config = $config;
             let mut job = config.job();
             if let Some(lim) = params.limits {
@@ -143,7 +146,7 @@ pub(crate) fn dyn_push_decode(
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
             }
-            at_crate!(job.push_decoder(Cow::Borrowed(params.data), sink, params.preferred))
+            whereat::at_crate!(job.push_decoder(Cow::Borrowed(params.data), sink, params.preferred))
                 .map_err_at(|e| CodecError::from_codec(format, e))
         }};
     }
@@ -426,7 +429,8 @@ pub(crate) fn dyn_streaming_decoder(
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
             }
-            let dec = at_crate!(
+            use whereat::ResultAtExt as _;
+            let dec = whereat::at_crate!(
                 job.streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred)
             )
             .map_err_at(|e| CodecError::from_codec(format, e))?;
@@ -486,7 +490,8 @@ pub(crate) fn dyn_streaming_decoder(
             if let Some(dp) = params.decode_policy {
                 job = job.with_policy(dp);
             }
-            let dec = at_crate!(
+            use whereat::ResultAtExt as _;
+            let dec = whereat::at_crate!(
                 job.streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred)
             )
             .map_err_at(|e| CodecError::from_codec(format, e))?;
@@ -553,9 +558,8 @@ fn build_raw_decoder(codec_config: Option<&CodecConfig>) -> zenraw::RawDecoderCo
 // Encode dispatch for animation
 // ═══════════════════════════════════════════════════════════════════════════
 
-use zencodec::encode::{EncodeJob as _, EncoderConfig as _};
-
 /// Parameters for creating an animation encoder.
+#[allow(dead_code)] // A JPEG-only build has no animation encoder arm.
 pub(crate) struct AnimEncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
@@ -575,26 +579,28 @@ pub(crate) struct AnimEncodeParams<'a> {
 /// Create a full-frame animation encoder for the specified format.
 pub(crate) fn dyn_animation_frame_encoder(
     format: ImageFormat,
-    params: AnimEncodeParams<'_>,
+    _params: AnimEncodeParams<'_>,
 ) -> Result<Box<dyn zencodec::encode::DynAnimationFrameEncoder>> {
+    #[allow(unused_macros)] // JPEG-only builds have no animation encoder.
     macro_rules! build_ffe {
         ($config:expr) => {{
+            use zencodec::encode::{EncodeJob as _, EncoderConfig as _};
             let config = $config;
             let mut job = config.job();
-            if let Some(s) = params.stop {
+            if let Some(s) = _params.stop {
                 job = job.with_stop(s);
             }
-            if let Some(lim) = params.limits {
+            if let Some(lim) = _params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(meta) = params.metadata {
-                job = job.with_metadata_policy(meta, params.metadata_policy);
+            if let Some(meta) = _params.metadata {
+                job = job.with_metadata_policy(meta, _params.metadata_policy);
             }
-            if let Some(ep) = params.encode_policy {
+            if let Some(ep) = _params.encode_policy {
                 job = job.with_policy(ep);
             }
-            job = job.with_canvas_size(params.canvas_width, params.canvas_height);
-            if let Some(lc) = params.loop_count {
+            job = job.with_canvas_size(_params.canvas_width, _params.canvas_height);
+            if let Some(lc) = _params.loop_count {
                 job = job.with_loop_count(Some(lc));
             }
             job.dyn_animation_frame_encoder()
@@ -606,7 +612,7 @@ pub(crate) fn dyn_animation_frame_encoder(
         #[cfg(feature = "gif")]
         ImageFormat::Gif => {
             let mut config = zengif::GifEncoderConfig::new();
-            if let Some(cfg) = params.codec_config.and_then(|c| c.gif_encoder.as_ref()) {
+            if let Some(cfg) = _params.codec_config.and_then(|c| c.gif_encoder.as_ref()) {
                 *config.inner_mut() = cfg.as_ref().clone();
             }
             build_ffe!(config)
@@ -615,20 +621,20 @@ pub(crate) fn dyn_animation_frame_encoder(
         #[cfg(feature = "webp")]
         ImageFormat::WebP => {
             build_ffe!(crate::codecs::webp::build_encoding(
-                params.quality,
-                params.effort,
-                params.lossless,
-                params.codec_config,
+                _params.quality,
+                _params.effort,
+                _params.lossless,
+                _params.codec_config,
             ))
         }
 
         #[cfg(feature = "png")]
         ImageFormat::Png => {
             build_ffe!(crate::codecs::png::build_encoding(
-                params.quality,
-                params.effort,
-                params.lossless,
-                params.codec_config,
+                _params.quality,
+                _params.effort,
+                _params.lossless,
+                _params.codec_config,
                 None, // explicit cICP not threaded through the animation path yet
             ))
         }

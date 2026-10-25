@@ -180,6 +180,7 @@ enum V {
     /// Container has no carrier; dropping is correct — asserted absent.
     NotCarried,
     /// Should round-trip but doesn't yet — asserted absent, with a note.
+    #[allow(dead_code)] // Constructed only by the AVIF/JXL feature cases.
     Gap(&'static str),
 }
 
