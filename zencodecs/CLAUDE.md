@@ -895,3 +895,7 @@ The coordinated core pin moves rich metadata services to `zenmeta`. Existing
 metadata scrub and gain-map calls use that owner. WebP/GIF/JXL/AVIF adapter pins
 include the shared rational-timing signature; the AVIF wrapper moves without
 changing `rav1d-safe dfd01e32`. `just check-pins` checks every standalone graph.
+
+CI qualification found additional generic `V::<T>` SIMD constructor aliases in
+zenfilters' NEON/WASM helper functions. They also require the explicit-token
+method names; `just checked-transcode-arm-clippy` checks those compiled paths.

@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 746 lines (supported surface) | zencodecs.features.txt 179 added (features: all,jp2-decode,metadata,checked-transcode) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
+# files: zencodecs.txt 746 lines (supported surface) | zencodecs.features.txt 181 added (features: all,jp2-decode,metadata,checked-transcode-async) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
 
 ## summary
 #

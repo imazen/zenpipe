@@ -28,14 +28,14 @@ jobs:
       # feature and runs via `just test-zenfilters-quality` on a workstation
       # (zenpipe#44) — it used to self-skip on CI and pass without testing.
       clippy_extra_runs: |
-        cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
+        cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
         cargo clippy --all-targets --no-default-features -- -D warnings
         cargo clippy -p zenlayout --all-targets -- -D warnings
         cargo clippy -p zencodecs --no-default-features --all-targets -- -D warnings
         cargo clippy -p zeneditor --all-targets -- -D warnings
         cargo clippy -p zenfilters --all-targets -- -D warnings
       test_extra_runs: |
-        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --test checked_transcode --locked
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --test checked_transcode --locked
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema

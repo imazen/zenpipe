@@ -154,8 +154,10 @@ checked-transcode-sync export:
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/zencodecs/src/checked_transcode"
     cp zencodecs/src/checked_transcode.rs zencodecs/src/lib.rs zencodecs/src/dispatch.rs zencodecs/src/dyn_dispatch.rs zencodecs/src/encode.rs zencodecs/src/gainmap.rs "{{export}}/zencodecs/src/"
-    cp zencodecs/src/checked_transcode/sink.rs "{{export}}/zencodecs/src/checked_transcode/"
+    cp zencodecs/src/checked_transcode/*.rs "{{export}}/zencodecs/src/checked_transcode/"
     cp zencodecs/tests/checked_transcode.rs "{{export}}/zencodecs/tests/"
+    mkdir -p "{{export}}/zencodecs/tests/checked_transcode"
+    cp zencodecs/tests/checked_transcode/*.rs "{{export}}/zencodecs/tests/checked_transcode/"
     cp zencodecs/examples/checked_transcode.rs "{{export}}/zencodecs/examples/"
     cp zencodecs/src/metadata/mod.rs zencodecs/src/metadata/jpeg.rs "{{export}}/zencodecs/src/metadata/"
     cp zencodecs/Cargo.toml "{{export}}/zencodecs/Cargo.toml"
@@ -201,3 +203,15 @@ checked-transcode-workspace:
     cargo test -p zenfilters --lib --tests --locked
     cargo clippy -p zenfilters --all-targets --locked -- -D warnings
     cargo clippy --all-targets --no-default-features --locked -- -D warnings
+
+checked-transcode-async-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --test checked_transcode --locked
+    cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
+
+checked-transcode-arm-clippy:
+    cargo clippy -p zenfilters --all-targets --target aarch64-unknown-linux-gnu --locked -- -D warnings
+
+# Compile all benchmark bodies, then exercise the native nested pipeline.
+session-stack-check:
+    cargo clippy --bench session_cache --locked -- -D warnings
+    cargo test --bench session_cache --locked -- --group=session_4k_drain

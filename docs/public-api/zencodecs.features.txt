@@ -1,5 +1,5 @@
 # zencodecs public API — additions from non-default features
-# features: all,jp2-decode,metadata,checked-transcode
+# features: all,jp2-decode,metadata,checked-transcode-async
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -14,20 +14,20 @@
 #   free functions                              3
 #   inherent methods                           54
 #   struct fields                              15
-#   enum variants                              49
+#   enum variants                              51
 #   re-exports                                 27
 #   trait roster entries (type × trait)        40
 #   auto-trait-complete types                   9
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                           29
+#   (root)                           31
 #   checked_transcode                58
 #   config                           20
 #   gainmap                          16
 #   metadata                         44
 
-## items (164 lines)
+## items (166 lines)
 
 pub use GainMap
 pub use GainMapMetadata
@@ -80,6 +80,8 @@ pub struct checked_transcode::Error
 pub fn checked_transcode::Error::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn checked_transcode::Error::stage(&self) -> checked_transcode::Stage
 pub struct checked_transcode::TranscodeRequest<'a>
+pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async<S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, R: zencodec::operation::policy::PolicyResolver + ?core::marker::Sized
 pub fn checked_transcode::TranscodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::preferring_fidelity(self, alloc::vec::Vec<zencodec::fidelity::Fidelity>) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::transcode(&self, &zencodec::set::CodecSet, &[u8]) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
