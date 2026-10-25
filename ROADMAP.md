@@ -49,6 +49,13 @@ Costs that grew:
   editor demo as of March.
 - **CI on main is red on Windows** (x64 and ARM64) since 2026-10-19: stack
   overflow in the `session_cache` bench (#104).
+- **CI tests sibling mains, not the lockfile.** The shared `rust` job clones
+  sibling repos at main (`cargo superwork ci-clone --add-paths`), so a sibling
+  commit can turn zenpipe main red with no zenpipe change. On 2026-10-25 the
+  pre-change commit failed on re-run exactly as the new one did: zencodec's
+  new default `Encoder::begin` refuses row-level WebP encode (zencodec #164),
+  and rav1d-safe main does not compile off x86_64 (rav1d-safe #536). Only the
+  "Committed dependency graph" job checks what the lockfile ships.
 
 ## 2. New abstractions beneath zenpipe, and adoption
 
