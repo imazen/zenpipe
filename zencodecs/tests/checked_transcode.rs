@@ -602,3 +602,6 @@ fn default_p3_preservation_keeps_authority_and_required_policies_still_win() {
         }
     }
 }
+
+#[path = "checked_transcode/png_source.rs"]
+mod png_source;

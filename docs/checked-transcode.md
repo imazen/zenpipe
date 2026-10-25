@@ -21,7 +21,7 @@ Reported physical resolution must also survive; the shared encoder job cannot
 yet carry it directly, so a destination that loses it refuses at verification.
 They do not preserve unreported container packets. The native source must expose
 controlled interpretation: this implementation qualifies the whole-source JPEG
-route from zenjpeg PR 240, with PNG and JPEG destinations. Other source codecs
+route from zenjpeg PR 240 and PNG route from zenpng PR 46, with PNG and JPEG destinations. Other source codecs
 refuse if they have no controlled factory. Sequences, auxiliary content, unknown
 gain-map discovery, HDR rendering and unqualified float output refuse explicitly.
 
@@ -100,7 +100,7 @@ cannot preempt a codec step. A CPU-heavy configuration needs a suitable worker
 runtime. The default-policy future is Send when its source is Send. This is
 async byte demand, not proof of small native working memory or short CPU steps.
 
-The current JPEG controlled decoder retains the complete compressed source
+The current JPEG and PNG controlled decoders retain the complete compressed source
 before its final interpretation decision. Small driver read sizes do not make
 that native implementation incremental. Source failures preserve their native
 error object through `Error::source()`.
@@ -108,7 +108,7 @@ error object through `Error::source()`.
 ## Storage, output and failures
 
 The default managed allowance is 64 MiB / 128 objects. It covers the controlled
-JPEG source and adapter row buffers. Conversion/native workspace and encoded
+JPEG/PNG source and adapter row buffers. Conversion/native workspace and encoded
 allocation are not qualified bounds. `TranscodeOffer::workspace_upper_bound`
 therefore remains `None`, and a preset requiring a known workspace bound refuses.
 `admitted_bytes` describes the row/conversion storage retained after selection;
@@ -202,3 +202,32 @@ violations, source/callback errors, cancellation and owner cleanup passed with
 strict library/example/test Clippy (`just checked-transcode-async-check`). The
 API snapshot gate also passed. This adds a second inspection query on completed
 output; its parsing cost is not yet measured.
+
+## Native PNG source qualification (2026-10-25)
+
+`checked-transcode` enables the registered PNG decoder's controlled factory.
+Lossless PNG-to-PNG checks cover RGB8, RGBA8, RGB16, RGBA16, Gray16 and
+GrayAlpha16, with strided authored input, retained alpha/sample depth and exact
+independent PNG readback. RGB ICC preservation and P3-to-sRGB conversion use
+the same prepared route as JPEG; conversion matches a separate CMS transform.
+Slice and positional sources agree. Delayed network sources with known or
+unknown length, one-byte and 31-byte reads agree with synchronous output and
+release managed storage after completion.
+
+This qualification required native fixes: gain-map absence is established only
+for a complete PNG with known chunks and no trailer, and untagged GrayAlpha16
+uses the same sRGB assumption as the other integer layouts. Android/proposed
+gain-map carriers, unknown extensions, APNG and unsupported color carriers
+refuse before reconstruction. It does not qualify arbitrary PNG extensions,
+native byte-resuming inflation or a complete operation memory bound.
+
+Pinned zenpng `f6ac2539`, zencodec `78fe667c`, zenjpeg `c9f82fc0` and
+zenpixels `f8596aae`; all five lock graphs resolve those sources. Native
+integration, strict Clippy and the public API snapshot pass:
+
+```text
+just checked-color-integration
+run-heavy: done rc=0 21s | peak-RSS 0.53GiB | min-avail 17073MiB | peak-load 0.49
+```
+
+This is a validation-process receipt, not a codec workspace or speed bound.

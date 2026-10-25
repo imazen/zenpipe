@@ -297,7 +297,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "53861c95b5a2f982d0494f07242765c2ccf6729a" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "f6ac25390ac47f4aa7c4cb0a8c83adec92d94f78" }
 # zennode main has NodeRole variants (DisplayAdjust, ToneMap, …) the published
 # 0.1.1 predates (same version number, older content).
 zennode = { git = "https://github.com/imazen/zennode" }

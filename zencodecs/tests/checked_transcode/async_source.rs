@@ -215,3 +215,27 @@ fn async_transfer_registration_is_checked_before_input() {
     assert_eq!(source.reads, 0);
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 }
+
+#[test]
+fn png_network_sources_match_sync_with_alpha_and_sixteen_bit_samples() {
+    let codecs = codecs();
+    for descriptor in [PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB16_SRGB] {
+        let (input, _) = super::png_source::png_fixture(descriptor, false);
+        let budget = StorageBudget::new(512 * 1024, 16);
+        let request = TranscodeRequest::new(ImageFormat::Png)
+            .with_fidelity(zencodec::encode::Fidelity::Lossless)
+            .with_storage(budget.clone())
+            .with_io_options(options());
+        let expected = request.transcode(&codecs, &input).unwrap();
+        for chunk in [1, 31] {
+            for known in [false, true] {
+                let mut source = Network::new(&input, chunk, known);
+                let (result, pending) = drive(request.transcode_async(&codecs, &mut source));
+                let output = result.unwrap_or_else(|e| panic!("{}", explain(&e)));
+                assert_eq!(output.data(), expected.data());
+                assert!(pending > 1);
+                assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+            }
+        }
+    }
+}

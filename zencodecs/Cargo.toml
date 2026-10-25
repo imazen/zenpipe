@@ -138,7 +138,7 @@ rayon = "1"
 [features]
 # Joint resolver path; requires qualified controlled native decoders.
 checked-transcode-async = ["checked-transcode", "std", "zencodec-io/tokio"]
-checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-decode", "zenpixels-convert/icc-db"]
+checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-decode", "zenpng?/controlled-decode", "zenpixels-convert/icc-db"]
 # Encoded metadata inspection/rewrite services. Pixel codecs remain optional.
 metadata = ["dep:zenmeta", "zenmeta/xmp"]
 default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
