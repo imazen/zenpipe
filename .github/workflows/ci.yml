@@ -85,6 +85,7 @@ jobs:
         cargo test --all-targets --no-default-features
         cargo test --features zennode
         cargo test --features zennode,json-schema
+        cargo test --features job,nodes-all --lib --tests
         cargo test -p zenlayout --all-targets
         cargo test -p zencodecs --no-default-features --all-targets
         cargo test -p zencodecs --no-default-features --features std,pdf-decode --lib pdf_
