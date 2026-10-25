@@ -7,7 +7,7 @@ use core::{
 use zencodec_io::{DriveOptions, WorkQuota, tokio_io::AsyncSource};
 
 type SourceError = Box<dyn std::error::Error + Send + Sync>;
-struct Network<'a> {
+pub(super) struct Network<'a> {
     bytes: &'a [u8],
     chunk: usize,
     known_len: bool,
@@ -15,7 +15,7 @@ struct Network<'a> {
     fail_at: Option<usize>,
 }
 impl<'a> Network<'a> {
-    fn new(bytes: &'a [u8], chunk: usize, known_len: bool) -> Self {
+    pub(super) fn new(bytes: &'a [u8], chunk: usize, known_len: bool) -> Self {
         Self {
             bytes,
             chunk,
@@ -60,7 +60,7 @@ impl AsyncSource for Network<'_> {
 
 // Sources here wake after each one-poll delay, so no reactor is needed.
 // A bounded manual executor also makes a non-progressing driver a test failure.
-fn drive<F: Future>(future: F) -> (F::Output, usize) {
+pub(super) fn drive<F: Future>(future: F) -> (F::Output, usize) {
     let mut future = core::pin::pin!(future);
     let mut cx = Context::from_waker(Waker::noop());
     for pending in 0..100_000 {

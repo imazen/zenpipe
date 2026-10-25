@@ -511,10 +511,12 @@ fn reported_physical_resolution_cannot_silently_disappear() {
         .with_cms(&MoxCms)
         .transcode(&codecs, &input)
         .unwrap_err();
-    assert_eq!(error.error().stage(), Stage::Verify, "{}", explain(&error));
+    // Refuse during preparation, before an
+    // encoder or policy callback can run, and retains the precise native cause.
+    assert_eq!(error.error().stage(), Stage::Plan, "{}", explain(&error));
     assert_eq!(
-        zencodec::find_cause::<zencodecs::checked_transcode::Refusal>(&error),
-        Some(&zencodecs::checked_transcode::Refusal::PhysicalResolution)
+        zencodec::find_cause::<zencodec::ResolutionError>(&error),
+        Some(&zencodec::ResolutionError::NotRepresentable)
     );
     // Dropping descriptive metadata is an explicit separate request.
     request(StorageBudget::new(512 * 1024, 16))
@@ -605,3 +607,6 @@ fn default_p3_preservation_keeps_authority_and_required_policies_still_win() {
 
 #[path = "checked_transcode/png_source.rs"]
 mod png_source;
+
+#[path = "checked_transcode/resolution.rs"]
+mod resolution;

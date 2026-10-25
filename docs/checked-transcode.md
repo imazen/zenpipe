@@ -17,8 +17,9 @@ let output = TranscodeRequest::new(ImageFormat::Png)
 ```
 
 Defaults preserve current color, reported EXIF/XMP and rendering orientation.
-Reported physical resolution must also survive; the shared encoder job cannot
-yet carry it directly, so a destination that loses it refuses at verification.
+Reported physical resolution must also survive. The retained encoder job confirms
+exact native carriage before selection, and the completed output is checked for
+exact unit-equivalence. Unrepresentable values refuse during planning.
 They do not preserve unreported container packets. The native source must expose
 controlled interpretation: this implementation qualifies the whole-source JPEG
 route from zenjpeg PR 240 and PNG route from zenpng PR 46, with PNG and JPEG destinations. Other source codecs
@@ -245,3 +246,53 @@ The complete native integration and strict Clippy/API checks pass with core
 `939d5628`, PNG `3046bd77` and JPEG `02fa3866` (`just checked-color-integration`,
 rc=0, 34 s; run-heavy peak RSS 0.72 GiB, minimum available 15496 MiB, peak
 load 1.02). The root and four standalone dependency graphs agree.
+
+## Exact density preservation
+
+A source's known physical units and unknown-unit pixel aspect are distinct. The
+encoder job must accept the same meaning before `Question::Transcode`; the offer
+records that requirement. The adapter uses that held job after the callback,
+then independently checks the reported output density using exact unit ratios.
+It does not resize, transpose, round, or silently omit density. Stored-axis X/Y
+remain in the same order because this route preserves orientation metadata
+instead of transforming sample geometry.
+
+Native PNG pHYs accepts exact integer pixels/metre, or an equivalent reduced
+unknown-unit ratio, within PNG's 31-bit field limit. Native JFIF 254×127/inch and
+100×50/cm can become 10000×5000/metre. 300×150/inch cannot: its precise typed
+`ResolutionError::NotRepresentable` survives in the route rejection before policy
+or encoder execution. `DiscardDescriptive` explicitly excludes source density.
+
+Density plus retained EXIF/XMP currently refuses with `ResolutionMetadata`. This
+is conservative even for packets without conflicting fields: these routes have
+no qualified reconciliation service. Legacy EXIF inspection can omit malformed
+entries; its lack of a visible density tag is insufficient evidence. Parsing XMP
+without its RDF interpretation is likewise insufficient. A future reconciliation
+route must handle conflicting/duplicate fields, malformed data, rational precision
+and unit semantics, with an explicit choice about preservation or rewriting.
+PNG does not assign precedence to conflicting Exif and PNG metadata; see the
+[PNG Exif guidance](https://www.w3.org/TR/png-3/#eXIf).
+
+Native density regression coverage lives in
+`zencodecs/tests/checked_transcode/resolution.rs`: independent `png` metadata and
+pixel readback, exact JFIF conversions, reduced aspect, field limits, several row
+capacities, and delayed/short async sources. These tests do not qualify arbitrary
+EXIF/XMP reconciliation, JPEG output density, or approximate quantization.
+
+Qualification on 2026-10-25: `just checked-transcode-locks
+checked-transcode-async-check` passed in an export outside local path patches,
+with one zencodec copy in each standalone graph. This includes independent
+expanded PNG samples (palette indices are not RGB samples), source JFIF aspect
+retention, and conflict refusal before the joint transcode question.
+
+```text
+run-heavy: done rc=0 16s | peak-RSS 0.73GiB | min-avail 15804MiB | peak-load 0.38
+```
+
+The broader `checked-transcode-ci` and `checked-transcode-integrations` gates
+also passed: metadata scrub contracts, strict Clippy, public API capture,
+application metadata services and both standalone fuzz graphs.
+
+```text
+run-heavy: done rc=0 43s | peak-RSS 0.72GiB | min-avail 15248MiB | peak-load 1.30
+```

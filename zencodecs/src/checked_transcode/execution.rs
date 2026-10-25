@@ -174,16 +174,47 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     .prepared_jobs
                     .take()
                     .ok_or(Refusal::RepeatedInterpretation)?;
+                let resolution = if self.request.metadata == MetadataTransfer::PreserveReported {
+                    info.resolution
+                } else {
+                    None
+                };
                 let mut jobs = Vec::new();
+                let mut rejections = Vec::new();
                 jobs.try_reserve_exact(prepared.len())?;
+                rejections.try_reserve_exact(prepared.len())?;
                 for prepared in prepared {
-                    let offer = prepared.offer();
+                    let mut offer = prepared.offer();
                     let mut job = prepared.into_job();
                     // Retention is an explicit request choice. Bind the
                     // actual carriers before the joint resolver runs.
                     #[allow(deprecated)]
                     job.set_metadata(metadata.clone());
+                    if let Some(resolution) = resolution {
+                        if let Err(cause) = job.try_set_resolution(resolution) {
+                            rejections.push(operation::RouteRejection {
+                                preference_index: offer.preference_index,
+                                fidelity: offer.fidelity,
+                                cause: zencodec::CodecSetError::Codec(cause),
+                            });
+                            continue;
+                        }
+                        offer.resolution = Some(resolution);
+                    }
                     jobs.push((offer, job));
+                }
+                if jobs.is_empty() {
+                    return Err(
+                        At::wrap(operation::OperationError::NoEncodeRoute(rejections))
+                            .at_named("prepare transcode density")
+                            .into(),
+                    );
+                }
+                // An opaque copy may carry a second, contradictory density.
+                // Neither legacy EXIF inspection nor carrier byte equality
+                // proves reconciliation. No offered route claims that scope.
+                if resolution.is_some() && (metadata.exif.is_some() || metadata.xmp.is_some()) {
+                    return Err(Refusal::ResolutionMetadata.into());
                 }
                 let rows = PreparedRows::new(
                     info,
@@ -225,11 +256,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     width: info.width,
                     height: info.height,
                     descriptor: output_descriptor,
-                    resolution: if self.request.metadata == MetadataTransfer::PreserveReported {
-                        info.resolution
-                    } else {
-                        None
-                    },
+                    resolution,
                 };
                 let encoder = job.into_encoder()?;
                 held.sink_mut().install(rows, encoder)?;

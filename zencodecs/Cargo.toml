@@ -12,8 +12,8 @@ readme = "README.crates.md"
 exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "fuzz/", "benchmarks/", "docs/", "*.zst"]
 
 [dependencies]
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "939d5628b5abfd7e55f5e926278cfe38678c9a38", optional = true, default-features = false }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "939d5628b5abfd7e55f5e926278cfe38678c9a38", optional = true }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "008b93c31c57578874cc7518a32f996454dd6694", optional = true, default-features = false }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "008b93c31c57578874cc7518a32f996454dd6694", optional = true }
 # Core (always available)
 enough = "0.4"
 whereat = "0.1.4"

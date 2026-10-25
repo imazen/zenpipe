@@ -24,8 +24,8 @@ zencodecs = { path = "../zencodecs", default-features = false }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "939d5628b5abfd7e55f5e926278cfe38678c9a38" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "02fa386631845cc08543090abb3fd1ba2da31012" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "008b93c31c57578874cc7518a32f996454dd6694" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756" }
 # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
 # root, which is invisible from here; the registry is frozen at 0.1.0. Without
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
@@ -35,7 +35,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "2af93f4a76f0f70ed3b2
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "3046bd77d1bae58516ee760043a444af087ee3c7" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "7f13367f8f2d8ad78f60c9638c07214997451f54" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }

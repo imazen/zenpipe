@@ -161,6 +161,11 @@ checked-transcode-sync export:
     cp zencodecs/examples/checked_transcode.rs "{{export}}/zencodecs/examples/"
     cp zencodecs/src/metadata/mod.rs zencodecs/src/metadata/jpeg.rs "{{export}}/zencodecs/src/metadata/"
     cp zencodecs/Cargo.toml "{{export}}/zencodecs/Cargo.toml"
+    cp Cargo.toml "{{export}}/Cargo.toml"
+    cp fuzz/Cargo.toml "{{export}}/fuzz/Cargo.toml"
+    cp zencodecs/fuzz/Cargo.toml "{{export}}/zencodecs/fuzz/Cargo.toml"
+    cp demo/crate/Cargo.toml "{{export}}/demo/crate/Cargo.toml"
+    cp tools/metadata-services/Cargo.toml "{{export}}/tools/metadata-services/Cargo.toml"
     cp justfile "{{export}}/justfile"
 
 # Resolve pinned revisions outside local sibling overrides before testing.

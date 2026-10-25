@@ -1089,6 +1089,11 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Fixed
 
+- Checked transcodes bind exact required density to the retained encoder job
+  before policy selection and compare output across physical units. Native PNG
+  and representable JFIF-to-PNG paths retain pixels and density; unrepresentable
+  density and unqualified EXIF/XMP reconciliation refuse before execution.
+
 - Checked transcodes preserve the prepared color carriers through native JPEG/PNG
   checked policy defaults while explicit caller requirements win. Output
   precision uses native decoded samples rather than packed palette index width.

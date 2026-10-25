@@ -118,6 +118,8 @@ pub enum Refusal {
     RepeatedDestination,
     /// The decoder omitted required final rows.
     MissingRows,
+    /// Reported density also has EXIF/XMP copies without qualified reconciliation.
+    ResolutionMetadata,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -422,7 +424,11 @@ fn verify_output(
     expected: &ExpectedOutput,
 ) -> Result<(), Cause> {
     let (width, height, descriptor) = (expected.width, expected.height, expected.descriptor);
-    if expected.resolution.is_some() && actual.resolution != expected.resolution {
+    if expected.resolution.is_some_and(|required| {
+        actual
+            .resolution
+            .is_none_or(|actual| !required.is_equivalent_to(&actual))
+    }) {
         return Err(Refusal::PhysicalResolution.into());
     }
     let expected = &expected.metadata;
