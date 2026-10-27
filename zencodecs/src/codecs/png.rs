@@ -96,3 +96,10 @@ pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<
         params,
     )
 }
+
+pub(crate) fn build_job(params: EncodeParams<'_>) -> crate::error::Result<crate::dispatch::ConfiguredJob> {
+    crate::dispatch::build_job_from_config(
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config, p.cicp),
+        params,
+    )
+}

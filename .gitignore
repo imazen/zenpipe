@@ -52,6 +52,7 @@ Thumbs.db
 # package) are tracked.
 /docs/*
 !/docs/checked-transcode.md
+!/docs/io.md
 !/docs/public-api/
 
 # Tooling noise

@@ -530,6 +530,31 @@ impl<'a> EncodeRequest<'a> {
         width: u32,
         height: u32,
     ) -> Result<crate::dispatch::StreamingEncoder> {
+        self.with_resolved_rows(width, height, crate::dispatch::build_streaming_encoder)
+    }
+
+    /// Resolve the configured job for planned row encoding, without
+    /// constructing an encoder.
+    ///
+    /// Format selection, quality, effort, metadata and limits resolve exactly as
+    /// for [`build_streaming_encoder`](Self::build_streaming_encoder). Retain the
+    /// returned job across planning and output policy (for example
+    /// `zencodec_io::row_encode::encode_job`), so the plan that is admitted is the
+    /// one that starts. A required encode policy is applied with the checked
+    /// setter and refuses when unsupported. Planned row encoding is qualified for
+    /// JPEG and PNG; other formats refuse instead of falling back.
+    pub fn build_job(self, width: u32, height: u32) -> Result<crate::dispatch::ConfiguredJob> {
+        self.with_resolved_rows(width, height, crate::dispatch::build_job)
+    }
+
+    /// Shared resolution for streaming encoders and configured jobs; `build`
+    /// runs while the resolved parameters' borrows are alive.
+    fn with_resolved_rows<T>(
+        self,
+        width: u32,
+        height: u32,
+        build: impl FnOnce(ImageFormat, crate::dispatch::EncodeParams<'_>) -> Result<T>,
+    ) -> Result<T> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let default_policy = CodecPolicy::new();
@@ -576,7 +601,7 @@ impl<'a> EncodeRequest<'a> {
             cicp: self.cicp,
         };
 
-        crate::dispatch::build_streaming_encoder(format, params)
+        build(format, params)
     }
 
     // ═══════════════════════════════════════════════════════════════════

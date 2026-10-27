@@ -322,6 +322,74 @@ where
     })
 }
 
+/// A configured encoder job, before any encoder exists.
+///
+/// Retain it across planning and policy, then hand it to a planned row driver
+/// (`zencodec_io::row_encode::encode_job` through an erased-job adapter). The
+/// job carries the request's quality, effort, limits, pulse and metadata.
+pub struct ConfiguredJob {
+    /// The erased job; `plan_encode` and `into_encoder` are available on it.
+    pub job: Box<dyn zencodec::encode::DynEncodeJob>,
+    /// Pixel formats the encoder accepts natively.
+    pub supported: &'static [PixelDescriptor],
+    /// The resolved output format.
+    pub format: ImageFormat,
+}
+
+/// The configuration [`build_streaming_from_config`] builds, kept as a job.
+///
+/// A required encode policy is applied with the checked setter: a codec that
+/// cannot honor it refuses here. (The streaming path keeps its legacy
+/// best-effort setter, which may ignore such a policy.)
+pub(crate) fn build_job_from_config<C, F>(
+    build_config: F,
+    params: EncodeParams<'_>,
+) -> Result<ConfiguredJob>
+where
+    C: zencodec::encode::EncoderConfig + 'static,
+    F: FnOnce(&EncodeParams<'_>) -> C,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
+    <C::Job as zencodec::encode::EncodeJob>::AnimationFrameEnc:
+        zencodec::encode::AnimationFrameEncoder,
+{
+    use zencodec::encode::DynEncoderConfig as _;
+    let config = build_config(&params);
+    let format = C::format();
+    let mut job = config.dyn_job();
+    job.set_pulse(params.pulse);
+    if let Some(lim) = params.limits {
+        job.set_limits(crate::limits::to_resource_limits(lim));
+    }
+    if let Some(meta) = params.metadata {
+        job.set_metadata_policy(meta, params.metadata_policy);
+    }
+    if let Some(policy) = params.encode_policy {
+        job.try_set_policy(policy)
+            .map_err(|source| at!(CodecError::Codec { format, source }))?;
+    }
+    Ok(ConfiguredJob {
+        job,
+        supported: C::supported_descriptors(),
+        format,
+    })
+}
+
+/// Build a configured job for the specified format. Planned row encoding is
+/// qualified for JPEG and PNG; other formats refuse instead of falling back.
+pub(crate) fn build_job(format: ImageFormat, params: EncodeParams<'_>) -> Result<ConfiguredJob> {
+    let _ = &params;
+    match format {
+        #[cfg(feature = "jpeg")]
+        ImageFormat::Jpeg => crate::codecs::jpeg::build_job(params),
+        #[cfg(feature = "png")]
+        ImageFormat::Png => crate::codecs::png::build_job(params),
+        _ => Err(at!(CodecError::UnsupportedOperation {
+            format,
+            detail: "planned row encoding is qualified for JPEG and PNG only",
+        })),
+    }
+}
+
 /// Build a streaming encoder for the specified format.
 pub(crate) fn build_streaming_encoder(
     format: ImageFormat,

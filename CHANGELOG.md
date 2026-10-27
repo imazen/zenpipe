@@ -703,6 +703,35 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Added (zencodec 0.2 drivers, 2026-10-27)
+
+- **`zenpipe::io`** (feature `io`; `io-tokio` adds `io::tokio_bridge`): a
+  controlled zencodec decoder over any `ReadAt` served as a pipeline `Source`
+  (`DecodeSource`; decode questions answered at construction, final
+  interpretation held until the first pull), a pipeline served to the planned
+  row encoder (`PipelineRows` for `zencodec_io::row_encode::encode_job`), an
+  erased registry job usable there (`ErasedJob`), owned zero-copy resident
+  input (`SharedBytes`), orientation rendering costs and an admitted-raster
+  renderer (`OrientationCost`, `render_orientation`), and a blocking-pool
+  bridge for async sources and writers. Typed causes stay in the error chain.
+  Qualification is in the unpublished `tools/io-check` member; see
+  `docs/io.md` for the measured scope and the explicit gaps.
+- **`Source::color_context()`** (provided, default `None` = unknown): the
+  interpretation of a source's samples when it is known before any strip.
+  Crop, 8-bit resize, horizontal flip, edge replication, canvas expansion and
+  tracing pass on their upstream's; `io::PipelineRows::from_source` declares it
+  to the encoder and refuses `UnknownColor` instead of guessing, so a
+  color-changing operator can no longer be encoded under its input's profile
+  without an explicit declaration.
+- **`impl Source for Box<S>`** (forwarding), so a compiled graph's
+  `Box<dyn Source>` works wherever a `Source` is required (`PipelineRows`).
+- **`ImageJob::with_output_policy(PolicySet)`** (with `io`): plan the configured
+  encoder job for the pipeline's rows and resolve the output schedule before any
+  row or byte; unsupported row modes and gain-map sidecars refuse instead of
+  falling back to a one-shot encode of the materialized image. The policy is the
+  driver's preset as well as its resolver, so a refusal names the unmet
+  requirement.
+
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
 - **The sink's own pass is 23–29 % faster** with byte-identical output
@@ -1121,6 +1150,13 @@ Three crates.io requirements block a newer release and were left alone on purpos
   one admitted strip per coroutine step), zenjpeg `8672e549`, zenpng `5422b6d2`,
   zenbitmaps `9ad4582b`, ultrahdr-core `cc57c57a`; `thiserror` 2.0.21 where
   zenbitmaps requires it. Not releasable until those ship.
+
+#### Added (zenpipe::io support, 2026-10-27)
+
+- `EncodeRequest::build_job(width, height) -> ConfiguredJob`: the configured job
+  `build_streaming_encoder` would start, retained for planning; a required encode
+  policy is applied with `try_set_policy` and refuses when unsupported. Qualified
+  for JPEG and PNG; other formats refuse.
 
 ### Checked transcode review integration (2026-10-27)
 

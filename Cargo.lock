@@ -1683,6 +1683,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5084,12 +5093,14 @@ dependencies = [
  "moxcms 0.8.1",
  "rgb",
  "serde_json",
+ "tokio",
  "whereat",
  "zenavif",
  "zenbench",
  "zenbitmaps",
  "zenblend",
  "zencodec",
+ "zencodec-io",
  "zencodecs",
  "zenfilters",
  "zengif",
@@ -5119,6 +5130,27 @@ dependencies = [
  "serde_json",
  "zennode",
  "zenpipe",
+]
+
+[[package]]
+name = "zenpipe-io-check"
+version = "0.0.0"
+dependencies = [
+ "enough",
+ "jpeg-decoder",
+ "png",
+ "tokio",
+ "whereat",
+ "zencodec",
+ "zencodec-io",
+ "zencodecs",
+ "zenjpeg",
+ "zenlayout 0.2.2",
+ "zenpipe",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenpng",
+ "zenresize",
 ]
 
 [[package]]

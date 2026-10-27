@@ -38,6 +38,13 @@ std = [
     "dep:zenfilters",
     "dep:moxcms",
 ]
+# Pipelines over zencodec-io drivers (`zenpipe::io`): controlled decode from
+# slices, files and range sources; planned, policy-admitted row encoding to
+# forward or seek-back destinations.
+io = ["std", "dep:zencodec-io", "zencodec-io/std"]
+# `zenpipe::io::tokio_bridge`: run planned pipelines on Tokio's blocking pool
+# with async sources and async writers. Never starts a runtime.
+io-tokio = ["io", "zencodec-io/tokio", "dep:tokio"]
 # Bridge from zennode NodeInstance to PipelineGraph NodeOps.
 zennode = ["dep:zennode", "dep:zencodecs", "zencodecs/zennode"]
 # Local-dev only: gate bridge tests requiring zennode_defs modules in zenresize/zenlayout.
@@ -110,6 +117,11 @@ zenpixels.workspace = true
 zencodec.workspace = true
 # Cooperative cancellation
 enough.workspace = true
+# Slice/file/range/async drivers and the planned row encoder (`io` feature).
+# Same repository and revision as the zencodec patch, so one zencodec copy.
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "79676215c037bf222c414198813e4b4f6b6efb96", optional = true }
+# Blocking-pool bridge for async sources and writers (`io-tokio`).
+tokio = { version = "1.53.3", default-features = false, features = ["rt", "sync", "io-util"], optional = true }
 # Error location tracking (re-exported by zenpixels for BufferError)
 whereat.workspace = true
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
@@ -220,7 +232,7 @@ harness = false
 required-features = ["zennode", "std"]
 
 [workspace]
-members = ["zencodecs", "zencodecs-cli", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor"]
+members = ["zencodecs", "zencodecs-cli", "zenfilters", "zenlayout", "zenpipe-cmd", "zeneditor", "tools/io-check"]
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.

@@ -67,6 +67,9 @@ impl Source for FlipHSource {
     fn format(&self) -> PixelFormat {
         self.upstream.format()
     }
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        self.upstream.color_context()
+    }
 }
 
 #[cfg(test)]

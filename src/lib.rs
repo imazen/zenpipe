@@ -37,6 +37,9 @@ pub mod trace;
 #[cfg(feature = "zennode")]
 pub mod bridge;
 
+#[cfg(feature = "io")]
+pub mod io;
+
 #[cfg(feature = "job")]
 pub mod job;
 
@@ -141,6 +144,33 @@ pub trait Source: Send {
     fn height(&self) -> u32;
     /// Pixel format of output strips.
     fn format(&self) -> PixelFormat;
+    /// The color interpretation of this source's samples, when it is known
+    /// before any strip is produced. `None` means unknown: an encoder that must
+    /// declare its header color needs it supplied explicitly. Operators that
+    /// keep their upstream's interpretation delegate; anything that changes or
+    /// cannot vouch for it keeps this default.
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        None
+    }
+}
+
+/// A boxed source, such as a compiled graph, is a source.
+impl<S: Source + ?Sized> Source for alloc::boxed::Box<S> {
+    fn next(&mut self) -> PipeResult<Option<Strip<'_>>> {
+        (**self).next()
+    }
+    fn width(&self) -> u32 {
+        (**self).width()
+    }
+    fn height(&self) -> u32 {
+        (**self).height()
+    }
+    fn format(&self) -> PixelFormat {
+        (**self).format()
+    }
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        (**self).color_context()
+    }
 }
 
 /// A sink that consumes pixel strips (push-based).

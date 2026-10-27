@@ -176,6 +176,13 @@ pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<
     )
 }
 
+pub(crate) fn build_job(params: EncodeParams<'_>) -> crate::error::Result<crate::dispatch::ConfiguredJob> {
+    crate::dispatch::build_job_from_config(
+        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        params,
+    )
+}
+
 /// Derive the UltraHDR color gamut from CICP color primaries (zenpipe#40).
 ///
 /// ultrahdr-core's gain-map math supports exactly the three UltraHDR

@@ -389,6 +389,9 @@ pub struct ImageJob<'a> {
     decode_io_id: i32,
     /// Primary encode io_id (which output slot to write encoded result).
     encode_io_id: i32,
+    /// Planned row encoding under this output policy (see `with_output_policy`).
+    #[cfg(feature = "io")]
+    output_policy: Option<zencodec::operation::PolicySet>,
 }
 
 impl<'a> ImageJob<'a> {
@@ -411,6 +414,8 @@ impl<'a> ImageJob<'a> {
             trace_config: None,
             decode_io_id: 0,
             encode_io_id: 1,
+            #[cfg(feature = "io")]
+            output_policy: None,
         }
     }
 
@@ -517,6 +522,21 @@ impl<'a> ImageJob<'a> {
     /// keeps ICC/CICP/HDR metadata for correct display.
     pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
         self.metadata_policy = policy;
+        self
+    }
+
+    /// Encode through the planned row driver under `policy`.
+    ///
+    /// The configured encoder job is planned for the pipeline's actual rows
+    /// and the output schedule is resolved under `policy` before any row is
+    /// read or byte produced (`zencodec_io::row_encode::encode_job`). A format
+    /// or configuration that cannot encode one ordered row pass refuses, as
+    /// does a gain-map sidecar; nothing falls back to a whole-image encode.
+    /// Without this, the job pushes rows into a streaming encoder and falls back
+    /// to a one-shot encode of the materialized image when that fails.
+    #[cfg(feature = "io")]
+    pub fn with_output_policy(mut self, policy: zencodec::operation::PolicySet) -> Self {
+        self.output_policy = Some(policy);
         self
     }
 
@@ -905,6 +925,74 @@ impl<'a> ImageJob<'a> {
     /// right after, so the budget effectively covers the streaming phase.
     fn deadline(&self) -> Option<crate::limits::Deadline> {
         self.limits.as_ref().and_then(|l| l.to_deadline())
+    }
+
+    /// The planned route of [`stream_encode`](Self::stream_encode): retain the
+    /// configured job, declare the rows' color, plan, admit the schedule, then
+    /// read rows and publish into memory.
+    #[cfg(feature = "io")]
+    fn planned_encode(
+        &self,
+        request: zencodecs::EncodeRequest<'_>,
+        source: Box<dyn crate::Source>,
+        (w, h): (u32, u32),
+        target_format: zencodec::ImageFormat,
+        policy: zencodec::operation::PolicySet,
+        metadata: Option<&zencodec::Metadata>,
+    ) -> crate::PipeResult<EncodeResult> {
+        let configured = request
+            .build_job(w, h)
+            .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        // The job embeds this metadata's carriers; the rows are declared with
+        // the same interpretation, so planning compares like with like.
+        let color = metadata.map(|m| {
+            let mut context = zenpixels::ColorContext::default();
+            context.icc = m.icc_profile.clone();
+            context.cicp = m.cicp;
+            alloc::sync::Arc::new(context)
+        });
+        let rows = crate::io::PipelineRows::new(source, color)?;
+        let limits = self.limits.as_ref();
+        let storage = zencodec::storage::StorageBudget::new(
+            limits
+                .and_then(|l| l.max_memory_bytes)
+                .map_or(256 << 20, |bytes| {
+                    usize::try_from(bytes).unwrap_or(usize::MAX)
+                }),
+            4096,
+        );
+        // The policy is also the preset: the driver admits offers against the
+        // preset's requirements before asking the resolver, and only those are
+        // named in a refusal's decision report.
+        let options = zencodec_io::row_encode::Options::new(
+            storage,
+            limits.and_then(|l| l.max_output_bytes).unwrap_or(u64::MAX),
+        )
+        .with_policy_set(policy);
+        let pulse = match self.deadline() {
+            Some(deadline) => {
+                zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
+            }
+            None => zencodec::SharedPulse::default(),
+        };
+        let mut bytes = alloc::vec::Vec::new();
+        zencodec_io::row_encode::encode_job(
+            crate::io::ErasedJob::new(configured.job),
+            rows,
+            &mut bytes,
+            policy,
+            options,
+            pulse.as_pulse(),
+        )
+        .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        Ok(EncodeResult {
+            io_id: self.encode_io_id,
+            bytes,
+            width: w,
+            height: h,
+            mime_type: target_format.mime_type().to_string(),
+            extension: target_format.extension().to_string(),
+        })
     }
 }
 
@@ -1501,7 +1589,7 @@ impl<'a> ImageJob<'a> {
         if let Some(effort) = decision.quality.effort {
             encode_request = encode_request.with_effort(effort);
         }
-        if let Some(meta) = output.metadata {
+        if let Some(meta) = output.metadata.clone() {
             encode_request = encode_request.with_metadata(meta);
         }
         // Per-codec hint overrides (?jpeg.quality=, ?webp.effort=, …).
@@ -1514,6 +1602,24 @@ impl<'a> ImageJob<'a> {
         }
         if let Some(ref cl) = codec_limits {
             encode_request = encode_request.with_limits(cl);
+        }
+
+        #[cfg(feature = "io")]
+        if let Some(policy) = self.output_policy {
+            if output.sidecar.is_some() {
+                // A gain map is assembled from the whole image (MPF/tmap/jhgm).
+                return Err(at!(PipeError::Codec(Box::new(
+                    zencodec::UnsupportedOperation::GainMapEncode
+                ))));
+            }
+            return self.planned_encode(
+                encode_request,
+                source,
+                (w, h),
+                target_format,
+                policy,
+                output.metadata.as_ref(),
+            );
         }
 
         // Prepare gain map data for re-embedding (if sidecar was preserved).

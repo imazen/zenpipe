@@ -230,3 +230,13 @@ checked-color-integration:
 # Run in an export; verifies one local review zencodec across registry/git edges.
 checked-transcode-review-check codec:
     python3 scripts/check-review-codec.py "{{codec}}"
+
+# Frame sizes at a stack-overflow abort in one io-check test (debug build, default
+# 2 MiB test thread; no stack override). Example:
+#   just io-stack-frames io_pipeline jpeg_controlled_strips_equal_the_one_shot_decode
+io-stack-frames target test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exe=$(cargo test -p zenpipe-io-check --test "{{target}}" --no-run --locked --message-format=json 2>/dev/null \
+      | jq -r 'select(.reason=="compiler-artifact" and .executable != null and .profile.test) | .executable')
+    gdb -q -batch -x tools/io-check/scripts/stack_frames.py --args "$exe" "{{test}}" --exact --test-threads 1 --nocapture
