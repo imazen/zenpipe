@@ -139,3 +139,94 @@ arm-codec-integration-audit:
 # Explicitly opt into real AVIF corpus tests; retain per-test output.
 arm-avif-corpus-audit:
     CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 RUST_TEST_THREADS=4 TMPDIR="$HOME/tmp" nice -n19 cargo test -p zencodecs --features std,cms,tiff,svg,pdf-decode,heic-decode,raw-decode,bitmaps-hdr,bitmaps-qoi,bitmaps-tga --test corpus -- --ignored avif --show-output
+
+# Minimal checked-transcode feature combination must remain warning-free.
+checked-transcode-baseline:
+    cargo clippy -p zencodecs --no-default-features --features std,cms,metadata,jpeg,png --lib -- -D warnings
+
+# The joint-policy implementation and a real JPEG-to-PNG pixel oracle.
+checked-transcode-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --test checked_transcode --locked
+    cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
+
+checked-transcode-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    mkdir -p "{{export}}/zencodecs/src/checked_transcode"
+    cp zencodecs/src/checked_transcode.rs zencodecs/src/lib.rs zencodecs/src/dispatch.rs zencodecs/src/dyn_dispatch.rs zencodecs/src/encode.rs zencodecs/src/gainmap.rs "{{export}}/zencodecs/src/"
+    cp zencodecs/src/checked_transcode/*.rs "{{export}}/zencodecs/src/checked_transcode/"
+    cp zencodecs/tests/checked_transcode.rs "{{export}}/zencodecs/tests/"
+    mkdir -p "{{export}}/zencodecs/tests/checked_transcode"
+    cp zencodecs/tests/checked_transcode/*.rs "{{export}}/zencodecs/tests/checked_transcode/"
+    cp zencodecs/examples/checked_transcode.rs "{{export}}/zencodecs/examples/"
+    cp zencodecs/src/metadata/mod.rs zencodecs/src/metadata/jpeg.rs "{{export}}/zencodecs/src/metadata/"
+    cp zencodecs/Cargo.toml "{{export}}/zencodecs/Cargo.toml"
+    cp Cargo.toml "{{export}}/Cargo.toml"
+    cp fuzz/Cargo.toml "{{export}}/fuzz/Cargo.toml"
+    cp zencodecs/fuzz/Cargo.toml "{{export}}/zencodecs/fuzz/Cargo.toml"
+    cp demo/crate/Cargo.toml "{{export}}/demo/crate/Cargo.toml"
+    cp tools/metadata-services/Cargo.toml "{{export}}/tools/metadata-services/Cargo.toml"
+    cp justfile "{{export}}/justfile"
+
+# Resolve pinned revisions outside local sibling overrides before testing.
+checked-transcode-resolve:
+    cargo update -p zencodecs
+    cargo tree -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode -i zencodec
+
+# The new operation must not remove existing adapter coverage.
+checked-transcode-compat:
+    cargo check -p zencodecs --no-default-features --features checked-transcode --locked
+    cargo test -p zencodecs --no-default-features --all-targets --locked
+    just test-gainmap-surface
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode --doc --locked
+    just api-doc
+
+# Preserve the decoder pin invariant across every standalone Cargo graph.
+checked-transcode-locks:
+    cargo update -p zencodecs
+    cargo update --manifest-path fuzz/Cargo.toml -p zenpipe-fuzz -p magetypes -p archmage -p enough -p almost-enough
+    cargo update --manifest-path zencodecs/fuzz/Cargo.toml -p zencodecs-fuzz -p magetypes -p archmage -p enough -p almost-enough -p rustix
+    cargo update --manifest-path demo/crate/Cargo.toml -p zenpipe-demo -p magetypes -p archmage -p enough -p almost-enough
+    cargo update --manifest-path tools/metadata-services/Cargo.toml -p zencodecs -p magetypes -p archmage -p enough -p almost-enough
+    just check-pins
+
+# Standalone application service and fuzz graphs use the same pinned contracts.
+checked-transcode-integrations:
+    cargo test --manifest-path tools/metadata-services/Cargo.toml --locked
+    cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+    cargo check --manifest-path zencodecs/fuzz/Cargo.toml --all-targets --locked
+
+# Final compatibility gates after changing the shared operation dependency.
+checked-transcode-ci:
+    cargo clippy -p zencodecs --no-default-features --features std,cms,metadata,jpeg,png,checked-transcode --all-targets --locked -- -D warnings
+    cargo test -p zencodecs --no-default-features --features metadata,jpeg-ultrahdr,jxl-encode,jxl-decode,png --test metadata_scrub --locked
+    just checked-transcode-check
+    just api-doc
+
+# Check the surrounding pipeline without launching standalone benchmark mains.
+checked-transcode-workspace:
+    cargo test -p zenfilters --lib --tests --locked
+    cargo clippy -p zenfilters --all-targets --locked -- -D warnings
+    cargo clippy --all-targets --no-default-features --locked -- -D warnings
+
+checked-transcode-async-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --test checked_transcode --locked
+    cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib --test checked_transcode --example checked_transcode --locked -- -D warnings
+
+checked-transcode-arm-clippy:
+    cargo clippy -p zenfilters --all-targets --target aarch64-unknown-linux-gnu --locked -- -D warnings
+
+# Compile all benchmark bodies, then exercise the native nested pipeline.
+session-stack-check:
+    cargo clippy --bench session_cache --locked -- -D warnings
+    cargo test --bench session_cache --locked -- --group=session_4k_drain
+
+# Qualify color handoff after resolving all pinned application graphs.
+checked-color-integration:
+    just checked-transcode-locks
+    just checked-transcode-async-check
+    just api-doc
+
+# Run in an export; verifies one local review zencodec across registry/git edges.
+checked-transcode-review-check codec:
+    python3 scripts/check-review-codec.py "{{codec}}"

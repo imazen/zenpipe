@@ -7,6 +7,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (2026-10-25)
+
+- The JPEG/PNG/CMS-only zencodecs build remains warning-free when WebP
+  is disabled; its decoder factory still forwards limits whenever WebP is enabled.
+
 #### Added (AVIF auto-tuning consumer, 2026-09-04)
 
 - **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam
@@ -1080,7 +1085,31 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ## zencodecs
 
+### Checked transcode review integration (2026-10-27)
+
+- Supply explicit opaque-profile retention evidence to the checked resolver.
+  The shared offer now defaults to unknown; profile exclusion cannot be inferred
+  from missing evidence. Preserve native retain/discard regression expectations.
+
 ### [Unreleased]
+
+#### Fixed
+
+- Checked transcodes bind exact required density to the retained encoder job
+  before policy selection and compare output across physical units. Native PNG
+  and representable JFIF-to-PNG paths retain pixels and density; unrepresentable
+  density and unqualified EXIF/XMP reconciliation refuse before execution.
+
+- Checked transcodes preserve the prepared color carriers through native JPEG/PNG
+  checked policy defaults while explicit caller requirements win. Output
+  precision uses native decoded samples rather than packed palette index width.
+
+
+#### Added
+
+- Default-off `checked-transcode`: one stored request executes prepared conversion, metadata and encoder routes through the shared fallible resolver. Slice/file/range input, explicit opaque-profile policy, admitted row storage and output postconditions are exercised with native JPEG/PNG and independent pixel readback. Native workspace and encoded allocation remain unqualified; see `docs/checked-transcode.md`.
+- `checked-transcode-async` drives the same checked execution over AsyncSource; short/pending reads, native errors, drop/cancellation cleanup and pre-read admission are tested. CPU work remains on the polling task with between-step fairness.
+- Checked PNG sources now use native controlled interpretation. Six integer layouts retain exact samples through lossless PNG output; P3 conversion matches an independent CMS route, and slice/positional/delayed-network results agree. Unknown extension and gain-map carriers refuse; native inflate storage remains unqualified.
 
 #### Changed
 

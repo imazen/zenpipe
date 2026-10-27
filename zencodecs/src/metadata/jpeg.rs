@@ -268,7 +268,7 @@ fn gain_map<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
     // disagreeing declarations rather than silently choosing a different curve.
     for xml in [base_signals.xmp, gain_signals.xmp].into_iter().flatten() {
         let packet =
-            zencodec::xmp::Packet::parse(xml).map_err(|_| Error::Malformed("gain-map XMP XML"))?;
+            zenmeta::xmp::Packet::parse(xml).map_err(|_| Error::Malformed("gain-map XMP XML"))?;
         if packet
             .property(xmp::HDRGM_NAMESPACE, "GainMapMax")
             .map_err(|_| Error::Malformed("gain-map XMP property"))?
@@ -284,7 +284,7 @@ fn gain_map<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
     }
     if let Some(xml) = base_signals.xmp {
         let packet =
-            zencodec::xmp::Packet::parse(xml).map_err(|_| Error::Malformed("primary XMP XML"))?;
+            zenmeta::xmp::Packet::parse(xml).map_err(|_| Error::Malformed("primary XMP XML"))?;
         let directory = packet
             .resource_sequence(
                 xmp::CONTAINER_NAMESPACE,
@@ -546,7 +546,7 @@ fn edited_gain_xmp(
     req.packet(merged.len())?;
     let merged = core::str::from_utf8(&merged).map_err(|_| Error::Service("merged XMP UTF-8"))?;
     let packet =
-        zencodec::xmp::Packet::parse(merged).map_err(|_| Error::Service("merged XMP XML"))?;
+        zenmeta::xmp::Packet::parse(merged).map_err(|_| Error::Service("merged XMP XML"))?;
     if let Some(params) = params {
         let actual = xmp::parse_xmp(merged)
             .map_err(|_| Error::Service("merged gain-map parameters"))?
@@ -558,8 +558,8 @@ fn edited_gain_xmp(
         }
     } else {
         let expected =
-            zencodec::xmp::Packet::parse(required).map_err(|_| Error::Service("generated XMP"))?;
-        let read = |p: &zencodec::xmp::Packet<'_>| {
+            zenmeta::xmp::Packet::parse(required).map_err(|_| Error::Service("generated XMP"))?;
+        let read = |p: &zenmeta::xmp::Packet<'_>| {
             p.resource_sequence(
                 xmp::CONTAINER_NAMESPACE,
                 "Directory",

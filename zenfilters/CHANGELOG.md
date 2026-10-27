@@ -13,6 +13,8 @@
   thing for the same callers.
 
 ### Fixed
+- Use magetypes 0.9.30 explicit-token constructors and partition methods in
+  the x86, NEON and WASM SIMD implementations. The arithmetic is unchanged.
 - Convenience encode path (`convenience.rs`) now PRESERVES the `whereat` trace from
   `zenpixels-convert` conversion errors: replaced the trace-dropping
   `at!(e).map_error(|e| ConvenienceError::Convert(e.decompose().0))` with

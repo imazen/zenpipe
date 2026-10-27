@@ -186,9 +186,12 @@ impl FrameSource {
                 }
 
                 self.y = 0;
+                // This legacy FrameInfo still represents integer milliseconds.
+                #[allow(deprecated)]
+                let duration_ms = owned.duration_ms();
                 self.frame_info = Some(FrameInfo {
                     index: owned.frame_index(),
-                    duration_ms: owned.duration_ms(),
+                    duration_ms,
                 });
             }
             None => {

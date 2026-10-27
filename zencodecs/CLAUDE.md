@@ -875,3 +875,27 @@ See private notes for details — do not commit vulnerability specifics.
 ## User Feedback Log
 
 See [FEEDBACK.md](FEEDBACK.md) if it exists.
+
+## Checked-transcode qualification (2026-10-25)
+
+`checked-transcode` couples controlled JPEG interpretation, retained
+`zenpixels_convert::OutputPlan`, metadata treatment and a prepared encoder job
+under one shared policy question. Qualified destinations are JPEG and PNG.
+See `../docs/checked-transcode.md` for limits and `just checked-transcode-check`
+for native pixel/metadata, file/range, refusal and cleanup controls.
+
+Known gaps: native codec/CMS workspace and encoded staging have no qualified
+upper bounds. Physical resolution is reported on decode but has no shared
+encode carrier: the checked route now refuses lost required DPI before returning
+output. This was reproduced as false success with an asymmetric JFIF fixture.
+Whole-source JPEG, opaque-container discovery and HDR/sequence restrictions
+remain explicit; the new operation does not imply native incremental parsing.
+
+The coordinated core pin moves rich metadata services to `zenmeta`. Existing
+metadata scrub and gain-map calls use that owner. WebP/GIF/JXL/AVIF adapter pins
+include the shared rational-timing signature; the AVIF wrapper moves without
+changing `rav1d-safe dfd01e32`. `just check-pins` checks every standalone graph.
+
+CI qualification found additional generic `V::<T>` SIMD constructor aliases in
+zenfilters' NEON/WASM helper functions. They also require the explicit-token
+method names; `just checked-transcode-arm-clippy` checks those compiled paths.

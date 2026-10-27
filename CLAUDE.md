@@ -37,6 +37,19 @@ sources`.
 
 ## Known Bugs
 
+- Fixed during native PNG qualification (2026-10-25): a 97x65 source could
+  deliver a 65-row native batch to an admitted 64-row transcode strip and fail
+  with `StripGeometry`. The sink now advertises its capacity; shared coroutine
+  delivery splits batches. 97x65/257 RGB8 and RGBA16 retain exact independent
+  samples with 1/3/64-row buffers (`just checked-transcode-async-check`).
+
+- Fixed in the checked-transcode review (2026-10-25): default PNG color emission
+  could add derived cICP beside a retained Display P3 ICC, changing authority.
+  The adapter now supplies checked verbatim defaults without overriding required
+  policy fields. Packed PNG palette index width also no longer masquerades as
+  decoded channel precision. The native regression compares expanded pixels
+  against an independent PNG reader; `just checked-transcode-async-check`.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly
@@ -102,3 +115,19 @@ threading, hdr directives, compat security. Verified remaining:
   extend the generator, then regenerate. (`docs/querystring.md:159` /
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
+
+## Known Bugs: optional decoder limits warning (fixed 2026-10-25)
+
+The JPEG/PNG/CMS-only configuration exposed an unused decoder-factory limits
+parameter when WebP was disabled. The parameter remains forwarded in the WebP
+arm; `just checked-transcode-baseline` verifies this smaller configuration.
+
+### Session benchmark main-thread stack (2026-10-25)
+
+Windows x64 and ARM64 CI reached `benches/session_cache.rs` after the ordinary
+correctness tests, then the standalone benchmark executable overflowed its main
+thread stack before reporting a sample. The benchmark now enters through a named
+worker with an explicit 8 MiB stack reservation on every platform; all benchmark
+bodies, assertions and zenbench process options are retained. This is a reservation,
+not a measured live-memory bound for the codecs. `just session-stack-check` runs
+the nested decode/crop/resize/filter path; Windows execution remains a CI gate.

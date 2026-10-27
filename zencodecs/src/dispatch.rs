@@ -17,6 +17,7 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 pub(crate) struct EncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
+    #[allow(dead_code)] // Not every compiled codec has a lossless configuration.
     pub lossless: bool,
     pub metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` at the codec boundary via
@@ -30,6 +31,7 @@ pub(crate) struct EncodeParams<'a> {
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
     /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
     /// derive color from the pixel descriptor as before.
+    #[allow(dead_code)] // Consumed by the optional PNG arm.
     pub cicp: Option<zencodec::Cicp>,
 }
 
@@ -45,6 +47,7 @@ pub(crate) struct EncodeParams<'a> {
 /// boundary's `MetadataPolicy` reconciles it to the field). Formats with a
 /// native carrier (AVIF irot/imir, JXL codestream orientation — where EXIF
 /// orientation is *not* authoritative) are left alone.
+#[allow(deprecated)] // Preserve the existing serializer on this compatibility path.
 pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
     use zencodec::exif::{Exif, TextEncoding};
     if meta.orientation == zencodec::Orientation::Identity
@@ -374,6 +377,7 @@ pub(crate) fn build_encoder<'a>(
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // Exercise the existing compatibility serializer.
 mod fold_tests {
     use super::*;
     use zencodec::Orientation;
