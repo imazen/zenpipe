@@ -10,7 +10,7 @@ use std::{
 use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
 use zencodec::operation::{Decision, DecisionCode, Decline, MetadataTransfer, Question, Selection};
 use zencodec::storage::StorageBudget;
-use zencodec::{At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, StopToken};
+use zencodec::{At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, SharedPulse};
 use zencodecs::checked_transcode::{Stage, TranscodeRequest};
 use zenjpeg::{JpegDecoderConfig, JpegEncoderConfig};
 use zenpixels::{
@@ -233,7 +233,9 @@ impl enough::Stop for Stop {
 fn callback_cancellation_and_publication_failure_preserve_reports_and_release_storage() {
     let input = fixture(false);
     let stop = Arc::new(AtomicBool::new(false));
-    let codecs = codecs().with_stop(StopToken::new(Stop(stop.clone())));
+    let codecs = codecs().with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(Stop(
+        stop.clone(),
+    ))));
     let budget = StorageBudget::new(512 * 1024, 16);
     let error = request(budget.clone())
         .transcode_with(&codecs, &input, &mut |question: Question<'_>| -> Result<
@@ -267,6 +269,8 @@ fn callback_cancellation_and_publication_failure_preserve_reports_and_release_st
 
 // This adapter deliberately drops requested metadata while using a real native
 // encoder. Configuration success must not become false successful publication.
+// It forwards planning, so the route is admitted and only the publication
+// postcondition (Verify) can catch the loss.
 #[derive(Clone)]
 struct IgnoresMetadata<C>(C);
 struct IgnoresMetadataJob<J>(J);
@@ -287,8 +291,8 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
     type Error = J::Error;
     type Enc = J::Enc;
     type AnimationFrameEnc = J::AnimationFrameEnc;
-    fn with_stop(self, stop: StopToken) -> Self {
-        Self(self.0.with_stop(stop))
+    fn with_pulse(self, pulse: SharedPulse) -> Self {
+        Self(self.0.with_pulse(pulse))
     }
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
@@ -306,6 +310,13 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
     ) -> Result<(), zencodec::UnsupportedOperation> {
         self.0.try_set_policy(policy)
     }
+    // Planning reports the inner job, configured with the reduced metadata.
+    fn plan_encode(
+        &self,
+        declaration: &zencodec::encode::EncodeDeclaration<'_>,
+    ) -> Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError> {
+        self.0.plan_encode(declaration)
+    }
     fn encoder(self) -> Result<Self::Enc, Self::Error> {
         self.0.encoder()
     }
@@ -313,6 +324,76 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
         self.0.animation_frame_encoder()
     }
 }
+
+// The same real encoder behind an adapter that does not forward planning: the
+// checked route cannot plan one ordered row pass for it, so the route is
+// excluded with its native cause before the joint question.
+#[derive(Clone)]
+struct CannotPlan<C>(C);
+struct CannotPlanJob<J>(J);
+impl<C: EncoderConfig> EncoderConfig for CannotPlan<C> {
+    type Error = C::Error;
+    type Job = CannotPlanJob<C::Job>;
+    fn format() -> ImageFormat {
+        C::format()
+    }
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        C::supported_descriptors()
+    }
+    fn job(self) -> Self::Job {
+        CannotPlanJob(self.0.job())
+    }
+}
+impl<J: EncodeJob> EncodeJob for CannotPlanJob<J> {
+    type Error = J::Error;
+    type Enc = J::Enc;
+    type AnimationFrameEnc = J::AnimationFrameEnc;
+    fn with_pulse(self, pulse: SharedPulse) -> Self {
+        Self(self.0.with_pulse(pulse))
+    }
+    fn with_limits(self, limits: ResourceLimits) -> Self {
+        Self(self.0.with_limits(limits))
+    }
+    #[allow(deprecated)] // Forwarding the codec's own setter unchanged.
+    fn with_metadata(self, metadata: Metadata) -> Self {
+        Self(self.0.with_metadata(metadata))
+    }
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::encode::EncodePolicy,
+    ) -> Result<(), zencodec::UnsupportedOperation> {
+        self.0.try_set_policy(policy)
+    }
+    fn encoder(self) -> Result<Self::Enc, Self::Error> {
+        self.0.encoder()
+    }
+    fn animation_frame_encoder(self) -> Result<Self::AnimationFrameEnc, Self::Error> {
+        self.0.animation_frame_encoder()
+    }
+}
+
+#[test]
+fn an_encoder_that_cannot_plan_rows_is_excluded_before_the_joint_question() {
+    let input = fixture(false);
+    let codecs = CodecSet::new()
+        .with_decoder(JpegDecoderConfig::new())
+        .with_encoder(CannotPlan(jpeg_config(false)));
+    let budget = StorageBudget::new(512 * 1024, 16);
+    let error = TranscodeRequest::new(ImageFormat::Jpeg)
+        .with_cms(&MoxCms)
+        .with_storage(budget.clone())
+        .transcode(&codecs, &input)
+        .unwrap_err();
+    assert_eq!(error.error().stage(), Stage::Plan, "{}", explain(&error));
+    assert!(
+        zencodec::find_cause::<zencodec::UnsupportedOperation>(&error)
+            .is_some_and(|e| *e == zencodec::UnsupportedOperation::EncodePlanning),
+        "{}",
+        explain(&error)
+    );
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}
+
 #[test]
 fn a_real_encoder_that_ignores_metadata_cannot_publish_success() {
     let input = fixture(false);

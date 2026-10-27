@@ -541,7 +541,7 @@ fn edited_gain_xmp(
         &descriptive,
         required.as_bytes(),
         req.max_metadata,
-        req.stop,
+        req.pulse,
     )?;
     req.packet(merged.len())?;
     let merged = core::str::from_utf8(&merged).map_err(|_| Error::Service("merged XMP UTF-8"))?;

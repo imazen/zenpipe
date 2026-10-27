@@ -19,7 +19,7 @@ use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::macros::dispatch_format;
 use crate::trace::{SelectionStep, SelectionTrace};
-use crate::{CodecError, ImageFormat, Limits, StopToken};
+use crate::{CodecError, ImageFormat, Limits, SharedPulse};
 use whereat::at;
 use zencodec::decode::{DecodeJob as _, DecoderConfig as _, DynDecoderConfig, OutputInfo};
 
@@ -42,7 +42,7 @@ pub(crate) struct DecodeParams<'a> {
     pub data: &'a [u8],
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<StopToken>,
+    pub pulse: SharedPulse,
     pub preferred: &'a [zenpixels::PixelDescriptor],
     pub decode_policy: Option<zencodec::decode::DecodePolicy>,
     /// When true, codecs that support gain maps will extract and attach
@@ -114,11 +114,11 @@ pub(crate) fn dyn_push_decode(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(ref s) = params.stop {
-                job = job.with_stop(s.clone());
-            }
+            job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
-                job = job.with_policy(dp);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(dp)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
@@ -137,11 +137,11 @@ pub(crate) fn dyn_push_decode(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(ref s) = params.stop {
-                job = job.with_stop(s.clone());
-            }
+            job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
-                job = job.with_policy(dp);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(dp)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
@@ -262,7 +262,9 @@ pub(crate) fn dyn_animation_frame_decoder(
         job.set_limits(to_resource_limits(lim));
     }
     if let Some(dp) = params.decode_policy {
-        job.set_policy(dp);
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(dp)
+            .map_err(|e| at!(CodecError::from_codec_boxed(format, e)))?;
     }
     if params.extract_gain_map {
         job.set_extract_gain_map(true);
@@ -341,12 +343,12 @@ impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
 
     fn render_next_frame_owned(
         &mut self,
-        stop: Option<&dyn enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> core::result::Result<
         Option<zencodec::decode::OwnedAnimationFrame>,
         zencodec::decode::BoxedError,
     > {
-        let frame = self.inner.render_next_frame_owned(stop)?;
+        let frame = self.inner.render_next_frame_owned(pulse)?;
         if let Some(f) = &frame {
             let px = f.pixels();
             self.charge(px.width(), px.rows())?;
@@ -356,10 +358,10 @@ impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
 
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
         sink: &mut dyn zencodec::decode::DecodeRowSink,
     ) -> core::result::Result<Option<OutputInfo>, zencodec::decode::BoxedError> {
-        let out = self.inner.render_next_frame_to_sink(stop, sink)?;
+        let out = self.inner.render_next_frame_to_sink(pulse, sink)?;
         if let Some(info) = &out {
             self.charge(info.width, info.height)?;
         }
@@ -420,11 +422,11 @@ pub(crate) fn dyn_streaming_decoder(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(ref s) = params.stop {
-                job = job.with_stop(s.clone());
-            }
+            job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
-                job = job.with_policy(dp);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(dp)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             if params.extract_gain_map {
                 job = job.with_extract_gain_map(true);
@@ -464,11 +466,11 @@ pub(crate) fn dyn_streaming_decoder(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(ref s) = params.stop {
-                job = job.with_stop(s.clone());
-            }
+            job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
-                job = job.with_policy(dp);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(dp)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             let dec = job
                 .streaming_decoder(Cow::Owned(params.data.to_vec()), params.preferred)
@@ -484,11 +486,11 @@ pub(crate) fn dyn_streaming_decoder(
             if let Some(lim) = params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
-            if let Some(ref s) = params.stop {
-                job = job.with_stop(s.clone());
-            }
+            job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
-                job = job.with_policy(dp);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(dp)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             use whereat::ResultAtExt as _;
             let dec = whereat::at_crate!(
@@ -569,7 +571,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub metadata_policy: zencodec::MetadataPolicy,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<StopToken>,
+    pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
     pub canvas_width: u32,
     pub canvas_height: u32,
@@ -587,9 +589,7 @@ pub(crate) fn dyn_animation_frame_encoder(
             use zencodec::encode::{EncodeJob as _, EncoderConfig as _};
             let config = $config;
             let mut job = config.job();
-            if let Some(s) = _params.stop {
-                job = job.with_stop(s);
-            }
+            job = job.with_pulse(_params.pulse);
             if let Some(lim) = _params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
@@ -597,7 +597,9 @@ pub(crate) fn dyn_animation_frame_encoder(
                 job = job.with_metadata_policy(meta, _params.metadata_policy);
             }
             if let Some(ep) = _params.encode_policy {
-                job = job.with_policy(ep);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(ep)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             job = job.with_canvas_size(_params.canvas_width, _params.canvas_height);
             if let Some(lc) = _params.loop_count {

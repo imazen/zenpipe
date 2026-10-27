@@ -313,3 +313,26 @@ and lint against zencodec `f384e4c7`. The recipe verifies exactly one local
 zencodec in the resolved graph and restores the export's manifest/config/lock.
 It catches the duplicate-type problem that a partial git-pin update introduces.
 No zenpixels change was required for this migration.
+
+## Planned encoder startup (2026-10-27)
+
+Each prepared route's retained job is planned against the declared output rows
+(width, height, converted descriptor and the conversion's output color) with
+`EncodeJob::plan_encode` before `Question::Transcode`. A job that refuses that
+color, or cannot take one ordered row pass, leaves the offered routes with its
+native cause. The selected job starts with `Encoder::begin_declared` on the same
+declaration; startup that differs from the admitted plan refuses before any row
+is pushed or byte produced. The encoder no longer learns the output color only
+from job metadata.
+
+zenpixels-convert keeps `OutputPlan`'s own output context private, so the adapter
+rebuilds it from the plan's public carriers (ICC and CICP; diffuse white carries
+over because HDR routes refuse earlier) and refuses if the first converted batch
+carries anything else. A public `OutputPlan::output_context()` would remove that
+reconstruction.
+
+Verified output still requires the complete file: the adapter decodes the result
+and checks its metadata and color before returning it. Live publication would
+expose bytes before those checks, so this route stays finish-first by design. The
+planned row driver in `zenpipe::io` (see `docs/io.md`) offers live schedules for
+pipelines without output postconditions.

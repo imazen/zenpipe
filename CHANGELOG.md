@@ -1085,6 +1085,43 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ## zencodecs
 
+### zencodec 0.2 Pulse family pin (2026-10-27)
+
+#### QUEUED BREAKING CHANGES
+
+- `DecodeRequest::with_stop` / `EncodeRequest::with_stop` / `ScrubRequest::with_stop`
+  become `with_pulse(SharedPulse)`; the `StopToken` re-export becomes `SharedPulse`,
+  `Pulse` and `NoPulse`; `metadata::Services` methods take `&dyn zencodec::Pulse`;
+  animation frame decoders take `Option<&dyn Pulse>`; `metadata::Error::Stopped(reason)`
+  keeps non-cancellation stop reasons.
+
+#### Changed
+
+- One retained `SharedPulse` reaches every codec job through `with_pulse`
+  (zencodec `79676215`); nothing is narrowed into a cancellation-only token.
+- Checked transcodes plan each retained encoder job against the declared output
+  rows before the joint resolver question (`EncodeJob::plan_encode`), exclude
+  routes that cannot take one ordered row pass with their native cause, and
+  start the selected job with `begin_declared` and the conversion's output color,
+  comparing startup with the admitted plan before any row or byte. The first
+  converted batch must carry the declared color.
+- Decode and encode policies reach every codec job through the checked setters
+  (`try_set_policy`), in each adapter, dispatch path and dyn path. A policy the
+  codec cannot enforce now refuses with `CodecError::Codec` around
+  `UnsupportedOperation::DecodePolicy` / `EncodePolicy`; the setters that
+  zencodec 0.2 deprecates stored or ignored it. At the pinned heads zenpng's
+  decode job accepts only `DecodePolicy::none()`, zenjpeg's refuses
+  `allow_truncated: Some(true)` and `strict`, and both encode jobs accept only
+  `EncodePolicy::none()` or `Verbatim` color. So `imageflow_compat`'s
+  `allow_truncated: Some(false)` now refuses PNG decodes, and `EncodeRequest`
+  strip/embed policies and `Compact`/`Compatibility` color emission refuse for
+  JPEG and PNG, until those codecs qualify the fields.
+- Unreleased review pins in every manifest and standalone lock (root, fuzz,
+  zencodecs/fuzz, demo, metadata-services): zencodec `79676215` (draft PR 168;
+  one admitted strip per coroutine step), zenjpeg `8672e549`, zenpng `5422b6d2`,
+  zenbitmaps `9ad4582b`, ultrahdr-core `cc57c57a`; `thiserror` 2.0.21 where
+  zenbitmaps requires it. Not releasable until those ship.
+
 ### Checked transcode review integration (2026-10-27)
 
 - Supply explicit opaque-profile retention evidence to the checked resolver.

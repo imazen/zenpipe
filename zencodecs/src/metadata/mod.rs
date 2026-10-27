@@ -30,6 +30,8 @@ pub enum Error {
     Service(&'static str),
     /// Cooperative cancellation was requested.
     Cancelled,
+    /// A deadline or another cooperative pulse reason.
+    Stopped(enough::StopReason),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -37,6 +39,14 @@ impl core::fmt::Display for Error {
     }
 }
 impl core::error::Error for Error {}
+
+/// Keep the caller's stop reason: only cancellation is `Cancelled`.
+pub(super) fn stopped(reason: enough::StopReason) -> Error {
+    match reason {
+        enough::StopReason::Cancelled => Error::Cancelled,
+        other => Error::Stopped(other),
+    }
+}
 
 /// Compression of metadata, never image samples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +75,7 @@ pub trait Services {
         _descriptive: &[u8],
         _required: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn zencodec::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported("XMP merge service not supplied"))
     }
@@ -76,7 +86,7 @@ pub trait Services {
         &self,
         _xml: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn zencodec::Pulse,
     ) -> Result<Option<Vec<u8>>, Error> {
         Err(Error::Unsupported("XMP editing service not supplied"))
     }
@@ -86,7 +96,7 @@ pub trait Services {
         &self,
         _icc: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn zencodec::Pulse,
     ) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
@@ -96,7 +106,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn zencodec::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata decompression service not supplied",
@@ -108,7 +118,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn zencodec::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata compression service not supplied",
@@ -268,7 +278,7 @@ pub struct ScrubRequest<'a> {
     max_output: usize,
     max_metadata: usize,
     max_carriers: usize,
-    stop: &'a dyn enough::Stop,
+    pulse: &'a dyn zencodec::Pulse,
 }
 impl<'a> ScrubRequest<'a> {
     /// Borrow encoded input. No parsing or allocation occurs yet.
@@ -284,7 +294,7 @@ impl<'a> ScrubRequest<'a> {
             max_output: 512 << 20,
             max_metadata: 16 << 20,
             max_carriers: 65_536,
-            stop: &enough::Unstoppable,
+            pulse: &zencodec::NoPulse,
         }
     }
     /// EXIF retention. Source XMP retention requires explicit `with_xmp_editing`.
@@ -331,8 +341,9 @@ impl<'a> ScrubRequest<'a> {
         self
     }
     /// Cooperative cancellation, checked between carriers and long byte walks.
-    pub fn with_stop(mut self, stop: &'a dyn enough::Stop) -> Self {
-        self.stop = stop;
+    /// Services receive this same pulse.
+    pub fn with_pulse(mut self, pulse: &'a dyn zencodec::Pulse) -> Self {
+        self.pulse = pulse;
         self
     }
     /// Validate and plan the entire rewrite before any output is emitted.
@@ -366,7 +377,7 @@ impl<'a> ScrubRequest<'a> {
         ))
     }
     fn check(&self) -> Result<(), Error> {
-        self.stop.check().map_err(|_| Error::Cancelled)
+        self.pulse.check().map_err(stopped)
     }
     fn packet(&self, size: usize) -> Result<(), Error> {
         if size > self.max_metadata {
@@ -386,7 +397,7 @@ impl<'a> ScrubRequest<'a> {
         }
         let out = self
             .services()?
-            .rewrite_xmp(xml, self.max_metadata, self.stop)?;
+            .rewrite_xmp(xml, self.max_metadata, self.pulse)?;
         if let Some(ref bytes) = out {
             self.packet(bytes.len())?;
         }
@@ -405,7 +416,7 @@ impl<'a> ScrubRequest<'a> {
         }
         let out = self
             .services()?
-            .normalize_icc(bytes, self.max_metadata, self.stop)?;
+            .normalize_icc(bytes, self.max_metadata, self.pulse)?;
         if let Some(ref bytes) = out {
             self.packet(bytes.len())?;
             if bytes.len() < 128 || bytes.get(36..40) != Some(b"acsp") {
@@ -419,7 +430,7 @@ impl<'a> ScrubRequest<'a> {
         self.packet(bytes.len())?;
         let out = self
             .services()?
-            .decompress(kind, bytes, self.max_metadata, self.stop)?;
+            .decompress(kind, bytes, self.max_metadata, self.pulse)?;
         self.packet(out.len())?;
         self.check()?;
         Ok(out)

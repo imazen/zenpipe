@@ -39,7 +39,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
         }
         let data = &req.input[pos + 8..end - 4];
         let range = pos..end;
-        let crc = crc32(&req.input[pos + 4..end - 4], req.stop)?;
+        let crc = crc32(&req.input[pos + 4..end - 4], req.pulse)?;
         if crc != be32(&req.input[end - 4..end])? {
             return Err(Error::Malformed("PNG CRC"));
         }
@@ -168,7 +168,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                     range,
                     "EXIF",
                     Action::Rewrite,
-                    Some(Cow::Owned(chunk(&kind, tiff, req.stop)?)),
+                    Some(Cow::Owned(chunk(&kind, tiff, req.pulse)?)),
                 )?;
             }
             b"iCCP" => {
@@ -193,7 +193,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                             Compression::Zlib,
                             &normalized,
                             req.max_metadata,
-                            req.stop,
+                            req.pulse,
                         )?;
                         req.packet(compressed.len())?;
                         let body = [b"ICC\0\0".as_slice(), &compressed].concat();
@@ -202,7 +202,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                             range,
                             "ICC",
                             Action::Rewrite,
-                            Some(Cow::Owned(chunk(&kind, &body, req.stop)?)),
+                            Some(Cow::Owned(chunk(&kind, &body, req.pulse)?)),
                         )?;
                     } else {
                         let body = [b"ICC\0\0".as_slice(), &data[zero + 2..]].concat();
@@ -211,7 +211,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                             range,
                             "ICC (opaque, name normalized)",
                             Action::OpaqueIcc,
-                            Some(Cow::Owned(chunk(&kind, &body, req.stop)?)),
+                            Some(Cow::Owned(chunk(&kind, &body, req.pulse)?)),
                         )?;
                     }
                 } else {
@@ -223,7 +223,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                         range,
                         "ICC (opaque, name normalized)",
                         Action::OpaqueIcc,
-                        Some(Cow::Owned(chunk(&kind, &body, req.stop)?)),
+                        Some(Cow::Owned(chunk(&kind, &body, req.pulse)?)),
                     )?;
                 }
             }
@@ -243,7 +243,7 @@ pub(super) fn plan<'a>(req: &ScrubRequest<'a>) -> Result<Plan<'a>, Error> {
                             range,
                             "XMP",
                             Action::Rewrite,
-                            Some(Cow::Owned(chunk(b"iTXt", &body, req.stop)?)),
+                            Some(Cow::Owned(chunk(b"iTXt", &body, req.pulse)?)),
                         )?;
                     } else {
                         out.remove(req, range, "XMP")?;
@@ -424,7 +424,7 @@ fn read_xmp(req: &ScrubRequest<'_>, data: &[u8]) -> Result<Vec<u8>, Error> {
 pub(super) fn chunk(
     kind: &[u8; 4],
     data: &[u8],
-    stop: &dyn enough::Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<Vec<u8>, Error> {
     let len = u32::try_from(data.len()).map_err(|_| Error::Limit("PNG chunk size"))?;
     let mut out = Vec::new();
@@ -433,7 +433,7 @@ pub(super) fn chunk(
     out.extend_from_slice(&len.to_be_bytes());
     out.extend_from_slice(kind);
     out.extend_from_slice(data);
-    let crc = crc32(&out[4..], stop)?;
+    let crc = crc32(&out[4..], pulse)?;
     out.extend_from_slice(&crc.to_be_bytes());
     Ok(out)
 }
@@ -456,10 +456,10 @@ const CRC_TABLE: [u32; 256] = {
     }
     table
 };
-fn crc32(data: &[u8], stop: &dyn enough::Stop) -> Result<u32, Error> {
+fn crc32(data: &[u8], pulse: &dyn zencodec::Pulse) -> Result<u32, Error> {
     let mut c = !0u32;
     for block in data.chunks(65536) {
-        stop.check().map_err(|_| Error::Cancelled)?;
+        pulse.check().map_err(super::stopped)?;
         for &b in block {
             c = CRC_TABLE[((c ^ b as u32) & 255) as usize] ^ (c >> 8);
         }

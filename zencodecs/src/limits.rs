@@ -23,15 +23,6 @@ pub use zencodec::ResourceLimits as Limits;
 /// don't need cancellation (zero-cost).
 pub use enough::Stop;
 
-/// Get a `&dyn Stop` reference, defaulting to `Unstoppable` if `None`.
-#[cfg(feature = "jpeg-ultrahdr")]
-pub(crate) fn stop_or_default(stop: &Option<zencodec::StopToken>) -> &dyn Stop {
-    match stop {
-        Some(s) => s,
-        None => &enough::Unstoppable,
-    }
-}
-
 /// Adapt a [`Limits`] for a codec job.
 ///
 /// Identity now that `Limits` *is* [`zencodec::ResourceLimits`] (`Copy`); kept as

@@ -81,7 +81,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     metadata: &crate::gainmap::GainMapMetadata,
     source_metadata: &zencodec::Metadata,
     limits: Option<&crate::Limits>,
-    stop: Option<&zencodec::StopToken>,
+    pulse: &crate::SharedPulse,
 ) -> crate::error::Result<crate::EncodeOutput> {
     use crate::{CodecError, ImageFormat};
     use whereat::{ResultAtExt, at_crate};
@@ -105,7 +105,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
         let result = at_crate!(zenavif::encode_rgb8(
             img.as_ref(),
             &gm_enc,
-            crate::StopToken::new(enough::Unstoppable),
+            zencodec::StopToken::new(enough::Unstoppable),
         ))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
         // Extract AV1 data from the AVIF file by re-parsing
@@ -121,7 +121,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
         let result = at_crate!(zenavif::encode_rgb8(
             img,
             &gm_enc,
-            crate::StopToken::new(enough::Unstoppable)
+            zencodec::StopToken::new(enough::Unstoppable)
         ))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
         extract_av1_from_avif(&result.avif_file)?
@@ -152,9 +152,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     if let Some(lim) = limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s.clone());
-    }
+    job = job.with_pulse(pulse.clone());
     job = job.with_canvas_size(width, height);
 
     let encoder =
