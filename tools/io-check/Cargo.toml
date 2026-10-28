@@ -26,9 +26,11 @@ whereat = "0.1.5"
 
 # ImageJob's planned output route: zenpipe's job API with JPEG/PNG nodes.
 zencodecs = { workspace = true, optional = true }
+# Node lists for ImageJob (`Box<dyn zennode::NodeInstance>`).
+zennode = { workspace = true, optional = true }
 
 [features]
-job = ["zenpipe/job", "zenpipe/nodes-jpeg", "zenpipe/nodes-png", "dep:zencodecs"]
+job = ["zenpipe/job", "zenpipe/nodes-jpeg", "zenpipe/nodes-png", "dep:zencodecs", "dep:zennode"]
 
 [[test]]
 name = "image_job"

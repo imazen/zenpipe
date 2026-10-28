@@ -211,3 +211,152 @@ fn displayed_orientation_survives_every_metadata_policy_on_both_routes() {
         "orientation not displayed upright: {wrong:#?}"
     );
 }
+
+/// For a mismatching output: which of the eight orientations of the source it
+/// equals exactly (if any), and the largest sample difference from `expected`.
+fn diagnose(shown: &[u8], w: u32, h: u32, samples: &[u8], expected: &[u8]) -> String {
+    let all = [
+        zencodec::Orientation::Identity,
+        zencodec::Orientation::FlipH,
+        zencodec::Orientation::Rotate180,
+        zencodec::Orientation::FlipV,
+        zencodec::Orientation::Transpose,
+        zencodec::Orientation::Rotate90,
+        zencodec::Orientation::Transverse,
+        zencodec::Orientation::Rotate270,
+    ];
+    let matches: Vec<_> = all
+        .iter()
+        .filter(|o| {
+            let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
+            let (r, rw, rh) = zenpipe::execute_layout::orient_image(samples, W, H, lo, 3);
+            (rw, rh) == (w, h) && r == shown
+        })
+        .collect();
+    let max_diff = if shown.len() == expected.len() {
+        shown
+            .iter()
+            .zip(expected)
+            .map(|(a, b)| a.abs_diff(*b))
+            .max()
+            .unwrap_or(0)
+    } else {
+        u8::MAX
+    };
+    let differing = shown.iter().zip(expected).filter(|(a, b)| a != b).count();
+    format!(
+        "equals source oriented {matches:?}; max sample diff {max_diff}; {differing} samples differ"
+    )
+}
+
+#[test]
+fn an_orient_node_renders_the_orientation_once_on_both_routes() {
+    // The node renders the source orientation into the pixels, so the output
+    // must say Identity: a kept EXIF tag would make a viewer rotate twice.
+    use zenpipe::job::MetadataPolicy;
+    let o = zencodec::Orientation::Rotate90;
+    let (samples, input) = oriented_png_input(o);
+    let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
+    let (expected, ew, eh) = zenpipe::execute_layout::orient_image(&samples, W, H, lo, 3);
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+        vec![Box::new(zenpipe::zennode_defs::Orient {
+            orientation: i32::from(o.to_exif()),
+        })];
+    let mut wrong = Vec::new();
+    for policy in [
+        MetadataPolicy::PreserveAll,
+        MetadataPolicy::WebDefault,
+        MetadataPolicy::StripAll,
+    ] {
+        for planned in [false, true] {
+            let lossless = CodecIntent {
+                lossless: Some(zencodecs::BoolKeep::True),
+                ..intent(ImageFormat::Png)
+            };
+            let mut job = ImageJob::new()
+                .add_input(0, input.clone())
+                .add_output(1)
+                .with_intent(lossless)
+                .with_metadata_policy(policy)
+                .with_nodes(&nodes);
+            if planned {
+                job = job.with_output_policy(PolicySet::new());
+            }
+            let cell = format!("{policy:?} planned={planned}");
+            match job.run() {
+                Ok(result) => {
+                    let (w, h, shown) = displayed(&result.encode_results[0].bytes);
+                    let ok = (w, h) == (ew, eh) && shown == expected;
+                    eprintln!("{cell} with an orient node: displayed {w}x{h}, upright {ok}");
+                    if !ok {
+                        eprintln!("  {}", diagnose(&shown, w, h, &samples, &expected));
+                    }
+                    if !ok {
+                        wrong.push(format!("{cell}: displayed {w}x{h}, not the upright source"));
+                    }
+                }
+                Err(e) => wrong.push(format!("{cell}: {e}")),
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "orientation rendered twice or lost: {wrong:#?}"
+    );
+}
+
+#[test]
+fn autorotate_displays_upright_on_both_routes() {
+    // `autorotate=true` becomes `Orient { orientation: 0 }`, a sentinel for
+    // "the EXIF orientation found at decode". Whether the pixels are rendered
+    // or the orientation is carried, a viewer must see the upright source.
+    use zenpipe::job::MetadataPolicy;
+    let o = zencodec::Orientation::Rotate90;
+    let (samples, input) = oriented_png_input(o);
+    let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
+    let (expected, ew, eh) = zenpipe::execute_layout::orient_image(&samples, W, H, lo, 3);
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> =
+        vec![Box::new(zenpipe::zennode_defs::Orient { orientation: 0 })];
+    let mut wrong = Vec::new();
+    for policy in [
+        MetadataPolicy::PreserveAll,
+        MetadataPolicy::WebDefault,
+        MetadataPolicy::StripAll,
+    ] {
+        for planned in [false, true] {
+            let lossless = CodecIntent {
+                lossless: Some(zencodecs::BoolKeep::True),
+                ..intent(ImageFormat::Png)
+            };
+            let mut job = ImageJob::new()
+                .add_input(0, input.clone())
+                .add_output(1)
+                .with_intent(lossless)
+                .with_metadata_policy(policy)
+                .with_nodes(&nodes);
+            if planned {
+                job = job.with_output_policy(PolicySet::new());
+            }
+            let cell = format!("{policy:?} planned={planned}");
+            match job.run() {
+                Ok(result) => {
+                    let bytes = &result.encode_results[0].bytes;
+                    let (sw, sh, _) = decode_png(bytes);
+                    let (w, h, shown) = displayed(bytes);
+                    let ok = (w, h) == (ew, eh) && shown == expected;
+                    eprintln!(
+                        "{cell} with autorotate: stored {sw}x{sh}, displayed {w}x{h}, upright {ok}"
+                    );
+                    if !ok {
+                        wrong.push(format!("{cell}: displayed {w}x{h}, not the upright source"));
+                    }
+                }
+                Err(e) => wrong.push(format!("{cell}: {e}")),
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "autorotate not displayed upright: {wrong:#?}"
+    );
+}

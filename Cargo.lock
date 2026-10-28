@@ -5146,6 +5146,7 @@ dependencies = [
  "zencodecs",
  "zenjpeg",
  "zenlayout 0.2.2",
+ "zennode",
  "zenpipe",
  "zenpixels",
  "zenpixels-convert",
