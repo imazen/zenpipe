@@ -57,7 +57,7 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # workspace binds a local sibling checkout, so a git source adds no second copy
 # of any crate and needs nothing cloned. Each is removable the moment its crate
 # publishes the version zenpipe asks for.
-zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
 # Same tested decoder revision as the root, enforced by check-decoder-pins.py.
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }

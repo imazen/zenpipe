@@ -184,7 +184,7 @@ zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b
 # Pattern B error boundary (`type Error = At<zencodec::CodecError>`) and made
 # `zencodec` a required, always-on dependency (zengif#13); crates.io 0.7.3
 # predates both changes.
-zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
 # Coordinated animation/native-12/color contract. This directly selects the
 # managed rav1d-safe decoder; a registry patch cannot replace a git dependency.
 # The former ARM film-grain blocker (rav1d-safe#526) was fixed by #527,

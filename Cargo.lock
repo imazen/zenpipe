@@ -4884,7 +4884,7 @@ dependencies = [
 [[package]]
 name = "zengif"
 version = "0.8.0"
-source = "git+https://github.com/imazen/zengif?rev=469a893fcbce40d96b8602560390e79891bc5d3d#469a893fcbce40d96b8602560390e79891bc5d3d"
+source = "git+https://github.com/imazen/zengif?rev=efb7e43bee86df097f572589dc17b2a9903faa3f#efb7e43bee86df097f572589dc17b2a9903faa3f"
 dependencies = [
  "bytemuck",
  "enough",

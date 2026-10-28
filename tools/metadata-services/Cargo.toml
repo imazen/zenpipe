@@ -53,7 +53,7 @@ imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
-zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }

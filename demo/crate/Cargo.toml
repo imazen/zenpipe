@@ -74,7 +74,7 @@ zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c6
 # zenbitmaps main is 0.2.0 (At<BitmapError>); crates.io tops out at 0.1.5.
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
 # zengif main is 0.8.0 (Pattern B error boundary, zencodec always-on).
-zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
 # zenraw / zenpdf: registry 0.2.0 of both predates the CategorizedError
 # taxonomy; their mains are on zencodec 0.1.26.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
