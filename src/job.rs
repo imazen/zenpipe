@@ -744,8 +744,7 @@ impl<'a> ImageJob<'a> {
             .any(|n| n.schema().id == "zenpipe.riapi.frame");
         if image_info.is_animation() && !wants_single_frame {
             let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
-            let deadline = self.deadline();
-            let stop: Option<&dyn enough::Stop> = deadline.as_ref().map(|d| d as &dyn enough::Stop);
+            let control = self.control();
             let (hint_q, hint_e) = decision_hint_overrides(&decision);
             if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
                 input_bytes,
@@ -758,7 +757,7 @@ impl<'a> ImageJob<'a> {
                 hint_q.unwrap_or(decision.quality.quality),
                 decision.lossless,
                 hint_e.or(decision.quality.effort),
-                stop,
+                &control,
                 self.limits.as_ref().and_then(|l| l.max_frames),
             )? {
                 return Ok(JobResult {
@@ -937,6 +936,17 @@ impl<'a> ImageJob<'a> {
         self.limits.as_ref().and_then(|l| l.to_deadline())
     }
 
+    /// The job's one operation control: its [`deadline`](Self::deadline) as a
+    /// cancellation-only pulse, or the quiet default when no limit is set.
+    fn control(&self) -> zencodec::SharedPulse {
+        match self.deadline() {
+            Some(deadline) => {
+                zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
+            }
+            None => zencodec::SharedPulse::default(),
+        }
+    }
+
     /// The planned route of [`stream_encode`](Self::stream_encode): retain the
     /// configured job, declare the rows' color, plan, admit the schedule, then
     /// read rows and publish into memory.
@@ -977,12 +987,7 @@ impl<'a> ImageJob<'a> {
             storage,
             limits.and_then(|l| l.max_output_bytes).unwrap_or(u64::MAX),
         );
-        let pulse = match self.deadline() {
-            Some(deadline) => {
-                zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
-            }
-            None => zencodec::SharedPulse::default(),
-        };
+        let pulse = self.control();
         let mut bytes = alloc::vec::Vec::new();
         zencodec_io::row_encode::encode_dyn_job(
             configured.job,
@@ -1180,6 +1185,9 @@ pub(crate) fn decision_hint_overrides(
 /// Returns `Ok(None)` when the target format has no animation encoder
 /// (static formats like JPEG); callers fall back to single-frame behavior.
 /// Shared by [`ImageJob`] and the imageflow-compat executor.
+///
+/// `control` is the operation's one control. It is checked between frames and
+/// by each frame's pipeline.
 #[allow(clippy::too_many_arguments)] // crate-internal plumbing
 pub(crate) fn transcode_animated_nodes(
     data: &[u8],
@@ -1192,7 +1200,7 @@ pub(crate) fn transcode_animated_nodes(
     quality: f32,
     lossless: bool,
     effort: Option<u32>,
-    stop: Option<&dyn enough::Stop>,
+    control: &zencodec::SharedPulse,
     max_frames: Option<u32>,
 ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
     // Animation decoder (frames arrive composited at canvas size).
@@ -1257,7 +1265,7 @@ pub(crate) fn transcode_animated_nodes(
         out_h,
         crate::format::RGBA8_SRGB,
         |frame_src, _idx| Ok(crate::bridge::build_pipeline(frame_src, nodes, converters)?.source),
-        stop.unwrap_or(&enough::Unstoppable),
+        control,
         max_frames,
     )?;
 
