@@ -14,6 +14,10 @@ use rgb::Rgb;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
 use zenpixels::PixelSlice;
 
+#[cfg(feature = "avif-encode")]
+#[path = "avif_capability/orientation.rs"]
+mod orientation;
+
 // ─── Inline fixtures (avoid common/mod.rs feature drift) ──────────────────
 
 fn rgb8_image(w: usize, h: usize) -> ImgVec<Rgb<u8>> {
