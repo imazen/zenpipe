@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 zencodecs = { path = "../../zencodecs", default-features = false, features = ["std", "jpeg", "metadata"] }
 zencodec = { version = ">=0.1.27, <0.3.0" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "008b93c31c57578874cc7518a32f996454dd6694", features = ["xmp"] }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "79676215c037bf222c414198813e4b4f6b6efb96", features = ["xmp"] }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 xmpkit = { version = "=0.1.6", default-features = false, features = ["core"] }
 roxmltree = { version = "0.21", default-features = false, features = ["positions"] }
@@ -25,18 +25,18 @@ enough = "0.4"
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "008b93c31c57578874cc7518a32f996454dd6694" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "79676215c037bf222c414198813e4b4f6b6efb96" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "cc57c57abc491001c69ca85dab8213102df93825" }
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "7f13367f8f2d8ad78f60c9638c07214997451f54" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
@@ -47,7 +47,7 @@ imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "adc96ccad471a2d4c1b5fe9821f91b249580f300" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
 zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }

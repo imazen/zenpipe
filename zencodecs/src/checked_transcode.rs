@@ -293,8 +293,8 @@ impl<'a> TranscodeRequest<'a> {
         resolver: &mut R,
     ) -> Result<Outcome<EncodeOutput>, At<Error>> {
         let mut cursor = SliceCursor::new(self.io.read_size);
-        self.execute(codecs, resolver, |held, stop| {
-            Ok(cursor.next(input, held, stop)?)
+        self.execute(codecs, resolver, |held, pulse| {
+            Ok(cursor.next(input, held, pulse)?)
         })
     }
 
@@ -322,8 +322,8 @@ impl<'a> TranscodeRequest<'a> {
         R: PolicyResolver + ?Sized,
     {
         let mut cursor = ReadAtCursor::new(self.io);
-        self.execute(codecs, resolver, |held, stop| {
-            Ok(cursor.next(source, held, stop)?)
+        self.execute(codecs, resolver, |held, pulse| {
+            Ok(cursor.next(source, held, pulse)?)
         })
     }
 
@@ -335,7 +335,7 @@ impl<'a> TranscodeRequest<'a> {
     ) -> Result<Outcome<EncodeOutput>, At<Error>>
     where
         R: PolicyResolver + ?Sized,
-        F: FnMut(&mut Held<'_>, &dyn enough::Stop) -> Result<Yield<ControlledEvent>, Cause>,
+        F: FnMut(&mut Held<'_>, &dyn zencodec::Pulse) -> Result<Yield<ControlledEvent>, Cause>,
     {
         let mut execution = execution::Execution::<operation::PreparedEncode>::new(self, codecs);
         let result = (|| {
@@ -344,7 +344,7 @@ impl<'a> TranscodeRequest<'a> {
             let mut held = ControlledStepper::new(decoder, &mut destination);
             loop {
                 execution.before_step();
-                let event = next(&mut held, codecs.stop())
+                let event = next(&mut held, codecs.pulse())
                     .inspect_err(|error| execution.step_error(error))?;
                 if execution.advance(&mut held, event, resolver)? {
                     break;

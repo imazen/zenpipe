@@ -144,7 +144,9 @@ fn dropping_or_cancelling_a_pending_future_releases_admitted_source() {
     let input = fixture(true);
     for cancel in [false, true] {
         let stopped = Arc::new(AtomicBool::new(false));
-        let codecs = codecs().with_stop(StopToken::new(Stop(stopped.clone())));
+        let codecs = codecs().with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(Stop(
+            stopped.clone(),
+        ))));
         let budget = StorageBudget::new(512 * 1024, 16);
         let request = request(budget.clone()).with_io_options(options());
         let mut source = Network::new(&input, 7, false);

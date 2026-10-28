@@ -393,10 +393,27 @@ fn cancellation_is_observed_before_parsing() {
     }
     assert_eq!(
         ScrubRequest::new(b"data")
-            .with_stop(&Stop)
+            .with_pulse(&zencodec::how_far::StopOnly::new(Stop))
             .plan()
             .unwrap_err(),
         Error::Cancelled
+    );
+}
+
+#[test]
+fn a_deadline_keeps_its_stop_reason() {
+    struct Late;
+    impl enough::Stop for Late {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            Err(enough::StopReason::TimedOut)
+        }
+    }
+    assert_eq!(
+        ScrubRequest::new(b"data")
+            .with_pulse(&zencodec::how_far::StopOnly::new(Late))
+            .plan()
+            .unwrap_err(),
+        Error::Stopped(enough::StopReason::TimedOut)
     );
 }
 
@@ -538,7 +555,7 @@ mod gain_map_scrub {
                 &self,
                 _: &[u8],
                 _: usize,
-                _: &dyn enough::Stop,
+                _: &dyn zencodec::Pulse,
             ) -> Result<Option<Vec<u8>>, Error> {
                 self.calls.set(self.calls.get() + 1);
                 Ok(Some(b"description".to_vec()))
@@ -548,7 +565,7 @@ mod gain_map_scrub {
                 _: &[u8],
                 required: &[u8],
                 _: usize,
-                _: &dyn enough::Stop,
+                _: &dyn zencodec::Pulse,
             ) -> Result<Vec<u8>, Error> {
                 Ok(if self.corrupt {
                     b"<invalid/>".to_vec()

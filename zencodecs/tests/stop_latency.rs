@@ -15,7 +15,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use common::{encode_rgba_test_data, encode_test_data, rgb8_image, rgba8_image};
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, StopToken};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, SharedPulse};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,12 +74,12 @@ impl enough::Stop for DelayedStop {
 fn measure_stop_latency(
     name: &str,
     cancel_delay: Duration,
-    operation: impl FnOnce(StopToken) -> Result<(), whereat::At<zencodecs::CodecError>>,
+    operation: impl FnOnce(SharedPulse) -> Result<(), whereat::At<zencodecs::CodecError>>,
 ) {
     let stop = DelayedStop::new();
     let cancel_time = stop.cancel_time.clone();
     let handle = stop.cancel_after(cancel_delay);
-    let token = StopToken::new(stop);
+    let token = SharedPulse::new(zencodec::how_far::StopOnly::new(stop));
     let start = Instant::now();
     let result = operation(token);
     let return_time = Instant::now();
@@ -118,7 +118,7 @@ fn stop_latency_jpeg_decode() {
     let data = encode_test_data(ImageFormat::Jpeg, 4096, 4096);
     measure_stop_latency("jpeg_decode", CANCEL_DELAY, |token| {
         DecodeRequest::new(&data)
-            .with_stop(token)
+            .with_pulse(token)
             .decode_full_frame()?;
         Ok(())
     });
@@ -130,7 +130,7 @@ fn stop_latency_webp_decode() {
     let data = encode_test_data(ImageFormat::WebP, 4096, 4096);
     measure_stop_latency("webp_decode", CANCEL_DELAY, |token| {
         DecodeRequest::new(&data)
-            .with_stop(token)
+            .with_pulse(token)
             .decode_full_frame()?;
         Ok(())
     });
@@ -142,7 +142,7 @@ fn stop_latency_png_decode() {
     let data = encode_test_data(ImageFormat::Png, 4096, 4096);
     measure_stop_latency("png_decode", CANCEL_DELAY, |token| {
         DecodeRequest::new(&data)
-            .with_stop(token)
+            .with_pulse(token)
             .decode_full_frame()?;
         Ok(())
     });
@@ -154,7 +154,7 @@ fn stop_latency_gif_decode() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 2048, 2048);
     measure_stop_latency("gif_decode", CANCEL_DELAY, |token| {
         DecodeRequest::new(&data)
-            .with_stop(token)
+            .with_pulse(token)
             .decode_full_frame()?;
         Ok(())
     });
@@ -166,7 +166,7 @@ fn stop_latency_avif_decode() {
     let data = encode_test_data(ImageFormat::Avif, 1024, 1024);
     measure_stop_latency("avif_decode", CANCEL_DELAY, |token| {
         DecodeRequest::new(&data)
-            .with_stop(token)
+            .with_pulse(token)
             .decode_full_frame()?;
         Ok(())
     });
@@ -183,7 +183,7 @@ fn stop_latency_jpeg_encode() {
     measure_stop_latency("jpeg_encode", CANCEL_DELAY, |token| {
         EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(50.0)
-            .with_stop(token)
+            .with_pulse(token)
             .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
@@ -196,7 +196,7 @@ fn stop_latency_webp_encode() {
     measure_stop_latency("webp_encode", CANCEL_DELAY, |token| {
         EncodeRequest::new(ImageFormat::WebP)
             .with_quality(50.0)
-            .with_stop(token)
+            .with_pulse(token)
             .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
@@ -208,7 +208,7 @@ fn stop_latency_png_encode() {
     let img = rgb8_image(4096, 4096);
     measure_stop_latency("png_encode", CANCEL_DELAY, |token| {
         EncodeRequest::new(ImageFormat::Png)
-            .with_stop(token)
+            .with_pulse(token)
             .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });
@@ -220,7 +220,7 @@ fn stop_latency_gif_encode() {
     let img = rgba8_image(2048, 2048);
     measure_stop_latency("gif_encode", CANCEL_DELAY, |token| {
         EncodeRequest::new(ImageFormat::Gif)
-            .with_stop(token)
+            .with_pulse(token)
             .encode_full_frame_rgba8(img.as_ref())?;
         Ok(())
     });
@@ -233,7 +233,7 @@ fn stop_latency_avif_encode() {
     measure_stop_latency("avif_encode", CANCEL_DELAY, |token| {
         EncodeRequest::new(ImageFormat::Avif)
             .with_quality(50.0)
-            .with_stop(token)
+            .with_pulse(token)
             .encode_full_frame_rgb8(img.as_ref())?;
         Ok(())
     });

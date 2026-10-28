@@ -6,7 +6,7 @@ use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
 use crate::{
-    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, StopToken,
+    CodecError, DecodeJob, DecodeOutput, DecoderConfig, ImageFormat, ImageInfo, Limits, SharedPulse,
 };
 use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::Decode;
@@ -22,7 +22,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
     extract_gain_map: bool,
 ) -> Result<DecodeOutput> {
@@ -39,11 +39,11 @@ pub(crate) fn decode(
     if extract_gain_map {
         job = job.with_extract_gain_map(true);
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(pulse);
     if let Some(dp) = decode_policy {
-        job = job.with_policy(dp);
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(dp)
+            .map_err(|e| whereat::at!(CodecError::from_codec(ImageFormat::Avif, e)))?;
     }
     let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;

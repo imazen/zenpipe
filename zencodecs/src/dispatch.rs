@@ -7,7 +7,7 @@
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::macros::dispatch_format;
-use crate::{CodecError, ImageFormat, Limits, Metadata, StopToken};
+use crate::{CodecError, ImageFormat, Limits, Metadata, SharedPulse};
 use alloc::boxed::Box;
 use whereat::at;
 use zencodec::encode::EncodeOutput;
@@ -25,7 +25,7 @@ pub(crate) struct EncodeParams<'a> {
     pub metadata_policy: zencodec::MetadataPolicy,
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<StopToken>,
+    pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
     /// Explicit color signal to emit (e.g. a source `source_color` resolved from
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
@@ -109,19 +109,19 @@ where
             use zencodec::encode::{EncodeJob as _, Encoder as _};
             let config = build_config(&params);
             let mut job = config.job();
-            if let Some(s) = params.stop {
-                job = job.with_stop(s);
-            }
+            job = job.with_pulse(params.pulse);
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
             if let Some(meta) = params.metadata {
                 job = job.with_metadata_policy(meta, params.metadata_policy);
             }
-            if let Some(ep) = params.encode_policy {
-                job = job.with_policy(ep);
-            }
             let format = C::format();
+            if let Some(ep) = params.encode_policy {
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(ep)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            }
             let enc = job
                 .encoder()
                 .map_err(|e| at!(CodecError::from_codec(format, e)))?;
@@ -166,7 +166,7 @@ pub trait AnyEncoder: Send + Sync {
         pixels: PixelSlice<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
-        stop: Option<StopToken>,
+        pulse: SharedPulse,
     ) -> Result<EncodeOutput>;
 
     /// Encode sRGB RGBA8 pixels from an `ImgRef`.
@@ -188,7 +188,7 @@ pub trait AnyEncoder: Send + Sync {
         } else {
             typed.erase()
         };
-        self.encode_pixels(pixels, None, None, None)
+        self.encode_pixels(pixels, None, None, SharedPulse::default())
     }
 }
 
@@ -210,7 +210,7 @@ where
         pixels: PixelSlice<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
-        stop: Option<StopToken>,
+        pulse: SharedPulse,
     ) -> Result<EncodeOutput> {
         use zencodec::encode::{EncodeJob as _, Encoder as _};
 
@@ -232,9 +232,7 @@ where
         let adapted_pixels = adapted.as_slice();
 
         let mut job = self.clone().job();
-        if let Some(s) = stop {
-            job = job.with_stop(s);
-        }
+        job = job.with_pulse(pulse);
         if let Some(m) = metadata {
             // Type-erased convenience path carries no policy; embed verbatim
             // (PreserveExact also reconciles a stale EXIF orientation tag).
@@ -301,19 +299,19 @@ where
     use zencodec::encode::EncodeJob as _;
     let config = build_config(&params);
     let mut job = config.job();
-    if let Some(s) = params.stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(params.pulse);
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
     if let Some(meta) = params.metadata {
         job = job.with_metadata_policy(meta, params.metadata_policy);
     }
-    if let Some(ep) = params.encode_policy {
-        job = job.with_policy(ep);
-    }
     let format = C::format();
+    if let Some(ep) = params.encode_policy {
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(ep)
+            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+    }
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;

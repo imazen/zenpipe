@@ -12,7 +12,7 @@
 mod common;
 
 use common::{encode_rgba_test_data, encode_test_data, rgb8_image, rgba8_image};
-use zencodecs::{CodecError, DecodeRequest, EncodeRequest, ImageFormat, Limits, StopToken};
+use zencodecs::{CodecError, DecodeRequest, EncodeRequest, ImageFormat, Limits, SharedPulse};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,7 +64,9 @@ fn is_limit_error(err: &whereat::At<CodecError>) -> bool {
 fn stop_decode_jpeg() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
     let result = DecodeRequest::new(&data)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -80,7 +82,9 @@ fn stop_decode_jpeg() {
 fn stop_decode_webp() {
     let data = encode_test_data(ImageFormat::WebP, 256, 256);
     let result = DecodeRequest::new(&data)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -96,7 +100,9 @@ fn stop_decode_webp() {
 fn stop_decode_gif() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 128, 128);
     let result = DecodeRequest::new(&data)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -113,7 +119,9 @@ fn stop_decode_gif() {
 fn stop_decode_avif() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
     let result = DecodeRequest::new(&data)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .decode_full_frame();
     // AVIF decode may not check stop before completing for small images,
     // but it should at least not panic.
@@ -130,7 +138,9 @@ fn stop_decode_avif() {
 fn stop_decode_png() {
     let data = encode_test_data(ImageFormat::Png, 256, 256);
     let result = DecodeRequest::new(&data)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -151,7 +161,9 @@ fn stop_encode_jpeg() {
     let img = rgb8_image(256, 256);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -168,7 +180,9 @@ fn stop_encode_webp() {
     let img = rgb8_image(256, 256);
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -184,7 +198,9 @@ fn stop_encode_webp() {
 fn stop_encode_gif_rgb8() {
     let img = rgb8_image(128, 128);
     let result = EncodeRequest::new(ImageFormat::Gif)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -200,7 +216,9 @@ fn stop_encode_gif_rgb8() {
 fn stop_encode_gif_rgba8() {
     let img = rgba8_image(128, 128);
     let result = EncodeRequest::new(ImageFormat::Gif)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
@@ -218,7 +236,9 @@ fn stop_encode_avif() {
     let img = rgb8_image(64, 64);
     let result = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(50.0)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgb8(img.as_ref());
     // AVIF encode may not check stop for small images, but should not panic.
     if let Err(e) = &result {
@@ -234,7 +254,9 @@ fn stop_encode_avif() {
 fn stop_encode_png() {
     let img = rgb8_image(256, 256);
     let result = EncodeRequest::new(ImageFormat::Png)
-        .with_stop(StopToken::new(AlreadyStopped))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(
+            AlreadyStopped,
+        )))
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
