@@ -150,6 +150,12 @@ pub struct CodecConfig {
     #[cfg(feature = "avif-decode")]
     pub avif_decoder: Option<Box<avif_decode::DecoderConfig>>,
 
+    /// Complete AVIF encoder configuration, including native settings through
+    /// [`zenavif::AvifEncoderConfig::inner_mut`]. Explicit scalar AVIF overrides
+    /// take priority; generic quality/effort do not replace this configuration.
+    #[cfg(feature = "avif-encode")]
+    pub avif_encoder: Option<Box<zenavif::AvifEncoderConfig>>,
+
     /// AVIF encode quality override (0-100).
     /// When set, overrides the generic quality on EncodeRequest.
     #[cfg(feature = "avif-encode")]
@@ -189,7 +195,8 @@ impl CodecConfig {
             crate::ImageFormat::Png => self.png_compression.is_some() || self.png_filter.is_some(),
             #[cfg(feature = "avif-encode")]
             crate::ImageFormat::Avif => {
-                self.avif_quality.is_some()
+                self.avif_encoder.is_some()
+                    || self.avif_quality.is_some()
                     || self.avif_speed.is_some()
                     || self.avif_alpha_quality.is_some()
             }
@@ -257,6 +264,14 @@ impl CodecConfig {
     #[cfg(feature = "avif-decode")]
     pub fn with_avif_decoder(mut self, config: avif_decode::DecoderConfig) -> Self {
         self.avif_decoder = Some(Box::new(config));
+        self
+    }
+
+    /// Set complete AVIF encoding options without dropping native format,
+    /// color model, threading, or lossless settings.
+    #[cfg(feature = "avif-encode")]
+    pub fn with_avif_encoder(mut self, config: zenavif::AvifEncoderConfig) -> Self {
+        self.avif_encoder = Some(Box::new(config));
         self
     }
 

@@ -58,6 +58,6 @@ zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
 zengif = { git = "https://github.com/imazen/zengif" }
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305" }
 zenraw = { git = "https://github.com/imazen/zenraw" }
 zenpdf = { git = "https://github.com/imazen/zenextras" }

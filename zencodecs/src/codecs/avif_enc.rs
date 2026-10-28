@@ -33,20 +33,25 @@ pub(crate) fn build_encoding(
     lossless: bool,
     codec_config: Option<&CodecConfig>,
 ) -> zenavif::AvifEncoderConfig {
-    let mut enc = zenavif::AvifEncoderConfig::new();
+    let native = codec_config.and_then(|cfg| cfg.avif_encoder.as_deref());
+    let mut enc = native.cloned().unwrap_or_default();
 
     // Format-specific overrides from codec_config take priority
     if let Some(cfg) = codec_config {
         if let Some(q) = cfg.avif_quality {
             enc = enc.with_quality(q);
-        } else if let Some(q) = quality {
+        } else if native.is_none()
+            && let Some(q) = quality
+        {
             enc = enc.with_generic_quality(q);
         }
         // avif_speed is a direct speed value (higher = faster),
         // distinct from generic effort (higher = more work)
         if let Some(speed) = cfg.avif_speed {
             enc = enc.with_effort_u32(speed as u32);
-        } else if let Some(e) = effort {
+        } else if native.is_none()
+            && let Some(e) = effort
+        {
             enc = enc.with_generic_effort(e as i32);
         }
         if let Some(alpha_q) = cfg.avif_alpha_quality {
@@ -56,11 +61,9 @@ pub(crate) fn build_encoding(
             // AvifEncoderConfig exposes no backend setter; EncoderConfig's
             // `backend()` is a consuming builder, so swap the inner config.
             let mut inner = core::mem::take(enc.inner_mut()).backend(backend);
-            // Zenav1Svt encodes 4:2:0 only while the config default is the
-            // zenravif-oriented 4:4:4 — normalize so a backend choice alone
-            // produces an encodable config. CodecConfig carries no chroma
-            // knob, so nothing explicit is overridden.
-            if backend == zenavif::Av1Backend::Zenav1Svt {
+            // Preserve the historical backend-only default. A complete native
+            // config carries explicit chroma and must keep it unchanged.
+            if backend == zenavif::Av1Backend::Zenav1Svt && native.is_none() {
                 inner = inner.chroma_subsampling(zenavif::EncodeChromaSubsampling::Yuv420);
             }
             *enc.inner_mut() = inner;

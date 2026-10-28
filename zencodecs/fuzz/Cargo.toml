@@ -55,7 +55,7 @@ members = ["."]
 # current sibling main is 0.2.0 and cannot satisfy this requirement.
 # Use the same streaming interface revision as the production workspace.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305" }
 # Unpublished mains the root [patch.crates-io] pins (see its comments):
 # zengif 0.8 / zenwebp 0.5 / zenpng 0.2 (zencodec Pattern B error boundary),
 # zenjxl + zenjxl-decoder (mode-aware orientation API). Mirrored here because
@@ -67,7 +67,7 @@ zenjxl = { git = "https://github.com/imazen/zenjxl" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder" }
 # zenavif-parse 0.7.0 is a member of the imazen/zenavif workspace (the
 # standalone repo is archived), pinned to the same revision as the decoder.
-zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
+zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305" }
 # zenbitmaps main is 0.2.0 (PNM/BMP decode-bomb bound + At<BitmapError>); fuzz_push_decode's
 # bitmaps path needs it to be panic/OOM-safe on untrusted input (zenpipe#50).
 # heic main is 0.2.0; the registry 0.2.0 is yanked. Same entry as the root table.

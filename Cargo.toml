@@ -72,13 +72,9 @@ nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
 # AVIF backend + knob auto-tuning (`crate::avif_autotune`). OFF by default and
 # flips no default: a caller opts in by holding an `AvifAutotune`.
 #
-# Takes zenavif 0.2.x as a SEPARATELY-NAMED direct dep (`zenavif_tuner`)
-# alongside the 0.1.x edge zenpipe + zencodecs already use for decode/encode.
-# The two are semver-incompatible so they coexist, and no 0.2 type is ever
-# handed to a 0.1 API. Migrating the whole edge to 0.2.x is a real change with
-# nothing additive about it; when it happens, drop the rename and this feature
-# keeps working unchanged.
-avif-autotune = ["std", "dep:zenavif_tuner", "dep:almost-enough", "dep:imgref", "dep:rgb"]
+# Tuning and ordinary AVIF nodes share the same pinned 0.2.x native crate.
+# Enabling both must not introduce a separately named copy or a sibling path.
+avif-autotune = ["std", "dep:zenavif", "zenavif/auto-tune", "zenavif/encode", "zenavif/encode-imazen", "dep:almost-enough", "dep:imgref", "dep:rgb"]
 nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
 nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
@@ -152,26 +148,8 @@ zengif = { version = "0.8.0", default-features = false, features = ["std"], opti
 # requested here (CI resolves zenavif from the sibling clone of main, and
 # "zenavif does not have that feature" was the resolution failure since 2026-08-01).
 zenavif = { version = "0.2.0", default-features = false, optional = true }
-# zenavif 0.2.x, ONLY for `avif-autotune` (see the feature comment above). A
-# SIBLING PATH because the backend tuner needs zenavif's `auto-tune` feature,
-# whose own zenanalyze/zenpredict deps are path-pinned to `../zenanalyze` — a
-# git dep cannot resolve those. The crate is renamed so it sits beside the
-# 0.1.x dep on the line above. Requires a `../zenavif` checkout at or past
-# cdfe7b46 (the backend_tuner commit); the feature is off by default, so a
-# tree without one still builds everything else.
-#
-# That "at or past" is a CHECKOUT requirement, not a manifest one — VERIFIED
-# 2026-09-04 by building this feature against a read-only export of zenavif
-# `main` (c6c4c96) placed beside a symlink to ../zenanalyze: `cargo build -p
-# zenpipe --features avif-autotune` and `cargo test -p zenpipe --lib --features
-# avif-autotune` both pass (287 tests, incl. all four avif_autotune cases), with
-# ONE zenanalyze-api in the graph and no edit to zenavif's manifest. So if this
-# feature fails with `unresolved import zenavif_tuner::backend_tuner` (or a
-# missing AvifTune / AvifTuner / TuneSource), the sibling ../zenavif working
-# copy is simply BEHIND its own main — advance that checkout; do not change any
-# Cargo.toml here or there. zenavif main exports exactly what src/avif_autotune.rs
-# imports, under `#[cfg(all(feature = "auto-tune", feature = "encode"))]`.
-zenavif_tuner = { package = "zenavif", path = "../zenavif", version = "0.2.0", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
+# The optional tuner uses the same zenavif dependency and root git patch as
+# ordinary AVIF nodes, keeping one native crate/parser source in the graph.
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
 # itself depends on so the two unify rather than resolving twice.
@@ -411,7 +389,7 @@ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # other entry in this table on purpose: a rev pin would strand us the next time
 # zenjpeg's main bumps its zenanalyze requirement.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
-# zenpredict 0.2.x is unpublished (registry 0.1.0). `zenavif_tuner` (the
+# zenpredict 0.2.x is unpublished (registry 0.1.0). `zenavif` (the
 # sibling ../zenavif) asks for the registry `zenpredict = "0.2.0"`, which only
 # zenavif's own patch table satisfies; this entry points it at the same repo
 # as zencodecs' `picker` dep so the root graph resolves without that table.
@@ -467,10 +445,10 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # repo. And AVIF decode is not covered by CI here (no job enables
 # `avif-decode`), so a decoder change lands silently.
 #
-# WHICH REV. zenavif main a7059dcf, moved 2026-10-28 from 73be1f6e: the bump
-# pulls svtav1 339bfb4a, whose multi-tile path honors thread_count=1 without
-# reaching std::thread::scope (spawn panics on wasm32), the fix zensquoosh's
-# WASM AVIF encode needs on >4096px-wide stills. Decoder unchanged
+# WHICH REV. zenavif review f29fd4d1 (PR 76), moved from fada2db0:
+# adds 8-bit SVT 444 and source-lossless identity RGB stills, using SVT
+# d0f6edc0 (PR 28) for the still facade and identity-header repair. That
+# revision also retains the wasm-safe single-thread tile walk. Decoder unchanged
 # (rav1d-safe dfd01e32 both sides). Previously: zenavif main 5e493d39 (0.2.0,
 # rav1d-safe dfd01e32), moved
 # 2026-10-15 from 11033c95 (0.1.7, rav1d-safe 140f9145) via c6c037c0; the
@@ -495,7 +473,7 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
 # so you get two zenavif-parse instances and its `At<Error>` stops unifying.
 # `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }

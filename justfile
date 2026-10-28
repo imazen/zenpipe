@@ -487,10 +487,15 @@ current-main-corpus-inventory manifest config list output:
 test-avif-backend:
     cargo test --locked -p zencodecs --no-default-features --features std,avif-svt --test avif_backend
 
+# Native 444/source-lossless AVIF settings must survive the generic dispatcher
+test-avif-native:
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-svt,avif-decode --test avif_backend
+
 # Resolve complete standalone graphs so missing dependency edges cannot hide
 check-standalone-locks:
     #!/usr/bin/env bash
     set -euo pipefail
     for manifest in fuzz/Cargo.toml zencodecs/fuzz/Cargo.toml demo/crate/Cargo.toml wasm-size-shim/Cargo.toml tools/metadata-services/Cargo.toml; do
+        printf '%s\n' "$manifest"
         cargo metadata --locked --format-version 1 --manifest-path "$manifest" > /dev/null
     done
