@@ -160,7 +160,7 @@ impl FrameSource {
         let frame = self
             .decoder
             .render_next_frame_owned(None)
-            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
+            .map_err(codec_failure)?;
 
         match frame {
             Some(owned) => {
@@ -328,7 +328,7 @@ impl FrameSink {
 
         encoder
             .push_frame(pixels, duration_ms, None)
-            .map_err(|e| at!(PipeError::Op(e.to_string())))?;
+            .map_err(codec_failure)?;
 
         self.rows_accumulated = 0;
         Ok(())
@@ -341,9 +341,7 @@ impl FrameSink {
             .take()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        encoder
-            .finish(None)
-            .map_err(|e| at!(PipeError::Op(e.to_string())))
+        encoder.finish(None).map_err(codec_failure)
     }
 
     /// Take the encoded output (if finish_animation was called via trait).
@@ -447,6 +445,16 @@ pub fn transcode_with_stop(
         stop,
         None,
     )
+}
+
+/// A frame codec's failure: its stop as [`PipeError::Cancelled`], anything else
+/// as before.
+fn codec_failure(e: zencodec::decode::BoxedError) -> whereat::At<PipeError> {
+    if crate::error::is_codec_stop(&*e) {
+        at!(PipeError::Cancelled)
+    } else {
+        at!(PipeError::Op(e.to_string()))
+    }
 }
 
 /// Full transcode entry point with cancellation and per-iteration frame-

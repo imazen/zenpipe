@@ -17,6 +17,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 - `DecodeRequest::animation_frame_decoder` hands the request's pulse to the codec
   job, as the one-shot, push and streaming paths already did, so a request-level
   deadline stops an animation decode (control: `pulse_retention.rs`, GIF).
+- `ImageJob`'s animated route hands the job's deadline (`limits.max_duration`)
+  to its decoder and encoder jobs, so it stops inside a frame: decoder creation,
+  a frame's render or a frame's encode, not only between frames. A codec stop is
+  `PipeError::Cancelled` (it was an `Op` string), and a stop while creating the
+  encoder no longer falls back to the static route.
 
 #### Fixed (2026-10-25)
 

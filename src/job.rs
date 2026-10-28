@@ -1186,8 +1186,11 @@ pub(crate) fn decision_hint_overrides(
 /// (static formats like JPEG); callers fall back to single-frame behavior.
 /// Shared by [`ImageJob`] and the imageflow-compat executor.
 ///
-/// `control` is the operation's one control. It is checked between frames and
-/// by each frame's pipeline.
+/// `control` is the operation's one control. The decoder and encoder jobs hold
+/// it, so they stop inside a frame; the route also checks it between frames and
+/// in each frame's pipeline. Per-call pulses stay `None`. A stop anywhere is
+/// [`PipeError::Cancelled`], and nothing runs after it: not the next frame,
+/// not the static fallback.
 #[allow(clippy::too_many_arguments)] // crate-internal plumbing
 pub(crate) fn transcode_animated_nodes(
     data: &[u8],
@@ -1204,15 +1207,22 @@ pub(crate) fn transcode_animated_nodes(
     max_frames: Option<u32>,
 ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
     // Animation decoder (frames arrive composited at canvas size).
-    let mut decode_request = zencodecs::DecodeRequest::new(data).with_registry(registry);
+    let mut decode_request = zencodecs::DecodeRequest::new(data)
+        .with_registry(registry)
+        .with_pulse(control.clone());
     if let Some(cfg) = codec_config {
         decode_request = decode_request.with_codec_config(cfg);
     }
     if let Some(cl) = codec_limits {
         decode_request = decode_request.with_limits(cl);
     }
-    let decoder = at_crate!(decode_request.animation_frame_decoder())
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+    let decoder = at_crate!(decode_request.animation_frame_decoder()).map_err_at(|e| {
+        if crate::error::is_codec_stop(&e) {
+            PipeError::Cancelled
+        } else {
+            PipeError::Codec(Box::new(e))
+        }
+    })?;
     let info = decoder.info().clone();
     let (in_w, in_h) = (info.width, info.height);
 
@@ -1243,7 +1253,8 @@ pub(crate) fn transcode_animated_nodes(
     // caller keeps its single-frame behavior.
     let mut encode_request = zencodecs::EncodeRequest::new(target_format)
         .with_quality(quality)
-        .with_registry(registry);
+        .with_registry(registry)
+        .with_pulse(control.clone());
     if lossless {
         encode_request = encode_request.with_lossless(true);
     }
@@ -1255,6 +1266,8 @@ pub(crate) fn transcode_animated_nodes(
     }
     let encoder = match encode_request.animation_frame_encoder(out_w, out_h) {
         Ok(enc) => enc,
+        // A stop is the operation's refusal, not a static target.
+        Err(e) if crate::error::is_codec_stop(e.error()) => return Err(at!(PipeError::Cancelled)),
         Err(_) => return Ok(None),
     };
 
