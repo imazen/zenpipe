@@ -46,10 +46,12 @@ fn rgb8(bytes: &[u8]) -> Result<(u32, u32, String, Vec<u8>), Error> {
     let rgb = match info.color_type {
         png::ColorType::Rgb => buf,
         png::ColorType::Rgba => {
-            if buf.chunks_exact(4).any(|p| p[3] != 255) {
+            if buf.as_chunks::<4>().0.iter().any(|p| p[3] != 255) {
                 return Err(format!("opaque samples gained alpha ({stored})").into());
             }
-            buf.chunks_exact(4)
+            buf.as_chunks::<4>()
+                .0
+                .iter()
                 .flat_map(|p| [p[0], p[1], p[2]])
                 .collect()
         }

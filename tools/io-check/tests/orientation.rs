@@ -40,6 +40,7 @@ fn samples() -> Vec<u8> {
     out
 }
 
+#[allow(deprecated)] // compatibility writer; authoring a fixture
 fn exif(orientation: Orientation, private: bool) -> Vec<u8> {
     let mut exif = Exif::new(TextEncoding::Ascii);
     exif.set_orientation(orientation);

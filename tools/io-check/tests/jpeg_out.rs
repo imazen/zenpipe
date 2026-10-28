@@ -124,9 +124,9 @@ fn icc_and_orientation_reach_the_jpeg_through_the_job() {
     let p3 = p3.into_owned();
     let mut exif = Exif::new(TextEncoding::Ascii);
     exif.set_orientation(Orientation::Rotate90);
-    let meta = Metadata::none()
-        .with_icc(p3.clone())
-        .with_exif(exif.to_bytes());
+    #[allow(deprecated)] // compatibility writer; authoring a fixture
+    let exif = exif.to_bytes();
+    let meta = Metadata::none().with_icc(p3.clone()).with_exif(exif);
     // The rows are declared Display P3; the job's metadata agrees.
     let context = Arc::new(ColorContext::from_icc(p3.clone()));
     let job = zenjpeg::JpegEncoderConfig::new()
