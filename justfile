@@ -132,8 +132,14 @@ check-core-family:
 repin-native repo old new crates:
     bash scripts/repin-native.sh {{repo}} {{old}} {{new}} {{crates}}
 
+# Strict Clippy on the single-codec zencodecs subset each zenpipe `nodes-<codec>`
+# feature builds; every node feature by default, or NODE=CODEC pairs
+# (`just clippy-codec-subsets nodes-jxl=jxl-decode`).
+clippy-codec-subsets *pairs:
+    bash scripts/clippy-codec-subsets.sh {{pairs}}
+
 # Run all CI checks locally
-ci: fmt-check clippy check-pins check-core-family test fuzz-check fuzz-regression
+ci: fmt-check clippy clippy-codec-subsets check-pins check-core-family test fuzz-check fuzz-regression
 
 # Build documentation site
 site-build:

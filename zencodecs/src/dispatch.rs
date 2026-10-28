@@ -14,8 +14,49 @@ use zencodec::encode::EncodeOutput;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 /// Encoding parameters extracted from [`EncodeRequest`](crate::EncodeRequest).
+// Every field is read by some encoder; with only decoders compiled the request
+// still carries them, unread.
+#[cfg_attr(
+    not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )),
+    allow(dead_code)
+)]
 pub(crate) struct EncodeParams<'a> {
+    // Read by the encoders that map quality and effort; GIF, the bitmap
+    // formats and TIFF take neither.
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode"
+        )),
+        allow(dead_code)
+    )]
     pub quality: Option<f32>,
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode"
+        )),
+        allow(dead_code)
+    )]
     pub effort: Option<u32>,
     #[allow(dead_code)] // Not every compiled codec has a lossless configuration.
     pub lossless: bool,
@@ -23,6 +64,18 @@ pub(crate) struct EncodeParams<'a> {
     /// Retention policy applied to `metadata` at the codec boundary via
     /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
     pub metadata_policy: zencodec::MetadataPolicy,
+    // The bitmap formats and TIFF have no per-codec configuration.
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode",
+            feature = "gif"
+        )),
+        allow(dead_code)
+    )]
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub pulse: SharedPulse,
@@ -95,6 +148,20 @@ pub(crate) struct BuiltEncoder<'a> {
 /// The closure receives `EncodeParams` and returns the concrete `EncoderConfig`.
 /// Config construction happens inside the returned closure so the config's
 /// lifetime doesn't escape the function.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
 pub(crate) fn build_from_config<'a, C, F>(
     build_config: F,
     params: EncodeParams<'a>,
@@ -287,6 +354,20 @@ pub struct StreamingEncoder {
 /// Cancellation is checked once before building the encoder.
 /// For streaming encode the caller controls pacing and can check
 /// the stop token between `push_rows()` calls.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
 pub(crate) fn build_streaming_from_config<C, F>(
     build_config: F,
     params: EncodeParams<'_>,
@@ -341,6 +422,7 @@ pub struct ConfiguredJob {
 /// A required encode policy is applied with the checked setter: a codec that
 /// cannot honor it refuses here. (The streaming path keeps its legacy
 /// best-effort setter, which may ignore such a policy.)
+#[cfg(any(feature = "jpeg", feature = "png"))]
 pub(crate) fn build_job_from_config<C, F>(
     build_config: F,
     params: EncodeParams<'_>,
@@ -395,6 +477,22 @@ pub(crate) fn build_streaming_encoder(
     format: ImageFormat,
     params: EncodeParams<'_>,
 ) -> Result<StreamingEncoder> {
+    // Only the encoder arms below consume `params`.
+    #[cfg(not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )))]
+    let _ = params;
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => crate::codecs::jpeg::build_streaming(params),
@@ -423,6 +521,22 @@ pub(crate) fn build_encoder<'a>(
     format: ImageFormat,
     params: EncodeParams<'a>,
 ) -> Result<BuiltEncoder<'a>> {
+    // Only the encoder arms below consume `params`.
+    #[cfg(not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )))]
+    let _ = params;
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => Ok(crate::codecs::jpeg::build_trait_encoder(params)),

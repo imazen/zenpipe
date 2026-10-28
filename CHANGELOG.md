@@ -7,6 +7,14 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed (2026-10-28)
+
+- The decode-only JXL subset (zencodecs `zennode,jxl-decode`, which zenpipe
+  `std,nodes-jxl` builds) passes strict Clippy: encoder-only helpers, the owned
+  streaming-decoder shim and their imports are gated on the codecs that use
+  them; no signature or behavior change. `just clippy-codec-subsets` and the
+  `Codec subsets` CI job lint every `nodes-<codec>` subset.
+
 #### Fixed (2026-10-25)
 
 - The JPEG/PNG/CMS-only zencodecs build remains warning-free when WebP

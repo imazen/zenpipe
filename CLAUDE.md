@@ -116,6 +116,13 @@ threading, hdr directives, compat security. Verified remaining:
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
 
+## Known Bugs: single-codec subset warnings (fixed 2026-10-28)
+
+zenpipe `std,nodes-jxl` builds zencodecs with only `zennode,jxl-decode`; that
+subset had 13 strict-Clippy warnings (encoder-only helpers and the owned
+streaming shim compiled without a user). `just clippy-codec-subsets` lints every
+`nodes-<codec>` subset; pass NODE=CODEC pairs to check a few.
+
 ## Known Bugs: optional decoder limits warning (fixed 2026-10-25)
 
 The JPEG/PNG/CMS-only configuration exposed an unused decoder-factory limits

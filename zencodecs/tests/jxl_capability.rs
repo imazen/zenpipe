@@ -16,7 +16,9 @@
 use imgref::{ImgRef, ImgVec};
 #[cfg(feature = "jxl-encode")]
 use rgb::{Rgb, Rgba};
-use zencodecs::{DecodeRequest, ImageFormat};
+use zencodecs::DecodeRequest;
+#[cfg(feature = "jxl-encode")]
+use zencodecs::ImageFormat;
 #[cfg(feature = "jxl-encode")]
 use zencodecs::{EncodeRequest, Metadata};
 #[cfg(feature = "jxl-encode")]
@@ -89,6 +91,7 @@ fn encode_jxl_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) 
         .into_vec()
 }
 
+#[cfg(feature = "jxl-encode")]
 fn decode_full(bytes: &[u8]) -> zencodecs::DecodeOutput {
     DecodeRequest::new(bytes)
         .decode_full_frame()

@@ -37,38 +37,51 @@ pub fn estimate_encode(
     image: &ImageCharacteristics,
     compute: &ComputeEnvironment,
 ) -> Result<ResourceEstimate> {
+    #[cfg(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "gif"
+    ))]
     use zencodec::encode::EncoderConfig;
     let q = Some(quality.quality);
     let e = quality.effort;
     // Used by every per-format arm; bound here so a decode-only feature set
     // (no encoders compiled) doesn't warn on unused params.
     let _ = (q, e, codec_config, image, compute);
-    let est = match format {
+    // Each arm returns its own result, so a decode-only build (no arms) has no
+    // unreachable success path.
+    match format {
         #[cfg(feature = "jpeg")]
-        ImageFormat::Jpeg => crate::codecs::jpeg::build_encoding(q, e, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::Jpeg => Ok(crate::codecs::jpeg::build_encoding(q, e, codec_config)
+            .estimate_encode_resources(image, compute)),
         #[cfg(feature = "webp")]
         ImageFormat::WebP => {
-            crate::codecs::webp::build_encoding(q, e, quality.lossless, codec_config)
-                .estimate_encode_resources(image, compute)
+            Ok(
+                crate::codecs::webp::build_encoding(q, e, quality.lossless, codec_config)
+                    .estimate_encode_resources(image, compute),
+            )
         }
         #[cfg(feature = "png")]
         ImageFormat::Png => {
-            crate::codecs::png::build_encoding(q, e, quality.lossless, codec_config, None)
-                .estimate_encode_resources(image, compute)
+            Ok(
+                crate::codecs::png::build_encoding(q, e, quality.lossless, codec_config, None)
+                    .estimate_encode_resources(image, compute),
+            )
         }
         #[cfg(feature = "avif-encode")]
-        ImageFormat::Avif => crate::codecs::avif_enc::build_encoding(q, e, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::Avif => Ok(crate::codecs::avif_enc::build_encoding(q, e, codec_config)
+            .estimate_encode_resources(image, compute)),
         #[cfg(feature = "jxl-encode")]
-        ImageFormat::Jxl => crate::codecs::jxl_enc::build_encoding(q, e, codec_config)
-            .estimate_encode_resources(image, compute),
+        ImageFormat::Jxl => Ok(crate::codecs::jxl_enc::build_encoding(q, e, codec_config)
+            .estimate_encode_resources(image, compute)),
         #[cfg(feature = "gif")]
-        ImageFormat::Gif => crate::codecs::gif::build_gif_encoding(codec_config)
-            .estimate_encode_resources(image, compute),
-        _ => return Err(whereat::at!(CodecError::UnsupportedFormat(format))),
-    };
-    Ok(est)
+        ImageFormat::Gif => Ok(crate::codecs::gif::build_gif_encoding(codec_config)
+            .estimate_encode_resources(image, compute)),
+        _ => Err(whereat::at!(CodecError::UnsupportedFormat(format))),
+    }
 }
 
 /// Estimate decode resources for `format` **without decoding**, using a default

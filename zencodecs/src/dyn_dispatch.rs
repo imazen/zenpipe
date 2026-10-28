@@ -59,6 +59,9 @@ fn build_dyn_decoder_config(
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
 ) -> Result<Box<dyn DynDecoderConfig>> {
+    // Only the JPEG, WebP and AVIF arms read the codec config.
+    #[cfg(not(any(feature = "jpeg", feature = "webp", feature = "avif-decode")))]
+    let _ = codec_config;
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => Ok(Box::new(build_jpeg_decoder(codec_config))),
@@ -376,9 +379,24 @@ impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
 /// Wrap a concrete `StreamingDecode` into a boxed `DynStreamingDecoder`.
 ///
 /// Local shim — zencodec's `StreamingDecoderShim` is `pub(super)`, so we
-/// implement the trait directly for a newtype wrapper.
+/// implement the trait directly for a newtype wrapper. Only the formats with an
+/// owned streaming decoder construct it.
+#[cfg(any(
+    feature = "gif",
+    feature = "avif-decode",
+    feature = "heic-decode",
+    feature = "jpeg",
+    feature = "png"
+))]
 struct OwnedStreamingDecoderShim<S>(S);
 
+#[cfg(any(
+    feature = "gif",
+    feature = "avif-decode",
+    feature = "heic-decode",
+    feature = "jpeg",
+    feature = "png"
+))]
 impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreamingDecoder
     for OwnedStreamingDecoderShim<S>
 {
@@ -409,6 +427,22 @@ pub(crate) fn dyn_streaming_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,
 ) -> Result<Box<dyn zencodec::decode::DynStreamingDecoder + 'static>> {
+    // Only the owned-streaming arms below read the request.
+    #[cfg(not(any(
+        feature = "gif",
+        feature = "avif-decode",
+        feature = "heic-decode",
+        feature = "jpeg",
+        feature = "png"
+    )))]
+    let _ = params;
+    #[cfg(any(
+        feature = "gif",
+        feature = "avif-decode",
+        feature = "heic-decode",
+        feature = "jpeg",
+        feature = "png"
+    ))]
     use zencodec::decode::{DecodeJob as _, DecoderConfig as _};
 
     // For instrumented codecs that return At<E> from streaming_decoder.
