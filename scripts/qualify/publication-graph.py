@@ -27,6 +27,21 @@ def identity(package):
 
 def inspect(root, expected, before, results):
     errors, graphs, deltas, metadata = [], {}, {}, {}
+    reviewed, admitted = Counter(), Counter()
+    if expected.get('reviewed_deltas_file'):
+        ledger = json.loads((root / expected['reviewed_deltas_file']).read_text())
+        valid = ledger['schema'] == 1
+        for name, want in ledger['before_lock_sha256'].items():
+            if hashlib.sha256((before / name).read_bytes()).hexdigest() != want:
+                errors.append(f'{name}: reviewed delta baseline mismatch')
+                valid = False
+        for name, want in ledger['scope_sources'].items():
+            if expected.get(name) != want:
+                errors.append(f'{name}: reviewed delta source scope mismatch')
+                valid = False
+        if valid:
+            reviewed.update((r['lock'], r['change'], tuple(r['identity']))
+                            for r in ledger['records'])
     allowed = CORE | PIXELS | EXTRAS | {'zenavif', 'zenavif-parse', 'rav1d-safe',
                                       'tiff', 'hayro-syntax'}
     sources = {**{name: expected['core_source'] for name in CORE},
@@ -41,9 +56,14 @@ def inspect(root, expected, before, results):
         old_ids, new_ids = Counter(map(identity, old)), Counter(map(identity, packages))
         added, removed = list((new_ids-old_ids).elements()), list((old_ids-new_ids).elements())
         deltas[relative] = {'added': added, 'removed': removed}
-        for item in added + removed:
-            if item[0] not in allowed:
-                errors.append(f'{relative}: unreviewed package drift: {item}')
+        for change, items in [('added', added), ('removed', removed)]:
+            for item in items:
+                if item[0] not in allowed:
+                    record = (relative, change, item)
+                    if admitted[record] < reviewed[record]:
+                        admitted[record] += 1
+                    else:
+                        errors.append(f'{relative}: unreviewed package drift: {item}')
         tracked = {}
         for package in packages:
             name, version, source, _ = identity(package)
@@ -97,7 +117,10 @@ def inspect(root, expected, before, results):
             errors.append(f'full API profile lost features: {sorted(required-set(node["features"]))}')
     except (OSError, ValueError, KeyError, StopIteration) as error:
         errors.append(f'missing/invalid full API metadata: {error}')
-    return {'graphs': graphs, 'package_deltas': deltas, 'metadata': metadata, 'errors': errors}
+    if reviewed != admitted:
+        errors.append('reviewed delta records do not exactly match this migration')
+    return {'graphs': graphs, 'package_deltas': deltas, 'metadata': metadata,
+            'reviewed_delta_records': sum(admitted.values()), 'errors': errors}
 
 
 if __name__ == '__main__':

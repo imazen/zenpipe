@@ -1,0 +1,543 @@
+{
+  "schema": 1,
+  "scope": "Exact observed transitive deltas for core f02/pixels283/AVIF b25/rav1d b19/extras a5 with TIFF10a/hayro2ce; not a crate-name allowlist",
+  "before_lock_sha256": {
+    "Cargo.lock": "3dfcdd254e6f5b3c44efd989d350ec9579c42fa543a49ec0681e6069760b9e86",
+    "fuzz/Cargo.lock": "10cb9a1a751cc8722e9342dc625f597da421f661bb69e0037b2973c482a43e63",
+    "demo/crate/Cargo.lock": "617440264d3f9b6dcb7cd2d17a1910067958670c54cf38ea00f95b9778200d31",
+    "tools/metadata-services/Cargo.lock": "00f89a4191f29f7ac90fb397a83a0a1fce186931cd40125c55d12048e8302e2e",
+    "zencodecs/fuzz/Cargo.lock": "a7f6baec8b49fe39a0d1bb7de985fad3d314cf57a4d8505046d95f5a02fcd276",
+    "apidoc/Cargo.lock": "bb393be2fd713855f3b664b67a6f8dec5945ee588d7f98cb603aa550b33234bc"
+  },
+  "records": [
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "bitvec",
+        "1.1.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "ddcec3d12c579d40898fe0a9a358a803c23e9c52ca3c425707f81c9436211837"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "fax",
+        "0.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "70ed8646f3993cad0585c6669ffba6f7e5440a0bfb0a1f16600cae33ce7cf307"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "fearless_simd",
+        "0.7.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "f4beca3cb2444e3304ac30843cc091f44ed58932353cd492ce740067bfce6b12"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "fearless_simd",
+        "1.2.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "629c9d6b6f30b5604089e0980f4d924a013aacb1654a6cdf5d3d852224f68651"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "funty",
+        "2.0.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "glifo",
+        "0.4.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "9f1218dedd5348c1b166ec3b8b3cbca49d2f527bd43b3fa072ea5123c523ed3f"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro",
+        "0.8.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "4675ff5acd7ca41c0c34ccd2a3a154f5c86d8b5ec92bef0a114bfb194969e2af"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro-ccitt",
+        "0.4.0",
+        "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+        ""
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro-interpret",
+        "0.8.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "ac9df074ff163a63864cec9b0bf640ccbff8abf4e44481df7369ce0ac172ffbe"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro-jbig2",
+        "0.3.1",
+        "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+        ""
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro-jpeg2000",
+        "0.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "122c5f834c37a2260b9c851bb8be685cf539b2a8b94b704a931ef7d2525d5835"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "hayro-jpeg2000",
+        "0.4.1",
+        "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+        ""
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "lerc-rs",
+        "0.7.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "af29646ba82a905e2b503fabadb693be59364006155ac6e4c39db3c6863f1c56"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "likely_stable",
+        "0.1.3",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d61f7017d8abea1fc23ff7f01a8147b2656dea3aeb24d519aab6e2177eaf671c"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "lzma-rust2",
+        "0.24.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "490750560fa7851fbbf5d3ab1a8750f09350ed361ed8aed85b1e1e40587812ee"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "radium",
+        "0.7.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.4.0",
+        "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+        ""
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "read-fonts",
+        "0.43.3",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "005c8acf251756c478b0bf402885bfd88a1476020c4c7e6060edc1aa68da38ea"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "resvg",
+        "0.49.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "1572844b6727a1bf842190e9947641a68ac44bed83f50afb4bd1407a2564bee8"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "skrifa",
+        "0.46.2",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d4febebda507fb889c545a37a135517769d1391941013561292897961d1887d6"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "tap",
+        "1.0.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "usvg",
+        "0.49.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d09b73ee83641d390ad7ffd9000f347b16eb128e437675b6ff277ea5c7fcf22c"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "vello_common",
+        "0.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "73c2fbe53548bcd25c8ff42f75a93770a8611a16b37bee56d7ef7b44e36027f1"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "vello_cpu",
+        "0.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "ed1fec424fbba6acf6cbc78bb526447eb77590d95f40419d598870fe37535212"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "weezl",
+        "0.2.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d4ca08e5ef825b65b056d9efbd95c8750683f0a6d0466d02e96dc2e4e360f3d2"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "added",
+      "identity": [
+        "wyz",
+        "0.5.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "fearless_simd",
+        "0.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "font-types",
+        "0.11.3",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "5b38ad915f6dadd993ced50848a8291a543bd41ca62bc10740d5e64e2ab4cfd7"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "glifo",
+        "0.1.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d99fc21d493812643aae86d53b7bbd02f376434a90317e8a790bc209fdd6605e"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "hayro",
+        "0.7.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "c4caa128ab87fd48ffb7490617cf93f77f606820dffbc9fd9ef6ab0ed077f56d"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "hayro-ccitt",
+        "0.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "9f4d0e94ddd48749f06bbe4e5389fb9799a0c45bcaf00495042076ef05e3241a"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "hayro-interpret",
+        "0.7.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "f2613d0406898995042d0794c4245b2f2fba1246490c8ac593769bba6551129d"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "hayro-jbig2",
+        "0.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "69374b3668dd45aeb3d3145cda68f2c7b4f223aaa2511e67d076f1c7d741388d"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "hayro-jpeg2000",
+        "0.3.5",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "c75ab947623ef4ccaa7acf0579edf7cbb5a73838e3839a7be73335e522f433a1"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.3.2",
+        "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+        ""
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "read-fonts",
+        "0.39.2",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "c4ed38b89c2c77ff968c524145ad65fb010f38af5c7a224b53b81d47ac2daa81"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "resvg",
+        "0.48.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "67e3803f97b999e80cbf7c6ecdd07a8102204d92e1633cf48783720c521196bd"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "skrifa",
+        "0.42.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "0c34617370ae968efb7161bb2beb517d9084659aae19e24b89e3db25b46e4564"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "usvg",
+        "0.48.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "vello_common",
+        "0.0.8",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "3361bff7f7d82c0c496b92048db83846691f0e844cc28dee92b1c824291b55ee"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "vello_common",
+        "0.0.9",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "19d672facaa2d697285a786cd9d44d614cd2ce54cdc022504bf339f8fff3b750"
+      ]
+    },
+    {
+      "lock": "Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "vello_cpu",
+        "0.0.8",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "6d8ded630e8316bb94a55881256506d1f3b9947b5f66db8a7d32ca7ba02decd0"
+      ]
+    },
+    {
+      "lock": "demo/crate/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "likely_stable",
+        "0.1.3",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d61f7017d8abea1fc23ff7f01a8147b2656dea3aeb24d519aab6e2177eaf671c"
+      ]
+    },
+    {
+      "lock": "demo/crate/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.4.0",
+        "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+        ""
+      ]
+    },
+    {
+      "lock": "demo/crate/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "rustc_version",
+        "0.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+      ]
+    },
+    {
+      "lock": "demo/crate/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "semver",
+        "1.0.28",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+      ]
+    },
+    {
+      "lock": "demo/crate/Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.3.2",
+        "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+        ""
+      ]
+    },
+    {
+      "lock": "zencodecs/fuzz/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "likely_stable",
+        "0.1.3",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "d61f7017d8abea1fc23ff7f01a8147b2656dea3aeb24d519aab6e2177eaf671c"
+      ]
+    },
+    {
+      "lock": "zencodecs/fuzz/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.4.0",
+        "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+        ""
+      ]
+    },
+    {
+      "lock": "zencodecs/fuzz/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "rustc_version",
+        "0.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+      ]
+    },
+    {
+      "lock": "zencodecs/fuzz/Cargo.lock",
+      "change": "added",
+      "identity": [
+        "semver",
+        "1.0.28",
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+      ]
+    },
+    {
+      "lock": "zencodecs/fuzz/Cargo.lock",
+      "change": "removed",
+      "identity": [
+        "rav1d-disjoint-mut",
+        "0.3.2",
+        "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+        ""
+      ]
+    }
+  ],
+  "scope_sources": {
+    "core_source": "git+https://github.com/imazen/zencodec?rev=f02a17ec6001a9efcad1267f92a3ea928ed06e57#f02a17ec6001a9efcad1267f92a3ea928ed06e57",
+    "pixel_source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158",
+    "avif_source": "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a",
+    "rav1d_source": "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+    "tiff_source": "git+https://github.com/lilith/image-tiff?rev=10a3b6b2fa88eb5943525066a989ea9e64e644d5#10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+    "hayro_source": "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "extras_source": "git+https://github.com/imazen/zenextras?rev=a5e792612145e0d544fa0243677d935fbcd487f0#a5e792612145e0d544fa0243677d935fbcd487f0"
+  }
+}

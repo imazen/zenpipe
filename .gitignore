@@ -53,6 +53,9 @@ Thumbs.db
 /docs/*
 !/docs/checked-transcode.md
 !/docs/io.md
+!/docs/publication-qualification.md
+!/docs/publication-deltas-2026-10-28.md
+!/docs/publication-delta-manifests-2026-10-28.json
 !/docs/public-api/
 
 # Tooling noise
