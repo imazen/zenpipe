@@ -1205,6 +1205,14 @@ Three crates.io requirements block a newer release and were left alone on purpos
   one admitted strip per coroutine step), zenjpeg `8672e549`, zenpng `5422b6d2`,
   zenbitmaps `9ad4582b`, ultrahdr-core `cc57c57a`; `thiserror` 2.0.21 where
   zenbitmaps requires it. Not releasable until those ship.
+- The core family is named by version: zencodec-io and zenmeta at floor 0.1.0,
+  zencodec ranges unchanged. Every graph root (root, fuzz, zencodecs/fuzz, demo,
+  metadata-services) patches all four family crates (zencodec, zencodec-io,
+  zencodec-coroutine, zenmeta) to zencodec `6214c93c` (PR 168: `OperationPolicy`
+  and `BoundPolicy` binding, `encode_dyn_job`, completion guards), so each graph
+  holds one copy. Native heads that name the family by version: zenjpeg
+  `d099267c`, zenpng `a2a9dc6d`, ultrahdr-core `61097504`.
+  The companion crates are unpublished: not releasable until they ship.
 
 #### Added (zenpipe::io support, 2026-10-27)
 
