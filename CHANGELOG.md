@@ -14,6 +14,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   streaming-decoder shim and their imports are gated on the codecs that use
   them; no signature or behavior change. `just clippy-codec-subsets` and the
   `Codec subsets` CI job lint every `nodes-<codec>` subset.
+- `DecodeRequest::animation_frame_decoder` hands the request's pulse to the codec
+  job, as the one-shot, push and streaming paths already did, so a request-level
+  deadline stops an animation decode (control: `pulse_retention.rs`, GIF).
 
 #### Fixed (2026-10-25)
 

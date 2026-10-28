@@ -261,6 +261,7 @@ pub(crate) fn dyn_animation_frame_decoder(
 ) -> Result<Box<dyn zencodec::decode::DynAnimationFrameDecoder>> {
     let config = build_dyn_decoder_config(format, params.codec_config, params.limits)?;
     let mut job = config.dyn_job();
+    job.set_pulse(params.pulse.clone());
     if let Some(lim) = params.limits {
         job.set_limits(to_resource_limits(lim));
     }
