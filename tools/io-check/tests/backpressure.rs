@@ -339,9 +339,10 @@ fn a_required_wait_bound_is_unknown_and_refuses_before_any_effect() {
     );
 }
 
-/// The working placement: the requirement in the driver's preset (and the same
-/// policy as the resolver) refuses before any effect and names `OutputWait`
-/// with `Unknown` evidence.
+/// The compatibility placement: the requirement also in the driver's deprecated
+/// preset (and the same set as the operation policy). The two sets are ANDed;
+/// the operation still refuses before any effect and names `OutputWait` with
+/// `Unknown` evidence.
 #[test]
 fn a_required_wait_bound_in_the_preset_is_named_before_any_effect() {
     let file = png();
@@ -349,12 +350,17 @@ fn a_required_wait_bound_in_the_preset_is_named_before_any_effect() {
     let budget = StorageBudget::new(16 << 20, 1024);
     let mut sink = probe(&budget, &counter, None);
     let bound = PolicySet::new().with_output_wait_limit(1 << 30);
+    #[allow(
+        deprecated,
+        reason = "exercises the migration path: a preset still ANDs its requirements"
+    )]
+    let preset = options(&budget, 16 << 20).with_policy_set(bound);
     let error = row_encode::encode_job(
         zenpng::PngEncoderConfig::new().with_generic_effort(0).job(),
         rows(&file, counter.clone(), false),
         &mut sink,
         bound,
-        options(&budget, 16 << 20).with_policy_set(bound),
+        preset,
         &NoPulse,
     )
     .unwrap_err();

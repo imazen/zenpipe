@@ -757,8 +757,8 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 - **`zenpipe::io`** (feature `io`; `io-tokio` adds `io::tokio_bridge`): a
   controlled zencodec decoder over any `ReadAt` served as a pipeline `Source`
-  (`DecodeSource`; decode questions answered at construction, final
-  interpretation held until the first pull), a pipeline served to the planned
+  (`DecodeSource`; decode questions answered at construction through a zencodec
+  `OperationPolicy`, final interpretation held until the first pull), a pipeline served to the planned
   row encoder (`PipelineRows` for `zencodec_io::row_encode::encode_job`), an
   erased registry job usable there (`ErasedJob`), owned zero-copy resident
   input (`SharedBytes`), orientation rendering costs and an admitted-raster
@@ -778,8 +778,8 @@ Three crates.io requirements block a newer release and were left alone on purpos
 - **`ImageJob::with_output_policy(PolicySet)`** (with `io`): plan the configured
   encoder job for the pipeline's rows and resolve the output schedule before any
   row or byte; unsupported row modes and gain-map sidecars refuse instead of
-  falling back to a one-shot encode of the materialized image. The policy is the
-  driver's preset as well as its resolver, so a refusal names the unmet
+  falling back to a one-shot encode of the materialized image. The policy is
+  passed as zencodec's operation policy, so a refusal names the unmet
   requirement.
 
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)

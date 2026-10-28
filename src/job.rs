@@ -971,14 +971,12 @@ impl<'a> ImageJob<'a> {
                 }),
             4096,
         );
-        // The policy is also the preset: the driver admits offers against the
-        // preset's requirements before asking the resolver, and only those are
-        // named in a refusal's decision report.
+        // `policy` is the operation policy: its requirements are checked
+        // against every offer before selection and named in a refusal.
         let options = zencodec_io::row_encode::Options::new(
             storage,
             limits.and_then(|l| l.max_output_bytes).unwrap_or(u64::MAX),
-        )
-        .with_policy_set(policy);
+        );
         let pulse = match self.deadline() {
             Some(deadline) => {
                 zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))

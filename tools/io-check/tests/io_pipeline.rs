@@ -277,8 +277,9 @@ fn required_live_schedule_refuses_a_buffered_png_before_any_pixel_work() {
     );
 }
 
-/// The working placement: the requirement in the driver's preset (and the same
-/// policy as the resolver) refuses before any pixel work and names
+/// The compatibility placement: the requirement also in the driver's deprecated
+/// preset (and the same set as the operation policy). The two sets are ANDed;
+/// the operation still refuses before any pixel work and names
 /// `OutputSchedule`.
 #[test]
 fn required_live_schedule_in_the_preset_is_named_before_any_pixel_work() {
@@ -297,16 +298,13 @@ fn required_live_schedule_in_the_preset_is_named_before_any_pixel_work() {
         .with_generic_effort(19)
         .job();
     let live = PolicySet::new().require_output_schedule(OutputSchedule::Live);
+    #[allow(
+        deprecated,
+        reason = "exercises the migration path: a preset still ANDs its requirements"
+    )]
+    let preset = encode_options().with_policy_set(live);
     let mut out = Vec::new();
-    let error = row_encode::encode_job(
-        job,
-        rows,
-        &mut out,
-        live,
-        encode_options().with_policy_set(live),
-        &NoPulse,
-    )
-    .unwrap_err();
+    let error = row_encode::encode_job(job, rows, &mut out, live, preset, &NoPulse).unwrap_err();
     assert_eq!(error.error().stage, Stage::Policy);
     assert_eq!(error.error().emitted, 0);
     assert!(out.is_empty());

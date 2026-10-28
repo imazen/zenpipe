@@ -13,7 +13,7 @@ use zencodec::decode::{
     InputRequest, InterpretationState, SinkError, StepError,
 };
 use zencodec::operation::{
-    DecodeRequest, OperationReport, PolicyResolver, PolicySet, resolve_boundary,
+    DecodeRequest, OperationPolicy, OperationReport, PolicySet, resolve_boundary,
 };
 use zencodec::source::{ReadAt, SliceReadAt};
 use zencodec::storage::{OwnedStorage, StorageBudget};
@@ -41,21 +41,20 @@ pub struct DecodeOptions {
     strip_rows: u32,
     slots: u32,
     drive: DriveOptions,
-    preset: PolicySet,
     pulse: SharedPulse,
 }
 
 impl DecodeOptions {
     /// Share `storage` between the controlled decoder (its retained input and
     /// delivery rows) and this adapter's strip slots. Defaults: 64-row strips,
-    /// two slots, default drive options, the default policy set and no pulse.
+    /// two slots, default drive options and no pulse. The operation policy is
+    /// an argument of [`DecodeSource::new`], not an option.
     pub fn new(storage: StorageBudget) -> Self {
         Self {
             storage,
             strip_rows: 64,
             slots: 2,
             drive: DriveOptions::default(),
-            preset: PolicySet::new(),
             pulse: SharedPulse::default(),
         }
     }
@@ -77,12 +76,6 @@ impl DecodeOptions {
     /// Read sizes, range coalescing and input admission for the source.
     pub fn with_drive(mut self, drive: DriveOptions) -> Self {
         self.drive = drive;
-        self
-    }
-
-    /// Built-in policy used when the resolver delegates with `UsePreset`.
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
         self
     }
 
@@ -328,7 +321,7 @@ impl ByteStepper for Stage {
 /// A controlled decoder over a positional source, served one strip per pull.
 ///
 /// Construction reads until the decoder states its final interpretation,
-/// answers each mandatory decode question through the resolver, and stops
+/// answers each mandatory decode question through its operation policy, and stops
 /// there: `width`, `height`, `format` and [`info`](Self::info) are final, but
 /// no pixel row is decoded until the first [`next`](crate::Source::next).
 /// An encode refusal that happens between construction and the first pull
@@ -346,8 +339,7 @@ pub struct DecodeSource<R, P = PolicySet> {
     stage: Stage,
     source: R,
     cursor: ReadAtCursor,
-    resolver: P,
-    preset: PolicySet,
+    policy: P,
     report: OperationReport,
     pulse: SharedPulse,
     /// The adopted final interpretation, applied at the first pull.
@@ -361,26 +353,26 @@ pub struct DecodeSource<R, P = PolicySet> {
 }
 
 impl<'a> DecodeSource<SliceReadAt<'a>, PolicySet> {
-    /// Decode resident bytes with the default request and the options' policy.
+    /// Decode resident bytes with the default request and an empty
+    /// [`PolicySet`]. [`new`](DecodeSource::new) takes any other policy.
     pub fn from_slice(
         codecs: &CodecSet,
         bytes: &'a [u8],
         options: DecodeOptions,
     ) -> PipeResult<Self> {
-        let preset = options.preset;
         Self::new(
             codecs,
             &DecodeRequest::new(),
             SliceReadAt::new(bytes),
-            preset,
+            PolicySet::new(),
             options,
         )
     }
 }
 
 impl DecodeSource<SharedBytes, PolicySet> {
-    /// Decode owned resident bytes with the default request and the options'
-    /// policy. The source is `'static`, so it can feed operators that box
+    /// Decode owned resident bytes with the default request and an empty
+    /// [`PolicySet`]. The source is `'static`, so it can feed operators that box
     /// their upstream (crop, resize, filters). The bytes are not copied, and
     /// they stay resident until this source is dropped: see [`SharedBytes`].
     pub fn from_bytes(
@@ -388,20 +380,27 @@ impl DecodeSource<SharedBytes, PolicySet> {
         bytes: impl Into<SharedBytes>,
         options: DecodeOptions,
     ) -> PipeResult<Self> {
-        let preset = options.preset;
-        Self::new(codecs, &DecodeRequest::new(), bytes.into(), preset, options)
+        Self::new(
+            codecs,
+            &DecodeRequest::new(),
+            bytes.into(),
+            PolicySet::new(),
+            options,
+        )
     }
 }
 
-impl<R: ReadAt, P: PolicyResolver> DecodeSource<R, P> {
+impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
     /// Start a controlled decode of `source` and drive it to its final
-    /// interpretation. `resolver` answers each mandatory decode question;
-    /// returning `UsePreset` delegates to the options' policy set.
+    /// interpretation. `policy` answers each mandatory decode question. Pass a
+    /// [`PolicySet`], a closure, or `BoundPolicy::new(requirements, resolver)`.
+    /// The requirements of a set or of a binding are checked before the
+    /// callback runs, and a refusal names the unmet ones.
     pub fn new(
         codecs: &CodecSet,
         request: &DecodeRequest,
         source: R,
-        resolver: P,
+        policy: P,
         options: DecodeOptions,
     ) -> PipeResult<Self> {
         if options.strip_rows == 0 || options.slots == 0 {
@@ -431,8 +430,7 @@ impl<R: ReadAt, P: PolicyResolver> DecodeSource<R, P> {
             },
             source,
             cursor: ReadAtCursor::new(options.drive),
-            resolver,
-            preset: options.preset,
+            policy,
             report: OperationReport::default(),
             pulse: options.pulse,
             pending: None,
@@ -513,8 +511,9 @@ impl<R: ReadAt, P: PolicyResolver> DecodeSource<R, P> {
     fn decide(&mut self, boundary: DecodeBoundary) -> PipeResult<BoundaryAction> {
         match resolve_boundary(
             boundary,
-            &mut self.resolver,
-            self.preset,
+            &mut self.policy,
+            // No legacy preset: the policy carries its own requirements.
+            PolicySet::new(),
             self.pulse.as_pulse(),
         ) {
             Ok((action, record)) => {
@@ -586,7 +585,7 @@ impl<R: ReadAt, P: PolicyResolver> DecodeSource<R, P> {
     }
 }
 
-impl<R: ReadAt + Send, P: PolicyResolver + Send> crate::Source for DecodeSource<R, P> {
+impl<R: ReadAt + Send, P: OperationPolicy + Send> crate::Source for DecodeSource<R, P> {
     fn next(&mut self) -> PipeResult<Option<Strip<'_>>> {
         if let Some(slot) = self.served.take() {
             self.stage.queue.slots[slot].busy = false;

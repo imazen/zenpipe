@@ -2,10 +2,10 @@
 //! encoder and names the unmet requirement; finish-first with a disk spool
 //! then succeeds. `cargo run -p zenpipe-io-check --example output_policy -- in.png out.png spool.bin`
 //!
-//! Requirements go in the preset (`Options::with_policy_set`): the driver admits
-//! offers against it before asking the resolver, and only the preset's
-//! requirements are named in the refusal report. The same `PolicySet` passed only
-//! as the resolver still refuses, but the report names nothing.
+//! The `PolicySet` is the operation policy. The driver admits every offer
+//! against its requirements before selection, and the refusal report names the
+//! unmet ones. A custom callback goes inside
+//! `BoundPolicy::new(requirements, resolver)`.
 use std::num::NonZeroUsize;
 
 use zencodec::encode::EncoderConfig;
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         rows(&codecs, &bytes)?,
         std::io::sink(),
         live,
-        Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20).with_policy_set(live),
+        Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
         &NoPulse,
     )
     .unwrap_err();
@@ -72,7 +72,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .open(spool)?;
     let finish_first = PolicySet::new().require_output_schedule(OutputSchedule::FinishFirst);
     let options = Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20)
-        .with_policy_set(finish_first)
         .with_disk_staging(spool, NonZeroUsize::new(64 * 1024).unwrap())?;
     let done = row_encode::encode_job(
         buffered(),

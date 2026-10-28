@@ -107,7 +107,7 @@ fn run(
         rows,
         Forward(std::fs::File::create(output)?),
         policy,
-        options.with_policy_set(policy),
+        options,
         &NoPulse,
     )?;
     println!(

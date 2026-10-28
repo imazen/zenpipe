@@ -36,9 +36,7 @@ async fn main() -> Result<(), Error> {
                 PipelineRows::from_source(source)?,
                 writer,
                 PolicySet::new().require_output_schedule(OutputSchedule::Live),
-                Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20).with_policy_set(
-                    PolicySet::new().require_output_schedule(OutputSchedule::Live),
-                ),
+                Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
                 &NoPulse,
             )?)
         },

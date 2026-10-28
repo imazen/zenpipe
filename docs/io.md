@@ -122,20 +122,19 @@ streams (a PNG at effort 0 does; effort 19 buffers the image and emits at finish
 Slowing a streaming encoder bounds its queues. Slowing one that retains a whole
 raster keeps that raster alive for a slow client; finishing into bounded staging
 releases it sooner. `PolicySet::require_output_schedule` makes the choice mandatory.
-Put requirements in the driver's preset, `Options::with_policy_set(policy)`, and pass
-the same policy as the resolver: the driver admits every offer against the preset
-before it asks the resolver, so an impossible requirement refuses before any row is
-read or byte written, and the error's decision report names the unmet requirement.
-The same `PolicySet` passed only as the resolver also refuses before any effect, but
-the report names nothing (zencodec `79676215` evaluates requirements from the preset
-alone). `ImageJob::with_output_policy` installs its policy in both places. A required
-wait-memory bound (`with_output_wait_limit`) refuses today with
-`(OutputWait, Unknown)`: the driver reports no qualified bound.
+Pass the `PolicySet` as the operation policy. For a custom callback, pass
+`BoundPolicy::new(requirements, resolver)`. The driver admits every offer against
+the policy's requirements before selection, so an impossible requirement refuses
+before any row is read or byte is written, and the error's decision report names the
+unmet requirement. `ImageJob::with_output_policy` passes its policy that way.
+`Options::with_policy_set` is deprecated. During migration its requirements are ANDed
+with the policy's, and a binding's preferences take priority. A required wait-memory
+bound (`with_output_wait_limit`) refuses today with `(OutputWait, Unknown)`: the
+driver reports no qualified bound.
 
 ```rust
 let policy = PolicySet::new().require_output_schedule(OutputSchedule::Live);
-row_encode::encode_job(job, rows, writer, policy,
-                       Options::new(budget, max_output).with_policy_set(policy), &pulse)?;
+row_encode::encode_job(job, rows, writer, policy, Options::new(budget, max_output), &pulse)?;
 ```
 
 ## Orientation
