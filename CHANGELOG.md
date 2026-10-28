@@ -749,6 +749,13 @@ None.
 
 #### Fixed
 
+- `CropSource` no longer drops rows when an upstream strip straddles one of its
+  16-row output strips. It filled the output strip, then skipped the rest of that
+  upstream strip, so any crop whose rows did not line up with the upstream strips
+  came out short and shifted; the cropped rows that do not fit are now carried to
+  the next output strip. Regression: `tests/pipeline.rs`
+  `crop_keeps_every_row_across_unaligned_upstream_strips` (six crops over
+  upstream strips of 1, 7, 16, 17, 64 and 150 rows, exact samples).
 - `ResizeSource` and `ResizeF32Source` no longer fail with "ring buffer overflow" when an upstream strip is taller than the 16-row batch the resizer is sized for (an `ImageJob` resizing a 48x40 PNG with `w=24` failed). Rows are pushed one at a time with output drained in between; rows that cannot be pushed before the output strip fills are held for the next pull. `tests/resize_strip_heights.rs` checks that strips of 1, 7, 16, 40 and 64 rows give bit-identical output, down- and upscaling, RGBA8 and f32.
 - Schema fixture export respects the configured temporary directory (9dccbaa3).
 - Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
