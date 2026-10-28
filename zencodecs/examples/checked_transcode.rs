@@ -26,14 +26,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             PixelFormat::Rgb8,
             ConvertOptions::forbid_lossy(),
         )
-        .with_metadata(MetadataTransfer::DiscardDescriptive)
-        .with_policy_set(
-            PolicySet::new()
-                .require_metadata(MetadataTransfer::DiscardDescriptive)
-                .allow_opaque_profiles(false),
-        );
+        .with_metadata(MetadataTransfer::DiscardDescriptive);
+    let mut policy = PolicySet::new()
+        .require_metadata(MetadataTransfer::DiscardDescriptive)
+        .allow_opaque_profiles(false);
     let mut source = zencodec_io::FileReadAt::open(input)?;
-    let encoded = request.transcode_from_read_at(&codecs, &mut source)?;
+    let encoded = request.transcode_from_read_at_with(&codecs, &mut source, &mut policy)?;
     std::fs::write(output, encoded.data())?;
     Ok(())
 }

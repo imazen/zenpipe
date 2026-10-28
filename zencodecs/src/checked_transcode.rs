@@ -249,10 +249,12 @@ impl<'a> TranscodeRequest<'a> {
         self.storage = storage;
         self
     }
-    /// The built-in policy that `transcode` and `transcode_from_read_at` use,
-    /// and the preset a callback reaches with `Decision::UsePreset`. Its
-    /// requirements also apply to a policy passed to the `_with` methods; a
-    /// `BoundPolicy` supplies preferences in place of these.
+    /// Configure the built-in policy that `transcode` and
+    /// `transcode_from_read_at` use, and the preset a callback reaches with
+    /// `Decision::UsePreset`. During migration, these requirements and the
+    /// policy argument both apply. A bound policy supplies preferences in
+    /// place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, policy: PolicySet) -> Self {
         self.preset = policy;
         self
@@ -276,7 +278,8 @@ impl<'a> TranscodeRequest<'a> {
         self
     }
 
-    /// Execute with the configured built-in policy and return verified output.
+    /// Execute with the request's built-in policy and return verified output.
+    /// To pass a `PolicySet` or `BoundPolicy`, use [`Self::transcode_with`].
     pub fn transcode(
         &self,
         codecs: &CodecSet,

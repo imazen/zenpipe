@@ -46,11 +46,11 @@ let request = TranscodeRequest::new(ImageFormat::Png)
     .with_cms(&MoxCms)
     .with_output(OutputProfile::Named(Cicp::SRGB), PixelFormat::Rgb8,
                  ConvertOptions::forbid_lossy())
-    .with_metadata(MetadataTransfer::DiscardDescriptive)
-    .with_policy_set(PolicySet::new()
-        .require_metadata(MetadataTransfer::DiscardDescriptive)
-        .allow_opaque_profiles(false));
-let output = request.transcode(&codecs, input)?;
+    .with_metadata(MetadataTransfer::DiscardDescriptive);
+let mut policy = PolicySet::new()
+    .require_metadata(MetadataTransfer::DiscardDescriptive)
+    .allow_opaque_profiles(false);
+let output = request.transcode_with(&codecs, input, &mut policy)?;
 ```
 
 RGB8 is explicit here because this example accepts JPEG. The conversion policy
@@ -65,12 +65,18 @@ certificate that the image's pixels contain no PII.
 
 ## A tenant-specific decision
 
-Use `transcode_with`, or `transcode_from_read_at_with`, when a preset is
-insufficient. `Question::Transcode` contains complete prepared routes: confirmed
-encoder configuration, converted sample descriptor, metadata treatment,
-opaque-profile retention and scoped storage facts. A closure returns
+The policy argument of `transcode_with` and `transcode_from_read_at_with` is a
+`PolicySet`, a closure, or a callback struct inside
+`BoundPolicy::new(requirements, resolver)`. Requirements are checked against every
+route before the callback runs, and a refusal names the unmet ones.
+`Question::Transcode` contains complete prepared routes: confirmed encoder
+configuration, converted sample descriptor, metadata treatment, opaque-profile
+retention and scoped storage facts. A closure returns
 `Result<Decision, At<ApplicationError>>`. It can choose an offered token, delegate
-to the configured `PolicySet`, or return a predefined traced decline. The adapter
+to the built-in preferences with `Decision::UsePreset` (a binding's own set, else
+the request's), or return a predefined traced decline. `with_policy_set` is
+deprecated: during migration its requirements still apply beside the policy
+argument. The adapter
 holds the actual conversion and encoder jobs while it calls the resolver; it
 does not reconstruct a potentially different route from the chosen enums.
 

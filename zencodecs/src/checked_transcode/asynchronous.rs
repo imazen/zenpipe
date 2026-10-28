@@ -3,7 +3,8 @@ use super::*;
 use zencodec_io::tokio_io::{AsyncCursor, AsyncSource};
 
 impl TranscodeRequest<'_> {
-    /// Transcode from asynchronous byte demand using the configured policy.
+    /// Transcode from asynchronous byte demand using the request's built-in
+    /// policy. `transcode_async_with` takes the policy as an argument.
     ///
     /// Encoders must be registered with `CodecSet::with_send_encoder`; refusal
     /// precedes source I/O when a job lacks transferable registration.

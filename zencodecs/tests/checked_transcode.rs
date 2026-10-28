@@ -422,6 +422,10 @@ fn discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enfor
     let privacy = zencodec::operation::PolicySet::new()
         .require_metadata(MetadataTransfer::DiscardDescriptive)
         .allow_opaque_profiles(false);
+    #[allow(
+        deprecated,
+        reason = "compatibility placement: a preset PolicySet still enforces its requirements"
+    )]
     let output = request(budget.clone())
         .with_policy_set(privacy)
         .transcode(&codecs, &input)
@@ -440,6 +444,10 @@ fn discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enfor
             .windows(SECRET.len())
             .any(|w| w == SECRET.as_bytes())
     );
+    #[allow(
+        deprecated,
+        reason = "compatibility placement: a preset PolicySet still enforces its requirements"
+    )]
     let error = TranscodeRequest::new(ImageFormat::Jpeg)
         .with_cms(&MoxCms)
         .with_storage(budget.clone())
@@ -447,6 +455,10 @@ fn discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enfor
         .transcode(&codecs, &input)
         .unwrap_err();
     assert_eq!(error.error().stage(), Stage::Policy);
+    #[allow(
+        deprecated,
+        reason = "compatibility placement: a preset PolicySet still enforces its requirements"
+    )]
     let error = request(budget.clone())
         .with_policy_set(privacy.with_workspace_limit(u64::MAX))
         .transcode(&codecs, &input)

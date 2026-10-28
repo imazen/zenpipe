@@ -1213,6 +1213,16 @@ Three crates.io requirements block a newer release and were left alone on purpos
   policy is applied with `try_set_policy` and refuses when unsupported. Qualified
   for JPEG and PNG; other formats refuse.
 
+#### Deprecated
+
+- `TranscodeRequest::with_policy_set`, matching zencodec's deprecation of its
+  separate `with_policy_set` placements: pass a `PolicySet` or `BoundPolicy` to
+  `transcode_with`, `transcode_from_read_at_with` or `transcode_async_with`.
+  Semantics are unchanged during migration: `transcode`, `transcode_from_read_at`
+  and `transcode_async` still use the configured set, its requirements still
+  apply beside a policy argument, and a binding's preferences take priority.
+  The example and `docs/checked-transcode.md` pass the policy argument.
+
 ### Checked transcode review integration (2026-10-27)
 
 - Supply explicit opaque-profile retention evidence to the checked resolver.
