@@ -518,6 +518,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "enough",
+ "how-far",
  "imgref",
  "linear-srgb",
  "rgb",
@@ -825,7 +826,7 @@ source = "git+https://github.com/imazen/zenanalyze?rev=f7fe3435169716579670944d1
 [[patch.unused]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4#73be1f6e8a394d0c6e58e388e364c2764174cbd4"
+source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
 
 [[patch.unused]]
 name = "zenbitmaps"

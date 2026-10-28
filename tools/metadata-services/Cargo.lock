@@ -563,6 +563,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "enough",
+ "how-far",
  "imgref",
  "linear-srgb",
  "rgb",
@@ -745,7 +746,7 @@ dependencies = [
 [[patch.unused]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic#c09e6e77264e7ccc9c39f56c1f8ec6a26fc4350d"
+source = "git+https://github.com/imazen/heic#a9ea9f67a8fc3b145a10493c0dd335415c4cb4ea"
 
 [[patch.unused]]
 name = "imageflow_riapi"
@@ -760,7 +761,7 @@ source = "git+https://github.com/imazen/imageflow#f49ec638d60d06911c7232309bba85
 [[patch.unused]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder#cbe0ecf556dd36ca25587d369de0efc83c91b9ad"
+source = "git+https://github.com/imazen/jxl-encoder#c978839d41d770bbd76adec5a74684860e908e14"
 
 [[patch.unused]]
 name = "zenanalyze-api"
@@ -770,7 +771,7 @@ source = "git+https://github.com/imazen/zenanalyze#208ee7ecf5ffa97691d8e74fab35d
 [[patch.unused]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4#73be1f6e8a394d0c6e58e388e364c2764174cbd4"
+source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
 
 [[patch.unused]]
 name = "zenbitmaps"
@@ -824,13 +825,13 @@ source = "git+https://github.com/imazen/zensally#b7b34c4ef2a74f54999163af1d3273c
 
 [[patch.unused]]
 name = "zensim"
-version = "0.3.0"
-source = "git+https://github.com/imazen/zensim#c58fa829b55109efed0c87d3215a52bf9d2f56d6"
+version = "0.2.7"
+source = "git+https://github.com/imazen/zensim#6748cdf40f331b7cf6e38f4908629cb431064498"
 
 [[patch.unused]]
 name = "zensim-regress"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zensim#c58fa829b55109efed0c87d3215a52bf9d2f56d6"
+source = "git+https://github.com/imazen/zensim#6748cdf40f331b7cf6e38f4908629cb431064498"
 
 [[patch.unused]]
 name = "zentiff"

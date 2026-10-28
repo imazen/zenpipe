@@ -4796,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4#73be1f6e8a394d0c6e58e388e364c2764174cbd4"
+source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4815,8 +4815,8 @@ dependencies = [
  "yuv",
  "zenav1-aom-encode",
  "zenav1-svt",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4)",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728)",
+ "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -4841,7 +4841,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4#73be1f6e8a394d0c6e58e388e364c2764174cbd4"
+source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4857,7 +4857,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4#73be1f6e8a394d0c6e58e388e364c2764174cbd4"
+source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4866,7 +4866,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
+source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4977,8 +4977,8 @@ dependencies = [
  "ultrahdr-core",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4)",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728)",
  "zenbitmaps",
  "zencodec",
  "zencodec-testkit",
@@ -5290,7 +5290,7 @@ dependencies = [
  "serde_json",
  "whereat",
  "zenavif 0.2.0",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=73be1f6e8a394d0c6e58e388e364c2764174cbd4)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728)",
  "zenbench",
  "zenbitmaps",
  "zenblend",

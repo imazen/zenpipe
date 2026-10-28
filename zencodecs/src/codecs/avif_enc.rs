@@ -55,7 +55,15 @@ pub(crate) fn build_encoding(
         if let Some(backend) = cfg.avif_backend {
             // AvifEncoderConfig exposes no backend setter; EncoderConfig's
             // `backend()` is a consuming builder, so swap the inner config.
-            *enc.inner_mut() = core::mem::take(enc.inner_mut()).backend(backend);
+            let mut inner = core::mem::take(enc.inner_mut()).backend(backend);
+            // Zenav1Svt encodes 4:2:0 only while the config default is the
+            // zenravif-oriented 4:4:4 — normalize so a backend choice alone
+            // produces an encodable config. CodecConfig carries no chroma
+            // knob, so nothing explicit is overridden.
+            if backend == zenavif::Av1Backend::Zenav1Svt {
+                inner = inner.chroma_subsampling(zenavif::EncodeChromaSubsampling::Yuv420);
+            }
+            *enc.inner_mut() = inner;
         }
     } else {
         if let Some(q) = quality {
