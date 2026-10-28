@@ -44,8 +44,8 @@ zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
