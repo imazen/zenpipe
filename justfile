@@ -486,3 +486,7 @@ current-main-corpus-inventory manifest config list output:
 # AVIF backend selection and retained cancellation through dispatch
 test-avif-backend:
     cargo test --locked -p zencodecs --no-default-features --features std,avif-svt --test avif_backend
+
+# Native 444/source-lossless AVIF settings must survive the generic dispatcher
+test-avif-native:
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-svt,avif-decode --test avif_backend

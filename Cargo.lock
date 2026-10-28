@@ -4720,7 +4720,7 @@ dependencies = [
 [[package]]
 name = "zenav1-svt"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=339bfb4ae1262cf9752e5d5d530eee1c01a9bc85#339bfb4ae1262cf9752e5d5d530eee1c01a9bc85"
+source = "git+https://github.com/imazen/zenav1-svt?rev=d0f6edc058c99659a73c53cf891090e80fb39ee0#d0f6edc058c99659a73c53cf891090e80fb39ee0"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4732,7 +4732,7 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-dsp"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=339bfb4ae1262cf9752e5d5d530eee1c01a9bc85#339bfb4ae1262cf9752e5d5d530eee1c01a9bc85"
+source = "git+https://github.com/imazen/zenav1-svt?rev=d0f6edc058c99659a73c53cf891090e80fb39ee0#d0f6edc058c99659a73c53cf891090e80fb39ee0"
 dependencies = [
  "archmage",
  "magetypes",
@@ -4742,7 +4742,7 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-encoder"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=339bfb4ae1262cf9752e5d5d530eee1c01a9bc85#339bfb4ae1262cf9752e5d5d530eee1c01a9bc85"
+source = "git+https://github.com/imazen/zenav1-svt?rev=d0f6edc058c99659a73c53cf891090e80fb39ee0#d0f6edc058c99659a73c53cf891090e80fb39ee0"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4757,7 +4757,7 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-types"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=339bfb4ae1262cf9752e5d5d530eee1c01a9bc85#339bfb4ae1262cf9752e5d5d530eee1c01a9bc85"
+source = "git+https://github.com/imazen/zenav1-svt?rev=d0f6edc058c99659a73c53cf891090e80fb39ee0#d0f6edc058c99659a73c53cf891090e80fb39ee0"
 dependencies = [
  "enough",
  "whereat",
@@ -4796,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4815,8 +4815,8 @@ dependencies = [
  "yuv",
  "zenav1-aom-encode",
  "zenav1-svt",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5)",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
+ "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -4841,7 +4841,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4866,7 +4866,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4977,8 +4977,8 @@ dependencies = [
  "ultrahdr-core",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5)",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
  "zenbitmaps",
  "zencodec",
  "zencodec-testkit",
@@ -5290,7 +5290,7 @@ dependencies = [
  "serde_json",
  "whereat",
  "zenavif 0.2.0",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5)",
+ "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
  "zenbench",
  "zenbitmaps",
  "zenblend",

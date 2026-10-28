@@ -3100,7 +3100,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -3127,7 +3127,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "arrayvec",
  "bitreader",

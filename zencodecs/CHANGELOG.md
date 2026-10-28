@@ -14,6 +14,12 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ### Added
 
+- `CodecConfig::with_avif_encoder` retains a complete native AVIF configuration,
+  including explicit 4:4:4, identity RGB, lossless state and threading. Generic
+  quality/effort do not overwrite it; explicit AVIF scalar overrides still apply.
+  Unified zenavif pin f29fd4d1 selects the independently verified SVT still review.
+  See [native AVIF configuration](docs/avif-native-config.md).
+
 - `CodecConfig::with_avif_backend` selects the native AV1 encoder;
   `EncodeRequest::with_pulse` retains the caller's progress/cancellation handle
   on the zencodec 0.1 family (superseded by the 0.2 Pulse migration). The SVT

@@ -467,10 +467,10 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # repo. And AVIF decode is not covered by CI here (no job enables
 # `avif-decode`), so a decoder change lands silently.
 #
-# WHICH REV. zenavif main a7059dcf, moved 2026-10-28 from 73be1f6e: the bump
-# pulls svtav1 339bfb4a, whose multi-tile path honors thread_count=1 without
-# reaching std::thread::scope (spawn panics on wasm32), the fix zensquoosh's
-# WASM AVIF encode needs on >4096px-wide stills. Decoder unchanged
+# WHICH REV. zenavif review f29fd4d1 (PR 76), moved from fada2db0:
+# adds 8-bit SVT 444 and source-lossless identity RGB stills, using SVT
+# d0f6edc0 (PR 28) for the still facade and identity-header repair. That
+# revision also retains the wasm-safe single-thread tile walk. Decoder unchanged
 # (rav1d-safe dfd01e32 both sides). Previously: zenavif main 5e493d39 (0.2.0,
 # rav1d-safe dfd01e32), moved
 # 2026-10-15 from 11033c95 (0.1.7, rav1d-safe 140f9145) via c6c037c0; the
@@ -495,7 +495,7 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
 # so you get two zenavif-parse instances and its `At<Error>` stops unifying.
 # `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }
