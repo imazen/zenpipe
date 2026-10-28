@@ -26,6 +26,10 @@ pub(crate) struct EncodeParams<'a> {
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub stop: Option<StopToken>,
+    /// Progress + cancellation pulse stamped onto the built job
+    /// (`EncodeJob::with_pulse`). A pulse doubles as a stop; `stop` may be
+    /// `None` when a pulse is set.
+    pub pulse: Option<how_far::SharedPulse>,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
     #[cfg(feature = "tonemap")]
     pub tone_map_policy: crate::ToneMapPolicy,
@@ -227,6 +231,9 @@ where
             let mut job = config.job();
             if let Some(s) = params.stop {
                 job = job.with_stop(s);
+            }
+            if let Some(p) = params.pulse {
+                job = job.with_pulse(p);
             }
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
@@ -455,6 +462,9 @@ where
     let mut job = config.job();
     if let Some(s) = params.stop {
         job = job.with_stop(s);
+    }
+    if let Some(p) = params.pulse {
+        job = job.with_pulse(p);
     }
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));

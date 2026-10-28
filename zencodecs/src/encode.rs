@@ -52,6 +52,7 @@ pub struct EncodeRequest<'a> {
     prefer_streaming: bool,
     limits: Option<&'a Limits>,
     stop: Option<StopToken>,
+    pulse: Option<how_far::SharedPulse>,
     metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` when the codec embeds it.
     /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim).
@@ -89,6 +90,7 @@ impl<'a> EncodeRequest<'a> {
             prefer_streaming: false,
             limits: None,
             stop: None,
+            pulse: None,
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
@@ -119,6 +121,7 @@ impl<'a> EncodeRequest<'a> {
             prefer_streaming: false,
             limits: None,
             stop: None,
+            pulse: None,
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
@@ -218,6 +221,14 @@ impl<'a> EncodeRequest<'a> {
     /// Set a cancellation token.
     pub fn with_stop(mut self, stop: StopToken) -> Self {
         self.stop = Some(stop);
+        self
+    }
+
+    /// Progress + cancellation pulse (`EncodeJob::with_pulse`). A pulse is
+    /// also a stop, so a lone `with_pulse` still gets cancellation; `stop` and
+    /// `pulse` may both be set (the stop fires first on `check`).
+    pub fn with_pulse(mut self, pulse: how_far::SharedPulse) -> Self {
+        self.pulse = Some(pulse);
         self
     }
 
@@ -609,6 +620,7 @@ impl<'a> EncodeRequest<'a> {
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
             stop: self.stop,
+            pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,
@@ -912,6 +924,7 @@ impl<'a> EncodeRequest<'a> {
             codec_config: self.codec_config,
             limits,
             stop: self.stop.clone(),
+            pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,

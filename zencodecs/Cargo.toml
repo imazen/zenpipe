@@ -14,6 +14,7 @@ exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".super
 [dependencies]
 # Core (always available)
 enough = "0.4.4"
+how-far = "0.1.0"
 whereat = "0.1.5"
 thiserror = { version = "2.0.20", default-features = false }
 rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }

@@ -4965,6 +4965,7 @@ dependencies = [
  "enough",
  "fast-ssim2",
  "heic",
+ "how-far",
  "imgref",
  "linear-srgb",
  "moxcms 0.8.1",

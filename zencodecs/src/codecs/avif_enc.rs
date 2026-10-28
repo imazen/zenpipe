@@ -52,6 +52,11 @@ pub(crate) fn build_encoding(
         if let Some(alpha_q) = cfg.avif_alpha_quality {
             enc = enc.with_alpha_quality(alpha_q);
         }
+        if let Some(backend) = cfg.avif_backend {
+            // AvifEncoderConfig exposes no backend setter; EncoderConfig's
+            // `backend()` is a consuming builder, so swap the inner config.
+            *enc.inner_mut() = core::mem::take(enc.inner_mut()).backend(backend);
+        }
     } else {
         if let Some(q) = quality {
             enc = enc.with_generic_quality(q);
