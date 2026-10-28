@@ -25,7 +25,16 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 - Animated transcodes convert each frame to the encoder's pixel format: a decoder
   that renders frames in another layout (zenwebp renders an opaque animation as
   RGB8) made `FrameSink` slice a short row and panic. `FrameSink` now refuses a
-  strip of another format (`FormatMismatch`) or width (`DimensionMismatch`).
+  strip of another format (`FormatMismatch`) or width (`DimensionMismatch`)
+  (`3c688575`; evidence: `benchmarks/pulse_animation_qualify_2026-10-28.md`,
+  whose run failed on two recorded causes outside the fix).
+
+#### Added (qualification runner, 2026-10-28)
+
+- `scripts/qualify/`: the step helpers and strict-Clippy baseline classifier
+  that qualified the fix above, with 24 synthetic controls
+  (`just qualify-selftest`). They count `#[ignore]` tests as not run, never as
+  passes. A baseline-only strict-Clippy log is still reported as a FAIL.
 
 #### Fixed (2026-10-25)
 

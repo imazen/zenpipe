@@ -116,6 +116,27 @@ threading, hdr directives, compat security. Verified remaining:
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
 
+## Known Bugs: animated routes and qualification gaps (2026-10-28)
+
+- Fixed (`3c688575`): an animated transcode whose decoder renders frames in a
+  layout other than the encoder's (zenwebp renders an opaque lossy animation as
+  RGB8) panicked in `FrameSink`. Each frame now converts to the encoder's
+  format. Evidence: `benchmarks/pulse_animation_qualify_2026-10-28.md`.
+- Open (#111): `zencodecs::transcode()` is still-only. Given a multi-frame
+  source, it encodes the first frame and drops the rest without reporting it.
+  Nothing changes until an API proposal is reviewed.
+- Open: `imageflow-compat` (`std,imageflow-compat,nodes-jpeg,nodes-png` lib)
+  fails strict Clippy with 65 pre-existing lints, all in
+  `src/imageflow_compat/*`
+  (`scripts/qualify/imageflow-compat-clippy-baseline-60127aaf.tsv`).
+- Open: four `zencodecs/tests/stop_and_limits.rs` tests are ignored with the
+  reason "PNG codec adapter not yet wired into zencodecs", yet pass with
+  `--ignored`. The attributes stay until reviewed.
+- Open: `PipeError::Cancelled` carries no stop reason. A caller's `TimedOut`
+  and a codec's typed stop error are lost.
+- Unmeasured: stop latency. Every `zencodecs/tests/stop_latency.rs` test is an
+  `#[ignore]` benchmark.
+
 ## Known Bugs: single-codec subset warnings (fixed 2026-10-28)
 
 zenpipe `std,nodes-jxl` builds zencodecs with only `zennode,jxl-decode`; that
