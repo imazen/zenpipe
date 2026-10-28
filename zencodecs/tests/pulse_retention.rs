@@ -47,14 +47,11 @@ impl Pulse for Deadline {
 /// an `At`-only downcast saw nothing). The reason itself is still required.
 fn stop_reason(error: &whereat::At<CodecError>) -> Option<StopReason> {
     match error.error() {
-        CodecError::Codec { source, .. } => {
-            zencodec::find_cause::<zencodec::CodecError>(&**source).and_then(|e| {
-                match e.category() {
-                    zencodec::ErrorCategory::Stopped(reason) => Some(reason),
-                    _ => None,
-                }
-            })
-        }
+        CodecError::Codec { source, .. } => zencodec::find_cause::<zencodec::CodecError>(&**source)
+            .and_then(|e| match e.category() {
+                zencodec::ErrorCategory::Stopped(reason) => Some(reason),
+                _ => None,
+            }),
         _ => None,
     }
 }
