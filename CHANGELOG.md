@@ -749,6 +749,18 @@ None.
 
 #### Fixed
 
+- A resizing layout with an orientation no longer puts uneven padding on the
+  wrong side. The resizer pads before it orients, and `config_from_plan` moved
+  the oriented canvas's margins to the unoriented raster by swapping axes only,
+  so for every orientation but `Identity` and `Transpose` a flip mirrored
+  uneven margins and a quarter turn moved them to another side. Each margin is
+  now padded on the side the orientation turns onto it, for every
+  `config_from_plan` / `streaming_from_plan` caller. The regression,
+  `tests/layout_exact.rs`
+  (`a_resizing_layout_pads_where_the_plan_places_the_content`), also needs two
+  zenresize fixes (imazen/zenresize#25): with a turning orientation, bottom
+  padding was captured before the content, and padded FlipH flipped its
+  reusable row in place.
 - A `Layout` whose plan keeps the size no longer resamples every sample.
   `NodeOp::Layout` ran each plan through the streaming resizer, so an
   orientation, trim or placement with no scaling was resampled 1:1 with the

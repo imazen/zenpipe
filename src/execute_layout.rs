@@ -1054,8 +1054,10 @@ pub fn replicate_edges(
 ///
 /// When the plan has a non-identity orientation, the resize and padding
 /// dimensions are pre-inverted so that a post-resize orientation transform
-/// produces the correct final dimensions. Use [`streaming_from_plan()`]
-/// which automatically applies the orientation via [`zenresize::OrientOutput`].
+/// produces the correct final dimensions, and each margin of the oriented
+/// canvas is padded on the side the orientation turns onto it. Use
+/// [`streaming_from_plan()`] which automatically applies the orientation via
+/// [`zenresize::OrientOutput`].
 ///
 /// **Edge replication** (`content_size`) is not handled — call
 /// [`replicate_edges()`] on the final output if needed.
@@ -1100,25 +1102,37 @@ pub fn config_from_plan(
         builder = builder.crop(trim_x, trim_y, trim_w, trim_h);
     }
 
-    // Padding from canvas placement
-    // Canvas dimensions and placement are post-orientation, so pre-invert for streaming.
-    let (canvas_w, canvas_h) = if swaps {
-        (plan.canvas.height, plan.canvas.width)
-    } else {
-        (plan.canvas.width, plan.canvas.height)
-    };
-    let (px, py) = if swaps {
-        (plan.placement.1, plan.placement.0)
-    } else {
-        plan.placement
-    };
-
-    let needs_canvas = canvas_w != rw || canvas_h != rh || px != 0 || py != 0;
+    // Padding from canvas placement. Canvas and placement are
+    // post-orientation, but the resizer pads before it orients: each margin
+    // of the oriented canvas is padded on the side the orientation turns
+    // onto it (a flip mirrors it, a quarter turn moves it to the adjacent
+    // side).
+    let (px, py) = plan.placement;
+    let needs_canvas = plan.canvas.width != plan.resize_to.width
+        || plan.canvas.height != plan.resize_to.height
+        || px != 0
+        || py != 0;
     if needs_canvas {
-        let pad_left = px.max(0) as u32;
-        let pad_top = py.max(0) as u32;
-        let pad_right = canvas_w.saturating_sub(rw + pad_left);
-        let pad_bottom = canvas_h.saturating_sub(rh + pad_top);
+        let left = px.max(0) as u32;
+        let top = py.max(0) as u32;
+        let right = plan
+            .canvas
+            .width
+            .saturating_sub(plan.resize_to.width.saturating_add(left));
+        let bottom = plan
+            .canvas
+            .height
+            .saturating_sub(plan.resize_to.height.saturating_add(top));
+        let (pad_left, pad_top, pad_right, pad_bottom) = match orient {
+            Orientation::FlipH => (right, top, left, bottom),
+            Orientation::Rotate180 => (right, bottom, left, top),
+            Orientation::FlipV => (left, bottom, right, top),
+            Orientation::Transpose => (top, left, bottom, right),
+            Orientation::Rotate90 => (top, right, bottom, left),
+            Orientation::Transverse => (bottom, right, top, left),
+            Orientation::Rotate270 => (bottom, left, top, right),
+            _ => (left, top, right, bottom),
+        };
 
         let color = canvas_color_to_f32(&plan.canvas_color, desc);
         builder = builder
