@@ -705,6 +705,17 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Fixed (2026-10-28)
 
+- **A resizing layout with an orientation put uneven padding on the wrong
+  side.** The resizer pads before it orients, and `config_from_plan` moved the
+  oriented canvas's margins to the unoriented raster by swapping axes only, so
+  for every orientation but `Identity` and `Transpose` a flip mirrored uneven
+  margins and a quarter turn moved them to another side. Each margin is now
+  padded on the side the orientation turns onto it, for every
+  `config_from_plan` / `streaming_from_plan` caller. The control, io-check
+  `layout_exact` (`a_resizing_layout_pads_where_the_plan_places_the_content`),
+  still fails: two zenresize bugs under it also misplace the padding (bottom
+  padding captured before the content for a turning orientation; padded FlipH
+  flipping its reusable row in place). See `docs/io.md`.
 - **A `Layout` whose plan keeps the size resampled every sample.**
   `NodeOp::Layout` ran each plan through the streaming resizer, so an
   orientation, trim or placement with no scaling was resampled 1:1 with the
