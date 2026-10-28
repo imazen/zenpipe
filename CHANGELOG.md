@@ -705,6 +705,15 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Fixed (2026-10-28)
 
+- **`ImageJob` lost the orientation under its default policy.** `WebDefault`
+  (the default) and `StripAll` set the output orientation to `Identity` and
+  stripped EXIF without rendering the orientation, so a rotated photo displayed
+  sideways on the legacy and the planned route. Every policy now carries the
+  source orientation to the encoder (it is display-critical, not descriptive)
+  unless a `zenlayout.orient` node with a concrete value renders it, in which case
+  the output says `Identity`. Regression: io-check `image_job`
+  (`displayed_orientation_survives_every_metadata_policy_on_both_routes`,
+  `an_orient_node_renders_the_orientation_once_on_both_routes`).
 - **`CropSource` dropped rows** when an upstream strip straddled one of its
   16-row output strips: it filled the output strip, then skipped the rest of that
   upstream strip, so any crop whose rows did not line up with the upstream strips

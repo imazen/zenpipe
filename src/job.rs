@@ -263,6 +263,9 @@ pub enum CmsMode {
 /// EXIF and XMP contain privacy-sensitive data (GPS, camera serial numbers,
 /// edit history) and can be large (embedded thumbnails, C2PA provenance).
 /// ICC profiles and CICP are functional — they affect how pixels display.
+/// So is the orientation: every policy carries the source's to the encoder
+/// unless a `zenlayout.orient` node renders it into the pixels, in which case
+/// the output is upright and says so.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MetadataPolicy {
     /// Web-optimized defaults (recommended).
@@ -271,8 +274,8 @@ pub enum MetadataPolicy {
     /// HDR metadata (ContentLightLevel, MasteringDisplay).
     ///
     /// Strips: EXIF (privacy: GPS, timestamps, camera IDs, thumbnails),
-    /// XMP (privacy: edit history, author info; includes C2PA provenance),
-    /// orientation (already applied or passed through as flag).
+    /// XMP (privacy: edit history, author info; includes C2PA provenance).
+    /// The orientation itself is kept (see above).
     #[default]
     WebDefault,
 
@@ -285,7 +288,7 @@ pub enum MetadataPolicy {
     /// Strip all metadata. Smallest output.
     ///
     /// Only the bare minimum for correct display is kept:
-    /// CICP (4 bytes, needed for wide gamut/HDR).
+    /// CICP (4 bytes, needed for wide gamut/HDR) and the orientation.
     StripAll,
 }
 
@@ -881,6 +884,13 @@ impl<'a> ImageJob<'a> {
                 if discard_icc {
                     m.icc_profile = None;
                 }
+                // Display-critical, not descriptive: the encoder must carry the
+                // source orientation unless the nodes render it.
+                m.orientation = if self.renders_orientation() {
+                    zencodec::Orientation::Identity
+                } else {
+                    image_info.orientation
+                };
                 m
             }),
         };
@@ -1422,6 +1432,20 @@ impl<'a> ImageJob<'a> {
         Ok((Box::new(source), sidecar))
     }
 
+    /// Whether the nodes re-orient the pixels: a `zenlayout.orient` node with a
+    /// concrete non-identity EXIF value (2-8). The identity value `1` and the
+    /// autorotate sentinel `0` leave the stored pixels as they are (the sentinel
+    /// is not resolved when the geometry is compiled), so the source
+    /// orientation still has to reach the encoder.
+    fn renders_orientation(&self) -> bool {
+        self.nodes.iter().any(|n| {
+            n.schema().id == "zenlayout.orient"
+                && n.get_param("orientation")
+                    .and_then(|v| v.as_i32())
+                    .is_some_and(|o| (2..=8).contains(&o))
+        })
+    }
+
     /// Apply metadata policy: filter metadata fields based on the policy.
     fn apply_metadata_policy(&self, mut meta: zencodec::Metadata) -> zencodec::Metadata {
         match self.metadata_policy {
@@ -1440,8 +1464,7 @@ impl<'a> ImageJob<'a> {
                 }
                 // Keep CICP (4 bytes, required for correct wide gamut/HDR display)
                 // Keep content_light_level and mastering_display (HDR tone mapping)
-                // Set orientation to Identity (already applied or passed through)
-                meta.orientation = zencodec::Orientation::Identity;
+                // Orientation: set by the caller from what the nodes render.
                 meta
             }
             MetadataPolicy::StripAll => {
@@ -1450,8 +1473,8 @@ impl<'a> ImageJob<'a> {
                 meta.icc_profile = None;
                 meta.content_light_level = None;
                 meta.mastering_display = None;
-                meta.orientation = zencodec::Orientation::Identity;
-                // Keep only CICP (4 bytes, bare minimum for correct display)
+                // Keep only CICP (4 bytes, bare minimum for correct display);
+                // the caller sets the orientation from what the nodes render.
                 meta
             }
         }

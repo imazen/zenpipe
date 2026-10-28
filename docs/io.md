@@ -192,11 +192,15 @@ Integration findings (2026-10-28):
   orientation as EXIF and refuse when EXIF is forbidden (zenjpeg `6c548022`,
   zenpng `1cb9976e`). zencodecs' `EncodeRequest` also folds a field-only
   orientation into a minimal EXIF payload for JPEG, PNG and WebP before the codec.
-- **Open (`ImageJob`): `WebDefault` and `StripAll` drop orientation without
-  rendering it.** Both set the output orientation to `Identity` and strip EXIF,
-  but a job with no orientation step leaves the stored pixels unrotated, so a
-  Rotate90 source displays sideways on the legacy and the planned route alike.
-  `PreserveAll` carries it. `WebDefault` is the default.
+- **Fixed here (`ImageJob`): `WebDefault` and `StripAll` dropped the orientation
+  without rendering it**, so a rotated photo displayed sideways on both routes.
+  Every policy now carries the source orientation to the encoder unless a
+  `zenlayout.orient` node with a concrete value renders it, in which case the
+  output says `Identity`. Still open on this base (zenpipe issue 107): with an
+  orient node the rendered pixels are not the exact rotation (5,715 of 18,915
+  samples differ, by up to 95, on both routes), and `autorotate=true` (the
+  `Orient` sentinel 0, not resolved when the geometry is compiled) fails in
+  `ResizeSource` with a ring-buffer overflow that main has since fixed.
 - **Fixed in zencodec `79676215`: one PNG native batch was delivered in one step.**
   zenpng returns 32 KiB of rows per batch (a 97x65 RGB image arrives whole); at
   `f5a7fd46` the coroutine decoder copied every sub-strip of a batch into the sink
