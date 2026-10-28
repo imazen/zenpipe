@@ -56,7 +56,7 @@ zenbitmaps = { git = "https://github.com/imazen/zenbitmaps" }
 # rav1d-safe decoder (see the root manifest for the full rationale). This
 # workspace's committed lock had drifted to a DIFFERENT zenavif (7d950f1c)
 # than the root's (11033c95) while both entries floated.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7059dcfa09a2a1672ac598d15bb89bacde47728" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
 heic = { git = "https://github.com/imazen/heic" }
 zentiff = { git = "https://github.com/imazen/zenextras" }
 zenraw = { git = "https://github.com/imazen/zenraw" }

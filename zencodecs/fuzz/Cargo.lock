@@ -3100,7 +3100,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
+source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -3127,7 +3127,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=a7059dcfa09a2a1672ac598d15bb89bacde47728#a7059dcfa09a2a1672ac598d15bb89bacde47728"
+source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -3254,7 +3254,7 @@ dependencies = [
 [[package]]
 name = "zenjp2"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras#206965d639426ec333a94f0bb61af8b8894f431c"
+source = "git+https://github.com/imazen/zenextras#fb3c9d5703a3c6e5ac9a6e855c7e94edf17a5707"
 dependencies = [
  "enough",
  "hayro-jpeg2000",
@@ -3365,7 +3365,7 @@ dependencies = [
 [[package]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras#206965d639426ec333a94f0bb61af8b8894f431c"
+source = "git+https://github.com/imazen/zenextras#fb3c9d5703a3c6e5ac9a6e855c7e94edf17a5707"
 dependencies = [
  "flate2",
  "hayro",
@@ -3539,7 +3539,7 @@ dependencies = [
 [[package]]
 name = "zensvg"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras#206965d639426ec333a94f0bb61af8b8894f431c"
+source = "git+https://github.com/imazen/zenextras#fb3c9d5703a3c6e5ac9a6e855c7e94edf17a5707"
 dependencies = [
  "data-url",
  "enough",
@@ -3558,7 +3558,7 @@ dependencies = [
 [[package]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras#206965d639426ec333a94f0bb61af8b8894f431c"
+source = "git+https://github.com/imazen/zenextras#fb3c9d5703a3c6e5ac9a6e855c7e94edf17a5707"
 dependencies = [
  "bytemuck",
  "enough",

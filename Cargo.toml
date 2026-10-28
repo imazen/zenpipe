@@ -488,7 +488,7 @@ zengif = { git = "https://github.com/imazen/zengif" }
 # the graph: cargo treats `git+URL` and `git+URL?rev=X` as different sources,
 # so you get two zenavif-parse instances and its `At<Error>` stops unifying.
 # `just check-pins` fails on a missing, disagreeing or dead pin.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7059dcfa09a2a1672ac598d15bb89bacde47728" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "fada2db0fbfbcfc6425d4eef649b0936850733b5" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw" }
