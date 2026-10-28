@@ -714,6 +714,12 @@ Three crates.io requirements block a newer release and were left alone on purpos
   the output says `Identity`. Regression: io-check `image_job`
   (`displayed_orientation_survives_every_metadata_policy_on_both_routes`,
   `an_orient_node_renders_the_orientation_once_on_both_routes`).
+- `ResizeSource` and `ResizeF32Source` no longer fail with "ring buffer overflow"
+  when an upstream strip is taller than the 16-row batch the resizer is sized for:
+  rows are pushed one at a time with output drained in between, and rows that
+  cannot be pushed before the output strip fills are held for the next pull
+  (adopted from main `dd63d9d1`; `tests/resize_strip_heights.rs`, mirrored in
+  io-check, checks strips of 1, 7, 16, 40 and 64 rows give bit-identical output).
 - **`CropSource` dropped rows** when an upstream strip straddled one of its
   16-row output strips: it filled the output strip, then skipped the rest of that
   upstream strip, so any crop whose rows did not line up with the upstream strips
