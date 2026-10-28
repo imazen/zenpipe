@@ -23,6 +23,49 @@ mod wasm128;
 #[cfg(target_arch = "wasm32")]
 use wasm128::*;
 
+/// `self * a + b` on `f32x8`, rounded as the backend's `mul_add` rounds:
+/// fused on x86-64 (FMA) and NEON (`vfmaq_f32`), multiply then add on the
+/// scalar backend and on WASM without `relaxed-simd`.
+///
+/// magetypes 0.9.31 deprecates `mul_add` in favour of `mul_add_relaxed`, the
+/// same operation under a new name. This crate requires magetypes `0.9.30`
+/// (any `<0.10`), where `mul_add_relaxed` does not exist yet, while CI's
+/// sibling build uses archmage main. Both run identical code (verified
+/// 2026-10-28 against the `magetypes-v0.9.30` tag and archmage main
+/// `ca9fe520`, the 0.9.31-beta.2 sources). 0.9.30's `mul_add` and main's
+/// `mul_add_relaxed` are both
+/// `Self(T::mul_add(self.1, self.0, a.0, b.0), self.1)`, and main's
+/// deprecated `mul_add` calls `mul_add_relaxed`. The f32x8 backend
+/// `mul_add` bodies (x86-64-v3, -v4, NEON, WASM128, scalar) are unchanged.
+/// Call `mul_add_relaxed` directly once the requirement admits 0.9.31.
+#[cfg(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "wasm32"
+))]
+pub(crate) trait MulAddCompat {
+    /// `self * a + b`, as `mul_add` computes it.
+    fn mul_add_compat(self, a: Self, b: Self) -> Self;
+}
+
+#[cfg(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "wasm32"
+))]
+impl<T: magetypes::simd::backends::F32x8Backend> MulAddCompat
+    for magetypes::simd::generic::f32x8<T>
+{
+    #[inline(always)]
+    #[allow(
+        deprecated,
+        reason = "magetypes 0.9.31 renames mul_add to mul_add_relaxed (same code); 0.9.30, which this crate requires, has only mul_add"
+    )]
+    fn mul_add_compat(self, a: Self, b: Self) -> Self {
+        self.mul_add(a, b)
+    }
+}
+
 /// Dispatch: scale every element of a plane by a constant factor.
 pub(crate) fn scale_plane(plane: &mut [f32], factor: f32) {
     archmage::incant!(scale_plane_impl(plane, factor), [v3, neon, wasm128, scalar]);

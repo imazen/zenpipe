@@ -749,6 +749,40 @@ None.
 
 #### Fixed
 
+- A resizing layout with an orientation no longer puts uneven padding on the
+  wrong side. The resizer pads before it orients, and `config_from_plan` moved
+  the oriented canvas's margins to the unoriented raster by swapping axes only,
+  so for every orientation but `Identity` and `Transpose` a flip mirrored
+  uneven margins and a quarter turn moved them to another side. Each margin is
+  now padded on the side the orientation turns onto it, for every
+  `config_from_plan` / `streaming_from_plan` caller. The regression,
+  `tests/layout_exact.rs`
+  (`a_resizing_layout_pads_where_the_plan_places_the_content`), also needs two
+  zenresize fixes (imazen/zenresize#25): with a turning orientation, bottom
+  padding was captured before the content, and padded FlipH flipped its
+  reusable row in place. Those are fixed on zenresize main; this workspace
+  pins it with `[patch.crates-io] zenresize` at 5b4e14e3 until a release
+  carries them.
+- A `Layout` whose plan keeps the size no longer resamples every sample.
+  `NodeOp::Layout` ran each plan through the streaming resizer, so an
+  orientation, trim or placement with no scaling was resampled 1:1 with the
+  default Robidoux kernel, which blends neighbours (its weights at integer
+  offsets are about 0.063, 0.874, 0.063): an `ImageJob` orient node changed
+  5,715 of 18,915 samples, max 95. A size-preserving plan (`resize_is_identity`,
+  no post-resize effects) now moves samples exactly, in the plan's order: trim
+  (`CropSource`), a horizontal flip (`FlipHSource`) and placement
+  (`ExpandCanvasSource`, with the bytes the resizer's padding writes) stream;
+  any other orientation turns the materialized trimmed frame, as `Orient` does,
+  and the estimate counts that frame and its turned copy. Regression:
+  `tests/layout_exact.rs` (eight orientations with trim, uneven padding and
+  negative placement, against authored canvases).
+- `CropSource` no longer drops rows when an upstream strip straddles one of its
+  16-row output strips. It filled the output strip, then skipped the rest of that
+  upstream strip, so any crop whose rows did not line up with the upstream strips
+  came out short and shifted; the cropped rows that do not fit are now carried to
+  the next output strip. Regression: `tests/pipeline.rs`
+  `crop_keeps_every_row_across_unaligned_upstream_strips` (six crops over
+  upstream strips of 1, 7, 16, 17, 64 and 150 rows, exact samples).
 - `ResizeSource` and `ResizeF32Source` no longer fail with "ring buffer overflow" when an upstream strip is taller than the 16-row batch the resizer is sized for (an `ImageJob` resizing a 48x40 PNG with `w=24` failed). Rows are pushed one at a time with output drained in between; rows that cannot be pushed before the output strip fills are held for the next pull. `tests/resize_strip_heights.rs` checks that strips of 1, 7, 16, 40 and 64 rows give bit-identical output, down- and upscaling, RGBA8 and f32.
 - Schema fixture export respects the configured temporary directory (9dccbaa3).
 - Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
@@ -1111,6 +1145,13 @@ None.
 
 #### Fixed
 
+- The f32x8 kernels in `simd/x86.rs` and `simd/wide_simd.rs` now reach
+  `mul_add` through a private `MulAddCompat` helper, which confines one
+  `#[allow(deprecated)]` to the legacy call. magetypes 0.9.31 deprecates
+  `mul_add` for `mul_add_relaxed`, the same operation, and CI's sibling
+  archmage main turned the 88 call sites per target into Clippy errors. This
+  crate still requires magetypes 0.9.30, where `mul_add_relaxed` does not exist.
+  Same arithmetic and the same intrinsics on every backend; pixels unchanged.
 - Use token-suffixed SIMD constructors in the generic ARM path, preserving
   arithmetic while satisfying warnings-as-errors Clippy on ARM targets.
 

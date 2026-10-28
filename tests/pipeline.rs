@@ -529,3 +529,53 @@ fn edge_replicate_no_expansion() {
         assert_eq!(*px, [100, 200, 50, 255]);
     }
 }
+
+/// Crops over upstream strips that do not line up with `CropSource`'s own
+/// 16-row output strips. Before the fix, an upstream strip reaching past the
+/// output strip being filled lost its remaining rows.
+#[test]
+fn crop_keeps_every_row_across_unaligned_upstream_strips() {
+    const W: u32 = 23;
+    const H: u32 = 150;
+    let mut data = Vec::with_capacity((W * H * 3) as usize);
+    for y in 0..H {
+        for x in 0..W {
+            data.extend_from_slice(&[y as u8, (y >> 8) as u8 ^ x as u8, (x * 11) as u8]);
+        }
+    }
+    let mut wrong = Vec::new();
+    for upstream_rows in [1, 7, 16, 17, 64, 150] {
+        for (x, y, w, h) in [
+            (0, 0, W, H),
+            (2, 3, 19, 100),
+            (1, 16, 21, 33),
+            (5, 5, 3, 1),
+            (0, 149, W, 1),
+            (4, 61, 9, 89),
+        ] {
+            let upstream = MaterializedSource::from_data(data.clone(), W, H, format::RGB8_SRGB)
+                .with_strip_height(upstream_rows);
+            let mut crop = CropSource::new(Box::new(upstream), x, y, w, h).unwrap();
+            let (mut got, mut rows) = (Vec::new(), 0);
+            while let Some(strip) = crop.next().unwrap() {
+                for r in 0..strip.rows() {
+                    got.extend_from_slice(strip.row(r));
+                }
+                rows += strip.rows();
+            }
+            let mut expected = Vec::new();
+            for row in y..y + h {
+                let start = ((row * W + x) * 3) as usize;
+                expected.extend_from_slice(&data[start..start + (w * 3) as usize]);
+            }
+            if rows != h || got != expected {
+                wrong.push(format!(
+                    "upstream strips of {upstream_rows}: crop ({x},{y},{w},{h}) gave {rows} rows, \
+                     samples equal: {}",
+                    got == expected
+                ));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}

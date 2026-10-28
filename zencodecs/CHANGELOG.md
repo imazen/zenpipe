@@ -14,6 +14,12 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ### Added
 
+- `CodecConfig::with_avif_backend` selects the native AV1 encoder;
+  `EncodeRequest::with_pulse` retains the caller's progress/cancellation handle
+  on the zencodec 0.1 family (superseded by the 0.2 Pulse migration). The SVT
+  selection uses its current 4:2:0 adapter, and unavailable backends refuse
+  rather than fall back (`5b43355`).
+
 - The inventory CLI accepts one `-` input for encoded bytes on stdin, with fallible buffer growth and the same part rows as file input.
 
 - Structural inventory dispatch and the `zencodecs inventory` CLI (from #89). `inventory` is default-enabled in

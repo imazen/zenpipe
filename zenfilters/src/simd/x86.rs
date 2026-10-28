@@ -4,6 +4,8 @@ use crate::prelude::*;
 use archmage::prelude::*;
 use magetypes::simd::f32x8;
 
+use super::MulAddCompat;
+
 use crate::blur::GaussianKernel;
 use crate::context::FilterContext;
 use linear_srgb::tokens::x8::{linear_to_srgb_u8_v3, srgb_u8_to_linear_v3};
@@ -151,7 +153,7 @@ fn sigmoid_tone_map_plane_simd(token: X64V3Token, plane: &mut [f32], contrast: f
 
         // Schlick bias: x / (bias_a * (1 - x) + 1)
         if has_bias {
-            let denom = (one_v - x).mul_add(bias_a_v, one_v);
+            let denom = (one_v - x).mul_add_compat(bias_a_v, one_v);
             x *= denom.recip();
             x = x.max(zero_v).min(one_v);
         }
@@ -220,7 +222,7 @@ fn unsharp_fuse_simd(
         let orig = f32x8::load_t(token, sc);
         let blur = f32x8::load_t(token, bc);
         let hp = orig - blur;
-        hp.mul_add(amount_v, orig).max(zero_v).store(dc);
+        hp.mul_add_compat(amount_v, orig).max(zero_v).store(dc);
     }
 
     let done = src_chunks.len() * 8;
@@ -289,7 +291,7 @@ fn gaussian_blur_plane_simd(
                 let wv = f32x8::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = padded[x + k..x + k + 8].try_into().unwrap();
                 let vals = f32x8::load_t(token, src_chunk);
-                acc = vals.mul_add(wv, acc);
+                acc = vals.mul_add_compat(wv, acc);
             }
             acc.store(out_chunk);
         }
@@ -320,7 +322,7 @@ fn gaussian_blur_plane_simd(
                 let sy = (y + k).saturating_sub(radius).min(h - 1);
                 let wv = f32x8::splat_t(token, weight);
                 let src_chunk: &[f32; 8] = h_buf[sy * w + x..sy * w + x + 8].try_into().unwrap();
-                acc = f32x8::load_t(token, src_chunk).mul_add(wv, acc);
+                acc = f32x8::load_t(token, src_chunk).mul_add_compat(wv, acc);
             }
             acc.store(out_chunk);
         }
@@ -400,7 +402,7 @@ fn brilliance_apply_simd(
         // Shadow: t = clamp(1 - ratio, 0, 1), smoothstep = t² * (3 - 2t)
         let st = (one - ratio).max(zero).min(one);
         let shadow_curve = st * st * (three - two * st);
-        let shadow_corr = shadow_curve.mul_add(sa, one);
+        let shadow_corr = shadow_curve.mul_add_compat(sa, one);
 
         // Highlight: t = clamp(ratio - 1, 0, 1), smoothstep
         let ht = (ratio - one).max(zero).min(one);
@@ -501,9 +503,9 @@ fn scatter_oklab_simd(
         let b = f32x8::from_array_t(token, b_arr) * inv_white_v;
 
         // M1: linear RGB → LMS (FMA chains)
-        let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
-        let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
-        let lms_s = m1_20.mul_add(r, m1_21.mul_add(g, m1_22 * b));
+        let lms_l = m1_00.mul_add_compat(r, m1_01.mul_add_compat(g, m1_02 * b));
+        let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
+        let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
         // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
         let l_ = lms_l.cbrt_lowp();
@@ -511,9 +513,9 @@ fn scatter_oklab_simd(
         let s_ = lms_s.cbrt_lowp();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
-        let ok_l = m2_00.mul_add(l_, m2_01.mul_add(m_, m2_02 * s_));
-        let ok_a = m2_10.mul_add(l_, m2_11.mul_add(m_, m2_12 * s_));
-        let ok_b = m2_20.mul_add(l_, m2_21.mul_add(m_, m2_22 * s_));
+        let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
+        let ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
+        let ok_b = m2_20.mul_add_compat(l_, m2_21.mul_add_compat(m_, m2_22 * s_));
 
         // Store to planes (direct SIMD store to contiguous memory)
         let l_chunk: &mut [f32; 8] = (&mut l_out[i..i + 8]).try_into().unwrap();
@@ -605,9 +607,9 @@ fn gather_oklab_simd(
         let bv = f32x8::load_t(token, b_chunk);
 
         // Inverse M2: Oklab → LMS^(1/3) (FMA chains)
-        let l_ = im2_00.mul_add(lv, im2_01.mul_add(av, im2_02 * bv));
-        let m_ = im2_10.mul_add(lv, im2_11.mul_add(av, im2_12 * bv));
-        let s_ = im2_20.mul_add(lv, im2_21.mul_add(av, im2_22 * bv));
+        let l_ = im2_00.mul_add_compat(lv, im2_01.mul_add_compat(av, im2_02 * bv));
+        let m_ = im2_10.mul_add_compat(lv, im2_11.mul_add_compat(av, im2_12 * bv));
+        let s_ = im2_20.mul_add_compat(lv, im2_21.mul_add_compat(av, im2_22 * bv));
 
         // Cube: LMS^(1/3) → LMS
         let lms_l = l_ * l_ * l_;
@@ -615,9 +617,9 @@ fn gather_oklab_simd(
         let lms_s = s_ * s_ * s_;
 
         // Inverse M1: LMS → linear RGB (FMA chains)
-        let r = im1_00.mul_add(lms_l, im1_01.mul_add(lms_m, im1_02 * lms_s));
-        let g = im1_10.mul_add(lms_l, im1_11.mul_add(lms_m, im1_12 * lms_s));
-        let b = im1_20.mul_add(lms_l, im1_21.mul_add(lms_m, im1_22 * lms_s));
+        let r = im1_00.mul_add_compat(lms_l, im1_01.mul_add_compat(lms_m, im1_02 * lms_s));
+        let g = im1_10.mul_add_compat(lms_l, im1_11.mul_add_compat(lms_m, im1_12 * lms_s));
+        let b = im1_20.mul_add_compat(lms_l, im1_21.mul_add_compat(lms_m, im1_22 * lms_s));
 
         // Scale by reference white and clamp to [0, ∞)
         let r_out = (r * white_v).max(zero_v);
@@ -721,9 +723,9 @@ fn scatter_srgb_u8_to_oklab_rite(
         let b = f32x8::from_array_t(token, srgb_u8_to_linear_v3(token, b_u8));
 
         // M1: linear RGB → LMS (FMA chains)
-        let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
-        let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
-        let lms_s = m1_20.mul_add(r, m1_21.mul_add(g, m1_22 * b));
+        let lms_l = m1_00.mul_add_compat(r, m1_01.mul_add_compat(g, m1_02 * b));
+        let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
+        let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
         // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
         let l_ = lms_l.cbrt_lowp();
@@ -731,9 +733,9 @@ fn scatter_srgb_u8_to_oklab_rite(
         let s_ = lms_s.cbrt_lowp();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
-        let ok_l = m2_00.mul_add(l_, m2_01.mul_add(m_, m2_02 * s_));
-        let ok_a = m2_10.mul_add(l_, m2_11.mul_add(m_, m2_12 * s_));
-        let ok_b = m2_20.mul_add(l_, m2_21.mul_add(m_, m2_22 * s_));
+        let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
+        let ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
+        let ok_b = m2_20.mul_add_compat(l_, m2_21.mul_add_compat(m_, m2_22 * s_));
 
         // Store to planes (direct SIMD store to contiguous memory)
         let l_chunk: &mut [f32; 8] = (&mut l_out[i..i + 8]).try_into().unwrap();
@@ -820,9 +822,9 @@ fn gather_oklab_to_srgb_u8_rite(
         let bv = f32x8::load_t(token, b_chunk);
 
         // Inverse M2: Oklab → LMS^(1/3) (FMA chains)
-        let l_ = im2_00.mul_add(lv, im2_01.mul_add(av, im2_02 * bv));
-        let m_ = im2_10.mul_add(lv, im2_11.mul_add(av, im2_12 * bv));
-        let s_ = im2_20.mul_add(lv, im2_21.mul_add(av, im2_22 * bv));
+        let l_ = im2_00.mul_add_compat(lv, im2_01.mul_add_compat(av, im2_02 * bv));
+        let m_ = im2_10.mul_add_compat(lv, im2_11.mul_add_compat(av, im2_12 * bv));
+        let s_ = im2_20.mul_add_compat(lv, im2_21.mul_add_compat(av, im2_22 * bv));
 
         // Cube: LMS^(1/3) → LMS
         let lms_l = l_ * l_ * l_;
@@ -830,9 +832,9 @@ fn gather_oklab_to_srgb_u8_rite(
         let lms_s = s_ * s_ * s_;
 
         // Inverse M1: LMS → linear RGB (FMA chains)
-        let r = im1_00.mul_add(lms_l, im1_01.mul_add(lms_m, im1_02 * lms_s));
-        let g = im1_10.mul_add(lms_l, im1_11.mul_add(lms_m, im1_12 * lms_s));
-        let b = im1_20.mul_add(lms_l, im1_21.mul_add(lms_m, im1_22 * lms_s));
+        let r = im1_00.mul_add_compat(lms_l, im1_01.mul_add_compat(lms_m, im1_02 * lms_s));
+        let g = im1_10.mul_add_compat(lms_l, im1_11.mul_add_compat(lms_m, im1_12 * lms_s));
+        let b = im1_20.mul_add_compat(lms_l, im1_21.mul_add_compat(lms_m, im1_22 * lms_s));
 
         // LUT: linear f32 → sRGB u8 (includes clamp to [0, 1])
         let r_u8 = linear_to_srgb_u8_v3(token, r.to_array());
@@ -914,8 +916,8 @@ fn hue_rotate_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], cos_r: f32, 
         let av = f32x8::load_t(token, &*ac);
         let bv = f32x8::load_t(token, &*bc);
         // a' = a*cos - b*sin, b' = a*sin + b*cos
-        cos_v.mul_add(av, neg_sin_v * bv).store(ac);
-        sin_v.mul_add(av, cos_v * bv).store(bc);
+        cos_v.mul_add_compat(av, neg_sin_v * bv).store(ac);
+        sin_v.mul_add_compat(av, cos_v * bv).store(bc);
     }
     for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
         let a_orig = *a_val;
@@ -949,7 +951,7 @@ fn highlights_shadows_rite(token: X64V3Token, plane: &mut [f32], shadows: f32, h
         let mut l = f32x8::load_t(token, &*chunk);
         // Shadows: mask = max(1 - l*2, 0), l += mask² * shadows * 0.5
         let sm = (one_v - l * two_v).max(zero_v);
-        l = (sm * sm).mul_add(shadows_half, l);
+        l = (sm * sm).mul_add_compat(shadows_half, l);
         // Highlights: mask = clamp((l-0.5)*2, 0, 1), l -= mask² * highlights * 0.5
         let hm = ((l - half_v) * two_v).max(zero_v).min(one_v);
         l -= hm * hm * highlights_half;
@@ -996,7 +998,7 @@ fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, p
         // protection_factor = (1 - normalized)^protection
         let pf = (one_v - normalized).pow_lowp_unchecked(protection);
         // scale = 1 + amount * pf
-        let scale = amount_v.mul_add(pf, one_v);
+        let scale = amount_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
     }
@@ -1099,12 +1101,12 @@ fn fused_adjust_l_rite(
         v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
         // 5. Shadows: mask = max(1 - v*2, 0), v += mask² * shadows*0.5
         let sm = (one_v - v * two_v).max(zero_v);
-        v = (sm * sm).mul_add(shadows_half, v);
+        v = (sm * sm).mul_add_compat(shadows_half, v);
         // 6. Highlights: mask = clamp((v-0.5)*2, 0, 1), v -= mask² * highlights*0.5
         let hm = ((v - half_v) * two_v).max(zero_v).min(one_v);
         v -= hm * hm * highlights_half;
         // 7. Dehaze L: v * dc + 0.5 * (1 - dc)
-        v = v.mul_add(dc_v, dc_offset);
+        v = v.mul_add_compat(dc_v, dc_offset);
         v.store(chunk);
     }
     for v in tail {
@@ -1169,7 +1171,7 @@ fn fused_adjust_ab_rite(
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
         let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
-        let scale = vib_v.mul_add(pf, one_v);
+        let scale = vib_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
     }
@@ -1583,27 +1585,27 @@ fn fused_interleaved_adjust_rite(
         let b = f32x8::from_array_t(token, b_arr) * inv_white_v;
 
         // ── RGB → Oklab (stays in registers) ──
-        let lms_l = m1_00.mul_add(r, m1_01.mul_add(g, m1_02 * b));
-        let lms_m = m1_10.mul_add(r, m1_11.mul_add(g, m1_12 * b));
-        let lms_s = m1_20.mul_add(r, m1_21.mul_add(g, m1_22 * b));
+        let lms_l = m1_00.mul_add_compat(r, m1_01.mul_add_compat(g, m1_02 * b));
+        let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
+        let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
         let l_ = lms_l.cbrt_lowp();
         let m_ = lms_m.cbrt_lowp();
         let s_ = lms_s.cbrt_lowp();
 
-        let mut ok_l = m2_00.mul_add(l_, m2_01.mul_add(m_, m2_02 * s_));
-        let mut ok_a = m2_10.mul_add(l_, m2_11.mul_add(m_, m2_12 * s_));
-        let mut ok_b = m2_20.mul_add(l_, m2_21.mul_add(m_, m2_22 * s_));
+        let mut ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
+        let mut ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
+        let mut ok_b = m2_20.mul_add_compat(l_, m2_21.mul_add_compat(m_, m2_22 * s_));
 
         // ── L adjustments (all in-register) ──
         ok_l = ((ok_l - bp_v) * inv_range_v).max(zero_v);
         ok_l *= wp_exp_v;
         ok_l = ok_l.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
         let sm = (one_v - ok_l * two_v).max(zero_v);
-        ok_l = (sm * sm).mul_add(shadows_half, ok_l);
+        ok_l = (sm * sm).mul_add_compat(shadows_half, ok_l);
         let hm = ((ok_l - half_v) * two_v).max(zero_v).min(one_v);
         ok_l -= hm * hm * highlights_half;
-        ok_l = ok_l.mul_add(dc_v, dc_offset);
+        ok_l = ok_l.mul_add_compat(dc_v, dc_offset);
 
         // ── AB adjustments (all in-register) ──
         ok_a *= exp_chroma_v;
@@ -1617,25 +1619,28 @@ fn fused_interleaved_adjust_rite(
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
         let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
-        let vib_scale = vib_v.mul_add(pf, one_v);
+        let vib_scale = vib_v.mul_add_compat(pf, one_v);
         ok_a *= vib_scale;
         ok_b *= vib_scale;
 
         // ── Oklab → RGB (stays in registers) ──
-        let l2 = im2_00.mul_add(ok_l, im2_01.mul_add(ok_a, im2_02 * ok_b));
-        let m2 = im2_10.mul_add(ok_l, im2_11.mul_add(ok_a, im2_12 * ok_b));
-        let s2 = im2_20.mul_add(ok_l, im2_21.mul_add(ok_a, im2_22 * ok_b));
+        let l2 = im2_00.mul_add_compat(ok_l, im2_01.mul_add_compat(ok_a, im2_02 * ok_b));
+        let m2 = im2_10.mul_add_compat(ok_l, im2_11.mul_add_compat(ok_a, im2_12 * ok_b));
+        let s2 = im2_20.mul_add_compat(ok_l, im2_21.mul_add_compat(ok_a, im2_22 * ok_b));
 
         let lms_l2 = l2 * l2 * l2;
         let lms_m2 = m2 * m2 * m2;
         let lms_s2 = s2 * s2 * s2;
 
-        let r_out =
-            (im1_00.mul_add(lms_l2, im1_01.mul_add(lms_m2, im1_02 * lms_s2)) * white_v).max(zero_v);
-        let g_out =
-            (im1_10.mul_add(lms_l2, im1_11.mul_add(lms_m2, im1_12 * lms_s2)) * white_v).max(zero_v);
-        let b_out =
-            (im1_20.mul_add(lms_l2, im1_21.mul_add(lms_m2, im1_22 * lms_s2)) * white_v).max(zero_v);
+        let r_out = (im1_00.mul_add_compat(lms_l2, im1_01.mul_add_compat(lms_m2, im1_02 * lms_s2))
+            * white_v)
+            .max(zero_v);
+        let g_out = (im1_10.mul_add_compat(lms_l2, im1_11.mul_add_compat(lms_m2, im1_12 * lms_s2))
+            * white_v)
+            .max(zero_v);
+        let b_out = (im1_20.mul_add_compat(lms_l2, im1_21.mul_add_compat(lms_m2, im1_22 * lms_s2))
+            * white_v)
+            .max(zero_v);
 
         // ── Reinterleave and store ──
         let r_a = r_out.to_array();
@@ -1774,7 +1779,7 @@ fn stackblur_plane_simd(
             let dist = r.abs_diff(i);
             let weight = f32x8::splat_t(token, (r + 1 - dist) as f32);
             let val = f32x8::from_array_t(token, *sv);
-            sum = val.mul_add(weight, sum);
+            sum = val.mul_add_compat(weight, sum);
         }
 
         // Initial sum_out (positions 0..=r) and sum_in (positions r+1..stack_size)
