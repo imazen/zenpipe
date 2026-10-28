@@ -121,8 +121,19 @@ check-pins:
     python3 scripts/check-decoder-pins.py --self-test
     python3 scripts/check-decoder-pins.py
 
+# Fail if any graph root's lock holds more than one copy of the zencodec core
+# family (zencodec, zencodec-io, zencodec-coroutine, zenmeta).
+check-core-family:
+    python3 scripts/check-core-family.py --self-test
+    python3 scripts/check-core-family.py
+
+# Swap one native repository's git pin everywhere it is named, re-resolve every
+# lock, and stop on any unrelated package movement (left in place for review).
+repin-native repo old new crates:
+    bash scripts/repin-native.sh {{repo}} {{old}} {{new}} {{crates}}
+
 # Run all CI checks locally
-ci: fmt-check clippy check-pins test fuzz-check fuzz-regression
+ci: fmt-check clippy check-pins check-core-family test fuzz-check fuzz-regression
 
 # Build documentation site
 site-build:
