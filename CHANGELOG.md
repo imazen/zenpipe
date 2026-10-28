@@ -760,7 +760,9 @@ None.
   (`a_resizing_layout_pads_where_the_plan_places_the_content`), also needs two
   zenresize fixes (imazen/zenresize#25): with a turning orientation, bottom
   padding was captured before the content, and padded FlipH flipped its
-  reusable row in place.
+  reusable row in place. Those are fixed on zenresize main; this workspace
+  pins it with `[patch.crates-io] zenresize` at 5b4e14e3 until a release
+  carries them.
 - A `Layout` whose plan keeps the size no longer resamples every sample.
   `NodeOp::Layout` ran each plan through the streaming resizer, so an
   orientation, trim or placement with no scaling was resampled 1:1 with the

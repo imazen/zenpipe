@@ -293,6 +293,13 @@ zennode = { version = "0.1.1", default-features = false, features = ["derive"] }
 [patch.crates-io]
 # Current tone mapper; the adapter also accepts the compatible stable release.
 zentone = { git = "https://github.com/imazen/zentone", branch = "main" }
+# zenresize 0.3.1 on crates.io predates the imazen/zenresize#25 fixes
+# (padding under an output orientation). Pinned to the zenresize main commit
+# that carries them until a release includes them. zenpipe's normal graph has
+# this one zenresize. The lock keeps two copies outside it, which this patch
+# cannot reach: zensim / zensim-regress (zensimx) pin git e3975fb9 themselves,
+# and zenfilters' native dev-dependency asks for zenresize 0.2.2.
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
 # Streaming encode output is not available in the published 0.1.26 API.
 # Match zenjpeg's direct zencodec dependency so its trait types unify.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
