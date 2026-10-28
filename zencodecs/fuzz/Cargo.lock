@@ -1854,7 +1854,7 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenwebp?rev=f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb#f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb"
+source = "git+https://github.com/imazen/zenwebp?rev=5a6cce275b84f2e56f81cfed0ebd59b9345b23b7#5a6cce275b84f2e56f81cfed0ebd59b9345b23b7"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1862,6 +1862,7 @@ dependencies = [
  "enough",
  "garb",
  "hashbrown",
+ "how-far",
  "libm",
  "linear-srgb",
  "magetypes",

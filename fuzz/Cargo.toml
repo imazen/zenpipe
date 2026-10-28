@@ -39,7 +39,7 @@ zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "a76ac76d080295b754d970a3392eed8f964de490" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "5a6cce275b84f2e56f81cfed0ebd59b9345b23b7" }
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }

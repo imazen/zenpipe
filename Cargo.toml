@@ -311,7 +311,7 @@ zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a
 # is 0.4.4 -- 0.4.5 was yanked): the zencodec Pattern B error boundary
 # (`type Error = At<zencodec::CodecError>`) + `zencodec` promoted from an
 # optional feature to a required dep (zenwebp#69).
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "5a6cce275b84f2e56f81cfed0ebd59b9345b23b7" }
 # zenpng main decodes EXIF orientation (the conformance verdict table was
 # promoted to match it); the published 0.1.4 predates that sweep. This rev adds
 # Pulse controls and effective-job planning (zenpng PR 47).

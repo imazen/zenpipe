@@ -68,7 +68,7 @@ jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179a
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 # zenwebp main is 0.5.0 (Pattern B error boundary, zencodec always-on);
 # the last unyanked crates.io release is 0.4.4.
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "5a6cce275b84f2e56f81cfed0ebd59b9345b23b7" }
 # zenpng main is 0.2.0; the published 0.1.4 predates the orientation sweep.
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
 # zenbitmaps main is 0.2.0 (At<BitmapError>); crates.io tops out at 0.1.5.
