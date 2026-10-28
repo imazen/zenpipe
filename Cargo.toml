@@ -72,13 +72,9 @@ nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
 # AVIF backend + knob auto-tuning (`crate::avif_autotune`). OFF by default and
 # flips no default: a caller opts in by holding an `AvifAutotune`.
 #
-# Takes zenavif 0.2.x as a SEPARATELY-NAMED direct dep (`zenavif_tuner`)
-# alongside the 0.1.x edge zenpipe + zencodecs already use for decode/encode.
-# The two are semver-incompatible so they coexist, and no 0.2 type is ever
-# handed to a 0.1 API. Migrating the whole edge to 0.2.x is a real change with
-# nothing additive about it; when it happens, drop the rename and this feature
-# keeps working unchanged.
-avif-autotune = ["std", "dep:zenavif_tuner", "dep:almost-enough", "dep:imgref", "dep:rgb"]
+# Tuning and ordinary AVIF nodes share the same pinned 0.2.x native crate.
+# Enabling both must not introduce a separately named copy or a sibling path.
+avif-autotune = ["std", "dep:zenavif", "zenavif/auto-tune", "zenavif/encode", "zenavif/encode-imazen", "dep:almost-enough", "dep:imgref", "dep:rgb"]
 nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
 nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
@@ -152,26 +148,8 @@ zengif = { version = "0.8.0", default-features = false, features = ["std"], opti
 # requested here (CI resolves zenavif from the sibling clone of main, and
 # "zenavif does not have that feature" was the resolution failure since 2026-08-01).
 zenavif = { version = "0.2.0", default-features = false, optional = true }
-# zenavif 0.2.x, ONLY for `avif-autotune` (see the feature comment above). A
-# SIBLING PATH because the backend tuner needs zenavif's `auto-tune` feature,
-# whose own zenanalyze/zenpredict deps are path-pinned to `../zenanalyze` — a
-# git dep cannot resolve those. The crate is renamed so it sits beside the
-# 0.1.x dep on the line above. Requires a `../zenavif` checkout at or past
-# cdfe7b46 (the backend_tuner commit); the feature is off by default, so a
-# tree without one still builds everything else.
-#
-# That "at or past" is a CHECKOUT requirement, not a manifest one — VERIFIED
-# 2026-09-04 by building this feature against a read-only export of zenavif
-# `main` (c6c4c96) placed beside a symlink to ../zenanalyze: `cargo build -p
-# zenpipe --features avif-autotune` and `cargo test -p zenpipe --lib --features
-# avif-autotune` both pass (287 tests, incl. all four avif_autotune cases), with
-# ONE zenanalyze-api in the graph and no edit to zenavif's manifest. So if this
-# feature fails with `unresolved import zenavif_tuner::backend_tuner` (or a
-# missing AvifTune / AvifTuner / TuneSource), the sibling ../zenavif working
-# copy is simply BEHIND its own main — advance that checkout; do not change any
-# Cargo.toml here or there. zenavif main exports exactly what src/avif_autotune.rs
-# imports, under `#[cfg(all(feature = "auto-tune", feature = "encode"))]`.
-zenavif_tuner = { package = "zenavif", path = "../zenavif", version = "0.2.0", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
+# The optional tuner uses the same zenavif dependency and root git patch as
+# ordinary AVIF nodes, keeping one native crate/parser source in the graph.
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
 # itself depends on so the two unify rather than resolving twice.
@@ -411,7 +389,7 @@ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # other entry in this table on purpose: a rev pin would strand us the next time
 # zenjpeg's main bumps its zenanalyze requirement.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
-# zenpredict 0.2.x is unpublished (registry 0.1.0). `zenavif_tuner` (the
+# zenpredict 0.2.x is unpublished (registry 0.1.0). `zenavif` (the
 # sibling ../zenavif) asks for the registry `zenpredict = "0.2.0"`, which only
 # zenavif's own patch table satisfies; this entry points it at the same repo
 # as zencodecs' `picker` dep so the root graph resolves without that table.

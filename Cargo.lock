@@ -4766,6 +4766,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4785,57 +4786,15 @@ dependencies = [
  "yuv",
  "zenanalyze",
  "zenanalyze-api",
- "zenavif-parse 0.7.0",
+ "zenav1-aom-encode",
+ "zenav1-svt",
+ "zenavif-parse",
+ "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
  "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze)",
  "zenravif",
-]
-
-[[package]]
-name = "zenavif"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305#f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305"
-dependencies = [
- "almost-enough",
- "archmage",
- "bytemuck",
- "enough",
- "imgref",
- "linear-srgb",
- "log",
- "magetypes",
- "rav1d-safe",
- "rgb",
- "safe_unaligned_simd",
- "thiserror 2.0.21",
- "ultrahdr-core",
- "whereat",
- "yuv",
- "zenav1-aom-encode",
- "zenav1-svt",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
- "zencodec",
- "zenpixels",
- "zenpixels-convert",
- "zenravif",
-]
-
-[[package]]
-name = "zenavif-parse"
-version = "0.7.0"
-dependencies = [
- "arrayvec 0.7.8",
- "bitreader",
- "byteorder",
- "enough",
- "fallible_collections",
- "leb128",
- "log",
- "whereat",
- "zencodec",
 ]
 
 [[package]]
@@ -4977,8 +4936,8 @@ dependencies = [
  "ultrahdr-core",
  "whereat",
  "zenanalyze-api",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
- "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
+ "zenavif",
+ "zenavif-parse",
  "zenbitmaps",
  "zencodec",
  "zencodec-testkit",
@@ -5289,8 +5248,7 @@ dependencies = [
  "rgb",
  "serde_json",
  "whereat",
- "zenavif 0.2.0",
- "zenavif 0.2.0 (git+https://github.com/imazen/zenavif?rev=f29fd4d1ea0ad928164ca9a7dac9306fa7dcc305)",
+ "zenavif",
  "zenbench",
  "zenbitmaps",
  "zenblend",

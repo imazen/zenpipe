@@ -26,3 +26,10 @@ current-main CI that substitutes the migrated zenjpeg into the 0.1 family fails
 on missing SharedPulse/EncodeDeclaration/planning APIs. The locked AVIF target
 passes. Zensquoosh must keep one compatible codec family until that migration
 covers WebP and GIF as well.
+
+The optional root AVIF tuner now shares the normal pinned dependency. Its
+former sibling-path alias made the lock depend on another checkout's SVT
+revision and produced duplicate native/parser sources. The combined
+`avif-autotune,nodes-avif` library suite passes 287 tests after unification.
+`just check-standalone-locks` resolves every complete standalone graph with
+--locked, catching the missing how-far edge that no-deps metadata missed.
