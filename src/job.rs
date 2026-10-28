@@ -2348,3 +2348,177 @@ mod tests {
         }
     }
 }
+
+/// The animated route hands the job's one control to its codecs, so a stop is
+/// seen inside a frame (decoder creation, frame rendering, frame encoding), not
+/// only between frames. Each test runs the route with a control that is stopped
+/// from its `fail_at`-th poll on, with zenpipe's deadline reason, and counts
+/// every poll.
+#[cfg(all(test, feature = "nodes-gif"))]
+mod animation_control_tests {
+    use super::*;
+    use alloc::sync::Arc;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    use zencodec::enough::{Stop, StopReason};
+    use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report};
+
+    const W: u32 = 24;
+    const H: u32 = 16;
+    const FRAMES: u32 = 3;
+
+    struct Control {
+        polls: Arc<AtomicUsize>,
+        fail_at: usize,
+    }
+    impl Stop for Control {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.polls.fetch_add(1, Ordering::Relaxed) >= self.fail_at {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl Report for Control {
+        fn advance(&self, _completed: u64) {}
+    }
+    impl Pulse for Control {
+        fn split(
+            &self,
+            _execution: Execution,
+            _parts: &[PhaseSpec<'_>],
+        ) -> Result<Vec<Child<'_>>, PlanError> {
+            Err(PlanError::Unsupported)
+        }
+    }
+
+    fn control(fail_at: usize) -> (zencodec::SharedPulse, Arc<AtomicUsize>) {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let pulse = zencodec::SharedPulse::new(Control {
+            polls: polls.clone(),
+            fail_at,
+        });
+        (pulse, polls)
+    }
+
+    fn animated_gif() -> Vec<u8> {
+        let stride = W as usize * 4;
+        let mut encoder = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Gif)
+            .animation_frame_encoder(W, H)
+            .unwrap();
+        for frame in 0..FRAMES {
+            let bytes: Vec<u8> = (0..W * H)
+                .flat_map(|n| [(n * 7 + frame * 40) as u8, (frame * 60) as u8, 200, 255])
+                .collect();
+            let pixels = zenpixels::PixelSlice::new(
+                &bytes,
+                W,
+                H,
+                stride,
+                zenpixels::PixelDescriptor::RGBA8_SRGB,
+            )
+            .unwrap();
+            encoder.push_frame(pixels, 100, None).unwrap();
+        }
+        encoder.finish(None).unwrap().into_vec()
+    }
+
+    fn run(
+        gif: &[u8],
+        limits: Option<&zencodecs::Limits>,
+        control: &zencodec::SharedPulse,
+    ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
+        transcode_animated_nodes(
+            gif,
+            &zencodecs::AllowedFormats::all(),
+            limits,
+            None,
+            &[],
+            &[],
+            zencodec::ImageFormat::Gif,
+            80.0,
+            false,
+            None,
+            control,
+            None,
+        )
+    }
+
+    fn frames_in(gif: &[u8]) -> u32 {
+        let mut decoder = zencodecs::DecodeRequest::new(gif)
+            .animation_frame_decoder()
+            .unwrap();
+        let mut frames = 0;
+        while decoder.render_next_frame_owned(None).unwrap().is_some() {
+            frames += 1;
+        }
+        frames
+    }
+
+    /// A control that is already stopped refuses before any frame renders. The
+    /// pixel budget is smaller than one frame: a route that renders a frame
+    /// before its codec consults the control fails on that budget instead.
+    #[test]
+    fn a_stopped_control_refuses_before_the_first_frame_renders() {
+        let gif = animated_gif();
+        let budget = zencodecs::Limits::none().with_max_total_pixels(u64::from(W * H) - 1);
+        let (stopped, polls) = control(0);
+        match run(&gif, Some(&budget), &stopped) {
+            Err(e) => assert!(
+                matches!(e.error(), PipeError::Cancelled),
+                "expected the control's refusal, got {e}"
+            ),
+            Ok(_) => panic!("a stopped control must refuse the route"),
+        }
+        assert_eq!(
+            polls.load(Ordering::Relaxed),
+            1,
+            "the first poll refuses and nothing polls after it"
+        );
+    }
+
+    /// Every poll the route makes refuses there, with the control's reason, no
+    /// output, and no later poll.
+    #[test]
+    fn every_poll_of_the_animated_route_refuses_without_output() {
+        let gif = animated_gif();
+        let (unstopped, polls) = control(usize::MAX);
+        let (bytes, w, h) = run(&gif, None, &unstopped)
+            .expect("unstopped route")
+            .expect("GIF has an animation encoder");
+        assert_eq!((w, h), (W, H));
+        assert_eq!(
+            frames_in(&bytes),
+            FRAMES,
+            "an unstopped route keeps every frame"
+        );
+        let total = polls.load(Ordering::Relaxed);
+        assert!(total > 0, "the route never polled its control");
+        let mut failures = Vec::new();
+        for fail_at in 0..total {
+            let (stopped, polls) = control(fail_at);
+            match run(&gif, None, &stopped) {
+                Ok(_) => failures.push(alloc::format!(
+                    "poll {fail_at}/{total}: completed after the control stopped"
+                )),
+                Err(e) if !matches!(e.error(), PipeError::Cancelled) => {
+                    failures.push(alloc::format!("poll {fail_at}/{total}: refused as {e}"))
+                }
+                Err(_) => {}
+            }
+            let seen = polls.load(Ordering::Relaxed);
+            if seen != fail_at + 1 {
+                failures.push(alloc::format!(
+                    "poll {fail_at}/{total}: {seen} polls, expected {} (work continued after the refusal)",
+                    fail_at + 1
+                ));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} wrong stop points:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
+    }
+}
