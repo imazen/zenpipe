@@ -14,7 +14,7 @@ use core::fmt;
 use zencodec::decode::{BoundaryAction, Event, InterpretationState};
 use zencodec::encode::EncodeOutput;
 use zencodec::operation::{
-    self, MetadataTransfer, OperationReport, Outcome, PolicyResolver, PolicySet, TranscodeOffer,
+    self, MetadataTransfer, OperationPolicy, OperationReport, Outcome, PolicySet, TranscodeOffer,
 };
 use zencodec::storage::StorageBudget;
 use zencodec::{At, CodecSet, ImageFormat, ImageInfo, Metadata};
@@ -249,7 +249,10 @@ impl<'a> TranscodeRequest<'a> {
         self.storage = storage;
         self
     }
-    /// Configure the shared built-in resolver used directly or by delegation.
+    /// The built-in policy that `transcode` and `transcode_from_read_at` use,
+    /// and the preset a callback reaches with `Decision::UsePreset`. Its
+    /// requirements also apply to a policy passed to the `_with` methods; a
+    /// `BoundPolicy` supplies preferences in place of these.
     pub fn with_policy_set(mut self, policy: PolicySet) -> Self {
         self.preset = policy;
         self
@@ -286,7 +289,7 @@ impl<'a> TranscodeRequest<'a> {
     /// Execute with one fallible resolver for discovery and the complete route.
     /// Its own traced error remains inspectable through `Error::source`.
     #[track_caller]
-    pub fn transcode_with<R: PolicyResolver + ?Sized>(
+    pub fn transcode_with<R: OperationPolicy + ?Sized>(
         &self,
         codecs: &CodecSet,
         input: &[u8],
@@ -319,7 +322,7 @@ impl<'a> TranscodeRequest<'a> {
     ) -> Result<Outcome<EncodeOutput>, At<Error>>
     where
         S: zencodec::source::ReadAt + ?Sized,
-        R: PolicyResolver + ?Sized,
+        R: OperationPolicy + ?Sized,
     {
         let mut cursor = ReadAtCursor::new(self.io);
         self.execute(codecs, resolver, |held, pulse| {
@@ -334,7 +337,7 @@ impl<'a> TranscodeRequest<'a> {
         mut next: F,
     ) -> Result<Outcome<EncodeOutput>, At<Error>>
     where
-        R: PolicyResolver + ?Sized,
+        R: OperationPolicy + ?Sized,
         F: FnMut(&mut Held<'_>, &dyn zencodec::Pulse) -> Result<Yield<ControlledEvent>, Cause>,
     {
         let mut execution = execution::Execution::<operation::PreparedEncode>::new(self, codecs);

@@ -1168,6 +1168,11 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### QUEUED BREAKING CHANGES
 
+- `TranscodeRequest::transcode_with`, `transcode_from_read_at_with` and
+  `transcode_async_with` take zencodec's `OperationPolicy` (a `PolicySet`, a
+  closure, or `BoundPolicy::new(requirements, resolver)`) instead of
+  `PolicyResolver`. A custom resolver struct now goes inside a `BoundPolicy`.
+  A `PolicySet` or a binding's requirements are named in refusals.
 - `DecodeRequest::with_stop` / `EncodeRequest::with_stop` / `ScrubRequest::with_stop`
   become `with_pulse(SharedPulse)`; the `StopToken` re-export becomes `SharedPulse`,
   `Pulse` and `NoPulse`; `metadata::Services` methods take `&dyn zencodec::Pulse`;

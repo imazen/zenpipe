@@ -32,7 +32,7 @@ impl TranscodeRequest<'_> {
     ) -> Result<Outcome<EncodeOutput>, At<Error>>
     where
         S: AsyncSource + ?Sized,
-        R: PolicyResolver + ?Sized,
+        R: OperationPolicy + ?Sized,
     {
         let mut execution =
             execution::Execution::<operation::PreparedSendEncode>::new(self, codecs);

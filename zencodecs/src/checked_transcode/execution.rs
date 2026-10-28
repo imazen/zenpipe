@@ -90,7 +90,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
             self.stage = Stage::Encode;
         }
     }
-    pub(super) fn advance<R: PolicyResolver + ?Sized>(
+    pub(super) fn advance<R: OperationPolicy + ?Sized>(
         &mut self,
         held: &mut Held<'_>,
         event: Yield<ControlledEvent>,
