@@ -910,3 +910,13 @@ observer then falsely refused three existing PNG preservation/density controls.
 It now retains that already observed EOF, with a focused no-extra-read control;
 nonzero async short reads remain incomplete. All original native assertions
 remain, and the isolated 12-unit/35-native qualification passes at 2a78941f.
+
+## Known Bugs: publication browser bootstrap (2026-10-28, source repair pending run)
+
+The frozen final runner omitted the guide's locked shiki dependency and installed
+Playwright without its matching Chromium. Core guide controls stopped before
+source/browser assertions; the demo had 48 launch failures plus one inherited
+skip. These are bootstrap failures, not product assertion results. The proposed
+runner now uses the guide's committed npm lock, the same complete Playwright
+version for both profiles, and an explicit matching Chromium install. Existing
+assertions and skips stay intact; the repair has only shell-syntax validation.

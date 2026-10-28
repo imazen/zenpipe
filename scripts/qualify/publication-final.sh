@@ -31,19 +31,28 @@ step native timeout 600s just checked-publication-check
 step api-generate timeout 1200s just api-doc
 # Generation and check are distinct gates; neither substitutes a reduced profile.
 step api-check timeout 600s just api-doc-check
+# Use the guide's committed dependency lock, including its highlighter. The
+# demo accepts this Playwright version through its existing ^1.59.1 range.
+step core-tools timeout 120s npm ci --prefix "$core/docs" --ignore-scripts
 mkdir -p "$results/browser-tools"
-printf '%s\n' '{"private":true,"dependencies":{"playwright":"1.59.1","@playwright/test":"1.59.1"}}' > "$results/browser-tools/package.json"
+python3 - "$core/docs/package.json" "$results/browser-tools/package.json" <<'PYTOOLS'
+from pathlib import Path
+import json,re,sys
+version = json.loads(Path(sys.argv[1]).read_text())['devDependencies']['playwright']
+assert re.fullmatch(r'\d+\.\d+\.\d+', version), 'guide must pin a complete Playwright version'
+Path(sys.argv[2]).write_text(json.dumps({'private': True, 'dependencies': {'playwright': version, '@playwright/test': version}}) + '\n')
+PYTOOLS
 step browser-tools timeout 120s npm install --prefix "$results/browser-tools" --ignore-scripts --no-save --package-lock=false
+step browser-runtime timeout 180s env PLAYWRIGHT_SKIP_BROWSER_GC=1 "$core/docs/node_modules/.bin/playwright" install chromium
 # Disposable exports only. No shared checkout or cached binary is changed.
-step browser-links timeout 45s python3 - "$root" "$core" "$results/browser-tools/node_modules" <<'PY'
+step browser-links timeout 45s python3 - "$root" "$results/browser-tools/node_modules" <<'PYLINKS'
 from pathlib import Path
 import sys
-for root in [Path(sys.argv[1]) / 'demo', Path(sys.argv[2])]:
-    link = root / 'node_modules'
-    assert not link.exists() and not link.is_symlink(), f'pre-existing tools at {link}'
-    link.symlink_to(Path(sys.argv[3]), target_is_directory=True)
+link = Path(sys.argv[1]) / 'demo/node_modules'
+assert not link.exists() and not link.is_symlink(), f'pre-existing tools at {link}'
+link.symlink_to(Path(sys.argv[2]), target_is_directory=True)
 assert not (Path(sys.argv[1]) / 'demo/pkg').exists(), 'demo profile is explicitly mock/browser-canvas, not a WASM qualification'
-PY
+PYLINKS
 step core-guide timeout 300s bash -c '
     set -euo pipefail
     cd "$1"
