@@ -940,7 +940,7 @@ source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe8
 [[patch.unused]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e#2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e"
+source = "git+https://github.com/imazen/zenjxl?rev=a76ac76d080295b754d970a3392eed8f964de490#a76ac76d080295b754d970a3392eed8f964de490"
 
 [[patch.unused]]
 name = "zenjxl-decoder"

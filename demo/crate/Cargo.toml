@@ -60,7 +60,7 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f8596a
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "610975047bcb0bb266e952f15bcd978ba3f34950" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "a76ac76d080295b754d970a3392eed8f964de490" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 # zenjxl-decoder main is 0.4.0 (the breaking API batch zenjxl 0.3.0 needs);

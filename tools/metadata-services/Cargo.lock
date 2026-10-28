@@ -675,7 +675,7 @@ source = "git+https://github.com/imazen/zengif?rev=469a893fcbce40d96b8602560390e
 [[patch.unused]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e#2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e"
+source = "git+https://github.com/imazen/zenjxl?rev=a76ac76d080295b754d970a3392eed8f964de490#a76ac76d080295b754d970a3392eed8f964de490"
 
 [[patch.unused]]
 name = "zenjxl-decoder"

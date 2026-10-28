@@ -36,7 +36,7 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35
 # this entry a fresh resolve of this workspace fails outright. See the repo-root
 # manifest for the full rationale.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "2af93f4a76f0f70ed3b24b4f206ac9c31d3bd60e" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "a76ac76d080295b754d970a3392eed8f964de490" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179ac7fdb7e7322e299cdad645046acf6c" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
 zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "f4078f4ddccb2a7e11c0924bd90c92ba70cfb4eb" }
