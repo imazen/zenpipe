@@ -703,6 +703,15 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixed (2026-10-28)
+
+- **`CropSource` dropped rows** when an upstream strip straddled one of its
+  16-row output strips: it filled the output strip, then skipped the rest of that
+  upstream strip, so any crop whose rows did not line up with the upstream strips
+  came out short and shifted. It now carries those rows to the next output
+  strip. Regression: `tools/io-check/tests/sources.rs` (six crops over upstream
+  strips of 1, 7, 16, 17, 64 and 150 rows, exact samples).
+
 #### Added (zencodec 0.2 drivers, 2026-10-27)
 
 - **`zenpipe::io`** (feature `io`; `io-tokio` adds `io::tokio_bridge`): a

@@ -25,6 +25,12 @@ pub struct CropSource {
     out_y: u32,
     /// Tracks the absolute y position of rows consumed from upstream.
     upstream_y: u32,
+    /// Cropped rows of the last upstream strip that did not fit the output
+    /// strip being filled (`crop_w * bpp` bytes each). The upstream cannot
+    /// hand them out again, so they are kept for the next output strip.
+    carry: alloc::vec::Vec<u8>,
+    carry_rows: u32,
+    carry_next: u32,
 }
 
 impl CropSource {
@@ -70,6 +76,9 @@ impl CropSource {
             buf,
             out_y: 0,
             upstream_y: 0,
+            carry: alloc::vec::Vec::new(),
+            carry_rows: 0,
+            carry_next: 0,
         })
     }
 
@@ -92,39 +101,43 @@ impl Source for CropSource {
         self.buf.reset();
 
         let bpp = self.format.bytes_per_pixel();
+        let row_bytes = self.crop_w as usize * bpp;
 
-        while self.buf.rows_filled() < rows_wanted {
+        // Rows left over from the previous upstream strip come first.
+        while self.buf.rows_filled() < rows_wanted && self.carry_next < self.carry_rows {
+            let at = self.carry_next as usize * row_bytes;
+            self.buf.push_row(&self.carry[at..at + row_bytes]);
+            self.carry_next += 1;
+        }
+
+        // Pre-compute end-of-region; constructor verified y+crop_h fits.
+        let region_end = self.y.saturating_add(self.crop_h);
+        while self.buf.rows_filled() < rows_wanted && self.upstream_y < region_end {
             let strip = self.upstream.next()?;
             let Some(strip) = strip else { break };
-
-            // Pre-compute end-of-region; constructor verified y+crop_h fits.
-            let region_end = self.y.saturating_add(self.crop_h);
+            let first_y = self.upstream_y;
+            self.upstream_y = self.upstream_y.saturating_add(strip.rows());
+            // The carry was drained above (the buffer is not full yet).
+            self.carry.clear();
+            self.carry_rows = 0;
+            self.carry_next = 0;
             for r in 0..strip.rows() {
-                let abs_y = self.upstream_y.saturating_add(r);
-
-                // Skip rows before crop region
+                let abs_y = first_y.saturating_add(r);
+                // Skip rows before the crop region; stop after it.
                 if abs_y < self.y {
                     continue;
                 }
-                // Stop after crop region
                 if abs_y >= region_end {
-                    self.out_y += self.buf.rows_filled();
-                    return if self.buf.rows_filled() > 0 {
-                        Ok(Some(self.buf.as_strip()))
-                    } else {
-                        Ok(None)
-                    };
-                }
-
-                if self.buf.rows_filled() >= rows_wanted {
                     break;
                 }
-
-                let src_row = strip.row(r);
-                let cropped = Self::extract_row_into(src_row, self.x, self.crop_w, bpp);
-                self.buf.push_row(cropped);
+                let cropped = Self::extract_row_into(strip.row(r), self.x, self.crop_w, bpp);
+                if self.buf.rows_filled() < rows_wanted {
+                    self.buf.push_row(cropped);
+                } else {
+                    self.carry.extend_from_slice(cropped);
+                    self.carry_rows += 1;
+                }
             }
-            self.upstream_y = self.upstream_y.saturating_add(strip.rows());
         }
 
         if self.buf.rows_filled() == 0 {
