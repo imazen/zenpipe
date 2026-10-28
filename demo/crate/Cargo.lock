@@ -2085,12 +2085,12 @@ source = "git+https://github.com/imazen/zensally?rev=47a023370763d11466306625124
 [[patch.unused]]
 name = "zensim"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zensim?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
+source = "git+https://github.com/imazen/zensimx?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
 
 [[patch.unused]]
 name = "zensim-regress"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zensim?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
+source = "git+https://github.com/imazen/zensimx?rev=f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2#f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2"
 
 [[patch.unused]]
 name = "zentiff"

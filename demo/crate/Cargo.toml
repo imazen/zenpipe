@@ -49,8 +49,8 @@ zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "b5f28c976a0b285ec5
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d6c95b3a34b8b3529b0f1" }
 zennode = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
 zennode-derive = { git = "https://github.com/imazen/zennode", rev = "3ed1181c28829595170dcaaa1f4d57dc016a43b8" }
-zensim = { git = "https://github.com/imazen/zensim", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
+zensim = { git = "https://github.com/imazen/zensimx", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
+zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "f2c86dcb8d35d1563abf84f78cbcb3be6ebd32d2" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "f7fe3435169716579670944d1b2cf1e0132c69db" }
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "f7fe3435169716579670944d1b2cf1e0132c69db" }
 zenpredict = { git = "https://github.com/imazen/zenanalyze" }

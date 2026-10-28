@@ -336,8 +336,8 @@ zenpng = { git = "https://github.com/imazen/zenpng", rev = "fb0553964406c010901d
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
-zensim = { git = "https://github.com/imazen/zensim" }
-zensim-regress = { git = "https://github.com/imazen/zensim" }
+zensim = { git = "https://github.com/imazen/zensimx" }
+zensim-regress = { git = "https://github.com/imazen/zensimx" }
 # zenanalyze-api 0.1.0 IS on crates.io (zencodecs declares it from the registry),
 # but zenpicker/zenpredict (git mains, unpublished) pull THEIR copy from the
 # zenanalyze git checkout via an internal `{ version, path }` dep — so a bare
