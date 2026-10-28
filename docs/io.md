@@ -218,10 +218,11 @@ Integration findings (2026-10-28):
   - after it, all three are exact, as are 32 canvases authored from the EXIF
     definitions (eight orientations × orientation only, trim, trim with uneven
     padding, trim with a negative placement; all 32 differed before).
-- **Open in zenresize, not zenpipe: a resizing layout with an orientation
-  misplaces uneven padding.** zenpipe now pads each oriented margin on the side
-  the orientation turns onto it (`config_from_plan`). Two zenresize bugs remain
-  under it, at the pinned `e3975fb9` and on zenresize main `93317e51`:
+- **Fixed here and in zenresize: a resizing layout with an orientation
+  misplaced uneven padding.** zenpipe pads each oriented margin on the side the
+  orientation turns onto it (`config_from_plan`). Two zenresize bugs were under
+  it at `e3975fb9` (imazen/zenresize#25), fixed on zenresize main `5b4e14e3`,
+  which this stack now pins:
   - With an orientation other than Identity or FlipH, rows are captured eagerly
     into the orientation buffer, and the bottom padding is taken before any
     content row exists. All of the unoriented raster's vertical padding lands
@@ -231,10 +232,12 @@ Integration findings (2026-10-28):
     padding columns whenever the margins are uneven.
 
   The control `a_resizing_layout_pads_where_the_plan_places_the_content`
-  (margins 2/5/1/3, 40x24 to half size) still fails for seven orientations. The
-  miss counts before (39, 106, 40, 200, 80, 120, 228 pixels) and after (33, 40,
-  40, 200, 80, 80, 200) the zenpipe change match the counts these two bugs
-  predict, for every orientation.
+  (margins 2/5/1/3, 40x24 to half size) failed for seven orientations before the
+  repin. The miss counts before (39, 106, 40, 200, 80, 120, 228 pixels) and
+  after (33, 40, 40, 200, 80, 80, 200) the zenpipe change matched the counts
+  these two bugs predict. zenresize's own control (run 09) failed before its fix
+  and passes after. With the pin, run 11's io-check is 54/56: the control
+  passes, and only the two root-173 resolver-only controls fail.
 - **Fixed in zencodec `79676215`: one PNG native batch was delivered in one step.**
   zenpng returns 32 KiB of rows per batch (a 97x65 RGB image arrives whole); at
   `f5a7fd46` the coroutine decoder copied every sub-strip of a batch into the sink
