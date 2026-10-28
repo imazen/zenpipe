@@ -749,6 +749,19 @@ None.
 
 #### Fixed
 
+- A `Layout` whose plan keeps the size no longer resamples every sample.
+  `NodeOp::Layout` ran each plan through the streaming resizer, so an
+  orientation, trim or placement with no scaling was resampled 1:1 with the
+  default Robidoux kernel, which blends neighbours (its weights at integer
+  offsets are about 0.063, 0.874, 0.063): an `ImageJob` orient node changed
+  5,715 of 18,915 samples, max 95. A size-preserving plan (`resize_is_identity`,
+  no post-resize effects) now moves samples exactly, in the plan's order: trim
+  (`CropSource`), a horizontal flip (`FlipHSource`) and placement
+  (`ExpandCanvasSource`, with the bytes the resizer's padding writes) stream;
+  any other orientation turns the materialized trimmed frame, as `Orient` does,
+  and the estimate counts that frame and its turned copy. Regression:
+  `tests/layout_exact.rs` (eight orientations with trim, uneven padding and
+  negative placement, against authored canvases).
 - `CropSource` no longer drops rows when an upstream strip straddles one of its
   16-row output strips. It filled the output strip, then skipped the rest of that
   upstream strip, so any crop whose rows did not line up with the upstream strips

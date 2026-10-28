@@ -1182,7 +1182,7 @@ pub fn streaming_from_plan_batched(
 }
 
 /// Convert a [`CanvasColor`] to `[f32; 4]` in the output's color space (0.0–1.0).
-fn canvas_color_to_f32(color: &CanvasColor, desc: PixelDescriptor) -> [f32; 4] {
+pub(crate) fn canvas_color_to_f32(color: &CanvasColor, desc: PixelDescriptor) -> [f32; 4] {
     match color {
         CanvasColor::Transparent => [0.0, 0.0, 0.0, 0.0],
         CanvasColor::Srgb { r, g, b, a } => [
