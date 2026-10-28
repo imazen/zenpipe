@@ -112,12 +112,82 @@ before its final interpretation decision. Small driver read sizes do not make
 that native implementation incremental. Source failures preserve their native
 error object through `Error::source()`.
 
+## Metadata completeness and retained publication
+
+The proposed follow-up uses core `4c8a8eac` and pixels `283655c5`; its new Rust
+controls have not yet run. Earlier qualification receipts below describe their
+recorded revisions, not this follow-up.
+
+A final pixel interpretation is not a metadata inventory. Before configuring
+encoder metadata, slice input is inspected by the registered native inventory
+and full probe over that same immutable slice. Structural coverage must validate.
+The reviewed JPEG service collects recognized metadata through primary EOI.
+The reviewed PNG probe reports the pre-IDAT snapshot; any inventory-surfaced
+metadata after IDAT refuses with `MetadataCompleteness`, rather than treating
+that snapshot as complete. These checks qualify reported JPEG/PNG carriers;
+unknown carriers and trailers are not copied or certified.
+
+For `PreserveReported`, file/range and async drivers retain one additional
+compressed-input copy from the reads already being served. Its payload and object
+are admitted by the existing shared `StorageBudget` before source reads. Prefix
+detection can grow that copy before length discovery, temporarily charging both
+old and new buffers. There is no replay or second source pass, and batching remains delegated to the source.
+The current native JPEG/PNG factories read the complete source in order. Unknown
+length or incomplete ordered coverage refuses preservation. Discarding descriptions
+does not retain this copy; streaming discard relies on the native controlled
+final color/orientation contract. Every metadata event after adoption and the final
+Done compare color context, orientation, density and EXIF/XMP against the adopted
+epoch. Drift refuses before completed bytes can escape. Different policies or
+applied-orientation probes that cannot be reconciled also refuse.
+
+With `std`, `transcode_for_publication` adds an executable finish-first schedule
+to that same joint route, then returns
+`checked_transcode::publication::VerifiedOutput`. The selected job, encode plan
+and prepared conversion are retained through selection and adoption; failed
+selection or adoption cannot substitute another route. `VerifiedOutput` moves
+the completed encoder Vec and drops backend extras. It retains no source, native
+codec, CMS or callback. Construction is private to successful verification.
+
+```rust
+use zencodec::{NoPulse, operation::OutputSchedule};
+policy = policy.require_output_schedule(OutputSchedule::FinishFirst);
+let ready = request.transcode_for_publication(&codecs, input, &mut policy)?;
+// Create the destination only after conversion/encode/verification succeeded.
+let mut file = std::fs::File::create(output_path)?;
+let receipt = ready.write_to(&mut file, &NoPulse)?;
+let accepted = *receipt.output();
+```
+
+`write_to` consumes the owner and loops over short writes. It checks the supplied
+Pulse before attempts (including interrupted retries), before flush and after a
+successful flush. `PublicationError::emitted` counts confirmed accepted bytes;
+its cause preserves the original write/flush error. Native I/O failure takes
+precedence over a coincident stop. WriteZero and invalid accepted counts refuse.
+Errors consume the output, and dropping it does not publish. A panicking writer
+returns no receipt. Accepted bytes are irrevocable, and flush is not an atomic
+rename, durability or rollback guarantee.
+
+A borrowed arbitrary Pulse can itself retain a raster, and the Vec can retain
+spare capacity. Wait retention therefore stays unknown. Required finite wait
+caps refuse even with finish-first; a private fixed-array/NoPulse test does not
+create a production bound. Ordinary transcode calls still have unknown schedule
+evidence. The additional source copy, inventory walks and full probe introduce
+unmeasured allocation and CPU costs.
+
+`zencodecs/examples/checked_publication.rs` is the cumulative file-publication
+example; the original file/range example remains available.
+
 ## Storage, output and failures
 
 The default managed allowance is 64 MiB / 128 objects. It covers the controlled
 JPEG/PNG source and adapter row buffers. Conversion/native workspace and encoded
 allocation are not qualified bounds. `TranscodeOffer::workspace_upper_bound`
-therefore remains `None`, and a preset requiring a known workspace bound refuses.
+therefore remains `None`. Both the request's legacy preset and the policy
+argument are snapshotted once. Each calls `check_workspace(None)` before encoder
+jobs, a controlled decoder or conversion can be prepared. Every finite cap,
+including `u64::MAX`, refuses at `Stage::Prepare` with typed
+`UnmetRequirements` containing `Workspace(Unknown)`, without a policy callback or
+fabricated offer. Those same requirements still constrain the joint decision.
 `admitted_bytes` describes the row/conversion storage retained after selection;
 alternative fidelity choices share it and must not be summed.
 

@@ -268,3 +268,26 @@ io-stack-frames target test:
     exe=$(cargo test -p zenpipe-io-check --test "{{target}}" --no-run --locked --message-format=json 2>/dev/null \
       | jq -r 'select(.reason=="compiler-artifact" and .executable != null and .profile.test) | .executable')
     gdb -q -batch -x tools/io-check/scripts/stack_frames.py --args "$exe" "{{test}}" --exact --test-threads 1 --nocapture
+
+# Run only after a serialized heavy slot is granted. Does not enter bench mains.
+checked-publication-check:
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib checked_transcode --locked
+    cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --test checked_transcode --locked
+    cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib --test checked_transcode --example checked_transcode --example checked_publication --locked -- -D warnings
+    cargo check -p zencodecs --no-default-features --features checked-transcode --locked
+
+# Source-only preflight; no Cargo command or native compilation.
+checked-publication-source:
+    timeout 45s rustfmt --check --edition 2024 --config skip_children=true zencodecs/src/checked_transcode.rs zencodecs/src/checked_transcode/execution.rs zencodecs/src/checked_transcode/asynchronous.rs zencodecs/src/checked_transcode/evidence.rs zencodecs/src/checked_transcode/publication.rs zencodecs/tests/checked_transcode.rs zencodecs/tests/checked_transcode/publication.rs zencodecs/tests/checked_transcode/async_source.rs zencodecs/examples/checked_publication.rs
+    timeout 45s python3 scripts/check-decoder-pins.py
+    just --show checked-publication-check > /dev/null
+
+# Resolves only after a serialized heavy slot is granted, outside sibling overrides.
+checked-publication-locks:
+    timeout 180s cargo metadata --format-version 1 --manifest-path Cargo.toml > /dev/null
+    timeout 180s cargo metadata --format-version 1 --manifest-path fuzz/Cargo.toml > /dev/null
+    timeout 180s cargo metadata --format-version 1 --manifest-path demo/crate/Cargo.toml > /dev/null
+    timeout 180s cargo metadata --format-version 1 --manifest-path tools/metadata-services/Cargo.toml > /dev/null
+    timeout 180s cargo metadata --format-version 1 --manifest-path zencodecs/fuzz/Cargo.toml > /dev/null
+    python3 scripts/check-core-family.py
+    python3 scripts/check-decoder-pins.py

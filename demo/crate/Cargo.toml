@@ -41,12 +41,12 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
+# Core family at one revision (zencodec PR 168, 4c8a8eac). Dependencies name
 # these crates by version, so this root alone decides their source.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
+zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
 # One entry per git-form entry at the workspace root (see the rationale
 # comments there); keep the two tables in sync.
 # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
@@ -57,8 +57,8 @@ heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121d
 # zentiff 0.1.2 at this rev; crates.io 0.1.2 is pre-adapter. This rev predates
 # the zencodec 0.2 Pulse contract (see the root Cargo.toml).
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
 # Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "610975047bcb0bb266e952f15bcd978ba3f34950" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.

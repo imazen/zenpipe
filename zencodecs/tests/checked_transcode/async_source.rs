@@ -241,3 +241,27 @@ fn png_network_sources_match_sync_with_alpha_and_sixteen_bit_samples() {
         }
     }
 }
+
+#[test]
+fn workspace_refusal_precedes_async_source_and_callback_work() {
+    use zencodec::operation::{BoundPolicy, PolicySet, UnmetRequirements};
+    let input = fixture(false);
+    let budget = StorageBudget::new(512 * 1024, 16);
+    let codecs = codecs();
+    let request = request(budget.clone());
+    let mut source = Network::new(&input, 7, false);
+    let mut policy = BoundPolicy::new(
+        PolicySet::new().with_workspace_limit(u64::MAX),
+        |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+            panic!("workspace refuses before callbacks")
+        },
+    );
+    let error = drive(request.transcode_async_with(&codecs, &mut source, &mut policy))
+        .0
+        .unwrap_err();
+    assert_eq!(error.error().stage(), Stage::Prepare);
+    assert!(zencodec::find_cause::<UnmetRequirements>(&error).is_some());
+    assert_eq!(source.reads, 0);
+    assert_eq!(error.error().report().decisions().count(), 0);
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}

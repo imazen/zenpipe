@@ -35,8 +35,14 @@ impl TranscodeRequest<'_> {
         S: AsyncSource + ?Sized,
         R: OperationPolicy + ?Sized,
     {
-        let mut execution =
-            execution::Execution::<operation::PreparedSendEncode>::new(self, codecs);
+        let bound = resolver.requirements();
+        let mut frozen = operation::BoundPolicy::new(
+            bound.unwrap_or(self.preset),
+            |question: operation::Question<'_>| resolver.decide(question),
+        );
+        let mut execution = execution::Execution::<operation::PreparedSendEncode>::new(
+            self, codecs, bound, None, None,
+        );
         let result = async {
             let decoder = execution.prepare()?;
             let mut destination = Destination::default();
@@ -44,12 +50,16 @@ impl TranscodeRequest<'_> {
             let mut cursor = AsyncCursor::new(self.io);
             loop {
                 execution.before_step();
+                let mut captured = evidence::Source {
+                    source,
+                    input: execution.input_mut(),
+                };
                 let event = cursor
-                    .next(source, &mut held, codecs.pulse())
+                    .next(&mut captured, &mut held, codecs.pulse())
                     .await
                     .map_err(|error| -> Cause { Box::new(DriverError(error)) })
                     .inspect_err(|error| execution.step_error(error))?;
-                if execution.advance(&mut held, event, resolver)? {
+                if execution.advance(&mut held, event, &mut frozen)? {
                     break;
                 }
             }

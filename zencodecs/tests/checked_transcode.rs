@@ -1,4 +1,7 @@
 //! Real native codecs, with independent PNG parsing and CMS conversion oracles.
+#[cfg(feature = "std")]
+#[path = "checked_transcode/publication.rs"]
+mod publication;
 use std::{
     convert::Infallible,
     io::Cursor,
@@ -463,7 +466,7 @@ fn discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enfor
         .with_policy_set(privacy.with_workspace_limit(u64::MAX))
         .transcode(&codecs, &input)
         .unwrap_err();
-    assert_eq!(error.error().stage(), Stage::Policy); // Unknown is not an upper bound, even at this limit.
+    assert_eq!(error.error().stage(), Stage::Prepare); // Unknown is not an upper bound, even at this limit.
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 }
 

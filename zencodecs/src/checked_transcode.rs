@@ -26,7 +26,10 @@ use zenpixels_convert::{OutputPlan, OutputProfile, cms::PluggableCms};
 
 #[cfg(feature = "checked-transcode-async")]
 mod asynchronous;
+mod evidence;
 mod execution;
+#[cfg(feature = "std")]
+pub mod publication;
 mod sink;
 use sink::{Destination, PreparedRows};
 
@@ -120,6 +123,10 @@ pub enum Refusal {
     MissingRows,
     /// Reported density also has EXIF/XMP copies without qualified reconciliation.
     ResolutionMetadata,
+    /// Retained input or a qualified native metadata inventory was unavailable.
+    MetadataCompleteness,
+    /// Metadata required by the selected route changed after final adoption.
+    LateMetadata,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -299,7 +306,7 @@ impl<'a> TranscodeRequest<'a> {
         resolver: &mut R,
     ) -> Result<Outcome<EncodeOutput>, At<Error>> {
         let mut cursor = SliceCursor::new(self.io.read_size);
-        self.execute(codecs, resolver, |held, pulse| {
+        self.execute(codecs, resolver, None, Some(input), |held, pulse, _| {
             Ok(cursor.next(input, held, pulse)?)
         })
     }
@@ -317,6 +324,9 @@ impl<'a> TranscodeRequest<'a> {
 
     /// The same joint resolver and output postconditions over a file/range
     /// source. Source errors retain their native type in the error chain.
+    /// Preserving descriptions retains one additional compressed-input copy
+    /// under the shared storage budget, with no extra source reads. A source
+    /// without a known length or complete ordered coverage refuses preservation.
     pub fn transcode_from_read_at_with<S, R>(
         &self,
         codecs: &CodecSet,
@@ -328,8 +338,9 @@ impl<'a> TranscodeRequest<'a> {
         R: OperationPolicy + ?Sized,
     {
         let mut cursor = ReadAtCursor::new(self.io);
-        self.execute(codecs, resolver, |held, pulse| {
-            Ok(cursor.next(source, held, pulse)?)
+        self.execute(codecs, resolver, None, None, |held, pulse, input| {
+            let mut captured = evidence::Source { source, input };
+            Ok(cursor.next(&mut captured, held, pulse)?)
         })
     }
 
@@ -337,22 +348,35 @@ impl<'a> TranscodeRequest<'a> {
         &self,
         codecs: &CodecSet,
         resolver: &mut R,
+        schedule: Option<operation::OutputScheduleOffer>,
+        input: Option<&[u8]>,
         mut next: F,
     ) -> Result<Outcome<EncodeOutput>, At<Error>>
     where
         R: OperationPolicy + ?Sized,
-        F: FnMut(&mut Held<'_>, &dyn zencodec::Pulse) -> Result<Yield<ControlledEvent>, Cause>,
+        F: FnMut(
+            &mut Held<'_>,
+            &dyn zencodec::Pulse,
+            &mut evidence::Input<'_>,
+        ) -> Result<Yield<ControlledEvent>, Cause>,
     {
-        let mut execution = execution::Execution::<operation::PreparedEncode>::new(self, codecs);
+        let bound = resolver.requirements();
+        let mut frozen = operation::BoundPolicy::new(
+            bound.unwrap_or(self.preset),
+            |question: operation::Question<'_>| resolver.decide(question),
+        );
+        let mut execution = execution::Execution::<operation::PreparedEncode>::new(
+            self, codecs, bound, schedule, input,
+        );
         let result = (|| {
             let decoder = execution.prepare()?;
             let mut destination = Destination::default();
             let mut held = ControlledStepper::new(decoder, &mut destination);
             loop {
                 execution.before_step();
-                let event = next(&mut held, codecs.pulse())
+                let event = next(&mut held, codecs.pulse(), execution.input_mut())
                     .inspect_err(|error| execution.step_error(error))?;
-                if execution.advance(&mut held, event, resolver)? {
+                if execution.advance(&mut held, event, &mut frozen)? {
                     break;
                 }
             }

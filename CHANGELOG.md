@@ -7,6 +7,23 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+- None in the proposed retained-publication API; existing entry signatures stay.
+
+#### Added (retained publication proposal, 2026-10-28)
+
+- `zencodecs/checked-transcode` with `std`: consuming `publication::VerifiedOutput`,
+  `PublicationError` and `TranscodeRequest::transcode_for_publication`. One
+  selected route completes verification before file publication. Short writes,
+  stop checks, typed I/O failures and accepted-byte receipts remain observable.
+- Entry workspace admission checks both frozen requirement sets before native
+  preparation. Metadata inventory/epoch checks prevent a final pixel boundary
+  from silently authorizing incomplete or changed reported metadata. File/range
+  preservation admits an additional compressed-input copy without replay;
+  unqualified metadata completeness refuses. New controls are source-only until
+  the serialized native qualification run; see `docs/checked-transcode.md`.
+
 #### Fixed (2026-10-28)
 
 - The decode-only JXL subset (zencodecs `zennode,jxl-decode`, which zenpipe

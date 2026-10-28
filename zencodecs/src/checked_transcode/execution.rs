@@ -40,42 +40,75 @@ impl PreparedJob for operation::PreparedSendEncode {
     }
 }
 
+// Taking a phase makes every fallible transition terminal. The destination owns
+// the running encoder/transform only after installation; Selected is committed
+// after adoption succeeds. No alternate route can replace it afterwards.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Keep one operation's evidence inline instead of adding an unbudgeted allocation"
+)]
+enum Phase<J> {
+    Unprepared,
+    Discovering(Vec<J>),
+    Preparing,
+    Selected {
+        expected: ExpectedOutput,
+        source: evidence::Epoch,
+    },
+    Verifying,
+}
+
 pub(super) struct Execution<'request, 'services, J> {
     request: &'request TranscodeRequest<'services>,
     codecs: &'request CodecSet,
+    bound: Option<PolicySet>,
+    schedule: Option<operation::OutputScheduleOffer>,
+    input: evidence::Input<'request>,
     report: OperationReport,
     stage: Stage,
-    prepared_jobs: Option<Vec<J>>,
-    expected: Option<ExpectedOutput>,
-    final_seen: bool,
+    phase: Phase<J>,
 }
 impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
     pub(super) fn new(
         request: &'request TranscodeRequest<'services>,
         codecs: &'request CodecSet,
+        bound: Option<PolicySet>,
+        schedule: Option<operation::OutputScheduleOffer>,
+        input: Option<&'request [u8]>,
     ) -> Self {
         Self {
             request,
             codecs,
+            bound,
+            schedule,
+            input: evidence::Input::new(input, request.metadata, request.storage.clone()),
             report: OperationReport::default(),
             stage: Stage::Prepare,
-            prepared_jobs: None,
-            expected: None,
-            final_seen: false,
+            phase: Phase::Unprepared,
         }
     }
     pub(super) fn prepare(&mut self) -> Result<Box<zencodec::decode::DynControlledDecoder>, Cause> {
+        self.request.preset.check_workspace(None)?;
+        if let Some(bound) = self.bound {
+            bound.check_workspace(None)?;
+        }
+        if !matches!(self.phase, Phase::Unprepared) {
+            return Err(Refusal::RepeatedInterpretation.into());
+        }
         if self.request.strip_rows == 0 {
             return Err(Refusal::InvalidStripRows.into());
         }
         if self.codecs.decoder_for(self.request.format).is_none() {
             return Err(zencodec::CodecSetError::NoDecoder(self.request.format).into());
         }
-        self.prepared_jobs = Some(J::prepare(&self.request.encode, self.codecs)?);
+        self.phase = Phase::Discovering(J::prepare(&self.request.encode, self.codecs)?);
         Ok(self
             .request
             .decode
             .start_controlled(self.codecs, self.request.storage.clone())?)
+    }
+    pub(super) fn input_mut(&mut self) -> &mut evidence::Input<'request> {
+        &mut self.input
     }
     pub(super) fn before_step(&mut self) {
         self.stage = Stage::Decode;
@@ -99,6 +132,9 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
         match event {
             Yield::Output(ControlledEvent::Suspended(boundary)) => {
                 if boundary.facts().state != InterpretationState::Final {
+                    if !matches!(self.phase, Phase::Discovering(_)) {
+                        return Err(Refusal::RepeatedInterpretation.into());
+                    }
                     self.stage = Stage::Policy;
                     let (action, record) = operation::resolve_boundary(
                         boundary,
@@ -113,13 +149,23 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     held.resume(boundary.id(), action, self.codecs.pulse())?;
                     return Ok(false);
                 }
-                if self.final_seen {
+                let Phase::Discovering(prepared) =
+                    core::mem::replace(&mut self.phase, Phase::Preparing)
+                else {
                     return Err(Refusal::RepeatedInterpretation.into());
-                }
-                self.final_seen = true;
+                };
                 self.stage = Stage::Plan;
                 let info = held.info().ok_or(Refusal::MissingImageInfo)?;
                 require_primary(info)?;
+                // A final pixel boundary does not qualify metadata completeness.
+                // Inspect the same immutable slice, never re-read a range source.
+                let source = evidence::qualify(
+                    self.codecs,
+                    self.input.complete(),
+                    info,
+                    self.request.metadata,
+                )?;
+                self.input.release_capture();
                 let descriptor = boundary
                     .facts()
                     .descriptor
@@ -175,10 +221,6 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     self.request.metadata,
                     self.request.format,
                 )?;
-                let prepared = self
-                    .prepared_jobs
-                    .take()
-                    .ok_or(Refusal::RepeatedInterpretation)?;
                 let resolution = if self.request.metadata == MetadataTransfer::PreserveReported {
                     info.resolution
                 } else {
@@ -273,6 +315,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     // These buffers are shared by all fidelity alternatives;
                     // each route retains this same allocation after selection.
                     offer.admitted_bytes = rows.admitted_bytes();
+                    offer.output_schedule = self.schedule;
                     offers.push(offer);
                 }
                 self.stage = Stage::Policy;
@@ -300,20 +343,42 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 let encoder = job.into_encoder()?;
                 held.sink_mut()
                     .install(rows, encoder, Arc::new(output_color.clone()), plan)?;
-                self.expected = Some(expectation);
                 held.resume(
                     boundary.id(),
                     BoundaryAction::AdoptInterpretation,
                     self.codecs.pulse(),
                 )?;
+                self.phase = Phase::Selected {
+                    expected: expectation,
+                    source,
+                };
             }
-            Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => return Ok(true),
+            Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => {
+                self.revalidate(held)?;
+                return Ok(true);
+            }
+            Yield::Output(ControlledEvent::Decode(Event::Metadata(_))) => {
+                if matches!(self.phase, Phase::Selected { .. }) {
+                    self.revalidate(held)?;
+                }
+            }
             Yield::Output(ControlledEvent::Decode(_)) => {}
             _ => return Err(Refusal::UnexpectedProgress.into()),
         }
         Ok(false)
     }
+    fn revalidate(&self, held: &Held<'_>) -> Result<(), Cause> {
+        let Phase::Selected { source, .. } = &self.phase else {
+            return Err(Refusal::MissingRoute.into());
+        };
+        source.check(held.info().ok_or(Refusal::MissingImageInfo)?)
+    }
     pub(super) fn finish(&mut self, destination: Destination) -> Result<EncodeOutput, Cause> {
+        let Phase::Selected { expected, .. } =
+            core::mem::replace(&mut self.phase, Phase::Verifying)
+        else {
+            return Err(Refusal::MissingRoute.into());
+        };
         self.stage = Stage::Encode;
         let encoded = destination.finish_encoder()?;
         self.stage = Stage::Verify;
@@ -328,10 +393,15 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
             }
             .into());
         }
-        let expected = self.expected.take().ok_or(Refusal::MissingRoute)?;
         let inspector = self.codecs.decode_job(self.request.format)?;
         let actual = inspector.probe_full(encoded.data())?;
         let decoded = inspector.output_info(encoded.data())?;
+        evidence::qualify(
+            self.codecs,
+            Some(encoded.data()),
+            &actual,
+            self.request.metadata,
+        )?;
         verify_output(&actual, &decoded, &expected)?;
         self.codecs
             .pulse()
@@ -351,6 +421,177 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 cause,
             })
             .at_named("checked pixel transcode")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    use zencodec::decode::*;
+    use zencodec::operation::{
+        BoundPolicy, Decision, PolicyRequirement, Question, RequirementEvidence, UnmetRequirements,
+    };
+
+    static PREPARATIONS: AtomicUsize = AtomicUsize::new(0);
+    struct RecordingJob;
+    impl PreparedJob for RecordingJob {
+        fn prepare(
+            _: &operation::EncodeRequest,
+            _: &CodecSet,
+        ) -> Result<Vec<Self>, At<operation::OperationError>> {
+            PREPARATIONS.fetch_add(1, Ordering::SeqCst);
+            Ok(Vec::new())
+        }
+        fn offer(&self) -> operation::EncodeOffer {
+            unreachable!("workspace refuses before offers")
+        }
+        fn into_job(self) -> Box<dyn zencodec::encode::DynEncodeJob> {
+            unreachable!("workspace refuses before jobs")
+        }
+    }
+    #[test]
+    fn both_workspace_snapshots_refuse_before_native_preparation() {
+        PREPARATIONS.store(0, Ordering::SeqCst);
+        for legacy in [false, true] {
+            for cap in [0, 1, u64::MAX] {
+                let mut request = TranscodeRequest::new(ImageFormat::Png);
+                let required = PolicySet::new().with_workspace_limit(cap);
+                if legacy {
+                    request.preset = required;
+                }
+                let codecs = CodecSet::new();
+                let mut execution = Execution::<RecordingJob>::new(
+                    &request,
+                    &codecs,
+                    Some(if legacy { PolicySet::new() } else { required }),
+                    None,
+                    None,
+                );
+                let result = execution.prepare();
+                let cause = match result {
+                    Err(cause) => cause,
+                    Ok(_) => panic!("unknown workspace admitted"),
+                };
+                assert_eq!(
+                    zencodec::find_cause::<UnmetRequirements>(cause.as_ref())
+                        .unwrap()
+                        .iter()
+                        .collect::<Vec<_>>(),
+                    [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+                );
+                assert_eq!(execution.stage, Stage::Prepare);
+                assert_eq!(execution.report.decisions().count(), 0);
+                assert_eq!(PREPARATIONS.load(Ordering::SeqCst), 0);
+            }
+        }
+    }
+
+    struct EvidenceDecoder(ImageInfo);
+    impl IncrementalDecode for EvidenceDecoder {
+        type Error = ErasedError;
+        fn step(
+            &mut self,
+            _: Input<'_>,
+            _: &mut dyn DecodeRowSink,
+            _: &dyn zencodec::Pulse,
+        ) -> Result<Progress, StepError<Self::Error>> {
+            unreachable!("controlled path only")
+        }
+        fn requested(&self) -> &[InputRequest] {
+            &[]
+        }
+        fn info(&self) -> Option<&ImageInfo> {
+            Some(&self.0)
+        }
+    }
+    impl ControlledIncrementalDecode for EvidenceDecoder {
+        fn step_controlled(
+            &mut self,
+            _: Input<'_>,
+            _: &mut dyn DecodeRowSink,
+            _: &dyn zencodec::Pulse,
+        ) -> Result<ControlledProgress, StepError<Self::Error>> {
+            unreachable!("the test supplies the event being handled")
+        }
+        fn resume(
+            &mut self,
+            _: BoundaryId,
+            _: BoundaryAction,
+            _: &dyn zencodec::Pulse,
+        ) -> Result<(), StepError<Self::Error>> {
+            unreachable!()
+        }
+    }
+    #[test]
+    fn selected_route_rejects_late_metadata_and_unannounced_done_drift() {
+        let mut original = ImageInfo::new(1, 1, ImageFormat::Png);
+        original.gain_map = zencodec::GainMapPresence::Absent;
+        let changes: &[fn(&mut ImageInfo)] = &[
+            |i| i.source_color.icc_profile = Some(Arc::from(&b"late ICC"[..])),
+            |i| i.embedded_metadata.exif = Some(Arc::from(&b"late EXIF"[..])),
+            |i| i.embedded_metadata.xmp = Some(Arc::from(&b"late XMP"[..])),
+            |i| i.orientation = zencodec::Orientation::Rotate90,
+            |i| {
+                i.resolution = Some(zencodec::Resolution {
+                    x: 72.0,
+                    y: 72.0,
+                    unit: zencodec::ResolutionUnit::Inch,
+                })
+            },
+        ];
+        for change in changes {
+            for done in [false, true] {
+                let mut changed = original.clone();
+                change(&mut changed);
+                let source = evidence::qualify(
+                    &CodecSet::new(),
+                    None,
+                    &original,
+                    MetadataTransfer::DiscardDescriptive,
+                )
+                .unwrap();
+                let request = TranscodeRequest::new(ImageFormat::Png);
+                let codecs = CodecSet::new();
+                let mut execution =
+                    Execution::<RecordingJob>::new(&request, &codecs, None, None, None);
+                execution.phase = Phase::Selected {
+                    source,
+                    expected: ExpectedOutput {
+                        metadata: Metadata::none(),
+                        width: 1,
+                        height: 1,
+                        descriptor: PixelDescriptor::RGB8_SRGB,
+                        resolution: None,
+                    },
+                };
+                let mut destination = Destination::default();
+                let decoder: Box<DynControlledDecoder> = Box::new(EvidenceDecoder(changed));
+                let mut held = ControlledStepper::new(decoder, &mut destination);
+                let event = if done {
+                    Yield::Finished(ControlledEvent::Decode(Event::Done(
+                        OutputInfo::full_decode(1, 1, PixelDescriptor::RGB8_SRGB),
+                    )))
+                } else {
+                    Yield::Output(ControlledEvent::Decode(Event::Metadata(
+                        MetadataUpdate::HeaderReady,
+                    )))
+                };
+                let mut policy = BoundPolicy::new(
+                    PolicySet::new(),
+                    |_: Question<'_>| -> Result<Decision, At<core::convert::Infallible>> {
+                        panic!("late evidence cannot create another decision")
+                    },
+                );
+                let error = execution
+                    .advance(&mut held, event, &mut policy)
+                    .unwrap_err();
+                assert_eq!(
+                    zencodec::find_cause::<Refusal>(error.as_ref()),
+                    Some(&Refusal::LateMetadata)
+                );
+            }
         }
     }
 }
