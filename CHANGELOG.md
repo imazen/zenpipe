@@ -29,12 +29,21 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   (`3c688575`; evidence: `benchmarks/pulse_animation_qualify_2026-10-28.md`,
   whose run failed on two recorded causes outside the fix).
 
+- zencodecs' `stop_latency` benchmarks counted any error as a stop and printed a
+  stop latency for it; they now report only a stop as one, with its reason, and
+  any other error as a failure (test only; the benchmarks stay `#[ignore]`d).
+
 #### Added (qualification runner, 2026-10-28)
 
 - `scripts/qualify/`: the step helpers and strict-Clippy baseline classifier
   that qualified the fix above, with 24 synthetic controls
   (`just qualify-selftest`). They count `#[ignore]` tests as not run, never as
   passes. A baseline-only strict-Clippy log is still reported as a FAIL.
+- `just stop-latency`: zencodecs' eight non-AVIF stop-latency benchmarks, each
+  alone in an optimized build.
+- `benchmarks/native_pulse_heads_2026-10-28.md`: the native heads re-resolved
+  against the 0.2 core. zenavif, heic, zenextras and zenraw have no head this
+  graph can use yet.
 
 #### Fixed (2026-10-25)
 

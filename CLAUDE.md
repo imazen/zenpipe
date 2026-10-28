@@ -135,7 +135,16 @@ threading, hdr directives, compat security. Verified remaining:
 - Open: `PipeError::Cancelled` carries no stop reason. A caller's `TimedOut`
   and a codec's typed stop error are lost.
 - Unmeasured: stop latency. Every `zencodecs/tests/stop_latency.rs` test is an
-  `#[ignore]` benchmark.
+  `#[ignore]` benchmark (`just stop-latency` runs them). They used to count any
+  error as a stop; they now report only a stop as one, with its reason.
+- Open: four natives predate the zencodec 0.2 Pulse contract, and their features
+  do not build against the core: zenavif, heic, zenextras (zenpdf, zentiff) and
+  zenraw. No compatible head existed on 2026-10-28
+  (`benchmarks/native_pulse_heads_2026-10-28.md`).
+- CI blind spot: each extras step stops at its first failure. At `363f7c50` the
+  `pdf_` and `zeneditor` failures kept the Test extras for zeneditor, the
+  raw-decode set, `metadata_scrub`, `tools/metadata-services` and zenfilters,
+  and the Clippy extra for zenfilters, from running.
 
 ## Known Bugs: single-codec subset warnings (fixed 2026-10-28)
 
