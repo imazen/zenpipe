@@ -1131,6 +1131,13 @@ None.
 
 #### Fixed
 
+- The f32x8 kernels in `simd/x86.rs` and `simd/wide_simd.rs` now reach
+  `mul_add` through a private `MulAddCompat` helper, which confines one
+  `#[allow(deprecated)]` to the legacy call. magetypes 0.9.31 deprecates
+  `mul_add` for `mul_add_relaxed`, the same operation, and CI's sibling
+  archmage main turned the 88 call sites per target into Clippy errors. This
+  crate still requires magetypes 0.9.30, where `mul_add_relaxed` does not exist.
+  Same arithmetic and the same intrinsics on every backend; pixels unchanged.
 - Use token-suffixed SIMD constructors in the generic ARM path, preserving
   arithmetic while satisfying warnings-as-errors Clippy on ARM targets.
 
