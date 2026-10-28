@@ -45,13 +45,14 @@ baseline-only, 65 lints, 0 new. The full log's sha256 was
 `just checked-publication-graph RESULTS CORE EXPECTED` runs only in an isolated
 source export after a fresh serialized heavy grant. EXPECTED is a frozen JSON
 file naming the intended core, pixel, AVIF/parse, rav1d, TIFF and PDF-syntax
-sources plus the canonical extras source export. Local extras paths are an
-experiment overlay; portable landing requires the owner's pushed revision.
+sources plus either the owner's pushed extras source (`extras_source`) or the
+canonical extras source export (`extras_export`). Local extras paths are an
+experiment overlay; portable landing uses the verified pushed revision.
 
 The runner preserves all six locks before resolution, records resolved package
 identities and enabled features, and retains every failure. The existing five
 graph gates remain intact. Its additional audit covers apidoc, supplemental
-core members and exact extras export paths, and fails on unrelated package
+core members and exact extras git sources or export paths, and fails on unrelated package
 drift. Review any such drift against immutable source before changing its
 allowlist. All old native/browser assertions and the full API profile remain.
 The broader native check retains HEIC/raw; focused AVIF and extras consumer

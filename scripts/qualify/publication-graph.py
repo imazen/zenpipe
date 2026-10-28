@@ -51,8 +51,8 @@ def inspect(root, expected, before, results):
                 tracked.setdefault(name, []).append(identity(package))
                 if name in sources and source != sources[name]:
                     errors.append(f'{relative}: wrong source: {identity(package)}')
-                if name in EXTRAS and source != 'path':
-                    errors.append(f'{relative}: extras must use the frozen source export: {identity(package)}')
+                if name in EXTRAS and source != expected.get('extras_source', 'path'):
+                    errors.append(f'{relative}: wrong frozen extras source: {identity(package)}')
                 if name == 'how-far' and (version != '0.1.0' or not source.startswith('registry+')):
                     errors.append(f'{relative}: unexpected how-far: {identity(package)}')
             if name == 'tiff' and version == '0.11.3' and source != expected['tiff_source']:
@@ -77,9 +77,13 @@ def inspect(root, expected, before, results):
             metadata[relative] = {'packages': [{'id': p['id'], 'manifest_path': p['manifest_path']} for p in document['packages']], 'resolve': document['resolve']}
             for p in document['packages']:
                 if p['name'] in EXTRAS:
-                    want = Path(expected['extras_export']) / p['name'] / 'Cargo.toml'
-                    if Path(p['manifest_path']).resolve() != want.resolve():
-                        errors.append(f'{relative}: wrong extras export: {p["manifest_path"]}')
+                    if 'extras_source' in expected:
+                        if p.get('source') != expected['extras_source']:
+                            errors.append(f'{relative}: wrong extras metadata source: {p["id"]}')
+                    else:
+                        want = Path(expected['extras_export']) / p['name'] / 'Cargo.toml'
+                        if Path(p['manifest_path']).resolve() != want.resolve():
+                            errors.append(f'{relative}: wrong extras export: {p["manifest_path"]}')
         except (OSError, ValueError, KeyError) as error:
             errors.append(f'{relative}: missing/invalid executed metadata: {error}')
     full = results / 'metadata-full-api.json'
