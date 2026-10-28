@@ -205,11 +205,36 @@ Integration findings (2026-10-28):
   without rendering it**, so a rotated photo displayed sideways on both routes.
   Every policy now carries the source orientation to the encoder unless a
   `zenlayout.orient` node with a concrete value renders it, in which case the
-  output says `Identity`. Still open on this base (zenpipe issue 107): with an
-  orient node the rendered pixels are not the exact rotation (5,715 of 18,915
-  samples differ, by up to 95, on both routes), and `autorotate=true` (the
-  `Orient` sentinel 0, not resolved when the geometry is compiled) fails in
-  `ResizeSource` with a ring-buffer overflow that main has since fixed.
+  output says `Identity`.
+- **Fixed here (zenpipe issue 107): a geometry run that keeps the size resampled
+  every sample.** `NodeOp::Layout` sent every plan through the streaming resizer,
+  whose default Robidoux kernel blends neighbours even at 1:1. A size-preserving
+  plan now moves samples instead: trim, flip and placement stream, and other
+  orientations turn the materialized trimmed frame. Run 07, on both routes:
+  - before the fix (with main's `ResizeSource` fix already adopted, so
+    `autorotate=true` no longer overflows its ring), the orient node changed
+    5,715 of 18,915 samples (max 95), autorotate was not the upright source, and
+    a crop-only job changed 2,665 of 8,601 samples (max 92);
+  - after it, all three are exact, as are 32 canvases authored from the EXIF
+    definitions (eight orientations × orientation only, trim, trim with uneven
+    padding, trim with a negative placement; all 32 differed before).
+- **Open in zenresize, not zenpipe: a resizing layout with an orientation
+  misplaces uneven padding.** zenpipe now pads each oriented margin on the side
+  the orientation turns onto it (`config_from_plan`). Two zenresize bugs remain
+  under it, at the pinned `e3975fb9` and on zenresize main `93317e51`:
+  - With an orientation other than Identity or FlipH, rows are captured eagerly
+    into the orientation buffer, and the bottom padding is taken before any
+    content row exists. All of the unoriented raster's vertical padding lands
+    above the content.
+  - The padded FlipH path flips its reusable padding row in place. From the
+    second content row on, the previous row's content shows through in the
+    padding columns whenever the margins are uneven.
+
+  The control `a_resizing_layout_pads_where_the_plan_places_the_content`
+  (margins 2/5/1/3, 40x24 to half size) still fails for seven orientations. The
+  miss counts before (39, 106, 40, 200, 80, 120, 228 pixels) and after (33, 40,
+  40, 200, 80, 80, 200) the zenpipe change match the counts these two bugs
+  predict, for every orientation.
 - **Fixed in zencodec `79676215`: one PNG native batch was delivered in one step.**
   zenpng returns 32 KiB of rows per batch (a 97x65 RGB image arrives whole); at
   `f5a7fd46` the coroutine decoder copied every sub-strip of a batch into the sink
