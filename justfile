@@ -482,3 +482,15 @@ current-main-metadata-check manifest config:
 current-main-corpus-inventory manifest config list output:
     just current-main-inventory-build {{quote(manifest)}} {{quote(config)}}
     python3 "{{justfile_directory()}}/../imazen-26/tools/metadata-loss-audit/inventory_routes.py" {{quote(list)}} {{quote(output)}} --inventory "{{parent_directory(manifest)}}/target/release/zencodecs" --inventory-commit 841a171c63933a66bd834fab5cbfe0086908cf34 --workers 2
+
+# AVIF backend selection and retained cancellation through dispatch
+test-avif-backend:
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-svt --test avif_backend
+
+# Resolve complete standalone graphs so missing dependency edges cannot hide
+check-standalone-locks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for manifest in fuzz/Cargo.toml zencodecs/fuzz/Cargo.toml demo/crate/Cargo.toml wasm-size-shim/Cargo.toml tools/metadata-services/Cargo.toml; do
+        cargo metadata --locked --format-version 1 --manifest-path "$manifest" > /dev/null
+    done

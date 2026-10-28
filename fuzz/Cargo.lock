@@ -587,6 +587,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "enough",
+ "how-far",
  "imgref",
  "linear-srgb",
  "moxcms",
@@ -922,7 +923,7 @@ source = "git+https://github.com/imazen/jxl-encoder#049ea1346cd9884af81d65b72fb5
 [[patch.unused]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=5e493d39bb0b1e60e79ef755d0734e5bc30313ac#5e493d39bb0b1e60e79ef755d0734e5bc30313ac"
+source = "git+https://github.com/imazen/zenavif?rev=fada2db0fbfbcfc6425d4eef649b0936850733b5#fada2db0fbfbcfc6425d4eef649b0936850733b5"
 
 [[patch.unused]]
 name = "zenbitmaps"

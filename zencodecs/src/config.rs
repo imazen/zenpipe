@@ -163,6 +163,13 @@ pub struct CodecConfig {
     #[cfg(feature = "avif-encode")]
     pub avif_alpha_quality: Option<f32>,
 
+    /// AV1 encoder backend override for AVIF (default: zenavif's own default).
+    /// `Zenav1Svt`/`Zenav1Aom` require the `avif-svt`/`avif-aom` cargo features;
+    /// an unavailable backend is refused by zenavif's validate, not silently
+    /// swapped.
+    #[cfg(feature = "avif-encode")]
+    pub avif_backend: Option<zenavif::Av1Backend>,
+
     /// RAW/DNG decoder configuration (demosaic method, gamma, crop, orientation).
     #[cfg(feature = "raw-decode")]
     pub raw_decoder: Option<Box<raw::RawDecodeConfig>>,
@@ -271,6 +278,13 @@ impl CodecConfig {
     #[cfg(feature = "avif-encode")]
     pub fn with_avif_alpha_quality(mut self, quality: f32) -> Self {
         self.avif_alpha_quality = Some(quality);
+        self
+    }
+
+    /// Select the AV1 encoder backend for AVIF.
+    #[cfg(feature = "avif-encode")]
+    pub fn with_avif_backend(mut self, backend: zenavif::Av1Backend) -> Self {
+        self.avif_backend = Some(backend);
         self
     }
 
