@@ -4,6 +4,10 @@
 set -uo pipefail
 results=${1:?absolute results directory required}
 core=${2:?immutable core guide export required}
+core_revision=${3:-${GITHUB_SHA:-}}
+[[ "$core_revision" =~ ^[0-9a-f]{40}$ ]] || {
+    echo 'pass the immutable core revision for the archived guide' >&2; exit 2;
+}
 case "$results:$core" in /*:/*) ;; *) echo 'absolute paths required' >&2; exit 2 ;; esac
 root=$(pwd)
 [[ ! -e .git && ! -e .jj ]] || { echo 'run in an immutable source export' >&2; exit 2; }
@@ -27,6 +31,7 @@ step() {
     [[ $rc -eq 0 ]] || status=1
 }
 step source timeout 45s just checked-publication-source
+step preview-protocol timeout 45s just checked-preview-source
 step native timeout 600s just checked-publication-check
 step api-generate timeout 1200s just api-doc
 # Generation and check are distinct gates; neither substitutes a reduced profile.
@@ -53,7 +58,7 @@ assert not link.exists() and not link.is_symlink(), f'pre-existing tools at {lin
 link.symlink_to(Path(sys.argv[2]), target_is_directory=True)
 assert not (Path(sys.argv[1]) / 'demo/pkg').exists(), 'demo profile is explicitly mock/browser-canvas, not a WASM qualification'
 PYLINKS
-step core-guide timeout 300s bash -c '
+step core-guide timeout 300s env GITHUB_SHA="$core_revision" bash -c '
     set -euo pipefail
     cd "$1"
     python3 - "$2" <<'"'"'PY'"'"'
@@ -63,15 +68,23 @@ with socket.socket() as s:
 PY
     SITE_SCREENSHOTS="$3" just docs-site-browser-check "$2"
 ' _ "$core" 3547 "$results/core-browser"
-step demo-browser timeout 600s bash -c '
+demo_browser() {
+    local demo=$1 output=$2; shift 2
+    (
     set -euo pipefail
-    cd "$1"
-    python3 - <<'"'"'PY'"'"'
+    cd "$demo"
+    python3 - <<'PY'
 import socket
 with socket.socket() as s:
+    # A completed prior browser leaves TIME_WAIT, not a live server.
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("127.0.0.1",3847))
 PY
-    exec ./node_modules/.bin/playwright test --config playwright.config.js --project chromium --workers 1 --output "$2"
-' _ "$root/demo" "$results/demo-browser"
+    exec ./node_modules/.bin/playwright test --config playwright.config.js --project chromium --workers 1 --output "$output" "$@"
+    )
+}
+export -f demo_browser
+step demo-preview timeout 90s bash -c 'demo_browser "$@"' _ "$root/demo" "$results/demo-preview" tests/encode-preview.spec.js
+step demo-browser timeout 600s bash -c 'demo_browser "$@"' _ "$root/demo" "$results/demo-browser"
 printf 'done status=%s\n' "$status" > "$results/stage.txt"
 exit "$status"

@@ -48,14 +48,19 @@ step full-api-graph timeout 300s bash -c 'exec cargo metadata --format-version 1
 step graph-identities timeout 45s python3 scripts/qualify/publication-graph.py "$PWD" "$expected" "$results/before" "$results"
 step existing-core-gate timeout 45s python3 scripts/check-core-family.py
 step existing-decoder-gate timeout 45s python3 scripts/check-decoder-pins.py
+# First compiler diagnostic: preserve the complete canonical API feature profile
+# and raw compiler spans, before asking the snapshot wrapper to summarize it.
+step full-profile-diagnostic timeout 900s just checked-publication-diagnostic "$results/full-profile"
 # Preserve the entire canonical feature profile, including known unmigrated
 # HEIC/raw controls. Extras are additional gates, not profile substitutions.
-step full-native-check timeout 900s cargo check -p zencodecs --no-default-features --features all,jp2-decode,metadata,checked-transcode-async,tiff,pdf-decode,svg-decode --locked
+step full-native-check timeout 900s cargo check -p zencodecs --no-default-features --features all,jp2-decode,metadata,checked-transcode-async,tiff,pdf-decode,svg --locked
 step avif-capability timeout 600s cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,avif-decode,avif-encode,jpeg-ultrahdr --test avif_capability --locked
-step avif-pixels timeout 600s cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,avif-decode,avif-encode,jpeg-ultrahdr --test regress avif --locked
-step extras-consumers timeout 600s cargo test -p zencodecs --no-default-features --features std,cms,tiff,pdf-decode,svg-decode,jp2-decode --test pdf --test svg_decode --test jp2_decode --locked
-step full-native-clippy timeout 600s cargo clippy -p zencodecs --no-default-features --features all,jp2-decode,metadata,checked-transcode-async,tiff,pdf-decode,svg-decode --lib --locked -- -D warnings
-step publication-api-browser timeout 3600s bash scripts/qualify/publication-final.sh "$results/final" "$core"
+step avif-orientation-witness timeout 600s cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,avif-decode,avif-encode,jpeg-ultrahdr --test avif_capability orientation_pixel_witness --locked
+step avif-pixels timeout 600s cargo test -p zencodecs --no-default-features --features all,jp2-decode,metadata,checked-transcode-async --test regress avif --locked
+step extras-consumers timeout 600s cargo test -p zencodecs --no-default-features --features std,cms,tiff,pdf-decode,svg,jp2-decode --test pdf --test svg_decode --test jp2_decode --locked
+step full-native-clippy timeout 600s cargo clippy -p zencodecs --no-default-features --features all,jp2-decode,metadata,checked-transcode-async,tiff,pdf-decode,svg --lib --locked -- -D warnings
+core_revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["core_source"].rsplit("#",1)[1])' "$expected")
+step publication-api-browser timeout 3600s bash scripts/qualify/publication-final.sh "$results/final" "$core" "$core_revision"
 # Record again after API generation (which invokes nested Cargo commands).
 step final-graph-identities timeout 45s python3 scripts/qualify/publication-graph.py "$PWD" "$expected" "$results/before" "$results"
 printf 'done status=%s\n' "$status" > "$results/stage.txt"

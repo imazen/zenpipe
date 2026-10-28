@@ -58,3 +58,21 @@ allowlist. All old native/browser assertions and the full API profile remain.
 The broader native check retains HEIC/raw; focused AVIF and extras consumer
 tests add evidence without replacing that gate. Ignored corpus controls and the
 demo's inherited download skip remain unexecuted, never counted as passes.
+
+The first compiler gate is `just checked-publication-diagnostic RESULTS`.
+It uses the complete canonical API feature profile, writes raw Cargo JSON and
+stderr separately, and extracts rendered diagnostics with native source spans.
+Run it in an immutable export with an already resolved lock, after its own
+serialized grant. Do not substitute another snapshot-wrapper attempt for this
+diagnostic. The later full runner retains the actual `svg` feature and the
+`regress` target's required `all` feature, and supplies the immutable core
+revision as `GITHUB_SHA` to the archived guide. The narrow canvas preview
+browser test runs before the unchanged full browser suite.
+
+The optional `reviewed_deltas_file` expectation names the exact 52 records in
+`publication-deltas-2026-10-28.json`, reviewed in
+`docs/publication-deltas-2026-10-28.md`. Baseline locks, selected source pins,
+graph root, change direction, version, source, checksum and multiplicity all
+must match; unrelated drift still fails. The existing name-based allowance is
+unchanged. `just checked-publication-delta-source FROZEN_RUN` exercises both
+refusal and exact admission against retained metadata, without invoking Cargo.

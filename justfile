@@ -293,8 +293,8 @@ checked-publication-locks:
     python3 scripts/check-decoder-pins.py
 
 # Full API/profile + existing source/browser controls, after a fresh slot grant.
-checked-publication-final results core:
-    bash scripts/qualify/publication-final.sh "{{results}}" "{{core}}"
+checked-publication-final results core revision="":
+    bash scripts/qualify/publication-final.sh "{{results}}" "{{core}}" "{{revision}}"
 
 # Frozen graph migration; a fresh serialized heavy grant is required.
 checked-publication-graph results core expected:
@@ -303,3 +303,13 @@ checked-publication-graph results core expected:
 # Node protocol controls only; browser/pixel readback is a separate granted gate.
 checked-preview-source:
     timeout 45s node --test demo/tests-node/worker-preview.test.cjs
+    timeout 45s node --input-type=module --check < demo/js/export-modal.js
+    timeout 45s node --check demo/tests/encode-preview.spec.js
+
+# Reads retained locks/metadata only; no Cargo invocation.
+checked-publication-delta-source frozen:
+    timeout 45s python3 scripts/qualify/publication-delta-controls.py "{{frozen}}"
+
+# FIRST compiler gate after a fresh grant; keeps the full canonical API features.
+checked-publication-diagnostic results:
+    bash scripts/qualify/publication-diagnostic.sh "{{results}}"
