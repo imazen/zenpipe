@@ -360,3 +360,69 @@ fn autorotate_displays_upright_on_both_routes() {
         "autorotate not displayed upright: {wrong:#?}"
     );
 }
+
+#[test]
+fn a_crop_node_keeps_exact_pixels_on_both_routes() {
+    // A crop changes no sample: the output must equal the cropped source
+    // exactly. A geometry run without a size change must not resample.
+    let samples = {
+        let mut s = Vec::with_capacity((W * H * 3) as usize);
+        for y in 0..H {
+            for x in 0..W {
+                s.extend_from_slice(&[(x * 2) as u8, (y * 3) as u8, ((x * 7) ^ (y * 5)) as u8]);
+            }
+        }
+        s
+    };
+    let (x0, y0, cw, ch) = (5u32, 3u32, 61u32, 47u32);
+    let mut expected = Vec::new();
+    for y in y0..y0 + ch {
+        let start = ((y * W + x0) * 3) as usize;
+        expected.extend_from_slice(&samples[start..start + (cw * 3) as usize]);
+    }
+    let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![Box::new(zenpipe::zennode_defs::Crop {
+        x: x0,
+        y: y0,
+        w: cw,
+        h: ch,
+    })];
+    let mut wrong = Vec::new();
+    for planned in [false, true] {
+        let lossless = CodecIntent {
+            lossless: Some(zencodecs::BoolKeep::True),
+            ..intent(ImageFormat::Png)
+        };
+        let mut job = ImageJob::new()
+            .add_input(0, png_input())
+            .add_output(1)
+            .with_intent(lossless)
+            .with_metadata_policy(zenpipe::job::MetadataPolicy::PreserveAll)
+            .with_nodes(&nodes);
+        if planned {
+            job = job.with_output_policy(PolicySet::new());
+        }
+        match job.run() {
+            Ok(result) => {
+                let (w, h, shown) = displayed(&result.encode_results[0].bytes);
+                let ok = (w, h) == (cw, ch) && shown == expected;
+                let differing = shown.iter().zip(&expected).filter(|(a, b)| a != b).count();
+                let max = shown
+                    .iter()
+                    .zip(&expected)
+                    .map(|(a, b)| a.abs_diff(*b))
+                    .max()
+                    .unwrap_or(0);
+                eprintln!(
+                    "crop planned={planned}: {w}x{h}, exact {ok}, {differing} samples differ, max {max}"
+                );
+                if !ok {
+                    wrong.push(format!(
+                        "planned={planned}: {differing} samples differ, max {max}"
+                    ));
+                }
+            }
+            Err(e) => wrong.push(format!("planned={planned}: {e}")),
+        }
+    }
+    assert!(wrong.is_empty(), "crop changed samples: {wrong:#?}");
+}
