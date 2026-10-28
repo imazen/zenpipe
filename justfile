@@ -299,3 +299,7 @@ checked-publication-final results core:
 # Frozen graph migration; a fresh serialized heavy grant is required.
 checked-publication-graph results core expected:
     bash scripts/qualify/publication-graph.sh "{{results}}" "{{core}}" "{{expected}}"
+
+# Node protocol controls only; browser/pixel readback is a separate granted gate.
+checked-preview-source:
+    timeout 45s node --test demo/tests-node/worker-preview.test.cjs

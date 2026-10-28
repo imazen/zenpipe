@@ -176,7 +176,7 @@ async function runEncodePreview() {
       jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
       avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
     };
-    const mime = MIME_MAP[exportFormat] || 'image/jpeg';
+    const mime = result.mime || MIME_MAP[exportFormat] || 'image/jpeg';
     const blob = new Blob([result.data], { type: mime });
     previewBlobUrl = URL.createObjectURL(blob);
     const img = $('export-preview-img');

@@ -37,6 +37,14 @@ sources`.
 
 ## Known Bugs
 
+- Fixed in source during publication qualification (2026-10-28): the browser
+  fallback supported export but rejected `encode_preview`, leaving the preview
+  hidden and its statistics empty. The worker now uses its existing canvas
+  backend for previews and reports the actual encoded MIME. Two Node protocol
+  controls fail on the old worker and pass on the repair; actual browser
+  readback and the unchanged full suite remain unrun for this source change.
+  See `docs/publication-qualification.md`.
+
 - Fixed during native PNG qualification (2026-10-25): a 97x65 source could
   deliver a 65-row native batch to an admitted 64-row transcode strip and fail
   with `StripGeometry`. The sink now advertises its capacity; shared coroutine
