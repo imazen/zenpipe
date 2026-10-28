@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_output(
             OutputProfile::Named(Cicp::SRGB),
             PixelFormat::Rgb8,
-            ConvertOptions::forbid_lossy(),
+            ConvertOptions::retain_channels(),
         )
         .with_metadata(MetadataTransfer::DiscardDescriptive);
     let mut policy = PolicySet::new()

@@ -248,6 +248,9 @@ impl<S: zencodec::source::ReadAt + ?Sized> zencodec::source::ReadAt for Source<'
             .get(..n)
             .ok_or_else(|| ReadError(Refusal::MetadataCompleteness.into()))?;
         self.input.record(offset, bytes)?;
+        if n < out.len() && offset.checked_add(n as u64) == Some(self.input.prefix as u64) {
+            self.input.length(self.input.prefix as u64)?;
+        }
         Ok(n)
     }
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), ReadError> {
@@ -302,6 +305,9 @@ impl<S: zencodec_io::tokio_io::AsyncSource + ?Sized> zencodec_io::tokio_io::Asyn
         let n = self.source.read_at(offset, out).await?;
         let bytes = out.get(..n).ok_or(Refusal::MetadataCompleteness)?;
         self.input.record(offset, bytes)?;
+        if n == 0 && offset == self.input.prefix as u64 {
+            self.input.length(offset)?;
+        }
         Ok(n)
     }
 }
@@ -346,6 +352,27 @@ mod tests {
         assert_eq!(budget.reserved_bytes(), 8);
         adapter.input.release_capture();
         assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+    }
+    #[test]
+    fn short_positional_read_records_eof_without_an_extra_length_request() {
+        use zencodec::source::ReadAt;
+        let mut input = Input::new(
+            None,
+            MetadataTransfer::PreserveReported,
+            StorageBudget::new(32, 3),
+        );
+        let mut source = Reads {
+            bytes: b"abcdef",
+            reads: 0,
+        };
+        let mut adapter = Source {
+            source: &mut source,
+            input: &mut input,
+        };
+        let mut out = [0; 16];
+        assert_eq!(adapter.read_at(0, &mut out).unwrap(), 6);
+        assert_eq!(adapter.input.complete(), Some(&b"abcdef"[..]));
+        assert_eq!(adapter.source.reads, 1);
     }
     #[test]
     fn capture_admission_precedes_reads_and_changed_overlap_refuses() {

@@ -45,7 +45,7 @@ let codecs = CodecSet::new()
 let request = TranscodeRequest::new(ImageFormat::Png)
     .with_cms(&MoxCms)
     .with_output(OutputProfile::Named(Cicp::SRGB), PixelFormat::Rgb8,
-                 ConvertOptions::forbid_lossy())
+                 ConvertOptions::retain_channels())
     .with_metadata(MetadataTransfer::DiscardDescriptive);
 let mut policy = PolicySet::new()
     .require_metadata(MetadataTransfer::DiscardDescriptive)
@@ -54,7 +54,11 @@ let output = request.transcode_with(&codecs, input, &mut policy)?;
 ```
 
 RGB8 is explicit here because this example accepts JPEG. The conversion policy
-refuses implicit alpha removal, gray conversion or depth reduction. An alpha
+refuses implicit alpha removal, gray conversion or depth reduction.
+At pixels `283655c5`, `retain_channels()` replaces the deprecated
+`forbid_lossy()` alias with identical behavior; it still permits color arithmetic
+and float clipping. Exact-sample conversion requires the separate preserving
+samples API, not this preset. An alpha
 output cannot select a destination without native alpha support. Output checks
 also require the selected integer sample depth. Orientation needed to render the
 image is retained or reconciled even when source descriptions are discarded.
@@ -114,9 +118,14 @@ error object through `Error::source()`.
 
 ## Metadata completeness and retained publication
 
-The proposed follow-up uses core `4c8a8eac` and pixels `283655c5`; its new Rust
-controls have not yet run. Earlier qualification receipts below describe their
-recorded revisions, not this follow-up.
+The follow-up uses core `4c8a8eac` and pixels `283655c5`. At Rust source
+`2a78941f`, the isolated publication qualification passed 12 unit controls and
+35 native integration controls, strict Clippy (library, native suite and both
+examples), and the codec-free checked-transcode feature check. All five graph
+locks resolved one paired core/pixel/how-far family with no unrelated resolved
+package identity changes. Compiler API snapshots and browser checks have not run
+for this change; public API review remains required. Earlier receipts below
+describe their recorded revisions.
 
 A final pixel interpretation is not a metadata inventory. Before configuring
 encoder metadata, slice input is inspected by the registered native inventory
@@ -412,3 +421,30 @@ and checks its metadata and color before returning it. Live publication would
 expose bytes before those checks, so this route stays finish-first by design. The
 planned row driver in `zenpipe::io` (see `docs/io.md`) offers live schedules for
 pipelines without output postconditions.
+
+### Retained publication qualification (2026-10-28)
+
+The initial source snapshot `b9fbb58f` failed compilation on a stale private proof
+constructor call. The first repair exposed a new readback helper's nonexistent
+PixelSlice geometry method. The following native run passed 32 of 35 controls:
+three existing PNG range/async controls showed that the new input observer missed
+length already learned by its driver at EOF. The observer now records positional
+short-read EOF and async zero-read EOF at the observed contiguous prefix. A
+nonzero async short read still proves no EOF. No source replay or additional
+length call was added; all prior pixel, metadata, density and budget assertions
+remain. The final source `2a78941f` passes all 35 native controls and 12 unit
+controls, with no ignored cases in those runs.
+
+```text
+run-heavy: done rc=101 36s | peak-RSS 0.67GiB | min-avail 4779MiB | peak-load 1.02
+run-heavy: done rc=101 4s | peak-RSS 0.49GiB | min-avail 5030MiB | peak-load 0.54
+run-heavy: done rc=101 5s | peak-RSS 0.53GiB | min-avail 5189MiB | peak-load 0.43
+run-heavy: done rc=0 22s | peak-RSS 0.57GiB | min-avail 4669MiB | peak-load 0.97
+```
+
+The measurements describe validation processes, not codec memory bounds or
+performance. Full commands are `just checked-publication-locks` followed by
+`just checked-publication-check` in an immutable source export with its own
+Cargo target. Native bytes/features stayed pinned; all failed logs were retained.
+The broader inherited run21, optional native-family migrations, ignored latency
+controls, generated API snapshots and browser checks are separate qualifications.

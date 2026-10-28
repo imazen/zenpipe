@@ -185,7 +185,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 let (profile, output_format, options) = self.request.output.clone().unwrap_or((
                     OutputProfile::SameAsOrigin,
                     descriptor.pixel_format(),
-                    ConvertOptions::forbid_lossy(),
+                    ConvertOptions::retain_channels(),
                 ));
                 let mut conversion = OutputPlan::new(
                     descriptor,

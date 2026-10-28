@@ -21,8 +21,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   preparation. Metadata inventory/epoch checks prevent a final pixel boundary
   from silently authorizing incomplete or changed reported metadata. File/range
   preservation admits an additional compressed-input copy without replay;
-  unqualified metadata completeness refuses. New controls are source-only until
-  the serialized native qualification run; see `docs/checked-transcode.md`.
+  unqualified metadata completeness refuses. Isolated source `2a78941f` passes
+  12 unit and 35 native controls, strict Clippy and the codec-free feature check;
+  generated API snapshots and public API review remain pending. See
+  `docs/checked-transcode.md`.
 
 #### Fixed (2026-10-28)
 

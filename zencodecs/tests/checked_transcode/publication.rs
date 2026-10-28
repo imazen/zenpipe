@@ -421,7 +421,7 @@ fn operation_source(codecs: &CodecSet, input: &[u8]) -> Vec<u8> {
     let source = zencodec::operation::DecodeRequest::new()
         .decode(codecs, input)
         .unwrap();
-    (0..source.pixels().height())
+    (0..source.height())
         .flat_map(|y| source.pixels().row(y).to_vec())
         .collect()
 }

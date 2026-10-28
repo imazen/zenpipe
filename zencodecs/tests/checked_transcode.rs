@@ -80,7 +80,7 @@ fn request<'a>(budget: StorageBudget) -> TranscodeRequest<'a> {
         .with_output(
             OutputProfile::Named(Cicp::SRGB),
             PixelFormat::Rgb8,
-            ConvertOptions::forbid_lossy(),
+            ConvertOptions::retain_channels(),
         )
         .with_metadata(MetadataTransfer::DiscardDescriptive)
 }
@@ -108,7 +108,7 @@ fn native_jpeg_to_png_matches_separate_cms_and_png_oracles() {
                 ColorProfileSource::Cicp(Cicp::SRGB),
                 PixelFormat::Rgb8,
                 PixelFormat::Rgb8,
-                &ConvertOptions::forbid_lossy(),
+                &ConvertOptions::retain_channels(),
             )
             .unwrap()
             .unwrap();

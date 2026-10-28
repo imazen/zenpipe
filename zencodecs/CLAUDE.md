@@ -899,3 +899,14 @@ changing `rav1d-safe dfd01e32`. `just check-pins` checks every standalone graph.
 CI qualification found additional generic `V::<T>` SIMD constructor aliases in
 zenfilters' NEON/WASM helper functions. They also require the explicit-token
 method names; `just checked-transcode-arm-clippy` checks those compiled paths.
+
+
+## Known Bugs: retained input observation (2026-10-28, fixed in review)
+
+The publication proposal initially recorded source length only through len or
+len_hint. A driver may already know EOF from a short positional read or a zero
+async read and answer the native decoder without another source call. The
+observer then falsely refused three existing PNG preservation/density controls.
+It now retains that already observed EOF, with a focused no-extra-read control;
+nonzero async short reads remain incomplete. All original native assertions
+remain, and the isolated 12-unit/35-native qualification passes at 2a78941f.

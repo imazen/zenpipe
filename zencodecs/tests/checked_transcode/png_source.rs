@@ -140,7 +140,7 @@ fn png_profile_conversion_matches_separate_cms_and_drops_reported_descriptions()
             ColorProfileSource::Cicp(Cicp::SRGB),
             PixelFormat::Rgb8,
             PixelFormat::Rgb8,
-            &ConvertOptions::forbid_lossy(),
+            &ConvertOptions::retain_channels(),
         )
         .unwrap()
         .unwrap();

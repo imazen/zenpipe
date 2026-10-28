@@ -464,7 +464,7 @@ mod tests {
             .with_output(
                 OutputProfile::Named(Cicp::SRGB),
                 PixelFormat::Rgb8,
-                ConvertOptions::forbid_lossy(),
+                ConvertOptions::retain_channels(),
             )
             .with_metadata(MetadataTransfer::DiscardDescriptive)
             .with_output_limit(CAP);
@@ -478,9 +478,13 @@ mod tests {
         schedule.wait_retained_upper_bound = Some(FixedProof::<CAP>::wait_bound());
         let mut cursor = SliceCursor::new(request.io.read_size);
         let completed = request
-            .execute_scheduled(&codecs, &mut policy, Some(schedule), |held, pulse, _| {
-                Ok(cursor.next(&input, held, pulse)?)
-            })
+            .execute(
+                &codecs,
+                &mut policy,
+                Some(schedule),
+                Some(&input),
+                |held, pulse, _| Ok(cursor.next(&input, held, pulse)?),
+            )
             .unwrap();
         let proof = FixedProof::<CAP>::from_verified(completed).unwrap();
         drop(cursor);
