@@ -136,3 +136,47 @@ fn jpeg_and_png_requests_hand_their_pulse_to_the_codec_job() {
         failures.join("\n")
     );
 }
+
+/// `animation_frame_decoder` creates its codec job from the same request, so
+/// it carries the same pulse: an animated GIF stops at every poll the decoder
+/// makes, with the deadline's reason. (2026-10-28: the animation path built its
+/// job without the request's pulse; only per-call pulses reached the codec.)
+#[cfg(feature = "gif")]
+#[test]
+fn gif_animation_request_hands_its_pulse_to_the_codec_job() {
+    let (w, h, frames) = (24u32, 16u32, 3u32);
+    let stride = w as usize * 4;
+    let mut encoder = EncodeRequest::new(ImageFormat::Gif)
+        .animation_frame_encoder(w, h)
+        .unwrap();
+    for frame in 0..frames {
+        let bytes: Vec<u8> = (0..w * h)
+            .flat_map(|n| [(n * 7 + frame * 40) as u8, (frame * 60) as u8, 200, 255])
+            .collect();
+        let pixels = PixelSlice::new(&bytes, w, h, stride, PixelDescriptor::RGBA8_SRGB).unwrap();
+        encoder.push_frame(pixels, 100, None).unwrap();
+    }
+    let encoded = encoder.finish(None).unwrap().into_vec();
+    let mut failures = Vec::new();
+    each_stop_point("Gif animation decode", &mut failures, |pulse| {
+        let mut decoder = DecodeRequest::new(&encoded)
+            .with_pulse(pulse)
+            .animation_frame_decoder()?;
+        let mut decoded = 0;
+        while decoder
+            .render_next_frame_owned(None)
+            .map_err(|e| CodecError::from_codec_boxed(ImageFormat::Gif, e))?
+            .is_some()
+        {
+            decoded += 1;
+        }
+        assert_eq!(decoded, frames, "an unstopped decode yields every frame");
+        Ok(())
+    });
+    assert!(
+        failures.is_empty(),
+        "{} wrong stop points:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
