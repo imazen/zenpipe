@@ -705,6 +705,19 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Fixed (2026-10-28)
 
+- **A `Layout` whose plan keeps the size resampled every sample.**
+  `NodeOp::Layout` ran each plan through the streaming resizer, so an
+  orientation, trim or placement with no scaling was resampled 1:1 with the
+  default Robidoux kernel, which blends neighbours (its weights at integer
+  offsets are about 0.063, 0.874, 0.063): an `ImageJob` orient node changed
+  5,715 of 18,915 samples, max 95. A size-preserving plan (`resize_is_identity`,
+  no post-resize effects) now moves samples exactly, in the plan's order: trim
+  (`CropSource`), a horizontal flip (`FlipHSource`) and placement
+  (`ExpandCanvasSource`, with the bytes the resizer's padding writes) stream;
+  any other orientation turns the materialized trimmed frame, as `Orient` does,
+  and the estimate counts that frame and its turned copy. Regression: io-check
+  `layout_exact` (eight orientations with trim, uneven padding and negative
+  placement, against authored canvases) and `image_job`.
 - **`ImageJob` lost the orientation under its default policy.** `WebDefault`
   (the default) and `StripAll` set the output orientation to `Identity` and
   stripped EXIF without rendering the orientation, so a rotated photo displayed

@@ -57,7 +57,7 @@ use crate::ops::RowConverterOp;
 #[cfg(feature = "std")]
 use crate::sources::FilterSource;
 use crate::sources::{
-    CanvasFill, CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource,
+    CanvasFill, CompositeSource, CropSource, EdgeReplicateSource, ExpandCanvasSource, FlipHSource,
     MaterializedSource, ResizeSource, TransformSource,
 };
 
@@ -235,14 +235,19 @@ pub enum NodeOp {
 
     // === Layout: crop + orient + resize + canvas via zenresize ===
     /// Execute a [`LayoutPlan`] — handles crop, orientation, resize, and canvas
-    /// placement in a single streaming pass via [`crate::execute_layout::streaming_from_plan_batched`].
+    /// placement. A plan that resizes runs in a single streaming pass via
+    /// [`crate::execute_layout::streaming_from_plan_batched`]: one
+    /// [`StreamingResize`](zenresize::StreamingResize) does crop, resize,
+    /// padding and orientation, buffering its whole output for an
+    /// orientation other than a horizontal flip.
     ///
-    /// Input must be `Rgba8`. All steps (crop, resize, padding, orientation)
-    /// are handled inside one [`StreamingResize`](zenresize::StreamingResize)
-    /// — no intermediate materialization.
+    /// A plan that keeps the size (`resize_is_identity`, no post-resize
+    /// effects) moves samples exactly instead of resampling them 1:1: trim,
+    /// a horizontal flip and placement stream, and any other orientation
+    /// materializes the trimmed frame.
     ///
-    /// Falls back to materializing `execute_layout` only for edge extension
-    /// (`content_size`).
+    /// Input must be `Rgba8`. Edge extension (`content_size`) streams through
+    /// [`EdgeReplicateSource`].
     Layout {
         plan: zenlayout::LayoutPlan,
         filter: zenresize::Filter,
@@ -845,6 +850,29 @@ impl PipelineGraph {
                 est.streaming_bytes +=
                     kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
                 est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                // A size-preserving plan runs exactly (`exact_identity_layout`):
+                // an orientation other than a horizontal flip holds the
+                // trimmed frame and its turned copy.
+                let o = plan.remaining_orientation;
+                if plan.resize_is_identity
+                    && plan.effects.iter().all(|e| e.before_resize)
+                    && !o.is_identity()
+                    && o != zenlayout::Orientation::FlipH
+                {
+                    let input = plan
+                        .effects
+                        .iter()
+                        .rev()
+                        .find(|e| e.before_resize)
+                        .map_or((upstream.width, upstream.height), |e| {
+                            (e.output_dims.width, e.output_dims.height)
+                        });
+                    let (tw, th) = plan.trim.map_or(input, |t| (t.width, t.height));
+                    let frame = tw as u64 * th as u64 * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                    est.materializes = true;
+                    est.materialization_bytes =
+                        est.materialization_bytes.max(frame.saturating_mul(2));
+                }
                 // Dimension effects (non-cardinal rotation, auto-deskew) run
                 // through `EffectSource`, which materializes its input and
                 // its output: two full frames of RGBA8 at the larger of the
@@ -1403,20 +1431,28 @@ impl PipelineGraph {
                 }
                 let content_size = plan.content_size;
 
-                let in_w = source.width();
-                let in_h = source.height();
-                let resizer = crate::execute_layout::streaming_from_plan_batched(
-                    in_w, in_h, &plan, working, filter, 16,
-                );
-                source = Box::new(ResizeSource::from_streaming(source, resizer, 16)?);
+                if plan.resize_is_identity && after_resize.is_empty() {
+                    // The plan keeps the size, so it only moves samples
+                    // (trim, orientation, placement). Resampling it 1:1
+                    // would blend neighbours with a non-interpolating kernel
+                    // (the default Robidoux), so it runs exactly instead.
+                    source = exact_identity_layout(source, &plan, working)?;
+                } else {
+                    let in_w = source.width();
+                    let in_h = source.height();
+                    let resizer = crate::execute_layout::streaming_from_plan_batched(
+                        in_w, in_h, &plan, working, filter, 16,
+                    );
+                    source = Box::new(ResizeSource::from_streaming(source, resizer, 16)?);
 
-                // Apply post-resize effects (cheaper — operating on smaller buffer).
-                if !after_resize.is_empty() {
-                    source = Box::new(crate::sources::EffectSource::new(
-                        source,
-                        &after_resize,
-                        &crate::limits::Limits::default(),
-                    )?);
+                    // Apply post-resize effects (cheaper — operating on smaller buffer).
+                    if !after_resize.is_empty() {
+                        source = Box::new(crate::sources::EffectSource::new(
+                            source,
+                            &after_resize,
+                            &crate::limits::Limits::default(),
+                        )?);
+                    }
                 }
 
                 if let Some(cs) = content_size {
@@ -2081,6 +2117,49 @@ fn compile_orient(
         )?),
         meta,
     ))
+}
+
+/// Run a layout plan that keeps the size exactly, in the order the plan
+/// defines (trim, orientation, placement): no kernel touches a sample. Trim,
+/// a horizontal flip and placement stream; any other orientation needs the
+/// whole trimmed raster, as it does in the resizer and in `Orient`.
+fn exact_identity_layout(
+    mut source: Box<dyn Source>,
+    plan: &zenlayout::LayoutPlan,
+    working: PixelFormat,
+) -> crate::PipeResult<Box<dyn Source>> {
+    if let Some(t) = plan.trim
+        && (t.x, t.y, t.width, t.height) != (0, 0, source.width(), source.height())
+    {
+        source = Box::new(CropSource::new(source, t.x, t.y, t.width, t.height)?);
+    }
+    let orientation = plan.remaining_orientation;
+    if orientation == zenlayout::Orientation::FlipH {
+        source = Box::new(FlipHSource::new(source));
+    } else if !orientation.is_identity() {
+        let (in_w, in_h) = (source.width(), source.height());
+        source = Box::new(MaterializedSource::from_source_with_transform(
+            source,
+            move |data, w, h, _fmt| {
+                let (result, new_w, new_h) =
+                    crate::execute_layout::orient_image(data, in_w, in_h, orientation, 4);
+                *data = result;
+                *w = new_w;
+                *h = new_h;
+            },
+        )?);
+    }
+    let (canvas_w, canvas_h) = (plan.canvas.width, plan.canvas.height);
+    if (canvas_w, canvas_h) != (source.width(), source.height()) || plan.placement != (0, 0) {
+        // The bytes the resizer's padding writes for this canvas color.
+        let bg = crate::execute_layout::canvas_color_to_f32(&plan.canvas_color, working)
+            .map(|v| (v * 255.0 + 0.5) as u8);
+        let (x, y) = plan.placement;
+        source = Box::new(ExpandCanvasSource::new(
+            source, canvas_w, canvas_h, x, y, bg,
+        )?);
+    }
+    Ok(source)
 }
 
 /// Insert a format conversion source if needed (no-std path).
