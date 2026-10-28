@@ -22,6 +22,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   a frame's render or a frame's encode, not only between frames. A codec stop is
   `PipeError::Cancelled` (it was an `Op` string), and a stop while creating the
   encoder no longer falls back to the static route.
+- Animated transcodes convert each frame to the encoder's pixel format: a decoder
+  that renders frames in another layout (zenwebp renders an opaque animation as
+  RGB8) made `FrameSink` slice a short row and panic. `FrameSink` now refuses a
+  strip of another format (`FormatMismatch`) or width (`DimensionMismatch`).
 
 #### Fixed (2026-10-25)
 

@@ -352,6 +352,19 @@ impl FrameSink {
 
 impl crate::Sink for FrameSink {
     fn consume(&mut self, strip: &Strip<'_>) -> crate::PipeResult<()> {
+        if strip.descriptor() != self.format {
+            return Err(at!(PipeError::FormatMismatch {
+                expected: self.format,
+                got: strip.descriptor(),
+            }));
+        }
+        if strip.width() != self.width {
+            return Err(at!(PipeError::DimensionMismatch(alloc::format!(
+                "frame sink is {} pixels wide, strip is {}",
+                self.width,
+                strip.width()
+            ))));
+        }
         let stride = self.format.aligned_stride(self.width);
         for r in 0..strip.rows() {
             if self.rows_accumulated >= self.height {
@@ -447,6 +460,25 @@ pub fn transcode_with_stop(
     )
 }
 
+/// A frame's pipeline delivering the sink's pixel format. Decoders may render
+/// frames in another layout (zenwebp renders an opaque animation as RGB8), so a
+/// differing format is converted, or refused when no conversion exists.
+fn in_format(pipeline: Box<dyn Source>, format: PixelFormat) -> crate::PipeResult<Box<dyn Source>> {
+    let from = pipeline.format();
+    if from == format {
+        return Ok(pipeline);
+    }
+    let convert = crate::ops::RowConverterOp::new(from, format).ok_or_else(|| {
+        at!(PipeError::FormatMismatch {
+            expected: format,
+            got: from,
+        })
+    })?;
+    Ok(Box::new(
+        crate::sources::TransformSource::new(pipeline).push(convert),
+    ))
+}
+
 /// A frame codec's failure: its stop as [`PipeError::Cancelled`], anything else
 /// as before.
 fn codec_failure(e: zencodec::decode::BoxedError) -> whereat::At<PipeError> {
@@ -499,7 +531,7 @@ pub fn transcode_with_stop_and_limits(
         let fmt = frame_source.format;
         let mem = crate::sources::MaterializedSource::from_data(frame_data, w, h, fmt);
 
-        let mut pipeline = build_pipeline(Box::new(mem), info.index)?;
+        let mut pipeline = in_format(build_pipeline(Box::new(mem), info.index)?, out_format)?;
 
         // Drain pipeline into frame sink.
         frame_sink.begin_frame();
