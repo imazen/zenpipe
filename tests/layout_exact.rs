@@ -1,6 +1,7 @@
 //! A `Layout` node whose plan keeps the size moves samples exactly (zenpipe
-//! issue 107). Codec-free: every expected canvas is authored here from the
-//! EXIF orientation definitions, not taken from zenpipe.
+//! issue 107), and a plan that resizes puts its padding where the plan places
+//! it on the final, oriented canvas. Codec-free: every expected canvas is
+//! authored here from the EXIF orientation definitions, not taken from zenpipe.
 
 use hashbrown::HashMap;
 use zenlayout::{CanvasColor, LayoutPlan, Orientation, Rect, Size};
@@ -174,6 +175,61 @@ fn a_size_preserving_layout_moves_every_sample_exactly() {
                     expected.len()
                 ));
             }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn a_resizing_layout_pads_where_the_plan_places_the_content() {
+    // Opaque content on a transparent canvas: resampling keeps the content
+    // opaque, so alpha alone says where the resizer put the content.
+    let (w, h) = (40u32, 24u32);
+    let data = [200u8, 100, 50, 255].repeat((w * h) as usize);
+    let mut wrong = Vec::new();
+    for o in ORIENTATIONS {
+        let content = turned(o, w / 2, h / 2);
+        // Uneven margins: left 2, right 5, top 1, bottom 3.
+        let canvas = Size::new(content.width + 7, content.height + 4);
+        let (px, py) = (2u32, 1u32);
+        let plan = LayoutPlan::identity(canvas)
+            .with_resize_to(content)
+            .with_remaining_orientation(o)
+            .with_canvas(canvas)
+            .with_placement(px as i32, py as i32)
+            .with_canvas_color(CanvasColor::Transparent);
+        let (ow, oh, got) = run_layout(plan, w, h, data.clone());
+        if (ow, oh) != (canvas.width, canvas.height) {
+            wrong.push(format!(
+                "{o:?}: {ow}x{oh}, expected {}x{}",
+                canvas.width, canvas.height
+            ));
+            continue;
+        }
+        let mut misplaced = 0;
+        let mut first = None;
+        for y in 0..oh {
+            for x in 0..ow {
+                let inside =
+                    (px..px + content.width).contains(&x) && (py..py + content.height).contains(&y);
+                let i = ((y * ow + x) * 4) as usize;
+                let ok = if inside {
+                    got[i + 3] == 255
+                } else {
+                    got[i..i + 4] == [0, 0, 0, 0]
+                };
+                if !ok {
+                    misplaced += 1;
+                    first.get_or_insert((x, y));
+                }
+            }
+        }
+        if misplaced != 0 {
+            wrong.push(format!(
+                "{o:?}: {misplaced}/{} pixels misplaced, first at {:?}",
+                ow * oh,
+                first.unwrap()
+            ));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
