@@ -828,7 +828,7 @@ dependencies = [
 [[package]]
 name = "zenresize"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012#e3975fb9d6d6b7baa96038a0eb8e27febb37c012"
+source = "git+https://github.com/imazen/zenresize?rev=5b4e14e33a1cd49bd9e08287858d2f534526ac25#5b4e14e33a1cd49bd9e08287858d2f534526ac25"
 dependencies = [
  "archmage",
  "imgref",
