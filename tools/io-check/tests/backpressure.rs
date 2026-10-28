@@ -302,11 +302,11 @@ fn disk_staging_publishes_the_same_bytes_after_finishing() {
     assert_eq!(std::fs::read(&scratch_path).unwrap(), sink.out);
 }
 
-/// Expected to fail at zencodec `f5a7fd46` (policy composition gap): the
-/// requirement passed only as the resolver is refused before any effect, but
-/// the report names nothing, because the core admits and names requirements
-/// from the driver's preset alone. Kept unchanged as the visible finding; the
-/// preset form below is the working placement.
+/// A requirement passed only as the operation policy refuses before any
+/// effect, and the decision report names it. At zencodec `f5a7fd46` and
+/// `79676215` the core admitted and named requirements from the driver's
+/// preset alone, so this control failed (issue 173). It passes unchanged from
+/// `a15c28fd`, where the core binds the policy's own requirements.
 #[test]
 fn a_required_wait_bound_is_unknown_and_refuses_before_any_effect() {
     let file = png();

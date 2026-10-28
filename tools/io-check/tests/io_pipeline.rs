@@ -228,11 +228,11 @@ fn live_and_finish_first_publish_identical_bytes_for_a_streaming_png() {
     assert_eq!(outputs[0], outputs[1]);
 }
 
-/// Expected to fail at zencodec `f5a7fd46` (policy composition gap): the
-/// requirement passed only as the resolver is refused before any pixel work,
-/// but the report names nothing, because the core admits and names
-/// requirements from the driver's preset alone. Kept unchanged as the visible
-/// finding; the preset form below is the working placement.
+/// A requirement passed only as the operation policy refuses before any pixel
+/// work, and the decision report names it. At zencodec `f5a7fd46` and
+/// `79676215` the core admitted and named requirements from the driver's
+/// preset alone, so this control failed (issue 173). It passes unchanged from
+/// `a15c28fd`, where the core binds the policy's own requirements.
 #[test]
 fn required_live_schedule_refuses_a_buffered_png_before_any_pixel_work() {
     let (file, _) = png_fixture(W, H, 3);

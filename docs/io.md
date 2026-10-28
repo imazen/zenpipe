@@ -244,6 +244,13 @@ Integration findings (2026-10-28):
   slots against a 64-object budget). The coroutine now keeps the batch and lends
   one admitted strip per step; the same test passes with one slot and the budget
   unchanged.
+- **Fixed in zencodec `a15c28fd`: a requirement passed as the operation policy
+  refused but went unnamed (issue 173).** The core admitted and named
+  requirements from the driver's preset alone.
+  `required_live_schedule_refuses_a_buffered_png_before_any_pixel_work` and
+  `a_required_wait_bound_is_unknown_and_refuses_before_any_effect` failed at
+  `79676215` and pass unchanged against a15c28fd's sources (run 13: io-check
+  56/56, and only these two changed status).
 
 Not solved here, and not implied by the still-image tests:
 
