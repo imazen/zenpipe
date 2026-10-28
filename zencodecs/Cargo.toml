@@ -79,8 +79,9 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
-# crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to
-# imazen/zenextras git main at the workspace root. Powers `tiff` (zenpipe#43).
+# crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to a
+# pinned imazen/zenextras rev at the workspace root, which predates the zencodec
+# 0.2 Pulse contract (see the root Cargo.toml). Powers `tiff` (zenpipe#43).
 zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
@@ -97,8 +98,8 @@ zenjxl-decoder = { version = "0.4.0", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # Registry zenraw 0.2.0 / zenpdf 0.2.0 predate zencodec's CategorizedError
-# taxonomy; both are git-patched at the workspace root to their mains (zenraw /
-# zenextras), which are on zencodec 0.1.26.
+# taxonomy; both are git-patched at the workspace root to pinned revs, which
+# predate the zencodec 0.2 Pulse contract (see the root Cargo.toml).
 zenraw = { version = "0.2.0", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
 # PDF page rendering via the hayro engine (decode-only; renders pages to RGBA8).
 # Optional and out of default — hayro is a heavy dependency.

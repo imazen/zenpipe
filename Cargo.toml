@@ -287,12 +287,17 @@ zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a
 # Controlled interpretation and profile-tagged byte encode (zenjpeg PR 240),
 # with Pulse controls and effective-job planning (zenjpeg PR 246).
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
-# heic main is 0.2.0 (the zencodec decode adapter + Apple unspecified-nclx→CICP
+# heic 0.2.0 at this rev (the zencodec decode adapter + Apple unspecified-nclx→CICP
 # resolution); crates.io tops out at 0.1.6 (pre-adapter). Powers `heic-decode`.
+# This rev predates the zencodec 0.2 Pulse contract, so it does not build against
+# the core patched above (CI at 363f7c50). heic main pins its own core rev
+# (d327434b) by git, which would split the core family here (2026-10-28).
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
-# zentiff main is 0.1.2 on zencodec 0.1.26 (the zencodec decode/encode adapter +
+# zentiff 0.1.2 at this rev (the zencodec decode/encode adapter +
 # heaptrack-calibrated estimate_decode_resources); crates.io 0.1.2 predates both
-# (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43).
+# (it's on zencodec ^0.1.19). Powers `zencodecs/tiff` (zenpipe#43). This rev
+# predates the zencodec 0.2 Pulse contract and does not build against the core
+# patched above (CI at 363f7c50), pending zenextras' migration (2026-10-28).
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 # Prepared row conversion with current color context (zenpixels PR 92).
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
@@ -412,11 +417,15 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f57
 # dfd01e32. All manifests and authoritative lockfiles must agree; run
 # scripts/check-decoder-pins.py after resolving any workspace.
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
-# zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
-# zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
+# zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely.
+# This rev implements `with_stop`, not the `with_pulse` the 0.2 core requires, so
+# it cannot build against the core patched above. zenraw main (9d4560a4) adds
+# Pulse progress but pins its own core rev (d327434b) by git, which would split
+# the core family here (2026-10-28). Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
-# zenpdf: registry 0.2.0 predates the taxonomy entirely; zenextras main is on
-# zencodec 0.1.26. Powers `zencodecs/pdf-decode`.
+# zenpdf: registry 0.2.0 predates the taxonomy entirely. This rev implements
+# `with_stop`, not the `with_pulse` the 0.2 core requires (E0046 in CI at
+# 363f7c50), pending zenextras' migration. Powers `zencodecs/pdf-decode`.
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
