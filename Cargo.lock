@@ -5137,6 +5137,7 @@ name = "zenpipe-io-check"
 version = "0.0.0"
 dependencies = [
  "enough",
+ "hashbrown 0.16.1",
  "jpeg-decoder",
  "png",
  "tokio",
