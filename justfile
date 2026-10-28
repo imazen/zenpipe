@@ -295,3 +295,7 @@ checked-publication-locks:
 # Full API/profile + existing source/browser controls, after a fresh slot grant.
 checked-publication-final results core:
     bash scripts/qualify/publication-final.sh "{{results}}" "{{core}}"
+
+# Frozen graph migration; a fresh serialized heavy grant is required.
+checked-publication-graph results core expected:
+    bash scripts/qualify/publication-graph.sh "{{results}}" "{{core}}" "{{expected}}"

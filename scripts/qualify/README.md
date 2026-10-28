@@ -39,3 +39,21 @@ The fixture keeps only the lines `ic_compare.py` reads, so it fits in the repo
 (7,289 of 37,915 bytes). `ic_compare.py` classifies both files identically:
 baseline-only, 65 lints, 0 new. The full log's sha256 was
 `535de6012e9dd1aa1a89d096cf9280be87a402c607390ecee9fe5db76721862f`.
+
+## Publication graph qualification
+
+`just checked-publication-graph RESULTS CORE EXPECTED` runs only in an isolated
+source export after a fresh serialized heavy grant. EXPECTED is a frozen JSON
+file naming the intended core, pixel, AVIF/parse, rav1d, TIFF and PDF-syntax
+sources plus the canonical extras source export. Local extras paths are an
+experiment overlay; portable landing requires the owner's pushed revision.
+
+The runner preserves all six locks before resolution, records resolved package
+identities and enabled features, and retains every failure. The existing five
+graph gates remain intact. Its additional audit covers apidoc, supplemental
+core members and exact extras export paths, and fails on unrelated package
+drift. Review any such drift against immutable source before changing its
+allowlist. All old native/browser assertions and the full API profile remain.
+The broader native check retains HEIC/raw; focused AVIF and extras consumer
+tests add evidence without replacing that gate. Ignored corpus controls and the
+demo's inherited download skip remain unexecuted, never counted as passes.
