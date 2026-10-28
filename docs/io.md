@@ -161,6 +161,15 @@ its compressed staging are admitted from `StorageBudget`s. Native codec workspac
 the controlled decoder's retained input, encoder-internal buffering and operator
 buffers (resize rings, the carry buffer in `PipelineRows`) are not.
 
+Measured once at 2048x2048 RGB8 PNG to PNG (`benchmarks/io_memory_2026-10-28.tsv`;
+every published output checked against the authored samples with an independent
+PNG reader): at effort 0, Live and disk-staged FinishFirst peak at 17.58M heap
+where the one-shot route peaks at 33.09M. Of those 17.58M, 15.7 are two copies of
+the 7.85 MB compressed input: the controlled PNG decoder retains it, and zenpng's
+streaming decoder copies it again. At effort 2 the encoder holds the image until
+finish (63.8M with memory or disk staging), and a required Live schedule refuses
+before any output. These are whole-process numbers at that size, not bounds.
+
 ## Coverage and gaps
 
 Qualified paths: controlled JPEG and PNG decode; planned PNG row encode; slice,
