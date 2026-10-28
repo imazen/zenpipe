@@ -759,8 +759,8 @@ Three crates.io requirements block a newer release and were left alone on purpos
   controlled zencodec decoder over any `ReadAt` served as a pipeline `Source`
   (`DecodeSource`; decode questions answered at construction through a zencodec
   `OperationPolicy`, final interpretation held until the first pull), a pipeline served to the planned
-  row encoder (`PipelineRows` for `zencodec_io::row_encode::encode_job`), an
-  erased registry job usable there (`ErasedJob`), owned zero-copy resident
+  row encoder (`PipelineRows` for `zencodec_io::row_encode::encode_job`, and
+  for registry jobs `encode_dyn_job`), owned zero-copy resident
   input (`SharedBytes`), orientation rendering costs and an admitted-raster
   renderer (`OrientationCost`, `render_orientation`), and a blocking-pool
   bridge for async sources and writers. Typed causes stay in the error chain.

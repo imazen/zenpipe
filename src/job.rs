@@ -984,8 +984,8 @@ impl<'a> ImageJob<'a> {
             None => zencodec::SharedPulse::default(),
         };
         let mut bytes = alloc::vec::Vec::new();
-        zencodec_io::row_encode::encode_job(
-            crate::io::ErasedJob::new(configured.job),
+        zencodec_io::row_encode::encode_dyn_job(
+            configured.job,
             rows,
             &mut bytes,
             policy,

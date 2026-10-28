@@ -15,7 +15,7 @@ use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, ImageFormat, NoPulse};
 use zencodec_io::row_encode::{self, Options, Stage};
 use zencodec_io::{DriveOptions, FileReadAt};
-use zenpipe::io::{DecodeOptions, DecodeSource, ErasedJob, PipelineRows};
+use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
 use zenpipe::{PipeResult, Source, Strip};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -333,9 +333,8 @@ fn erased_registry_job_matches_the_typed_job_bytes() {
         let rows = PipelineRows::from_source(source).unwrap();
         let mut out = Vec::new();
         if erased {
-            let job = ErasedJob::new(codecs.encode_job(ImageFormat::Png).unwrap());
-            row_encode::encode_job(
-                job,
+            row_encode::encode_dyn_job(
+                codecs.encode_job(ImageFormat::Png).unwrap(),
                 rows,
                 &mut out,
                 PolicySet::new(),

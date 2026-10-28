@@ -12,7 +12,8 @@
 //! [`zencodec_io::row_encode`]. Its job-based entry points plan the retained
 //! encoder job, admit the output schedule and staging under the supplied
 //! policy, and only then read the first row or publish the first byte.
-//! [`ErasedJob`] lets a registry's `Box<dyn DynEncodeJob>` use that driver.
+//! A registry's `Box<dyn DynEncodeJob>` uses the same driver through
+//! `zencodec_io::row_encode::encode_dyn_job`.
 //!
 //! Copies per decoded row: the native batch is copied into the controlled
 //! decoder's delivery buffer, then into a held strip slot here; pipeline
@@ -30,7 +31,6 @@
 mod bytes;
 mod decode;
 mod encode;
-mod erased;
 mod orientation;
 #[cfg(feature = "io-tokio")]
 pub mod tokio_bridge;
@@ -38,7 +38,6 @@ pub mod tokio_bridge;
 pub use bytes::SharedBytes;
 pub use decode::{DecodeOptions, DecodeSource, DecodeStats};
 pub use encode::{PipelineRows, RowStats};
-pub use erased::{ErasedEncoder, ErasedJob, NoAnimation};
 pub use orientation::{OrientationCost, render_orientation};
 
 use core::fmt;
