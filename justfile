@@ -143,6 +143,12 @@ clippy-codec-subsets *pairs:
 qualify-selftest:
     bash scripts/qualify/runner-selftest.sh
 
+# zencodecs' stop-latency benchmarks (#[ignore]d, observational), each alone in
+# an optimized build: how long a codec takes to return after its stop fires.
+# AVIF needs zenavif, so the default list leaves its two benchmarks out.
+stop-latency *tests="stop_latency_jpeg_decode stop_latency_webp_decode stop_latency_png_decode stop_latency_gif_decode stop_latency_jpeg_encode stop_latency_webp_encode stop_latency_png_encode stop_latency_gif_encode":
+    for t in {{tests}}; do cargo test --release -p zencodecs --no-default-features --features std,cms,jpeg,jpeg-ultrahdr,webp,gif,gif-zenquant,png,png-zenquant,jxl-decode,bitmaps-bmp --test stop_latency --locked -- "$t" --exact --ignored --nocapture --test-threads 1 || exit 1; done
+
 # Run all CI checks locally
 ci: fmt-check clippy clippy-codec-subsets check-pins check-core-family test fuzz-check fuzz-regression
 

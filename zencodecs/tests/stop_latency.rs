@@ -64,11 +64,33 @@ impl enough::Stop for DelayedStop {
     }
 }
 
+/// How an operation's error reports a stop: the reason of a codec error whose
+/// category is `Stopped` (reached through `find_cause`, as `pulse_retention.rs`
+/// does), or zencodecs' own `Cancelled`, which carries no reason. `None` for any
+/// other error: that is a failure, not a stop, and has no stop latency.
+fn stop_kind(error: &whereat::At<zencodecs::CodecError>) -> Option<String> {
+    match error.error() {
+        zencodecs::CodecError::Cancelled => Some("Cancelled".into()),
+        zencodecs::CodecError::Codec { source, .. } => {
+            zencodec::find_cause::<zencodec::CodecError>(&**source).and_then(|e| {
+                match e.category() {
+                    zencodec::ErrorCategory::Stopped(reason) => {
+                        Some(format!("Stopped({reason:?})"))
+                    }
+                    _ => None,
+                }
+            })
+        }
+        _ => None,
+    }
+}
+
 /// Measure stop latency for an operation.
 ///
 /// Timestamps the exact moment the stop flag is set and the exact moment the
 /// operation returns. The difference is the true stop latency — how long the
-/// codec took to notice and bail out after the flag was raised.
+/// codec took to notice and bail out after the flag was raised. Only an error
+/// that reports the stop counts; any other error is printed as a failure.
 ///
 /// Prints results to stderr. Does not assert — this is observational.
 fn measure_stop_latency(
@@ -86,24 +108,81 @@ fn measure_stop_latency(
     handle.join().unwrap();
 
     let total = return_time.duration_since(start);
-    let was_cancelled = result.is_err();
-
-    if was_cancelled {
-        if let Some(cancel_instant) = *cancel_time.lock().unwrap() {
-            let latency = return_time.duration_since(cancel_instant);
-            eprintln!(
-                "{name}: CANCELLED total={total:?}, stop_latency={latency:?} (flag_set→return)"
-            );
-            if latency > Duration::from_millis(200) {
-                eprintln!("  WARNING: stop latency > 200ms");
-            }
-        } else {
-            // Operation failed before cancel thread even ran
-            eprintln!("{name}: CANCELLED BEFORE FLAG total={total:?}");
+    let error = match result {
+        Ok(()) => {
+            eprintln!("{name}: COMPLETED BEFORE CANCEL total={total:?}");
+            return;
+        }
+        Err(error) => error,
+    };
+    let Some(kind) = stop_kind(&error) else {
+        eprintln!("{name}: FAILED (not a stop) total={total:?}: {error}");
+        return;
+    };
+    if let Some(cancel_instant) = *cancel_time.lock().unwrap() {
+        let latency = return_time.duration_since(cancel_instant);
+        eprintln!(
+            "{name}: CANCELLED ({kind}) total={total:?}, stop_latency={latency:?} (flag_set→return)"
+        );
+        if latency > Duration::from_millis(200) {
+            eprintln!("  WARNING: stop latency > 200ms");
         }
     } else {
-        eprintln!("{name}: COMPLETED BEFORE CANCEL total={total:?}");
+        // Operation failed before cancel thread even ran
+        eprintln!("{name}: CANCELLED BEFORE FLAG ({kind}) total={total:?}");
     }
+}
+
+#[test]
+fn stop_kind_tells_a_stop_from_another_error() {
+    use enough::StopReason;
+    use zencodec::ErrorCategory;
+    let traced = |e: zencodecs::CodecError| whereat::At::from(e);
+    let codec_stop = |reason| {
+        zencodecs::CodecError::from_codec(
+            ImageFormat::Jpeg,
+            zencodec::CodecError::new(Some("probe"), ErrorCategory::Stopped(reason)),
+        )
+    };
+    assert_eq!(
+        stop_kind(&traced(codec_stop(StopReason::TimedOut))).as_deref(),
+        Some("Stopped(TimedOut)")
+    );
+    assert_eq!(
+        stop_kind(&traced(codec_stop(StopReason::Cancelled))).as_deref(),
+        Some("Stopped(Cancelled)")
+    );
+    assert_eq!(
+        stop_kind(&traced(zencodecs::CodecError::Cancelled)).as_deref(),
+        Some("Cancelled")
+    );
+    // Not stops: each of these used to be reported as a cancellation with a
+    // stop latency.
+    assert_eq!(
+        stop_kind(&traced(zencodecs::CodecError::UnsupportedFormat(
+            ImageFormat::Avif
+        ))),
+        None
+    );
+    let limit = zencodec::CodecError::new(
+        Some("probe"),
+        ErrorCategory::Resource(zencodec::ResourceError::Limits(zencodec::LimitKind::Pixels)),
+    );
+    assert_eq!(
+        stop_kind(&traced(zencodecs::CodecError::from_codec(
+            ImageFormat::Png,
+            limit
+        ))),
+        None
+    );
+    let native = std::io::Error::other("a codec's own error, without the shared envelope");
+    assert_eq!(
+        stop_kind(&traced(zencodecs::CodecError::from_codec(
+            ImageFormat::Gif,
+            native
+        ))),
+        None
+    );
 }
 
 const CANCEL_DELAY: Duration = Duration::from_millis(20);
