@@ -397,6 +397,95 @@ mod tests {
             );
         }
     }
+    struct BrokenWriter {
+        accepted: Vec<u8>,
+        attempts: usize,
+        result: usize,
+        panic: bool,
+        cancelled: Arc<AtomicBool>,
+        fail_and_cancel: bool,
+    }
+    impl Write for BrokenWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.attempts += 1;
+            if self.accepted.is_empty() {
+                self.accepted.push(bytes[0]);
+                return Ok(1);
+            }
+            if self.fail_and_cancel {
+                self.cancelled.store(true, Ordering::SeqCst);
+                return Err(io::ErrorKind::BrokenPipe.into());
+            }
+            assert!(!self.panic, "writer unwind after accepted prefix");
+            Ok(self.result)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("failed writes must not reach flush")
+        }
+    }
+    #[test]
+    fn zero_and_invalid_counts_preserve_only_the_confirmed_prefix() {
+        for (result, kind) in [
+            (0, io::ErrorKind::WriteZero),
+            (usize::MAX, io::ErrorKind::InvalidData),
+        ] {
+            let mut writer = BrokenWriter {
+                accepted: Vec::new(),
+                attempts: 0,
+                result,
+                panic: false,
+                cancelled: Arc::new(AtomicBool::new(false)),
+                fail_and_cancel: false,
+            };
+            let error = verified().write_to(&mut writer, &NoPulse).unwrap_err();
+            assert_eq!(error.error().emitted(), 1);
+            assert_eq!(writer.accepted, [1]);
+            assert_eq!(writer.attempts, 2);
+            assert_eq!(
+                zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                kind
+            );
+        }
+    }
+    #[test]
+    fn native_write_error_wins_a_coincident_stop_after_the_same_prefix() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
+        let mut writer = BrokenWriter {
+            accepted: Vec::new(),
+            attempts: 0,
+            result: 0,
+            panic: false,
+            cancelled,
+            fail_and_cancel: true,
+        };
+        let error = verified().write_to(&mut writer, &pulse).unwrap_err();
+        assert_eq!(error.error().emitted(), 1);
+        assert_eq!(writer.accepted, [1]);
+        assert_eq!(writer.attempts, 2);
+        assert_eq!(
+            zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+            io::ErrorKind::BrokenPipe
+        );
+        assert!(!stopped(&error));
+    }
+    #[test]
+    fn writer_unwind_has_effects_but_returns_no_receipt() {
+        let mut writer = BrokenWriter {
+            accepted: Vec::new(),
+            attempts: 0,
+            result: 0,
+            panic: true,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            fail_and_cancel: false,
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            verified().write_to(&mut writer, &NoPulse)
+        }));
+        assert!(result.is_err());
+        assert_eq!(writer.accepted, [1]);
+        assert_eq!(writer.attempts, 2);
+    }
     #[test]
     fn empty_cancelled_output_does_not_flush() {
         let empty = VerifiedOutput::from_verified(Outcome::from_parts(

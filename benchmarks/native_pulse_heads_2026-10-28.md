@@ -32,7 +32,7 @@ A native written against the older contract fails here in two ways:
 
 CI run 40693652904 at `363f7c50` shows both.
 
-## Unmigrated: no compatible head exists
+## Native families needing standalone qualification (initial observation, with AVIF follow-up below)
 
 | Native | Pin | Current heads | Why none fits this graph | Effect here |
 |---|---|---|---|---|
@@ -43,8 +43,11 @@ CI run 40693652904 at `363f7c50` shows both.
 
 **zenavif:**
 - main names zencodec-io and zencodec-media by git at `7cc3d3ec`, before the contract change.
-- PR #75 adopts the contract (`f73a7e0e`), but names zencodec-io and zencodec-media by git, which would add a second
-  core-family copy here. It also moves rav1d-safe to `b19aec65`, off the coordinated `dfd01e32`.
+- PR #75 adopts the contract (`f73a7e0e`). Its git zencodec-io edge is a
+  dev-dependency; its git zencodec-media edge is optional and enabled by media,
+  which this consumer does not enable. Neither establishes a second core copy
+  in the current zenpipe feature graph. The candidate moves rav1d-safe to
+  `b19aec65`, off coordinated `dfd01e32`; see the source audit below.
 
 **zenraw:**
 - The pin implements `with_stop`, not `with_pulse`.
@@ -84,3 +87,40 @@ In the root lock only:
 
 Unifying any of them needs the owning native's manifest, or a patch whose source is proven identical. Neither is done
 here.
+
+
+## AVIF candidate follow-up (2026-10-28, source audit; no consumer repin)
+
+The initial CI failure and receipts above remain failures. At pin `a7638f6e`,
+`src/codec/anim_decoder.rs:94` implements `render_next_frame` with
+`Option<&dyn zencodec::enough::Stop>`; the core trait requires
+`Option<&dyn zencodec::Pulse>`. The return type `At<CodecError>` is its associated
+error and is not the mismatch. Similar old Stop signatures remain in animation
+encoding and incremental step.
+
+Open draft [PR75](https://github.com/imazen/zenavif/pull/75), immutable head
+`b25f7604fbb71ead6517ec27fa52646770e3606a`, carries matching Pulse signatures.
+Core `f552d338` pins both zenavif and zenmp4 to it; its
+[native AV1 policy/guide gate](https://github.com/imazen/zencodec/actions/runs/40767258147/job/123095875607)
+passes. This is a qualified harness candidate, not qualification of zenpipe's
+complete standalone feature graph.
+
+The PR's own standalone ultrahdr split is a different graph: its root patches
+ultrahdr to `10a79c3a`. Zenpipe already patches ultrahdr-core to `61097504`, whose
+core dependency is registry `>=0.2.0, <0.3.0`; dependency patch tables do not
+propagate into consumers. Keep that distinction when resolving the follow-up.
+
+A candidate consumer migration must move all five zenavif patch entries and
+zencodecs' direct zenavif-parse edge together. The parser's source tree is
+identical at the two revisions, but git source identities still differ.
+`b25f7604` selects rav1d-safe `b19aec65`; coordinate that intentional decoder
+change with the pin checker and unchanged native pixel oracles. Current
+consumer features do not enable the candidate's media edge, and the existing
+zenavif-serialize source is separately selected through zenravif. No automatic
+zenmp4/serialize repin or feature addition follows from the harness.
+
+Keep the frozen publication API run at its original pins. If that full API gate
+confirms the remaining blocker, qualify the graph migration separately: inspect
+all five resolved graphs for one core/pixel/how-far/parser source, then retain
+the full API, AVIF and other native-family failures. No new build or graph
+resolution was performed for this source audit.

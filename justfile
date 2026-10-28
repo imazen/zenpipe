@@ -291,3 +291,7 @@ checked-publication-locks:
     timeout 180s cargo metadata --format-version 1 --manifest-path zencodecs/fuzz/Cargo.toml > /dev/null
     python3 scripts/check-core-family.py
     python3 scripts/check-decoder-pins.py
+
+# Full API/profile + existing source/browser controls, after a fresh slot grant.
+checked-publication-final results core:
+    bash scripts/qualify/publication-final.sh "{{results}}" "{{core}}"
