@@ -138,6 +138,11 @@ repin-native repo old new crates:
 clippy-codec-subsets *pairs:
     bash scripts/clippy-codec-subsets.sh {{pairs}}
 
+# Synthetic controls for the qualification runner in scripts/qualify (stub
+# cargo and stub test binaries; builds nothing). Every failure mode must fail.
+qualify-selftest:
+    bash scripts/qualify/runner-selftest.sh
+
 # Run all CI checks locally
 ci: fmt-check clippy clippy-codec-subsets check-pins check-core-family test fuzz-check fuzz-regression
 

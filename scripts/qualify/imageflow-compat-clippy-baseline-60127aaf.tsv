@@ -1,0 +1,65 @@
+src/imageflow_compat/color.rs:48:8	function `color_to_rgb` is never used
+src/imageflow_compat/converter.rs:389:14	the loop variable `v` is used to index `map`
+src/imageflow_compat/converter.rs:469:41	clamp-like pattern without using clamp function
+src/imageflow_compat/converter.rs:470:45	clamp-like pattern without using clamp function
+src/imageflow_compat/converter.rs:471:45	clamp-like pattern without using clamp function
+src/imageflow_compat/converter.rs:472:45	clamp-like pattern without using clamp function
+src/imageflow_compat/execute.rs:1103:29	using `clone` on type `DecodePolicy` which implements the `Copy` trait
+src/imageflow_compat/execute.rs:1340:9	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:1341:13	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:1362:16	casting to the same type is unnecessary (`u32` -> `u32`)
+src/imageflow_compat/execute.rs:1368:16	casting to the same type is unnecessary (`u32` -> `u32`)
+src/imageflow_compat/execute.rs:1491:18	this `map_or` can be simplified
+src/imageflow_compat/execute.rs:1547:17	this `map_or` can be simplified
+src/imageflow_compat/execute.rs:1578:21	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:1615:25	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:17:5	unused import: `zennode::NodeDef`
+src/imageflow_compat/execute.rs:421:5	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:515:9	this `if` statement can be collapsed
+src/imageflow_compat/execute.rs:888:13	this `if` statement can be collapsed
+src/imageflow_compat/nodes.rs:88:9	this `if` statement can be collapsed
+src/imageflow_compat/nodes.rs:89:13	this `if` statement can be collapsed
+src/imageflow_compat/preset_map.rs:114:13	this `if` statement can be collapsed
+src/imageflow_compat/preset_map.rs:132:29	this `if` can be collapsed into the outer `match`
+src/imageflow_compat/preset_map.rs:159:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:184:13	unused variable: `optimize_huffman_coding`
+src/imageflow_compat/preset_map.rs:188:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:209:13	unused variable: `depth`
+src/imageflow_compat/preset_map.rs:211:13	unused variable: `zlib_compression`
+src/imageflow_compat/preset_map.rs:214:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:229:13	unused variable: `maximum_deflate`
+src/imageflow_compat/preset_map.rs:232:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:252:34	unused variable: `maximum_deflate`
+src/imageflow_compat/preset_map.rs:254:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:264:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:275:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:285:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/preset_map.rs:333:17	using `clone` on type `AllowedFormats` which implements the `Copy` trait
+src/imageflow_compat/preset_map.rs:36:13	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/riapi.rs:123:5	unused variable: `source_w`
+src/imageflow_compat/riapi.rs:124:5	unused variable: `source_h`
+src/imageflow_compat/riapi.rs:125:5	unused variable: `exif_flag`
+src/imageflow_compat/riapi.rs:17:15	unused import: `NodeDef`
+src/imageflow_compat/riapi.rs:244:17	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/riapi.rs:458:17	field assignment outside of initializer for an instance created with Default::default()
+src/imageflow_compat/riapi.rs:62:5	unused variable: `exif_flag`
+src/imageflow_compat/riapi.rs:90:9	variable does not need to be mutable
+src/imageflow_compat/translate.rs:15:40	unused imports: `CommandStringKind`, `CompositingMode`, `EncoderPreset`, and `Watermark`
+src/imageflow_compat/translate.rs:192:13	this `if` statement can be collapsed
+src/imageflow_compat/translate.rs:193:17	this `if` statement can be collapsed
+src/imageflow_compat/translate.rs:248:13	unused variable: `background_color`
+src/imageflow_compat/translate.rs:315:13	unused variable: `format`
+src/imageflow_compat/translate.rs:437:47	casting to the same type is unnecessary (`u32` -> `u32`)
+src/imageflow_compat/translate.rs:495:13	unused variable: `kind`
+src/imageflow_compat/translate.rs:496:13	unused variable: `value`
+src/imageflow_compat/translate.rs:497:13	unused variable: `decode`
+src/imageflow_compat/translate.rs:498:13	unused variable: `encode`
+src/imageflow_compat/translate.rs:499:13	unused variable: `watermarks`
+src/imageflow_compat/translate.rs:535:5	this `if` statement can be collapsed
+src/imageflow_compat/translate.rs:553:5	this `if` statement can be collapsed
+src/imageflow_compat/translate.rs:554:9	this `if` statement can be collapsed
+src/imageflow_compat/watermark.rs:403:29	it looks like you're manually copying between slices
+src/imageflow_compat/watermark.rs:501:52	clamp-like pattern without using clamp function
+src/imageflow_compat/watermark.rs:642:18	using `clone` on type `Option<WatermarkConstraintBox>` which implements the `Copy` trait
+src/imageflow_compat/watermark.rs:647:18	clamp-like pattern without using clamp function
+src/imageflow_compat/watermark.rs:670:5	clamp-like pattern without using clamp function
