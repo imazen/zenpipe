@@ -64,3 +64,18 @@ permutation, not an independent AV1 decoder. No assertion was relaxed.
 Command: `cargo test --locked -p zencodecs --no-default-features --features
 avif-decode,avif-encode --test avif_capability -- --test-threads=1`.
 Receipt: rc101, 20s, peak RSS 0.95GiB; `avif-orientation-current.log`.
+
+## Portable lock repair and JPEG float propagation
+
+The prior manifest rollout omitted five tracked lockfiles. Both fuzz CI checks
+therefore refused `--locked`. The repaired locks carry the intended core, paired
+pixel, HEIC, RAW, GIF and JPEG revisions; the package identity audit found no
+unrelated changes. JPEG now pins `e49c76f0`, including the qualified RGBAF32 decode
+fix. All five graph roots contain one core family.
+
+Validation in an export outside workspace path patches: both fuzz roots passed
+`cargo check --locked --all-targets`; `just checked-publication-check` passed
+16 unit and 35 native tests plus strict Clippy; `zenpipe-io-check --features job`
+passed 57 tests and strict all-target Clippy. Wrapper: rc=0, 56 seconds, peak RSS
+0.86 GiB, minimum available 10621 MiB. Existing AVIF orientation failures are
+unchanged and are not covered by this repair.

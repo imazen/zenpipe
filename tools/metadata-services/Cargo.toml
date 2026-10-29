@@ -36,7 +36,7 @@ zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a1
 tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
 hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8505e118f81dcb1d0367b26957" }
 # Optional borrowed Pulse JPEG source; consumer qualification remains unrun.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e0bb92b4d0751526b64269ca6dcf25240e91d8bc" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e49c76f0d59660701be6fcf52d0892b75d10c39f" }
 # Retained HEIC source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
 heic = { git = "https://github.com/imazen/heic", rev = "c67cffe461ade38e4ca1c9bb36175dc67e724c07" }
