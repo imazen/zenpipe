@@ -22,7 +22,7 @@ thiserror = { version = "2.0", default-features = false }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = ">=0.1.27, <0.3.0" }
+zencodec = { version = ">=0.2.0, <0.3.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -33,7 +33,7 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 # `{ version = "0.1.0", path }`; consumed via git, that resolves to this same
 # registry crate, so the `zenanalyze_api` types unify to one instance.
 zenanalyze-api = { version = "0.1.0", optional = true, default-features = false }
-zenpixels = { version = ">=0.2.10, <0.4.0", default-features = false, features = ["imgref"] }
+zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false, features = ["imgref"] }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", features = ["imgref"] }
 linear-srgb = { version = "0.6.3", default-features = false }
 
@@ -76,18 +76,16 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
-# Pure-Rust TIFF decode/encode (zencodec adapter + heaptrack-calibrated estimate).
-# crates.io tops out at 0.1.2 (pre-adapter, on zencodec ^0.1.19); patched to a
-# pinned imazen/zenextras rev at the workspace root, which predates the zencodec
-# 0.2 Pulse contract (see the root Cargo.toml). Powers `tiff` (zenpipe#43).
+# TIFF decode/encode through the optional-control extras source and its
+# matching image-tiff fork, selected by each consumer's root patch table.
 zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
 # rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
-zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd", optional = true }
-zensvg = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd", optional = true }
+zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", optional = true }
+zensvg = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", optional = true }
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -97,9 +95,8 @@ zenjxl = { version = "0.3.0", optional = true, default-features = false, feature
 zenjxl-decoder = { version = "0.4.0", optional = true, features = ["jpeg"] }
 # heic-decoder = { path = "../../heic-decoder-rs", optional = true, default-features = false, features = ["zencodec"] }  # not cloned locally
 zenbitmaps = { version = "0.2.0", optional = true, features = ["zencodec"] }
-# Registry zenraw 0.2.0 / zenpdf 0.2.0 predate zencodec's CategorizedError
-# taxonomy; both are git-patched at the workspace root to pinned revs, which
-# predate the zencodec 0.2 Pulse contract (see the root Cargo.toml).
+# RAW remains a separate owned-Pulse source prerequisite. PDF uses the
+# optional-control extras source selected by each consumer root.
 zenraw = { version = "0.2.0", optional = true, default-features = false, features = ["rawloader", "rawler", "std", "zencodec", "exif"] }
 # PDF page rendering via the hayro engine (decode-only; renders pages to RGBA8).
 # Optional and out of default — hayro is a heavy dependency.

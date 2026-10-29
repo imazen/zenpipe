@@ -17,7 +17,7 @@ parallel = ["dep:rayon", "dep:wasm-bindgen-rayon"]
 zeneditor = { path = "../../zeneditor" }
 
 # Codec types for format detection in WASM glue
-zencodec = { version = ">=0.1.26, <0.3.0", default-features = false }
+zencodec = { version = ">=0.2.0, <0.3.0", default-features = false }
 
 serde_json = "1"
 
@@ -41,26 +41,29 @@ web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
-# Core family at one revision (zencodec PR 168, 4c8a8eac). Dependencies name
-# these crates by version, so this root alone decides their source.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "4c8a8eaca2faf43b4cd6d16a219dde94304e48cb" }
-# One entry per git-form entry at the workspace root (see the rationale
-# comments there); keep the two tables in sync.
-# zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
-# heic 0.2.0 at this rev (zencodec decode adapter); crates.io tops out at 0.1.6.
-# This rev predates the zencodec 0.2 Pulse contract (see the root Cargo.toml).
+# Optional borrowed Pulse family; source alignment only, original locks retained.
+# Dependencies use version edges, so each consumer root selects this source.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
+zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
+# Transitive source prerequisites: dependency patch tables do not propagate.
+zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
+tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
+hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8505e118f81dcb1d0367b26957" }
+# Optional borrowed Pulse JPEG source; consumer qualification remains unrun.
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e0bb92b4d0751526b64269ca6dcf25240e91d8bc" }
+# Retained HEIC source still needs its owned-Pulse adapter migration.
+# Keep its full-profile/API feature and existing assertions enabled.
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
-# zentiff 0.1.2 at this rev; crates.io 0.1.2 is pre-adapter. This rev predates
-# the zencodec 0.2 Pulse contract (see the root Cargo.toml).
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
+# Optional-control TIFF source with the matching image-tiff resource-limit fork.
+# Consumer resolution, pixel parity and native qualification remain pending.
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
-# Keep legacy HEIC on the 0.5 reconstruction fix while current codecs use 0.6.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "610975047bcb0bb266e952f15bcd978ba3f34950" }
+# The consumed ultrahdr-core package uses version edges for shared types.
+# Match the source selected by the optional-control codec roots.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 # zenjxl main is 0.3.0 (`jpeg-lossy`); the published 0.2.1 predates it.
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "a76ac76d080295b754d970a3392eed8f964de490" }
 # jxl-encoder 0.3.2 (lossy-JPEG recompression API) is not yet on crates.io.
@@ -68,22 +71,25 @@ jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "3c1be8179a
 # zenjxl-decoder main is 0.4.0 (the breaking API batch zenjxl 0.3.0 needs);
 # crates.io tops out at 0.3.10.
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "ce1a28b41b71b66b19240dce0d1b6f0579c8064d" }
-# zenwebp main is 0.5.0 (Pattern B error boundary, zencodec always-on);
-# the last unyanked crates.io release is 0.4.4.
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "5a6cce275b84f2e56f81cfed0ebd59b9345b23b7" }
-# zenpng main is 0.2.0; the published 0.1.4 predates the orientation sweep.
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
-# zenbitmaps main is 0.2.0 (At<BitmapError>); crates.io tops out at 0.1.5.
-zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
+# Optional borrowed Pulse WebP source; consumer qualification remains unrun.
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "d5893295cc7562002017980b44753bf3237a89f3" }
+# Optional borrowed Pulse PNG source with its required zenflate source patch.
+# Consumer lock resolution and native qualification remain pending.
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "7b6d1436db5d771fc43226c146847fc76305afde" }
+# Bitmap/QOI optional-control source; consumer qualification remains unrun.
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c" }
 # zengif main is 0.8.0 (Pattern B error boundary, zencodec always-on).
 zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
-# zenraw / zenpdf: registry 0.2.0 of both predates the CategorizedError
-# taxonomy; these revs predate the zencodec 0.2 Pulse contract (see the root
-# Cargo.toml).
+# Retained RAW source still needs its owned-Pulse adapter migration.
+# Keep its full-profile/API feature and existing assertions enabled.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
-# Same tested decoder revision as the root, enforced by check-decoder-pins.py.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
+# Optional-control PDF source with its matching hayro-syntax resource-limit fork.
+# Full consumer qualification remains pending.
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+# AVIF/parse/MP4 optional-control source, matching the direct parser edge.
+# Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
+# This consumer graph is unbuilt.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg
