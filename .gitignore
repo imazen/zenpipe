@@ -58,6 +58,7 @@ Thumbs.db
 !/docs/publication-deltas-2026-10-28.md
 !/docs/publication-delta-manifests-2026-10-28.json
 !/docs/public-api/
+!/docs/reader-compat.md
 
 # Tooling noise
 .superwork/
@@ -81,3 +82,5 @@ demo/crate/target-threaded/
 # Python bytecode from scripts/ (e.g. scripts/check-decoder-pins.py)
 __pycache__/
 *.pyc
+
+!/docs/current-main-integration.md

@@ -11,6 +11,9 @@
 //! are exercised by the `--ignored` tests at the bottom of this file.
 
 #![cfg(feature = "jxl-decode")]
+// Most fixtures and imports serve the `jxl-encode` tests; with only
+// `jxl-decode` (the default features) they are unused.
+#![cfg_attr(not(feature = "jxl-encode"), allow(unused_imports, dead_code))]
 
 #[cfg(feature = "jxl-encode")]
 use imgref::{ImgRef, ImgVec};

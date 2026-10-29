@@ -27,7 +27,7 @@ encode = [
     "zencodecs/jxl-encode", "zencodecs/avif-encode",
 ]
 # Native decoding via zencodecs (JXL, AVIF, BMP + browser-native formats).
-# heic-decode / bitmaps-qoi / bitmaps-tga / bitmaps-hdr are zencodecs stubs
+# bitmaps-qoi / bitmaps-tga / bitmaps-hdr are zencodecs stubs
 # (compile errors) — re-add them here when the backends land (zenpipe#43).
 decode = [
     "dep:zencodecs",

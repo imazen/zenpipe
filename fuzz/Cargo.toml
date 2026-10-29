@@ -18,9 +18,10 @@ arbitrary = { version = "1", features = ["derive"] }
 zenpipe = { path = "..", features = ["job", "nodes-jpeg", "nodes-png", "nodes-webp", "nodes-gif"] }
 zencodecs = { path = "../zencodecs", default-features = false }
 
-# Replicate the parent workspace's patch table so transitive deps
+# Replicate the parent workspace's [patch.crates-io] so transitive deps
 # resolve identically to the root build (keep in sync with ../Cargo.toml).
 [patch.crates-io]
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }

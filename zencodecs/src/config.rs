@@ -177,6 +177,27 @@ pub struct CodecConfig {
 }
 
 impl CodecConfig {
+    /// Only overrides for the selected encoder suppress the generic preference.
+    pub(crate) fn has_encode_override(&self, format: crate::ImageFormat) -> bool {
+        match format {
+            #[cfg(feature = "jpeg")]
+            crate::ImageFormat::Jpeg => self.jpeg_encoder.is_some(),
+            #[cfg(feature = "webp")]
+            crate::ImageFormat::WebP => self.webp_lossy.is_some() || self.webp_lossless.is_some(),
+            #[cfg(feature = "gif")]
+            crate::ImageFormat::Gif => self.gif_encoder.is_some(),
+            #[cfg(feature = "png")]
+            crate::ImageFormat::Png => self.png_compression.is_some() || self.png_filter.is_some(),
+            #[cfg(feature = "avif-encode")]
+            crate::ImageFormat::Avif => {
+                self.avif_quality.is_some()
+                    || self.avif_speed.is_some()
+                    || self.avif_alpha_quality.is_some()
+            }
+            _ => false,
+        }
+    }
+
     /// Set JPEG encoder configuration.
     #[cfg(feature = "jpeg")]
     pub fn with_jpeg_encoder(mut self, config: jpeg::EncoderConfig) -> Self {

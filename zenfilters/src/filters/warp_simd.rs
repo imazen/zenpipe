@@ -273,7 +273,7 @@ fn warp_plane_v3(
     let m3 = m[3]; // d(sy)/dx
 
     // f32x8 with offsets [0,1,2,3,4,5,6,7] * m0
-    let dx_offsets = f32x8::from_array(
+    let dx_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m0,
@@ -286,7 +286,7 @@ fn warp_plane_v3(
             7.0 * m0,
         ],
     );
-    let dy_offsets = f32x8::from_array(
+    let dy_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m3,
@@ -300,32 +300,32 @@ fn warp_plane_v3(
         ],
     );
 
-    let step_sx = f32x8::splat(token, 8.0 * m0); // advance 8 pixels
-    let step_sy = f32x8::splat(token, 8.0 * m3);
+    let step_sx = f32x8::splat_t(token, 8.0 * m0); // advance 8 pixels
+    let step_sy = f32x8::splat_t(token, 8.0 * m3);
 
     // Clamp bounds
-    let zero_v = f32x8::zero(token);
-    let wf_minus1 = f32x8::splat(token, wf - 1.0);
-    let hf_minus1 = f32x8::splat(token, hf - 1.0);
+    let zero_v = f32x8::zero_t(token);
+    let wf_minus1 = f32x8::splat_t(token, wf - 1.0);
+    let hf_minus1 = f32x8::splat_t(token, hf - 1.0);
 
     // OOB bounds for color fill mode
-    let neg_half = f32x8::splat(token, -0.5);
-    let wf_half = f32x8::splat(token, wf - 0.5);
-    let hf_half = f32x8::splat(token, hf - 0.5);
+    let neg_half = f32x8::splat_t(token, -0.5);
+    let wf_half = f32x8::splat_t(token, wf - 0.5);
+    let hf_half = f32x8::splat_t(token, hf - 0.5);
 
-    let one_v = f32x8::splat(token, 1.0);
+    let one_v = f32x8::splat_t(token, 1.0);
 
     // Robidoux kernel constants for SIMD Horner evaluation
-    let a3_v = f32x8::splat(token, A3);
-    let a2_v = f32x8::splat(token, A2);
-    let a0_v = f32x8::splat(token, A0);
-    let b3_v = f32x8::splat(token, B3);
-    let b2_v = f32x8::splat(token, B2);
-    let b1_v = f32x8::splat(token, B1);
-    let b0_v = f32x8::splat(token, B0);
-    let two_v = f32x8::splat(token, 2.0);
-    let bg_v = f32x8::splat(token, bg_val);
-    let _eps_v = f32x8::splat(token, 1e-10);
+    let a3_v = f32x8::splat_t(token, A3);
+    let a2_v = f32x8::splat_t(token, A2);
+    let a0_v = f32x8::splat_t(token, A0);
+    let b3_v = f32x8::splat_t(token, B3);
+    let b2_v = f32x8::splat_t(token, B2);
+    let b1_v = f32x8::splat_t(token, B1);
+    let b0_v = f32x8::splat_t(token, B0);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let bg_v = f32x8::splat_t(token, bg_val);
+    let _eps_v = f32x8::splat_t(token, 1e-10);
 
     for dy in 0..h {
         let dyf = dy as f32;
@@ -333,8 +333,8 @@ fn warp_plane_v3(
         let base_sx = m[0] * 0.0 + m[1] * dyf + m[2];
         let base_sy = m[3] * 0.0 + m[4] * dyf + m[5];
 
-        let mut sx_v = f32x8::splat(token, base_sx) + dx_offsets;
-        let mut sy_v = f32x8::splat(token, base_sy) + dy_offsets;
+        let mut sx_v = f32x8::splat_t(token, base_sx) + dx_offsets;
+        let mut sy_v = f32x8::splat_t(token, base_sy) + dy_offsets;
 
         let row_start = dy * w;
         let mut dx = 0usize;
@@ -395,8 +395,8 @@ fn warp_plane_v3(
             //   1 <= |t| < 2: ((b3*t + b2)*t + b1)*t + b0
 
             // Tap offsets: -1, 0, +1, +2 relative to floor
-            let neg1_v = f32x8::splat(token, -1.0);
-            let pos2_v = f32x8::splat(token, 2.0);
+            let neg1_v = f32x8::splat_t(token, -1.0);
+            let pos2_v = f32x8::splat_t(token, 2.0);
 
             // Horizontal weights (4 taps)
             let tx0 = (neg1_v - fx).abs();
@@ -517,10 +517,10 @@ fn warp_plane_v3(
                     g2[p] = src[base + x2];
                     g3[p] = src[base + x3];
                 }
-                let s0 = magetypes::simd::f32x8::from_array(token, g0);
-                let s1 = magetypes::simd::f32x8::from_array(token, g1);
-                let s2 = magetypes::simd::f32x8::from_array(token, g2);
-                let s3 = magetypes::simd::f32x8::from_array(token, g3);
+                let s0 = magetypes::simd::f32x8::from_array_t(token, g0);
+                let s1 = magetypes::simd::f32x8::from_array_t(token, g1);
+                let s2 = magetypes::simd::f32x8::from_array_t(token, g2);
+                let s3 = magetypes::simd::f32x8::from_array_t(token, g3);
                 // Horizontal dot product: s0*wx0 + s1*wx1 + s2*wx2 + s3*wx3
                 s0.mul_add(wx0, s1.mul_add(wx1, s2.mul_add(wx2, s3 * wx3)))
             }
@@ -721,21 +721,21 @@ fn warp_plane_rowgather_v3(
     let mut wy_buf = vec![[0.0f32; 4]; w_aligned];
     let mut oob_buf = vec![false; w_aligned];
 
-    let zero_v = f32x8::zero(token);
-    let one_v = f32x8::splat(token, 1.0);
-    let two_v = f32x8::splat(token, 2.0);
-    let a3_v = f32x8::splat(token, A3);
-    let a2_v = f32x8::splat(token, A2);
-    let a0_v = f32x8::splat(token, A0);
-    let b3_v = f32x8::splat(token, B3);
-    let b2_v = f32x8::splat(token, B2);
-    let b1_v = f32x8::splat(token, B1);
-    let b0_v = f32x8::splat(token, B0);
-    let wf_minus1 = f32x8::splat(token, wf - 1.0);
-    let hf_minus1 = f32x8::splat(token, hf - 1.0);
+    let zero_v = f32x8::zero_t(token);
+    let one_v = f32x8::splat_t(token, 1.0);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let a3_v = f32x8::splat_t(token, A3);
+    let a2_v = f32x8::splat_t(token, A2);
+    let a0_v = f32x8::splat_t(token, A0);
+    let b3_v = f32x8::splat_t(token, B3);
+    let b2_v = f32x8::splat_t(token, B2);
+    let b1_v = f32x8::splat_t(token, B1);
+    let b0_v = f32x8::splat_t(token, B0);
+    let wf_minus1 = f32x8::splat_t(token, wf - 1.0);
+    let hf_minus1 = f32x8::splat_t(token, hf - 1.0);
 
     // Offsets for incremental coordinate computation
-    let dx_offsets = f32x8::from_array(
+    let dx_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m0,
@@ -748,7 +748,7 @@ fn warp_plane_rowgather_v3(
             7.0 * m0,
         ],
     );
-    let dy_offsets = f32x8::from_array(
+    let dy_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m3,
@@ -761,12 +761,12 @@ fn warp_plane_rowgather_v3(
             7.0 * m3,
         ],
     );
-    let step8_sx = f32x8::splat(token, 8.0 * m0);
-    let step8_sy = f32x8::splat(token, 8.0 * m3);
+    let step8_sx = f32x8::splat_t(token, 8.0 * m0);
+    let step8_sy = f32x8::splat_t(token, 8.0 * m3);
 
-    let neg_half = f32x8::splat(token, -0.5);
-    let wf_half = f32x8::splat(token, wf - 0.5);
-    let hf_half = f32x8::splat(token, hf - 0.5);
+    let neg_half = f32x8::splat_t(token, -0.5);
+    let wf_half = f32x8::splat_t(token, wf - 0.5);
+    let hf_half = f32x8::splat_t(token, hf - 0.5);
 
     for dy in 0..h {
         let dyf = dy as f32;
@@ -774,8 +774,8 @@ fn warp_plane_rowgather_v3(
         let base_sy = m[4] * dyf + m[5];
 
         // Step 1: Compute coordinates for the entire row in SIMD
-        let mut sx_v = f32x8::splat(token, base_sx) + dx_offsets;
-        let mut sy_v = f32x8::splat(token, base_sy) + dy_offsets;
+        let mut sx_v = f32x8::splat_t(token, base_sx) + dx_offsets;
+        let mut sy_v = f32x8::splat_t(token, base_sy) + dy_offsets;
 
         let mut dx = 0usize;
         while dx + 8 <= w_aligned {
@@ -825,7 +825,7 @@ fn warp_plane_rowgather_v3(
 
             // Compute kernel weights in SIMD
             for tap in 0..4u32 {
-                let offset_f = f32x8::splat(token, (tap as i32 - 1) as f32);
+                let offset_f = f32x8::splat_t(token, (tap as i32 - 1) as f32);
                 let tx = (offset_f - fx_v).abs();
                 let ty = (offset_f - fy_v).abs();
 
@@ -895,16 +895,16 @@ fn warp_plane_rowgather_v3(
         dx = 0;
         while dx + 8 <= w {
             // Compute accumulated result for 8 pixels
-            let mut accum = f32x8::zero(token);
+            let mut accum = f32x8::zero_t(token);
 
             for j in 0..4 {
                 let wy_j_arr: [f32; 8] = core::array::from_fn(|p| wy_buf[dx + p][j]);
-                let wy_j = f32x8::from_array(token, wy_j_arr);
+                let wy_j = f32x8::from_array_t(token, wy_j_arr);
 
-                let mut row_sum = f32x8::zero(token);
+                let mut row_sum = f32x8::zero_t(token);
                 for i in 0..4 {
                     let wx_i_arr: [f32; 8] = core::array::from_fn(|p| wx_buf[dx + p][i]);
-                    let wx_i = f32x8::from_array(token, wx_i_arr);
+                    let wx_i = f32x8::from_array_t(token, wx_i_arr);
 
                     // Scalar gather
                     let gathered: [f32; 8] = core::array::from_fn(|p| {
@@ -913,7 +913,7 @@ fn warp_plane_rowgather_v3(
                         src[gy * w + gx]
                     });
 
-                    let src_v = f32x8::from_array(token, gathered);
+                    let src_v = f32x8::from_array_t(token, gathered);
                     row_sum = src_v.mul_add(wx_i, row_sum);
                 }
 
@@ -922,7 +922,7 @@ fn warp_plane_rowgather_v3(
 
             // Handle OOB for color fill
             if is_color_bg {
-                let bg_v = f32x8::splat(token, bg_val);
+                let bg_v = f32x8::splat_t(token, bg_val);
                 let oob_mask: [f32; 8] = core::array::from_fn(|p| {
                     if oob_buf[dx + p] {
                         f32::from_bits(0xFFFF_FFFF)
@@ -930,7 +930,7 @@ fn warp_plane_rowgather_v3(
                         0.0
                     }
                 });
-                let mask = f32x8::from_array(token, oob_mask);
+                let mask = f32x8::from_array_t(token, oob_mask);
                 let is_oob = mask.simd_ne(zero_v);
                 accum = f32x8::blend(is_oob, bg_v, accum);
             }
@@ -1431,28 +1431,28 @@ fn warp_3plane_fused_inner(
     let m0 = m[0];
     let m3 = m[3];
 
-    let zero_v = f32x8::zero(token);
-    let one_v = f32x8::splat(token, 1.0);
-    let two_v = f32x8::splat(token, 2.0);
-    let neg1_v = f32x8::splat(token, -1.0);
-    let pos2_v = f32x8::splat(token, 2.0);
-    let wf_minus1 = f32x8::splat(token, wf - 1.0);
-    let hf_minus1 = f32x8::splat(token, hf - 1.0);
-    let a3_v = f32x8::splat(token, A3);
-    let a2_v = f32x8::splat(token, A2);
-    let a0_v = f32x8::splat(token, A0);
-    let b3_v = f32x8::splat(token, B3);
-    let b2_v = f32x8::splat(token, B2);
-    let b1_v = f32x8::splat(token, B1);
-    let b0_v = f32x8::splat(token, B0);
-    let neg_half = f32x8::splat(token, -0.5);
-    let wf_half = f32x8::splat(token, wf - 0.5);
-    let hf_half = f32x8::splat(token, hf - 0.5);
-    let bg_l_v = f32x8::splat(token, bg_l);
-    let bg_a_v = f32x8::splat(token, bg_a);
-    let bg_b_v = f32x8::splat(token, bg_b);
+    let zero_v = f32x8::zero_t(token);
+    let one_v = f32x8::splat_t(token, 1.0);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let neg1_v = f32x8::splat_t(token, -1.0);
+    let pos2_v = f32x8::splat_t(token, 2.0);
+    let wf_minus1 = f32x8::splat_t(token, wf - 1.0);
+    let hf_minus1 = f32x8::splat_t(token, hf - 1.0);
+    let a3_v = f32x8::splat_t(token, A3);
+    let a2_v = f32x8::splat_t(token, A2);
+    let a0_v = f32x8::splat_t(token, A0);
+    let b3_v = f32x8::splat_t(token, B3);
+    let b2_v = f32x8::splat_t(token, B2);
+    let b1_v = f32x8::splat_t(token, B1);
+    let b0_v = f32x8::splat_t(token, B0);
+    let neg_half = f32x8::splat_t(token, -0.5);
+    let wf_half = f32x8::splat_t(token, wf - 0.5);
+    let hf_half = f32x8::splat_t(token, hf - 0.5);
+    let bg_l_v = f32x8::splat_t(token, bg_l);
+    let bg_a_v = f32x8::splat_t(token, bg_a);
+    let bg_b_v = f32x8::splat_t(token, bg_b);
 
-    let dx_offsets = f32x8::from_array(
+    let dx_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m0,
@@ -1465,7 +1465,7 @@ fn warp_3plane_fused_inner(
             7.0 * m0,
         ],
     );
-    let dy_offsets = f32x8::from_array(
+    let dy_offsets = f32x8::from_array_t(
         token,
         [
             0.0 * m3,
@@ -1478,8 +1478,8 @@ fn warp_3plane_fused_inner(
             7.0 * m3,
         ],
     );
-    let step8_sx = f32x8::splat(token, 8.0 * m0);
-    let step8_sy = f32x8::splat(token, 8.0 * m3);
+    let step8_sx = f32x8::splat_t(token, 8.0 * m0);
+    let step8_sy = f32x8::splat_t(token, 8.0 * m3);
 
     // Robidoux kernel in SIMD — inline macro to avoid inner fn type issues
     // with #[magetypes] token replacement.
@@ -1498,8 +1498,8 @@ fn warp_3plane_fused_inner(
         let dyf = dy as f32;
         let base_sx = m[1] * dyf + m[2];
         let base_sy = m[4] * dyf + m[5];
-        let mut sx_v = f32x8::splat(token, base_sx) + dx_offsets;
-        let mut sy_v = f32x8::splat(token, base_sy) + dy_offsets;
+        let mut sx_v = f32x8::splat_t(token, base_sx) + dx_offsets;
+        let mut sy_v = f32x8::splat_t(token, base_sy) + dy_offsets;
         let row_start = dy * w;
         let mut dx = 0usize;
 
@@ -1624,9 +1624,9 @@ fn warp_3plane_fused_inner(
             }
 
             // Store results
-            let mut res_l = f32x8::from_array(token, out_l);
-            let mut res_a = f32x8::from_array(token, out_a);
-            let mut res_b = f32x8::from_array(token, out_b);
+            let mut res_l = f32x8::from_array_t(token, out_l);
+            let mut res_a = f32x8::from_array_t(token, out_a);
+            let mut res_b = f32x8::from_array_t(token, out_b);
 
             // OOB masking
             if is_color_bg {

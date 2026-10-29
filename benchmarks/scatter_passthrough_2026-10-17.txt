@@ -1,0 +1,16 @@
+# zenfilters scatter_srgb_passthrough: autoversioned deinterleave vs the index loop it replaced
+# date: 2026-10-17  host: dev (Ryzen 9 9950X3D, Zen 5), pinned `taskset -c 0-7` (CCD0)
+# command: run-heavy --mem 8G -- taskset -c 0-7 target/release/deps/scatter_passthrough-* --bench --cpu-policy=unrestricted
+#   (bench: zenfilters/benches/scatter_passthrough.rs; built without target-cpu=native)
+# zenbench placement: UNVERIFIED_UNRESTRICTED (run-heavy's scope is not a cpuset zenbench accepts); interleaved A/B in one binary
+# run-heavy: done rc=0 12s | peak-RSS 0.39GiB | min-avail 34879MiB | peak-load 6.10
+# base: zenpipe main 0d2bb172 + this change; not measured on aarch64 (NEON is baseline there, so little change is expected)
+group        index loop (µs)   autoversion (µs)   95% CI vs base
+rgb 4k       1.2               0.6                -54.3% .. -51.8%
+rgba 4k      1.7               0.9                -48.1% .. -43.7%
+rgb 64k      20.1              10.6               -48.2% .. -45.9%
+rgba 64k     27.7              16.9               -40.9% .. -36.9%
+rgb 349k     111.5             61.8               -44.1% .. -43.0%
+rgba 349k    152.0             91.7               -40.6% .. -38.1%
+rgb 1M       335.2             162.6              -52.6% .. -51.3%
+rgba 1M      446.1             227.4              -50.8% .. -50.2%

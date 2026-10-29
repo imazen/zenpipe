@@ -167,14 +167,14 @@ mod tests {
         assert!(qs_json.len() > 100);
     }
 
-    /// Dump all schemas to /tmp/zen-schemas/ for the doc generator.
+    /// Dump schemas to `zen-schemas` under the configured temporary directory.
     ///
     /// Used by CI: `cargo test --features "json-schema,nodes-all" --lib -- dump_schemas_to_files`
     #[test]
     fn dump_schemas_to_files() {
         let schemas = export_all();
-        let dir = std::path::Path::new("/tmp/zen-schemas");
-        std::fs::create_dir_all(dir).unwrap();
+        let dir = std::env::temp_dir().join("zen-schemas");
+        std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("v3_nodes.json"),
             serde_json::to_string_pretty(&schemas.node_schemas).unwrap(),

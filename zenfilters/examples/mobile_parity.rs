@@ -1141,9 +1141,9 @@ fn linear_to_srgb_u8(rgb: &[f32]) -> Vec<u8> {
     output
 }
 
-// ── Apple ProfileToneCurve pipeline ──────────────────────────────────────
+// ── ProfileToneCurve parity pipeline ──────────────────────────────────────
 
-/// LUT built from Apple's ProfileToneCurve (257 control points → fast lookup).
+/// LUT built from the ProfileToneCurve tag (257 control points → fast lookup).
 struct ToneCurveLut {
     lut: Vec<f32>,
 }

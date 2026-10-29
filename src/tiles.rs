@@ -74,7 +74,7 @@
 //! The sink's bounded memory only survives if the *source* streams.
 //! [`ImageJob`](crate::job) prefers a row-level decoder and falls back to
 //! a whole decoded frame for any codec whose `zencodec` adapter reports
-//! `streaming_decoder` unsupported — which today is JXL, TIFF, AVIF, HEIC
+//! `streaming_decoder` unsupported — which today is JXL, TIFF, AVIF
 //! and RAW. Measured at 8000 × 8000 RGBA8: 25.0 MB peak heap from a
 //! streaming source, 45.2 MB through the real `zenjpeg` row decoder,
 //! **280.4 MB** through a full-frame decode.

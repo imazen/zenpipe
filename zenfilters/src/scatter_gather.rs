@@ -1,5 +1,6 @@
 use crate::planes::OklabPlanes;
 use crate::simd;
+use archmage::prelude::*;
 use zenpixels_convert::gamut::GamutMatrix;
 
 /// Convert interleaved linear RGB f32 to planar Oklab.
@@ -160,24 +161,56 @@ pub fn gather_oklab_to_srgb_u8(
 ///
 /// Maps R→L, G→a, B→b planes. Used for `WorkingSpace::Srgb` where filters
 /// operate in the same color space as ImageMagick.
+///
+/// The deinterleave loops are compiled per SIMD tier (`autoversion`), so the
+/// AVX2 build is picked at runtime on x86-64 instead of the SSE2 baseline.
 pub fn scatter_srgb_passthrough(src: &[f32], planes: &mut OklabPlanes, channels: u32) {
     let n = planes.pixel_count();
     let ch = channels as usize;
     debug_assert!(ch == 3 || ch == 4);
     debug_assert!(src.len() >= n * ch);
+    let src = &src[..n * ch];
 
-    for i in 0..n {
-        planes.l[i] = src[i * ch];
-        planes.a[i] = src[i * ch + 1];
-        planes.b[i] = src[i * ch + 2];
+    match (ch, planes.alpha.as_mut()) {
+        (4, Some(alpha)) => deinterleave4(src, &mut planes.l, &mut planes.a, &mut planes.b, alpha),
+        (4, None) => deinterleave4_drop_alpha(src, &mut planes.l, &mut planes.a, &mut planes.b),
+        _ => deinterleave3(src, &mut planes.l, &mut planes.a, &mut planes.b),
     }
+}
 
-    if ch == 4
-        && let Some(alpha) = &mut planes.alpha
+#[autoversion(v3, neon, wasm128)]
+pub(crate) fn deinterleave3(src: &[f32], r: &mut [f32], g: &mut [f32], b: &mut [f32]) {
+    for (((&[pr, pg, pb], r), g), b) in src.as_chunks::<3>().0.iter().zip(r).zip(g).zip(b) {
+        *r = pr;
+        *g = pg;
+        *b = pb;
+    }
+}
+
+#[autoversion(v3, neon, wasm128)]
+pub(crate) fn deinterleave4(
+    src: &[f32],
+    r: &mut [f32],
+    g: &mut [f32],
+    b: &mut [f32],
+    a: &mut [f32],
+) {
+    for ((((&[pr, pg, pb, pa], r), g), b), a) in
+        src.as_chunks::<4>().0.iter().zip(r).zip(g).zip(b).zip(a)
     {
-        for i in 0..n {
-            alpha[i] = src[i * ch + 3];
-        }
+        *r = pr;
+        *g = pg;
+        *b = pb;
+        *a = pa;
+    }
+}
+
+#[autoversion(v3, neon, wasm128)]
+pub(crate) fn deinterleave4_drop_alpha(src: &[f32], r: &mut [f32], g: &mut [f32], b: &mut [f32]) {
+    for (((&[pr, pg, pb, _], r), g), b) in src.as_chunks::<4>().0.iter().zip(r).zip(g).zip(b) {
+        *r = pr;
+        *g = pg;
+        *b = pb;
     }
 }
 
@@ -235,6 +268,41 @@ mod tests {
     use crate::prelude::*;
     use zenpixels::ColorPrimaries;
     use zenpixels_convert::oklab;
+
+    /// The dispatched deinterleave matches the plain index loop for widths that
+    /// leave SIMD tails, with and without an alpha plane. With three channels
+    /// an allocated alpha plane is left as it was.
+    #[test]
+    fn srgb_passthrough_matches_index_loop() {
+        for (w, h) in [(1u32, 1u32), (7, 3), (31, 2), (64, 5), (1000, 1)] {
+            let n = (w * h) as usize;
+            for ch in [3usize, 4] {
+                let src: Vec<f32> = (0..n * ch).map(|i| i as f32 * 0.25 - 3.0).collect();
+                for with_alpha in [false, true] {
+                    let mut planes = if with_alpha {
+                        OklabPlanes::with_alpha(w, h)
+                    } else {
+                        OklabPlanes::new(w, h)
+                    };
+                    if let Some(alpha) = planes.alpha.as_mut() {
+                        alpha.fill(-7.0);
+                    }
+                    scatter_srgb_passthrough(&src, &mut planes, ch as u32);
+                    for i in 0..n {
+                        assert_eq!(planes.l[i], src[i * ch]);
+                        assert_eq!(planes.a[i], src[i * ch + 1]);
+                        assert_eq!(planes.b[i], src[i * ch + 2]);
+                    }
+                    if let Some(alpha) = &planes.alpha {
+                        for (i, &got) in alpha.iter().enumerate() {
+                            let want = if ch == 4 { src[i * ch + 3] } else { -7.0 };
+                            assert_eq!(got, want, "alpha at {i}, ch {ch}");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     fn make_test_rgb(width: u32, height: u32) -> Vec<f32> {
         let n = (width as usize) * (height as usize);

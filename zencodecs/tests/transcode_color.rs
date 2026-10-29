@@ -38,9 +38,6 @@ fn source_png(icc: &[u8]) -> Vec<u8> {
 fn explicit_srgb_transcode_converts_adobe_rgb_before_png_and_gif() {
     let source = source_png(ADOBE_RGB);
     let all = AllowedFormats::all();
-    let gif = FormatDecision::for_format(ImageFormat::Gif);
-    assert!(transcode(&source, &gif, &TranscodeOptions::default(), &all).is_err());
-
     let mut transform = MoxCms
         .build_source_transform(
             ColorProfileSource::Icc(ADOBE_RGB),
@@ -54,11 +51,18 @@ fn explicit_srgb_transcode_converts_adobe_rgb_before_png_and_gif() {
     let mut expected = [0; 4];
     transform.transform_row(&[191, 97, 53, 255], &mut expected, 1);
     assert_ne!(expected, [191, 97, 53, 255]);
-    for format in [ImageFormat::Png, ImageFormat::Gif] {
+    // Explicit sRGB conversion for both; GIF also by default, because a
+    // format that cannot carry the profile has its pixels fitted to sRGB
+    // (`color_fit`) rather than relabelled.
+    for (format, color) in [
+        (ImageFormat::Png, TranscodeColor::Srgb8),
+        (ImageFormat::Gif, TranscodeColor::Srgb8),
+        (ImageFormat::Gif, TranscodeOptions::default().color),
+    ] {
         let mut decision = FormatDecision::for_format_quality(format, 100.0);
         decision.lossless = true;
         let opts = TranscodeOptions {
-            color: TranscodeColor::Srgb8,
+            color,
             ..Default::default()
         };
         let output = transcode(&source, &decision, &opts, &all).unwrap();

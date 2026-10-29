@@ -115,7 +115,7 @@ mod jpeg {
             }
             assert!(matches!(
                 request.clone().with_metadata_limit(0).plan(),
-                Err(Error::Limit("metadata bytes"))
+                Err(Error::Limit(zencodec::LimitKind::MetadataSize))
             ));
             assert_eq!(service.calls.get(), 1);
         }
@@ -222,6 +222,7 @@ mod jpeg {
     }
 }
 
+#[cfg(feature = "png")]
 mod png_scrub {
     use super::*;
     pub fn chunk(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
@@ -403,6 +404,7 @@ mod png_scrub {
     }
 }
 
+#[cfg(any(feature = "jxl-decode", feature = "jxl-encode"))]
 mod jxl_scrub {
     use super::*;
     pub fn box_(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {

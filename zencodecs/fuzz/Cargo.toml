@@ -21,7 +21,7 @@ path = ".."
 # Use all decodable codecs + encoders that build.
 # Excluded: avif-encode (zenrav1e build error), jxl-encode (jxl-encoder build error)
 # Excluded: raw-decode-gainmap (requires jpeg-ultrahdr which needs std features)
-# Excluded: heic-decode, bitmaps-qoi, bitmaps-tga, bitmaps-hdr — these are
+# Excluded: bitmaps-qoi, bitmaps-tga, bitmaps-hdr — these are
 # `compile_error!` stubs in zencodecs (no backend wired yet, zenpipe#43);
 # enabling them only floods unresolved-item errors. Re-add each when its
 # backend lands.
@@ -49,6 +49,8 @@ members = ["."]
 # This standalone fuzz workspace does not inherit the root patch table.
 # Keep its decoder/parser source aligned with zencodecs' direct parser pin.
 [patch.crates-io]
+
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
@@ -191,8 +193,8 @@ zenraw = { git = "https://github.com/imazen/zenraw", rev = "799ac0a1fd9cba997f4c
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6" }
 
-# Override zenresize's git dep on zenlayout to use our workspace copy
 [profile.release]
 debug = 1
 opt-level = 3
@@ -261,15 +263,15 @@ doc = false
 bench = false
 
 [[bin]]
-name = "seed_corpus_tool"
-path = "seed_corpus_tool.rs"
+name = "fuzz_metadata_scrub"
+path = "fuzz_targets/fuzz_metadata_scrub.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_metadata_scrub"
-path = "fuzz_targets/fuzz_metadata_scrub.rs"
+name = "seed_corpus_tool"
+path = "seed_corpus_tool.rs"
 test = false
 doc = false
 bench = false

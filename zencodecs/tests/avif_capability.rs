@@ -187,7 +187,7 @@ fn build_minimal_exif_with_orientation(value: u16) -> Vec<u8> {
     v
 }
 
-/// AVIF stores EXIF in an `Exif` HEIF item. The whole metadata
+/// AVIF stores EXIF in an `Exif` container item. The whole metadata
 /// pipeline (zencodecs → zenavif → ravif → zenavif-serialize) does
 /// pass the bytes through, AND the encoded AVIF *does* contain the
 /// "Exif" 4-byte box type at the right place — so the item is
@@ -229,56 +229,32 @@ fn avif_exif_round_trip_preserves_blob() {
     );
 }
 
-/// Positive test: when the caller sets `Metadata::orientation` directly,
-/// AVIF translates it through irot/imir HEIF transforms on encode and
-/// decoder reads it back into `info.orientation`.
+/// A re-encode writes upright pixels and orientation 1 (imazen/zencodec#132:
+/// HEIF `imir` reads opposite ways in the 2017 and 2022 editions, and several
+/// readers ignore `irot` without being asked), so no `irot`/`imir` is written:
+/// the decode reports `Identity` with the dimensions rotated.
 #[cfg(feature = "avif-encode")]
 #[test]
-fn avif_explicit_orientation_round_trips_via_irot() {
+fn avif_explicit_orientation_is_baked() {
     use zencodec::Orientation;
-    let img = rgb8_image(32, 32);
+    let img = rgb8_image(32, 16);
     let meta = Metadata::none().with_orientation(Orientation::Rotate90);
-
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img.as_ref());
-    let bytes = EncodeRequest::new(ImageFormat::Avif)
-        .with_quality(75.0)
-        .with_metadata(meta)
-        .encode(typed.erase(), false)
-        .expect("AVIF encode")
-        .into_vec();
-
-    let decoded = decode_full(&bytes);
-    let extracted = decoded.info().orientation;
-    assert_eq!(
-        extracted,
-        Orientation::Rotate90,
-        "AVIF irot/imir must round-trip an explicit Metadata::orientation"
-    );
+    let decoded = decode_full(&encode_avif_with_meta(img.as_ref(), meta, 75.0));
+    assert_eq!(decoded.info().orientation, Orientation::Identity);
+    assert_eq!((decoded.width(), decoded.height()), (16, 32), "rotated 90°");
 }
 
-/// AVIF's preferred way to convey orientation is the `irot` / `imir` HEIF
-/// transform boxes, not the EXIF Orientation tag. zencodec's
-/// `Metadata::orientation` field IS the explicit channel for this.
-///
-/// As a convenience, `Metadata::with_exif(blob)` now auto-parses the
-/// EXIF Orientation tag (0x0112) and sets `self.orientation` if not
-/// already explicitly set. This test verifies the full round-trip:
-/// EXIF blob → meta.orientation → AVIF irot → decoded info.orientation.
+/// An EXIF Orientation tag reaches `Metadata::orientation` through
+/// `Metadata::with_exif`, and is baked the same way.
 #[cfg(feature = "avif-encode")]
 #[test]
-fn avif_exif_orientation_round_trip_via_irot() {
-    let img = rgb8_image(32, 32);
+fn avif_exif_orientation_is_baked() {
+    let img = rgb8_image(32, 16);
     let exif = build_minimal_exif_with_orientation(6);
     let meta = Metadata::none().with_exif(exif);
-    let bytes = encode_avif_with_meta(img.as_ref(), meta, 75.0);
-    let decoded = decode_full(&bytes);
-
-    let extracted = decoded.info().orientation;
-    assert_ne!(
-        format!("{:?}", extracted),
-        "Identity",
-        "EXIF orientation 6 should not parse as Identity"
-    );
+    let decoded = decode_full(&encode_avif_with_meta(img.as_ref(), meta, 75.0));
+    assert_eq!(decoded.info().orientation, zencodec::Orientation::Identity);
+    assert_eq!((decoded.width(), decoded.height()), (16, 32), "rotated 90°");
 }
 
 #[cfg(feature = "avif-encode")]

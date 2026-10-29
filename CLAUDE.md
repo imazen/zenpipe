@@ -65,6 +65,43 @@ sources`.
   decoded channel precision. The native regression compares expanded pixels
   against an independent PNG reader; `just checked-transcode-async-check`.
 
+### Windows session-cache benchmark stack overflow (2026-10-19)
+
+Both Windows x64 and ARM64 full test jobs abort in the debug all-target
+`session_cache` benchmark after JPEG generation and zenbench calibration,
+with `STATUS_STACK_OVERFLOW`. This occurs at both 47695c06 and 5adaa204;
+the overflowing stack frame has not been identified. Track the finding in
+[issue 104](https://github.com/imazen/zenpipe/issues/104). No test, workload,
+stack-size setting or expectation was changed to bypass it.
+
+
+- 2026-10-19: the locked AVIF cohort loses Display-P3 primaries in `metadata_conformance::cicp_color_signaling_without_matrix` (12/13/0/full becomes 2/13/6/full). The unchanged test passes against the current-main encoder/decoder cohort with 12/13/6/full. The responsible dependency has not been isolated; [zenpipe issue 103](https://github.com/imazen/zenpipe/issues/103) tracks the pin refresh.
+- 2026-10-19: floating-point HDR input to TIFF fails with the default integer predictor on both one-shot and streaming paths. The 264-cell streaming matrix retains this failing case; [zenextras issue 52](https://github.com/imazen/zenextras/issues/52) tracks the codec fix.
+
+- Fixed during metadata integration: the operation catalog still called the legacy
+  unsupported-timing checker for GIF after its adapter gained rational timing.
+  It now asserts the advertised capability and checks exact 10/20 ms frame
+  durations, pixel order and typed rejection of 1/3 second through both generic
+  and erased encoders. The rejected frame must not mutate the animation.
+
+- HDR rendering on PR100 required an explicit per-request policy and a common
+  missing-peak fallback. The proposed `tonemap` followup uses
+  `ToneMapPolicy::Bt2408` and the same metadata-or-1000-nit peak for whole
+  images and strips. The feature alone retains the existing encode contract.
+  Validation commands: `just test-tonemap-policy`, `just clippy-tonemap-policy`.
+
+- Fixed: `transcode_matrix` explicitly chooses sRGB8 clipping for HDR-to-GIF in both paths, since RGBE reconstruction can exceed GIF's finite SDR range. All source/target cells and success/pixel-identity assertions remain. A white RGBE regression requires native refusal and clipped white output; `just test-hdr-gif` and `just clippy-hdr-gif` pass. `just test-hdr-gif-oracle` checks both outputs' pixels with ImageMagick. Encoder defaults and public APIs are unchanged.
+
+- Dispatched native row encoders could accept repeated declarations or one-shot encoding after begin, and empty WebP/AVIF inputs could panic. The private row guard validates declarations, counts emitted bytes, poisons failed pushes, and matches begin/encode empty-canvas acceptance with the same typed validation error or identical finished bytes. `zencodecs/tests/streamed_bytes.rs` covers the enabled encoders. Rotated buffered encodes apply dimension limits to the output canvas.
+
+- Fixed: strict one-shot encoding checked color policy after pixel-format negotiation, which could convert Display P3 to sRGB and make an otherwise forbidden fit look harmless. The check now runs against the original description first. `strict_refuses_conversion_when_descriptor_matches_source_color` reproduces the earlier successful 146-byte PNM and requires rejection in both paths.
+
+- Fixed in the streaming audit: the old PNG pin stored linear-float input as sRGB bytes while retaining a linear CICP tag. `zencodecs/tests/color_adapt.rs` measured a maximum byte error of 70; the current PNG pin includes its transfer-tag correction. This test passes against the committed graph.
+
+- Fixed in the streaming audit: `EncodeRequest::encode` rebuilt a validated row view through an adapter that required final-row padding. Passing the validated `PixelSlice` into dispatch preserves short final rows. `zencodecs/tests/strided_encode.rs` compares packed, padded and short-final-row inputs.
+
+- Streaming output regressions fixed in the post-landing review: encoder/writer errors could still be finalized or retried, and buffered row fallback did not enforce protocol state or admission limits. Regression coverage is in `tests/sink_output_contract.rs`, `zencodecs/tests/transcode_output_contract.rs`, and `zencodecs/tests/buffered_encode_contract.rs`. The dispatch byte matrix is separate from pixel-equivalence coverage.
+
 - ARM adapter audit 2026-09-06: the stale PDF estimator regression now compares
   dispatch with the actual backend estimate. The corrected expanded suite has
   335 passed / zero failed / 79 existing ignored tests. Native CI explicitly
@@ -83,13 +120,11 @@ sources`.
     --features std,cms,avif-decode,jpeg,webp,png,gif,gif-zenquant,png-zenquant \
     --test corpus -- --ignored avif
   ```
-- **The coordinated media dependency pin advances to `rav1d-safe dfd01e32`**
-  via `zenavif b777fa12`. The former aarch64 film-grain reservation blocker
-  **rav1d-safe#526** closed with **#527**, commit `83fa5d3edd5137f1b0b1d981625c0ba28ae79a49`,
-  an ancestor of this pin. Keep all root/demo/fuzz manifests and authoritative
-  locks consistent; the pin checker rejects drift. Re-run the corpus command
-  above for decoder changes; x86 validation does not replace the upstream ARM
-  conformance evidence.
+- **zenavif is pinned to main `5e493d39`** (rav1d-safe `dfd01e32`) since
+  2026-10-15. The earlier hold at `11033c95` / rav1d-safe `140f9145` was for
+  an aarch64 film-grain panic (rav1d-safe#526, closed 2026-09-06); the command
+  above passes at the new pin on aarch64. Keep every zenavif rev in the repo
+  equal (`just check-pins`), and re-run the command when moving it.
 
 Two 2026-07-11 fix waves (009c7938..f7d1900d, then c75ca304..) closed the
 original list — animation per-frame routing, matte flatten, the two-engine
@@ -109,7 +144,7 @@ threading, hdr directives, compat security. Verified remaining:
   calibrated scale; exact native units plus the non-decision params
   (progressive, subsampling, quant tables, sharp_yuv, …) need per-codec
   `CodecConfig` boxes wired from encode nodes (zencodecs `config.rs` has
-  jpeg/webp/gif/png/avif boxes; JXL/TIFF/HEIC boxes don't exist yet).
+  jpeg/webp/gif/png/avif boxes; JXL/TIFF boxes don't exist yet).
 - **`AllocationTracker` is API-only by decision**: superseded by the
   orchestrate estimate gate + codec-level `ResourceLimits`; scheduled for
   removal in the pre-0.1 public-API sweep rather than wiring a duplicate
@@ -227,3 +262,7 @@ decode errors instead of reporting absence. Full-profile strict Clippy and
 real JPEG timeout/limit/malformed-input controls pass. Complete Apple DNG
 container coverage and aggregate memory accounting are not established by
 that focused control. See `benchmarks/full_profile_2026-10-29.md`.
+
+### Comparing unpublished API surfaces
+
+`just semver-against <reviewed-source-export>` builds stable-toolchain rustdoc JSON inside the actual workspaces and compares the resulting API graphs at patch level. This preserves root git patches for unpublished dependencies that a synthetic outer workspace loses. `just test-streaming-seam`, `just test-dispatched-output`, and `just streaming-clippy-gate` exercise the dispatched row and transport contract.

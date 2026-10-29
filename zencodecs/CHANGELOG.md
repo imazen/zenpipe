@@ -6,14 +6,27 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- No registry baseline exists for zencodecs (crates.io API returned 404 on
+  2026-10-12). The proposed scrub API now uses zencodec-owned result/service
+  types and codec feature gates; no zenmeta types appear in public signatures.
+
+### Added
+
+- The inventory CLI accepts one `-` input for encoded bytes on stdin, with fallible buffer growth and the same part rows as file input.
+
+- Structural inventory dispatch and the `zencodecs inventory` CLI (from #89). `inventory` is default-enabled in
+  zencodecs and weakly enables only the selected codec walkers. Direct codec
+  defaults stay unchanged. The proposed convenience API retains `Option` for
+  absent capability; codec jobs expose the shared typed unsupported error.
+- Add optional `avif-svt` and `avif-aom` forwarding; backend selection is unchanged.
 - Add default-off `metadata::ScrubRequest` for bounded, auditable encoded JPEG,
   gain-map JPEG, JXL and PNG/APNG metadata rewrites. Borrow image payloads and
   preserve rendering signals; explicit services handle XMP and compressed
   metadata. JPEG reconstruction removal and known ICC normalization are opt-in.
-  No arbitrary ICC sanitization or new metadata-feature dependencies.
-- Propagate transcode metadata-probe errors instead of treating them as absent
-  metadata.
-
+  No arbitrary ICC sanitization. Container planning delegates to codec crates;
+  generic analysis uses zenmeta and shared contracts remain in zencodec.
 - Precomputed gain-map encodes now honor metadata retention and coarse privacy
   gates. Forward filtered metadata to JPEG, JXL and AVIF instead of bypassing it.
 - JPEG retains EXIF orientation and requested attribution, emits ICC for supported
@@ -29,10 +42,83 @@ All notable changes to `zencodecs` are documented here. Format follows
   qualification remain pending; this migration ran source checks only.
 
 ### Fixed
-- Coordinate codec revisions around zenpixels 0.3, UltraHDR 0.6 and the exact
-  animation/color contracts; eliminate duplicate incompatible pixel types.
+
+- Exercise GIF's advertised rational animation timing in the operation catalog, including exact representable delays, typed rejection and preservation of the accepted frames (2e74cf3d).
+
+- The HDR-to-GIF transcode matrix explicitly selects the same sRGB8 clipping for whole images and strips, retaining every cell and pixel-identity assertion. Native over-range float refusal and clipped white pixels have regression coverage and an independent decoder gate (1573c8da).
+
+### Changed
+
+- Metadata services and codec adapters use one zencodec `d327434b` source. Gain-map retention preserves the newer strided-input adaptation and explicit HDR policy (2f07d845).
+
+- Require zencodec 0.1.27 for the streaming encode interface; production and fuzz locks share git revision `023a65c7`. WebP `c4b6614e` fixes RGB row/one-shot parity, and the GIF/bitmap locks include their streaming implementations.
+
+### Added
+- Feature-gated `ToneMapPolicy` and `EncodeRequest::with_tone_map_policy`
+  authorize BT.2408 HDR-to-SDR rendering per still-image request. PQ peak is
+  MaxCLL, else mastering luminance, else the same 1000-nit fallback for
+  one-shot and streamed rows. Strict policy refuses conversion; the feature
+  alone keeps existing behavior. Descriptor-only conversion clears HDR
+  luminance metadata and respects explicit opaque/padding alpha. The implementation
+  pins zentone 0.1.0 (1d42383b).
+- `EncodeRequest::with_prefer_streaming(bool)` forwards the incremental-output preference to still and animation dispatch while preserving explicit selected-codec encoder settings (4f17e09a017e).
+- GIF, WebP and APNG animation files retain identical bytes under uneven and owned-buffer drains (315c23f5).
+- All dispatched still encoders have complete-file streaming/one-shot byte checks across writer, uneven-prefix and owned-buffer drains. An explicit local-fixtures gate checks independent reader acceptance and dimensions (204850b8). Tiny whole-file caps also bound early refusals (86d8e06b).
+- `EncodePolicy::strict` (zencodec) is honoured for colour: with
+  `with_encode_policy(EncodePolicy::none().with_strict(true))` an encode
+  whose target cannot carry the source colour description fails
+  (`UnsupportedOperation`) instead of converting the pixels to sRGB or
+  dropping a profile it cannot reproduce. Fits that lose nothing (an sRGB
+  description dropped, an ICC replaced by its CICP) still succeed.
+- `tests/transcode_matrix.rs`: every compiled-in format (opaque RGB8 and,
+  where the format carries alpha, translucent RGBA8 sources) transcoded into
+  every encodable format both one-shot and through `TranscodeSink`; outputs
+  must decode to identical pixels, and byte identity is reported. With
+  `jxl-encode,bitmaps-qoi,bitmaps-tga,bitmaps-hdr`: 22 sources x 12 targets,
+  264 cells, 257 byte-identical and 7 pixel-identical (lossless reductions
+  only a one-shot encode can choose). CI runs that set in release.
+- **`TranscodeSink` streams encoded bytes** (needs zencodec PR 149's
+  `OutputTiming`): the decoder's `begin` is forwarded to the encoder
+  (`DynEncoder::begin`) with the descriptor the strips are adapted to (found by
+  adapting one pixel through the same `adapt_for_encode_cow`, so the two cannot
+  disagree); `output_timing()`, `pending_output()` / `consume_output()`,
+  `take_pending_output(&mut vec)` (hands over the encoder's buffer when `vec`
+  is empty), and `with_writer(..)` (a `TranscodeWriter` receiving every byte as the encoder
+  has it, with `finish_encode` then returning an empty output). An encoder
+  whose timing streams (zenjpeg with fixed tables, zenpng effort 0 or strips,
+  zenbitmaps, IMIJ row groups) now sends bytes while the source is still being
+  decoded (`tests/transcode_streaming.rs`).
+
+### Fixed
 - Wire JPEG 2000 decoding through zenjp2 and include it in runtime allowlists.
   Encoding remains unsupported.
+- Dispatched row encoders enforce declaration/row state, whole-file output budgets, and matching empty-canvas refusal or bytes in both paths. Rotated buffered encodes apply dimension limits to the output canvas (de1e0d66).
+- Strict one-shot encodes validate the original color description before pixel negotiation can replace it with sRGB metadata, matching the streaming rejection (08a0f60a).
+- One-shot encoding accepts valid strided views without trailing padding after the final row (cc128515).
+- Buffered row fallback rejects one-shot/pull encoding after a declaration or rows, checks dimensions and row-buffer memory before allocation, counts the final output against the whole-file limit, and cannot recover a failed push into a successful file.
+- `TranscodeSink` drops its encoder and owned writer after an encode/write failure and cannot finalize that incomplete file. A rejected second declaration leaves the pending decoded strip intact.
+- Encoding into a format that cannot carry the source's colour description
+  no longer depends on the codec's reaction (zengif now refuses ICC it can't
+  keep). zencodecs fits the description first, in the one-shot and streaming
+  paths: a format that carries it keeps it; an sRGB description, or a
+  profile that describes no colour space, is dropped with the pixels
+  unchanged; an ICC profile naming a CICP space the format carries is
+  replaced by the CICP; otherwise the pixels are converted to sRGB (the
+  closest colour such a format describes) through
+  `zenpixels_convert::finalize_for_output_with` and the description is
+  dropped. Without the `cms` feature an ICC profile that needs a full CMS is
+  dropped instead of converted; `cms` now enables zenpixels-convert's
+  moxcms backend for it. `tests/color_fit.rs` checks the P3-to-sRGB pixels
+  exactly (PNM) and that streaming gives the one-shot file.
+- Streaming encode (`EncodeRequest::build_streaming_encoder`, and so
+  `TranscodeSink`) failed with `row_level_encode` for codecs without
+  row-level encode (GIF, AVIF, BMP). Such encoders are now wrapped in a
+  buffering adapter that collects rows (fallibly allocated) and runs the
+  codec's one-shot `encode` at `finish`, so a streaming transcode gives the
+  one-shot bytes.
+- `AllowedFormats::all()` omitted QOI, TGA and HDR although their codecs
+  were compiled in (`bitmaps-qoi`, `bitmaps-tga`, `bitmaps-hdr`), so the
+  registry refused them.
 - **`AllowedFormats` now gates `ImageFormat::Custom` (RAW/DNG/PDF) decode formats
   correctly in both directions** (a4000797): `decode.rs::resolve_format` used to
   bypass the registry entirely for Custom formats (fail-open — `none()` still let

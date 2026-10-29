@@ -25,7 +25,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -42,8 +42,23 @@ jobs:
         # the crate side is pinned rather than floating). Bump both together.
         run: cargo install wasm-bindgen-cli --version 0.2.123
 
-      # The standalone demo carries its own portable dependency pins and lock.
-      # Do not replace the coordinated codecs with unrelated sibling revisions.
+      - uses: actions/checkout@v7
+        with:
+          repository: imazen/zen-workspace
+          path: zen-workspace
+
+      - name: Install cargo-superwork
+        run: cargo install cargo-superwork --git https://github.com/imazen/cargo-superwork
+
+      - name: Clone dependency repos (as CI does)
+        run: |
+          # The same resolution as ci.yml and fuzz.yml: every sibling at its
+          # head, every manifest (demo/crate included, --recursive) pathed to
+          # it. ci-prep's generated git patches could not express zenpipe's
+          # rev-pinned zenavif 0.1.7 decoder next to the 0.2.0 tuner, so the
+          # demo build resolved the yanked registry 0.1.7 and failed.
+          cargo superwork ci-clone --add-paths --recursive --config zen-workspace/Superwork.toml
+          rm -f demo/crate/Cargo.lock
 
       - name: Build WASM (threaded, nightly)
         run: |
@@ -52,7 +67,7 @@ jobs:
           # only the first flag binds; the rest hit rustc bare
           # ("Unrecognized option: 'import-memory'").
           RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--export=__heap_base" \
-            cargo +nightly build --locked --target wasm32-unknown-unknown --release \
+            cargo +nightly build --target wasm32-unknown-unknown --release \
             --features "wasm,parallel" -Z build-std=panic_abort,std
           wasm-bindgen --target web --out-dir ../pkg \
             target/wasm32-unknown-unknown/release/zenpipe_demo.wasm
@@ -69,16 +84,16 @@ jobs:
           cp -r demo/pkg _site/pkg
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       # Also deploy to Vercel (with COOP/COEP headers for SharedArrayBuffer)
       - name: Deploy to Vercel
@@ -87,7 +102,7 @@ jobs:
           npm i -g vercel
           cd _site
           cp ../demo/vercel.json .
-          vercel deploy --prod --token="$VERCEL_TOKEN" --yes
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

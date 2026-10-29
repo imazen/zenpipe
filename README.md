@@ -166,7 +166,7 @@ for its domain; `full_registry()` aggregates them all.
 | Owner | Nodes | Count |
 |-------|-------|------:|
 | **zenpipe** | Geometry + layout (crop/orient/flip/rotate/region/expand-canvas), Constrain, Resize, CropWhitespace, SmartCrop, FillRect, RemoveAlpha, RoundCorners, Composite, Overlay + RIAPI adapters | 26 |
-| **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP/HEIC encode+decode, Quantize, QualityIntentNode | 16 |
+| **zencodecs** | JPEG/PNG/WebP/GIF/AVIF/JXL/TIFF/BMP encode+decode, Quantize, QualityIntentNode | 16 |
 | **zenfilters** | Photo adjustment filter nodes | 61 |
 
 <!-- crates.io:skip-start -->
@@ -272,6 +272,10 @@ channel type (U8/U16/F32), layout (RGB/RGBA), alpha mode
 (straight/premultiplied), transfer function (sRGB/linear/PQ/HLG),
 and color primaries (BT.709/P3/BT.2020).
 
+What third-party decoders, browsers and OS image stacks do with the
+orientation, colour and gain-map signals we write is measured in
+[docs/reader-compat.md](docs/reader-compat.md).
+
 ## Animation
 
 Frame-by-frame processing for animated GIF/WebP/PNG, via
@@ -366,7 +370,7 @@ Manual focus rects work with zero additional dependencies — just zenlayout geo
 - `default = ["std", "lossless-jpeg"]` — `std` enables zenfilters + moxcms ICC CMS; `lossless-jpeg` is a fast orient-only JPEG path
 - `job` — high-level bytes-in/bytes-out [`ImageJob`] API (implies `zennode` + `std`)
 - `zennode` — bridge from declarative node definitions into `PipelineGraph`
-- `nodes-all` — all codec node converters (jpeg, png, webp, gif, avif, jxl, tiff, bmp, heic, resize, filters, quant)
+- `nodes-all` — all codec node converters (jpeg, png, webp, gif, avif, jxl, tiff, bmp, resize, filters, quant)
 - `nodes-faces` — face detection + saliency via zensally (optional, adds ML models)
 - `json-schema` — JSON Schema / OpenAPI export from the node registry
 - `imageflow-compat` — translate Imageflow v2 jobs into zen pipelines
@@ -473,7 +477,7 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
 | Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
@@ -501,7 +505,6 @@ See [LICENSE-COMMERCIAL](https://github.com/imazen/zenpipe/blob/main/LICENSE-COM
 [zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
 [jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
-[heic]: https://github.com/imazen/heic
 [zentiff]: https://github.com/imazen/zenextras
 [zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras

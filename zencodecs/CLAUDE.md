@@ -116,7 +116,7 @@ zencodecs/
 │       ├── avif_enc.rs   # ravif adapter
 │       ├── jxl_dec.rs    # zenjxl decoder adapter
 │       ├── jxl_enc.rs    # jxl-encoder adapter
-│       ├── heic.rs       # heic-decoder adapter
+│       ├── heic.rs       # container-stills decode adapter
 │       ├── raw.rs        # zenraw RAW/DNG adapter (feature: raw-decode)
 │       ├── tiff.rs       # zentiff adapter (feature: tiff)
 │       ├── pnm.rs        # zenbitmaps PNM adapter
@@ -149,7 +149,7 @@ zencodecs/
 - Passed to `EncodeRequest::with_metadata(meta)`; the **retention policy** is set separately via `EncodeRequest::with_metadata_policy(MetadataPolicy)` (default `PreserveExact`) and applied at the codec boundary with `EncodeJob::with_metadata_policy` (zencodec 0.1.21). See the dated section below.
 - **Decode extraction**: JPEG (ICC/EXIF/XMP via zenjpeg extras), WebP (ICC/EXIF/XMP via demuxer), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC from codestream, EXIF/XMP from container Exif/xml boxes), AVIF (ICC/EXIF/XMP — the raw EXIF blob round-trips since the zenavif git-main 0.1.7 re-pin, zenpipe#36 gap 4 closed; orientation from irot/imir; CICP primaries/transfer/range from the nclx `colr` box, `matrix_coefficients` reported as coded = BT.601, see `tests/metadata_conformance.rs` `cicp_color`), GIF (none)
 - **Encode embedding**: JPEG (ICC/EXIF/XMP), WebP (ICC/EXIF/XMP via mux), PNG (ICC/EXIF/XMP via iTXt), JXL (ICC/EXIF/XMP via container boxes), AVIF (ICC/EXIF/XMP; orientation via irot/imir; `Metadata::cicp` → nclx `colr` through `zencodec::resolve_color_emit`), GIF (none)
-- **Orientation field**: `Metadata::orientation` is folded into the EXIF blob for JPEG/PNG/WebP at the `EncodeRequest` boundary (`dispatch::fold_orientation_into_exif`, zenpipe#36 gap 1); AVIF uses irot/imir; JXL's codestream orientation is not written (gap).
+- **Orientation field**: every `EncodeRequest` encode (one-shot, streaming, animation) applies a non-identity `Metadata::orientation` to the pixels and writes orientation 1 (`src/orient_fit.rs`): the field becomes `Identity` and a non-identity EXIF Orientation tag is rewritten to 1. The reader-compatibility matrix (imazen/zencodec#132) found orientation metadata ignored by common readers on every target format. Streaming encodes buffer the image to rotate it.
 
 ### zencodec 0.1.21 adoption + lossless JPEG↔JXL transcode (2026-06-08)
 
@@ -279,14 +279,14 @@ is retained (it references no depth types). See CHANGELOG.
 - 37 tests against real ICC profile files from skcms and Compact-ICC-Profiles
 
 ### What's NOT implemented yet
-- Pull-based streaming decode for JPEG/PNG (their StreamDec borrows input data so can't be 'static; use push_decode instead). GIF/AVIF/HEIC streaming decode works via build_streaming_decoder().
+- Pull-based streaming decode for JPEG/PNG (their StreamDec borrows input data so can't be 'static; use push_decode instead). GIF/AVIF streaming decode works via build_streaming_decoder().
 - Color management transforms (moxcms) — sRGB detection is done, CMS transforms are not
 - Fallback chains (structural pieces ready, needs multi-decoder-per-format registry)
 - Registry v2 entries with factories (deferred — current match-based dispatch works)
 - Gain map encode embedding (with_gain_map builder exists but doesn't wire to actual encode yet)
 - JPEG GDepth XMP depth extraction (requires XMP parsing in zenjpeg)
 - JPEG Android DDF depth extraction (requires container directory parsing)
-- HEIC auxiliary depth image extraction (requires heic-decoder auxid support)
+- Auxiliary depth image extraction (requires decoder aux-id support)
 
 ## Public API Spec (Design Intent)
 

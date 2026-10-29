@@ -124,6 +124,7 @@ pub mod cms;
 pub mod codec_id;
 mod codecs;
 pub mod color;
+mod color_fit;
 pub mod config;
 pub mod decision;
 mod decode;
@@ -136,10 +137,12 @@ mod format_set;
 pub mod gainmap;
 mod info;
 pub mod intent;
+pub mod inventory;
 mod limits;
 mod macros;
 #[cfg(feature = "metadata")]
 pub mod metadata;
+mod orient_fit;
 #[cfg(feature = "picker")]
 pub mod picker;
 pub mod pixel;
@@ -149,8 +152,13 @@ pub(crate) mod quality_calibration;
 mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
+mod row_contract;
 pub mod select;
 pub mod speed;
+#[cfg(feature = "tonemap")]
+mod tonemap;
+#[cfg(feature = "tonemap")]
+pub use tonemap::ToneMapPolicy;
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]
@@ -194,7 +202,7 @@ pub use select::{FormatPicker, select_format_from_intent, select_format_from_int
 pub use trace::SelectionTrace;
 pub use transcode::{
     SupplementPolicy, SupplementSet, TranscodeColor, TranscodeOptions, TranscodeOutput,
-    TranscodeSink,
+    TranscodeSink, TranscodeWriter,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;

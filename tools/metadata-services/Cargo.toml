@@ -9,19 +9,32 @@ publish = false
 # zencodecs library graph. The application supplies Services at runtime.
 [workspace]
 
+[features]
+default = []
+cli = ["dep:zencodecs"]
+
+[[bin]]
+name = "zencodecs-metadata-services"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [dependencies]
-zencodecs = { path = "../../zencodecs", default-features = false, features = ["std", "jpeg", "metadata"] }
+zencodecs = { path = "../../zencodecs", optional = true, default-features = false, features = ["std", "jpeg", "metadata"] }
 zencodec = { version = ">=0.2.0, <0.4.0" }
 zenmeta = { version = "0.1.0", features = ["xmp"] }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 xmpkit = { version = "=0.1.6", default-features = false, features = ["core"] }
-roxmltree = { version = "0.21", default-features = false, features = ["positions"] }
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-brotli = "8"
-quick-xml = "0.38"
-enough = "0.4"
+roxmltree = { version = "0.21.1", default-features = false, features = ["positions"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+brotli = "8.0.4"
+quick-xml = "0.38.4"
+enough = "0.4.4"
 
+# Mirrors the workspace root table (cargo honours [patch] only from the
+# building workspace root; this harness is its own workspace).
 [patch.crates-io]
+
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }

@@ -133,7 +133,6 @@ pipeline is expected to work:
 
 - [ ] JPEG UltraHDR → decode → resize → encode AVIF HDR
 - [ ] AVIF HDR → decode → resize → encode JPEG UltraHDR
-- [ ] HEIC (iPhone) → decode → resize → encode AVIF HDR
 - [ ] Apple ProRAW (DNG) → demosaic → tone-map → encode JPEG UltraHDR
 - [ ] JXL HDR → decode → resize → encode JXL HDR (round-trip)
 - [ ] JPEG UltraHDR → decode → resize → re-encode JPEG UltraHDR (preserve)

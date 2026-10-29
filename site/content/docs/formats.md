@@ -12,7 +12,6 @@ weight = 10
 | **WebP** | `image/webp` | webp | yes | yes | yes | yes | yes |
 | **AVIF** | `image/avif` | avif | yes | yes | yes | yes | -- |
 | **JPEG XL** | `image/jxl` | jxl | yes | yes | yes | yes | -- |
-| **HEIC** | `image/heif` | heic, heif, hif | yes | -- | -- | -- | -- |
 | **BMP** | `image/bmp` | bmp | yes | yes | -- | yes | yes |
 | **TIFF** | `image/tiff` | tiff, tif | yes | yes | -- | yes | yes |
 | **PNM** | `image/x-portable-anymap` | pnm, ppm, pgm, pbm, pam, pfm | yes | yes | -- | yes | yes |

@@ -28,6 +28,14 @@ pub(crate) fn detect_raw_format(data: &[u8]) -> Option<zencodec::ImageFormat> {
     let classified = zenraw::classify(data);
     match classified {
         zenraw::FileFormat::Dng | zenraw::FileFormat::AppleDng => Some(dng_format()),
+        // zenraw accepts any TIFF header as a candidate. Auto-dispatch needs
+        // the shared registry's more specific RAW signature; otherwise enabling
+        // RAW steals ordinary TIFF images from the TIFF decoder.
+        zenraw::FileFormat::TiffRaw
+            if !(zencodec::ImageFormat::Raw.definition().unwrap().detect)(data) =>
+        {
+            None
+        }
         _ if classified.is_raw() => Some(raw_format()),
         _ => None,
     }
@@ -156,7 +164,7 @@ pub(crate) fn extract_gainmap(
     // 2. HDRToneMap (ISO 21496-1 style): full gain map parameters
     //
     // If HDRToneMap fields are present, use them directly.
-    // Otherwise, synthesize from Apple's headroom value.
+    // Otherwise, synthesize from the headroom value.
     let metadata = if gm_info.gain_map_max.is_some() || gm_info.alternate_headroom.is_some() {
         // ISO 21496-1 style metadata present — convert to GainMapMetadata
         // (= zencodec::GainMapParams, channels-based, since ultrahdr-core 0.5).

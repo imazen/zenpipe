@@ -54,7 +54,7 @@ pub(crate) struct DecodeParams<'a> {
 // Build a Box<dyn DynDecoderConfig> for a format
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_dyn_decoder_config(
+pub(crate) fn build_dyn_decoder_config(
     format: ImageFormat,
     codec_config: Option<&CodecConfig>,
     _limits: Option<&Limits>,
@@ -422,8 +422,8 @@ impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreaming
 ///
 /// Not all codecs support streaming decode with owned data. Codecs that
 /// require borrowed data (JPEG, PNG) or don't support row-level decode at
-/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF, AVIF,
-/// and HEIC support this path.
+/// all (WebP, TIFF, bitmaps) will return an error. Currently GIF and AVIF
+/// support this path.
 pub(crate) fn dyn_streaming_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,
@@ -601,6 +601,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub quality: Option<f32>,
     pub effort: Option<u32>,
     pub lossless: bool,
+    pub prefer_streaming: bool,
     pub metadata: Option<crate::Metadata>,
     /// Retention policy applied to `metadata` at the codec boundary.
     pub metadata_policy: zencodec::MetadataPolicy,
@@ -623,14 +624,24 @@ pub(crate) fn dyn_animation_frame_encoder(
     macro_rules! build_ffe {
         ($config:expr) => {{
             use zencodec::encode::{EncodeJob as _, EncoderConfig as _};
-            let config = $config;
+            let mut config = $config;
+            if _params.prefer_streaming
+                && !_params
+                    .codec_config
+                    .is_some_and(|c| c.has_encode_override(format))
+            {
+                config = config.with_prefer_streaming(true);
+            }
             let mut job = config.job();
             job = job.with_pulse(_params.pulse);
             if let Some(lim) = _params.limits {
                 job = job.with_limits(to_resource_limits(lim));
             }
             if let Some(meta) = _params.metadata {
-                job = job.with_metadata_policy(meta, _params.metadata_policy);
+                job = job.with_metadata_policy(
+                    crate::color_fit::exif_color_space(meta),
+                    _params.metadata_policy,
+                );
             }
             if let Some(mode) = _params.orientation_mode {
                 job.try_set_orientation_mode(mode)
@@ -726,4 +737,40 @@ pub(crate) fn trace_decode_selection(format: ImageFormat) -> SelectionTrace {
         reason: "single implementation",
     });
     trace
+}
+
+/// Structural inventory through the format's decoder (see
+/// [`crate::inventory`]). `Ok(None)` when that decoder doesn't implement it.
+pub(crate) fn dyn_inventory(
+    format: ImageFormat,
+    data: &[u8],
+    limits: Option<&Limits>,
+) -> Result<Option<zencodec::inventory::Inventory>> {
+    let config = inventory_decoder_config(format, limits)?;
+    if !config.capabilities().inventory() {
+        return Ok(None);
+    }
+    let mut job = config.dyn_job();
+    if let Some(lim) = limits {
+        job.set_limits(to_resource_limits(lim));
+    }
+    job.inventory(data)
+        .map(Some)
+        .map_err(|e| wrap_boxed(format, e))
+}
+
+/// The decoder config whose job carries `format`'s inventory. PDF decodes
+/// through `codecs::pdf` (page rendering) rather than the dyn decoder table,
+/// but zenpdf's zencodec config implements the inventory like any other.
+fn inventory_decoder_config(
+    format: ImageFormat,
+    limits: Option<&Limits>,
+) -> Result<Box<dyn DynDecoderConfig>> {
+    #[cfg(feature = "pdf-decode")]
+    if let ImageFormat::Custom(def) = format
+        && def.name == "pdf"
+    {
+        return Ok(Box::new(zenpdf::PdfDecoderConfig::new()));
+    }
+    build_dyn_decoder_config(format, None, limits)
 }

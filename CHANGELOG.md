@@ -138,6 +138,33 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 - The JPEG/PNG/CMS-only zencodecs build remains warning-free when WebP
   is disabled; its decoder factory still forwards limits whenever WebP is enabled.
 
+### Current-main verification
+
+- Admit zentone 0.2 alongside 0.1 and record the scoped Git-main override (`9e0731ff`). Tone-map integration tests, strict lint and doctests pass. The current-main CICP probe passes; locked AVIF primaries and floating-point TIFF findings remain tracked in issues 103 and zenextras 52, with assertions unchanged. Corpus inventory recipes retain all unsupported IMI results for issue zqi 73.
+
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Added
+
+- The inventory CLI reads one encoded image from stdin with `-`; the audit gate checks multi-chunk input parity and builds with RAW inventory enabled.
+- Portable standalone fuzz/WASM dependency graphs and committed-source checks (83b02437, 771c6c27); workspace JSON API comparisons for unpublished dependencies (56166c80). Complete local CI benchmark captures retain their command and source provenance (6159a7c2).
+- `docs/reader-compat.md`: measured reader behaviour on orientation, colour
+  and gain-map signalling (compat-matrix round 14, 2026-10-17), with the
+  implications for zenpipe output and the run data it rests on.
+
+#### Changed
+- Dependencies build at opt-level 2 in dev and test builds; workspace members stay at 0 and checks are unchanged. Test execution under nextest: 99.0 s to 8.5 s, identical results. `just nextest` runs the suite in parallel (benches excluded); CI now runs zenpipe's tests with `job,nodes-all`.
+- Metadata integration shares zencodec `d327434b` across dispatch, services and standalone graphs. PNG `fb055396` and ultrahdr `a834b2cc` retain that same contract; precomputed gain-map filtering composes with main's strided adaptation, streaming preference and explicit HDR policy (2f07d845).
+- All five committed graphs share zencodec `d327434b` and JPEG `4196fa93`; PNG `e4f4ed3e` includes the correction for linear-float input color signalling. A CI job validates these locked sources without sibling overrides (a6ac4c2a, ae99e340).
+- Root interface pin advances to zencodec `802952b7`, zenjpeg `c73a8740`, and WebP `b5f28c97`. Explicit native JPEG scan, entropy and parallel settings now survive dispatch; a direct-native byte comparison covers the adapter.
+- Production and fuzz graphs pin the streaming interface to zencodec `023a65c7` and zenjpeg `8aa966ab`. Fuzz manifests use git sources instead of sibling zencodec/codec checkouts; the WebP lock moves to `c4b6614e`, restoring byte-identical RGB one-shot and row encodes.
+- zenavif pin moved to `5e493d39` (same rav1d-safe): stills bake orientation instead of `irot`/`imir`, f32 input stored as sRGB is declared sRGB, and the Exif item is one `iloc` extent (zenavif#52).
+- zenavif pinned to main `c6c037c0` (0.2.0, rav1d-safe `dfd01e32`) in every manifest and lock, from `11033c95`. rav1d-safe#526, the reason for the hold, closed; the AVIF corpus decode passes on aarch64 at the new pin. The graph loses the archived zenavif-serialize (zenavif#53) and gains the imir axis fix (zenavif#54). A root `zenpredict` git patch lets the lock resolve outside the sibling-clone setup. The demo lock was stale against its manifest (archmage); `cargo update -p zenavif --recursive` refreshed it.
+- Dependencies: registry floors raised to the tested versions and `libblur` 0.24 for zenfilters; the git-tracked sibling pins are unchanged (025243d). `zenresize` 0.3 and `hashbrown` 0.17 are held because both appear in the public API.
+- CI: Actions bumped to current majors (checkout v7, Pages actions v5/v6) (29c831e).
+
 #### Added (AVIF auto-tuning consumer, 2026-09-04)
 
 - **`avif-autotune` feature + `crate::avif_autotune`** — the consumer seam
@@ -157,6 +184,24 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   The feature builds and all 4 of its tests pass; see the Fixed entry
   below for the `zenanalyze-api` resolution failure that blocked it at
   the time this entry was first written, and what it actually was.
+
+#### Fixed (deadline → codec requests, 2026-09-27)
+
+- **The `ImageJob` deadline now reaches `DecodeRequest`/`EncodeRequest`, not
+  just the strip loop.** `execute_with_stop` already polled between strips and
+  `transcode_animated_nodes` between frames, but every `zencodecs` request was
+  built without a stop token — so a single codec call (a slow AV1 frame, a JXL
+  container decode, a one-shot encode) ran uncancellable until it returned,
+  however far past the deadline that took. `deadline()` is now attached via
+  `DecodeRequest::with_stop`/`EncodeRequest::with_stop` on all eight request
+  sites: streaming decode, full-frame decode fallback, HDR reconstruction,
+  gain-map extraction, streaming encode, one-shot encode fallback, and both
+  animation decode + encode inside `transcode_animated_nodes` (whose `stop`
+  parameter changed from `Option<&dyn enough::Stop>` to
+  `Option<zencodec::StopToken>` so the owned token can be cloned into both
+  requests while the pipeline loop keeps its borrowed per-frame check). A
+  regression test asserts an expired deadline surfaces as the codec's own
+  "operation cancelled" rather than the strip loop's `PipeError::Cancelled`.
 
 #### Fixed (dependency unification, 2026-09-04)
 
@@ -912,6 +957,62 @@ Three crates.io requirements block a newer release and were left alone on purpos
   passed as zencodec's operation policy, so a refusal names the unmet
   requirement.
 
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Fixed
+
+- A resizing layout with an orientation no longer puts uneven padding on the
+  wrong side. The resizer pads before it orients, and `config_from_plan` moved
+  the oriented canvas's margins to the unoriented raster by swapping axes only,
+  so for every orientation but `Identity` and `Transpose` a flip mirrored
+  uneven margins and a quarter turn moved them to another side. Each margin is
+  now padded on the side the orientation turns onto it, for every
+  `config_from_plan` / `streaming_from_plan` caller. The regression,
+  `tests/layout_exact.rs`
+  (`a_resizing_layout_pads_where_the_plan_places_the_content`), also needs two
+  zenresize fixes (imazen/zenresize#25): with a turning orientation, bottom
+  padding was captured before the content, and padded FlipH flipped its
+  reusable row in place. Those are fixed on zenresize main; this workspace
+  pins it with `[patch.crates-io] zenresize` at 5b4e14e3 until a release
+  carries them.
+- A `Layout` whose plan keeps the size no longer resamples every sample.
+  `NodeOp::Layout` ran each plan through the streaming resizer, so an
+  orientation, trim or placement with no scaling was resampled 1:1 with the
+  default Robidoux kernel, which blends neighbours (its weights at integer
+  offsets are about 0.063, 0.874, 0.063): an `ImageJob` orient node changed
+  5,715 of 18,915 samples, max 95. A size-preserving plan (`resize_is_identity`,
+  no post-resize effects) now moves samples exactly, in the plan's order: trim
+  (`CropSource`), a horizontal flip (`FlipHSource`) and placement
+  (`ExpandCanvasSource`, with the bytes the resizer's padding writes) stream;
+  any other orientation turns the materialized trimmed frame, as `Orient` does,
+  and the estimate counts that frame and its turned copy. Regression:
+  `tests/layout_exact.rs` (eight orientations with trim, uneven padding and
+  negative placement, against authored canvases).
+- `CropSource` no longer drops rows when an upstream strip straddles one of its
+  16-row output strips. It filled the output strip, then skipped the rest of that
+  upstream strip, so any crop whose rows did not line up with the upstream strips
+  came out short and shifted; the cropped rows that do not fit are now carried to
+  the next output strip. Regression: `tests/pipeline.rs`
+  `crop_keeps_every_row_across_unaligned_upstream_strips` (six crops over
+  upstream strips of 1, 7, 16, 17, 64 and 150 rows, exact samples).
+- `ResizeSource` and `ResizeF32Source` no longer fail with "ring buffer overflow" when an upstream strip is taller than the 16-row batch the resizer is sized for (an `ImageJob` resizing a 48x40 PNG with `w=24` failed). Rows are pushed one at a time with output drained in between; rows that cannot be pushed before the output strip fills are held for the next pull. `tests/resize_strip_heights.rs` checks that strips of 1, 7, 16, 40 and 64 rows give bit-identical output, down- and upscaling, RGBA8 and f32.
+- Schema fixture export respects the configured temporary directory (9dccbaa3).
+- Streaming sink errors release the encoder and owned writer, prevent retrying a failed write, and refuse successful completion. Repeated declarations preserve the active image. Callers abort borrowed transports on error.
+
+#### Added
+- **`EncoderSink` streams encoded bytes** (needs zencodec PR 149):
+  `begin(width, height)` declares the image to the encoder and returns its
+  `OutputTiming`; `with_writer(..)` receives every byte as soon as the encoder
+  has it (after each strip, the rest at `finish`, `take_output` then empty);
+  `pending_output()` / `consume_output()` for callers that drain themselves,
+  and `take_pending_output(&mut vec)`, which hands over the encoder's buffer
+  when `vec` is empty (zencodec `take_output`; named apart from the existing
+  `take_output()`, which returns the finished output).
+  A pipeline can now feed an HTTP response or upload while it runs
+  (`tests/streaming_output.rs`).
+
 #### Changed (tile pyramid profile + fixes, 2026-08-28, #24)
 
 - **The sink's own pass is 23–29 % faster** with byte-identical output
@@ -1175,6 +1276,19 @@ Three crates.io requirements block a newer release and were left alone on purpos
 ### [Unreleased]
 
 #### Added
+- A finite operation catalog generates every ordered pair for registered still
+  encoder configurations, including three AVIF backends. It checks fidelity
+  preference selection and actual lossless samples, padded RGB rows, independent
+  readers, and enabled/disabled inventory with typed input-limit errors.
+
+#### Fixed
+- Forward explicit JXL lossless requests on both one-shot and streaming paths.
+- Include QOI/TGA in the compiled runtime allowlist.
+- Use the shared RAW signature detector to keep ordinary TIFF on the TIFF path
+  when RAW decoding is enabled. Explicit RAW requests remain available.
+
+
+#### Added
 
 - **`--lossless-if-cheaper [FACTOR]`** (#68): the last unchecked CLI item —
   encodes lossless and lossy, keeps lossless when it is at most FACTOR×
@@ -1243,7 +1357,26 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixed
+
+- The f32x8 kernels in `simd/x86.rs` and `simd/wide_simd.rs` now reach
+  `mul_add` through a private `MulAddCompat` helper, which confines one
+  `#[allow(deprecated)]` to the legacy call. magetypes 0.9.31 deprecates
+  `mul_add` for `mul_add_relaxed`, the same operation, and CI's sibling
+  archmage main turned the 88 call sites per target into Clippy errors. This
+  crate still requires magetypes 0.9.30, where `mul_add_relaxed` does not exist.
+  Same arithmetic and the same intrinsics on every backend; pixels unchanged.
+- Use token-suffixed SIMD constructors in the generic ARM path, preserving
+  arithmetic while satisfying warnings-as-errors Clippy on ARM targets.
+
 #### Changed
+
+- **sRGB/linear-RGB passthrough scatter is 1.6–2.1× faster on x86-64.** The deinterleave
+  loops in `scatter_srgb_passthrough` are `#[autoversion(v3, neon, wasm128)]`, so the AVX2
+  build runs instead of the SSE2 baseline (a 349k-pixel RGB strip: 111.5 → 61.8 µs on Zen 5;
+  `benchmarks/scatter_passthrough_2026-10-17.txt`). No new dependency; supersedes #32's
+  garb route, which compiled the same loop the same way. Pixels unchanged
+  (`srgb_passthrough_matches_index_loop`). Not measured on aarch64, where NEON is baseline.
 
 - **`quality_validation` vs libvips re-measured on a second machine**
   (zenpipe#44): with Homebrew libvips 8.18.6 on macOS arm64 and the CID22
@@ -1387,7 +1520,88 @@ Three crates.io requirements block a newer release and were left alone on purpos
 - `checked-transcode-async` drives the same checked execution over AsyncSource; short/pending reads, native errors, drop/cancellation cleanup and pre-read admission are tested. CPU work remains on the polling task with between-step fairness.
 - Checked PNG sources now use native controlled interpretation. Six integer layouts retain exact samples through lossless PNG output; P3 conversion matches an independent CMS route, and slice/positional/delayed-network results agree. Unknown extension and gain-map carriers refuse; native inflate storage remains unqualified.
 
+#### Added
+
+- Executable operation matrix across 15 configurations and all 675 ordered RGB8
+  routes, checked fidelity selection, inventory enabled/disabled, independent
+  readers, distinct animation frames, typed timing refusals, and structural
+  prefix oracles. Scope and unexecuted axes: `zencodecs/docs/operation-matrix.md`.
+
+#### Fixed
+
+- Forward lossless requests through both JXL convenience encoder builders.
+- Include QOI, TGA and Radiance HDR in compiled runtime format allowlists.
+- Share core RAW signature discrimination so enabling RAW does not claim plain TIFF.
+- Align consumer codec pins, including AVIF quantization/fidelity fixes and
+  WebP/PNG typed-error cause preservation; resolve each standalone lockfile.
+
+#### QUEUED BREAKING CHANGES
+
+- No released metadata API break is introduced by this extraction: the scrub API is unreleased. Its shared result types now belong to zencodec. The unreleased PNG/JXL scrub routes require their codec features, matching JPEG.
+
+#### Metadata integration
+
+- Reuse the inventory dispatch and CLI from PR 89. The default-enabled `inventory` feature weakly enables walkers only for selected codecs; direct codec users retain default-off walkers. Convenience dispatch preserves its proposed `Option` result for unavailable support, while codec jobs retain typed unsupported errors.
+- Add optional `avif-svt` and `avif-aom` feature forwarding for the native AVIF backends.
+
+- Move JPEG, PNG/APNG and JXL container planners to their codec crates; zencodecs retains a thin dispatcher and reexports zencodec request result/service types. Standalone codec users need neither zencodecs nor zenpipe.
+- Delegate gain-map retention to zenmeta without exposing zenmeta types in this API. Optional application services retain timeout reasons as well as cancellation.
+- Preserve the original scrub test assertions under the corresponding codec features; verify the combined path and the metadata-only build without codecs.
+
+#### Added
+
+- **`tonemap` capability**: `EncodeRequest::with_tone_map_policy(ToneMapPolicy::Bt2408)` explicitly authorizes HDR (PQ/HLG) rendering to sRGB 8-bit for SDR-only targets. The feature alone preserves existing behavior; strict policy refuses conversion. BT.2408 uses 203-nit SDR white; PQ peak is MaxCLL, else mastering peak, else 1000 nits on both one-shot and streaming paths. HLG uses the 1000-nit reference display. Descriptor-only HDR conversion also clears HDR luminance metadata. zentone is pinned to 0.1.0. Supersedes #48 and #100 (1d42383b); tests: `zencodecs/tests/tonemap.rs`. Explicit opacity and descriptor alpha padding are retained during rendering.
+
 #### Changed
+
+- **EXIF ColorSpace follows the colour written:** `1` only when the encode
+  writes sRGB, `0xFFFF` otherwise, rewritten in place when the tag is present
+  (`color_fit::exif_color_space`, via `zencodec::helpers::set_exif_color_space`).
+  Readers that consult it treat `1` as sRGB whatever ICC is embedded
+  (imazen/zencodec#132). Test: `tests/exif_color_space.rs`.
+
+- Builds warning-free against zenpixels 0.2.17: `zenpixels::hdr::ContentLightLevel`
+  instead of the deprecated root alias, and `transcode-iqa`'s use of zensim
+  profile A (deprecated, but the thresholds are calibrated on it) is allowed
+  explicitly. `tests/color_adapt.rs` reads a decoded file's colour from the
+  buffer's attached context (matrix 0 for RGB), not `source_color`'s coded
+  YUV matrix, which zenpixels 0.2.17 rightly refuses as a current context.
+
+- **A pixel-format conversion that changes the colour space re-describes
+  the pixels.** When the encoder can't take the input's pixel format and the
+  one it can take has other primaries or another transfer (linear f32 or u16
+  into an 8/16-bit sRGB format, Display P3 into an sRGB-only format), the
+  encode converts from the colour the metadata describes to that format's
+  colour space and writes the matching CICP, dropping an ICC profile that no
+  longer applies (`color_fit::fit_to_supported`). Before, the caller's ICC or
+  CICP was written next to converted pixels, and formats with no colour
+  carrier converted twice (linear off by up to 70 of 255, P3 by 10). The
+  one-shot encoder now negotiates the pixel format after fitting the colour
+  (the closure in `build_from_config`), and `AnyEncoder::encode_pixels` fits
+  too. Streaming encodes are not covered: the encoder sees strips the
+  caller already adapted. `tests/color_adapt.rs` checks 36 lossless cells
+  (4 sources x PNG, AVIF, JXL, WebP, PNM, BMP, farbfeld, QOI, TGA) by
+  decoding each file by its own description; 19 failed before.
+- `transcode-iqa` builds against zensim 0.3: it enables zensim's
+  `deprecated-profiles` feature, which now gates profile A (the profile the
+  transcode-to-quality thresholds are calibrated on).
+- **JXL and AVIF honour `with_lossless(true)`.** Their builders dropped the
+  flag and encoded lossy; it now reaches the codec after quality.
+
+- **Re-encodes write upright pixels and orientation 1.** A non-identity
+  `Metadata::orientation` (or EXIF Orientation tag) is applied to the
+  pixels by every `EncodeRequest` encode: one-shot, type-erased, streaming
+  (buffered and rotated at finish) and animation (canvas rotated, each
+  frame rotated on push). The field is written as `Identity` and the tag
+  rewritten to 1, and so is an XMP `tiff:Orientation` (same-length rewrite). Governed by the reader-compatibility matrix
+  (imazen/zencodec#132): no browser applies WebP EXIF orientation; WIC,
+  ImageMagick and WebKit on Linux ignore PNG `eXIf`; WIC's and ImageIO's
+  default decodes and `sips` ignore JPEG EXIF orientation; HEIF `imir`
+  reads opposite ways across editions. Replaces folding the field into
+  EXIF (`fold_orientation_into_exif`, removed) and AVIF `irot`/`imir`.
+  `transcode` no longer rotates twice: the probe metadata takes the
+  decoded orientation. Tests that expected the tag or `irot` to survive
+  now expect rotated dimensions and `Identity`.
 
 - **Metadata conformance: AVIF CICP re-verified, `cicp` split into two
   strengths** (zenpipe#36 gap 3): with zenavif git-main (11033c95)

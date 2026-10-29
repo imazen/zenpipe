@@ -32,12 +32,9 @@ wasm-bindgen = { version = "=0.2.123", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", features = ["ImageData"], optional = true }
 
-# Mirror of the workspace root's git-form patch table (zenpipe#37) so
-# the standalone demo resolves without sibling checkouts (zencodecs needs
-# zenjpeg `recompress`, which the published 0.8.4 predates). The Pages deploy
-# regenerates this section via ci-prep at build time; local sibling lockstep
-# is opt-in via `cargo superwork patch`.
+
 [patch.crates-io]
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
@@ -114,7 +111,8 @@ imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
 zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
 
-# Override zenresize's git dep on zenlayout to use our workspace copy
+[patch."https://github.com/imazen/zenlayout.git"]
+zenlayout = { path = "../../zenlayout" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

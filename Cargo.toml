@@ -79,8 +79,13 @@ nodes-avif = ["zennode", "dep:zenavif", "zencodecs/avif-decode"]
 # AVIF backend + knob auto-tuning (`crate::avif_autotune`). OFF by default and
 # flips no default: a caller opts in by holding an `AvifAutotune`.
 #
-# Decode, encode, and auto-tuning share the pinned zenavif 0.2 API.
-avif-autotune = ["std", "dep:zenavif", "zenavif/auto-tune", "zenavif/encode-imazen", "dep:almost-enough", "dep:imgref", "dep:rgb"]
+# Takes zenavif 0.2.x as a SEPARATELY-NAMED direct dep (`zenavif_tuner`)
+# alongside the 0.1.x edge zenpipe + zencodecs already use for decode/encode.
+# The two are semver-incompatible so they coexist, and no 0.2 type is ever
+# handed to a 0.1 API. Migrating the whole edge to 0.2.x is a real change with
+# nothing additive about it; when it happens, drop the rename and this feature
+# keeps working unchanged.
+avif-autotune = ["std", "dep:zenavif_tuner", "dep:almost-enough", "dep:imgref", "dep:rgb"]
 nodes-jxl = ["zennode", "dep:zenjxl", "zencodecs/jxl-decode"]
 nodes-tiff = ["zennode", "dep:zentiff", "zencodecs/tiff"]
 nodes-bmp = ["zennode", "dep:zenbitmaps", "zencodecs/bitmaps-bmp"]
@@ -108,7 +113,7 @@ zenresize = { version = "0.3.1", default-features = false }
 # Image layout: constraint modes, orientation, smart crop
 zenlayout = { workspace = true, features = ["smart-crop"] }
 # Blend modes on premultiplied linear f32 RGBA rows (SIMD-accelerated)
-zenblend = { version = "0.1.2", default-features = false }
+zenblend = { version = "0.1.3", default-features = false }
 # Pixel format descriptors and row-level conversion (transfer functions, gamut matrices, alpha)
 zenpixels-convert.workspace = true
 # Pixel buffer types, ColorContext, ICC/CICP metadata
@@ -154,23 +159,30 @@ zenwebp = { version = "0.5.0", default-features = false, optional = true }
 # `zencodec` feature is now gated on plain `std` (which that feature always
 # implied). Request `std` directly; `zencodec` is no longer a valid feature name.
 zengif = { version = "0.8.0", default-features = false, features = ["std"], optional = true }
-# The shared 0.2 codec contract; auto-tuning enables its native encoder.
+# zenavif main (0.1.7, git-patched below) made `zencodec` a required, always-on
+# dependency — its `zencodec` cargo feature no longer exists, so it must not be
+# requested here (CI resolves zenavif from the sibling clone of main, and
+# "zenavif does not have that feature" was the resolution failure since 2026-08-01).
 zenavif = { version = "0.2.0", default-features = false, optional = true }
+# zenavif 0.2.x, ONLY for `avif-autotune` (see the feature comment above). A
+# The optional tuner shares the root zenavif patch with codec dispatch.
+# Resolve it in an isolated export; no sibling checkout is required.
+zenavif_tuner = { package = "zenavif", version = "0.2.0", features = ["auto-tune", "encode", "encode-imazen"], optional = true }
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
 # itself depends on so the two unify rather than resolving twice.
-almost-enough = { version = "0.4.3", default-features = false, optional = true }
+almost-enough = { version = "0.4.4", default-features = false, optional = true }
 # The pixel-view types `zenavif::encode_rgb8` takes. Pinned to the exact
 # versions zenavif itself depends on so the types UNIFY — a second resolution
 # of either would make the call site fail to typecheck for a reason that reads
 # like nonsense. (They are also dev-dependencies of this crate; that entry is
 # for tests and does not reach the library.)
-imgref = { version = "1.12.0", optional = true }
-rgb = { version = "0.8.52", default-features = false, features = ["bytemuck"], optional = true }
+imgref = { version = "1.12.3", optional = true }
+rgb = { version = "0.8.53", default-features = false, features = ["bytemuck"], optional = true }
 zenjxl = { version = "0.3.0", default-features = false, features = ["zencodec"], optional = true }
-zentiff = { version = "0.1.0", default-features = false, optional = true }
+zentiff = { version = "0.1.2", default-features = false, optional = true }
 zenbitmaps = { version = "0.2.0", default-features = false, optional = true }
-zenquant = { version = "0.1.2", default-features = false, optional = true }
+zenquant = { version = "0.1.3", default-features = false, optional = true }
 # JSON serialization (optional — for schema export)
 serde_json = { workspace = true, optional = true }
 # Imageflow v2 compatibility (optional — for running legacy imageflow pipelines)
@@ -193,14 +205,14 @@ zenjpeg = { version = "0.9.0", features = ["zencodec"] }
 zengif = { version = "0.8.0", features = ["quantizr"] }
 zennode = { workspace = true }
 serde_json.workspace = true
-codec-corpus = "1"
-imgref = "1.12"
-rgb = { version = "0.8", features = ["as-bytes"] }
-zenbench = "0.1.3"
+codec-corpus = "1.1.0"
+imgref = "1.12.3"
+rgb = { version = "0.8.53", features = ["as-bytes"] }
+zenbench = "0.1.10"
 zenbitmaps = { version = "0.2.0", features = ["bmp"] }
 
 # Artifact-free 1/N downscale references from lossy corpus sources.
-# Needs every decoder the imazen-26 corpus actually contains (jpg/heic/png) plus
+# Needs every decoder the imazen-26 corpus actually contains (jpg/png) plus
 # the formats a future variant source might use, and the resize node's crate.
 # Settles pristine_downscale's --filter choice by measurement (rejection vs
 # fidelity per kernel). fast-ssim2 is a dev-dependency: it never reaches the
@@ -245,16 +257,16 @@ exclude = ["apidoc", "demo/crate", "wasm-size-shim"]
 
 [workspace.dependencies]
 # ── Shared across 3+ members ──
-enough = { version = "0.4", default-features = false }
+enough = { version = "0.4.4", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
-bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"] }
-linear-srgb = { version = "0.6.8", default-features = false }
+bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
+linear-srgb = { version = "0.6.12", default-features = false }
 zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false }
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 zencodec = { version = ">=0.2.0, <0.4.0", default-features = false }
 # ── Serialization ──
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0.151"
 # ── Workspace members ──
 zenfilters = { path = "zenfilters", version = "0.1.0" }
 zencodecs = { path = "zencodecs", version = "0.1.0", default-features = false }
@@ -281,6 +293,7 @@ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd4
 # Optional borrowed Pulse family; source alignment only, original locks retained.
 # Dependencies use version edges, so each consumer root selects this source.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
+zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
@@ -388,6 +401,10 @@ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb1
 # other entry in this table on purpose: a rev pin would strand us the next time
 # zenjpeg's main bumps its zenanalyze requirement.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+# zenpredict 0.2.x is unpublished (registry 0.1.0). `zenavif_tuner` (the
+# sibling ../zenavif) asks for the registry `zenpredict = "0.2.0"`, which only
+# zenavif's own patch table satisfies; this entry points it at the same repo
+# as zencodecs' `picker` dep so the root graph resolves without that table.
 # imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
 imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
@@ -425,3 +442,8 @@ delete = ["imageflow_types", "imageflow_riapi", "zensally", "zensally-zentract"]
 # patches above exist for bare-clone/registry resolution and would only make
 # every CI job fetch those repos redundantly (ci-lint convention).
 delete_sections = ["patch.crates-io"]
+
+# Dependencies (the codecs) build optimized in dev/test; workspace members stay
+# at opt-level 0. Debug assertions and overflow checks are unchanged.
+[profile.dev.package."*"]
+opt-level = 2
