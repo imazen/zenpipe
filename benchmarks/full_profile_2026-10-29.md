@@ -51,3 +51,16 @@ strict consumer Clippy also pass on these published pins. Exact command logs:
 `~/tmp/zenpixels-release-reconcile-20261029/zenpipe-portable-git.log` and
 `zenpipe-portable-profile-git.log`. The original two AVIF orientation-carrier
 failures remain; these checks neither change nor bypass their assertions.
+
+## Current orientation controls
+
+On the same paired graph, the complete `avif_capability` target reports 9 pass,
+2 failures (retained default tag-carriage expectations), 4 inherited ignores.
+All three non-square sample/container witnesses pass: explicit orientation
+baked, EXIF-only baked, and native stored-pixel/tag passthrough. Exact decoded
+sample permutations, dimensions, no double rotation and container properties
+are checked. The oracle is a separate identity encode/decode plus manual sample
+permutation, not an independent AV1 decoder. No assertion was relaxed.
+Command: `cargo test --locked -p zencodecs --no-default-features --features
+avif-decode,avif-encode --test avif_capability -- --test-threads=1`.
+Receipt: rc101, 20s, peak RSS 0.95GiB; `avif-orientation-current.log`.

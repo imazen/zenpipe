@@ -147,8 +147,11 @@ row_encode::encode_job(job, rows, writer, policy, Options::new(budget, max_outpu
 ## Orientation
 
 Decoders default to `OrientationHint::Preserve`: stored pixels plus the reported
-orientation. Passthrough keeps both and carries the orientation in the output
-metadata; nothing is held. `OrientationCost` reports what rendering upright costs a
+orientation. Pipeline passthrough keeps both and supplies the orientation to
+the encoder. This avoids a pipeline orientation raster, but does not prove that
+the encoder preserves stored pixels or avoids buffering: current AVIF still
+encoding bakes the transform. The common encode plan does not yet report that
+representation choice. `OrientationCost` reports what rendering upright costs a
 single-pass pipeline: `Identity` and `FlipH` stream; `FlipV` and `Rotate180` reverse
 rows; the four axis swaps read stored columns. All six hold the whole stored raster
 before the first upright row. `render_orientation` admits that raster from a

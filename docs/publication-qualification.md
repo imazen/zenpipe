@@ -68,7 +68,10 @@ unchanged full suite. These repaired Rust/browser commands remain unrun.
 ## Orientation contract remains unresolved
 
 The [core correctness model](https://github.com/imazen/zencodec/blob/f02a17ec6001a9efcad1267f92a3ea928ed06e57/docs/correctness-model.md#orientation-one-authority-reconciled)
-makes `Metadata::orientation` authoritative and says the codec embeds its value.
+makes `Metadata::orientation` authoritative. The current
+[correctness model](https://github.com/imazen/zencodec/blob/e1c0ca5beef29a815a2a42c2d008fc46d99b4d17/docs/correctness-model.md#orientation-one-authority-reconciled)
+allows either carrying the transform or baking it with emitted orientation
+reconciled to identity. Neither proves unchanged storage or low memory.
 The [shared specification](https://github.com/imazen/zencodec/blob/f02a17ec6001a9efcad1267f92a3ea928ed06e57/docs/spec.md)
 offers orientation hints for decoding, not an encode representation selector.
 The two existing AVIF assertions require a retained Rotate90/non-Identity tag.
@@ -88,8 +91,13 @@ container inspection checks coded dimensions, irot/imir and the retained EXIF
 tag. The EXIF-prefix parser check is strict: the known serializer issue may
 remain a separate failure, not a reason to omit that check. These witnesses
 test the current baked route alongside the original tag assertions; they do
-not decide which contract should win. They remain uncompiled/unrun and do not
-certify native RGB fidelity or an independent third-party decoder.
+not decide which contract should win. All three pass on the paired portable graph (2026-10-29), including the
+strict EXIF inspection. They do not certify native RGB fidelity or an
+independent third-party decoder. The full target returns rc101: 9 passed,
+2 retained tag-carriage assertions failed, 4 inherited ignores. No assertions
+or applicability changed. Receipt: 20s, peak RSS 0.95GiB under run-heavy
+3G/jobs2/timeout900. Full log: `avif-orientation-current.log` in the paired
+release qualification directory.
 
 The third witness prepares the native tag-preserving escape hatch:
 `AvifEncoderConfig::inner_mut()` selects the underlying `rotation(3)` while
