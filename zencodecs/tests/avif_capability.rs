@@ -9,9 +9,14 @@
 
 #![cfg(feature = "avif-decode")]
 
+#[cfg(feature = "avif-encode")]
 use imgref::{ImgRef, ImgVec};
+#[cfg(feature = "avif-encode")]
 use rgb::Rgb;
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
+use zencodecs::DecodeRequest;
+#[cfg(feature = "avif-encode")]
+use zencodecs::{EncodeRequest, ImageFormat, Metadata};
+#[cfg(feature = "avif-encode")]
 use zenpixels::PixelSlice;
 
 #[cfg(feature = "avif-encode")]
@@ -20,6 +25,7 @@ mod orientation;
 
 // ─── Inline fixtures (avoid common/mod.rs feature drift) ──────────────────
 
+#[cfg(feature = "avif-encode")]
 fn rgb8_image(w: usize, h: usize) -> ImgVec<Rgb<u8>> {
     let pixels: Vec<Rgb<u8>> = (0..w * h)
         .map(|i| Rgb {
@@ -51,12 +57,14 @@ fn encode_avif_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32)
         .into_vec()
 }
 
+#[cfg(feature = "avif-encode")]
 fn decode_full(bytes: &[u8]) -> zencodecs::DecodeOutput {
     DecodeRequest::new(bytes)
         .decode_full_frame()
         .expect("decode AVIF")
 }
 
+#[cfg(feature = "avif-encode")]
 fn synthetic_icc(len: usize) -> Vec<u8> {
     let mut v = Vec::with_capacity(len);
     v.extend_from_slice(&(len as u32).to_be_bytes());
@@ -165,6 +173,7 @@ fn avif_default_encode_yields_srgb_cicp() {
 // ─── EXIF / XMP round-trip ───────────────────────────────────────────────
 
 /// Build a minimal little-endian TIFF/EXIF blob with one Orientation tag.
+#[cfg(feature = "avif-encode")]
 fn build_minimal_exif_with_orientation(value: u16) -> Vec<u8> {
     let mut v = Vec::new();
     v.extend_from_slice(b"II\x2a\x00");
