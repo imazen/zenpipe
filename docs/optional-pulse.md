@@ -28,20 +28,24 @@ optional Pulse into prefix materialization. `MaterializedSource::from_source_wit
 checks before raster allocation and around source pulls. Their required-Stop
 predecessors are deprecated compatibility adapters.
 
-Source migration is in progress. Full consumer-graph, native-codec, API and browser
-qualification is not implied by these examples. Animation now forwards the original optional Pulse through frame decode, frame
-encode, finalization and strip execution. `FrameSource`/`FrameSink` expose
-`*_with_pulse` variants; convenience methods use `None`. The old required-Stop
-animation methods remain deprecated adapters. Lossless JPEG exposes `try_lossless_jpeg_with_pulse` and checks before the
+Animation forwards the original optional Pulse through frame decode, frame encode,
+finalization and strip execution. `FrameSource`/`FrameSink` expose `*_with_pulse`
+variants; convenience methods use `None`. The old required-Stop animation methods
+remain deprecated adapters.
+
+Lossless JPEG exposes `try_lossless_jpeg_with_pulse` and checks before the
 identity-copy fast path. Its native coefficient transform currently accepts only
 cancellation; the adapter does not promise progress reports. Zenfilters exposes
 `Pipeline::apply_with_pulse` and `apply_planar_with_pulse`; cancellation retains
 its reason and may leave partially filtered output. Their old Stop methods are
-deprecated compatibility entry points. Existing `PipeError::Cancelled`
-still loses the native stop reason; changing that error contract remains open.
+deprecated compatibility entry points. Existing `PipeError::Cancelled` still
+loses the native stop reason; changing that error contract remains open.
 
+## Qualification
 
-Focused pipeline qualification at 7c36d596 plus the closure-only fix 921a3f9f:
-29 limit/effect tests, 25 session tests and strict Clippy passed. Animation,
-lossless and filter changes made afterward need their own frozen qualification.
-These Linux results are not cross-platform or full-application qualification.
+[The frozen Linux receipt](../benchmarks/optional_pipeline_pulse_2026-10-29.md)
+records pipeline limits/effects, session cache, actual GIF forwarding and bytes,
+retained job cancellation, native lossless JPEG and filter controls, plus strict
+Clippy. Original assertions remain. Full publication/metadata, HEIC/RAW, generated
+API, browser and platform qualification remain separate gates; these focused
+results do not qualify the whole application graph.

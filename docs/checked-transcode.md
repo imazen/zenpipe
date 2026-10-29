@@ -167,16 +167,18 @@ the completed encoder Vec and drops backend extras. It retains no source, native
 codec, CMS or callback. Construction is private to successful verification.
 
 ```rust
-use zencodec::{NoPulse, operation::OutputSchedule};
+use zencodec::operation::OutputSchedule;
 policy = policy.require_output_schedule(OutputSchedule::FinishFirst);
 let ready = request.transcode_for_publication(&codecs, input, &mut policy)?;
 // Create the destination only after conversion/encode/verification succeeded.
 let mut file = std::fs::File::create(output_path)?;
-let receipt = ready.write_to(&mut file, &NoPulse)?;
+let receipt = ready.write_to(&mut file, None)?;
 let accepted = *receipt.output();
 ```
 
-`write_to` consumes the owner and loops over short writes. It checks the supplied
+`write_to` accepts `Option<&dyn Pulse>`, consumes the owner and loops over short writes.
+The verified output retains no earlier job control; supply `Some(pulse)` to control
+publication, or `None` for no additional publication control. It checks the supplied
 Pulse before attempts (including interrupted retries), before flush and after a
 successful flush. `PublicationError::emitted` counts confirmed accepted bytes;
 its cause preserves the original write/flush error. Native I/O failure takes

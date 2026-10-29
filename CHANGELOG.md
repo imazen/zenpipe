@@ -24,7 +24,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 - Animation transcode and frame operations accept optional borrowed Pulse and
   forward the original value into native decode, encode and finish. Deprecated
-  Stop entry points retain their original signatures. Runtime qualification pending.
+  Stop entry points retain their original signatures. Focused Linux native forwarding/cancellation and strict Clippy pass; full graph/API/platform gates remain pending (`6469f4bc`).
 
 #### Added (optional pipeline controls)
 
@@ -32,8 +32,16 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   `Session::stream_with_pulse` accept optional borrowed Pulse. Their original
   required-Stop entry points are deprecated compatibility adapters. Checks
   precede input pulls, raster allocation and sink finish; lazy session suffixes
-  require a control when drained. Source qualification pending; see
+  require a control when drained. Focused limits/cache controls and strict Clippy pass (`921a3f9f`); see
   `docs/optional-pulse.md`.
+
+#### Changed (consumer graph qualification)
+
+- Core requirements admit the current and next minor (`>=0.2.0, <0.4.0`).
+  The root lock records the reviewed paired native/core graph and zenfilters'
+  existing how-far dependency. Other portable locks and full-profile native
+  qualification remain pending. Focused receipts:
+  `benchmarks/optional_pipeline_pulse_2026-10-29.md`.
 
 #### Changed (optional Pulse source migration)
 
