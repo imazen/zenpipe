@@ -156,7 +156,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly-2026-10-12 # Match just api-doc
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-12 # Match just api-doc
       - uses: dtolnay/rust-toolchain@stable
       - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:

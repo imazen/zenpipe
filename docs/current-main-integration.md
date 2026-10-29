@@ -1,8 +1,21 @@
-# Current-main integration candidate
+# Paired-contract integration
 
-The isolated integration combines `io-drivers` 5248cabf with main e1875055.
-Neither parent is replaced or rewritten. The combined tree is not qualified and
-must not be merged while conflicts or validation failures remain.
+The integration retains the I/O/Pulse branch and current-main behavior, including
+the media-suite shell. Local qualification covers the portable codec graph,
+publication, pipeline and ImageJob runtime, strict lint, API references, native
+consumer compilation, WASM library compilation and both fuzz roots. Detailed
+receipts and the initial failures follow below.
+
+This is not full media-suite or release qualification. Five historical HDR tests
+are placeholder panics, not codec witnesses (issue 114). Native browser Pulse
+cancellation, scheduling/memory measurements and platform CI remain separate.
+No crate has been published from this integration.
+
+## Initial source integration
+
+The isolated integration first combined `io-drivers` 5248cabf with main e1875055,
+then retained main 704e55c0. Neither parent's work was replaced or rewritten.
+The following initial observations are preserved with their later qualification.
 
 Source resolutions so far preserve both optional Pulse and current-main behavior:
 
@@ -159,3 +172,9 @@ no assertions were changed. Full API generation/check now also covers this
 consumer feature surface, including ImageJob and tokio_bridge, rather than
 hiding it behind the default-only reference. Final lint/API batch: rc0, 36
 seconds, peak RSS 0.88 GiB, minimum available 13297 MiB.
+
+Final eacdfc67 checks pass both independent fuzz roots with `--all-targets
+--locked`, all nine trace-quality controls, and workspace formatting. The
+resource wrapper reports rc0, 44 seconds, peak RSS 0.86 GiB, minimum available
+13189 MiB. The final workflow correction selects the pinned API nightly through
+the toolchain action's input (not a nonexistent date-named action ref).
