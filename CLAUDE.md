@@ -183,3 +183,11 @@ worker with an explicit 8 MiB stack reservation on every platform; all benchmark
 bodies, assertions and zenbench process options are retained. This is a reservation,
 not a measured live-memory bound for the codecs. `just session-stack-check` runs
 the nested decode/crop/resize/filter path; Windows execution remains a CI gate.
+
+## Known Bugs: AVIF decode-only test helpers (fixed 2026-10-29)
+
+Seven strict-Clippy errors arose because encode-only helpers/imports in
+`zencodecs/tests/avif_capability.rs` compiled without `avif-encode`. Matching
+the helpers to their consuming tests preserves all tests and assertions.
+`just clippy-codec-subsets nodes-avif=avif-decode` passes at b7f8ff79; see
+benchmarks/optional_pipeline_pulse_2026-10-29.md.

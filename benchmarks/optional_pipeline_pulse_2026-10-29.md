@@ -100,3 +100,14 @@ Wrapper: rc0, 33 seconds, peak RSS 0.68 GiB, minimum available 14262 MiB,
 peak load 1.42; 3 GiB/two-job cap. This extends the focused Linux qualification;
 standalone metadata-services, full native profile/API, other locks and browser/
 platform gates remain unqualified. Earlier failed receipts remain unchanged.
+
+## Decode-only AVIF subset repair
+
+`b7f8ff79` scopes encode-only fixture imports/helpers to `avif-encode`. All
+existing tests, assertions and ignore attributes remain unchanged; decode-only
+fixture tests remain compiled. In an isolated export using the committed lock,
+`just clippy-codec-subsets nodes-avif=avif-decode` passes both zencodecs
+all-targets and zenpipe node-library strict Clippy. Wrapper: rc0,19s,peakRSS
+0.86GiB,minavail14251MiB,peakload0.60 (3G/jobs2,timeout900). This fixes
+CI's seven unused-helper/import errors; HEIC/full-profile and other locks remain
+unqualified. No native pixel or timing claim is derived from this compile check.
