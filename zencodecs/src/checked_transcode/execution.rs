@@ -140,13 +140,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                         boundary,
                         resolver,
                         self.request.preset,
-                        self.codecs.pulse(),
+                        Some(self.codecs.pulse()),
                     )
                     .inspect_err(|e| {
                         self.report.record(e.error().record());
                     })?;
                     self.report.record(record);
-                    held.resume(boundary.id(), action, self.codecs.pulse())?;
+                    held.resume(boundary.id(), action, Some(self.codecs.pulse()))?;
                     return Ok(false);
                 }
                 let Phase::Discovering(prepared) =
@@ -324,7 +324,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     &offers,
                     resolver,
                     self.request.preset,
-                    self.codecs.pulse(),
+                    Some(self.codecs.pulse()),
                 )
                 .inspect_err(|e| {
                     self.report.record(e.error().record());
@@ -346,7 +346,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 held.resume(
                     boundary.id(),
                     BoundaryAction::AdoptInterpretation,
-                    self.codecs.pulse(),
+                    Some(self.codecs.pulse()),
                 )?;
                 self.phase = Phase::Selected {
                     expected: expectation,
@@ -495,7 +495,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             _: &mut dyn DecodeRowSink,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<Progress, StepError<Self::Error>> {
             unreachable!("controlled path only")
         }
@@ -511,7 +511,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             _: &mut dyn DecodeRowSink,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<ControlledProgress, StepError<Self::Error>> {
             unreachable!("the test supplies the event being handled")
         }
@@ -519,7 +519,7 @@ mod tests {
             &mut self,
             _: BoundaryId,
             _: BoundaryAction,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<(), StepError<Self::Error>> {
             unreachable!()
         }

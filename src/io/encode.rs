@@ -191,8 +191,9 @@ impl<S: Source> RowSource for PipelineRows<S> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
-        self.fill(first, &mut rows, pulse)
+        // Resolve absence only for the private fill loop's checkpoints.
+        self.fill(first, &mut rows, pulse.unwrap_or(&zencodec::NoPulse))
     }
 }

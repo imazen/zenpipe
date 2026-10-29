@@ -356,7 +356,7 @@ impl<'a> TranscodeRequest<'a> {
         R: OperationPolicy + ?Sized,
         F: FnMut(
             &mut Held<'_>,
-            &dyn zencodec::Pulse,
+            Option<&dyn zencodec::Pulse>,
             &mut evidence::Input<'_>,
         ) -> Result<Yield<ControlledEvent>, Cause>,
     {
@@ -374,7 +374,8 @@ impl<'a> TranscodeRequest<'a> {
             let mut held = ControlledStepper::new(decoder, &mut destination);
             loop {
                 execution.before_step();
-                let event = next(&mut held, codecs.pulse(), execution.input_mut())
+                // Lend the same operation control the set retains on native jobs.
+                let event = next(&mut held, Some(codecs.pulse()), execution.input_mut())
                     .inspect_err(|error| execution.step_error(error))?;
                 if execution.advance(&mut held, event, &mut frozen)? {
                     break;

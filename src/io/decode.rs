@@ -268,7 +268,7 @@ impl Stage {
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), StepError<ErasedError>> {
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
         decoder.resume(boundary, action, pulse)?;
@@ -288,7 +288,7 @@ impl ByteStepper for Stage {
     fn step(
         &mut self,
         input: Input<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<Produced>, StepError<ErasedError>> {
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
         self.queue.step_strips = 0;
@@ -455,7 +455,11 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
         loop {
             let produced = self
                 .cursor
-                .next(&mut self.source, &mut self.stage, self.pulse.as_pulse())
+                .next(
+                    &mut self.source,
+                    &mut self.stage,
+                    Some(self.pulse.as_pulse()),
+                )
                 .map_err(failed)?;
             match produced {
                 Yield::Output(Produced::Suspended(boundary)) => {
@@ -475,7 +479,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
                         return self.declare(layout);
                     }
                     self.stage
-                        .resume(boundary.id(), action, self.pulse.as_pulse())
+                        .resume(boundary.id(), action, Some(self.pulse.as_pulse()))
                         .map_err(failed)?;
                 }
                 Yield::Output(Produced::Decode) => {
@@ -514,7 +518,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
             &mut self.policy,
             // No legacy preset: the policy carries its own requirements.
             PolicySet::new(),
-            self.pulse.as_pulse(),
+            Some(self.pulse.as_pulse()),
         ) {
             Ok((action, record)) => {
                 self.report.record(record);
@@ -554,7 +558,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
     fn pull(&mut self) -> PipeResult<Option<(usize, u32)>> {
         if let Some((boundary, action)) = self.pending.take() {
             self.stage
-                .resume(boundary, action, self.pulse.as_pulse())
+                .resume(boundary, action, Some(self.pulse.as_pulse()))
                 .map_err(failed)?;
         }
         loop {
@@ -569,13 +573,17 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
             }
             let produced = self
                 .cursor
-                .next(&mut self.source, &mut self.stage, self.pulse.as_pulse())
+                .next(
+                    &mut self.source,
+                    &mut self.stage,
+                    Some(self.pulse.as_pulse()),
+                )
                 .map_err(failed)?;
             match produced {
                 Yield::Output(Produced::Suspended(boundary)) => {
                     let action = self.decide(boundary)?;
                     self.stage
-                        .resume(boundary.id(), action, self.pulse.as_pulse())
+                        .resume(boundary.id(), action, Some(self.pulse.as_pulse()))
                         .map_err(failed)?;
                 }
                 Yield::Output(Produced::Decode) => {}

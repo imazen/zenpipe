@@ -55,7 +55,7 @@ impl TranscodeRequest<'_> {
                     input: execution.input_mut(),
                 };
                 let event = cursor
-                    .next(&mut captured, &mut held, codecs.pulse())
+                    .next(&mut captured, &mut held, Some(codecs.pulse()))
                     .await
                     .map_err(|error| -> Cause { Box::new(DriverError(error)) })
                     .inspect_err(|error| execution.step_error(error))?;

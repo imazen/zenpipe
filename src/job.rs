@@ -995,7 +995,7 @@ impl<'a> ImageJob<'a> {
             &mut bytes,
             policy,
             options,
-            pulse.as_pulse(),
+            Some(pulse.as_pulse()),
         )
         .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
         Ok(EncodeResult {
