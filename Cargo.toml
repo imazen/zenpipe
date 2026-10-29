@@ -280,16 +280,16 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
 # Optional borrowed Pulse family; source alignment only, original locks retained.
 # Dependencies use version edges, so each consumer root selects this source.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
+zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
 # Transitive source prerequisites: dependency patch tables do not propagate.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
 hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8505e118f81dcb1d0367b26957" }
 # Optional borrowed Pulse JPEG source; consumer qualification remains unrun.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "b2495f7d65b9121c031a706f485b56d53ed0ab00" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a3cc90997c0553832243daba383ac3086dc98" }
 # Retained HEIC source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
 heic = { git = "https://github.com/imazen/heic", rev = "c67cffe461ade38e4ca1c9bb36175dc67e724c07" }

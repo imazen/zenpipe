@@ -9,6 +9,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Dependency integration
 
+- Align all five consumer graphs with owned decode completion in core `eeb1a450`
+  and JPEG `c73a3cc9`; existing publication and I/O gates pass without API edits.
+
 - Align all five consumer roots with paired core/pixels main and current GIF,
   HEIC and RAW revisions. The complete codec profile compiles with one core
   family; publication, I/O and nested RAW gain-map controls pass. See

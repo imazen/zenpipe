@@ -1,5 +1,24 @@
 # Publication qualification repairs
 
+## Current completion-owner graph (2026-10-29)
+
+All five portable roots now use core `eeb1a450` and JPEG `c73a3cc9`, retaining
+paired pixels `f23ac753`. This makes the shared owned decode completion and
+finished collector ownership APIs available without application API changes.
+The lock audit permits only zencodec, zencodec-io, zencodec-coroutine, zenmeta,
+zenjpeg and zenyuv changes; no unrelated package changed.
+
+An isolated export passed both locked fuzz builds, the existing publication
+suite (16 unit and 35 native tests), all I/O-check job tests, both strict Clippy
+commands and the codec-free checked-transcode build. No feature or assertion
+changed. This does not qualify the unresolved AVIF orientation expectations,
+all-codec metadata completeness or whole-operation memory limits. Prior
+experiments below retain their historical pins and failures.
+
+Receipt: `benchmarks/completion_consumer_2026-10-29.md`.
+
+## Earlier qualification history
+
 The optional borrowed Pulse source migration targets core `a7c2a6ca`. Controlled
 step/resume and cursor calls preserve their original optional input; a retained
 operation control is lent as `Some` without replacing the job's control. The
