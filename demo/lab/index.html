@@ -47,6 +47,7 @@ canvas {
 }
 .canvases { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .fig { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
 th { color: var(--text-dim); font-weight: 500; }
@@ -100,7 +101,7 @@ td .btn { padding: 1px 8px; font-size: 11px; }
     <select id="op-select"></select>
     <label for="estimate-select">Estimate</label>
     <select id="estimate-select">
-      <option value="known">known</option>
+      <option value="known">illustrative model estimate</option>
       <option value="unknown">unknown</option>
     </select>
     <label for="strict-check"><input type="checkbox" id="strict-check" checked> strict admission</label>
@@ -124,6 +125,7 @@ td .btn { padding: 1px 8px; font-size: 11px; }
 
 <section aria-labelledby="tasks-h">
   <h2 id="tasks-h">Tasks</h2>
+  <div class="table-scroll" role="region" aria-labelledby="tasks-h" tabindex="0">
   <table id="task-table">
     <thead><tr>
       <th scope="col">op</th><th scope="col">kind</th><th scope="col">gen</th>
@@ -132,6 +134,7 @@ td .btn { padding: 1px 8px; font-size: 11px; }
     </tr></thead>
     <tbody id="task-body"><tr><td colspan="8" class="notes">none</td></tr></tbody>
   </table>
+  </div>
 </section>
 
 <section aria-labelledby="preview-h">

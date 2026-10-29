@@ -46,7 +46,7 @@ performance, or native-WASM behavior.
   dead backend refuses further submissions rather than queueing forever.
 - `teardown()` cancels owned tasks and reports unresolved ownership and
   held reservations honestly; a silent worker leaves tasks unresolved.
-- Estimate (empirical, or `unknown` — never zero) and declared
+- Estimate (illustrative model input, or `unknown` — never zero) and declared
   reservation are displayed as distinct values; observed peak is
   honestly "not measured". A payload's caller memory sits outside the
   declared reservation while queued; it is handed to the backend on
@@ -72,3 +72,17 @@ No Rust/public API, no WASM, no Pulse/shared-cell cancellation bridge, no
 native adapter, no collection/video decode, no measured scheduling. Model
 cancellation is async-cooperative only; nothing claims a postMessage
 interrupts synchronous WASM.
+
+## Qualification (2026-10-29)
+
+34 deterministic Node controls and 10 Chromium browser controls cover this
+model slice. The populated mobile table initially overflowed; it now scrolls
+inside a keyboard-focusable region without enlarging the page. The generated
+fixture and invert preview have exact sample assertions.
+
+Browser qualification used Playwright 1.59.1 with an explicitly selected
+Chromium 156.0.8078.4 executable: its default installer rejected Ubuntu 26.04.
+The page's numeric estimate is illustrative, not empirically measured. Queued
+caller buffers, receipt history and the canvas are outside declared task
+reservations; this is not a whole-application memory cap. Native WASM and other
+browser engines remain unqualified.

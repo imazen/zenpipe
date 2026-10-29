@@ -117,3 +117,13 @@ test.describe('media lab contract shell', () => {
     expect(widths.body).toBeLessThanOrEqual(390);
   });
 });
+
+// Exercise the table after it contains the longest refusal, not just its headings.
+test('populated mobile layout stays within the viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/lab/');
+  await page.locator('#op-select').selectOption('tiff-collection');
+  await page.locator('#submit-btn').click();
+  await expect(page.locator('#task-body')).toContainText('unsupported');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});

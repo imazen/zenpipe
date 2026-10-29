@@ -12,7 +12,8 @@ import {
 
 const $ = id => document.getElementById(id);
 
-// Empirical guess vs booked bound, kept visibly different.
+// Illustrative model estimate and declared reservation; neither is measured
+// peak memory nor a proven bound.
 const ESTIMATE_BYTES = 2 * FIXTURE_BYTES;
 const RESERVE_BYTES = 3 * FIXTURE_BYTES;
 
@@ -94,7 +95,7 @@ function renderEstimatePreview() {
   $('mem-estimate').innerHTML =
     est == null
       ? '<span class="unknown">unknown</span> — not zero; shown honestly, never a bound'
-      : `known: ${est.toLocaleString()} B (empirical, not a bound)`;
+      : `model estimate: ${est.toLocaleString()} B (illustrative; not measured or a bound)`;
   $('reservation-preview').textContent =
     `declared reservation on submit: ${RESERVE_BYTES.toLocaleString()} B + 1 CPU token`;
 }
