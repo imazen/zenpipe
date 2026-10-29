@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 746 lines (supported surface) | zencodecs.features.txt 182 added (features: all,jp2-decode,metadata,checked-transcode-async) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
+# files: zencodecs.txt 754 lines (supported surface) | zencodecs.features.txt 195 added (features: all,jp2-decode,metadata,checked-transcode-async) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                21
-#   pub types (struct/enum/trait/alias)        57
+#   pub types (struct/enum/trait/alias)        58
 #   pub consts/statics                         10
 #   free functions                             37
-#   inherent methods                          254
-#   struct fields                             128
+#   inherent methods                          255
+#   struct fields                             131
 #   enum variants                             119
-#   re-exports                                119
+#   re-exports                                121
 #   trait roster entries (type × trait)       102
 #   conditional trait impls (verbatim)          1
 #   auto-trait-complete types                  24
-#   auto-trait exceptions                       6
+#   auto-trait exceptions                       7
 #
 # per-module pub lines:
-#   (root)                          332
+#   (root)                          339
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -40,7 +40,7 @@
 #   trace                            48
 #   transcode                        43
 
-## items (711 lines)
+## items (718 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -88,6 +88,7 @@ pub use JxlDecoderConfig
 pub use Limits
 pub use Metadata
 pub use MetadataPolicy
+pub use NoPulse
 pub use Orientation
 pub use OrientationHint
 pub use OutputInfo
@@ -102,10 +103,11 @@ pub use PnmDecodeJob
 pub use PnmDecoderConfig
 pub use PnmEncodeJob
 pub use PnmEncoderConfig
+pub use Pulse
 pub use ResourceEstimate
+pub use SharedPulse
 pub use SourceColor
 pub use Stop
-pub use StopToken
 pub use WebpDecodeJob
 pub use WebpDecoderConfig
 pub use WebpEncodeJob
@@ -552,6 +554,10 @@ pub fn policy::CodecPolicy::with_allowed_formats(self, FormatSet) -> Self
 pub fn policy::CodecPolicy::with_disabled(self, codec_id::CodecId) -> Self
 pub fn policy::CodecPolicy::with_fallback(self, bool) -> Self
 pub fn policy::CodecPolicy::with_preference(self, zencodec::format::ImageFormat, &[codec_id::CodecId]) -> Self
+pub struct ConfiguredJob
+pub ConfiguredJob::format: zencodec::format::ImageFormat
+pub ConfiguredJob::job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>
+pub ConfiguredJob::supported: &'static [zenpixels::descriptor::PixelDescriptor]
 pub struct DecodeRequest<'a>
 pub fn DecodeRequest<'a>::animation_frame_decoder(self) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>>
 pub fn DecodeRequest<'a>::build_streaming_decoder(self) -> Result<alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'static)>>
@@ -570,8 +576,8 @@ pub fn DecodeRequest<'a>::with_gain_map_render(self, zencodec::gainmap::GainMapR
 pub fn DecodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits) -> Self
 pub fn DecodeRequest<'a>::with_orientation(self, zencodec::orientation::OrientationHint) -> Self
 pub fn DecodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
+pub fn DecodeRequest<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn DecodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
-pub fn DecodeRequest<'a>::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub struct EffortPlan [also: estimate]
 pub EffortPlan::effort: core::option::Option<u32>
 pub EffortPlan::estimate: zencodec::estimate::ResourceEstimate
@@ -583,6 +589,7 @@ pub EncodeBudget::wall_ms: core::option::Option<u64>
 pub struct EncodeRequest<'a>
 pub fn EncodeRequest<'a>::animation_frame_encoder(self, u32, u32) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>>
 pub fn EncodeRequest<'a>::auto() -> Self
+pub fn EncodeRequest<'a>::build_job(self, u32, u32) -> Result<ConfiguredJob>
 pub fn EncodeRequest<'a>::build_streaming_encoder(self, u32, u32) -> Result<StreamingEncoder>
 pub fn EncodeRequest<'a>::encode(self, zenpixels::buffer::PixelSlice<'_>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_bgra8(self, imgref::ImgRef<'_, rgb::formats::bgra::Bgra<u8>>) -> Result<zencodec::output::EncodeOutput>
@@ -610,11 +617,11 @@ pub fn EncodeRequest<'a>::with_lossless(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_metadata(self, zencodec::metadata::Metadata) -> Self
 pub fn EncodeRequest<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
 pub fn EncodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
+pub fn EncodeRequest<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_quality_profile(self, quality::QualityProfile) -> Self
 pub fn EncodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
 pub fn EncodeRequest<'a>::with_speed(self, speed::EncodeSpeed) -> Self
-pub fn EncodeRequest<'a>::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub struct FormatDecision [also: decision]
 pub FormatDecision::format: zencodec::format::ImageFormat
 pub FormatDecision::hints: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
@@ -722,7 +729,7 @@ pub struct TranscodeSink<'a> [also: transcode]
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
 pub trait AnyEncoder: core::marker::Send + core::marker::Sync
-pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, core::option::Option<almost_enough::stop_token::StopToken>) -> Result<zencodec::output::EncodeOutput>
+pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, how_far::pulse::SharedPulse) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::encode_srgba8_imgref(&self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::format(&self) -> zencodec::format::ImageFormat
 pub fn AnyEncoder::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -733,7 +740,7 @@ pub trait SourceColorExt [also: color]
 pub fn SourceColorExt::is_srgb(&self) -> bool
 pub fn check_estimate_against_limits(&zencodec::estimate::ResourceEstimate, &zencodec::estimate::ImageCharacteristics, &zencodec::limits::ResourceLimits) -> Result<()> [also: estimate]
 pub fn decode_full_frame(&[u8], &AllowedFormats) -> Result<zencodec::output::DecodeOutput>
-pub fn decode_gain_map_source(&zencodec::gainmap::GainMapSource, core::option::Option<&zencodec::limits::ResourceLimits>, core::option::Option<almost_enough::stop_token::StopToken>, &AllowedFormats) -> Result<zencodec::gainmap::DecodedGainMap> [also: gainmap]
+pub fn decode_gain_map_source(&zencodec::gainmap::GainMapSource, core::option::Option<&zencodec::limits::ResourceLimits>, how_far::pulse::SharedPulse, &AllowedFormats) -> Result<zencodec::gainmap::DecodedGainMap> [also: gainmap]
 pub fn decode_info(&[u8]) -> Result<zencodec::info::ImageInfo>
 pub fn decode_info_with_config(&[u8], core::option::Option<&config::CodecConfig>) -> Result<zencodec::info::ImageInfo>
 pub fn estimate_decode(zencodec::format::ImageFormat, &zencodec::estimate::ImageCharacteristics, &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate [also: estimate]
@@ -789,6 +796,7 @@ impl<C> AnyEncoder for C where C: zencodec::traits::encoding::EncoderConfig, <<C
 
 24 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
+ConfiguredJob: !RefUnwindSafe !Send !Sync !UnwindSafe
 DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 EncodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 StreamingEncoder: !RefUnwindSafe !Sync !UnwindSafe

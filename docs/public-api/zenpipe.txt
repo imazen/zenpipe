@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1361 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1374 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
 #   pub types (struct/enum/trait/alias)       201
 #   pub consts/statics                         45
-#   free functions                             56
-#   inherent methods                          328
+#   free functions                             60
+#   inherent methods                          336
 #   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 21
-#   trait roster entries (type × trait)       361
+#   trait roster entries (type × trait)       362
 #   auto-trait-complete types                 124
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                          198
-#   animation                        18
+#   (root)                          202
+#   animation                        24
 #   bridge                           55
 #   cache                            30
 #   codec                             7
@@ -32,20 +32,20 @@
 #   format                           12
 #   graph                           115
 #   limits                           79
-#   lossless                          5
+#   lossless                          6
 #   ops                              14
 #   orchestrate                      39
 #   riapi                             2
 #   session                           1
 #   sidecar                          25
-#   sources                          80
+#   sources                          81
 #   srcset                            2
 #   tiles                            92
 #   trace                           169
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1175 lines)
+## items (1187 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -71,16 +71,22 @@ pub animation::FrameInfo::index: u32
 pub struct animation::FrameSink
 pub fn animation::FrameSink::begin_frame(&mut self)
 pub fn animation::FrameSink::finish_animation(self) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::FrameSink::finish_animation_with_pulse(self, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::FrameSink::finish_frame(&mut self, u32) -> PipeResult<()>
+pub fn animation::FrameSink::finish_frame_with_pulse(&mut self, u32, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
 pub fn animation::FrameSink::new(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat) -> Self
 pub fn animation::FrameSink::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
 pub struct animation::FrameSource
 pub fn animation::FrameSource::advance_frame(&mut self) -> PipeResult<bool>
+pub fn animation::FrameSource::advance_frame_with_pulse(&mut self, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<bool>
 pub fn animation::FrameSource::frame_count(&self) -> core::option::Option<u32>
 pub fn animation::FrameSource::frame_info(&self) -> core::option::Option<animation::FrameInfo>
 pub fn animation::FrameSource::loop_count(&self) -> core::option::Option<u32>
 pub fn animation::FrameSource::new(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>) -> PipeResult<Self>
+pub fn animation::FrameSource::new_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<Self>
 pub fn animation::transcode(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_pulse_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::transcode_with_stop(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::transcode_with_stop_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
 pub mod bridge
@@ -348,6 +354,7 @@ pub lossless::LosslessResult::data: alloc::vec::Vec<u8>
 pub lossless::LosslessResult::height: u32
 pub lossless::LosslessResult::width: u32
 pub fn lossless::try_lossless_jpeg(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, &dyn enough::Stop) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
+pub fn lossless::try_lossless_jpeg_with_pulse(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
 pub mod ops
 pub struct ops::MatteFlattenOp
 pub fn ops::MatteFlattenOp::new(u8, u8, u8) -> Self
@@ -407,6 +414,7 @@ pub fn Session::memory_budget(&self) -> usize
 pub fn Session::new(usize) -> Self
 pub fn Session::stream(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64) -> PipeResult<orchestrate::StreamingOutput>
 pub fn Session::stream_stoppable(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, &dyn enough::Stop) -> PipeResult<orchestrate::StreamingOutput>
+pub fn Session::stream_with_pulse(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<orchestrate::StreamingOutput>
 pub mod sidecar
 #[non_exhaustive] pub enum sidecar::SidecarKind
 pub sidecar::SidecarKind::GainMap
@@ -475,6 +483,7 @@ pub fn sources::MaterializedSource::from_data(alloc::vec::Vec<u8>, u32, u32, for
 pub fn sources::MaterializedSource::from_source(alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_checked(alloc::boxed::Box<dyn Source>, &limits::Limits) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_stoppable(alloc::boxed::Box<dyn Source>, &dyn enough::Stop) -> PipeResult<Self>
+pub fn sources::MaterializedSource::from_source_with_pulse(alloc::boxed::Box<dyn Source>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_with_transform(alloc::boxed::Box<dyn Source>, impl core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut format::PixelFormat)) -> PipeResult<Self>
 pub fn sources::MaterializedSource::into_data(self) -> alloc::vec::Vec<u8>
 pub fn sources::MaterializedSource::row(&self, u32) -> &[u8]
@@ -1167,6 +1176,7 @@ pub fn Session::memory_budget(&self) -> usize
 pub fn Session::new(usize) -> Self
 pub fn Session::stream(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64) -> PipeResult<orchestrate::StreamingOutput>
 pub fn Session::stream_stoppable(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, &dyn enough::Stop) -> PipeResult<orchestrate::StreamingOutput>
+pub fn Session::stream_with_pulse(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<orchestrate::StreamingOutput>
 pub struct SourceImageInfo [also: orchestrate]
 pub SourceImageInfo::exif_orientation: u8
 pub SourceImageInfo::format: format::PixelFormat
@@ -1207,12 +1217,14 @@ pub trait Sink: core::marker::Send
 pub fn Sink::consume(&mut self, &Strip<'_>) -> PipeResult<()>
 pub fn Sink::finish(&mut self) -> PipeResult<()>
 pub trait Source: core::marker::Send
+pub fn Source::color_context(&self) -> core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
 pub fn Source::format(&self) -> format::PixelFormat
 pub fn Source::height(&self) -> u32
 pub fn Source::next(&mut self) -> PipeResult<core::option::Option<Strip<'_>>>
 pub fn Source::width(&self) -> u32
 pub fn canonical_sort(&mut [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) [also: bridge, bridge::ordering]
 pub fn execute(&mut dyn Source, &mut dyn Sink) -> PipeResult<()>
+pub fn execute_with_pulse(&mut dyn Source, &mut dyn Sink, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
 pub fn execute_with_stop(&mut dyn Source, &mut dyn Sink, &dyn enough::Stop) -> PipeResult<()>
 pub fn full_registry() -> zennode::registry::NodeRegistry
 pub fn geometry_split(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) -> usize [also: cache]
@@ -1223,11 +1235,12 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (147 types)
+## trait impls (148 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
 PipeError: Debug, Display, Error, From<enough::reason::StopReason>
+alloc::boxed::Box<S>: Source
 animation::FrameInfo: Clone, Copy, Debug
 animation::FrameSink: Sink
 animation::FrameSource: Source

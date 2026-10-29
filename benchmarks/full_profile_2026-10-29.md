@@ -26,3 +26,10 @@ Receipt: `run-heavy: done rc=0 4s | peak-RSS 0.70GiB | min-avail 14875MiB | peak
 Prior runs preserve the stale None type error, one unmigrated direct fixture call,
 and a documentation-list Clippy error. No behavioral assertions were weakened.
 The two existing AVIF encode-orientation carrier failures remain unresolved.
+
+## Generated API surface
+
+Both `just api-doc` and `just api-doc-check` pass in an isolated export of
+`f6f8bf75`, with the complete configured feature profile. Generated public and
+internal snapshots are copied back verbatim. Receipt: `run-heavy: done rc=0 83s | peak-RSS 0.87GiB | min-avail 14057MiB | peak-load 1.49`.
+This qualifies generation and freshness, not platform runtime behavior.

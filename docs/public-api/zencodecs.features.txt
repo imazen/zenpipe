@@ -9,25 +9,25 @@
 
 ## summary
 #
-#   pub modules                                 4
-#   pub types (struct/enum/trait/alias)        15
+#   pub modules                                 5
+#   pub types (struct/enum/trait/alias)        17
 #   free functions                              3
-#   inherent methods                           54
+#   inherent methods                           58
 #   struct fields                              15
-#   enum variants                              52
+#   enum variants                              55
 #   re-exports                                 27
-#   trait roster entries (type × trait)        40
-#   auto-trait-complete types                   9
-#   auto-trait exceptions                       3
+#   trait roster entries (type × trait)        44
+#   auto-trait-complete types                  10
+#   auto-trait exceptions                       4
 #
 # per-module pub lines:
 #   (root)                           31
-#   checked_transcode                59
+#   checked_transcode                68
 #   config                           20
 #   gainmap                          16
-#   metadata                         44
+#   metadata                         45
 
-## items (167 lines)
+## items (177 lines)
 
 pub use GainMap
 pub use GainMapMetadata
@@ -39,6 +39,12 @@ pub use RawDecodeConfig
 pub use RawDecoderConfig
 pub use UltraHdrExtras
 pub mod checked_transcode
+pub mod checked_transcode::publication
+pub struct checked_transcode::publication::PublicationError
+pub fn checked_transcode::publication::PublicationError::emitted(&self) -> usize
+pub fn checked_transcode::publication::PublicationError::report(&self) -> &zencodec::operation::policy::OperationReport
+pub struct checked_transcode::publication::VerifiedOutput
+pub fn checked_transcode::publication::VerifiedOutput::write_to<W: core::io::write::Write>(self, &mut W, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::operation::Outcome<usize>, whereat::at::At<checked_transcode::publication::PublicationError>>
 #[non_exhaustive] pub enum checked_transcode::Refusal
 pub checked_transcode::Refusal::AlphaRetention
 pub checked_transcode::Refusal::AuxiliaryContent
@@ -48,6 +54,8 @@ pub checked_transcode::Refusal::GeometryOrOrientation
 pub checked_transcode::Refusal::HdrRendering
 pub checked_transcode::Refusal::IncompleteGainMapDiscovery
 pub checked_transcode::Refusal::InvalidStripRows
+pub checked_transcode::Refusal::LateMetadata
+pub checked_transcode::Refusal::MetadataCompleteness
 pub checked_transcode::Refusal::MissingDescriptor
 pub checked_transcode::Refusal::MissingEncoderFinish
 pub checked_transcode::Refusal::MissingImageInfo
@@ -82,13 +90,14 @@ pub fn checked_transcode::Error::report(&self) -> &zencodec::operation::policy::
 pub fn checked_transcode::Error::stage(&self) -> checked_transcode::Stage
 pub struct checked_transcode::TranscodeRequest<'a>
 pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async<S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, R: zencodec::operation::policy::PolicyResolver + ?core::marker::Sized
+pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
+pub fn checked_transcode::TranscodeRequest<'_>::transcode_for_publication<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<checked_transcode::publication::VerifiedOutput, whereat::at::At<checked_transcode::Error>>
 pub fn checked_transcode::TranscodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::preferring_fidelity(self, alloc::vec::Vec<zencodec::fidelity::Fidelity>) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::transcode(&self, &zencodec::set::CodecSet, &[u8]) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
 pub fn checked_transcode::TranscodeRequest<'a>::transcode_from_read_at<S: zencodec::source::ReadAt + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub fn checked_transcode::TranscodeRequest<'a>::transcode_from_read_at_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec::source::ReadAt + ?core::marker::Sized, R: zencodec::operation::policy::PolicyResolver + ?core::marker::Sized
-pub fn checked_transcode::TranscodeRequest<'a>::transcode_with<R: zencodec::operation::policy::PolicyResolver + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub fn checked_transcode::TranscodeRequest<'a>::transcode_from_read_at_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec::source::ReadAt + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
+pub fn checked_transcode::TranscodeRequest<'a>::transcode_with<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
 pub fn checked_transcode::TranscodeRequest<'a>::with_cms(self, &'a dyn zenpixels_convert::cms::PluggableCms) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::with_decode(self, zencodec::operation::DecodeRequest) -> Self
 pub fn checked_transcode::TranscodeRequest<'a>::with_encode_policy(self, zencodec::policy::EncodePolicy) -> Self
@@ -148,6 +157,7 @@ pub metadata::Error::Cancelled
 pub metadata::Error::Limit(&'static str)
 pub metadata::Error::Malformed(&'static str)
 pub metadata::Error::Service(&'static str)
+pub metadata::Error::Stopped(enough::reason::StopReason)
 pub metadata::Error::Unsupported(&'static str)
 pub struct metadata::Entry
 pub fn metadata::Entry::action(&self) -> metadata::Action
@@ -167,15 +177,15 @@ pub fn metadata::ScrubRequest<'a>::with_icc_normalization(self, bool) -> Self
 pub fn metadata::ScrubRequest<'a>::with_jpeg_reconstruction_removal(self, bool) -> Self
 pub fn metadata::ScrubRequest<'a>::with_metadata_limit(self, usize) -> Self
 pub fn metadata::ScrubRequest<'a>::with_policy(self, zencodec::metadata::MetadataPolicy) -> Self
+pub fn metadata::ScrubRequest<'a>::with_pulse(self, core::option::Option<&'a dyn how_far::pulse::Pulse>) -> Self
 pub fn metadata::ScrubRequest<'a>::with_services(self, &'a dyn metadata::Services) -> Self
-pub fn metadata::ScrubRequest<'a>::with_stop(self, &'a dyn enough::Stop) -> Self
 pub fn metadata::ScrubRequest<'a>::with_xmp_editing(self, bool) -> Self
 pub trait metadata::Services
-pub fn metadata::Services::compress(&self, metadata::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::decompress(&self, metadata::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::merge_xmp(&self, &[u8], &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::normalize_icc(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
-pub fn metadata::Services::rewrite_xmp(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
+pub fn metadata::Services::compress(&self, metadata::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
+pub fn metadata::Services::decompress(&self, metadata::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
+pub fn metadata::Services::merge_xmp(&self, &[u8], &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
+pub fn metadata::Services::normalize_icc(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
+pub fn metadata::Services::rewrite_xmp(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
 pub enum GainMapSource<'a> [also: gainmap]
 pub GainMapSource::Precomputed
 pub GainMapSource::Precomputed::gain_map: &'a ultrahdr_core::types::GainMap
@@ -197,12 +207,14 @@ pub fn EncodeRequest<'a>::with_gainmap_quality(self, f32) -> Self
 pub fn decode_gain_map(&[u8], &AllowedFormats) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
 pub fn transcode_to_hdr_pq_png(&[u8], &AllowedFormats, core::option::Option<f32>) -> Result<core::option::Option<alloc::vec::Vec<u8>>> [also: gainmap]
 
-## trait impls (11 types)
+## trait impls (13 types)
 
 checked_transcode::Error: Debug, Display, Error
 checked_transcode::Refusal: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 checked_transcode::Stage: Clone, Copy, Debug, Eq, PartialEq
 checked_transcode::TranscodeRequest<'a>: Clone
+checked_transcode::publication::PublicationError: Debug, Display, Error
+checked_transcode::publication::VerifiedOutput: Debug
 gainmap::DecodedGainMap: Clone, Debug
 metadata::Action: Clone, Copy, Debug, Eq, PartialEq
 metadata::Compression: Clone, Copy, Debug, Eq, PartialEq
@@ -213,7 +225,8 @@ metadata::ScrubRequest<'a>: Clone
 
 ## auto traits
 
-9 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+10 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 checked_transcode::Error: !RefUnwindSafe !UnwindSafe
 checked_transcode::TranscodeRequest<'a>: !RefUnwindSafe !UnwindSafe
+checked_transcode::publication::PublicationError: !RefUnwindSafe !UnwindSafe
 metadata::ScrubRequest<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
