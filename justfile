@@ -332,3 +332,8 @@ processing-pulse-check:
     cargo clippy -p zenpipe --no-default-features --features std,lossless-jpeg --lib --test lossless_jpeg --locked -- -D warnings
     cargo test -p zenfilters --lib pipeline::tests --locked
     cargo clippy -p zenfilters --lib --locked -- -D warnings
+
+# Native consumer gate after portable AVIF source alignment.
+avif-consumer-contract-check:
+    cargo test --locked -p zencodecs --no-default-features --features avif-decode,avif-encode --test avif_capability -- --test-threads=1
+    cargo clippy --locked -p zencodecs --no-default-features --features avif-decode,avif-encode --lib --test avif_capability -- -D warnings

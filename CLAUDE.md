@@ -204,3 +204,9 @@ zenravif dependency commit, the consuming zenavif pin, and all zenpipe graph roo
 (including the direct parser edge), followed by native encode/readback controls.
 No pixel defect is established by this source-identity finding alone. Existing
 zenavif issue53 concerns historical serializer behavior, not proof of this fix.
+
+Resolution on the optional Pulse branch: zenravif `52bb0243` makes the serializer
+a registry edge; zenavif `f0a3919e` and all five application-root serializer
+patches now agree. Both source/family validators pass on `96972529`; the prior
+failure remains recorded above. Native consumer controls remain a separate gate.
+See `benchmarks/portable_serializer_2026-10-29.md`.
