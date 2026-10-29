@@ -196,12 +196,15 @@ threading, hdr directives, compat security. Verified remaining:
   raw-decode set, `metadata_scrub`, `tools/metadata-services` and zenfilters,
   and the Clippy extra for zenfilters, from running.
 
-## Known Bugs: single-codec subset warnings (fixed 2026-10-28)
+## Known Bugs: single-codec subset warnings (2026-10-29)
 
 zenpipe `std,nodes-jxl` builds zencodecs with only `zennode,jxl-decode`; that
 subset had 13 strict-Clippy warnings (encoder-only helpers and the owned
-streaming shim compiled without a user). `just clippy-codec-subsets` lints every
-`nodes-<codec>` subset; pass NODE=CODEC pairs to check a few.
+streaming shim compiled without a user). Main integration exposed the same
+class of warnings for AVIF/HEIC/JXL decode-only nodes. Native encoder helpers
+now compile only with an encoder feature; no lint allowance is added.
+`just clippy-codec-subsets` lints every `nodes-<codec>` subset; pass NODE=CODEC
+pairs to check a few. Qualification is recorded in docs/current-main-integration.md.
 
 ## Known Bugs: optional decoder limits warning (fixed 2026-10-25)
 

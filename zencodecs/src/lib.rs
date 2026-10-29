@@ -152,6 +152,16 @@ pub(crate) mod quality_calibration;
 mod registry;
 #[cfg(feature = "riapi")]
 pub mod riapi_parse;
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 mod row_contract;
 pub mod select;
 pub mod speed;

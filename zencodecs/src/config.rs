@@ -178,6 +178,16 @@ pub struct CodecConfig {
 
 impl CodecConfig {
     /// Only overrides for the selected encoder suppress the generic preference.
+    #[cfg(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "tiff",
+    ))]
     pub(crate) fn has_encode_override(&self, format: crate::ImageFormat) -> bool {
         match format {
             #[cfg(feature = "jpeg")]

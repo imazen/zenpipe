@@ -24,10 +24,30 @@
 use alloc::sync::Arc;
 
 use zencodec::Metadata;
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 use zencodec::encode::EncodeCapabilities;
 use zenpixels::{Cicp, ColorPrimaries, PixelDescriptor, PixelSlice, TransferFunction};
 
 /// What an encode does to fit its colour description to the target.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 pub(crate) enum ColorFit {
     /// Encode the pixels and metadata unchanged.
     Keep,
@@ -56,6 +76,16 @@ fn is_srgb_cicp(c: Cicp) -> bool {
 
 /// Convert to sRGB from `from`; without the `cms` feature an ICC source that
 /// needs a colour-management engine is dropped instead (pixels unchanged).
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 fn convert(from: Source, metadata: Metadata) -> ColorFit {
     #[cfg(not(feature = "cms"))]
     if matches!(from, Source::Icc(_)) {
@@ -66,6 +96,16 @@ fn convert(from: Source, metadata: Metadata) -> ColorFit {
 
 /// Decide how to fit `metadata`'s colour description to a target with
 /// `caps`.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 pub(crate) fn plan(metadata: Option<&Metadata>, caps: &EncodeCapabilities) -> ColorFit {
     let Some(meta) = metadata else {
         return ColorFit::Keep;
@@ -126,6 +166,16 @@ pub(crate) fn plan(metadata: Option<&Metadata>, caps: &EncodeCapabilities) -> Co
     ColorFit::Keep
 }
 
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 impl ColorFit {
     /// Under [`EncodePolicy::strict`](zencodec::encode::EncodePolicy::strict),
     /// refuse a fit that loses colour: a conversion or a dropped description.
@@ -159,6 +209,16 @@ fn source_descriptor(desc: PixelDescriptor, from: &Source) -> PixelDescriptor {
 }
 
 /// Convert `pixels` from `from` to sRGB in the same pixel format.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 pub(crate) fn convert_to_srgb(
     pixels: &PixelSlice<'_>,
     from: &Source,

@@ -748,11 +748,31 @@ pub(crate) fn build_job(format: ImageFormat, params: EncodeParams<'_>) -> Result
 /// Converts each strip to sRGB before the codec sees it, for a target that
 /// cannot carry the source colour (see `crate::color_fit`). The conversion is
 /// per pixel, so strip by strip gives what a whole-image conversion gives.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 struct ColorConvertingEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
     from: crate::color_fit::Source,
 }
 
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 impl ColorConvertingEncoder {
     fn convert(
         &self,
@@ -762,6 +782,16 @@ impl ColorConvertingEncoder {
     }
 }
 
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
     fn preferred_strip_height(&self) -> u32 {
         self.inner.preferred_strip_height()
@@ -1002,6 +1032,16 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
 /// arrives at `finish` ([`OutputTiming::AT_FINISH`]).
 ///
 /// [`OutputTiming::AT_FINISH`]: zencodec::encode::OutputTiming::AT_FINISH
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 struct BufferedRowEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
     limits: Limits,
@@ -1015,6 +1055,16 @@ struct BufferedRowEncoder {
     filled: u32,
 }
 
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 impl BufferedRowEncoder {
     fn new(inner: Box<dyn zencodec::encode::DynEncoder + Send>, limits: Limits) -> Self {
         Self {
@@ -1043,6 +1093,16 @@ impl BufferedRowEncoder {
     }
 }
 
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "tiff",
+))]
 impl zencodec::encode::DynEncoder for BufferedRowEncoder {
     fn preferred_strip_height(&self) -> u32 {
         self.inner.preferred_strip_height()

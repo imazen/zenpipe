@@ -178,3 +178,23 @@ Final eacdfc67 checks pass both independent fuzz roots with `--all-targets
 resource wrapper reports rc0, 44 seconds, peak RSS 0.86 GiB, minimum available
 13189 MiB. The final workflow correction selects the pinned API nightly through
 the toolchain action's input (not a nonexistent date-named action ref).
+
+## Decode-only subset qualification (2026-10-29)
+
+Main CI exposed encoder helpers with no callers in AVIF, HEIC and JPEG XL
+decode-only builds. The helpers now follow the same encoder-feature gates as
+the dispatch functions that instantiate them. Public signatures, runtime
+contracts and strict lint thresholds are unchanged; no warning allowance was
+added. Bitmap subfeatures all imply the common `bitmaps` feature.
+
+At source `6ceb39c0`, an isolated locked export passed the unchanged
+`just clippy-codec-subsets` matrix: all nine manifest-derived node codec pairs,
+with both zencodecs all-target and zenpipe node-library checks for each.
+Wrapper: rc0, 94 seconds, peak RSS 0.87 GiB, minimum available 13400 MiB.
+The codec-free all-target strict Clippy control also passes (rc0, 5 seconds,
+peak RSS 0.25 GiB, minimum available 13975 MiB). These are build resource
+figures, not codec-memory measurements.
+
+This qualifies feature selection/compilation, not runtime image correctness
+or browser cancellation. The existing native codec and application gates
+remain required.
