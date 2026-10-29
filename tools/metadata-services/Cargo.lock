@@ -639,7 +639,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=efa533d010b060d40c375923f2d569ecbe2325fc#efa533d010b060d40c375923f2d569ecbe2325fc"
+source = "git+https://github.com/imazen/zenjxl?rev=a3a93aaf068c589675aa5c63090ac9d07f24d07c#a3a93aaf068c589675aa5c63090ac9d07f24d07c"
 dependencies = [
  "enough",
  "imgref",
@@ -801,7 +801,7 @@ source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc13
 [[patch.unused]]
 name = "zenbitmaps"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenbitmaps?rev=5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c#5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c"
+source = "git+https://github.com/imazen/zenbitmaps?rev=9d71b356f290f6438b810cc53d99f29301f6d247#9d71b356f290f6438b810cc53d99f29301f6d247"
 
 [[patch.unused]]
 name = "zencodec-coroutine"
@@ -881,4 +881,4 @@ source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f
 [[patch.unused]]
 name = "zenwebp"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenwebp?rev=d5893295cc7562002017980b44753bf3237a89f3#d5893295cc7562002017980b44753bf3237a89f3"
+source = "git+https://github.com/imazen/zenwebp?rev=2e58d1e54a285bb3ae2db629cc2a3202411cd08e#2e58d1e54a285bb3ae2db629cc2a3202411cd08e"
