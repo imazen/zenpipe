@@ -79,3 +79,12 @@ Validation in an export outside workspace path patches: both fuzz roots passed
 passed 57 tests and strict all-target Clippy. Wrapper: rc=0, 56 seconds, peak RSS
 0.86 GiB, minimum available 10621 MiB. Existing AVIF orientation failures are
 unchanged and are not covered by this repair.
+
+## Ranked JPEG precision rollout
+
+All five portable graphs now pin JPEG b2495f7d, fixing a later F32 preference
+overriding an earlier supported U8 preference. Each lock changes only zenjpeg
+and zenyuv source identities. The unchanged locked fuzz checks, publication
+16+35 tests/Clippy and io-check 57 tests/Clippy pass: rc0, 38s, peak RSS 0.68 GiB,
+minimum available 10865 MiB. This does not resolve the separate AVIF orientation
+representation expectations.
