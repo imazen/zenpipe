@@ -145,3 +145,20 @@ assume every JXL frame is independently displayable.
   No Rust/API design, broad repins, test weakening or independent heavy jobs.
   Root reviews the diff and test receipts before landing. Use the existing editor
   and worker abstractions; leave native integration visibly unqualified until run.
+
+## Current integration gates (source review, 2026-10-29)
+
+These observations describe the existing editor, not a qualified replacement.
+
+| Existing implementation | Integration gate |
+|---|---|
+| [`worker.js`](../demo/worker.js) initializes up to eight Rayon threads per WASM instance; [`worker-pool.js`](../demo/js/worker-pool.js) independently creates two to four export workers. | Admit a global thread budget before creating instances. Include the interactive worker; a per-worker limit is not a global limit. |
+| `ExportPool.run` cancellation terminates every worker in that pool. | Keep the new controller's operation ownership explicit; a cancellation must not stop an unrelated operation sharing a pool. Qualify any production pool change separately. |
+| `worker.js` loads a mock editor when WASM loading fails, and image decoding has a browser fallback. | Native qualification checks both processing backend and decoder identity. A loaded WASM editor alone does not prove native source decoding. |
+| [`zeneditor/src/state.rs`](../zeneditor/src/state.rs) has internal atomic render cancellation, but the browser worker executes synchronous WASM calls. | Prove the caller can signal the running computation without waiting for that worker's event loop. Existing native atomic storage alone is not this bridge. |
+| [`demo/crate/src/lib.rs`](../demo/crate/src/lib.rs) is a thin binding over zeneditor. | Keep new browser transport here; retain codec policy, inventory and rendering decisions in the existing Rust layers. |
+
+The first shell tests are transport/accounting controls. They do not establish
+Rayon scaling, native cancellation latency, actual heap peaks, HTTP efficiency,
+codec support, or TIFF/JXL composition correctness. Those claims require the
+corresponding native slice and its independent controls.
