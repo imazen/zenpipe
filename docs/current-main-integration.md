@@ -129,3 +129,10 @@ Wrapper receipt: rc0, 57 seconds, peak RSS 0.56 GiB, minimum available
 13599 MiB. This proves target compilation, not browser execution or native
 Pulse cancellation inside WASM. No runtime or pixel guarantee follows from
 that compile gate. Publication tests and API generation are the next gates.
+
+Retained-publication validation on the resolved export passes 16 unit controls,
+35 native controls, strict Clippy (including both public examples), and the
+codec-free check. Full API snapshot generation and a subsequent check both
+pass; the generated snapshots are retained in docs/public-api. Wrapper receipt
+for that batch: rc0, 246 seconds, peak RSS 0.88 GiB, minimum available 13122 MiB.
+The broad pipeline runtime and browser-native execution remain separate gates.

@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1374 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1380 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       201
 #   pub consts/statics                         45
 #   free functions                             60
-#   inherent methods                          336
+#   inherent methods                          342
 #   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 21
@@ -27,7 +27,7 @@
 #   animation                        24
 #   bridge                           55
 #   cache                            30
-#   codec                             7
+#   codec                            13
 #   execute_layout                   15
 #   format                           12
 #   graph                           115
@@ -45,7 +45,7 @@
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1187 lines)
+## items (1193 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -161,9 +161,15 @@ pub struct codec::DecoderSource<'a>
 pub fn codec::DecoderSource<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>) -> PipeResult<Self>
 pub fn codec::DecoderSource<'a>::with_format(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>, format::PixelFormat) -> PipeResult<Self>
 pub struct codec::EncoderSink<'a>
+pub fn codec::EncoderSink<'a>::begin(&mut self, u32, u32) -> PipeResult<zencodec::output::OutputTiming>
+pub fn codec::EncoderSink<'a>::consume_output(&mut self, usize)
 pub fn codec::EncoderSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + core::marker::Send + 'a)>, format::PixelFormat) -> Self
+pub fn codec::EncoderSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
+pub fn codec::EncoderSink<'a>::pending_output(&self) -> &[u8]
 pub fn codec::EncoderSink<'a>::preferred_strip_height(&self) -> u32
 pub fn codec::EncoderSink<'a>::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
+pub fn codec::EncoderSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn codec::EncoderSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> PipeResult<()> + core::marker::Send + 'a) -> Self
 pub mod execute_layout
 pub fn execute_layout::canvas_color_to_pixel(&zenlayout::constraint::CanvasColor, zenpixels::descriptor::PixelDescriptor) -> alloc::vec::Vec<u8>
 pub fn execute_layout::config_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> zenresize::pixel::ResizeConfig

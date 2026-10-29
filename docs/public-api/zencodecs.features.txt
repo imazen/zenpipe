@@ -1,5 +1,5 @@
 # zencodecs public API — additions from non-default features
-# features: all,jp2-decode,metadata,checked-transcode-async
+# features: all,jp2-decode,metadata,tonemap,checked-transcode-async
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -10,24 +10,24 @@
 ## summary
 #
 #   pub modules                                 5
-#   pub types (struct/enum/trait/alias)        17
+#   pub types (struct/enum/trait/alias)        12
 #   free functions                              3
-#   inherent methods                           58
+#   inherent methods                           47
 #   struct fields                              15
-#   enum variants                              55
-#   re-exports                                 27
-#   trait roster entries (type × trait)        44
-#   auto-trait-complete types                  10
+#   enum variants                              42
+#   re-exports                                 33
+#   trait roster entries (type × trait)        29
+#   auto-trait-complete types                   6
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           31
+#   (root)                           35
 #   checked_transcode                68
 #   config                           20
 #   gainmap                          16
-#   metadata                         45
+#   metadata                         18
 
-## items (177 lines)
+## items (154 lines)
 
 pub use GainMap
 pub use GainMapMetadata
@@ -141,36 +141,15 @@ pub gainmap::DecodedGainMap::source_format: zencodec::format::ImageFormat
 pub fn gainmap::DecodedGainMap::params(&self) -> zencodec::gainmap::GainMapParams
 pub fn gainmap::DecodedGainMap::to_gain_map_info(&self) -> zencodec::gainmap::GainMapInfo
 pub mod metadata
-#[non_exhaustive] pub enum metadata::Action
-pub metadata::Action::Keep
-pub metadata::Action::OpaqueIcc
-pub metadata::Action::OpaqueImageData
-pub metadata::Action::Remove
-pub metadata::Action::RemoveJpegReconstruction
-pub metadata::Action::Rewrite
-#[non_exhaustive] pub enum metadata::Compression
-pub metadata::Compression::Brotli
-pub metadata::Compression::Zlib
-#[non_exhaustive] pub enum metadata::Error
-pub metadata::Error::Allocation
-pub metadata::Error::Cancelled
-pub metadata::Error::Limit(&'static str)
-pub metadata::Error::Malformed(&'static str)
-pub metadata::Error::Service(&'static str)
-pub metadata::Error::Stopped(enough::reason::StopReason)
-pub metadata::Error::Unsupported(&'static str)
-pub struct metadata::Entry
-pub fn metadata::Entry::action(&self) -> metadata::Action
-pub fn metadata::Entry::carrier(&self) -> &'static str
-pub fn metadata::Entry::source_range(&self) -> core::ops::range::Range<usize>
-pub struct metadata::Plan<'a>
-pub fn metadata::Plan<'a>::chunks(&self) -> impl core::iter::traits::iterator::Iterator<Item = &[u8]>
-pub fn metadata::Plan<'a>::output_len(&self) -> usize
-pub fn metadata::Plan<'a>::report(&self) -> &[metadata::Entry]
-pub fn metadata::Plan<'a>::to_vec(&self) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
+pub use metadata::Action
+pub use metadata::Compression
+pub use metadata::Entry
+pub use metadata::Error
+pub use metadata::Plan
+pub use metadata::Services
 pub struct metadata::ScrubRequest<'a>
 pub fn metadata::ScrubRequest<'a>::new(&'a [u8]) -> Self
-pub fn metadata::ScrubRequest<'a>::plan(&self) -> core::result::Result<metadata::Plan<'a>, metadata::Error>
+pub fn metadata::ScrubRequest<'a>::plan(&self) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>
 pub fn metadata::ScrubRequest<'a>::with_byte_limits(self, usize, usize) -> Self
 pub fn metadata::ScrubRequest<'a>::with_carrier_limit(self, usize) -> Self
 pub fn metadata::ScrubRequest<'a>::with_icc_normalization(self, bool) -> Self
@@ -178,18 +157,15 @@ pub fn metadata::ScrubRequest<'a>::with_jpeg_reconstruction_removal(self, bool) 
 pub fn metadata::ScrubRequest<'a>::with_metadata_limit(self, usize) -> Self
 pub fn metadata::ScrubRequest<'a>::with_policy(self, zencodec::metadata::MetadataPolicy) -> Self
 pub fn metadata::ScrubRequest<'a>::with_pulse(self, core::option::Option<&'a dyn how_far::pulse::Pulse>) -> Self
-pub fn metadata::ScrubRequest<'a>::with_services(self, &'a dyn metadata::Services) -> Self
+pub fn metadata::ScrubRequest<'a>::with_services(self, &'a dyn zencodec::metadata_rewrite::Services) -> Self
 pub fn metadata::ScrubRequest<'a>::with_xmp_editing(self, bool) -> Self
-pub trait metadata::Services
-pub fn metadata::Services::compress(&self, metadata::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::decompress(&self, metadata::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::merge_xmp(&self, &[u8], &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata::Error>
-pub fn metadata::Services::normalize_icc(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
-pub fn metadata::Services::rewrite_xmp(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata::Error>
 pub enum GainMapSource<'a> [also: gainmap]
 pub GainMapSource::Precomputed
 pub GainMapSource::Precomputed::gain_map: &'a ultrahdr_core::types::GainMap
 pub GainMapSource::Precomputed::metadata: &'a ultrahdr_core::types::GainMapMetadata
+#[non_exhaustive] pub enum ToneMapPolicy
+pub ToneMapPolicy::Bt2408
+pub ToneMapPolicy::Preserve
 pub fn DecodeRequest<'a>::decode_gain_map(self) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
 pub fn DecodeRequest<'a>::extract_raw_preview(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn DecodeRequest<'a>::read_raw_metadata(&self) -> core::option::Option<zenraw::exif::ExifMetadata>
@@ -204,11 +180,13 @@ pub fn EncodeRequest<'a>::encode_ultrahdr_rgb_f32(self, imgref::ImgRef<'_, rgb::
 pub fn EncodeRequest<'a>::encode_ultrahdr_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::with_gain_map(self, gainmap::GainMapSource<'a>) -> Self
 pub fn EncodeRequest<'a>::with_gainmap_quality(self, f32) -> Self
+pub fn EncodeRequest<'a>::with_tone_map_policy(self, ToneMapPolicy) -> Self
 pub fn decode_gain_map(&[u8], &AllowedFormats) -> Result<(zencodec::output::DecodeOutput, core::option::Option<gainmap::DecodedGainMap>)>
 pub fn transcode_to_hdr_pq_png(&[u8], &AllowedFormats, core::option::Option<f32>) -> Result<core::option::Option<alloc::vec::Vec<u8>>> [also: gainmap]
 
-## trait impls (13 types)
+## trait impls (9 types)
 
+ToneMapPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 checked_transcode::Error: Debug, Display, Error
 checked_transcode::Refusal: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 checked_transcode::Stage: Clone, Copy, Debug, Eq, PartialEq
@@ -216,16 +194,11 @@ checked_transcode::TranscodeRequest<'a>: Clone
 checked_transcode::publication::PublicationError: Debug, Display, Error
 checked_transcode::publication::VerifiedOutput: Debug
 gainmap::DecodedGainMap: Clone, Debug
-metadata::Action: Clone, Copy, Debug, Eq, PartialEq
-metadata::Compression: Clone, Copy, Debug, Eq, PartialEq
-metadata::Entry: Clone, Debug, Eq, PartialEq
-metadata::Error: Clone, Debug, Display, Eq, Error, PartialEq
-metadata::Plan<'a>: Debug
 metadata::ScrubRequest<'a>: Clone
 
 ## auto traits
 
-10 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+6 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 checked_transcode::Error: !RefUnwindSafe !UnwindSafe
 checked_transcode::TranscodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 checked_transcode::publication::PublicationError: !RefUnwindSafe !UnwindSafe
