@@ -7,6 +7,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Dependency integration
+
+- Align all five consumer roots with paired core/pixels main and current GIF,
+  HEIC and RAW revisions. The complete codec profile compiles with one core
+  family; publication, I/O and nested RAW gain-map controls pass. See
+  `benchmarks/full_profile_2026-10-29.md` for scope and remaining failures.
+
 #### QUEUED BREAKING CHANGES
 
 - `PipelineRows` follows the core row-source trait's optional borrowed Pulse

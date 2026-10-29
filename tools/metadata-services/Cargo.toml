@@ -27,10 +27,10 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
 # Optional borrowed Pulse family; source alignment only, original locks retained.
 # Dependencies use version edges, so each consumer root selects this source.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
+zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e1c0ca5beef29a815a2a42c2d008fc46d99b4d17" }
 # Transitive source prerequisites: dependency patch tables do not propagate.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
@@ -39,12 +39,12 @@ hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e0bb92b4d0751526b64269ca6dcf25240e91d8bc" }
 # Retained HEIC source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-heic = { git = "https://github.com/imazen/heic", rev = "f97f1a82469b245e6bdd3ca2f42eabbc393b2734" }
+heic = { git = "https://github.com/imazen/heic", rev = "c67cffe461ade38e4ca1c9bb36175dc67e724c07" }
 # Optional-control TIFF source with the matching image-tiff resource-limit fork.
 # Consumer resolution, pixel parity and native qualification remain pending.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
 # The consumed ultrahdr-core package uses version edges for shared types.
 # Match the source selected by the optional-control codec roots.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
@@ -68,7 +68,7 @@ zensally = { git = "https://github.com/imazen/zensally" }
 zensally-zentract = { git = "https://github.com/imazen/zensally" }
 # Bitmap/QOI optional-control source; consumer qualification remains unrun.
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c" }
-zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "a258e93c5bc0b0a5624b521d7103a34b472c5ac9" }
 # AVIF/parse/MP4 optional-control source, matching the direct parser edge.
 # Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
 # This consumer graph is unbuilt.
@@ -77,7 +77,7 @@ zenavif = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d2
 zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
 # Retained RAW source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "e2c2be837670a8ecf9604eb025a6e9427878f6ca" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
