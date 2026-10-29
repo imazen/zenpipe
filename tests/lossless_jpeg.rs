@@ -1,6 +1,6 @@
 //! Integration test: lossless JPEG fast path for orient-only pipelines.
 //!
-//! Validates that `try_lossless_jpeg()` correctly short-circuits the full
+//! Validates that `try_lossless_jpeg_with_pulse()` correctly short-circuits the full
 //! decode->transform->encode path when all operations are pure orientation
 //! transforms, and falls through when non-lossless operations are present.
 //!
@@ -16,7 +16,7 @@ use zennode::{
 };
 
 use zenpipe::bridge::EncodeConfig;
-use zenpipe::lossless::try_lossless_jpeg;
+use zenpipe::lossless::try_lossless_jpeg_with_pulse;
 
 // ============================================================================
 // Helper: generate a small test JPEG (MCU-aligned for clean lossless transforms)
@@ -298,10 +298,11 @@ fn absent_lossless_stop_preserves_explicit_unstoppable_bytes() {
     let jpeg_data = generate_test_jpeg(64, 48);
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockRotate90Node::boxed()];
     let config = EncodeConfig::default();
-    let expected = try_lossless_jpeg(&jpeg_data, &nodes, &config, 1, Some(&enough::Unstoppable))
-        .unwrap()
-        .unwrap();
-    let absent = try_lossless_jpeg(&jpeg_data, &nodes, &config, 1, None)
+    let expected =
+        try_lossless_jpeg_with_pulse(&jpeg_data, &nodes, &config, 1, Some(&zencodec::NoPulse))
+            .unwrap()
+            .unwrap();
+    let absent = try_lossless_jpeg_with_pulse(&jpeg_data, &nodes, &config, 1, None)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -320,12 +321,12 @@ fn lossless_rotate90_produces_valid_jpeg() {
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockRotate90Node::boxed()];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("lossless transform should not error");
 
@@ -344,15 +345,15 @@ fn lossless_rotate90_produces_valid_jpeg() {
 fn lossless_matches_direct_transform() {
     let jpeg_data = generate_test_jpeg(64, 48);
 
-    // Run through try_lossless_jpeg with Rotate90.
+    // Run through try_lossless_jpeg_with_pulse with Rotate90.
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockRotate90Node::boxed()];
     let encode_config = EncodeConfig::default();
-    let lossless_result = try_lossless_jpeg(
+    let lossless_result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error")
     .expect("should take lossless path");
@@ -380,12 +381,12 @@ fn lossless_orient_auto_from_exif() {
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockOrientNode::with_exif(6)];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error")
     .expect("should take lossless path (orient with EXIF 6 = Rotate90)");
@@ -403,12 +404,12 @@ fn lossless_identity_returns_source_unchanged() {
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockOrientNode::with_exif(1)];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error")
     .expect("identity should still take lossless path");
@@ -428,12 +429,12 @@ fn lossless_composed_transforms() {
         vec![MockRotate90Node::boxed(), MockFlipHNode::boxed()];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error")
     .expect("composed transforms should be lossless");
@@ -461,12 +462,12 @@ fn lossless_fallback_when_resize_present() {
         vec![MockRotate90Node::boxed(), MockConstrainNode::boxed()];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error");
 
@@ -484,12 +485,12 @@ fn lossless_fallback_for_non_jpeg_source() {
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![MockRotate90Node::boxed()];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &png_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error");
 
@@ -506,12 +507,12 @@ fn lossless_fallback_for_non_jpeg_output() {
         ..Default::default()
     };
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error");
 
@@ -528,16 +529,31 @@ fn lossless_empty_nodes_returns_identity() {
     let nodes: Vec<Box<dyn zennode::NodeInstance>> = vec![];
     let encode_config = EncodeConfig::default();
 
-    let result = try_lossless_jpeg(
+    let result = try_lossless_jpeg_with_pulse(
         &jpeg_data,
         &nodes,
         &encode_config,
         1,
-        Some(&enough::Unstoppable),
+        Some(&zencodec::NoPulse),
     )
     .expect("should not error")
     .expect("empty pipeline should take lossless path (identity)");
 
     // Identity: output equals input.
     assert_eq!(result.data, jpeg_data);
+}
+
+#[test]
+fn cancelled_identity_transform_does_not_return_success() {
+    struct Stopped;
+    impl enough::Stop for Stopped {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            Err(enough::StopReason::Cancelled)
+        }
+    }
+    let jpeg = generate_test_jpeg(8, 8);
+    let pulse = zencodec::how_far::StopOnly::new(Stopped);
+    let result =
+        try_lossless_jpeg_with_pulse(&jpeg, &[], &EncodeConfig::default(), 1, Some(&pulse));
+    assert!(matches!(result, Err(zenpipe::PipeError::Cancelled)));
 }

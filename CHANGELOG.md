@@ -13,6 +13,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   input, and core row-driver calls now take `None` or `Some(pulse)`
   (`f7b7760c`). Retained-publication entry signatures stay unchanged.
 
+#### Added (optional processing controls)
+
+- Lossless JPEG and interleaved/planar filters accept optional Pulse; their
+  required-Stop methods are deprecated adapters. Pre-cancelled identity JPEG and
+  filter-free planar paths refuse before output changes. Filter errors retain
+  the stop reason. Native coefficient transforms still report no progress phases.
+
 #### Added (optional animation controls)
 
 - Animation transcode and frame operations accept optional borrowed Pulse and

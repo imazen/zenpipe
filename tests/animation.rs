@@ -883,8 +883,8 @@ mod pulse_forwarding {
         fn render_next_frame_to_sink(
             &mut self,
             pulse: Option<&dyn Pulse>,
-            sink: &mut dyn zencodec::sink::DecodeRowSink,
-        ) -> Result<Option<zencodec::cost::OutputInfo>, BoxedError> {
+            sink: &mut dyn zencodec::decode::DecodeRowSink,
+        ) -> Result<Option<zencodec::decode::OutputInfo>, BoxedError> {
             self.1
                 .lock()
                 .unwrap()

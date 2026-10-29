@@ -325,3 +325,10 @@ animation-pulse-check:
     cargo test -p zenpipe --no-default-features --test animation --locked
     cargo clippy -p zenpipe --no-default-features --lib --test animation --locked -- -D warnings
     cargo test -p zenpipe --no-default-features --features std,job,nodes-gif --lib animation_control_tests --locked
+
+# Lossless native JPEG and processing controls, including legacy adapters.
+processing-pulse-check:
+    cargo test -p zenpipe --no-default-features --features std,lossless-jpeg --test lossless_jpeg --locked
+    cargo clippy -p zenpipe --no-default-features --features std,lossless-jpeg --lib --test lossless_jpeg --locked -- -D warnings
+    cargo test -p zenfilters --lib pipeline::tests --locked
+    cargo clippy -p zenfilters --lib --locked -- -D warnings

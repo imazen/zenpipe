@@ -37,6 +37,13 @@ sources`.
 
 ## Known Bugs
 
+- Fixed in the optional Pulse candidate (2026-10-29): pipeline execution pulled
+  a source before checking cancellation and could finish a sink after a cancelled
+  empty pull. New effect controls require zero source reads for pre-cancellation
+  and no sink delivery/finish after cancellation during a pull. The 29-test limits
+  target and strict Clippy passed on 7c36d596/921a3f9f; session cache tests also pass.
+  Native animation/processing migration is separately qualified.
+
 - Fixed in source during publication qualification (2026-10-28): the browser
   fallback supported export but rejected `encode_preview`, leaving the preview
   hidden and its statistics empty. The worker now uses its existing canvas
