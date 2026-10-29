@@ -1,0 +1,34 @@
+[package]
+name = "zencodecs-jpeg-png-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+description = "Frozen consumer graph for zencodec's checked JPEG/PNG guide"
+
+# A consumer outside this repository: its own workspace, git revisions only.
+# [patch] applies only from the top-level workspace, so a git consumer of
+# zencodecs repeats the pins below; nothing points at a sibling checkout.
+[workspace]
+
+[dependencies]
+zencodec = { version = "0.2.0", features = ["std"] }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158", features = ["std", "tokio"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "874a3856841bfcf5f8e223ec62d75a159fa42895", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zenpixels = ">=0.2.16, <0.4.0"
+zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["cms-moxcms"] }
+
+[patch.crates-io]
+# zencodec 0.2 (the Pulse contract and shared encode-planning hooks) is unpublished.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158" }
+# The native JPEG/PNG review branches that implement it.
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }
+# zenjpeg's gain-map support; the published 0.6.0 still links zencodec 0.1.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "cc57c57abc491001c69ca85dab8213102df93825" }
+# Prepared row conversion with current color context. The guide (zencodec
+# 79676215) calls ConvertOptions::retain_channels, which the codecs' pin
+# (f8596aae) lacks; zenpixels output-plan 86d0e2d3 (PR 92, 15 commits on top of
+# f8596aae) has it.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }

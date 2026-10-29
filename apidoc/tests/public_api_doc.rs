@@ -7,10 +7,13 @@
 fn public_api_surface_docs_are_current() {
     zenutils_apidoc::ApiDoc::new()
         .workspace_dir("..")
-        // zenpipe --all-features does not build (stub codec features), so its
-        // full-feature default build is the supported surface: no features file.
-        .no_extra_section("zenpipe")
+        // Include the consumer job, native nodes, sync/Tokio I/O and schema APIs.
+        // Experimental tuner/face models and local-only node definitions are separate.
+        .pinned_features("zenpipe", "job,job-ultrahdr,nodes-all,io-tokio,json-schema")
         // Include codec, CMS, JPEG 2000, metadata and explicit HDR rendering.
-        .pinned_features("zencodecs", "all,jp2-decode,metadata,tonemap")
+        .pinned_features(
+            "zencodecs",
+            "all,jp2-decode,metadata,tonemap,checked-transcode-async",
+        )
         .run();
 }

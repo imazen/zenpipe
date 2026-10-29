@@ -450,3 +450,562 @@ mod imagejob_animation {
         assert_eq!(&er.bytes[..4], b"\x89PNG");
     }
 }
+
+/// A strip in another pixel format is refused, not sliced: an RGB8 row is
+/// shorter than an RGBA8 sink's row.
+#[test]
+fn frame_sink_refuses_a_strip_in_another_format() {
+    use zenpipe::Sink as _;
+    let mut sink = FrameSink::new(make_gif_encoder(4, 2), 4, 2, format::RGBA8_SRGB);
+    sink.begin_frame();
+    let rgb = vec![7u8; 4 * 2 * 3];
+    let strip = zenpixels::PixelSlice::new(&rgb, 4, 2, 4 * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let err = sink
+        .consume(&strip)
+        .expect_err("an RGB8 strip in an RGBA8 frame sink must be refused");
+    assert!(
+        matches!(err.error(), zenpipe::PipeError::FormatMismatch { .. }),
+        "expected FormatMismatch, got {err}"
+    );
+}
+
+const SINK_W: u32 = 4;
+const SINK_H: u32 = 2;
+
+/// Two rows of four opaque RGBA8 pixels in three colors, which GIF keeps exactly.
+fn sink_rgba() -> Vec<u8> {
+    let colors = [[200u8, 20, 20, 255], [20, 200, 20, 255], [20, 20, 200, 255]];
+    (0..SINK_W * SINK_H)
+        .flat_map(|i| colors[(i % 3) as usize])
+        .collect()
+}
+
+/// `packed` rows of `row_bytes` each, followed by `pad` garbage bytes.
+fn padded(packed: &[u8], row_bytes: usize, pad: usize) -> Vec<u8> {
+    packed
+        .chunks(row_bytes)
+        .flat_map(|row| row.iter().copied().chain(core::iter::repeat_n(0xEE, pad)))
+        .collect()
+}
+
+fn open_frame_sink() -> FrameSink {
+    let mut sink = FrameSink::new(
+        make_gif_encoder(SINK_W as u16, SINK_H as u16),
+        SINK_W,
+        SINK_H,
+        format::RGBA8_SRGB,
+    );
+    sink.begin_frame();
+    sink
+}
+
+/// The RGBA8 pixels of a GIF's first frame.
+fn first_gif_frame(gif: &[u8]) -> Vec<u8> {
+    let mut decoder = GifDecoderConfig::new()
+        .job()
+        .animation_frame_decoder(Cow::Owned(gif.to_vec()), &[PixelDescriptor::RGBA8_SRGB])
+        .unwrap();
+    decoder
+        .render_next_frame_owned(None)
+        .unwrap()
+        .expect("one frame")
+        .into_buffer()
+        .copy_to_contiguous_bytes()
+}
+
+/// Give the sink the valid frame and return what its encoder wrote.
+fn finish_with_valid_frame(mut sink: FrameSink) -> Vec<u8> {
+    use zenpipe::Sink as _;
+    let rgba = sink_rgba();
+    let strip = zenpixels::PixelSlice::new(
+        &rgba,
+        SINK_W,
+        SINK_H,
+        SINK_W as usize * 4,
+        PixelDescriptor::RGBA8_SRGB,
+    )
+    .unwrap();
+    sink.consume(&strip).unwrap();
+    sink.finish_frame(100).unwrap();
+    sink.finish_animation().unwrap().into_vec()
+}
+
+/// Strided RGBA8 rows are read by width, never into their padding.
+#[test]
+fn frame_sink_reads_strided_rgba_rows_exactly() {
+    use zenpipe::Sink as _;
+    let rgba = sink_rgba();
+    let rows = padded(&rgba, SINK_W as usize * 4, 12);
+    let strip = zenpixels::PixelSlice::new(
+        &rows,
+        SINK_W,
+        SINK_H,
+        SINK_W as usize * 4 + 12,
+        PixelDescriptor::RGBA8_SRGB,
+    )
+    .unwrap();
+    let mut sink = open_frame_sink();
+    sink.consume(&strip).unwrap();
+    sink.finish_frame(100).unwrap();
+    let gif = sink.finish_animation().unwrap().into_vec();
+    assert_eq!(first_gif_frame(&gif), rgba);
+}
+
+/// A strided RGB8 strip is refused before the sink writes anything: the valid
+/// frame that follows encodes exactly.
+#[test]
+fn frame_sink_refuses_strided_rgb_before_writing() {
+    use zenpipe::Sink as _;
+    let rgb: Vec<u8> = sink_rgba()
+        .chunks(4)
+        .flat_map(|p| [p[0], p[1], p[2]])
+        .collect();
+    let rows = padded(&rgb, SINK_W as usize * 3, 6);
+    let strip = zenpixels::PixelSlice::new(
+        &rows,
+        SINK_W,
+        SINK_H,
+        SINK_W as usize * 3 + 6,
+        PixelDescriptor::RGB8_SRGB,
+    )
+    .unwrap();
+    let mut sink = open_frame_sink();
+    let err = sink
+        .consume(&strip)
+        .expect_err("an RGB8 strip must be refused by an RGBA8 frame sink");
+    assert!(
+        matches!(err.error(), zenpipe::PipeError::FormatMismatch { .. }),
+        "expected FormatMismatch, got {err}"
+    );
+    assert_eq!(first_gif_frame(&finish_with_valid_frame(sink)), sink_rgba());
+}
+
+/// Narrower and wider strips are refused before the sink writes anything.
+#[test]
+fn frame_sink_refuses_other_widths_before_writing() {
+    use zenpipe::Sink as _;
+    let mut sink = open_frame_sink();
+    for width in [SINK_W - 1, SINK_W + 1] {
+        let pixels = vec![9u8; width as usize * 4 * SINK_H as usize];
+        let strip = zenpixels::PixelSlice::new(
+            &pixels,
+            width,
+            SINK_H,
+            width as usize * 4,
+            PixelDescriptor::RGBA8_SRGB,
+        )
+        .unwrap();
+        let err = sink
+            .consume(&strip)
+            .expect_err("a strip of another width must be refused");
+        assert!(
+            matches!(err.error(), zenpipe::PipeError::DimensionMismatch(_)),
+            "width {width}: expected DimensionMismatch, got {err}"
+        );
+    }
+    assert_eq!(first_gif_frame(&finish_with_valid_frame(sink)), sink_rgba());
+}
+
+// =========================================================================
+// Animated WebP: every differing frame and its duration survive the codec
+// and ImageJob's animated route, into and out of WebP. zenwebp 8d40b11 made a
+// one-frame animation encode as a still; nothing here may lose a frame.
+// =========================================================================
+
+#[cfg(all(feature = "job", feature = "nodes-webp", feature = "nodes-gif"))]
+mod animated_webp_frames {
+    use super::*;
+    use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+    use zenpipe::job::ImageJob;
+
+    const W: u32 = 16;
+    const H: u32 = 12;
+    /// One duration per frame; GIF's centisecond clock keeps each exactly.
+    const DURATIONS_MS: [u32; 3] = [100, 150, 200];
+
+    fn frame(index: u32) -> Vec<u8> {
+        (0..W * H)
+            .flat_map(|n| {
+                [
+                    (n * 13 + index * 70) as u8,
+                    (index * 90) as u8,
+                    (n % W * 15) as u8,
+                    255,
+                ]
+            })
+            .collect()
+    }
+
+    /// Frame `index` with one-bit alpha: every third pixel transparent, with
+    /// zero RGB under it.
+    fn frame_with_alpha(index: u32) -> Vec<u8> {
+        (0..W * H)
+            .flat_map(|n| {
+                if (n + index).is_multiple_of(3) {
+                    [0, 0, 0, 0]
+                } else {
+                    [
+                        (n * 13 + index * 70) as u8,
+                        (index * 90) as u8,
+                        (n % W * 15) as u8,
+                        255,
+                    ]
+                }
+            })
+            .collect()
+    }
+
+    fn encode(format: ImageFormat, durations: &[u32]) -> Vec<u8> {
+        encode_frames(format, durations, frame, false)
+    }
+
+    fn encode_frames(
+        format: ImageFormat,
+        durations: &[u32],
+        frame: fn(u32) -> Vec<u8>,
+        lossless: bool,
+    ) -> Vec<u8> {
+        let stride = W as usize * 4;
+        let mut encoder = EncodeRequest::new(format)
+            .with_lossless(lossless)
+            .animation_frame_encoder(W, H)
+            .unwrap();
+        for (index, ms) in durations.iter().enumerate() {
+            let bytes = frame(index as u32);
+            let pixels =
+                zenpixels::PixelSlice::new(&bytes, W, H, stride, PixelDescriptor::RGBA8_SRGB)
+                    .unwrap();
+            encoder.push_frame(pixels, *ms, None).unwrap();
+        }
+        encoder.finish(None).unwrap().into_vec()
+    }
+
+    /// Each decoded frame's exact duration in milliseconds, and its pixels.
+    fn decoded(bytes: &[u8]) -> Vec<(u64, Vec<u8>)> {
+        let mut decoder = DecodeRequest::new(bytes).animation_frame_decoder().unwrap();
+        let mut frames = Vec::new();
+        while let Some(frame) = decoder.render_next_frame_owned(None).unwrap() {
+            let ms = frame
+                .duration()
+                .ticks_at(1000)
+                .expect("a whole number of milliseconds");
+            frames.push((ms, rgba8(frame.into_buffer())));
+        }
+        frames
+    }
+
+    /// A decoded frame's pixels as RGBA8: an opaque frame rendered as RGB8 gains
+    /// opaque alpha here, in the test, so frames compare in one layout.
+    fn rgba8(buffer: zenpixels::PixelBuffer) -> Vec<u8> {
+        let bpp = buffer.descriptor().bytes_per_pixel();
+        let bytes = buffer.copy_to_contiguous_bytes();
+        match bpp {
+            4 => bytes,
+            3 => bytes
+                .chunks(3)
+                .flat_map(|p| [p[0], p[1], p[2], 255])
+                .collect(),
+            other => panic!("unexpected {other}-byte pixels"),
+        }
+    }
+
+    /// Alpha everywhere, and RGB wherever a pixel is visible (an encoder may
+    /// rewrite RGB under alpha 0).
+    fn assert_same_visible(actual: &[u8], expected: &[u8], what: &str) {
+        assert_eq!(actual.len(), expected.len(), "{what}: size");
+        for (i, (a, e)) in actual.chunks(4).zip(expected.chunks(4)).enumerate() {
+            assert_eq!(a[3], e[3], "{what}: alpha of pixel {i}");
+            if e[3] != 0 {
+                assert_eq!(a[..3], e[..3], "{what}: RGB of pixel {i}");
+            }
+        }
+    }
+
+    /// Every frame, in order, with its duration; no frame repeats its predecessor.
+    fn assert_every_frame(bytes: &[u8]) {
+        let frames = decoded(bytes);
+        let durations: Vec<u64> = frames.iter().map(|f| f.0).collect();
+        let expected: Vec<u64> = DURATIONS_MS.iter().map(|&ms| u64::from(ms)).collect();
+        assert_eq!(durations, expected, "every frame and its duration survive");
+        for i in 1..frames.len() {
+            assert_ne!(
+                frames[i - 1].1,
+                frames[i].1,
+                "frame {i} repeats frame {}",
+                i - 1
+            );
+        }
+    }
+
+    fn job(input: Vec<u8>, extension: &str) -> Vec<u8> {
+        let result = ImageJob::new()
+            .add_input(0, input)
+            .add_output(1)
+            .with_output_extension(extension)
+            .run()
+            .expect("animated job");
+        result.encode_results[0].bytes.clone()
+    }
+
+    fn lossless_job(input: Vec<u8>, extension: &str) -> Vec<u8> {
+        let result = ImageJob::new()
+            .add_input(0, input)
+            .add_output(1)
+            .with_output_extension(extension)
+            .with_lossless(true)
+            .run()
+            .expect("lossless animated job");
+        result.encode_results[0].bytes.clone()
+    }
+
+    /// Lossless WebP -> lossless WebP: RGBA frames pass the route unconverted
+    /// and keep every frame, its exact duration, its alpha everywhere and its
+    /// RGB wherever a pixel is visible. This is visible-pixel and alpha
+    /// preservation, not bit-exactness of every sample: RGB under alpha 0 is
+    /// not compared (lossless WebP may rewrite it).
+    #[test]
+    fn imagejob_lossless_webp_keeps_visible_pixels_alpha_and_durations() {
+        let input = encode_frames(ImageFormat::WebP, &DURATIONS_MS, frame_with_alpha, true);
+        let frames = decoded(&lossless_job(input, "webp"));
+        let durations: Vec<u64> = frames.iter().map(|f| f.0).collect();
+        let expected: Vec<u64> = DURATIONS_MS.iter().map(|&ms| u64::from(ms)).collect();
+        assert_eq!(durations, expected);
+        for (i, (_, pixels)) in frames.iter().enumerate() {
+            assert_same_visible(pixels, &frame_with_alpha(i as u32), &format!("frame {i}"));
+        }
+    }
+
+    /// An opaque lossy animation renders as RGB8 (run 20). The route converts
+    /// those frames to RGBA8 for the encoder: with lossless output, every output
+    /// frame equals the decoded input frame with alpha 255, byte for byte, with
+    /// the same duration.
+    #[test]
+    fn imagejob_rgb8_frames_convert_exactly_with_opaque_alpha() {
+        let input = encode(ImageFormat::WebP, &DURATIONS_MS);
+        let first = DecodeRequest::new(&input)
+            .animation_frame_decoder()
+            .unwrap()
+            .render_next_frame_owned(None)
+            .unwrap()
+            .expect("a first frame");
+        assert_eq!(
+            first.pixels().descriptor().bytes_per_pixel(),
+            3,
+            "this control needs a decoder that renders RGB8 frames"
+        );
+        let source = decoded(&input);
+        let output = decoded(&lossless_job(input, "webp"));
+        assert_eq!(output.len(), source.len(), "frame count");
+        for (i, (out, src)) in output.iter().zip(&source).enumerate() {
+            assert_eq!(out.0, src.0, "frame {i} duration");
+            assert_eq!(out.1, src.1, "frame {i} pixels");
+        }
+    }
+
+    /// Transparent WebP -> GIF keeps every frame's exact alpha mask.
+    #[test]
+    fn imagejob_transparent_webp_to_gif_keeps_the_alpha_mask() {
+        let input = encode_frames(ImageFormat::WebP, &DURATIONS_MS, frame_with_alpha, true);
+        let frames = decoded(&job(input, "gif"));
+        assert_eq!(frames.len(), DURATIONS_MS.len());
+        for (i, (_, pixels)) in frames.iter().enumerate() {
+            let alpha: Vec<u8> = pixels.chunks(4).map(|p| p[3]).collect();
+            let expected: Vec<u8> = frame_with_alpha(i as u32).chunks(4).map(|p| p[3]).collect();
+            assert_eq!(alpha, expected, "frame {i}");
+        }
+    }
+
+    #[test]
+    fn webp_animation_keeps_every_differing_frame_and_duration() {
+        assert_every_frame(&encode(ImageFormat::WebP, &DURATIONS_MS));
+    }
+
+    #[test]
+    fn a_one_frame_webp_animation_still_decodes_its_frame() {
+        assert_eq!(decoded(&encode(ImageFormat::WebP, &[100])).len(), 1);
+    }
+
+    #[test]
+    fn imagejob_webp_to_webp_keeps_every_frame_and_duration() {
+        assert_every_frame(&job(encode(ImageFormat::WebP, &DURATIONS_MS), "webp"));
+    }
+
+    #[test]
+    fn imagejob_webp_to_gif_keeps_every_frame_and_duration() {
+        assert_every_frame(&job(encode(ImageFormat::WebP, &DURATIONS_MS), "gif"));
+    }
+
+    #[test]
+    fn imagejob_gif_to_webp_keeps_every_frame_and_duration() {
+        assert_every_frame(&job(encode(ImageFormat::Gif, &DURATIONS_MS), "webp"));
+    }
+}
+
+mod pulse_forwarding {
+    use super::*;
+    use std::any::Any;
+    use std::sync::{Arc, Mutex};
+    use zencodec::Pulse;
+    use zencodec::decode::{BoxedError, DynAnimationFrameDecoder};
+    use zencodec::encode::{DynAnimationFrameEncoder, EncodeOutput};
+
+    type Calls = Arc<Mutex<Vec<(&'static str, Option<usize>)>>>;
+    fn identity(pulse: Option<&dyn Pulse>) -> Option<usize> {
+        pulse.map(|p| p as *const dyn Pulse as *const () as usize)
+    }
+    struct Decoder(Box<dyn DynAnimationFrameDecoder>, Calls);
+    impl DynAnimationFrameDecoder for Decoder {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn info(&self) -> &zencodec::ImageInfo {
+            self.0.info()
+        }
+        fn frame_count(&self) -> Option<u32> {
+            self.0.frame_count()
+        }
+        fn loop_count(&self) -> Option<u32> {
+            self.0.loop_count()
+        }
+        fn render_next_frame_owned(
+            &mut self,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<Option<zencodec::OwnedAnimationFrame>, BoxedError> {
+            self.1.lock().unwrap().push(("decode", identity(pulse)));
+            self.0.render_next_frame_owned(pulse)
+        }
+        fn render_next_frame_to_sink(
+            &mut self,
+            pulse: Option<&dyn Pulse>,
+            sink: &mut dyn zencodec::decode::DecodeRowSink,
+        ) -> Result<Option<zencodec::decode::OutputInfo>, BoxedError> {
+            self.1
+                .lock()
+                .unwrap()
+                .push(("decode_sink", identity(pulse)));
+            self.0.render_next_frame_to_sink(pulse, sink)
+        }
+    }
+    struct Encoder(Box<dyn DynAnimationFrameEncoder>, Calls);
+    impl DynAnimationFrameEncoder for Encoder {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn push_frame(
+            &mut self,
+            pixels: zenpixels::PixelSlice<'_>,
+            duration_ms: u32,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<(), BoxedError> {
+            self.1.lock().unwrap().push(("encode", identity(pulse)));
+            self.0.push_frame(pixels, duration_ms, pulse)
+        }
+        fn finish(self: Box<Self>, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, BoxedError> {
+            self.1.lock().unwrap().push(("finish", identity(pulse)));
+            self.0.finish(pulse)
+        }
+    }
+
+    #[test]
+    fn optional_pulse_reaches_native_frames_without_losing_identity_or_bytes() {
+        let input = build_test_gif(3, 8, 8);
+        let mut baseline = None;
+        let pulse = zencodec::how_far::StopOnly::new(enough::Unstoppable);
+        for control in [None, Some(&pulse as &dyn Pulse)] {
+            let calls = Calls::default();
+            let output = zenpipe::animation::transcode_with_pulse_and_limits(
+                Box::new(Decoder(make_gif_decoder(input.clone()), calls.clone())),
+                Box::new(Encoder(make_gif_encoder(8, 8), calls.clone())),
+                8,
+                8,
+                format::RGBA8_SRGB,
+                |source, _| Ok(source),
+                control,
+                Some(3),
+            )
+            .unwrap()
+            .into_vec();
+            let recorded = calls.lock().unwrap();
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "decode")
+                    .count(),
+                4
+            );
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "encode")
+                    .count(),
+                3
+            );
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "finish")
+                    .count(),
+                1
+            );
+            assert!(
+                recorded
+                    .iter()
+                    .all(|(_, actual)| *actual == identity(control))
+            );
+            if let Some(expected) = &baseline {
+                assert_eq!(&output, expected);
+            } else {
+                baseline = Some(output.clone());
+            }
+            // Read every emitted native frame, including duration and exact solid samples.
+            let mut verify = make_gif_decoder(output);
+            for i in 0..3 {
+                let frame = verify.render_next_frame_owned(None).unwrap().unwrap();
+                assert_eq!(
+                    frame.duration(),
+                    zencodec::animation::FrameDuration::from_millis(100)
+                );
+                assert_pixel_gray(frame.pixels().as_strided_bytes(), i, 3);
+            }
+            assert!(verify.render_next_frame_owned(None).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn stopped_animation_never_enters_native_frame_operations() {
+        struct Stopped;
+        impl enough::Stop for Stopped {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                Err(enough::StopReason::Cancelled)
+            }
+        }
+        let calls = Calls::default();
+        let pulse = zencodec::how_far::StopOnly::new(Stopped);
+        let result = zenpipe::animation::transcode_with_pulse(
+            Box::new(Decoder(
+                make_gif_decoder(build_test_gif(1, 8, 8)),
+                calls.clone(),
+            )),
+            Box::new(Encoder(make_gif_encoder(8, 8), calls.clone())),
+            8,
+            8,
+            format::RGBA8_SRGB,
+            |_, _| panic!("cancelled animation constructed a pipeline"),
+            Some(&pulse),
+        );
+        assert!(result.is_err_and(|e| matches!(e.error(), zenpipe::PipeError::Cancelled)));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}

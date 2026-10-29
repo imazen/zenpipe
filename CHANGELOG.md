@@ -7,6 +7,137 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixes
+
+- Retain the caller deadline through both grayscale and RGB AVIF gain-map
+  auxiliary encodes instead of replacing it with an unstoppable control.
+
+#### Dependency integration
+
+- Align all five consumer graphs with owned decode completion in core `eeb1a450`
+  and JPEG `c73a3cc9`; existing publication and I/O gates pass without API edits.
+
+- Align all five consumer roots with paired core/pixels main and current GIF,
+  HEIC and RAW revisions. The complete codec profile compiles with one core
+  family; publication, I/O and nested RAW gain-map controls pass. See
+  `benchmarks/full_profile_2026-10-29.md` for scope and remaining failures.
+
+#### QUEUED BREAKING CHANGES
+
+- `PipelineRows` follows the core row-source trait's optional borrowed Pulse
+  input, and core row-driver calls now take `None` or `Some(pulse)`
+  (`f7b7760c`). Retained-publication entry signatures stay unchanged.
+
+#### Added (optional processing controls)
+
+- Lossless JPEG and interleaved/planar filters accept optional Pulse; their
+  required-Stop methods are deprecated adapters. Pre-cancelled identity JPEG and
+  filter-free planar paths refuse before output changes. Filter errors retain
+  the stop reason. Native coefficient transforms still report no progress phases.
+
+#### Added (optional animation controls)
+
+- Animation transcode and frame operations accept optional borrowed Pulse and
+  forward the original value into native decode, encode and finish. Deprecated
+  Stop entry points retain their original signatures. Focused Linux native forwarding/cancellation and strict Clippy pass; full graph/API/platform gates remain pending (`6469f4bc`).
+
+#### Added (optional pipeline controls)
+
+- `execute_with_pulse`, `MaterializedSource::from_source_with_pulse` and
+  `Session::stream_with_pulse` accept optional borrowed Pulse. Their original
+  required-Stop entry points are deprecated compatibility adapters. Checks
+  precede input pulls, raster allocation and sink finish; lazy session suffixes
+  require a control when drained. Focused limits/cache controls and strict Clippy pass (`921a3f9f`); see
+  `docs/optional-pulse.md`.
+
+#### Fixed (driver cancellation classification)
+
+- Controlled decode retains a categorized `Stopped(reason)` envelope when the
+  shared decoder observes cancellation before native startup, while keeping
+  the original driver error as its cause. Existing timeout assertions remain
+  unchanged.
+
+#### Fixed (checked publication qualification)
+
+- Optional publication controls and native JPEG/PNG checked transcodes pass the
+  existing 16-unit/35-integration suite, strict Clippy/examples and codec-free
+  build on `a0b34b33`; the 22-test metadata scrub target also passes. Standalone
+  metadata services and wider native/API/browser profiles remain unqualified.
+
+#### Changed (consumer graph qualification)
+
+- Core requirements admit the current and next minor (`>=0.2.0, <0.4.0`).
+  The root lock records the reviewed paired native/core graph and zenfilters'
+  existing how-far dependency. Other portable locks and full-profile native
+  qualification remain pending. Focused receipts:
+  `benchmarks/optional_pipeline_pulse_2026-10-29.md`.
+
+#### Changed (optional Pulse source migration)
+
+- Checked-transcode cursors and controlled step/resume calls forward optional
+  controls; retained operation controls still reach policy and native jobs.
+  Default selection and required output schedules are preserved. Source-only
+  formatting/static checks pass; matching core pins, API snapshots and runtime
+  qualification remain pending. See `docs/publication-qualification.md`.
+
+#### Added (retained publication proposal, 2026-10-28)
+
+- `zencodecs/checked-transcode` with `std`: consuming `publication::VerifiedOutput`,
+  `PublicationError` and `TranscodeRequest::transcode_for_publication`. One
+  selected route completes verification before file publication. Short writes,
+  stop checks, typed I/O failures and accepted-byte receipts remain observable.
+- Entry workspace admission checks both frozen requirement sets before native
+  preparation. Metadata inventory/epoch checks prevent a final pixel boundary
+  from silently authorizing incomplete or changed reported metadata. File/range
+  preservation admits an additional compressed-input copy without replay;
+  unqualified metadata completeness refuses. Isolated source `2a78941f` passes
+  12 unit and 35 native controls, strict Clippy and the codec-free feature check;
+  generated API snapshots and public API review remain pending. See
+  `docs/checked-transcode.md`.
+
+#### Fixed (2026-10-28)
+
+- The decode-only JXL subset (zencodecs `zennode,jxl-decode`, which zenpipe
+  `std,nodes-jxl` builds) passes strict Clippy: encoder-only helpers, the owned
+  streaming-decoder shim and their imports are gated on the codecs that use
+  them; no signature or behavior change. `just clippy-codec-subsets` and the
+  `Codec subsets` CI job lint every `nodes-<codec>` subset.
+- `DecodeRequest::animation_frame_decoder` hands the request's pulse to the codec
+  job, as the one-shot, push and streaming paths already did, so a request-level
+  deadline stops an animation decode (control: `pulse_retention.rs`, GIF).
+- `ImageJob`'s animated route hands the job's deadline (`limits.max_duration`)
+  to its decoder and encoder jobs, so it stops inside a frame: decoder creation,
+  a frame's render or a frame's encode, not only between frames. A codec stop is
+  `PipeError::Cancelled` (it was an `Op` string), and a stop while creating the
+  encoder no longer falls back to the static route.
+- Animated transcodes convert each frame to the encoder's pixel format: a decoder
+  that renders frames in another layout (zenwebp renders an opaque animation as
+  RGB8) made `FrameSink` slice a short row and panic. `FrameSink` now refuses a
+  strip of another format (`FormatMismatch`) or width (`DimensionMismatch`)
+  (`3c688575`; evidence: `benchmarks/pulse_animation_qualify_2026-10-28.md`,
+  whose run failed on two recorded causes outside the fix).
+
+- zencodecs' `stop_latency` benchmarks counted any error as a stop and printed a
+  stop latency for it; they now report only a stop as one, with its reason, and
+  any other error as a failure (test only; the benchmarks stay `#[ignore]`d).
+
+#### Added (qualification runner, 2026-10-28)
+
+- `scripts/qualify/`: the step helpers and strict-Clippy baseline classifier
+  that qualified the fix above, with 24 synthetic controls
+  (`just qualify-selftest`). They count `#[ignore]` tests as not run, never as
+  passes. A baseline-only strict-Clippy log is still reported as a FAIL.
+- `just stop-latency`: zencodecs' eight non-AVIF stop-latency benchmarks, each
+  alone in an optimized build.
+- `benchmarks/native_pulse_heads_2026-10-28.md`: the native heads re-resolved
+  against the 0.2 core. zenavif, heic, zenextras and zenraw have no head this
+  graph can use yet.
+
+#### Fixed (2026-10-25)
+
+- The JPEG/PNG/CMS-only zencodecs build remains warning-free when WebP
+  is disabled; its decoder factory still forwards limits whenever WebP is enabled.
+
 ### Current-main verification
 
 - Admit zentone 0.2 alongside 0.1 and record the scoped Git-main override (`9e0731ff`). Tone-map integration tests, strict lint and doctests pass. The current-main CICP probe passes; locked AVIF primaries and floating-point TIFF findings remain tracked in issues 103 and zenextras 52, with assertions unchanged. Corpus inventory recipes retain all unsupported IMI results for issue zqi 73.
@@ -525,6 +656,10 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Added
 
+- `zencodecs::EncodeRequest::with_orientation_mode` carries a checked stored
+  or baked representation requirement through encoder job construction.
+  Unsupported codec and specialized gain-map routes refuse explicitly.
+
 - **`IMAGEFLOW-PARITY.md`** — verified imageflow gap analysis (imageflow @
   0ba1c9ea vs zenpipe @ da8d8da): full RIAPI key parity matrix, six confirmed
   semantic divergences on the native querystring path, imageflow JSON
@@ -742,6 +877,85 @@ Three crates.io requirements block a newer release and were left alone on purpos
 ## zenpipe
 
 ### [Unreleased]
+
+#### Fixed (2026-10-28)
+
+- **A resizing layout with an orientation put uneven padding on the wrong
+  side.** The resizer pads before it orients, and `config_from_plan` moved the
+  oriented canvas's margins to the unoriented raster by swapping axes only, so
+  for every orientation but `Identity` and `Transpose` a flip mirrored uneven
+  margins and a quarter turn moved them to another side. Each margin is now
+  padded on the side the orientation turns onto it, for every
+  `config_from_plan` / `streaming_from_plan` caller. Two zenresize bugs under it
+  also misplaced the padding: bottom padding was captured before the content
+  for a turning orientation, and padded FlipH flipped its reusable row in place
+  (imazen/zenresize#25). They are fixed on zenresize main `5b4e14e3`, which this
+  stack now pins. The control, io-check `layout_exact`
+  (`a_resizing_layout_pads_where_the_plan_places_the_content`), passes. See
+  `docs/io.md`.
+- **A `Layout` whose plan keeps the size resampled every sample.**
+  `NodeOp::Layout` ran each plan through the streaming resizer, so an
+  orientation, trim or placement with no scaling was resampled 1:1 with the
+  default Robidoux kernel, which blends neighbours (its weights at integer
+  offsets are about 0.063, 0.874, 0.063): an `ImageJob` orient node changed
+  5,715 of 18,915 samples, max 95. A size-preserving plan (`resize_is_identity`,
+  no post-resize effects) now moves samples exactly, in the plan's order: trim
+  (`CropSource`), a horizontal flip (`FlipHSource`) and placement
+  (`ExpandCanvasSource`, with the bytes the resizer's padding writes) stream;
+  any other orientation turns the materialized trimmed frame, as `Orient` does,
+  and the estimate counts that frame and its turned copy. Regression: io-check
+  `layout_exact` (eight orientations with trim, uneven padding and negative
+  placement, against authored canvases) and `image_job`.
+- **`ImageJob` lost the orientation under its default policy.** `WebDefault`
+  (the default) and `StripAll` set the output orientation to `Identity` and
+  stripped EXIF without rendering the orientation, so a rotated photo displayed
+  sideways on the legacy and the planned route. Every policy now carries the
+  source orientation to the encoder (it is display-critical, not descriptive)
+  unless a `zenlayout.orient` node with a concrete value renders it, in which case
+  the output says `Identity`. Regression: io-check `image_job`
+  (`displayed_orientation_survives_every_metadata_policy_on_both_routes`,
+  `an_orient_node_renders_the_orientation_once_on_both_routes`).
+- `ResizeSource` and `ResizeF32Source` no longer fail with "ring buffer overflow"
+  when an upstream strip is taller than the 16-row batch the resizer is sized for:
+  rows are pushed one at a time with output drained in between, and rows that
+  cannot be pushed before the output strip fills are held for the next pull
+  (adopted from main `dd63d9d1`; `tests/resize_strip_heights.rs`, mirrored in
+  io-check, checks strips of 1, 7, 16, 40 and 64 rows give bit-identical output).
+- **`CropSource` dropped rows** when an upstream strip straddled one of its
+  16-row output strips: it filled the output strip, then skipped the rest of that
+  upstream strip, so any crop whose rows did not line up with the upstream strips
+  came out short and shifted. It now carries those rows to the next output
+  strip. Regression: `tools/io-check/tests/sources.rs` (six crops over upstream
+  strips of 1, 7, 16, 17, 64 and 150 rows, exact samples).
+
+#### Added (zencodec 0.2 drivers, 2026-10-27)
+
+- **`zenpipe::io`** (feature `io`; `io-tokio` adds `io::tokio_bridge`): a
+  controlled zencodec decoder over any `ReadAt` served as a pipeline `Source`
+  (`DecodeSource`; decode questions answered at construction through a zencodec
+  `OperationPolicy`, final interpretation held until the first pull), a pipeline served to the planned
+  row encoder (`PipelineRows` for `zencodec_io::row_encode::encode_job`, and
+  for registry jobs `encode_dyn_job`), owned zero-copy resident
+  input (`SharedBytes`), orientation rendering costs and an admitted-raster
+  renderer (`OrientationCost`, `render_orientation`), and a blocking-pool
+  bridge for async sources and writers. Typed causes stay in the error chain.
+  Qualification is in the unpublished `tools/io-check` member; see
+  `docs/io.md` for the measured scope and the explicit gaps.
+- **`Source::color_context()`** (provided, default `None` = unknown): the
+  interpretation of a source's samples when it is known before any strip.
+  Crop, 8-bit resize, horizontal flip, edge replication, canvas expansion and
+  tracing pass on their upstream's; `io::PipelineRows::from_source` declares it
+  to the encoder and refuses `UnknownColor` instead of guessing, so a
+  color-changing operator can no longer be encoded under its input's profile
+  without an explicit declaration.
+- **`impl Source for Box<S>`** (forwarding), so a compiled graph's
+  `Box<dyn Source>` works wherever a `Source` is required (`PipelineRows`).
+- **`ImageJob::with_output_policy(PolicySet)`** (with `io`): plan the configured
+  encoder job for the pipeline's rows and resolve the output schedule before any
+  row or byte; unsupported row modes and gain-map sidecars refuse instead of
+  falling back to a one-shot encode of the materialized image. The policy is
+  passed as zencodec's operation policy, so a refusal names the unmet
+  requirement.
 
 #### QUEUED BREAKING CHANGES
 
@@ -1213,7 +1427,98 @@ None.
 
 ## zencodecs
 
+### zencodec 0.2 Pulse family pin (2026-10-27)
+
+#### QUEUED BREAKING CHANGES
+
+- `TranscodeRequest::transcode_with`, `transcode_from_read_at_with` and
+  `transcode_async_with` take zencodec's `OperationPolicy` (a `PolicySet`, a
+  closure, or `BoundPolicy::new(requirements, resolver)`) instead of
+  `PolicyResolver`. A custom resolver struct now goes inside a `BoundPolicy`.
+  A `PolicySet` or a binding's requirements are named in refusals.
+- `DecodeRequest::with_stop` / `EncodeRequest::with_stop` / `ScrubRequest::with_stop`
+  become `with_pulse(SharedPulse)`; the `StopToken` re-export becomes `SharedPulse`,
+  `Pulse` and `NoPulse`; `metadata::Services` methods take `&dyn zencodec::Pulse`;
+  animation frame decoders take `Option<&dyn Pulse>`; `metadata::Error::Stopped(reason)`
+  keeps non-cancellation stop reasons.
+
+#### Changed
+
+- One retained `SharedPulse` reaches every codec job through `with_pulse`
+  (zencodec `79676215`); nothing is narrowed into a cancellation-only token.
+- Checked transcodes plan each retained encoder job against the declared output
+  rows before the joint resolver question (`EncodeJob::plan_encode`), exclude
+  routes that cannot take one ordered row pass with their native cause, and
+  start the selected job with `begin_declared` and the conversion's output color,
+  comparing startup with the admitted plan before any row or byte. The first
+  converted batch must carry the declared color.
+- Decode and encode policies reach every codec job through the checked setters
+  (`try_set_policy`), in each adapter, dispatch path and dyn path. A policy the
+  codec cannot enforce now refuses with `CodecError::Codec` around
+  `UnsupportedOperation::DecodePolicy` / `EncodePolicy`; the setters that
+  zencodec 0.2 deprecates stored or ignored it. At the pinned heads zenpng's
+  decode job accepts only `DecodePolicy::none()`, zenjpeg's refuses
+  `allow_truncated: Some(true)` and `strict`, and both encode jobs accept only
+  `EncodePolicy::none()` or `Verbatim` color. So `imageflow_compat`'s
+  `allow_truncated: Some(false)` now refuses PNG decodes, and `EncodeRequest`
+  strip/embed policies and `Compact`/`Compatibility` color emission refuse for
+  JPEG and PNG, until those codecs qualify the fields.
+- Unreleased review pins in every manifest and standalone lock (root, fuzz,
+  zencodecs/fuzz, demo, metadata-services): zencodec `79676215` (draft PR 168;
+  one admitted strip per coroutine step), zenjpeg `8672e549`, zenpng `5422b6d2`,
+  zenbitmaps `9ad4582b`, ultrahdr-core `cc57c57a`; `thiserror` 2.0.21 where
+  zenbitmaps requires it. Not releasable until those ship.
+- The core family is named by version: zencodec-io and zenmeta at floor 0.1.0,
+  zencodec ranges unchanged. Every graph root (root, fuzz, zencodecs/fuzz, demo,
+  metadata-services) patches all four family crates (zencodec, zencodec-io,
+  zencodec-coroutine, zenmeta) to zencodec `6214c93c` (PR 168: `OperationPolicy`
+  and `BoundPolicy` binding, `encode_dyn_job`, completion guards), so each graph
+  holds one copy. Native heads that name the family by version: zenjpeg
+  `d099267c`, zenpng `a2a9dc6d`, ultrahdr-core `61097504`.
+  The companion crates are unpublished: not releasable until they ship.
+
+#### Added (zenpipe::io support, 2026-10-27)
+
+- `EncodeRequest::build_job(width, height) -> ConfiguredJob`: the configured job
+  `build_streaming_encoder` would start, retained for planning; a required encode
+  policy is applied with `try_set_policy` and refuses when unsupported. Qualified
+  for JPEG and PNG; other formats refuse.
+
+#### Deprecated
+
+- `TranscodeRequest::with_policy_set`, matching zencodec's deprecation of its
+  separate `with_policy_set` placements: pass a `PolicySet` or `BoundPolicy` to
+  `transcode_with`, `transcode_from_read_at_with` or `transcode_async_with`.
+  Semantics are unchanged during migration: `transcode`, `transcode_from_read_at`
+  and `transcode_async` still use the configured set, its requirements still
+  apply beside a policy argument, and a binding's preferences take priority.
+  The example and `docs/checked-transcode.md` pass the policy argument.
+
+### Checked transcode review integration (2026-10-27)
+
+- Supply explicit opaque-profile retention evidence to the checked resolver.
+  The shared offer now defaults to unknown; profile exclusion cannot be inferred
+  from missing evidence. Preserve native retain/discard regression expectations.
+
 ### [Unreleased]
+
+#### Fixed
+
+- Checked transcodes bind exact required density to the retained encoder job
+  before policy selection and compare output across physical units. Native PNG
+  and representable JFIF-to-PNG paths retain pixels and density; unrepresentable
+  density and unqualified EXIF/XMP reconciliation refuse before execution.
+
+- Checked transcodes preserve the prepared color carriers through native JPEG/PNG
+  checked policy defaults while explicit caller requirements win. Output
+  precision uses native decoded samples rather than packed palette index width.
+
+
+#### Added
+
+- Default-off `checked-transcode`: one stored request executes prepared conversion, metadata and encoder routes through the shared fallible resolver. Slice/file/range input, explicit opaque-profile policy, admitted row storage and output postconditions are exercised with native JPEG/PNG and independent pixel readback. Native workspace and encoded allocation remain unqualified; see `docs/checked-transcode.md`.
+- `checked-transcode-async` drives the same checked execution over AsyncSource; short/pending reads, native errors, drop/cancellation cleanup and pre-read admission are tested. CPU work remains on the polling task with between-step fairness.
+- Checked PNG sources now use native controlled interpretation. Six integer layouts retain exact samples through lossless PNG output; P3 conversion matches an independent CMS route, and slice/positional/delayed-network results agree. Unknown extension and gain-map carriers refuse; native inflate storage remains unqualified.
 
 #### Added
 
@@ -1435,3 +1740,12 @@ None.
   BT.709, 12 → Display P3, 9 → BT.2100; an explicit code outside the three
   UltraHDR gamuts is an encode error (`UnsupportedOperation`) rather than a
   silent BT.709 fallback, which would compute wrong gain-map luma.
+
+### AVIF graph and orientation repair (2026-10-29)
+
+- Align all five portable roots with the same AVIF/parser/serializer source,
+  using root-owned patches for the unpublished serializer (`96972529`).
+- Forward `DecodeRequest::with_orientation` to AVIF decoding (`0a26163f`);
+  Preserve keeps stored samples, Correct rotates pixels and reports Identity.
+  Three exact pixel witnesses and strict Clippy pass. Two encode orientation
+  carrier assertions still fail; see `benchmarks/portable_serializer_2026-10-29.md`.

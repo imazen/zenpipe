@@ -875,3 +875,59 @@ See private notes for details — do not commit vulnerability specifics.
 ## User Feedback Log
 
 See [FEEDBACK.md](FEEDBACK.md) if it exists.
+
+## Checked-transcode qualification (2026-10-25)
+
+`checked-transcode` couples controlled JPEG interpretation, retained
+`zenpixels_convert::OutputPlan`, metadata treatment and a prepared encoder job
+under one shared policy question. Qualified destinations are JPEG and PNG.
+See `../docs/checked-transcode.md` for limits and `just checked-transcode-check`
+for native pixel/metadata, file/range, refusal and cleanup controls.
+
+Known gaps: native codec/CMS workspace and encoded staging have no qualified
+upper bounds. Physical resolution is reported on decode but has no shared
+encode carrier: the checked route now refuses lost required DPI before returning
+output. This was reproduced as false success with an asymmetric JFIF fixture.
+Whole-source JPEG, opaque-container discovery and HDR/sequence restrictions
+remain explicit; the new operation does not imply native incremental parsing.
+
+The coordinated core pin moves rich metadata services to `zenmeta`. Existing
+metadata scrub and gain-map calls use that owner. WebP/GIF/JXL/AVIF adapter pins
+include the shared rational-timing signature; the AVIF wrapper moves without
+changing `rav1d-safe dfd01e32`. `just check-pins` checks every standalone graph.
+
+CI qualification found additional generic `V::<T>` SIMD constructor aliases in
+zenfilters' NEON/WASM helper functions. They also require the explicit-token
+method names; `just checked-transcode-arm-clippy` checks those compiled paths.
+
+
+## Known Bugs: retained input observation (2026-10-28, fixed in review)
+
+The publication proposal initially recorded source length only through len or
+len_hint. A driver may already know EOF from a short positional read or a zero
+async read and answer the native decoder without another source call. The
+observer then falsely refused three existing PNG preservation/density controls.
+It now retains that already observed EOF, with a focused no-extra-read control;
+nonzero async short reads remain incomplete. All original native assertions
+remain, and the isolated 12-unit/35-native qualification passes at 2a78941f.
+
+## Known Bugs: publication browser bootstrap (2026-10-28, source repair pending run)
+
+The frozen final runner omitted the guide's locked shiki dependency and installed
+Playwright without its matching Chromium. Core guide controls stopped before
+source/browser assertions; the demo had 48 launch failures plus one inherited
+skip. These are bootstrap failures, not product assertion results. The proposed
+runner now uses the guide's committed npm lock, the same complete Playwright
+version for both profiles, and an explicit matching Chromium install. Existing
+assertions and skips stay intact; the repair has only shell-syntax validation.
+
+## Fixed: AVIF auxiliary gain-map deadline (2026-10-29)
+
+The precomputed gain-map path replaced the caller's operation control with
+Unstoppable while encoding its grayscale or RGB auxiliary image. It now lends
+the retained SharedPulse through the native API's StopToken. A native regression
+uses invalid base storage to distinguish an auxiliary timeout from cancellation
+only after auxiliary work: the old path reached base adaptation, while both
+repaired branches retain the original TimedOut cause. This does not add native
+progress reporting to the Stop-only low-level encoder. See
+`../benchmarks/avif_auxiliary_pulse_2026-10-29.md` and `just avif-gainmap-pulse-check`.

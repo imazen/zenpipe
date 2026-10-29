@@ -1,0 +1,48 @@
+[package]
+name = "zenpipe-io-check"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.93"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Executable qualification of zenpipe::io with native JPEG and PNG codecs"
+publish = false
+
+# The zenpipe package's own dev-dependencies include codecs that are not yet on
+# the zencodec 0.2 Pulse contract (zengif), so its test targets cannot build on
+# this graph. This package carries only zenpipe + the qualified JPEG/PNG codecs.
+
+[dependencies]
+zenpipe = { path = "../..", default-features = false, features = ["io", "io-tokio"] }
+zencodec.workspace = true
+zencodec-io = { version = "0.1.0", features = ["std", "tokio"] }
+zenpixels.workspace = true
+zenresize = { version = "0.3.1", default-features = false }
+# The whole-raster orientation reference (`zenpipe::execute_layout::orient_image`) takes its enum.
+zenlayout.workspace = true
+zenjpeg = { version = "0.9.0", features = ["zencodec", "controlled-decode"] }
+zenpng = { version = "0.2.0", default-features = false, features = ["controlled-decode"] }
+enough = "0.4.5"
+whereat = "0.1.5"
+
+# ImageJob's planned output route: zenpipe's job API with JPEG/PNG nodes.
+zencodecs = { workspace = true, optional = true }
+# Node lists for ImageJob (`Box<dyn zennode::NodeInstance>`).
+zennode = { workspace = true, optional = true }
+
+[features]
+job = ["zenpipe/job", "zenpipe/nodes-jpeg", "zenpipe/nodes-png", "dep:zencodecs", "dep:zennode"]
+
+[[test]]
+name = "image_job"
+required-features = ["job"]
+
+[dev-dependencies]
+# `PipelineGraph::compile` takes its source map as this type (zenpipe's version).
+hashbrown = "0.16.1"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "fs"] }
+# Independent PNG reader: a test oracle only.
+png = "0.18"
+# Independent JPEG reader: a test oracle only.
+jpeg-decoder = "0.3.2"
+# Bundled profiles for color-carriage tests.
+zenpixels-convert = { workspace = true, features = ["icc-db"] }

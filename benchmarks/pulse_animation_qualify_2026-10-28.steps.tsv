@@ -1,0 +1,31 @@
+R-selftest	0	12:54:03
+P0a-frame-sink-before-fix	101	failed-as-expected	12:54:06
+P0b-webp-route-before-fix	101	failed-as-expected	12:54:08
+P0c-strided-rgb-before-fix	101	failed-as-expected	12:54:08
+P0d-other-widths-before-fix	101	failed-as-expected	12:54:08
+P0e-rgb8-conversion-route-before-fix	101	failed-as-expected	12:54:08
+S-family	0	12:54:08
+S-pins	0	12:54:09
+S-resolve-.	0	12:54:09
+S-resolve-fuzz	0	12:54:09
+S-resolve-demo-crate	0	12:54:09
+S-resolve-tools-metadata-services	0	12:54:09
+S-resolve-zencodecs-fuzz	0	12:54:10
+S-fmt	0	12:54:10
+W-subset	0	12:54:12
+W-clippy	0	12:54:12
+W-test	0	12:54:20
+W-webp-capability	0/9-failed; 0-ignored-not-run	12:54:21
+W-stop-and-limits	0/25-failed; 4-ignored-not-run	12:54:25
+W-stop-latency	FAILED: no test ran	12:54:25
+W-stop-and-limits-ignored	0	recorded-only (#[ignore] tests run with --ignored)	12:54:25
+IC-clippy-lib	101	FAIL strict Clippy (raw rc 101; known baseline lints only); verdict baseline-only rc 101 lints 65 baseline 65 new 0 no-longer-reported 0	12:54:27
+IC-imageflow-compat-info	0/2-failed; 0-ignored-not-run	12:54:29
+IC-v2-zennode-parity	0/59-failed; 0-ignored-not-run	12:54:36
+IC-v2-json-jobs	0/41-failed; 0-ignored-not-run	12:54:41
+C-zenpipe-default-lib	0	12:54:43
+V-clippy-animation	0	12:54:44
+V-animation	0/20-failed; 0-ignored-not-run	12:54:48
+E-trace-migrated	0/7-failed; 0-ignored-not-run	12:54:50
+D-zenpipe-default	0	12:55:12
+P-witness	0	recorded-only	12:55:13

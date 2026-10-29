@@ -43,7 +43,7 @@ println!("encoded {} bytes ({})", encoded.bytes.len(), encoded.mime_type);
 
 For fine-grained control, build a [`PipelineGraph`](#pipeline-graph) and drive it
 with [`zenpipe::execute`](https://docs.rs/zenpipe/latest/zenpipe/fn.execute.html)
-(or `execute_with_stop` for cooperative cancellation) over the `Source`/`Sink`
+(or `execute_with_pulse(..., Some(pulse))` for cooperative control) over the `Source`/`Sink`
 traits — see below.
 
 <!-- crates.io:skip-start -->

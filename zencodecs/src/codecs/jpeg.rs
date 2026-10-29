@@ -9,7 +9,7 @@ use alloc::boxed::Box;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, StopToken};
+use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, SharedPulse};
 #[cfg(feature = "jpeg-ultrahdr")]
 use crate::{EncodeOutput, Metadata, pixel::ImgRef};
 #[cfg(feature = "jpeg-ultrahdr")]
@@ -73,7 +73,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
     gain_map_render: zencodec::GainMapRender,
     orientation: zencodec::OrientationHint,
@@ -86,11 +86,11 @@ pub(crate) fn decode(
     if let Some(lim) = limits {
         job = job.with_limits(to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(pulse);
     if let Some(dp) = decode_policy {
-        job = job.with_policy(dp);
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(dp)
+            .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
     }
     // BaseOnly (default) is a no-op; ReconstructHdr makes zenjpeg apply the
     // UltraHDR gain map and emit linear-float HDR pixels (needs `jpeg-ultrahdr`).
@@ -176,6 +176,15 @@ pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<
     )
 }
 
+pub(crate) fn build_job(
+    params: EncodeParams<'_>,
+) -> crate::error::Result<crate::dispatch::ConfiguredJob> {
+    crate::dispatch::build_job_from_config(
+        |p| build_encoding(p.quality, p.effort, p.codec_config),
+        params,
+    )
+}
+
 /// Derive the UltraHDR color gamut from CICP color primaries (zenpipe#40).
 ///
 /// ultrahdr-core's gain-map math supports exactly the three UltraHDR
@@ -219,14 +228,14 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
     metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorTransfer, UhdrPixelFormat, encode_ultrahdr,
     };
 
-    let stop_token = crate::limits::stop_or_default(&stop);
+    let stop_token: &dyn enough::Stop = &pulse;
     let width = img.width() as u32;
     let height = img.height() as u32;
 
@@ -289,14 +298,14 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
     metadata: Option<&Metadata>,
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
         GainMapConfig, ToneMapConfig, UhdrColorTransfer, UhdrPixelFormat, encode_ultrahdr,
     };
 
-    let stop_token = crate::limits::stop_or_default(&stop);
+    let stop_token: &dyn enough::Stop = &pulse;
     let width = img.width() as u32;
     let height = img.height() as u32;
 
@@ -350,14 +359,14 @@ pub(crate) fn encode_with_precomputed_gainmap(
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
     source_metadata: &zencodec::Metadata,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
 ) -> Result<EncodeOutput> {
     use ultrahdr_core::pixel_buffer_from_vec;
     use zenjpeg::ultrahdr::{
         GainMapEncodingFormat, UhdrColorTransfer, UhdrPixelFormat, encode_with_gainmap_metadata,
     };
 
-    let stop_token = crate::limits::stop_or_default(&stop);
+    let stop_token: &dyn enough::Stop = &pulse;
     let pixel_format = match channels {
         3 => UhdrPixelFormat::Rgb8,
         4 => UhdrPixelFormat::Rgba8,

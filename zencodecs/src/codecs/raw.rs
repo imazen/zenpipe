@@ -5,7 +5,7 @@ use alloc::borrow::Cow;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageInfo, Limits, StopToken};
+use crate::{CodecError, DecodeOutput, ImageInfo, Limits, SharedPulse};
 use whereat::at;
 use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
 
@@ -74,7 +74,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
 ) -> Result<DecodeOutput> {
     let format = detect_raw_format(data).unwrap_or_else(raw_format);
     let dec = build_raw_decoder(codec_config);
@@ -82,9 +82,7 @@ pub(crate) fn decode(
     if let Some(lim) = limits {
         job = job.with_limits(to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(pulse);
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| map_err(format, e))?
         .decode()
@@ -122,25 +120,21 @@ pub(crate) fn read_raw_metadata(data: &[u8]) -> Option<zenraw::exif::ExifMetadat
 ///
 /// Returns `None` if:
 /// - The file is not an Apple DNG with a gain map
-/// - The gain map JPEG cannot be decoded
-/// - The `raw-decode-gainmap` feature is not enabled
+///
+/// Embedded JPEG decoding failures are returned, including cancellation and limits.
 #[cfg(feature = "raw-decode-gainmap")]
-pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
+pub(crate) fn extract_gainmap(
+    data: &[u8],
+    limits: Option<&Limits>,
+    pulse: SharedPulse,
+) -> Result<Option<crate::gainmap::DecodedGainMap>> {
     use crate::gainmap::{DecodedGainMap, GainMap, GainMapChannel, GainMapMetadata};
 
-    let gm_info = zenraw::apple::extract_gain_map(data)?;
+    let Some(gm_info) = zenraw::apple::extract_gain_map(data) else {
+        return Ok(None);
+    };
 
-    // Decode the gain map JPEG to pixels using zencodecs' own JPEG decoder.
-    let gm_output = crate::codecs::jpeg::decode(
-        &gm_info.jpeg_data,
-        None,
-        None,
-        None,
-        None,
-        zencodec::GainMapRender::BaseOnly,
-        zencodec::OrientationHint::Preserve,
-    )
-    .ok()?;
+    let gm_output = decode_gainmap_jpeg(&gm_info.jpeg_data, limits, pulse)?;
     use zenpixels_convert::PixelBufferConvertTypedExt as _;
     let gm_rgb8 = gm_output.into_buffer().to_rgb8();
     let gm_ref = gm_rgb8.as_imgref();
@@ -231,7 +225,7 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
         }
     });
 
-    Some(DecodedGainMap {
+    Ok(Some(DecodedGainMap {
         gain_map: GainMap {
             data: gm_data,
             width: gm_w,
@@ -241,5 +235,69 @@ pub(crate) fn extract_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGain
         metadata,
         base_is_hdr: gm_info.base_rendition_is_hdr.unwrap_or(false),
         source_format: format,
-    })
+    }))
+}
+
+#[cfg(feature = "raw-decode-gainmap")]
+fn decode_gainmap_jpeg(
+    data: &[u8],
+    limits: Option<&Limits>,
+    pulse: SharedPulse,
+) -> Result<DecodeOutput> {
+    crate::codecs::jpeg::decode(
+        data,
+        None,
+        limits,
+        pulse,
+        None,
+        zencodec::GainMapRender::BaseOnly,
+        zencodec::OrientationHint::Preserve,
+    )
+}
+
+#[cfg(all(test, feature = "raw-decode-gainmap"))]
+mod gainmap_controls {
+    use super::*;
+    #[test]
+    fn embedded_jpeg_keeps_timeout_and_limits() {
+        let pixels = [128u8; 48];
+        let view =
+            zenpixels::PixelSlice::new(&pixels, 4, 4, 12, zenpixels::PixelDescriptor::RGB8_SRGB)
+                .unwrap();
+        let bytes = crate::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
+            .encode(view, false)
+            .unwrap()
+            .into_vec();
+        let output = decode_gainmap_jpeg(&bytes, None, SharedPulse::default()).unwrap();
+        assert_eq!((output.width(), output.height()), (4, 4));
+        struct Timeout;
+        impl zencodec::how_far::Stop for Timeout {
+            fn check(&self) -> core::result::Result<(), zencodec::how_far::StopReason> {
+                Err(zencodec::how_far::StopReason::TimedOut)
+            }
+        }
+        let error = decode_gainmap_jpeg(
+            &bytes,
+            None,
+            SharedPulse::new(zencodec::how_far::StopOnly::new(Timeout)),
+        )
+        .unwrap_err();
+        let CodecError::Codec { source, .. } = error.error() else {
+            panic!("{error:?}")
+        };
+        let cause = zencodec::find_cause::<zencodec::CodecError>(&**source).unwrap();
+        assert_eq!(
+            cause.category(),
+            zencodec::ErrorCategory::Stopped(zencodec::how_far::StopReason::TimedOut)
+        );
+        assert!(
+            decode_gainmap_jpeg(
+                &bytes,
+                Some(&Limits::none().with_max_pixels(1)),
+                SharedPulse::default()
+            )
+            .is_err()
+        );
+        assert!(decode_gainmap_jpeg(b"invalid JPEG", None, SharedPulse::default()).is_err());
+    }
 }

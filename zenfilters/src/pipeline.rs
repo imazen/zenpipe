@@ -418,21 +418,11 @@ impl Pipeline {
         channels: u32,
         ctx: &mut FilterContext,
     ) -> Result<(), At<PipelineError>> {
-        self.apply_with_stop(src, dst, width, height, channels, ctx, &enough::Unstoppable)
+        self.apply_with_pulse(src, dst, width, height, channels, ctx, None)
     }
 
-    /// Apply the full pipeline with cooperative cancellation.
-    ///
-    /// Identical to [`apply()`](Pipeline::apply) but takes a
-    /// [`enough::Stop`] token as the final parameter. The token's
-    /// [`check()`](enough::Stop::check) is polled only at outer loop
-    /// boundaries — between scatter/gather strips and between filters —
-    /// never inside the per-pixel inner loops, so cancellation costs
-    /// nothing in the hot path. On cancellation this returns
-    /// [`PipelineError::Cancelled`] carrying the [`enough::StopReason`].
-    ///
-    /// `apply()` delegates here passing [`enough::Unstoppable`], so the
-    /// uncancellable path is byte-identical to calling this directly.
+    /// Compatibility entry point for cancellation-only callers.
+    #[deprecated(note = "use apply_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
     #[track_caller]
     pub fn apply_with_stop(
         &self,
@@ -444,6 +434,36 @@ impl Pipeline {
         ctx: &mut FilterContext,
         stop: &dyn enough::Stop,
     ) -> Result<(), At<PipelineError>> {
+        self.apply_with_pulse(
+            src,
+            dst,
+            width,
+            height,
+            channels,
+            ctx,
+            Some(&how_far::StopOnly::borrowed(stop)),
+        )
+    }
+
+    /// Apply the full pipeline with optional cooperative control.
+    ///
+    /// Checks before processing, between scatter/gather strips and between
+    /// filters. No progress phases are planned here. `None` uses the same pixel
+    /// path without adding per-call cancellation. Cancellation retains its
+    /// [`enough::StopReason`] and may leave a partially written destination.
+    #[track_caller]
+    pub fn apply_with_pulse(
+        &self,
+        src: &[f32],
+        dst: &mut [f32],
+        width: u32,
+        height: u32,
+        channels: u32,
+        ctx: &mut FilterContext,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<(), At<PipelineError>> {
+        let stop = pulse.unwrap_or(&how_far::NoPulse);
+        stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
         let n = (width as usize) * (height as usize) * (channels as usize);
         if src.len() < n {
             return Err(at!(PipelineError::BufferSize {
@@ -484,7 +504,7 @@ impl Pipeline {
         height: u32,
         channels: u32,
         ctx: &mut FilterContext,
-        stop: &dyn enough::Stop,
+        stop: &dyn how_far::Pulse,
     ) -> Result<(), At<PipelineError>> {
         let ch = channels as usize;
         let w = width as usize;
@@ -539,7 +559,7 @@ impl Pipeline {
         }
 
         // Apply all filters on full-frame planes
-        self.apply_planar_with_stop(&mut planes, ctx, stop)?;
+        self.apply_planar_with_pulse(&mut planes, ctx, Some(stop))?;
 
         // Gather in strips for cache locality
         for y in (0..height as usize).step_by(scatter_strip) {
@@ -593,7 +613,7 @@ impl Pipeline {
         height: u32,
         channels: u32,
         ctx: &mut FilterContext,
-        stop: &dyn enough::Stop,
+        stop: &dyn how_far::Pulse,
     ) -> Result<(), At<PipelineError>> {
         let ch = channels as usize;
         let w = width as usize;
@@ -640,7 +660,7 @@ impl Pipeline {
                     self.config.reference_white,
                 );
             }
-            self.apply_planar_with_stop(&mut planes, ctx, stop)?;
+            self.apply_planar_with_pulse(&mut planes, ctx, Some(stop))?;
 
             // Gather only the core rows from the filtered extended strip
             let dst_offset = y_start * w * ch;
@@ -692,28 +712,38 @@ impl Pipeline {
     pub fn apply_planar(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         // Delegate to the cancellable variant with a no-op token; this path
         // is byte-identical and cannot fail (`Unstoppable::check` is `Ok`).
-        let _ = self.apply_planar_with_stop(planes, ctx, &enough::Unstoppable);
+        let _ = self.apply_planar_with_pulse(planes, ctx, None);
     }
 
-    /// Apply filters to already-scattered planar Oklab data, with
-    /// cooperative cancellation.
-    ///
-    /// Identical to [`apply_planar()`](Pipeline::apply_planar) but takes a
-    /// [`enough::Stop`] token. The token is polled once before each filter
-    /// runs (between filters — never per-pixel). On cancellation this
-    /// returns [`PipelineError::Cancelled`] and leaves `planes` holding the
-    /// partially-filtered result.
+    /// Compatibility entry point for cancellation-only callers.
+    #[deprecated(note = "use apply_planar_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
     pub fn apply_planar_with_stop(
         &self,
         planes: &mut OklabPlanes,
         ctx: &mut FilterContext,
         stop: &dyn enough::Stop,
     ) -> Result<(), At<PipelineError>> {
+        self.apply_planar_with_pulse(planes, ctx, Some(&how_far::StopOnly::borrowed(stop)))
+    }
+
+    /// Apply planar filters with optional cooperative control.
+    ///
+    /// Checks before each filter and before final gamut mapping. Cancellation
+    /// retains its reason and can leave partially filtered planes. The caller's
+    /// Pulse is used directly; no progress phases are planned here.
+    pub fn apply_planar_with_pulse(
+        &self,
+        planes: &mut OklabPlanes,
+        ctx: &mut FilterContext,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<(), At<PipelineError>> {
+        let stop = pulse.unwrap_or(&how_far::NoPulse);
         for filter in &self.filters {
             stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
             filter.apply(planes, ctx);
         }
 
+        stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
         // Apply gamut mapping after all filters
         if let (GamutMapping::SoftCompress { knee }, Some(lut)) =
             (self.config.gamut_mapping, &self.gamut_lut)
@@ -874,6 +904,7 @@ mod tests {
     /// returns `Err(PipelineError::Cancelled)` under a cancelled token, on
     /// both the per-pixel (stripped) and neighborhood (full-frame) paths.
     #[test]
+    #[allow(deprecated)] // Original cancellation compatibility contract.
     fn apply_with_stop_cancellation() {
         use crate::filters;
 
@@ -937,6 +968,7 @@ mod tests {
     /// `apply_planar_with_stop` checks between filters and `apply_planar`
     /// delegates with a no-op token (stays infallible).
     #[test]
+    #[allow(deprecated)] // Original cancellation compatibility contract.
     fn apply_planar_with_stop_cancellation() {
         use crate::filters;
 
@@ -967,6 +999,55 @@ mod tests {
         // Plain apply_planar still compiles + runs (infallible delegation).
         pipeline.apply_planar(&mut planes, &mut ctx);
 
+        planes.return_to_ctx(&mut ctx);
+    }
+    #[test]
+    fn optional_pulse_preserves_pixels_and_refuses_before_writes() {
+        use crate::filters;
+        let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
+        pipeline.push(Box::new(filters::Exposure { stops: 0.2 }));
+        let src = vec![0.5; 8 * 8 * 3];
+        let mut absent = vec![0.0; src.len()];
+        let mut explicit = absent.clone();
+        let mut ctx = FilterContext::new();
+        pipeline
+            .apply_with_pulse(&src, &mut absent, 8, 8, 3, &mut ctx, None)
+            .unwrap();
+        pipeline
+            .apply_with_pulse(
+                &src,
+                &mut explicit,
+                8,
+                8,
+                3,
+                &mut ctx,
+                Some(&how_far::NoPulse),
+            )
+            .unwrap();
+        assert_eq!(absent, explicit);
+        let stopped = how_far::StopOnly::new(almost_enough::Stopper::cancelled());
+        let mut untouched = vec![0.25; src.len()];
+        let error = pipeline
+            .apply_with_pulse(&src, &mut untouched, 8, 8, 3, &mut ctx, Some(&stopped))
+            .unwrap_err();
+        assert!(matches!(
+            error.error(),
+            PipelineError::Cancelled(enough::StopReason::Cancelled)
+        ));
+        assert_eq!(untouched, vec![0.25; src.len()]);
+
+        // Even a filter-free planar operation must honor its explicit control.
+        let empty = Pipeline::new(PipelineConfig::default()).unwrap();
+        let mut planes = OklabPlanes::from_ctx(&mut ctx, 8, 8);
+        planes.l.fill(0.5);
+        let error = empty
+            .apply_planar_with_pulse(&mut planes, &mut ctx, Some(&stopped))
+            .unwrap_err();
+        assert!(matches!(
+            error.error(),
+            PipelineError::Cancelled(enough::StopReason::Cancelled)
+        ));
+        assert_eq!(planes.l, vec![0.5; 64]);
         planes.return_to_ctx(&mut ctx);
     }
 }

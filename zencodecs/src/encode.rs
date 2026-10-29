@@ -17,7 +17,7 @@ use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
 use crate::select::ImageFacts;
 use crate::speed::EncodeSpeed;
-use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, StopToken};
+use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, SharedPulse};
 use whereat::at;
 use zencodec::encode::EncodePolicy;
 use zencodec::{ColorEmitPolicy, MetadataPolicy};
@@ -51,7 +51,7 @@ pub struct EncodeRequest<'a> {
     lossless: bool,
     prefer_streaming: bool,
     limits: Option<&'a Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` when the codec embeds it.
     /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim).
@@ -60,6 +60,7 @@ pub struct EncodeRequest<'a> {
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
+    orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     #[cfg(feature = "tonemap")]
     tone_map_policy: crate::ToneMapPolicy,
     image_facts: Option<ImageFacts>,
@@ -88,13 +89,14 @@ impl<'a> EncodeRequest<'a> {
             lossless: false,
             prefer_streaming: false,
             limits: None,
-            stop: None,
+            pulse: SharedPulse::default(),
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
             codec_config: None,
             policy: None,
             encode_policy: None,
+            orientation_mode: None,
             #[cfg(feature = "tonemap")]
             tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
@@ -104,6 +106,14 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(feature = "jpeg-ultrahdr")]
             gain_map_source: None,
         }
+    }
+
+    /// Require stored sample orientation or physically upright samples.
+    /// Omission preserves codec defaults. Unsupported codecs refuse before
+    /// encoding; metadata supplies the intrinsic orientation.
+    pub fn with_orientation_mode(mut self, mode: zencodec::encode::EncodeOrientation) -> Self {
+        self.orientation_mode = Some(mode);
+        self
     }
 
     /// Auto-select best format based on image stats and allowed encoders.
@@ -118,13 +128,14 @@ impl<'a> EncodeRequest<'a> {
             lossless: false,
             prefer_streaming: false,
             limits: None,
-            stop: None,
+            pulse: SharedPulse::default(),
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
             codec_config: None,
             policy: None,
             encode_policy: None,
+            orientation_mode: None,
             #[cfg(feature = "tonemap")]
             tone_map_policy: crate::ToneMapPolicy::Preserve,
             image_facts: None,
@@ -215,9 +226,11 @@ impl<'a> EncodeRequest<'a> {
         self
     }
 
-    /// Set a cancellation token.
-    pub fn with_stop(mut self, stop: StopToken) -> Self {
-        self.stop = Some(stop);
+    /// Retain an operation pulse (cancellation, progress, phase planning) for
+    /// every codec job this request creates. The default is the no-op pulse.
+    /// A cancellation-only source fits through `zencodec::how_far::StopOnly`.
+    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
+        self.pulse = pulse;
         self
     }
 
@@ -400,6 +413,13 @@ impl<'a> EncodeRequest<'a> {
     /// the SDR base JPEG quality.
     #[cfg(feature = "jpeg-ultrahdr")]
     pub fn encode_ultrahdr_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
+        if self.orientation_mode.is_some() {
+            return Err(at!(CodecError::from_codec(
+                ImageFormat::Jpeg,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
+
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
 
@@ -414,7 +434,7 @@ impl<'a> EncodeRequest<'a> {
             self.metadata.as_ref(),
             self.codec_config,
             self.limits,
-            self.stop,
+            self.pulse,
         )
     }
 
@@ -425,6 +445,13 @@ impl<'a> EncodeRequest<'a> {
     /// The `quality` setting controls the SDR base JPEG quality.
     #[cfg(feature = "jpeg-ultrahdr")]
     pub fn encode_ultrahdr_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
+        if self.orientation_mode.is_some() {
+            return Err(at!(CodecError::from_codec(
+                ImageFormat::Jpeg,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
+
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
 
@@ -439,7 +466,7 @@ impl<'a> EncodeRequest<'a> {
             self.metadata.as_ref(),
             self.codec_config,
             self.limits,
-            self.stop,
+            self.pulse,
         )
     }
 
@@ -505,8 +532,9 @@ impl<'a> EncodeRequest<'a> {
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: speed_limits.as_ref().or(self.limits),
-                stop: self.stop,
+                pulse: self.pulse,
                 encode_policy: self.encode_policy,
+                orientation_mode: self.orientation_mode,
                 canvas_width,
                 canvas_height,
                 loop_count: None,
@@ -566,6 +594,31 @@ impl<'a> EncodeRequest<'a> {
         width: u32,
         height: u32,
     ) -> Result<crate::dispatch::StreamingEncoder> {
+        self.with_resolved_rows(width, height, crate::dispatch::build_streaming_encoder)
+    }
+
+    /// Resolve the configured job for planned row encoding, without
+    /// constructing an encoder.
+    ///
+    /// Format selection, quality, effort, metadata and limits resolve exactly as
+    /// for [`build_streaming_encoder`](Self::build_streaming_encoder). Retain the
+    /// returned job across planning and output policy (for example
+    /// `zencodec_io::row_encode::encode_job`), so the plan that is admitted is the
+    /// one that starts. A required encode policy is applied with the checked
+    /// setter and refuses when unsupported. Planned row encoding is qualified for
+    /// JPEG and PNG; other formats refuse instead of falling back.
+    pub fn build_job(self, width: u32, height: u32) -> Result<crate::dispatch::ConfiguredJob> {
+        self.with_resolved_rows(width, height, crate::dispatch::build_job)
+    }
+
+    /// Shared resolution for streaming encoders and configured jobs; `build`
+    /// runs while the resolved parameters' borrows are alive.
+    fn with_resolved_rows<T>(
+        self,
+        width: u32,
+        height: u32,
+        build: impl FnOnce(ImageFormat, crate::dispatch::EncodeParams<'_>) -> Result<T>,
+    ) -> Result<T> {
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
         let default_policy = CodecPolicy::new();
@@ -608,14 +661,15 @@ impl<'a> EncodeRequest<'a> {
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
-            stop: self.stop,
+            pulse: self.pulse,
             encode_policy: self.encode_policy,
+            orientation_mode: self.orientation_mode,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
         };
 
-        crate::dispatch::build_streaming_encoder(format, params)
+        build(format, params)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -865,6 +919,13 @@ impl<'a> EncodeRequest<'a> {
         let width = pixels.width();
         let height = pixels.rows();
         let format = self.resolve_encode_format(width, height, has_alpha)?;
+        #[cfg(feature = "jpeg-ultrahdr")]
+        if self.orientation_mode.is_some() && self.gain_map_source.is_some() {
+            return Err(at!(CodecError::from_codec(
+                format,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
 
         // Pre-flight memory admission: when Limits::max_memory_bytes is set, reject
         // before building the encoder if the calibrated encode estimate exceeds it.
@@ -911,8 +972,9 @@ impl<'a> EncodeRequest<'a> {
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits,
-            stop: self.stop.clone(),
+            pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
+            orientation_mode: self.orientation_mode,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,
             cicp: self.cicp,
@@ -990,7 +1052,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     &retained,
-                    self.stop,
+                    self.pulse,
                 );
             }
             #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
@@ -1004,7 +1066,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     &retained,
-                    self.stop.as_ref(),
+                    &self.pulse,
                 );
             }
             #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
@@ -1021,7 +1083,7 @@ impl<'a> EncodeRequest<'a> {
                     metadata,
                     &retained,
                     limits,
-                    self.stop.as_ref(),
+                    &self.pulse,
                 );
             }
             return Err(at!(CodecError::UnsupportedOperation {
@@ -1037,8 +1099,12 @@ impl<'a> EncodeRequest<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "webp")]
     use alloc::vec;
-    use rgb::{Rgb, Rgba};
+    #[cfg(all(feature = "jpeg", feature = "webp", feature = "png"))]
+    use rgb::Rgb;
+    #[cfg(feature = "webp")]
+    use rgb::Rgba;
 
     #[test]
     fn builder_pattern() {

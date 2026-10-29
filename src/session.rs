@@ -68,7 +68,7 @@
 //! // images stay cached until the budget forces LRU eviction.
 //! ```
 //!
-//! [`Session::stream_stoppable`] is the same with cooperative cancellation
+//! [`Session::stream_with_pulse`] is the same with cooperative cancellation
 //! (checked between strips while the prefix materializes).
 
 #[cfg(feature = "zennode")]
@@ -195,13 +195,11 @@ mod inner {
             sidecar: Option<SidecarStream>,
             source_hash: u64,
         ) -> crate::PipeResult<StreamingOutput> {
-            self.stream_inner(source, config, sidecar, source_hash, &enough::Unstoppable)
+            self.stream_with_pulse(source, config, sidecar, source_hash, None)
         }
 
-        /// Like [`stream()`](Self::stream) but with cooperative cancellation.
-        ///
-        /// Checks `stop` between strips during prefix materialization (cache miss path).
-        /// Returns `PipeError::Cancelled` if cancelled mid-render.
+        /// Compatibility entry point for cancellation-only callers.
+        #[deprecated(note = "use stream_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
         pub fn stream_stoppable(
             &mut self,
             source: Box<dyn Source>,
@@ -210,19 +208,32 @@ mod inner {
             source_hash: u64,
             stop: &dyn enough::Stop,
         ) -> crate::PipeResult<StreamingOutput> {
-            self.stream_inner(source, config, sidecar, source_hash, stop)
+            self.stream_with_pulse(
+                source,
+                config,
+                sidecar,
+                source_hash,
+                Some(&zencodec::how_far::StopOnly::borrowed(stop)),
+            )
         }
 
-        /// Shared implementation for `stream` and `stream_stoppable`.
-        fn stream_inner(
+        /// Construct a cached pipeline with optional cooperative control.
+        ///
+        /// Checks before cache changes and while materializing a missed prefix.
+        /// The returned suffix is lazy and does not retain this borrowed control;
+        /// pass it again to [`crate::execute_with_pulse`] when draining the suffix.
+        /// Source-retained controls remain active even when `pulse` is `None`.
+        pub fn stream_with_pulse(
             &mut self,
             source: Box<dyn Source>,
             config: &ProcessConfig<'_>,
             sidecar: Option<SidecarStream>,
             source_hash: u64,
-            stop: &dyn enough::Stop,
+            pulse: Option<&dyn zencodec::Pulse>,
         ) -> crate::PipeResult<StreamingOutput> {
-            stop.check()
+            pulse
+                .unwrap_or(&zencodec::NoPulse)
+                .check()
                 .map_err(|_| whereat::at!(crate::error::PipeError::Cancelled))?;
 
             self.generation += 1;
@@ -333,7 +344,7 @@ mod inner {
             let prefix_metadata = prefix_output.metadata;
 
             // Materialize the prefix output so we can cache it.
-            let mat = MaterializedSource::from_source_stoppable(prefix_output.source, stop)?;
+            let mat = MaterializedSource::from_source_with_pulse(prefix_output.source, pulse)?;
             let width = mat.width();
             let height = mat.height();
             let format = mat.format();
@@ -1175,7 +1186,13 @@ mod tests {
             limits: None,
         };
         let source = Box::new(SolidSource::new(200, 200));
-        let result = session.stream_stoppable(source, &config, None, 0xCC, &stop);
+        let result = session.stream_with_pulse(
+            source,
+            &config,
+            None,
+            0xCC,
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+        );
         assert!(result.is_err()); // Should be cancelled
     }
 }

@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::macros::dispatch_format;
 use crate::policy::CodecPolicy;
-use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, StopToken};
+use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, SharedPulse};
 use whereat::at;
 use zencodec::decode::DecodePolicy;
 use zencodec::{GainMapRender, OrientationHint};
@@ -28,7 +28,7 @@ pub struct DecodeRequest<'a> {
     data: &'a [u8],
     format: Option<ImageFormat>,
     limits: Option<&'a Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     registry: Option<&'a AllowedFormats>,
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
@@ -56,7 +56,7 @@ impl<'a> DecodeRequest<'a> {
             data,
             format: None,
             limits: None,
-            stop: None,
+            pulse: SharedPulse::default(),
             registry: None,
             codec_config: None,
             policy: None,
@@ -79,9 +79,11 @@ impl<'a> DecodeRequest<'a> {
         self
     }
 
-    /// Set a cancellation token.
-    pub fn with_stop(mut self, stop: StopToken) -> Self {
-        self.stop = Some(stop);
+    /// Retain an operation pulse (cancellation, progress, phase planning) for
+    /// every codec job this request creates. The default is the no-op pulse.
+    /// A cancellation-only source fits through `zencodec::how_far::StopOnly`.
+    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
+        self.pulse = pulse;
         self
     }
 
@@ -171,8 +173,8 @@ impl<'a> DecodeRequest<'a> {
     ///   right choice for targets that can't carry an orientation tag (PNG) or
     ///   for display-ready output.
     ///
-    /// Currently honored by the JPEG decoder (EXIF orientation);
-    /// other adapters ignore it (no stored orientation to bake).
+    /// Currently forwarded to JPEG, HEIC and AVIF decoders. Other adapters
+    /// do not yet forward this hint.
     pub fn with_orientation(mut self, hint: OrientationHint) -> Self {
         self.orientation = hint;
         self
@@ -280,6 +282,8 @@ impl<'a> DecodeRequest<'a> {
         let data = self.data;
         // Enable gain map extraction so codecs attach gain map data to extras.
         self.extract_gain_map = true;
+        #[cfg(feature = "raw-decode-gainmap")]
+        let gainmap_controls = (self.limits, self.pulse.clone());
         let output = self.decode_format(format)?;
 
         let gainmap = match format {
@@ -288,7 +292,10 @@ impl<'a> DecodeRequest<'a> {
                 // If standard UltraHDR extraction didn't find a gain map,
                 // try Apple MPF extraction (for AMPF files detected as JPEG).
                 #[cfg(feature = "raw-decode-gainmap")]
-                let gm = gm.or_else(|| extract_raw_gainmap(data));
+                let gm = match gm {
+                    Some(gm) => Some(gm),
+                    None => extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?,
+                };
                 gm
             }
             #[cfg(feature = "avif-decode")]
@@ -297,7 +304,7 @@ impl<'a> DecodeRequest<'a> {
             ImageFormat::Jxl => extract_jxl_gainmap(&output),
             #[cfg(feature = "raw-decode-gainmap")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                extract_raw_gainmap(data)
+                extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?
             }
             _ => None,
         };
@@ -506,7 +513,7 @@ impl<'a> DecodeRequest<'a> {
             data: self.data,
             codec_config: self.codec_config,
             limits: self.limits,
-            stop: self.stop.clone(),
+            pulse: self.pulse.clone(),
             preferred: &[],
             decode_policy: self.decode_policy,
             extract_gain_map: self.extract_gain_map,
@@ -537,7 +544,7 @@ impl<'a> DecodeRequest<'a> {
                 self.data,
                 self.codec_config,
                 self.limits,
-                self.stop,
+                self.pulse,
                 dp,
                 self.gain_map_render,
                 self.orientation,
@@ -546,59 +553,60 @@ impl<'a> DecodeRequest<'a> {
                 self.data,
                 self.codec_config,
                 self.limits,
-                self.stop,
+                self.pulse,
                 dp,
             ),
-            Gif => "gif" => crate::codecs::gif::decode(self.data, self.limits, self.stop, dp),
-            Png => "png" => crate::codecs::png::decode(self.data, self.limits, self.stop, dp),
+            Gif => "gif" => crate::codecs::gif::decode(self.data, self.limits, self.pulse, dp),
+            Png => "png" => crate::codecs::png::decode(self.data, self.limits, self.pulse, dp),
             Avif => "avif-decode" => crate::codecs::avif_dec::decode(
                 self.data,
                 self.codec_config,
                 self.limits,
-                self.stop,
+                self.pulse,
                 dp,
                 self.extract_gain_map,
+                self.orientation,
             ),
             Jxl => "jxl-decode" => crate::codecs::jxl_dec::decode(
                 self.data,
                 self.limits,
-                self.stop,
+                self.pulse,
                 dp,
                 self.extract_gain_map,
             ),
             Heic => "heic-decode" => crate::codecs::heic::decode(
                 self.data,
                 self.limits,
-                self.stop,
+                self.pulse,
                 dp,
                 self.gain_map_render,
                 self.extract_gain_map,
                 self.orientation,
             ),
-            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, self.limits, self.stop, dp),
-            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, self.limits, self.stop, dp),
-            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, self.limits, self.stop, dp),
-            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, self.limits, self.stop, dp),
-            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, self.limits, self.stop, dp),
-            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, self.limits, self.stop, dp),
-            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, self.limits, self.stop, dp);
+            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, self.limits, self.pulse, dp),
+            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, self.limits, self.pulse, dp),
+            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, self.limits, self.pulse, dp),
+            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, self.limits, self.pulse, dp),
+            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, self.limits, self.pulse, dp),
+            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, self.limits, self.pulse, dp),
+            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, self.limits, self.pulse, dp);
             // RAW/DNG: Custom format from zenraw
             #[cfg(feature = "raw-decode")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.stop)
+                crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.pulse)
             }
             // JPEG 2000
             #[cfg(feature = "jp2-decode")]
-            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.stop, dp),
+            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.pulse, dp),
             // SVG/SVGZ
             #[cfg(feature = "svg")]
             ImageFormat::Custom(def) if def.name == "svg" => {
-                crate::codecs::svg::decode(self.data, self.limits, self.stop, dp)
+                crate::codecs::svg::decode(self.data, self.limits, self.pulse, dp)
             }
             // PDF: Custom format from zenpdf (renders page 0)
             #[cfg(feature = "pdf-decode")]
             ImageFormat::Custom(def) if def.name == "pdf" => {
-                crate::codecs::pdf::decode(self.data, self.limits, self.stop, dp)
+                crate::codecs::pdf::decode(self.data, self.limits, self.pulse, dp)
             }
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }
@@ -726,8 +734,12 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
 ///
 /// Returns `None` for non-Apple DNGs and generic RAW files.
 #[cfg(feature = "raw-decode-gainmap")]
-fn extract_raw_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
-    crate::codecs::raw::extract_gainmap(data)
+fn extract_raw_gainmap(
+    data: &[u8],
+    limits: Option<&Limits>,
+    pulse: SharedPulse,
+) -> Result<Option<crate::gainmap::DecodedGainMap>> {
+    crate::codecs::raw::extract_gainmap(data, limits, pulse)
 }
 
 #[cfg(test)]
@@ -854,7 +866,9 @@ mod tests {
                     e.error()
                 );
                 // Test gain map extraction directly, bypassing the base decode.
-                let gainmap = crate::codecs::raw::extract_gainmap(&data);
+                let gainmap =
+                    crate::codecs::raw::extract_gainmap(&data, None, SharedPulse::default())
+                        .expect("embedded gain-map decode");
                 check_appledng_gainmap(gainmap.as_ref());
             }
         }

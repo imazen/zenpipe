@@ -17,6 +17,9 @@ Pure Rust, `#![forbid(unsafe_code)]`, `no_std + alloc`.
 Part of the [zenpipe](https://github.com/imazen/zenpipe) monorepo (its standalone
 repository now redirects here).
 
+The review branch also includes [checked pixel transcoding](../docs/checked-transcode.md),
+which binds conversion, metadata, policy and output validation in one operation.
+
 ## Quick start
 
 ```toml

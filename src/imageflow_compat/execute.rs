@@ -467,7 +467,7 @@ fn execute_steps_with_overrides(
                 decision.quality.quality,
                 decision.lossless,
                 decision.quality.effort,
-                None,
+                &zencodec::SharedPulse::default(),
                 None,
             ) {
                 Ok(Some((bytes, out_w, out_h))) => {

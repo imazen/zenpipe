@@ -324,6 +324,9 @@ impl Source for ResizeSource {
     fn format(&self) -> PixelFormat {
         self.format
     }
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        self.upstream.color_context()
+    }
 }
 
 // =============================================================================

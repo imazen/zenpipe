@@ -5,6 +5,17 @@ use core::fmt;
 /// Result type with `whereat::At<PipeError>` as the error.
 pub type PipeResult<T> = Result<T, whereat::At<PipeError>>;
 
+/// A codec failure that is the operation's own stop (zencodec's
+/// [`ErrorCategory::Stopped`](zencodec::ErrorCategory::Stopped) anywhere in its
+/// cause chain), which zenpipe reports as [`PipeError::Cancelled`] like every
+/// other stop.
+pub(crate) fn is_codec_stop(error: &(dyn core::error::Error + 'static)) -> bool {
+    matches!(
+        zencodec::find_cause::<zencodec::CodecError>(error).map(zencodec::CodecError::category),
+        Some(zencodec::ErrorCategory::Stopped(_))
+    )
+}
+
 /// Pipeline execution error.
 #[derive(Debug)]
 pub enum PipeError {

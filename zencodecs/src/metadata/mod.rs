@@ -4,7 +4,7 @@
 //! codecs and reexports the shared request results and application services.
 //! No operation decodes image pixels. ICC profiles remain opaque.
 pub use zencodec::metadata_rewrite::{Action, Compression, Entry, Error, Plan, Services};
-use zencodec::{MetadataPolicy, metadata_rewrite::Request};
+use zencodec::{MetadataPolicy, metadata_rewrite::RewriteRequest};
 
 /// Metadata-only request dispatched to enabled codecs.
 ///
@@ -13,13 +13,13 @@ use zencodec::{MetadataPolicy, metadata_rewrite::Request};
 /// an enabled rewrite implementation returns [`Error::Unsupported`].
 #[derive(Clone)]
 pub struct ScrubRequest<'a> {
-    request: Request<'a>,
+    request: RewriteRequest<'a>,
 }
 impl<'a> ScrubRequest<'a> {
     /// Borrow encoded input. No parsing or allocation occurs yet.
     pub fn new(input: &'a [u8]) -> Self {
         Self {
-            request: Request::new(input),
+            request: RewriteRequest::new(input),
         }
     }
     /// EXIF retention. Source XMP retention requires explicit `with_xmp_editing`.
@@ -65,8 +65,8 @@ impl<'a> ScrubRequest<'a> {
         self
     }
     /// Cooperative cancellation, checked between carriers and long byte walks.
-    pub fn with_stop(mut self, stop: &'a dyn enough::Stop) -> Self {
-        self.request = self.request.with_stop(stop);
+    pub fn with_pulse(mut self, pulse: Option<&'a dyn zencodec::Pulse>) -> Self {
+        self.request = self.request.with_pulse(pulse);
         self
     }
     /// Validate and plan the entire rewrite before any output is emitted.
@@ -75,10 +75,14 @@ impl<'a> ScrubRequest<'a> {
     /// detection; the codec's planner repeats them through zenmeta and also
     /// checks that required services were supplied.
     pub fn plan(&self) -> Result<Plan<'a>, Error> {
-        self.request.stop().check().map_err(|reason| match reason {
-            enough::StopReason::Cancelled => Error::Cancelled,
-            other => Error::Stopped(other),
-        })?;
+        self.request
+            .pulse()
+            .unwrap_or(&zencodec::NoPulse)
+            .check()
+            .map_err(|reason| match reason {
+                enough::StopReason::Cancelled => Error::Cancelled,
+                other => Error::Stopped(other),
+            })?;
         if self.request.input().len() > self.request.max_input() {
             return Err(Error::Limit(zencodec::LimitKind::InputSize));
         }

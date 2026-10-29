@@ -4,6 +4,14 @@
 //! The [`CodecConfig`] struct bundles all format-specific overrides into
 //! a single value that can be passed to encode/decode requests.
 
+// Only the codec configs below that are stored boxed use it.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "avif-decode",
+    feature = "raw-decode"
+))]
 use alloc::boxed::Box;
 
 // --- Re-exports ---

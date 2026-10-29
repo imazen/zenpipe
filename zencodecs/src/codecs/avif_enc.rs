@@ -86,7 +86,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     metadata: &crate::gainmap::GainMapMetadata,
     source_metadata: &zencodec::Metadata,
     limits: Option<&crate::Limits>,
-    stop: Option<&zencodec::StopToken>,
+    pulse: &crate::SharedPulse,
 ) -> crate::error::Result<crate::EncodeOutput> {
     use crate::{CodecError, ImageFormat};
     use whereat::{ResultAtExt, at_crate};
@@ -110,7 +110,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
         let result = at_crate!(zenavif::encode_rgb8(
             img.as_ref(),
             &gm_enc,
-            crate::StopToken::new(enough::Unstoppable),
+            zencodec::StopToken::new(pulse.clone()),
         ))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
         // Extract AV1 data from the AVIF file by re-parsing
@@ -126,7 +126,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
         let result = at_crate!(zenavif::encode_rgb8(
             img,
             &gm_enc,
-            crate::StopToken::new(enough::Unstoppable)
+            zencodec::StopToken::new(pulse.clone())
         ))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
         extract_av1_from_avif(&result.avif_file)?
@@ -157,9 +157,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     if let Some(lim) = limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s.clone());
-    }
+    job = job.with_pulse(pulse.clone());
     job = job.with_canvas_size(width, height);
 
     let encoder =
@@ -195,4 +193,62 @@ fn extract_av1_from_avif(avif_data: &[u8]) -> crate::error::Result<alloc::vec::V
         .primary_data()
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("extract AV1: {e}"))))?;
     Ok(primary.to_vec())
+}
+
+#[cfg(all(test, feature = "avif-decode", feature = "jpeg-ultrahdr"))]
+mod pulse_tests {
+    use super::*;
+    use zencodec::enough::{Stop, StopReason};
+    use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report};
+
+    struct Deadline;
+    impl Stop for Deadline {
+        fn check(&self) -> Result<(), StopReason> {
+            Err(StopReason::TimedOut)
+        }
+    }
+    impl Report for Deadline {
+        fn advance(&self, _: u64) {}
+    }
+    impl Pulse for Deadline {
+        fn split(&self, _: Execution, _: &[PhaseSpec<'_>]) -> Result<Vec<Child<'_>>, PlanError> {
+            Err(PlanError::Unsupported)
+        }
+    }
+
+    #[test]
+    fn auxiliary_gain_map_observes_deadline_before_base_adaptation() {
+        for channels in [1, 3] {
+            let gain = crate::gainmap::GainMap {
+                data: vec![128; 8 * 8 * channels],
+                width: 8,
+                height: 8,
+                channels: channels as u8,
+            };
+            // Deliberately invalid base storage: a timeout must arrive from the
+            // preceding auxiliary encode, not only after it reaches the base.
+            let error = encode_with_precomputed_gainmap(
+                &[],
+                8,
+                8,
+                zenpixels::PixelDescriptor::RGB8_SRGB,
+                None,
+                None,
+                None,
+                &gain,
+                &crate::gainmap::GainMapMetadata::default(),
+                &zencodec::Metadata::none(),
+                None,
+                &crate::SharedPulse::new(Deadline),
+            )
+            .unwrap_err();
+            assert!(
+                matches!(
+                    zencodec::find_cause::<zenavif::Error>(&error),
+                    Some(zenavif::Error::Cancelled(StopReason::TimedOut))
+                ),
+                "channel count {channels}: {error:?}"
+            );
+        }
+    }
 }

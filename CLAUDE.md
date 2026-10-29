@@ -37,6 +37,34 @@ sources`.
 
 ## Known Bugs
 
+- Fixed in the optional Pulse candidate (2026-10-29): pipeline execution pulled
+  a source before checking cancellation and could finish a sink after a cancelled
+  empty pull. New effect controls require zero source reads for pre-cancellation
+  and no sink delivery/finish after cancellation during a pull. The 29-test limits
+  target and strict Clippy passed on 7c36d596/921a3f9f; session cache tests also pass.
+  Native animation/processing migration is separately qualified.
+
+- Fixed in source during publication qualification (2026-10-28): the browser
+  fallback supported export but rejected `encode_preview`, leaving the preview
+  hidden and its statistics empty. The worker now uses its existing canvas
+  backend for previews and reports the actual encoded MIME. Two Node protocol
+  controls fail on the old worker and pass on the repair; actual browser
+  readback and the unchanged full suite remain unrun for this source change.
+  See `docs/publication-qualification.md`.
+
+- Fixed during native PNG qualification (2026-10-25): a 97x65 source could
+  deliver a 65-row native batch to an admitted 64-row transcode strip and fail
+  with `StripGeometry`. The sink now advertises its capacity; shared coroutine
+  delivery splits batches. 97x65/257 RGB8 and RGBA16 retain exact independent
+  samples with 1/3/64-row buffers (`just checked-transcode-async-check`).
+
+- Fixed in the checked-transcode review (2026-10-25): default PNG color emission
+  could add derived cICP beside a retained Display P3 ICC, changing authority.
+  The adapter now supplies checked verbatim defaults without overriding required
+  policy fields. Packed PNG palette index width also no longer masquerades as
+  decoded channel precision. The native regression compares expanded pixels
+  against an independent PNG reader; `just checked-transcode-async-check`.
+
 ### Windows session-cache benchmark stack overflow (2026-10-19)
 
 Both Windows x64 and ARM64 full test jobs abort in the debug all-target
@@ -138,6 +166,114 @@ threading, hdr directives, compat security. Verified remaining:
   `docs/nodes/zenlayout-orient.md` still show `Orient` bound to `srotate`;
   since 2026-08-27 its key is `orientation` — regen will fix that too.)
 
+## Known Bugs: animated routes and qualification gaps (2026-10-28)
+
+- Fixed (`3c688575`): an animated transcode whose decoder renders frames in a
+  layout other than the encoder's (zenwebp renders an opaque lossy animation as
+  RGB8) panicked in `FrameSink`. Each frame now converts to the encoder's
+  format. Evidence: `benchmarks/pulse_animation_qualify_2026-10-28.md`.
+- Open (#111): `zencodecs::transcode()` is still-only. Given a multi-frame
+  source, it encodes the first frame and drops the rest without reporting it.
+  Nothing changes until an API proposal is reviewed.
+- Open: `imageflow-compat` (`std,imageflow-compat,nodes-jpeg,nodes-png` lib)
+  fails strict Clippy with 65 pre-existing lints, all in
+  `src/imageflow_compat/*`
+  (`scripts/qualify/imageflow-compat-clippy-baseline-60127aaf.tsv`).
+- Open: four `zencodecs/tests/stop_and_limits.rs` tests are ignored with the
+  reason "PNG codec adapter not yet wired into zencodecs", yet pass with
+  `--ignored`. The attributes stay until reviewed.
+- Open: `PipeError::Cancelled` carries no stop reason. A caller's `TimedOut`
+  and a codec's typed stop error are lost.
+- Unmeasured: stop latency. Every `zencodecs/tests/stop_latency.rs` test is an
+  `#[ignore]` benchmark (`just stop-latency` runs them). They used to count any
+  error as a stop; they now report only a stop as one, with its reason.
+- Open: four natives predate the zencodec 0.2 Pulse contract, and their features
+  do not build against the core: zenavif, heic, zenextras (zenpdf, zentiff) and
+  zenraw. No compatible head existed on 2026-10-28
+  (`benchmarks/native_pulse_heads_2026-10-28.md`).
+- CI blind spot: each extras step stops at its first failure. At `363f7c50` the
+  `pdf_` and `zeneditor` failures kept the Test extras for zeneditor, the
+  raw-decode set, `metadata_scrub`, `tools/metadata-services` and zenfilters,
+  and the Clippy extra for zenfilters, from running.
+
+## Known Bugs: single-codec subset warnings (fixed 2026-10-28)
+
+zenpipe `std,nodes-jxl` builds zencodecs with only `zennode,jxl-decode`; that
+subset had 13 strict-Clippy warnings (encoder-only helpers and the owned
+streaming shim compiled without a user). `just clippy-codec-subsets` lints every
+`nodes-<codec>` subset; pass NODE=CODEC pairs to check a few.
+
+## Known Bugs: optional decoder limits warning (fixed 2026-10-25)
+
+The JPEG/PNG/CMS-only configuration exposed an unused decoder-factory limits
+parameter when WebP was disabled. The parameter remains forwarded in the WebP
+arm; `just checked-transcode-baseline` verifies this smaller configuration.
+
+### Session benchmark main-thread stack (2026-10-25)
+
+Windows x64 and ARM64 CI reached `benches/session_cache.rs` after the ordinary
+correctness tests, then the standalone benchmark executable overflowed its main
+thread stack before reporting a sample. The benchmark now enters through a named
+worker with an explicit 8 MiB stack reservation on every platform; all benchmark
+bodies, assertions and zenbench process options are retained. This is a reservation,
+not a measured live-memory bound for the codecs. `just session-stack-check` runs
+the nested decode/crop/resize/filter path; Windows execution remains a CI gate.
+
+## Known Bugs: AVIF decode-only test helpers (fixed 2026-10-29)
+
+Seven strict-Clippy errors arose because encode-only helpers/imports in
+`zencodecs/tests/avif_capability.rs` compiled without `avif-encode`. Matching
+the helpers to their consuming tests preserves all tests and assertions.
+`just clippy-codec-subsets nodes-avif=avif-decode` passes at b7f8ff79; see
+benchmarks/optional_pipeline_pulse_2026-10-29.md.
+
+## Known Bugs: portable serializer source split (2026-10-29)
+
+The decoder-pin gate fails at3df0dd88 even after root lock qualification:
+zenavif94116d26 selects zenravif aac04acc, which explicitly selects
+zenavif-serialize98c8a501 from the canonical zenavif git repository. Root
+metadata confirms that sole serializer parent. This is a transitive explicit git
+edge, so adding a registry patch or merely refreshing the root lock cannot align
+it with94116d26. Preserve the pin gate. The portable repair needs a coordinated
+zenravif dependency commit, the consuming zenavif pin, and all zenpipe graph roots
+(including the direct parser edge), followed by native encode/readback controls.
+No pixel defect is established by this source-identity finding alone. Existing
+zenavif issue53 concerns historical serializer behavior, not proof of this fix.
+
+Resolution on the optional Pulse branch: zenravif `52bb0243` makes the serializer
+a registry edge; zenavif `f0a3919e` and all five application-root serializer
+patches now agree. Both source/family validators pass on `96972529`; the prior
+failure remains recorded above. Native consumer controls remain a separate gate.
+See `benchmarks/portable_serializer_2026-10-29.md`.
+
+Native gate `avif-consumer-contract-check` on `4fd1d7ec` resolves successfully
+but fails 3 orientation controls (8 pass, 4 pre-existing ignores). Two existing
+metadata tests require carrier preservation while native still encoding bakes
+orientation; separate diagnostic witnesses confirm that bake. The third failure
+exposes zencodecs dropping `OrientationHint` before AVIF decode. Do not weaken
+these assertions to declare the graph release-qualified.
+
+## Fixed: full-profile RAW gain-map controls (2026-10-29)
+
+Paired HEIC/RAW adapters compile under the full generated-API feature profile
+on3ae78770. A nested RAW JPEG gain-map decode still passed None to an owned
+Pulse argument; it now retains the operation's Pulse and limits and propagates
+decode errors instead of reporting absence. Full-profile strict Clippy and
+real JPEG timeout/limit/malformed-input controls pass. Complete Apple DNG
+container coverage and aggregate memory accounting are not established by
+that focused control. See `benchmarks/full_profile_2026-10-29.md`.
+
 ### Comparing unpublished API surfaces
 
 `just semver-against <reviewed-source-export>` builds stable-toolchain rustdoc JSON inside the actual workspaces and compares the resulting API graphs at patch level. This preserves root git patches for unpublished dependencies that a synthetic outer workspace loses. `just test-streaming-seam`, `just test-dispatched-output`, and `just streaming-clippy-gate` exercise the dispatched row and transport contract.
+
+## ImageJob optional Pulse integration (2026-10-29)
+
+Fuzz compilation exposed stale with_stop calls in the feature-gated ImageJob
+decode/fallback/encode paths, plus a duplicate animation stop block. Default
+zenpipe tests do not compile the job feature. Those paths now use the existing
+shared control helper; animation retains its already-attached shared Pulse.
+The dedicated integration-job-check recipe covers job and gain-map features.
+The combined job/gain-map/node/Tokio/schema runtime and strict Clippy pass.
+Original deadline/cancellation assertions are retained; see
+`docs/current-main-integration.md` for evidence and the five HDR placeholder gaps.

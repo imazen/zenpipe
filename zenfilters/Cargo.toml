@@ -36,6 +36,8 @@ local-darktable = ["local-fixtures"]
 [dependencies]
 archmage = { version = "0.9.30", features = ["avx512"] }
 enough = "0.4.4"
+# Optional shared operation control.
+how-far = { version = "0.1.0", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
@@ -53,6 +55,8 @@ imgref = "1.12.3"
 palette = { version = "0.7.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
 almost-enough = "0.4.4"
+# Shared optional operation control; no runtime or observer allocation required.
+how-far = { version = "0.1.0", default-features = false }
 # 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
 # git patch, same shape as zencodecs' zensim dep. CI paths it to the sibling clone.
 zensim = { version = "0.3.0", default-features = false }
@@ -73,7 +77,7 @@ zenbench = { version = "0.1.10", features = ["criterion-compat"] }
 # the SIMD path. Feature unification applies this to test/bench builds only.
 archmage = { version = "0.9.30", features = ["testable_dispatch"] }
 libblur = { version = "0.24.0", default-features = true }
-zenresize = { version = "0.2.2", default-features = false, features = ["std"] }
+zenresize = { version = "0.3.1", default-features = false, features = ["std"] }
 image = "0.25.9"
 codec-corpus = "1.1.0"
 

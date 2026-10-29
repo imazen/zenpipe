@@ -10,7 +10,7 @@
 //! and hold the returned [`AllocationGuard`] for the buffer's lifetime.
 //!
 //! [`Deadline`] (requires `std`) implements [`enough::Stop`] so it composes
-//! with the existing cancellation path in [`execute_with_stop`](crate::execute_with_stop).
+//! with the existing cancellation path in [`execute_with_pulse`](crate::execute_with_pulse).
 
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -585,8 +585,8 @@ impl core::fmt::Debug for AllocationGuard {
 /// A [`Stop`](enough::Stop) implementation that expires after a fixed duration.
 ///
 /// Created from [`Limits::to_deadline()`] or directly via [`Deadline::new()`].
-/// Composes with [`execute_with_stop`](crate::execute_with_stop) — pass as
-/// the `stop` parameter to enforce a wall-clock timeout on pipeline execution.
+/// Composes with [`execute_with_pulse`](crate::execute_with_pulse) — pass as
+/// `Some(&zencodec::how_far::StopOnly::borrowed(&deadline))` to enforce a timeout.
 ///
 /// # Example
 ///

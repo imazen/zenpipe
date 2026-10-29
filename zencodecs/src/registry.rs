@@ -330,6 +330,8 @@ mod tests {
         assert!(af.can_decode(ImageFormat::Jpeg));
         #[cfg(feature = "webp")]
         assert!(af.can_decode(ImageFormat::WebP));
+        #[cfg(not(any(feature = "jpeg", feature = "webp")))]
+        let _ = af;
     }
 
     #[test]
@@ -366,6 +368,8 @@ mod tests {
         let formats: alloc::vec::Vec<_> = af.decodable_formats().collect();
         #[cfg(feature = "jpeg")]
         assert!(formats.contains(&ImageFormat::Jpeg));
+        #[cfg(not(feature = "jpeg"))]
+        let _ = formats;
     }
 
     #[test]
@@ -491,6 +495,8 @@ mod tests {
             assert!(af.can_decode(ImageFormat::Gif));
             assert!(af.can_encode(ImageFormat::Gif));
         }
+        #[cfg(not(any(feature = "jpeg", feature = "png", feature = "webp", feature = "gif")))]
+        let _ = af;
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -8,7 +8,7 @@
 //!
 //! # Usage
 //!
-//! Call [`try_lossless_jpeg()`] before decoding the source image. If it returns
+//! Call [`try_lossless_jpeg_with_pulse()`] before decoding the source image. If it returns
 //! `Some(data)`, the lossless path succeeded and the result is ready for output.
 //! If it returns `None`, fall through to the normal streaming pipeline.
 //!
@@ -25,7 +25,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use enough::Stop;
 use zenjpeg::lossless::{EdgeHandling, LosslessTransform, TransformConfig};
 use zennode::NodeInstance;
 
@@ -45,6 +44,9 @@ pub struct LosslessResult {
 
 /// Try to execute a pipeline via lossless JPEG transforms.
 ///
+/// The native coefficient transform currently accepts cancellation only: this
+/// route checks the supplied Pulse but does not plan or report progress phases.
+///
 /// Returns `Ok(Some(result))` if all processing nodes are pure orientation
 /// transforms and the source/output are both JPEG. Returns `Ok(None)` if
 /// the pipeline requires pixel decoding (caller should fall through to
@@ -57,19 +59,21 @@ pub struct LosslessResult {
 ///   Only pixel-phase nodes are inspected; decode/encode nodes are skipped.
 /// * `encode_config` — Encode configuration (used to check output format).
 /// * `exif_orientation` — EXIF orientation tag (1-8) from source probing.
-/// * `stop` — Cooperative cancellation token.
+/// * `pulse` — Optional cooperative control; `None` adds no control.
 ///
 /// # Errors
 ///
 /// Returns `Err` only if the lossless transform itself fails (corrupt JPEG,
 /// etc.). A pipeline that can't be done losslessly returns `Ok(None)`.
-pub fn try_lossless_jpeg(
+pub fn try_lossless_jpeg_with_pulse(
     source_data: &[u8],
     nodes: &[Box<dyn NodeInstance>],
     encode_config: &EncodeConfig,
     exif_orientation: u8,
-    stop: &dyn Stop,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Option<LosslessResult>, PipeError> {
+    let control = pulse.unwrap_or(&zencodec::NoPulse);
+    control.check().map_err(|_| PipeError::Cancelled)?;
     // 1. Source must be JPEG (check magic bytes).
     if !is_jpeg(source_data) {
         return Ok(None);
@@ -103,7 +107,7 @@ pub fn try_lossless_jpeg(
         edge_handling: EdgeHandling::TrimPartialBlocks,
     };
 
-    let result = zenjpeg::lossless::transform(source_data, &config, stop)
+    let result = zenjpeg::lossless::transform(source_data, &config, control)
         .map_err(|e| PipeError::Op(alloc::format!("lossless JPEG transform failed: {e}")))?;
 
     // 6. Probe output dimensions.
@@ -118,6 +122,26 @@ pub fn try_lossless_jpeg(
         width: w,
         height: h,
     }))
+}
+
+/// Compatibility entry point for cancellation-only callers.
+#[deprecated(
+    note = "use try_lossless_jpeg_with_pulse; adapt Stop with how_far::StopOnly::borrowed"
+)]
+pub fn try_lossless_jpeg(
+    source_data: &[u8],
+    nodes: &[Box<dyn NodeInstance>],
+    encode_config: &EncodeConfig,
+    exif_orientation: u8,
+    stop: &dyn enough::Stop,
+) -> Result<Option<LosslessResult>, PipeError> {
+    try_lossless_jpeg_with_pulse(
+        source_data,
+        nodes,
+        encode_config,
+        exif_orientation,
+        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
+    )
 }
 
 /// Classify all pixel-processing nodes as a single composed lossless transform.

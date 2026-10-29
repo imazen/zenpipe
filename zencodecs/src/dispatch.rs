@@ -7,32 +7,88 @@
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::macros::dispatch_format;
-use crate::{CodecError, ImageFormat, Limits, Metadata, StopToken};
+use crate::{CodecError, ImageFormat, Limits, Metadata, SharedPulse};
 use alloc::boxed::Box;
 use whereat::at;
 use zencodec::encode::EncodeOutput;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 /// Encoding parameters extracted from [`EncodeRequest`](crate::EncodeRequest).
+// Every field is read by some encoder; with only decoders compiled the request
+// still carries them, unread.
+#[cfg_attr(
+    not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )),
+    allow(dead_code)
+)]
 pub(crate) struct EncodeParams<'a> {
+    // Read by the encoders that map quality and effort; GIF, the bitmap
+    // formats and TIFF take neither.
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode"
+        )),
+        allow(dead_code)
+    )]
     pub quality: Option<f32>,
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode"
+        )),
+        allow(dead_code)
+    )]
     pub effort: Option<u32>,
+    #[allow(dead_code)] // Not every compiled codec has a lossless configuration.
     pub lossless: bool,
     pub prefer_streaming: bool,
     pub metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` at the codec boundary via
     /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
     pub metadata_policy: zencodec::MetadataPolicy,
+    // The bitmap formats and TIFF have no per-codec configuration.
+    #[cfg_attr(
+        not(any(
+            feature = "jpeg",
+            feature = "webp",
+            feature = "png",
+            feature = "avif-encode",
+            feature = "jxl-encode",
+            feature = "gif"
+        )),
+        allow(dead_code)
+    )]
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
-    pub stop: Option<StopToken>,
+    pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
+    pub orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     #[cfg(feature = "tonemap")]
     pub tone_map_policy: crate::ToneMapPolicy,
     /// Explicit color signal to emit (e.g. a source `source_color` resolved from
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
     /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
     /// derive color from the pixel descriptor as before.
+    #[allow(dead_code)] // Consumed by the optional PNG arm.
     pub cicp: Option<zencodec::Cicp>,
 }
 
@@ -52,7 +108,8 @@ pub(crate) struct EncodeParams<'a> {
 /// Only the precomputed gain-map path uses it: that path encodes the caller's
 /// pixels and gain map unrotated. Ordinary encodes bake orientation into the
 /// pixels instead (`crate::orient_fit`).
-#[cfg(feature = "jpeg-ultrahdr")]
+#[cfg(any(test, feature = "jpeg-ultrahdr", feature = "checked-transcode"))]
+#[allow(deprecated)] // Preserve the existing serializer on this compatibility path.
 pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) -> Metadata {
     use zencodec::exif::{Exif, TextEncoding};
     if meta.orientation == zencodec::Orientation::Identity
@@ -102,6 +159,20 @@ pub(crate) struct BuiltEncoder<'a> {
 /// The closure receives `EncodeParams` and returns the concrete `EncoderConfig`.
 /// Config construction happens inside the returned closure so the config's
 /// lifetime doesn't escape the function.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
 pub(crate) fn build_from_config<'a, C, F>(
     build_config: F,
     params: EncodeParams<'a>,
@@ -225,9 +296,7 @@ where
                 config = config.with_prefer_streaming(true);
             }
             let mut job = config.job();
-            if let Some(s) = params.stop {
-                job = job.with_stop(s);
-            }
+            job = job.with_pulse(params.pulse);
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
@@ -237,8 +306,15 @@ where
                     params.metadata_policy,
                 );
             }
+            let format = C::format();
+            if let Some(mode) = params.orientation_mode {
+                job.try_set_orientation_mode(mode)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            }
             if let Some(ep) = params.encode_policy {
-                job = job.with_policy(ep);
+                // Refuse a policy the codec cannot enforce instead of ignoring it.
+                job.try_set_policy(ep)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             let enc = job
                 .encoder()
@@ -284,7 +360,7 @@ pub trait AnyEncoder: Send + Sync {
         pixels: PixelSlice<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
-        stop: Option<StopToken>,
+        pulse: SharedPulse,
     ) -> Result<EncodeOutput>;
 
     /// Encode sRGB RGBA8 pixels from an `ImgRef`.
@@ -306,7 +382,7 @@ pub trait AnyEncoder: Send + Sync {
         } else {
             typed.erase()
         };
-        self.encode_pixels(pixels, None, None, None)
+        self.encode_pixels(pixels, None, None, SharedPulse::default())
     }
 }
 
@@ -328,7 +404,7 @@ where
         pixels: PixelSlice<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
-        stop: Option<StopToken>,
+        pulse: SharedPulse,
     ) -> Result<EncodeOutput> {
         use zencodec::encode::{EncodeJob as _, Encoder as _};
 
@@ -375,9 +451,7 @@ where
         let adapted_pixels = adapted.as_slice();
 
         let mut job = self.clone().job();
-        if let Some(s) = stop {
-            job = job.with_stop(s);
-        }
+        job = job.with_pulse(pulse);
         if let Some(m) = metadata {
             // Type-erased convenience path carries no policy; embed verbatim.
             job = job.with_metadata_policy(
@@ -434,6 +508,20 @@ pub struct StreamingEncoder {
 /// Cancellation is checked once before building the encoder.
 /// For streaming encode the caller controls pacing and can check
 /// the stop token between `push_rows()` calls.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
 pub(crate) fn build_streaming_from_config<C, F>(
     build_config: F,
     params: EncodeParams<'_>,
@@ -453,9 +541,7 @@ where
         config = config.with_prefer_streaming(true);
     }
     let mut job = config.job();
-    if let Some(s) = params.stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(params.pulse);
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
@@ -518,10 +604,16 @@ where
             params.metadata_policy,
         );
     }
-    if let Some(ep) = params.encode_policy {
-        job = job.with_policy(ep);
-    }
     let format = C::format();
+    if let Some(mode) = params.orientation_mode {
+        job.try_set_orientation_mode(mode)
+            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+    }
+    if let Some(ep) = params.encode_policy {
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(ep)
+            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+    }
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
@@ -578,6 +670,79 @@ where
         supported,
         format,
     })
+}
+
+/// A configured encoder job, before any encoder exists.
+///
+/// Retain it across planning and policy, then hand it to a planned row driver
+/// (`zencodec_io::row_encode::encode_job` through an erased-job adapter). The
+/// job carries the request's quality, effort, limits, pulse and metadata.
+pub struct ConfiguredJob {
+    /// The erased job; `plan_encode` and `into_encoder` are available on it.
+    pub job: Box<dyn zencodec::encode::DynEncodeJob>,
+    /// Pixel formats the encoder accepts natively.
+    pub supported: &'static [PixelDescriptor],
+    /// The resolved output format.
+    pub format: ImageFormat,
+}
+
+/// The configuration [`build_streaming_from_config`] builds, kept as a job.
+///
+/// A required encode policy is applied with the checked setter: a codec that
+/// cannot honor it refuses here. (The streaming path keeps its legacy
+/// best-effort setter, which may ignore such a policy.)
+#[cfg(any(feature = "jpeg", feature = "png"))]
+pub(crate) fn build_job_from_config<C, F>(
+    build_config: F,
+    params: EncodeParams<'_>,
+) -> Result<ConfiguredJob>
+where
+    C: zencodec::encode::EncoderConfig + 'static,
+    F: FnOnce(&EncodeParams<'_>) -> C,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
+    <C::Job as zencodec::encode::EncodeJob>::AnimationFrameEnc:
+        zencodec::encode::AnimationFrameEncoder,
+{
+    use zencodec::encode::DynEncoderConfig as _;
+    let config = build_config(&params);
+    let format = C::format();
+    let mut job = config.dyn_job();
+    job.set_pulse(params.pulse);
+    if let Some(lim) = params.limits {
+        job.set_limits(crate::limits::to_resource_limits(lim));
+    }
+    if let Some(meta) = params.metadata {
+        job.set_metadata_policy(meta, params.metadata_policy);
+    }
+    if let Some(mode) = params.orientation_mode {
+        job.try_set_orientation_mode(mode)
+            .map_err(|source| at!(CodecError::Codec { format, source }))?;
+    }
+    if let Some(policy) = params.encode_policy {
+        job.try_set_policy(policy)
+            .map_err(|source| at!(CodecError::Codec { format, source }))?;
+    }
+    Ok(ConfiguredJob {
+        job,
+        supported: C::supported_descriptors(),
+        format,
+    })
+}
+
+/// Build a configured job for the specified format. Planned row encoding is
+/// qualified for JPEG and PNG; other formats refuse instead of falling back.
+pub(crate) fn build_job(format: ImageFormat, params: EncodeParams<'_>) -> Result<ConfiguredJob> {
+    let _ = &params;
+    match format {
+        #[cfg(feature = "jpeg")]
+        ImageFormat::Jpeg => crate::codecs::jpeg::build_job(params),
+        #[cfg(feature = "png")]
+        ImageFormat::Png => crate::codecs::png::build_job(params),
+        _ => Err(at!(CodecError::UnsupportedOperation {
+            format,
+            detail: "planned row encoding is qualified for JPEG and PNG only",
+        })),
+    }
 }
 
 /// Converts each strip to sRGB before the codec sees it, for a target that
@@ -1019,6 +1184,22 @@ pub(crate) fn build_streaming_encoder(
     format: ImageFormat,
     params: EncodeParams<'_>,
 ) -> Result<StreamingEncoder> {
+    // Only the encoder arms below consume `params`.
+    #[cfg(not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )))]
+    let _ = params;
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => crate::codecs::jpeg::build_streaming(params),
@@ -1047,6 +1228,22 @@ pub(crate) fn build_encoder<'a>(
     format: ImageFormat,
     params: EncodeParams<'a>,
 ) -> Result<BuiltEncoder<'a>> {
+    // Only the encoder arms below consume `params`.
+    #[cfg(not(any(
+        feature = "jpeg",
+        feature = "webp",
+        feature = "gif",
+        feature = "png",
+        feature = "avif-encode",
+        feature = "jxl-encode",
+        feature = "bitmaps",
+        feature = "bitmaps-bmp",
+        feature = "bitmaps-qoi",
+        feature = "bitmaps-tga",
+        feature = "bitmaps-hdr",
+        feature = "tiff"
+    )))]
+    let _ = params;
     dispatch_format! {
         format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
         Jpeg => "jpeg" => Ok(crate::codecs::jpeg::build_trait_encoder(params)),
@@ -1063,5 +1260,68 @@ pub(crate) fn build_encoder<'a>(
         Tga => "bitmaps-tga" => Ok(crate::codecs::tga::build_trait_encoder(params)),
         Hdr => "bitmaps-hdr" => Ok(crate::codecs::hdr::build_trait_encoder(params));
         _ => Err(at!(CodecError::UnsupportedFormat(format))),
+    }
+}
+
+#[cfg(test)]
+#[allow(deprecated)] // Exercise the existing compatibility serializer.
+mod fold_tests {
+    use super::*;
+    use zencodec::Orientation;
+    use zencodec::exif::Exif;
+
+    fn tag_of(meta: &Metadata) -> Option<Orientation> {
+        meta.exif
+            .as_deref()
+            .and_then(Exif::parse)
+            .and_then(|e| e.orientation())
+    }
+
+    #[test]
+    fn authors_a_blob_when_none_exists() {
+        let m = Metadata::none().with_orientation(Orientation::Rotate90);
+        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
+        assert_eq!(tag_of(&out), Some(Orientation::Rotate90));
+        assert_eq!(out.orientation, Orientation::Rotate90);
+    }
+
+    #[test]
+    fn inserts_the_tag_into_a_blob_that_lacks_it_and_keeps_other_fields() {
+        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
+        e.set_copyright("(c) test");
+        let m = Metadata::none()
+            .with_exif(e.to_bytes())
+            .with_orientation(Orientation::Rotate270);
+        let out = fold_orientation_into_exif(m, ImageFormat::Png);
+        assert_eq!(tag_of(&out), Some(Orientation::Rotate270));
+        let parsed = Exif::parse(out.exif.as_deref().unwrap()).unwrap();
+        assert_eq!(parsed.copyright().as_deref(), Some("(c) test"));
+    }
+
+    #[test]
+    fn leaves_identity_native_carriers_and_existing_tags_alone() {
+        // Identity: nothing to emit.
+        let m = Metadata::none();
+        assert!(
+            fold_orientation_into_exif(m, ImageFormat::WebP)
+                .exif
+                .is_none()
+        );
+        // AVIF carries orientation natively (irot/imir) — no EXIF authored.
+        let m = Metadata::none().with_orientation(Orientation::Rotate90);
+        assert!(
+            fold_orientation_into_exif(m, ImageFormat::Avif)
+                .exif
+                .is_none()
+        );
+        // Existing tag: blob byte-identical (reconciliation is the policy's job).
+        let mut e = Exif::new(zencodec::exif::TextEncoding::Ascii);
+        e.set_orientation(Orientation::Rotate180);
+        let blob = e.to_bytes();
+        let m = Metadata::none()
+            .with_exif(blob.clone())
+            .with_orientation(Orientation::Rotate90);
+        let out = fold_orientation_into_exif(m, ImageFormat::Jpeg);
+        assert_eq!(out.exif.as_deref(), Some(blob.as_slice()));
     }
 }

@@ -206,4 +206,7 @@ impl Source for EdgeReplicateSource {
     fn format(&self) -> PixelFormat {
         self.format
     }
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        self.upstream.color_context()
+    }
 }

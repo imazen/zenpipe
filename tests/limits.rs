@@ -157,7 +157,11 @@ fn execute_with_stop_cancels() {
     let stop = CountdownStop::new(2); // Cancel after 2 strip checks
 
     let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &stop);
+    let result = zenpipe::execute_with_pulse(
+        &mut *src,
+        &mut sink,
+        Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+    );
 
     assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
     // Should have processed some but not all data.
@@ -166,11 +170,30 @@ fn execute_with_stop_cancels() {
 
 #[test]
 fn execute_with_unstoppable_completes() {
-    let mut src = solid_source(4, 4);
-    let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &zenpipe::Unstoppable);
-    assert!(result.is_ok());
-    assert_eq!(sink.bytes, 4 * 4 * 4);
+    for stop in [None, Some(&zencodec::NoPulse as &dyn zencodec::Pulse)] {
+        let mut src = solid_source(4, 4);
+        let mut sink = CollectSink::new();
+        let result = zenpipe::execute_with_pulse(&mut *src, &mut sink, stop);
+        assert!(result.is_ok());
+        assert_eq!(sink.bytes, 4 * 4 * 4);
+    }
+}
+
+#[test]
+fn optional_materialization_stop_keeps_rows_and_cancellation() {
+    for stop in [None, Some(&zencodec::NoPulse as &dyn zencodec::Pulse)] {
+        let materialized =
+            MaterializedSource::from_source_with_pulse(solid_source(4, 4), stop).unwrap();
+        for y in 0..4 {
+            assert_eq!(&materialized.row(y)[..16], &[128; 16]);
+        }
+    }
+    let stop = CountdownStop::new(2);
+    let result = MaterializedSource::from_source_with_pulse(
+        solid_source(4, 100),
+        Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+    );
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
 }
 
 struct CollectSink {
@@ -399,6 +422,100 @@ fn deadline_compose_with_execute() {
 
     let mut src = solid_source(4, 100);
     let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &deadline);
+    let result = zenpipe::execute_with_pulse(
+        &mut *src,
+        &mut sink,
+        Some(&zencodec::how_far::StopOnly::borrowed(&deadline)),
+    );
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+}
+
+/// Cancellation observed before a pull or during a pull must not reach the sink.
+#[test]
+fn pulse_guards_input_delivery_and_finish() {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    struct Flag(Arc<AtomicBool>);
+    impl Stop for Flag {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            if self.0.load(Ordering::Relaxed) {
+                Err(enough::StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    #[derive(Default)]
+    struct Effects {
+        consumed: usize,
+        finished: usize,
+    }
+    impl zenpipe::Sink for Effects {
+        fn consume(&mut self, _: &Strip<'_>) -> zenpipe::PipeResult<()> {
+            self.consumed += 1;
+            Ok(())
+        }
+        fn finish(&mut self) -> zenpipe::PipeResult<()> {
+            self.finished += 1;
+            Ok(())
+        }
+    }
+
+    for (pre_cancelled, has_row) in [(true, true), (false, true), (false, false)] {
+        let cancelled = Arc::new(AtomicBool::new(pre_cancelled));
+        let pulls = Arc::new(AtomicU32::new(0));
+        let pull_flag = cancelled.clone();
+        let pull_count = pulls.clone();
+        let mut source = CallbackSource::new(1, 1, format::RGBA8_SRGB, 1, move |row| {
+            pull_count.fetch_add(1, Ordering::Relaxed);
+            pull_flag.store(true, Ordering::Relaxed);
+            row.fill(128);
+            Ok(has_row)
+        });
+        let pulse = zencodec::how_far::StopOnly::new(Flag(cancelled));
+        let mut sink = Effects::default();
+        let result = zenpipe::execute_with_pulse(&mut source, &mut sink, Some(&pulse));
+        assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+        assert_eq!(pulls.load(Ordering::Relaxed), u32::from(!pre_cancelled));
+        assert_eq!(sink.consumed, 0);
+        assert_eq!(sink.finished, 0);
+    }
+}
+
+#[test]
+fn materialization_checks_pulse_before_source_geometry() {
+    struct Untouched;
+    impl Source for Untouched {
+        fn next(&mut self) -> zenpipe::PipeResult<Option<Strip<'_>>> {
+            panic!("cancelled materialization pulled input")
+        }
+        fn width(&self) -> u32 {
+            panic!("cancelled materialization inspected geometry")
+        }
+        fn height(&self) -> u32 {
+            1
+        }
+        fn format(&self) -> zenpipe::PixelFormat {
+            format::RGBA8_SRGB
+        }
+    }
+    let stop = CountdownStop::new(1);
+    let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
+    let result = MaterializedSource::from_source_with_pulse(Box::new(Untouched), Some(&pulse));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+}
+
+#[test]
+#[allow(deprecated)] // Keep the original required-Stop signatures source compatible.
+fn legacy_stop_entries_preserve_cancellation() {
+    let stop = CountdownStop::new(1);
+    let mut sink = CollectSink::new();
+    let result = zenpipe::execute_with_stop(&mut *solid_source(1, 1), &mut sink, &stop);
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+    assert_eq!(sink.bytes, 0);
+
+    let stop = CountdownStop::new(1);
+    let result = MaterializedSource::from_source_stoppable(solid_source(1, 1), &stop);
     assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
 }

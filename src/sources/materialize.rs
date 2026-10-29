@@ -40,18 +40,33 @@ impl MaterializedSource {
 
     /// Drain all strips from `upstream` into memory.
     pub fn from_source(upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
-        Self::from_source_stoppable(upstream, &enough::Unstoppable)
+        Self::from_source_with_pulse(upstream, None)
     }
 
-    /// Drain all strips from `upstream` into memory, checking `stop` between strips.
-    ///
-    /// Returns `PipeError::Cancelled` if the stop signal fires mid-drain.
-    /// Returns `PipeError::LimitExceeded` if `stride * height` overflows
-    /// `usize` (audit C2).
+    /// Compatibility entry point for cancellation-only callers.
+    #[deprecated(note = "use from_source_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
     pub fn from_source_stoppable(
-        mut upstream: Box<dyn Source>,
+        upstream: Box<dyn Source>,
         stop: &dyn enough::Stop,
     ) -> crate::PipeResult<Self> {
+        Self::from_source_with_pulse(upstream, Some(&zencodec::how_far::StopOnly::borrowed(stop)))
+    }
+
+    /// Drain upstream with optional cooperative control.
+    ///
+    /// Checks before allocating the raster, before each pull, and before copying
+    /// returned rows. `None` adds no per-call control; upstream retained control
+    /// remains active. No progress phases are planned by this barrier.
+    /// Returns `PipeError::Cancelled` on cancellation and `LimitExceeded` on
+    /// dimension arithmetic overflow.
+    pub fn from_source_with_pulse(
+        mut upstream: Box<dyn Source>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> crate::PipeResult<Self> {
+        let control = pulse.unwrap_or(&zencodec::NoPulse);
+        control
+            .check()
+            .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
@@ -60,9 +75,15 @@ impl MaterializedSource {
         let mut data = vec![0u8; total];
         let mut y = 0u32;
 
-        while let Some(strip) = upstream.next()? {
-            stop.check()
+        loop {
+            control
+                .check()
                 .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
+            let strip = upstream.next()?;
+            control
+                .check()
+                .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
+            let Some(strip) = strip else { break };
             for r in 0..strip.rows() {
                 let dst_start = (y as usize)
                     .checked_add(r as usize)

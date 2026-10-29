@@ -111,8 +111,23 @@ pub(crate) struct OrientedAnimationEncoder {
 }
 
 impl OrientedAnimationEncoder {
-    fn frame<'a>(&self, pixels: PixelSlice<'a>) -> Option<PixelBuffer> {
-        orient(&pixels, self.orientation)
+    fn frame(
+        &self,
+        pixels: PixelSlice<'_>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Option<PixelBuffer>, BoxedError> {
+        if let Some(pulse) = pulse {
+            pulse.check().map_err(|reason| {
+                zencodec::CodecError::new(None, zencodec::ErrorCategory::Stopped(reason))
+            })?;
+        }
+        let frame = orient(&pixels, self.orientation);
+        if let Some(pulse) = pulse {
+            pulse.check().map_err(|reason| {
+                zencodec::CodecError::new(None, zencodec::ErrorCategory::Stopped(reason))
+            })?;
+        }
+        Ok(frame)
     }
 }
 
@@ -158,11 +173,11 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn zencodec::enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), BoxedError> {
-        match self.frame(pixels.clone()) {
-            Some(b) => self.inner.push_frame(b.as_slice(), duration_ms, stop),
-            None => self.inner.push_frame(pixels, duration_ms, stop),
+        match self.frame(pixels.clone(), pulse)? {
+            Some(b) => self.inner.push_frame(b.as_slice(), duration_ms, pulse),
+            None => self.inner.push_frame(pixels, duration_ms, pulse),
         }
     }
 
@@ -170,11 +185,11 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: zencodec::animation::FrameDuration,
-        stop: Option<&dyn zencodec::enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::animation::FrameDuration, BoxedError> {
-        match self.frame(pixels.clone()) {
-            Some(b) => self.inner.push_frame_timed(b.as_slice(), duration, stop),
-            None => self.inner.push_frame_timed(pixels, duration, stop),
+        match self.frame(pixels.clone(), pulse)? {
+            Some(b) => self.inner.push_frame_timed(b.as_slice(), duration, pulse),
+            None => self.inner.push_frame_timed(pixels, duration, pulse),
         }
     }
 
@@ -182,19 +197,19 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: zencodec::animation::FrameDuration,
-        stop: Option<&dyn zencodec::enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), BoxedError> {
-        match self.frame(pixels.clone()) {
-            Some(b) => self.inner.push_frame_exact(b.as_slice(), duration, stop),
-            None => self.inner.push_frame_exact(pixels, duration, stop),
+        match self.frame(pixels.clone(), pulse)? {
+            Some(b) => self.inner.push_frame_exact(b.as_slice(), duration, pulse),
+            None => self.inner.push_frame_exact(pixels, duration, pulse),
         }
     }
 
     fn finish(
         self: alloc::boxed::Box<Self>,
-        stop: Option<&dyn zencodec::enough::Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::encode::EncodeOutput, BoxedError> {
-        self.inner.finish(stop)
+        self.inner.finish(pulse)
     }
 }
 
@@ -228,5 +243,116 @@ mod tests {
         assert!(xmp_orientation_to_1(br#"<x exif:PixelXDimension="6"/>"#).is_none());
         assert!(xmp_orientation_to_1(b"tiff:Orientation").is_none());
         assert!(xmp_orientation_to_1(br#"<x tiff:Orientation="16"/>"#).is_none());
+    }
+}
+
+#[cfg(test)]
+mod pulse_tests {
+    use super::*;
+    use alloc::boxed::Box;
+    use zencodec::encode::DynAnimationFrameEncoder;
+    use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Report};
+
+    struct RecordingEncoder {
+        expected: Option<usize>,
+    }
+    impl DynAnimationFrameEncoder for RecordingEncoder {
+        fn as_any(&self) -> &dyn core::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+            self
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn core::any::Any> {
+            self
+        }
+        fn push_frame(
+            &mut self,
+            pixels: PixelSlice<'_>,
+            _: u32,
+            pulse: Option<&dyn zencodec::Pulse>,
+        ) -> Result<(), BoxedError> {
+            assert_eq!(
+                pulse.map(|p| p as *const dyn zencodec::Pulse as *const () as usize),
+                self.expected
+            );
+            assert_eq!((pixels.width(), pixels.rows()), (2, 1));
+            Ok(())
+        }
+        fn finish(
+            self: Box<Self>,
+            pulse: Option<&dyn zencodec::Pulse>,
+        ) -> Result<zencodec::encode::EncodeOutput, BoxedError> {
+            assert_eq!(
+                pulse.map(|p| p as *const dyn zencodec::Pulse as *const () as usize),
+                self.expected
+            );
+            Err(Box::new(zencodec::UnsupportedOperation::AnimationTiming))
+        }
+    }
+    struct TimedOut;
+    impl enough::Stop for TimedOut {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            Err(enough::StopReason::TimedOut)
+        }
+    }
+    impl Report for TimedOut {
+        fn advance(&self, _: u64) {}
+    }
+    impl zencodec::Pulse for TimedOut {
+        fn split(
+            &self,
+            _: Execution,
+            _: &[PhaseSpec<'_>],
+        ) -> Result<alloc::vec::Vec<Child<'_>>, PlanError> {
+            Err(PlanError::Unsupported)
+        }
+    }
+
+    #[test]
+    fn upright_frames_forward_original_optional_pulse() {
+        let samples = [1u8, 2, 3, 4, 5, 6];
+        let pixels =
+            PixelSlice::new(&samples, 1, 2, 3, zenpixels::PixelDescriptor::RGB8_SRGB).unwrap();
+        let noop = &zencodec::NoPulse;
+        for pulse in [None, Some(noop as &dyn zencodec::Pulse)] {
+            let mut encoder = OrientedAnimationEncoder {
+                inner: Box::new(RecordingEncoder {
+                    expected: pulse.map(|p| p as *const dyn zencodec::Pulse as *const () as usize),
+                }),
+                orientation: Orientation::Rotate90,
+            };
+            encoder.push_frame(pixels.clone(), 10, pulse).unwrap();
+            assert!(
+                Box::new(encoder)
+                    .finish(pulse)
+                    .unwrap_err()
+                    .is::<zencodec::UnsupportedOperation>()
+            );
+        }
+    }
+
+    #[test]
+    fn upright_frame_deadline_refuses_before_native_push() {
+        let samples = [1u8, 2, 3, 4, 5, 6];
+        let pixels =
+            PixelSlice::new(&samples, 1, 2, 3, zenpixels::PixelDescriptor::RGB8_SRGB).unwrap();
+        for orientation in [Orientation::Identity, Orientation::Rotate90] {
+            // Any downstream push would fail its expected-None assertion.
+            let mut encoder = OrientedAnimationEncoder {
+                inner: Box::new(RecordingEncoder { expected: None }),
+                orientation,
+            };
+            let error = encoder
+                .push_frame(pixels.clone(), 10, Some(&TimedOut))
+                .unwrap_err();
+            assert_eq!(
+                error
+                    .downcast_ref::<zencodec::CodecError>()
+                    .unwrap()
+                    .category(),
+                zencodec::ErrorCategory::Stopped(enough::StopReason::TimedOut)
+            );
+        }
     }
 }

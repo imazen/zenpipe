@@ -5,7 +5,7 @@ use alloc::borrow::Cow;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, StopToken};
+use crate::{CodecError, DecodeOutput, ImageFormat, ImageInfo, Limits, SharedPulse};
 use whereat::{ResultAtExt, at_crate};
 use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
 use zencodec::encode::EncoderConfig as _;
@@ -20,7 +20,7 @@ pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
 pub(crate) fn decode(
     data: &[u8],
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
 ) -> Result<DecodeOutput> {
     let dec = zenpng::PngDecoderConfig::new();
@@ -28,11 +28,11 @@ pub(crate) fn decode(
     if let Some(lim) = limits {
         job = job.with_limits(to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(pulse);
     if let Some(dp) = decode_policy {
-        job = job.with_policy(dp);
+        // Refuse a policy the codec cannot enforce instead of ignoring it.
+        job.try_set_policy(dp)
+            .map_err(|e| whereat::at!(CodecError::from_codec(ImageFormat::Png, e)))?;
     }
     let decoder = at_crate!(job.decoder(Cow::Borrowed(data), &[]))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Png, e))?;
@@ -92,6 +92,15 @@ pub(crate) fn build_trait_encoder<'a>(params: EncodeParams<'a>) -> BuiltEncoder<
 
 pub(crate) fn build_streaming(params: EncodeParams<'_>) -> crate::error::Result<StreamingEncoder> {
     crate::dispatch::build_streaming_from_config(
+        |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config, p.cicp),
+        params,
+    )
+}
+
+pub(crate) fn build_job(
+    params: EncodeParams<'_>,
+) -> crate::error::Result<crate::dispatch::ConfiguredJob> {
+    crate::dispatch::build_job_from_config(
         |p| build_encoding(p.quality, p.effort, p.lossless, p.codec_config, p.cicp),
         params,
     )

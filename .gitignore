@@ -51,6 +51,12 @@ Thumbs.db
 # (docs/public-api/, regenerated via `just api-doc` — the apidoc/ runner
 # package) are tracked.
 /docs/*
+!/docs/checked-transcode.md
+!/docs/io.md
+!/docs/optional-pulse.md
+!/docs/publication-qualification.md
+!/docs/publication-deltas-2026-10-28.md
+!/docs/publication-delta-manifests-2026-10-28.json
 !/docs/public-api/
 !/docs/reader-compat.md
 
@@ -76,5 +82,7 @@ demo/crate/target-threaded/
 # Python bytecode from scripts/ (e.g. scripts/check-decoder-pins.py)
 __pycache__/
 *.pyc
+
+!/docs/current-main-integration.md
 
 !/docs/media-suite.md

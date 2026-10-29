@@ -55,12 +55,10 @@ jobs:
           cargo check --locked --manifest-path wasm-size-shim/Cargo.toml --target wasm32-unknown-unknown --lib
 
   rust:
-    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
+    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@69b7e60780bb44c41b027755565e5a7a64bbbbd1
     with:
-      # macOS runs on ARM64 only (`macos-latest`); Intel macOS lanes are not
-      # run. The reusable workflow's default list has no macOS, so it is named
-      # here. `platforms` replaces the default list wholesale, so the other
-      # entries repeat it verbatim.
+      sibling_overrides: false
+      # macOS runs on ARM64; preserve the other platform lanes.
       platforms: '["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-latest"]'
       # Ordering note: the reusable workflow runs these under `bash -e` (one
       # failing `$cmd` aborts every line after it in the same step — see
@@ -71,6 +69,7 @@ jobs:
       # feature and runs via `just test-zenfilters-quality` on a workstation
       # (zenpipe#44) — it used to self-skip on CI and pass without testing.
       clippy_extra_runs: |
+        cargo clippy -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib --test checked_transcode --example checked_transcode --example checked_publication --locked -- -D warnings
         cargo clippy --all-targets --no-default-features -- -D warnings
         cargo clippy -p zenlayout --all-targets -- -D warnings
         cargo clippy -p zencodecs --no-default-features --all-targets -- -D warnings
@@ -81,6 +80,8 @@ jobs:
       # has) and `avif-svt`/`avif-aom` (zenavif main does not build against
       # the current zenav1-svt/zenav1-aom mains until zenavif#48/#49 land).
       test_extra_runs: |
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --lib checked_transcode --locked
+        cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,checked-transcode-async --test checked_transcode --locked
         cargo test -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif-zenquant,bitmaps-bmp,bitmaps-qoi,bitmaps-tga,bitmaps-hdr,jxl-encode,jxl-decode,avif-encode,avif-decode --test operation_matrix
         cargo test --all-targets --no-default-features
         cargo test --features zennode
@@ -128,22 +129,48 @@ jobs:
       - name: Check every manifest and lockfile agrees
         run: python3 scripts/check-decoder-pins.py
 
+  # zenpipe's `nodes-<codec>` features each build zencodecs with one codec
+  # feature, a combination none of the `rust` legs compiles. A decode-only
+  # subset (jxl-decode) carried 13 warnings that only this exact build showed.
+  # Feature gating is the same on every platform, so one runner suffices.
+  codec-subsets:
+    name: Codec subsets (strict Clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
+        with:
+          cache: 'false'
+          sibling-overrides: 'false'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: codec-subsets
+      - name: Strict Clippy on every node codec subset
+        run: bash scripts/clippy-codec-subsets.sh
+
   api-doc:
     name: Public API snapshots
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-12 # Match just api-doc
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
 
       - name: Check committed API snapshots are current
         run: cargo test --manifest-path apidoc/Cargo.toml
         env:
           ZEN_API_DOC: check
+          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-12
 
   # 32-bit coverage. i686 is a primary target: it is where `usize` narrowing
   # bugs show up (stride/offset arithmetic that silently fits in 64 bits, byte
@@ -166,9 +193,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: taiki-e/install-action@v2
         with:
           tool: cross
@@ -191,9 +219,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:

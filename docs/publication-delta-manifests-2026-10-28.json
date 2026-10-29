@@ -1,0 +1,248 @@
+[
+  {
+    "name": "tiff",
+    "version": "0.11.3",
+    "source": "git+https://github.com/lilith/image-tiff?rev=10a3b6b2fa88eb5943525066a989ea9e64e644d5#10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+    "revision": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+    "path": "Cargo.toml",
+    "blob": "29116e9fa8d60b5ae173d70d423046ce8b074690",
+    "manifest_sha256": "19312cb42f71e92bc9cd2fdc910bd61d5b9b401d422256e0ac120fdc9bc00020",
+    "url": "https://github.com/lilith/image-tiff/blob/10a3b6b2fa88eb5943525066a989ea9e64e644d5/Cargo.toml"
+  },
+  {
+    "name": "lerc-rs",
+    "version": "0.7.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/lerc-rs/lerc-rs-0.7.0.crate",
+    "archive_sha256": "af29646ba82a905e2b503fabadb693be59364006155ac6e4c39db3c6863f1c56",
+    "manifest_sha256": "2af9174d9c8ffd7e4abee05ff6ca0913f9ca33bedf62e2c06a22590befc06857"
+  },
+  {
+    "name": "zenpdf",
+    "version": "0.2.0",
+    "source": "git+https://github.com/imazen/zenextras?rev=a5e792612145e0d544fa0243677d935fbcd487f0#a5e792612145e0d544fa0243677d935fbcd487f0",
+    "revision": "a5e792612145e0d544fa0243677d935fbcd487f0",
+    "path": "zenpdf/Cargo.toml",
+    "blob": "6627e62eeeaa49256274ddc808c2183552225873",
+    "manifest_sha256": "04881bd07adcd83cbe95d09669b83dbed8fb7f4612c56a718d022658f3fffed0",
+    "url": "https://github.com/imazen/zenextras/blob/a5e792612145e0d544fa0243677d935fbcd487f0/zenpdf/Cargo.toml"
+  },
+  {
+    "name": "hayro",
+    "version": "0.8.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro/hayro-0.8.0.crate",
+    "archive_sha256": "4675ff5acd7ca41c0c34ccd2a3a154f5c86d8b5ec92bef0a114bfb194969e2af",
+    "manifest_sha256": "be824d4556a03ae69118412350785428b79049707880d6fdfc445323b34837e2"
+  },
+  {
+    "name": "vello_cpu",
+    "version": "0.3.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/vello_cpu/vello_cpu-0.3.0.crate",
+    "archive_sha256": "ed1fec424fbba6acf6cbc78bb526447eb77590d95f40419d598870fe37535212",
+    "manifest_sha256": "71dd6db313f0eac60b3888d786067e7dce78e515a20f645d63a85b183d2bbbce"
+  },
+  {
+    "name": "vello_common",
+    "version": "0.3.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/vello_common/vello_common-0.3.0.crate",
+    "archive_sha256": "73c2fbe53548bcd25c8ff42f75a93770a8611a16b37bee56d7ef7b44e36027f1",
+    "manifest_sha256": "4694aeb76d64b60fd490366bb1053b5e88268c9d3e436b75c50c5b3245de8a5a"
+  },
+  {
+    "name": "hayro-syntax",
+    "version": "0.8.0",
+    "source": "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "revision": "2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "path": "hayro-syntax/Cargo.toml",
+    "blob": "c1e60150338edbf0c94b2645d9adc08a1ea68285",
+    "manifest_sha256": "d90777aab6530afe5086f14368cb6fa7484d3e1223495fe2f24fe491f1904dfc",
+    "url": "https://github.com/lilith/hayro/blob/2ce50d0164878b8505e118f81dcb1d0367b26957/hayro-syntax/Cargo.toml"
+  },
+  {
+    "name": "hayro-jbig2",
+    "version": "0.3.1",
+    "source": "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "revision": "2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "path": "hayro-jbig2/Cargo.toml",
+    "blob": "eed756b6710e9819453d5e2b5a9c07855c25e538",
+    "manifest_sha256": "b1ccac8d0f38186c2a09ec742dae73dc0b4f46a903f65e6dca8eb658bf4f2055",
+    "url": "https://github.com/lilith/hayro/blob/2ce50d0164878b8505e118f81dcb1d0367b26957/hayro-jbig2/Cargo.toml"
+  },
+  {
+    "name": "bitvec",
+    "version": "1.1.1",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/bitvec/bitvec-1.1.1.crate",
+    "archive_sha256": "ddcec3d12c579d40898fe0a9a358a803c23e9c52ca3c425707f81c9436211837",
+    "manifest_sha256": "2735dda2aad59ac0e02777717f6cc94165e3265789a2ce5379a36785a2dab738"
+  },
+  {
+    "name": "zenjp2",
+    "version": "0.1.0",
+    "source": "git+https://github.com/imazen/zenextras?rev=a5e792612145e0d544fa0243677d935fbcd487f0#a5e792612145e0d544fa0243677d935fbcd487f0",
+    "revision": "a5e792612145e0d544fa0243677d935fbcd487f0",
+    "path": "zenjp2/Cargo.toml",
+    "blob": "1ff2c950931d302515b2152fb1afee17cfbf3323",
+    "manifest_sha256": "9c649a96e988c8b9e7ca966234da40a9c70fddac90cf35c433e71f46d5ba7823",
+    "url": "https://github.com/imazen/zenextras/blob/a5e792612145e0d544fa0243677d935fbcd487f0/zenjp2/Cargo.toml"
+  },
+  {
+    "name": "rav1d-safe",
+    "version": "0.7.0",
+    "source": "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+    "revision": "b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+    "path": "Cargo.toml",
+    "blob": "c108240d94425096914995ff6f338c63bed82e4b",
+    "manifest_sha256": "6f5543fa7039d741dd69d74e4945a504c029585f9a6c76622a1c8e844fb30100",
+    "url": "https://github.com/imazen/rav1d-safe/blob/b19aec6561204ff310250bf2bc1b2c6faa42c3b5/Cargo.toml"
+  },
+  {
+    "name": "hayro-interpret",
+    "version": "0.8.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro-interpret/hayro-interpret-0.8.0.crate",
+    "archive_sha256": "ac9df074ff163a63864cec9b0bf640ccbff8abf4e44481df7369ce0ac172ffbe",
+    "manifest_sha256": "511972142547a0e83a1c33f44c6880414b44bd40ec49f151333ef5c7a57ea917"
+  },
+  {
+    "name": "skrifa",
+    "version": "0.46.2",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/skrifa/skrifa-0.46.2.crate",
+    "archive_sha256": "d4febebda507fb889c545a37a135517769d1391941013561292897961d1887d6",
+    "manifest_sha256": "0bad45d08a8d68dce7ad275969ab1f8aaa1c23fd57b93e26084352c4778baed1"
+  },
+  {
+    "name": "zensvg",
+    "version": "0.1.0",
+    "source": "git+https://github.com/imazen/zenextras?rev=a5e792612145e0d544fa0243677d935fbcd487f0#a5e792612145e0d544fa0243677d935fbcd487f0",
+    "revision": "a5e792612145e0d544fa0243677d935fbcd487f0",
+    "path": "zensvg/Cargo.toml",
+    "blob": "c822d964d3048560137434c3a52ec84de780fb17",
+    "manifest_sha256": "d444f10d53ab6031b888c2c5bbaab1b267d03a6e892b2d695ed597f2277f442d",
+    "url": "https://github.com/imazen/zenextras/blob/a5e792612145e0d544fa0243677d935fbcd487f0/zensvg/Cargo.toml"
+  },
+  {
+    "name": "hayro-syntax",
+    "version": "0.7.2",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro-syntax/hayro-syntax-0.7.2.crate",
+    "archive_sha256": "0edeafd70aa2db743de8ede8637d07ec87db05efe69cde371d03f1b185fcef27",
+    "manifest_sha256": "289a1dc73723b036b9e43d5fcef5792dd82b25457829297dfb55ff8ca0f94e81"
+  },
+  {
+    "name": "hayro-jbig2",
+    "version": "0.3.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro-jbig2/hayro-jbig2-0.3.0.crate",
+    "archive_sha256": "69374b3668dd45aeb3d3145cda68f2c7b4f223aaa2511e67d076f1c7d741388d",
+    "manifest_sha256": "1b77fcad9f4b16874635660a2bba07996f1dec8cc1c3e2a35926b2b0a463bc2e"
+  },
+  {
+    "name": "zenpdf",
+    "version": "0.2.0",
+    "source": "git+https://github.com/imazen/zenextras?rev=109a9ec367278a93751f7701f8536358e5d3f5cd#109a9ec367278a93751f7701f8536358e5d3f5cd",
+    "revision": "109a9ec367278a93751f7701f8536358e5d3f5cd",
+    "path": "zenpdf/Cargo.toml",
+    "blob": "ed6a076d396390d2ee28952f2ce571d909dc4e68",
+    "manifest_sha256": "c5493324105a286b2ef1ca561c263b0d8d4b170f0550323d880ee6d3c260913a",
+    "url": "https://github.com/imazen/zenextras/blob/109a9ec367278a93751f7701f8536358e5d3f5cd/zenpdf/Cargo.toml"
+  },
+  {
+    "name": "hayro",
+    "version": "0.7.1",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro/hayro-0.7.1.crate",
+    "archive_sha256": "c4caa128ab87fd48ffb7490617cf93f77f606820dffbc9fd9ef6ab0ed077f56d",
+    "manifest_sha256": "821ec2851fe87773584b58a5885ea23086f0cec3f32934bc59ed0265224d4ed6"
+  },
+  {
+    "name": "hayro-interpret",
+    "version": "0.7.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/hayro-interpret/hayro-interpret-0.7.0.crate",
+    "archive_sha256": "f2613d0406898995042d0794c4245b2f2fba1246490c8ac593769bba6551129d",
+    "manifest_sha256": "cfca181d06b3396365b2e2656a190c19b6e7807a66fcbcbcb6c67b94d9915e55"
+  },
+  {
+    "name": "skrifa",
+    "version": "0.42.1",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/skrifa/skrifa-0.42.1.crate",
+    "archive_sha256": "0c34617370ae968efb7161bb2beb517d9084659aae19e24b89e3db25b46e4564",
+    "manifest_sha256": "2526f824b2e557bd3df083c44e23aa38520c334ee8642912c7a33bc3c9021f8e"
+  },
+  {
+    "name": "read-fonts",
+    "version": "0.39.2",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/read-fonts/read-fonts-0.39.2.crate",
+    "archive_sha256": "c4ed38b89c2c77ff968c524145ad65fb010f38af5c7a224b53b81d47ac2daa81",
+    "manifest_sha256": "ab8ffe431167794b53b46149e6a212bef5b892d1121cd534be112b0d771e3cf2"
+  },
+  {
+    "name": "vello_cpu",
+    "version": "0.0.8",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/vello_cpu/vello_cpu-0.0.8.crate",
+    "archive_sha256": "6d8ded630e8316bb94a55881256506d1f3b9947b5f66db8a7d32ca7ba02decd0",
+    "manifest_sha256": "57973a84cb0eb5da9148f9a757a6b6f1e333b79f8e82038ceb021d8dee547c5a"
+  },
+  {
+    "name": "rav1d-safe",
+    "version": "0.6.0",
+    "source": "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+    "revision": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+    "path": "Cargo.toml",
+    "blob": "0a8010131b267888420e730958dd24c294b28d96",
+    "manifest_sha256": "a2fbaa9e9fe7e801f7596941ab662302a518180ec53e26e35435a31cad5e094f",
+    "url": "https://github.com/imazen/rav1d-safe/blob/dfd01e3268f6e8da862d2d5f0a71d19f414f2b87/Cargo.toml"
+  },
+  {
+    "name": "zensvg",
+    "version": "0.1.0",
+    "source": "git+https://github.com/imazen/zenextras?rev=109a9ec367278a93751f7701f8536358e5d3f5cd#109a9ec367278a93751f7701f8536358e5d3f5cd",
+    "revision": "109a9ec367278a93751f7701f8536358e5d3f5cd",
+    "path": "zensvg/Cargo.toml",
+    "blob": "3ae4a6ba6735cf01d6a01d07c5ea36a3f32f95d6",
+    "manifest_sha256": "0d48b6af858670abe48caa8ec142347d2e330889ee82d32a67a45147d5e72f74",
+    "url": "https://github.com/imazen/zenextras/blob/109a9ec367278a93751f7701f8536358e5d3f5cd/zensvg/Cargo.toml"
+  },
+  {
+    "name": "glifo",
+    "version": "0.1.1",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/glifo/glifo-0.1.1.crate",
+    "archive_sha256": "d99fc21d493812643aae86d53b7bbd02f376434a90317e8a790bc209fdd6605e",
+    "manifest_sha256": "377eab5d1bf9b8909c9208345f3f3719ec7bca8f0d3af71675dee70662db0988"
+  },
+  {
+    "name": "likely_stable",
+    "version": "0.1.3",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/likely_stable/likely_stable-0.1.3.crate",
+    "archive_sha256": "d61f7017d8abea1fc23ff7f01a8147b2656dea3aeb24d519aab6e2177eaf671c",
+    "manifest_sha256": "e2c5a4c7c0a93cc4df13a5a76f102ae668fc7a1903865901bbfaa6e04890672f"
+  },
+  {
+    "name": "rustc_version",
+    "version": "0.4.1",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "url": "https://static.crates.io/crates/rustc_version/rustc_version-0.4.1.crate",
+    "archive_sha256": "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92",
+    "manifest_sha256": "c7d1d07fcb4f604eac7c2f9ad1262f93c81f2e45c6be6031de2d83da5ab59ccb"
+  },
+  {
+    "name": "hayro workspace",
+    "version": "workspace",
+    "source": "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d0367b26957#2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "revision": "2ce50d0164878b8505e118f81dcb1d0367b26957",
+    "path": "Cargo.toml",
+    "blob": "6d80a25d559779ee32b785458155692374f985ec",
+    "manifest_sha256": "04abdb643a377c17d029ad8405f90589f092858052fad36a2c0e3e0d8a4412f2",
+    "url": "https://github.com/lilith/hayro/blob/2ce50d0164878b8505e118f81dcb1d0367b26957/Cargo.toml"
+  }
+]

@@ -1,0 +1,26 @@
+# zenpipe::io memory matrix: 2048x2048 RGB8 PNG -> PNG, tools/io-check examples/memory_probe
+# measured 2026-10-28 (run 05) on r7900x: release memory_probe sha256 bdc74846f9dd469fc25a1f003d026bf5ffa3a84cf2883121ba842ab3c1f8ab94,
+#   built from commit 6dec2f8c7c3b6c2fe8872a6269139c9c3e529d9e (memory_probe.rs sha256 22e36976a5c272220c52b69e8474bf3a0670f603dc9518662eddcb26958802df),
+#   CARGO_PROFILE_RELEASE_DEBUG=line-tables-only, rustc 1.99.1; graph zencodec 79676215, zenjpeg 8672e549, zenpng 5422b6d2,
+#   zenbitmaps 9ad4582b, ultrahdr-core cc57c57a.
+# fixture: `memory_probe make fixture.png 2048 2048` -> 7,845,432 B (sha256 2d3cb5fd8276d290b1a05b61274b6b81015f7b7202e168291343946ab41b1aab).
+# cells: `memory_probe run fixture.png out.png EFFORT SCHEDULE spool`, each once under /usr/bin/time -v (max_rss_kb) and once under
+#   heaptrack (peak_heap as heaptrack_print reports it); single runs, whole process, this size only; wall times are not recorded
+#   here and are not throughput results. Same cells and flags as tools/io-check/scripts/memory_matrix.sh measure.
+# oracle (run 06): the same binary reran every cell untimed on the same fixture; tools/io-check examples/png_oracle (png crate)
+#   decoded each output and the fixture and compared them with the authored samples: `equal` = all 12,582,912 samples equal.
+# e2-live is a refusal (stage Policy, OutputSchedule: PNG effort 2 finishes before output), not a low-memory route; its
+#   numbers are the process at refusal.
+# residency (heaptrack, e0-live): 15.7 of the 17.58M peak are two full copies of the 7.85 MB compressed input: one admitted by
+#   zencodec-coroutine for zenpng controlled decode (codec/controlled.rs:86), one owned by zenpng streaming_decoder::new
+#   (Cow::Borrowed made owned). At effort 2 the encoder holds the image until finish, so disk staging does not lower the peak.
+# heaptrack archives are not in git (r7900x: ~/tmp/zenpipe-lane/runs/05-verify-memory/mem).
+cell	effort	route	outcome	output_bytes	peak_heap	max_rss_kb	oracle
+e0-oneshot	0	one-shot: whole file, whole raster, whole output	published	12585988	33.09M	36852	equal
+e0-live	0	planned rows, Live	published	12585988	17.58M	21516	equal
+e0-memory	0	planned rows, FinishFirst, memory staging	published	12585988	29.78M	33448	equal
+e0-disk	0	planned rows, FinishFirst, disk staging	published	12585988	17.58M	21740	equal
+e2-oneshot	2	one-shot: whole file, whole raster, whole output	published	7847136	70.57M	88688	equal
+e2-live	2	planned rows, Live	refused at Policy	0	8.98M	13024	n/a (no output)
+e2-memory	2	planned rows, FinishFirst, memory staging	published	7847136	63.82M	84768	equal
+e2-disk	2	planned rows, FinishFirst, disk staging	published	7847136	63.78M	85136	equal

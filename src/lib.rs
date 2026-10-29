@@ -37,6 +37,9 @@ pub mod trace;
 #[cfg(feature = "zennode")]
 pub mod bridge;
 
+#[cfg(feature = "io")]
+pub mod io;
+
 #[cfg(feature = "job")]
 pub mod job;
 
@@ -141,6 +144,33 @@ pub trait Source: Send {
     fn height(&self) -> u32;
     /// Pixel format of output strips.
     fn format(&self) -> PixelFormat;
+    /// The color interpretation of this source's samples, when it is known
+    /// before any strip is produced. `None` means unknown: an encoder that must
+    /// declare its header color needs it supplied explicitly. Operators that
+    /// keep their upstream's interpretation delegate; anything that changes or
+    /// cannot vouch for it keeps this default.
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        None
+    }
+}
+
+/// A boxed source, such as a compiled graph, is a source.
+impl<S: Source + ?Sized> Source for alloc::boxed::Box<S> {
+    fn next(&mut self) -> PipeResult<Option<Strip<'_>>> {
+        (**self).next()
+    }
+    fn width(&self) -> u32 {
+        (**self).width()
+    }
+    fn height(&self) -> u32 {
+        (**self).height()
+    }
+    fn format(&self) -> PixelFormat {
+        (**self).format()
+    }
+    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+        (**self).color_context()
+    }
 }
 
 /// A sink that consumes pixel strips (push-based).
@@ -153,18 +183,42 @@ pub trait Sink: Send {
 
 /// Drive a pipeline: pull all strips from `source` into `sink`.
 pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> PipeResult<()> {
-    execute_with_stop(source, sink, &Unstoppable)
+    execute_with_pulse(source, sink, None)
 }
 
-/// Drive a pipeline with cooperative cancellation.
+/// Drive a pipeline with optional cooperative control.
+///
+/// Checks cancellation before pulling input, before handing a strip to the sink,
+/// and before finishing. `None` adds no per-call control; controls retained by
+/// the source and sink remain active. This driver does not plan progress phases.
+/// Cancellation does not undo strips the sink has already accepted.
+pub fn execute_with_pulse(
+    source: &mut dyn Source,
+    sink: &mut dyn Sink,
+    pulse: Option<&dyn zencodec::Pulse>,
+) -> PipeResult<()> {
+    let control = pulse.unwrap_or(&zencodec::NoPulse);
+    loop {
+        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        let strip = source.next()?;
+        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        match strip {
+            Some(strip) => sink.consume(&strip)?,
+            None => return sink.finish(),
+        }
+    }
+}
+
+/// Compatibility entry point for cancellation-only callers.
+#[deprecated(note = "use execute_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
 pub fn execute_with_stop(
     source: &mut dyn Source,
     sink: &mut dyn Sink,
     stop: &dyn Stop,
 ) -> PipeResult<()> {
-    while let Some(strip) = source.next()? {
-        stop.check().map_err(|_| at!(PipeError::Cancelled))?;
-        sink.consume(&strip)?;
-    }
-    sink.finish()
+    execute_with_pulse(
+        source,
+        sink,
+        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
+    )
 }

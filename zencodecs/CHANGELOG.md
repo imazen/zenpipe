@@ -33,6 +33,14 @@ All notable changes to `zencodecs` are documented here. Format follows
   CICP, and regenerates gain-map discovery independently of source XMP. Requests
   to preserve arbitrary source XMP refuse rather than silently discarding it.
 
+### QUEUED BREAKING CHANGES
+
+- The checked-transcode dependency follows the shared core's optional borrowed
+  Pulse signatures (`f7b7760c`); zencodecs request entry signatures stay unchanged.
+  Forward the original Option and retain operation/job controls, successful
+  defaults and required policy obligations. Matching graph pins and native/API
+  qualification remain pending; this migration ran source checks only.
+
 ### Fixed
 
 - Exercise GIF's advertised rational animation timing in the operation catalog, including exact representable delays, typed rejection and preservation of the accepted frames (2e74cf3d).
@@ -295,3 +303,10 @@ All notable changes to `zencodecs` are documented here. Format follows
   `zenjxl::container::is_container` → `zenjxl::is_container`; dyn decoder
   `decode_full_frame()` → `decode()`; zenwebp configs under
   `zenwebp::zencodec::` (4a0b261).
+
+### RAW gain-map control propagation (unreleased)
+
+- Forward retained Pulse and decode limits to embedded JPEG gain-map decoding,
+  and return nested failures rather than treating them as absent gain maps
+  (`01f377a8`). Full codec-profile compilation/strict Clippy and a real JPEG
+  timeout/limit/malformed-input control pass; complete Apple DNG coverage remains separate.

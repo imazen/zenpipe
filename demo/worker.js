@@ -304,7 +304,29 @@ async function handleMessage(msg) {
       case 'encode_preview': {
         // Encode at overview size for inline preview (cache hit, near-instant)
         if (!editor) throw new Error('Editor not initialized');
-        if (backend !== 'wasm') throw new Error('Encode preview requires WASM backend');
+        if (backend !== 'wasm') {
+          const result = editor.renderOverview(
+            msg.adjustments || {}, 512, msg.film_preset || null,
+          );
+          const canvas = new OffscreenCanvas(result.width, result.height);
+          canvas.getContext('2d').putImageData(result, 0, 0);
+          const mime = {
+            jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png',
+            avif: 'image/avif', jxl: 'image/jxl', gif: 'image/gif',
+          }[msg.format || 'jpeg'] || 'image/jpeg';
+          const blob = await canvas.convertToBlob({
+            type: mime,
+            quality: (msg.options?.quality ?? 85) / 100,
+          });
+          const data = new Uint8Array(await blob.arrayBuffer());
+          self.postMessage(
+            { id, type: 'result', data, format: msg.format, mime: blob.type,
+              size: data.length, width: result.width, height: result.height,
+              bpp: (data.length * 8 / (result.width * result.height)).toFixed(2), backend },
+            { transfer: [data.buffer] },
+          );
+          break;
+        }
 
         const adjustmentsJson = JSON.stringify(msg.adjustments || {});
         const optionsJson = JSON.stringify(msg.options || {});

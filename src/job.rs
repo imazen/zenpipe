@@ -263,6 +263,9 @@ pub enum CmsMode {
 /// EXIF and XMP contain privacy-sensitive data (GPS, camera serial numbers,
 /// edit history) and can be large (embedded thumbnails, C2PA provenance).
 /// ICC profiles and CICP are functional — they affect how pixels display.
+/// So is the orientation: every policy carries the source's to the encoder
+/// unless a `zenlayout.orient` node renders it into the pixels, in which case
+/// the output is upright and says so.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MetadataPolicy {
     /// Web-optimized defaults (recommended).
@@ -271,8 +274,8 @@ pub enum MetadataPolicy {
     /// HDR metadata (ContentLightLevel, MasteringDisplay).
     ///
     /// Strips: EXIF (privacy: GPS, timestamps, camera IDs, thumbnails),
-    /// XMP (privacy: edit history, author info; includes C2PA provenance),
-    /// orientation (already applied or passed through as flag).
+    /// XMP (privacy: edit history, author info; includes C2PA provenance).
+    /// The orientation itself is kept (see above).
     #[default]
     WebDefault,
 
@@ -285,7 +288,7 @@ pub enum MetadataPolicy {
     /// Strip all metadata. Smallest output.
     ///
     /// Only the bare minimum for correct display is kept:
-    /// CICP (4 bytes, needed for wide gamut/HDR).
+    /// CICP (4 bytes, needed for wide gamut/HDR) and the orientation.
     StripAll,
 }
 
@@ -391,6 +394,9 @@ pub struct ImageJob<'a> {
     decode_io_id: i32,
     /// Primary encode io_id (which output slot to write encoded result).
     encode_io_id: i32,
+    /// Planned row encoding under this output policy (see `with_output_policy`).
+    #[cfg(feature = "io")]
+    output_policy: Option<zencodec::operation::PolicySet>,
 }
 
 impl<'a> ImageJob<'a> {
@@ -414,6 +420,8 @@ impl<'a> ImageJob<'a> {
             trace_config: None,
             decode_io_id: 0,
             encode_io_id: 1,
+            #[cfg(feature = "io")]
+            output_policy: None,
         }
     }
 
@@ -520,6 +528,21 @@ impl<'a> ImageJob<'a> {
     /// keeps ICC/CICP/HDR metadata for correct display.
     pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
         self.metadata_policy = policy;
+        self
+    }
+
+    /// Encode through the planned row driver under `policy`.
+    ///
+    /// The configured encoder job is planned for the pipeline's actual rows
+    /// and the output schedule is resolved under `policy` before any row is
+    /// read or byte produced (`zencodec_io::row_encode::encode_job`). A format
+    /// or configuration that cannot encode one ordered row pass refuses, as
+    /// does a gain-map sidecar; nothing falls back to a whole-image encode.
+    /// Without this, the job pushes rows into a streaming encoder and falls back
+    /// to a one-shot encode of the materialized image when that fails.
+    #[cfg(feature = "io")]
+    pub fn with_output_policy(mut self, policy: zencodec::operation::PolicySet) -> Self {
+        self.output_policy = Some(policy);
         self
     }
 
@@ -729,8 +752,7 @@ impl<'a> ImageJob<'a> {
             .any(|n| n.schema().id == "zenpipe.riapi.frame");
         if image_info.is_animation() && !wants_single_frame {
             let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
-            let deadline = self.deadline();
-            let stop = deadline;
+            let control = self.control();
             let (hint_q, hint_e) = decision_hint_overrides(&decision);
             if let Some((bytes, out_w, out_h)) = transcode_animated_nodes(
                 input_bytes,
@@ -743,7 +765,7 @@ impl<'a> ImageJob<'a> {
                 hint_q.unwrap_or(decision.quality.quality),
                 decision.lossless,
                 hint_e.or(decision.quality.effort),
-                stop,
+                &control,
                 self.limits.as_ref().and_then(|l| l.max_frames),
             )? {
                 return Ok(JobResult {
@@ -869,6 +891,13 @@ impl<'a> ImageJob<'a> {
                 if discard_icc {
                     m.icc_profile = None;
                 }
+                // Display-critical, not descriptive: the encoder must carry the
+                // source orientation unless the nodes render it.
+                m.orientation = if self.renders_orientation() {
+                    zencodec::Orientation::Identity
+                } else {
+                    image_info.orientation
+                };
                 m
             }),
         };
@@ -911,6 +940,78 @@ impl<'a> ImageJob<'a> {
     /// pipeline stages must not restart the job's duration budget.
     fn deadline(&self) -> Option<zencodec::StopToken> {
         self.job_stop.clone()
+    }
+
+    /// The job's one operation control: its [`deadline`](Self::deadline) as a
+    /// cancellation-only pulse, or the quiet default when no limit is set.
+    fn control(&self) -> zencodec::SharedPulse {
+        match self.deadline() {
+            Some(deadline) => {
+                zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
+            }
+            None => zencodec::SharedPulse::default(),
+        }
+    }
+
+    /// The planned route of [`stream_encode`](Self::stream_encode): retain the
+    /// configured job, declare the rows' color, plan, admit the schedule, then
+    /// read rows and publish into memory.
+    #[cfg(feature = "io")]
+    fn planned_encode(
+        &self,
+        request: zencodecs::EncodeRequest<'_>,
+        source: Box<dyn crate::Source>,
+        (w, h): (u32, u32),
+        target_format: zencodec::ImageFormat,
+        policy: zencodec::operation::PolicySet,
+        metadata: Option<&zencodec::Metadata>,
+    ) -> crate::PipeResult<EncodeResult> {
+        let configured = request
+            .build_job(w, h)
+            .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        // The job embeds this metadata's carriers; the rows are declared with
+        // the same interpretation, so planning compares like with like.
+        let color = metadata.map(|m| {
+            let mut context = zenpixels::ColorContext::default();
+            context.icc = m.icc_profile.clone();
+            context.cicp = m.cicp;
+            alloc::sync::Arc::new(context)
+        });
+        let rows = crate::io::PipelineRows::new(source, color)?;
+        let limits = self.limits.as_ref();
+        let storage = zencodec::storage::StorageBudget::new(
+            limits
+                .and_then(|l| l.max_memory_bytes)
+                .map_or(256 << 20, |bytes| {
+                    usize::try_from(bytes).unwrap_or(usize::MAX)
+                }),
+            4096,
+        );
+        // `policy` is the operation policy: its requirements are checked
+        // against every offer before selection and named in a refusal.
+        let options = zencodec_io::row_encode::Options::new(
+            storage,
+            limits.and_then(|l| l.max_output_bytes).unwrap_or(u64::MAX),
+        );
+        let pulse = self.control();
+        let mut bytes = alloc::vec::Vec::new();
+        zencodec_io::row_encode::encode_dyn_job(
+            configured.job,
+            rows,
+            &mut bytes,
+            policy,
+            options,
+            Some(pulse.as_pulse()),
+        )
+        .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        Ok(EncodeResult {
+            io_id: self.encode_io_id,
+            bytes,
+            width: w,
+            height: h,
+            mime_type: target_format.mime_type().to_string(),
+            extension: target_format.extension().to_string(),
+        })
     }
 }
 
@@ -1090,6 +1191,12 @@ pub(crate) fn decision_hint_overrides(
 /// Returns `Ok(None)` when the target format has no animation encoder
 /// (static formats like JPEG); callers fall back to single-frame behavior.
 /// Shared by [`ImageJob`] and the imageflow-compat executor.
+///
+/// `control` is the operation's one control. The decoder and encoder jobs hold
+/// it, so they stop inside a frame; the route also checks it between frames and
+/// in each frame's pipeline. The same Pulse also reaches each native call. A stop anywhere is
+/// [`PipeError::Cancelled`], and nothing runs after it: not the next frame,
+/// not the static fallback.
 #[allow(clippy::too_many_arguments)] // crate-internal plumbing
 pub(crate) fn transcode_animated_nodes(
     data: &[u8],
@@ -1102,22 +1209,26 @@ pub(crate) fn transcode_animated_nodes(
     quality: f32,
     lossless: bool,
     effort: Option<u32>,
-    stop: Option<zencodec::StopToken>,
+    control: &zencodec::SharedPulse,
     max_frames: Option<u32>,
 ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
     // Animation decoder (frames arrive composited at canvas size).
-    let mut decode_request = zencodecs::DecodeRequest::new(data).with_registry(registry);
+    let mut decode_request = zencodecs::DecodeRequest::new(data)
+        .with_registry(registry)
+        .with_pulse(control.clone());
     if let Some(cfg) = codec_config {
         decode_request = decode_request.with_codec_config(cfg);
     }
     if let Some(cl) = codec_limits {
         decode_request = decode_request.with_limits(cl);
     }
-    if let Some(ref stop) = stop {
-        decode_request = decode_request.with_stop(stop.clone());
-    }
-    let decoder = at_crate!(decode_request.animation_frame_decoder())
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+    let decoder = at_crate!(decode_request.animation_frame_decoder()).map_err_at(|e| {
+        if crate::error::is_codec_stop(&e) {
+            PipeError::Cancelled
+        } else {
+            PipeError::Codec(Box::new(e))
+        }
+    })?;
     let info = decoder.info().clone();
     let (in_w, in_h) = (info.width, info.height);
 
@@ -1148,7 +1259,8 @@ pub(crate) fn transcode_animated_nodes(
     // caller keeps its single-frame behavior.
     let mut encode_request = zencodecs::EncodeRequest::new(target_format)
         .with_quality(quality)
-        .with_registry(registry);
+        .with_registry(registry)
+        .with_pulse(control.clone());
     if lossless {
         encode_request = encode_request.with_lossless(true);
     }
@@ -1158,24 +1270,21 @@ pub(crate) fn transcode_animated_nodes(
     if let Some(cl) = codec_limits {
         encode_request = encode_request.with_limits(cl);
     }
-    if let Some(ref stop) = stop {
-        encode_request = encode_request.with_stop(stop.clone());
-    }
     let encoder = match encode_request.animation_frame_encoder(out_w, out_h) {
         Ok(enc) => enc,
+        // A stop is the operation's refusal, not a static target.
+        Err(e) if crate::error::is_codec_stop(e.error()) => return Err(at!(PipeError::Cancelled)),
         Err(_) => return Ok(None),
     };
 
-    let output = crate::animation::transcode_with_stop_and_limits(
+    let output = crate::animation::transcode_with_pulse_and_limits(
         decoder,
         encoder,
         out_w,
         out_h,
         crate::format::RGBA8_SRGB,
         |frame_src, _idx| Ok(crate::bridge::build_pipeline(frame_src, nodes, converters)?.source),
-        stop.as_ref()
-            .map(|s| s as &dyn enough::Stop)
-            .unwrap_or(&enough::Unstoppable),
+        Some(control.as_pulse()),
         max_frames,
     )?;
 
@@ -1207,9 +1316,7 @@ impl<'a> ImageJob<'a> {
         // The job deadline must reach the codec, not just the strip loop:
         // a single decode call (e.g. a multi-second AV1/JXL frame) runs
         // uncancellable between `source.next()` polls without it.
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
 
         match request.build_streaming_decoder() {
             Ok(decoder) => {
@@ -1223,9 +1330,7 @@ impl<'a> ImageJob<'a> {
                 if let Some(ref cl) = codec_limits {
                     fallback = fallback.with_limits(cl);
                 }
-                if let Some(deadline) = self.deadline() {
-                    fallback = fallback.with_stop(deadline);
-                }
+                fallback = fallback.with_pulse(self.control());
                 let decoded = at_crate!(fallback.decode_full_frame())
                     .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
@@ -1261,9 +1366,7 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             request = request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
         let decoded =
             at_crate!(request.decode_full_frame()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
         let pixels = decoded.pixels();
@@ -1297,9 +1400,7 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             request = request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
 
         let (decoded, gain_map) =
             at_crate!(request.decode_gain_map()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
@@ -1363,6 +1464,20 @@ impl<'a> ImageJob<'a> {
         Ok((Box::new(source), sidecar))
     }
 
+    /// Whether the nodes re-orient the pixels: a `zenlayout.orient` node with a
+    /// concrete non-identity EXIF value (2-8). The identity value `1` and the
+    /// autorotate sentinel `0` leave the stored pixels as they are (the sentinel
+    /// is not resolved when the geometry is compiled), so the source
+    /// orientation still has to reach the encoder.
+    fn renders_orientation(&self) -> bool {
+        self.nodes.iter().any(|n| {
+            n.schema().id == "zenlayout.orient"
+                && n.get_param("orientation")
+                    .and_then(|v| v.as_i32())
+                    .is_some_and(|o| (2..=8).contains(&o))
+        })
+    }
+
     /// Apply metadata policy: filter metadata fields based on the policy.
     fn apply_metadata_policy(&self, mut meta: zencodec::Metadata) -> zencodec::Metadata {
         match self.metadata_policy {
@@ -1381,8 +1496,7 @@ impl<'a> ImageJob<'a> {
                 }
                 // Keep CICP (4 bytes, required for correct wide gamut/HDR display)
                 // Keep content_light_level and mastering_display (HDR tone mapping)
-                // Set orientation to Identity (already applied or passed through)
-                meta.orientation = zencodec::Orientation::Identity;
+                // Orientation: set by the caller from what the nodes render.
                 meta
             }
             MetadataPolicy::StripAll => {
@@ -1391,8 +1505,8 @@ impl<'a> ImageJob<'a> {
                 meta.icc_profile = None;
                 meta.content_light_level = None;
                 meta.mastering_display = None;
-                meta.orientation = zencodec::Orientation::Identity;
-                // Keep only CICP (4 bytes, bare minimum for correct display)
+                // Keep only CICP (4 bytes, bare minimum for correct display);
+                // the caller sets the orientation from what the nodes render.
                 meta
             }
         }
@@ -1531,7 +1645,7 @@ impl<'a> ImageJob<'a> {
         if let Some(effort) = decision.quality.effort {
             encode_request = encode_request.with_effort(effort);
         }
-        if let Some(meta) = output.metadata {
+        if let Some(meta) = output.metadata.clone() {
             encode_request = encode_request.with_metadata(meta);
         }
         // Per-codec hint overrides (?jpeg.quality=, ?webp.effort=, …).
@@ -1545,48 +1659,61 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             encode_request = encode_request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            encode_request = encode_request.with_stop(deadline);
+        encode_request = encode_request.with_pulse(self.control());
+
+        #[cfg(feature = "io")]
+        if let Some(policy) = self.output_policy {
+            if output.sidecar.is_some() {
+                // A gain map is assembled from the whole image (MPF/tmap/jhgm).
+                return Err(at!(PipeError::Codec(Box::new(
+                    zencodec::UnsupportedOperation::GainMapEncode
+                ))));
+            }
+            return self.planned_encode(
+                encode_request,
+                source,
+                (w, h),
+                target_format,
+                policy,
+                output.metadata.as_ref(),
+            );
         }
 
         // Prepare gain map data for re-embedding (if sidecar was preserved).
         // These live outside the encode_request borrow scope. Gated on
         // `job-ultrahdr`: without it there is never a gain-map sidecar.
         #[cfg(feature = "job-ultrahdr")]
-        let gain_map_data = output.sidecar.and_then(|sidecar| {
-            if let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind {
-                // GainMapMetadata is a type alias for zencodec::GainMapParams
-                // since ultrahdr-core 0.5 — the sidecar params ARE the metadata.
-                let metadata = params.clone();
-                // Repack to the tight 1- or 3-channel layout GainMap consumers
-                // expect. The channel count follows the ISO 21496-1 metadata,
-                // not pixel inspection; a resized sidecar comes out of the
-                // layout pipeline expanded to RGBA with stride padding.
-                let (width, height) = (sidecar.width(), sidecar.height());
-                let src_ch = sidecar.format().channels() as usize;
-                let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
-                let out_ch = channels as usize;
-                let mut data =
-                    alloc::vec::Vec::with_capacity(width as usize * height as usize * out_ch);
-                for y in 0..height as usize {
-                    let row_start = y * sidecar.stride();
-                    let row = &sidecar.data()[row_start..row_start + width as usize * src_ch];
-                    for px in row.chunks_exact(src_ch) {
-                        for c in 0..out_ch {
-                            data.push(px[c.min(src_ch - 1)]);
-                        }
+        let gain_map_data = output.sidecar.map(|sidecar| {
+            let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind;
+            // GainMapMetadata is a type alias for zencodec::GainMapParams
+            // since ultrahdr-core 0.5 — the sidecar params ARE the metadata.
+            let metadata = params.clone();
+            // Repack to the tight 1- or 3-channel layout GainMap consumers
+            // expect. The channel count follows the ISO 21496-1 metadata,
+            // not pixel inspection; a resized sidecar comes out of the
+            // layout pipeline expanded to RGBA with stride padding.
+            let (width, height) = (sidecar.width(), sidecar.height());
+            let src_ch = sidecar.format().channels();
+            let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
+            let out_ch = channels as usize;
+            let mut data =
+                alloc::vec::Vec::with_capacity(width as usize * height as usize * out_ch);
+            for y in 0..height as usize {
+                let row_start = y * sidecar.stride();
+                let row = &sidecar.data()[row_start..row_start + width as usize * src_ch];
+                for px in row.chunks_exact(src_ch) {
+                    for c in 0..out_ch {
+                        data.push(px[c.min(src_ch - 1)]);
                     }
                 }
-                let gain_map = zencodecs::GainMap {
-                    data,
-                    width,
-                    height,
-                    channels,
-                };
-                Some((gain_map, metadata))
-            } else {
-                None
             }
+            let gain_map = zencodecs::GainMap {
+                data,
+                width,
+                height,
+                channels,
+            };
+            (gain_map, metadata)
         });
 
         // Attach gain map to encoder if the target format supports it.
@@ -1597,14 +1724,11 @@ impl<'a> ImageJob<'a> {
             zencodec::ImageFormat::Jpeg | zencodec::ImageFormat::Avif | zencodec::ImageFormat::Jxl
         );
         #[cfg(feature = "job-ultrahdr")]
-        if target_supports_gainmap {
-            if let Some((ref gm, ref meta)) = gain_map_data {
-                encode_request =
-                    encode_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
-                        gain_map: gm,
-                        metadata: meta,
-                    });
-            }
+        if target_supports_gainmap && let Some((ref gm, ref meta)) = gain_map_data {
+            encode_request = encode_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
+                gain_map: gm,
+                metadata: meta,
+            });
         }
 
         // When a gain map is present, use one-shot encode (gain map embedding
@@ -1626,9 +1750,11 @@ impl<'a> ImageJob<'a> {
             Some(streaming_enc) => {
                 let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
                 match self.deadline() {
-                    Some(deadline) => {
-                        crate::execute_with_stop(source.as_mut(), &mut sink, &deadline)?
-                    }
+                    Some(deadline) => crate::execute_with_pulse(
+                        source.as_mut(),
+                        &mut sink,
+                        Some(&zencodec::how_far::StopOnly::borrowed(&deadline)),
+                    )?,
                     None => crate::execute(source.as_mut(), &mut sink)?,
                 }
                 let encode_output = sink
@@ -1665,20 +1791,16 @@ impl<'a> ImageJob<'a> {
                 if let Some(ref cl) = codec_limits {
                     oneshot_request = oneshot_request.with_limits(cl);
                 }
-                if let Some(deadline) = self.deadline() {
-                    oneshot_request = oneshot_request.with_stop(deadline);
-                }
+                oneshot_request = oneshot_request.with_pulse(self.control());
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
                 #[cfg(feature = "job-ultrahdr")]
-                if target_supports_gainmap {
-                    if let Some((ref gm, ref meta)) = gain_map_data {
-                        oneshot_request =
-                            oneshot_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
-                                gain_map: gm,
-                                metadata: meta,
-                            });
-                    }
+                if target_supports_gainmap && let Some((ref gm, ref meta)) = gain_map_data {
+                    oneshot_request =
+                        oneshot_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
+                            gain_map: gm,
+                            metadata: meta,
+                        });
                 }
 
                 let encode_output = at_crate!(oneshot_request.encode(pixels, format.has_alpha()))
@@ -2282,5 +2404,179 @@ mod tests {
                 "expected codec-level cancellation, got: {msg}"
             );
         }
+    }
+}
+
+/// The animated route hands the job's one control to its codecs, so a stop is
+/// seen inside a frame (decoder creation, frame rendering, frame encoding), not
+/// only between frames. Each test runs the route with a control that is stopped
+/// from its `fail_at`-th poll on, with zenpipe's deadline reason, and counts
+/// every poll.
+#[cfg(all(test, feature = "nodes-gif"))]
+mod animation_control_tests {
+    use super::*;
+    use alloc::sync::Arc;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    use zencodec::enough::{Stop, StopReason};
+    use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report};
+
+    const W: u32 = 24;
+    const H: u32 = 16;
+    const FRAMES: u32 = 3;
+
+    struct Control {
+        polls: Arc<AtomicUsize>,
+        fail_at: usize,
+    }
+    impl Stop for Control {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.polls.fetch_add(1, Ordering::Relaxed) >= self.fail_at {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl Report for Control {
+        fn advance(&self, _completed: u64) {}
+    }
+    impl Pulse for Control {
+        fn split(
+            &self,
+            _execution: Execution,
+            _parts: &[PhaseSpec<'_>],
+        ) -> Result<Vec<Child<'_>>, PlanError> {
+            Err(PlanError::Unsupported)
+        }
+    }
+
+    fn control(fail_at: usize) -> (zencodec::SharedPulse, Arc<AtomicUsize>) {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let pulse = zencodec::SharedPulse::new(Control {
+            polls: polls.clone(),
+            fail_at,
+        });
+        (pulse, polls)
+    }
+
+    fn animated_gif() -> Vec<u8> {
+        let stride = W as usize * 4;
+        let mut encoder = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Gif)
+            .animation_frame_encoder(W, H)
+            .unwrap();
+        for frame in 0..FRAMES {
+            let bytes: Vec<u8> = (0..W * H)
+                .flat_map(|n| [(n * 7 + frame * 40) as u8, (frame * 60) as u8, 200, 255])
+                .collect();
+            let pixels = zenpixels::PixelSlice::new(
+                &bytes,
+                W,
+                H,
+                stride,
+                zenpixels::PixelDescriptor::RGBA8_SRGB,
+            )
+            .unwrap();
+            encoder.push_frame(pixels, 100, None).unwrap();
+        }
+        encoder.finish(None).unwrap().into_vec()
+    }
+
+    fn run(
+        gif: &[u8],
+        limits: Option<&zencodecs::Limits>,
+        control: &zencodec::SharedPulse,
+    ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
+        transcode_animated_nodes(
+            gif,
+            &zencodecs::AllowedFormats::all(),
+            limits,
+            None,
+            &[],
+            &[],
+            zencodec::ImageFormat::Gif,
+            80.0,
+            false,
+            None,
+            control,
+            None,
+        )
+    }
+
+    fn frames_in(gif: &[u8]) -> u32 {
+        let mut decoder = zencodecs::DecodeRequest::new(gif)
+            .animation_frame_decoder()
+            .unwrap();
+        let mut frames = 0;
+        while decoder.render_next_frame_owned(None).unwrap().is_some() {
+            frames += 1;
+        }
+        frames
+    }
+
+    /// A control that is already stopped refuses before any frame renders. The
+    /// pixel budget is smaller than one frame: a route that renders a frame
+    /// before its codec consults the control fails on that budget instead.
+    #[test]
+    fn a_stopped_control_refuses_before_the_first_frame_renders() {
+        let gif = animated_gif();
+        let budget = zencodecs::Limits::none().with_max_total_pixels(u64::from(W * H) - 1);
+        let (stopped, polls) = control(0);
+        match run(&gif, Some(&budget), &stopped) {
+            Err(e) => assert!(
+                matches!(e.error(), PipeError::Cancelled),
+                "expected the control's refusal, got {e}"
+            ),
+            Ok(_) => panic!("a stopped control must refuse the route"),
+        }
+        assert_eq!(
+            polls.load(Ordering::Relaxed),
+            1,
+            "the first poll refuses and nothing polls after it"
+        );
+    }
+
+    /// Every poll the route makes refuses there, with the control's reason, no
+    /// output, and no later poll.
+    #[test]
+    fn every_poll_of_the_animated_route_refuses_without_output() {
+        let gif = animated_gif();
+        let (unstopped, polls) = control(usize::MAX);
+        let (bytes, w, h) = run(&gif, None, &unstopped)
+            .expect("unstopped route")
+            .expect("GIF has an animation encoder");
+        assert_eq!((w, h), (W, H));
+        assert_eq!(
+            frames_in(&bytes),
+            FRAMES,
+            "an unstopped route keeps every frame"
+        );
+        let total = polls.load(Ordering::Relaxed);
+        assert!(total > 0, "the route never polled its control");
+        let mut failures = Vec::new();
+        for fail_at in 0..total {
+            let (stopped, polls) = control(fail_at);
+            match run(&gif, None, &stopped) {
+                Ok(_) => failures.push(alloc::format!(
+                    "poll {fail_at}/{total}: completed after the control stopped"
+                )),
+                Err(e) if !matches!(e.error(), PipeError::Cancelled) => {
+                    failures.push(alloc::format!("poll {fail_at}/{total}: refused as {e}"))
+                }
+                Err(_) => {}
+            }
+            let seen = polls.load(Ordering::Relaxed);
+            if seen != fail_at + 1 {
+                failures.push(alloc::format!(
+                    "poll {fail_at}/{total}: {seen} polls, expected {} (work continued after the refusal)",
+                    fail_at + 1
+                ));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} wrong stop points:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
     }
 }

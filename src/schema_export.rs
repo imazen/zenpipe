@@ -153,7 +153,7 @@ mod tests {
             .iter()
             .find(|k| str_val(k, "key").as_deref() == Some("w"))
             .expect("should have 'w' key");
-        let aliases = w_entry.get("aliases").map(|a| a.as_array()).flatten();
+        let aliases = w_entry.get("aliases").and_then(|a| a.as_array());
         assert!(aliases.is_some(), "w should have aliases (width, maxwidth)");
     }
 

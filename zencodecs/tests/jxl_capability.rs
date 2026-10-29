@@ -15,13 +15,21 @@
 // `jxl-decode` (the default features) they are unused.
 #![cfg_attr(not(feature = "jxl-encode"), allow(unused_imports, dead_code))]
 
+#[cfg(feature = "jxl-encode")]
 use imgref::{ImgRef, ImgVec};
+#[cfg(feature = "jxl-encode")]
 use rgb::{Rgb, Rgba};
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
+use zencodecs::DecodeRequest;
+#[cfg(feature = "jxl-encode")]
+use zencodecs::ImageFormat;
+#[cfg(feature = "jxl-encode")]
+use zencodecs::{EncodeRequest, Metadata};
+#[cfg(feature = "jxl-encode")]
 use zenpixels::PixelSlice;
 
 // ─── Inline fixtures ─────────────────────────────────────────────────────
 
+#[cfg(feature = "jxl-encode")]
 fn rgb8_image(w: usize, h: usize) -> ImgVec<Rgb<u8>> {
     let pixels: Vec<Rgb<u8>> = (0..w * h)
         .map(|i| Rgb {
@@ -86,12 +94,14 @@ fn encode_jxl_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) 
         .into_vec()
 }
 
+#[cfg(feature = "jxl-encode")]
 fn decode_full(bytes: &[u8]) -> zencodecs::DecodeOutput {
     DecodeRequest::new(bytes)
         .decode_full_frame()
         .expect("decode JXL")
 }
 
+#[cfg(feature = "jxl-encode")]
 fn synthetic_icc(len: usize) -> Vec<u8> {
     let mut v = Vec::with_capacity(len);
     v.extend_from_slice(&(len as u32).to_be_bytes());
