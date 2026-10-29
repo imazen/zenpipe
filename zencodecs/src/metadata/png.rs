@@ -424,7 +424,7 @@ fn read_xmp(req: &ScrubRequest<'_>, data: &[u8]) -> Result<Vec<u8>, Error> {
 pub(super) fn chunk(
     kind: &[u8; 4],
     data: &[u8],
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Vec<u8>, Error> {
     let len = u32::try_from(data.len()).map_err(|_| Error::Limit("PNG chunk size"))?;
     let mut out = Vec::new();
@@ -456,7 +456,8 @@ const CRC_TABLE: [u32; 256] = {
     }
     table
 };
-fn crc32(data: &[u8], pulse: &dyn zencodec::Pulse) -> Result<u32, Error> {
+fn crc32(data: &[u8], pulse: Option<&dyn zencodec::Pulse>) -> Result<u32, Error> {
+    let pulse = pulse.unwrap_or(&zencodec::NoPulse);
     let mut c = !0u32;
     for block in data.chunks(65536) {
         pulse.check().map_err(super::stopped)?;

@@ -75,7 +75,7 @@ pub trait Services {
         _descriptive: &[u8],
         _required: &[u8],
         _limit: usize,
-        _pulse: &dyn zencodec::Pulse,
+        _pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported("XMP merge service not supplied"))
     }
@@ -86,7 +86,7 @@ pub trait Services {
         &self,
         _xml: &[u8],
         _limit: usize,
-        _pulse: &dyn zencodec::Pulse,
+        _pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
         Err(Error::Unsupported("XMP editing service not supplied"))
     }
@@ -96,7 +96,7 @@ pub trait Services {
         &self,
         _icc: &[u8],
         _limit: usize,
-        _pulse: &dyn zencodec::Pulse,
+        _pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
@@ -106,7 +106,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _pulse: &dyn zencodec::Pulse,
+        _pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata decompression service not supplied",
@@ -118,7 +118,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _pulse: &dyn zencodec::Pulse,
+        _pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata compression service not supplied",
@@ -278,7 +278,7 @@ pub struct ScrubRequest<'a> {
     max_output: usize,
     max_metadata: usize,
     max_carriers: usize,
-    pulse: &'a dyn zencodec::Pulse,
+    pulse: Option<&'a dyn zencodec::Pulse>,
 }
 impl<'a> ScrubRequest<'a> {
     /// Borrow encoded input. No parsing or allocation occurs yet.
@@ -294,7 +294,7 @@ impl<'a> ScrubRequest<'a> {
             max_output: 512 << 20,
             max_metadata: 16 << 20,
             max_carriers: 65_536,
-            pulse: &zencodec::NoPulse,
+            pulse: None,
         }
     }
     /// EXIF retention. Source XMP retention requires explicit `with_xmp_editing`.
@@ -341,8 +341,8 @@ impl<'a> ScrubRequest<'a> {
         self
     }
     /// Cooperative cancellation, checked between carriers and long byte walks.
-    /// Services receive this same pulse.
-    pub fn with_pulse(mut self, pulse: &'a dyn zencodec::Pulse) -> Self {
+    /// `None` adds no per-call control; services receive the original option.
+    pub fn with_pulse(mut self, pulse: Option<&'a dyn zencodec::Pulse>) -> Self {
         self.pulse = pulse;
         self
     }
@@ -377,7 +377,10 @@ impl<'a> ScrubRequest<'a> {
         ))
     }
     fn check(&self) -> Result<(), Error> {
-        self.pulse.check().map_err(stopped)
+        self.pulse
+            .unwrap_or(&zencodec::NoPulse)
+            .check()
+            .map_err(stopped)
     }
     fn packet(&self, size: usize) -> Result<(), Error> {
         if size > self.max_metadata {

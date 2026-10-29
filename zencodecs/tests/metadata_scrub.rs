@@ -34,6 +34,95 @@ mod jpeg {
         .concat()
     }
     #[test]
+    fn optional_request_control_preserves_service_identity_bytes_and_limits() {
+        use std::cell::{Cell, RefCell};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use zencodec::{
+            Pulse, SharedPulse,
+            how_far::{Child, Execution, PhaseSpec, PlanError, Report},
+        };
+        use zencodecs::metadata::Services;
+
+        struct Meter(Arc<AtomicUsize>);
+        impl enough::Stop for Meter {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                Ok(())
+            }
+        }
+        impl Report for Meter {
+            fn advance(&self, n: u64) {
+                self.0.fetch_add(n as usize, Ordering::SeqCst);
+            }
+        }
+        impl Pulse for Meter {
+            fn split(
+                &self,
+                _: Execution,
+                _: &[PhaseSpec<'_>],
+            ) -> Result<Vec<Child<'_>>, PlanError> {
+                Err(PlanError::Unsupported)
+            }
+        }
+        struct Editor<'a> {
+            expected: Option<&'a dyn Pulse>,
+            calls: Cell<usize>,
+            retained: RefCell<Option<SharedPulse>>,
+        }
+        impl Services for Editor<'_> {
+            fn rewrite_xmp(
+                &self,
+                xml: &[u8],
+                _: usize,
+                pulse: Option<&dyn Pulse>,
+            ) -> Result<Option<Vec<u8>>, Error> {
+                match (self.expected, pulse) {
+                    (None, None) => {}
+                    (Some(expected), Some(actual)) => {
+                        assert!(core::ptr::eq(expected, actual));
+                        actual.advance(1);
+                        *self.retained.borrow_mut() = Some(actual.share().unwrap());
+                    }
+                    _ => panic!("metadata service changed control presence"),
+                }
+                self.calls.set(self.calls.get() + 1);
+                Ok(Some(xml.to_vec()))
+            }
+        }
+        let xml = b"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>";
+        let input = image(&app(
+            0xe1,
+            &[b"http://ns.adobe.com/xap/1.0/\0".as_slice(), xml].concat(),
+        ));
+        let units = Arc::new(AtomicUsize::new(0));
+        let shared = SharedPulse::new(Meter(units.clone()));
+        for pulse in [None, Some(&shared as &dyn Pulse)] {
+            let service = Editor {
+                expected: pulse,
+                calls: Cell::new(0),
+                retained: RefCell::new(None),
+            };
+            let request = ScrubRequest::new(&input)
+                .with_services(&service)
+                .with_xmp_editing(true)
+                .with_pulse(pulse);
+            assert_eq!(request.plan().unwrap().to_vec().unwrap(), input);
+            assert_eq!(service.calls.get(), 1);
+            if let Some(retained) = service.retained.borrow_mut().take() {
+                retained.advance(1);
+            }
+            assert!(matches!(
+                request.clone().with_metadata_limit(0).plan(),
+                Err(Error::Limit("metadata bytes"))
+            ));
+            assert_eq!(service.calls.get(), 1);
+        }
+        assert_eq!(units.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
     fn removes_private_packets_between_scans_and_trailer_without_copying_scan() {
         let mut input = image(&app(0xfe, b"SECRET-COMMENT"));
         input.extend_from_slice(b"SECRET-TRAILER");
@@ -393,7 +482,7 @@ fn cancellation_is_observed_before_parsing() {
     }
     assert_eq!(
         ScrubRequest::new(b"data")
-            .with_pulse(&zencodec::how_far::StopOnly::new(Stop))
+            .with_pulse(Some(&zencodec::how_far::StopOnly::new(Stop)))
             .plan()
             .unwrap_err(),
         Error::Cancelled
@@ -410,7 +499,7 @@ fn a_deadline_keeps_its_stop_reason() {
     }
     assert_eq!(
         ScrubRequest::new(b"data")
-            .with_pulse(&zencodec::how_far::StopOnly::new(Late))
+            .with_pulse(Some(&zencodec::how_far::StopOnly::new(Late)))
             .plan()
             .unwrap_err(),
         Error::Stopped(enough::StopReason::TimedOut)
@@ -555,7 +644,7 @@ mod gain_map_scrub {
                 &self,
                 _: &[u8],
                 _: usize,
-                _: &dyn zencodec::Pulse,
+                _: Option<&dyn zencodec::Pulse>,
             ) -> Result<Option<Vec<u8>>, Error> {
                 self.calls.set(self.calls.get() + 1);
                 Ok(Some(b"description".to_vec()))
@@ -565,7 +654,7 @@ mod gain_map_scrub {
                 _: &[u8],
                 required: &[u8],
                 _: usize,
-                _: &dyn zencodec::Pulse,
+                _: Option<&dyn zencodec::Pulse>,
             ) -> Result<Vec<u8>, Error> {
                 Ok(if self.corrupt {
                     b"<invalid/>".to_vec()

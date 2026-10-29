@@ -116,16 +116,18 @@ impl Services for PublishingServices {
         descriptive: &[u8],
         required: &[u8],
         limit: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<Vec<u8>, Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         merge_packets(descriptive, required, limit, pulse)
     }
     fn rewrite_xmp(
         &self,
         xml: &[u8],
         limit: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         pulse.check().map_err(stopped)?;
         if !self.keep_rights {
             return Ok(None);
@@ -210,8 +212,9 @@ impl Services for PublishingServices {
         &self,
         icc: &[u8],
         limit: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         pulse.check().map_err(stopped)?;
         if icc.len() > limit {
             return Err(Error::Limit("ICC bytes"));
@@ -230,8 +233,9 @@ impl Services for PublishingServices {
         kind: Compression,
         data: &[u8],
         limit: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<Vec<u8>, Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         match kind {
             Compression::Zlib => inflate_zlib(data, limit, pulse),
             Compression::Brotli => {
@@ -246,8 +250,9 @@ impl Services for PublishingServices {
         kind: Compression,
         data: &[u8],
         limit: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<Vec<u8>, Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if data.len() > limit {
             return Err(Error::Limit("metadata compression input"));
         }
@@ -362,7 +367,7 @@ mod tests {
     fn publishing_policy_removes_unknown_properties_but_keeps_rights_and_languages() {
         let services = PublishingServices { keep_rights: true };
         let out = services
-            .rewrite_xmp(PACKET.as_bytes(), 1 << 20, &zencodec::NoPulse)
+            .rewrite_xmp(PACKET.as_bytes(), 1 << 20, Some(&zencodec::NoPulse))
             .unwrap()
             .unwrap();
         let text = std::str::from_utf8(&out).unwrap();
@@ -391,11 +396,16 @@ mod tests {
         let service = PublishingServices::default();
         let plain = vec![b'A'; 100_000];
         let compressed = service
-            .compress(Compression::Zlib, &plain, 200_000, &zencodec::NoPulse)
+            .compress(Compression::Zlib, &plain, 200_000, Some(&zencodec::NoPulse))
             .unwrap();
         assert!(compressed.len() < 1000);
         assert!(matches!(
-            service.decompress(Compression::Zlib, &compressed, 1024, &zencodec::NoPulse),
+            service.decompress(
+                Compression::Zlib,
+                &compressed,
+                1024,
+                Some(&zencodec::NoPulse)
+            ),
             Err(Error::Limit(_))
         ));
         assert_eq!(
@@ -404,7 +414,7 @@ mod tests {
                     Compression::Zlib,
                     &compressed,
                     plain.len(),
-                    &zencodec::NoPulse
+                    Some(&zencodec::NoPulse)
                 )
                 .unwrap(),
             plain
@@ -417,7 +427,7 @@ mod tests {
         variant[24..36].fill(23);
         assert_eq!(
             PublishingServices::default()
-                .normalize_icc(&variant, 1 << 20, &zencodec::NoPulse)
+                .normalize_icc(&variant, 1 << 20, Some(&zencodec::NoPulse))
                 .unwrap()
                 .unwrap(),
             known
@@ -425,7 +435,7 @@ mod tests {
         variant[known.len() - 1] ^= 1;
         assert!(
             PublishingServices::default()
-                .normalize_icc(&variant, 1 << 20, &zencodec::NoPulse)
+                .normalize_icc(&variant, 1 << 20, Some(&zencodec::NoPulse))
                 .unwrap()
                 .is_none()
         );
@@ -631,15 +641,85 @@ mod integration_tests {
     }
 
     #[test]
+    fn absent_or_supplied_noop_controls_preserve_service_results_and_limits() {
+        let service = PublishingServices { keep_rights: true };
+        let xml = super::tests::PACKET.as_bytes();
+        let filtered = service
+            .rewrite_xmp(xml, 1 << 20, Some(&zencodec::NoPulse))
+            .unwrap()
+            .unwrap();
+        let merged = service
+            .merge_xmp(
+                &filtered,
+                REQUIRED.as_bytes(),
+                1 << 20,
+                Some(&zencodec::NoPulse),
+            )
+            .unwrap();
+        let plain = vec![7u8; 16_384];
+        let compressed = service
+            .compress(Compression::Zlib, &plain, 200_000, Some(&zencodec::NoPulse))
+            .unwrap();
+        let known = zenpixels_convert::icc_profiles::DISPLAY_P3_V4;
+        let mut variant = known.to_vec();
+        variant[24..36].fill(23);
+
+        for pulse in [None, Some(&zencodec::NoPulse as &dyn Pulse)] {
+            assert_eq!(
+                service.rewrite_xmp(xml, 1 << 20, pulse).unwrap(),
+                Some(filtered.clone())
+            );
+            assert_eq!(
+                service
+                    .merge_xmp(&filtered, REQUIRED.as_bytes(), 1 << 20, pulse)
+                    .unwrap(),
+                merged
+            );
+            assert_eq!(
+                service.normalize_icc(&variant, 1 << 20, pulse).unwrap(),
+                Some(known.to_vec())
+            );
+            assert_eq!(
+                service
+                    .compress(Compression::Zlib, &plain, 200_000, pulse)
+                    .unwrap(),
+                compressed
+            );
+            assert_eq!(
+                service
+                    .decompress(Compression::Zlib, &compressed, 20_000, pulse)
+                    .unwrap(),
+                plain
+            );
+            assert!(matches!(
+                service.decompress(Compression::Zlib, &compressed, 1024, pulse),
+                Err(Error::Limit(_))
+            ));
+            assert!(matches!(
+                service.compress(Compression::Zlib, &plain, 1, pulse),
+                Err(Error::Limit("metadata compression input"))
+            ));
+            assert!(matches!(
+                service.normalize_icc(&variant, 0, pulse),
+                Err(Error::Limit("ICC bytes"))
+            ));
+        }
+    }
+
+    #[test]
     fn every_service_reports_the_pulse_stop_reason() {
         let service = PublishingServices { keep_rights: true };
         let description = service
-            .rewrite_xmp(super::tests::PACKET.as_bytes(), 1 << 20, &zencodec::NoPulse)
+            .rewrite_xmp(
+                super::tests::PACKET.as_bytes(),
+                1 << 20,
+                Some(&zencodec::NoPulse),
+            )
             .unwrap()
             .unwrap();
         let plain = vec![b'A'; 100_000];
         let compressed = service
-            .compress(Compression::Zlib, &plain, 200_000, &zencodec::NoPulse)
+            .compress(Compression::Zlib, &plain, 200_000, Some(&zencodec::NoPulse))
             .unwrap();
         let icc = zenpixels_convert::icc_profiles::DISPLAY_P3_V4;
         for (reason, expected) in [
@@ -649,23 +729,23 @@ mod integration_tests {
             let pulse = Stopped(reason);
             let xml = super::tests::PACKET.as_bytes();
             assert_eq!(
-                service.rewrite_xmp(xml, 1 << 20, &pulse),
+                service.rewrite_xmp(xml, 1 << 20, Some(&pulse)),
                 Err(expected.clone())
             );
             assert_eq!(
-                service.merge_xmp(&description, REQUIRED.as_bytes(), 1 << 20, &pulse),
+                service.merge_xmp(&description, REQUIRED.as_bytes(), 1 << 20, Some(&pulse)),
                 Err(expected.clone())
             );
             assert_eq!(
-                service.normalize_icc(icc, 1 << 20, &pulse),
+                service.normalize_icc(icc, 1 << 20, Some(&pulse)),
                 Err(expected.clone())
             );
             assert_eq!(
-                service.decompress(Compression::Zlib, &compressed, 1 << 20, &pulse),
+                service.decompress(Compression::Zlib, &compressed, 1 << 20, Some(&pulse)),
                 Err(expected.clone())
             );
             assert_eq!(
-                service.compress(Compression::Zlib, &plain, 200_000, &pulse),
+                service.compress(Compression::Zlib, &plain, 200_000, Some(&pulse)),
                 Err(expected)
             );
         }
@@ -676,7 +756,11 @@ mod integration_tests {
     fn merge_keeps_required_signals_and_rights_language_qualifiers() {
         let service = PublishingServices { keep_rights: true };
         let description = service
-            .rewrite_xmp(super::tests::PACKET.as_bytes(), 1 << 20, &zencodec::NoPulse)
+            .rewrite_xmp(
+                super::tests::PACKET.as_bytes(),
+                1 << 20,
+                Some(&zencodec::NoPulse),
+            )
             .unwrap()
             .unwrap();
         let merged = service
@@ -684,7 +768,7 @@ mod integration_tests {
                 &description,
                 REQUIRED.as_bytes(),
                 1 << 20,
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             )
             .unwrap();
         let merged = std::str::from_utf8(&merged).unwrap();
@@ -708,7 +792,7 @@ mod integration_tests {
         );
         assert!(!merged.contains("SECRET"));
         // Re-editing our own multi-description output is supported.
-        let result = service.rewrite_xmp(merged.as_bytes(), 1 << 20, &zencodec::NoPulse);
+        let result = service.rewrite_xmp(merged.as_bytes(), 1 << 20, Some(&zencodec::NoPulse));
         assert!(result.is_ok(), "{result:?}\n{merged}");
     }
     #[test]
@@ -722,13 +806,23 @@ mod integration_tests {
         let service = PublishingServices::default();
         assert_eq!(
             service
-                .decompress(Compression::Brotli, &encoded, 16384, &zencodec::NoPulse)
+                .decompress(
+                    Compression::Brotli,
+                    &encoded,
+                    16384,
+                    Some(&zencodec::NoPulse)
+                )
                 .unwrap(),
             plain
         );
         assert!(
             service
-                .decompress(Compression::Brotli, &encoded, 1024, &zencodec::NoPulse)
+                .decompress(
+                    Compression::Brotli,
+                    &encoded,
+                    1024,
+                    Some(&zencodec::NoPulse)
+                )
                 .is_err()
         );
         for end in 0..encoded.len() {
@@ -738,7 +832,7 @@ mod integration_tests {
                         Compression::Brotli,
                         &encoded[..end],
                         16384,
-                        &zencodec::NoPulse
+                        Some(&zencodec::NoPulse)
                     )
                     .is_err(),
                 "{end}"
@@ -750,7 +844,7 @@ mod integration_tests {
         let service = PublishingServices::default();
         let plain = vec![5u8; 8192];
         let compressed = service
-            .compress(Compression::Zlib, &plain, 16384, &zencodec::NoPulse)
+            .compress(Compression::Zlib, &plain, 16384, Some(&zencodec::NoPulse))
             .unwrap();
         for end in 0..compressed.len() {
             assert!(
@@ -759,7 +853,7 @@ mod integration_tests {
                         Compression::Zlib,
                         &compressed[..end],
                         16384,
-                        &zencodec::NoPulse
+                        Some(&zencodec::NoPulse)
                     )
                     .is_err(),
                 "{end}"
@@ -769,7 +863,12 @@ mod integration_tests {
         trailing.extend_from_slice(b"SECRET");
         assert!(
             service
-                .decompress(Compression::Zlib, &trailing, 16384, &zencodec::NoPulse)
+                .decompress(
+                    Compression::Zlib,
+                    &trailing,
+                    16384,
+                    Some(&zencodec::NoPulse)
+                )
                 .is_err()
         );
     }
@@ -786,7 +885,7 @@ mod integration_tests {
             let result = PublishingServices { keep_rights: true }.rewrite_xmp(
                 xml.as_bytes(),
                 1 << 20,
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             );
             if let Ok(Some(bytes)) = result {
                 assert!(!String::from_utf8(bytes).unwrap().contains("SECRET"));
