@@ -739,3 +739,7 @@ integration-job-clippy:
 integration-fuzz-check:
     cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
     cargo check --manifest-path zencodecs/fuzz/Cargo.toml --all-targets --locked
+
+# Exact sample preservation through a no-transform, lossless ImageJob.
+job-precision-check:
+    cargo test --locked -p zenpipe --features job,nodes-png --test job_precision
