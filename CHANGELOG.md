@@ -1500,3 +1500,12 @@ Three crates.io requirements block a newer release and were left alone on purpos
   BT.709, 12 → Display P3, 9 → BT.2100; an explicit code outside the three
   UltraHDR gamuts is an encode error (`UnsupportedOperation`) rather than a
   silent BT.709 fallback, which would compute wrong gain-map luma.
+
+### AVIF graph and orientation repair (2026-10-29)
+
+- Align all five portable roots with the same AVIF/parser/serializer source,
+  using root-owned patches for the unpublished serializer (`96972529`).
+- Forward `DecodeRequest::with_orientation` to AVIF decoding (`0a26163f`);
+  Preserve keeps stored samples, Correct rotates pixels and reports Identity.
+  Three exact pixel witnesses and strict Clippy pass. Two encode orientation
+  carrier assertions still fail; see `benchmarks/portable_serializer_2026-10-29.md`.

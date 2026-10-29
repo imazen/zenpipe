@@ -21,3 +21,18 @@ The precise per-root package deltas are retained in the adjacent JSON ledger.
 Receipt: `run-heavy: done rc=0 7s | peak-RSS 0.29GiB | min-avail 15124MiB | peak-load 0.57`.
 This proves graph resolution and source agreement, not native behavior, API
 compilation or browser qualification. Those remain separate required gates.
+
+## Native consumer qualification
+
+The unmodified AVIF suite on `4fd1d7ec` failed: 8 passed, 3 failed, 4 existing
+ignores. Two retained assertions require explicit/EXIF orientation tags to survive
+encoding; native still encoding instead bakes the orientation. That contract
+conflict remains unresolved; neither assertion has been weakened.
+
+The third failure identified a dropped consumer request: AVIF decoding never
+received `DecodeRequest::with_orientation`. Fix `0a26163f` forwards it to the
+native decode job. All three orientation pixel witnesses now pass unchanged,
+including exact Preserve/Correct samples, rectangular dimensions and container
+carriers. Strict library/test Clippy passes. Full-suite success is NOT claimed.
+
+Receipts: failing full suite `run-heavy: done rc=101 22s | peak-RSS 0.95GiB | min-avail 13809MiB | peak-load 0.87`; focused repair `run-heavy: done rc=0 5s | peak-RSS 0.39GiB | min-avail 14738MiB | peak-load 0.39`.
