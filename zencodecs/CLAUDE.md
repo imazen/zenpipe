@@ -920,3 +920,14 @@ skip. These are bootstrap failures, not product assertion results. The proposed
 runner now uses the guide's committed npm lock, the same complete Playwright
 version for both profiles, and an explicit matching Chromium install. Existing
 assertions and skips stay intact; the repair has only shell-syntax validation.
+
+## Fixed: AVIF auxiliary gain-map deadline (2026-10-29)
+
+The precomputed gain-map path replaced the caller's operation control with
+Unstoppable while encoding its grayscale or RGB auxiliary image. It now lends
+the retained SharedPulse through the native API's StopToken. A native regression
+uses invalid base storage to distinguish an auxiliary timeout from cancellation
+only after auxiliary work: the old path reached base adaptation, while both
+repaired branches retain the original TimedOut cause. This does not add native
+progress reporting to the Stop-only low-level encoder. See
+`../benchmarks/avif_auxiliary_pulse_2026-10-29.md` and `just avif-gainmap-pulse-check`.

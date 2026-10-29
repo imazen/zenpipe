@@ -345,3 +345,9 @@ api-profile-check:
 raw-gainmap-controls:
     cargo test --locked -p zencodecs --features raw-decode-gainmap --lib codecs::raw::gainmap_controls
     cargo clippy --locked -p zencodecs --features all,jp2-decode,metadata,checked-transcode-async --lib -- -D warnings
+
+# Auxiliary AVIF encoding must retain the operation deadline before base work.
+avif-gainmap-pulse-check:
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --test avif_gainmap_diagnostic zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --lib auxiliary_gain_map_observes_deadline_before_base_adaptation
+    cargo clippy --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --lib -- -D warnings

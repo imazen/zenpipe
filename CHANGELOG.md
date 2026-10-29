@@ -7,6 +7,11 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixes
+
+- Retain the caller deadline through both grayscale and RGB AVIF gain-map
+  auxiliary encodes instead of replacing it with an unstoppable control.
+
 #### Dependency integration
 
 - Align all five consumer graphs with owned decode completion in core `eeb1a450`
