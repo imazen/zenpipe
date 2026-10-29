@@ -157,7 +157,7 @@ fn execute_with_stop_cancels() {
     let stop = CountdownStop::new(2); // Cancel after 2 strip checks
 
     let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &stop);
+    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, Some(&stop));
 
     assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
     // Should have processed some but not all data.
@@ -166,11 +166,27 @@ fn execute_with_stop_cancels() {
 
 #[test]
 fn execute_with_unstoppable_completes() {
-    let mut src = solid_source(4, 4);
-    let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &zenpipe::Unstoppable);
-    assert!(result.is_ok());
-    assert_eq!(sink.bytes, 4 * 4 * 4);
+    for stop in [None, Some(&zenpipe::Unstoppable as &dyn Stop)] {
+        let mut src = solid_source(4, 4);
+        let mut sink = CollectSink::new();
+        let result = zenpipe::execute_with_stop(&mut *src, &mut sink, stop);
+        assert!(result.is_ok());
+        assert_eq!(sink.bytes, 4 * 4 * 4);
+    }
+}
+
+#[test]
+fn optional_materialization_stop_keeps_rows_and_cancellation() {
+    for stop in [None, Some(&zenpipe::Unstoppable as &dyn Stop)] {
+        let materialized =
+            MaterializedSource::from_source_stoppable(solid_source(4, 4), stop).unwrap();
+        for y in 0..4 {
+            assert_eq!(&materialized.row(y)[..16], &[128; 16]);
+        }
+    }
+    let stop = CountdownStop::new(2);
+    let result = MaterializedSource::from_source_stoppable(solid_source(4, 100), Some(&stop));
+    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
 }
 
 struct CollectSink {
@@ -399,6 +415,6 @@ fn deadline_compose_with_execute() {
 
     let mut src = solid_source(4, 100);
     let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, &deadline);
+    let result = zenpipe::execute_with_stop(&mut *src, &mut sink, Some(&deadline));
     assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
 }

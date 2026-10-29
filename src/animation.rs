@@ -432,13 +432,14 @@ pub fn transcode(
         out_height,
         out_format,
         build_pipeline,
-        &enough::Unstoppable,
+        None,
         None,
     )
 }
 
-/// Like [`transcode`], but checks `stop` between frames and inside the
+/// Like [`transcode`], but checks an optional `stop` between frames and inside the
 /// per-frame pipeline (audit H8 / M6).
+/// `None` adds no per-call control; decoder/encoder job controls remain active.
 pub fn transcode_with_stop(
     decoder: Box<dyn DynAnimationFrameDecoder>,
     encoder: Box<dyn DynAnimationFrameEncoder>,
@@ -446,7 +447,7 @@ pub fn transcode_with_stop(
     out_height: u32,
     out_format: PixelFormat,
     build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
-    stop: &dyn enough::Stop,
+    stop: Option<&dyn enough::Stop>,
 ) -> crate::PipeResult<EncodeOutput> {
     transcode_with_stop_and_limits(
         decoder,
@@ -500,15 +501,16 @@ pub fn transcode_with_stop_and_limits(
     out_height: u32,
     out_format: PixelFormat,
     mut build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
-    stop: &dyn enough::Stop,
+    stop: Option<&dyn enough::Stop>,
     max_frames: Option<u32>,
 ) -> crate::PipeResult<EncodeOutput> {
+    let control = stop.unwrap_or(&enough::Unstoppable);
     let mut frame_source = FrameSource::new(decoder)?;
     let mut frame_sink = FrameSink::new(encoder, out_width, out_height, out_format);
 
     let mut frames_seen: u32 = 0;
     while let Some(info) = frame_source.frame_info() {
-        stop.check().map_err(|_| at!(PipeError::Cancelled))?;
+        control.check().map_err(|_| at!(PipeError::Cancelled))?;
 
         // Per-iteration max_frames check — covers the case where the
         // decoder's `frame_count()` returned `None` so the up-front check

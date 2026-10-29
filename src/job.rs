@@ -1278,7 +1278,7 @@ pub(crate) fn transcode_animated_nodes(
         out_h,
         crate::format::RGBA8_SRGB,
         |frame_src, _idx| Ok(crate::bridge::build_pipeline(frame_src, nodes, converters)?.source),
-        control,
+        Some(control),
         max_frames,
     )?;
 
@@ -1742,7 +1742,7 @@ impl<'a> ImageJob<'a> {
                 let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
                 match self.deadline() {
                     Some(deadline) => {
-                        crate::execute_with_stop(source.as_mut(), &mut sink, &deadline)?
+                        crate::execute_with_stop(source.as_mut(), &mut sink, Some(&deadline))?
                     }
                     None => crate::execute(source.as_mut(), &mut sink)?,
                 }

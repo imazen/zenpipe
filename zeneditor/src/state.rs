@@ -758,7 +758,7 @@ impl EditorState {
             .stream_stoppable(source, &config, None, self.source_hash, &stop)
             .map_err(|e| format!("render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
+        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
             .map_err(|e| format!("materialize: {e}"))?;
 
         Ok(RenderOutput {
@@ -1008,7 +1008,7 @@ impl EditorState {
             .stream_stoppable(source, &config, None, self.source_hash, &stop)
             .map_err(|e| format!("overview render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
+        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
             .map_err(|e| format!("overview materialize: {e}"))?;
 
         Ok(RenderOutput {
@@ -1087,7 +1087,7 @@ impl EditorState {
             .stream_stoppable(source, &config, None, region_hash, &stop)
             .map_err(|e| format!("detail render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, &stop)
+        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
             .map_err(|e| format!("detail materialize: {e}"))?;
 
         Ok(RenderOutput {

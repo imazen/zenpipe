@@ -57,7 +57,7 @@ pub struct LosslessResult {
 ///   Only pixel-phase nodes are inspected; decode/encode nodes are skipped.
 /// * `encode_config` — Encode configuration (used to check output format).
 /// * `exif_orientation` — EXIF orientation tag (1-8) from source probing.
-/// * `stop` — Cooperative cancellation token.
+/// * `stop` — Optional cooperative cancellation token; `None` adds no control.
 ///
 /// # Errors
 ///
@@ -68,7 +68,7 @@ pub fn try_lossless_jpeg(
     nodes: &[Box<dyn NodeInstance>],
     encode_config: &EncodeConfig,
     exif_orientation: u8,
-    stop: &dyn Stop,
+    stop: Option<&dyn Stop>,
 ) -> Result<Option<LosslessResult>, PipeError> {
     // 1. Source must be JPEG (check magic bytes).
     if !is_jpeg(source_data) {
@@ -103,8 +103,9 @@ pub fn try_lossless_jpeg(
         edge_handling: EdgeHandling::TrimPartialBlocks,
     };
 
-    let result = zenjpeg::lossless::transform(source_data, &config, stop)
-        .map_err(|e| PipeError::Op(alloc::format!("lossless JPEG transform failed: {e}")))?;
+    let result =
+        zenjpeg::lossless::transform(source_data, &config, stop.unwrap_or(&enough::Unstoppable))
+            .map_err(|e| PipeError::Op(alloc::format!("lossless JPEG transform failed: {e}")))?;
 
     // 6. Probe output dimensions.
     let (w, h) = probe_jpeg_dimensions(&result).unwrap_or_else(|| {

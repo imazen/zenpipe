@@ -40,18 +40,20 @@ impl MaterializedSource {
 
     /// Drain all strips from `upstream` into memory.
     pub fn from_source(upstream: Box<dyn Source>) -> crate::PipeResult<Self> {
-        Self::from_source_stoppable(upstream, &enough::Unstoppable)
+        Self::from_source_stoppable(upstream, None)
     }
 
-    /// Drain all strips from `upstream` into memory, checking `stop` between strips.
+    /// Drain all strips from `upstream`, checking an optional `stop` between strips.
+    /// `None` adds no per-call control; upstream retained control remains active.
     ///
     /// Returns `PipeError::Cancelled` if the stop signal fires mid-drain.
     /// Returns `PipeError::LimitExceeded` if `stride * height` overflows
     /// `usize` (audit C2).
     pub fn from_source_stoppable(
         mut upstream: Box<dyn Source>,
-        stop: &dyn enough::Stop,
+        stop: Option<&dyn enough::Stop>,
     ) -> crate::PipeResult<Self> {
+        let stop = stop.unwrap_or(&enough::Unstoppable);
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();

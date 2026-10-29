@@ -333,7 +333,7 @@ mod inner {
             let prefix_metadata = prefix_output.metadata;
 
             // Materialize the prefix output so we can cache it.
-            let mat = MaterializedSource::from_source_stoppable(prefix_output.source, stop)?;
+            let mat = MaterializedSource::from_source_stoppable(prefix_output.source, Some(stop))?;
             let width = mat.width();
             let height = mat.height();
             let format = mat.format();

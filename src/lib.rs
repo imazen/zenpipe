@@ -183,15 +183,17 @@ pub trait Sink: Send {
 
 /// Drive a pipeline: pull all strips from `source` into `sink`.
 pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> PipeResult<()> {
-    execute_with_stop(source, sink, &Unstoppable)
+    execute_with_stop(source, sink, None)
 }
 
-/// Drive a pipeline with cooperative cancellation.
+/// Drive a pipeline with optional cooperative cancellation.
+/// `None` adds no per-call control; source and sink state remain unchanged.
 pub fn execute_with_stop(
     source: &mut dyn Source,
     sink: &mut dyn Sink,
-    stop: &dyn Stop,
+    stop: Option<&dyn Stop>,
 ) -> PipeResult<()> {
+    let stop = stop.unwrap_or(&Unstoppable);
     while let Some(strip) = source.next()? {
         stop.check().map_err(|_| at!(PipeError::Cancelled))?;
         sink.consume(&strip)?;
