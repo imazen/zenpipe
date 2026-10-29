@@ -198,3 +198,19 @@ figures, not codec-memory measurements.
 This qualifies feature selection/compilation, not runtime image correctness
 or browser cancellation. The existing native codec and application gates
 remain required.
+
+## Locked browser dependency graph (2026-10-29)
+
+The demo deployment still ran `cargo superwork ci-clone --add-paths` and deleted
+its lock after the main CI switched to the portable graph. Its failure in
+`rav1d-safe/src/msac.rs` therefore came from a floating sibling source, not
+the committed decoder pin. Deployment now retains the manifests and lock and
+uses `cargo build --locked`; no codec or threading feature was removed.
+
+At source `726cc103`, `just test-standalone-wasm` passes in an isolated export:
+locked wasm32-unknown-unknown checks of the demo crate and size-shim library.
+Wrapper rc0, 26 seconds, peak RSS 0.56 GiB, minimum available 13482 MiB.
+All six graph-root family audits and workflow YAML parsing also pass. This
+qualifies the pinned graph for ordinary WASM compilation; it does not prove
+the threaded release linker, generated bindings, or native browser execution.
+Those are still deployment/browser gates.

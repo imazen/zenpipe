@@ -280,3 +280,11 @@ The dedicated integration-job-check recipe covers job and gain-map features.
 The combined job/gain-map/node/Tokio/schema runtime and strict Clippy pass.
 Original deadline/cancellation assertions are retained; see
 `docs/current-main-integration.md` for evidence and the five HDR placeholder gaps.
+
+## Known Bugs: demo deployment source drift (2026-10-29)
+
+Deployment still rewrote dependencies to sibling heads and deleted the demo
+lock, producing a different graph from portable qualification. It now keeps
+the committed graph and builds locked. Ordinary demo/size-shim WASM checks
+pass; threaded release/browser qualification remains separate. See
+`docs/current-main-integration.md`.
