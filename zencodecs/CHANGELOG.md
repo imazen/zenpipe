@@ -20,6 +20,14 @@ All notable changes to `zencodecs` are documented here. Format follows
   CICP, and regenerates gain-map discovery independently of source XMP. Requests
   to preserve arbitrary source XMP refuse rather than silently discarding it.
 
+### QUEUED BREAKING CHANGES
+
+- The checked-transcode dependency follows the shared core's optional borrowed
+  Pulse signatures (`f7b7760c`); zencodecs request entry signatures stay unchanged.
+  Forward the original Option and retain operation/job controls, successful
+  defaults and required policy obligations. Matching graph pins and native/API
+  qualification remain pending; this migration ran source checks only.
+
 ### Fixed
 - Coordinate codec revisions around zenpixels 0.3, UltraHDR 0.6 and the exact
   animation/color contracts; eliminate duplicate incompatible pixel types.

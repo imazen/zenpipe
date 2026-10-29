@@ -1,5 +1,14 @@
 # Publication qualification repairs
 
+The optional borrowed Pulse source migration targets core `a7c2a6ca`. Controlled
+step/resume and cursor calls preserve their original optional input; a retained
+operation control is lent as `Some` without replacing the job's control. The
+publication schedule, wait-retention evidence and required policy obligations
+are unchanged. New source controls exercise absent row-driver control, exact
+pixels/bytes, retained decoder/encoder timeouts and both optional forms under
+strict output-schedule requirements. These controls are unrun. Matching pins,
+six-graph resolution, full API and native qualification remain pending.
+
 The portable consumer experiment uses shared core f02a17ec, paired pixels
 283655c5, AVIF/parse b25f7604, rav1d b19aec65 and extras a5e79261. These source
 identities do not imply a qualified consumer graph. The frozen initial run

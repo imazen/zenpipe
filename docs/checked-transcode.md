@@ -92,6 +92,15 @@ best-effort rewrite that could report a false guarantee.
 
 ## Disk and network sources
 
+The core drivers and controlled-decoder hooks accept optional borrowed Pulse
+inputs. The checked adapter already has the operation control from its
+`CodecSet`, so it lends that same full control as `Some(codecs.pulse())` to
+discovery, policy resolution and resume. An optional input received by a
+forwarding wrapper remains unchanged. `None` adds no per-call control and does
+not replace controls retained by codec jobs, clear requirements or skip final
+output checks. The default-policy entry points keep their successful default
+behavior; required policy obligations still apply before selection.
+
 `transcode_from_read_at` uses the existing `zencodec::source::ReadAt` and
 `zencodec_io::ReadAtCursor`. `FileReadAt` provides disk input; object-store/HTTP
 adapters can retain batched range reads in their source implementation. Driver

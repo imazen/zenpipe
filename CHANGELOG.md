@@ -9,7 +9,17 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### QUEUED BREAKING CHANGES
 
-- None in the proposed retained-publication API; existing entry signatures stay.
+- `PipelineRows` follows the core row-source trait's optional borrowed Pulse
+  input, and core row-driver calls now take `None` or `Some(pulse)`
+  (`f7b7760c`). Retained-publication entry signatures stay unchanged.
+
+#### Changed (optional Pulse source migration)
+
+- Checked-transcode cursors and controlled step/resume calls forward optional
+  controls; retained operation controls still reach policy and native jobs.
+  Default selection and required output schedules are preserved. Source-only
+  formatting/static checks pass; matching core pins, API snapshots and runtime
+  qualification remain pending. See `docs/publication-qualification.md`.
 
 #### Added (retained publication proposal, 2026-10-28)
 
