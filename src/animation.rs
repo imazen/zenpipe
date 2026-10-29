@@ -537,7 +537,13 @@ pub fn transcode_with_stop_and_limits(
 
         // Drain pipeline into frame sink.
         frame_sink.begin_frame();
-        crate::execute_with_stop(pipeline.as_mut(), &mut frame_sink, stop)?;
+        crate::execute_with_pulse(
+            pipeline.as_mut(),
+            &mut frame_sink,
+            stop.map(|stop| zencodec::how_far::StopOnly::borrowed(stop))
+                .as_ref()
+                .map(|pulse| pulse as &dyn zencodec::Pulse),
+        )?;
         frame_sink.finish_frame(info.duration_ms)?;
 
         // Advance to next frame.

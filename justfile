@@ -313,3 +313,9 @@ checked-publication-delta-source frozen:
 # FIRST compiler gate after a fresh grant; keeps the full canonical API features.
 checked-publication-diagnostic results:
     bash scripts/qualify/publication-diagnostic.sh "{{results}}"
+
+# Optional per-call control, effect boundaries and legacy cancellation adapters.
+pipeline-pulse-check:
+    cargo test -p zenpipe --no-default-features --test limits --locked
+    cargo clippy -p zenpipe --no-default-features --lib --test limits --locked -- -D warnings
+    cargo test -p zenpipe --no-default-features --features std,zennode --lib session:: --locked

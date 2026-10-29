@@ -183,20 +183,42 @@ pub trait Sink: Send {
 
 /// Drive a pipeline: pull all strips from `source` into `sink`.
 pub fn execute(source: &mut dyn Source, sink: &mut dyn Sink) -> PipeResult<()> {
-    execute_with_stop(source, sink, None)
+    execute_with_pulse(source, sink, None)
 }
 
-/// Drive a pipeline with optional cooperative cancellation.
-/// `None` adds no per-call control; source and sink state remain unchanged.
+/// Drive a pipeline with optional cooperative control.
+///
+/// Checks cancellation before pulling input, before handing a strip to the sink,
+/// and before finishing. `None` adds no per-call control; controls retained by
+/// the source and sink remain active. This driver does not plan progress phases.
+/// Cancellation does not undo strips the sink has already accepted.
+pub fn execute_with_pulse(
+    source: &mut dyn Source,
+    sink: &mut dyn Sink,
+    pulse: Option<&dyn zencodec::Pulse>,
+) -> PipeResult<()> {
+    let control = pulse.unwrap_or(&zencodec::NoPulse);
+    loop {
+        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        let strip = source.next()?;
+        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        match strip {
+            Some(strip) => sink.consume(&strip)?,
+            None => return sink.finish(),
+        }
+    }
+}
+
+/// Compatibility entry point for cancellation-only callers.
+#[deprecated(note = "use execute_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
 pub fn execute_with_stop(
     source: &mut dyn Source,
     sink: &mut dyn Sink,
-    stop: Option<&dyn Stop>,
+    stop: &dyn Stop,
 ) -> PipeResult<()> {
-    let stop = stop.unwrap_or(&Unstoppable);
-    while let Some(strip) = source.next()? {
-        stop.check().map_err(|_| at!(PipeError::Cancelled))?;
-        sink.consume(&strip)?;
-    }
-    sink.finish()
+    execute_with_pulse(
+        source,
+        sink,
+        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
+    )
 }

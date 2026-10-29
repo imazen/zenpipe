@@ -1741,9 +1741,11 @@ impl<'a> ImageJob<'a> {
             Some(streaming_enc) => {
                 let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
                 match self.deadline() {
-                    Some(deadline) => {
-                        crate::execute_with_stop(source.as_mut(), &mut sink, Some(&deadline))?
-                    }
+                    Some(deadline) => crate::execute_with_pulse(
+                        source.as_mut(),
+                        &mut sink,
+                        Some(&zencodec::how_far::StopOnly::borrowed(&deadline)),
+                    )?,
                     None => crate::execute(source.as_mut(), &mut sink)?,
                 }
                 let encode_output = sink

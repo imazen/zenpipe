@@ -755,11 +755,20 @@ impl EditorState {
 
         let output = self
             .overview_session
-            .stream_stoppable(source, &config, None, self.source_hash, &stop)
+            .stream_with_pulse(
+                source,
+                &config,
+                None,
+                self.source_hash,
+                Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+            )
             .map_err(|e| format!("render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
-            .map_err(|e| format!("materialize: {e}"))?;
+        let mat = MaterializedSource::from_source_with_pulse(
+            output.source,
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+        )
+        .map_err(|e| format!("materialize: {e}"))?;
 
         Ok(RenderOutput {
             width: mat.width(),
@@ -1005,11 +1014,20 @@ impl EditorState {
 
         let output = self
             .overview_session
-            .stream_stoppable(source, &config, None, self.source_hash, &stop)
+            .stream_with_pulse(
+                source,
+                &config,
+                None,
+                self.source_hash,
+                Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+            )
             .map_err(|e| format!("overview render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
-            .map_err(|e| format!("overview materialize: {e}"))?;
+        let mat = MaterializedSource::from_source_with_pulse(
+            output.source,
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+        )
+        .map_err(|e| format!("overview materialize: {e}"))?;
 
         Ok(RenderOutput {
             width: mat.width(),
@@ -1084,11 +1102,20 @@ impl EditorState {
 
         let output = self
             .detail_session
-            .stream_stoppable(source, &config, None, region_hash, &stop)
+            .stream_with_pulse(
+                source,
+                &config,
+                None,
+                region_hash,
+                Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+            )
             .map_err(|e| format!("detail render: {e}"))?;
 
-        let mat = MaterializedSource::from_source_stoppable(output.source, Some(&stop))
-            .map_err(|e| format!("detail materialize: {e}"))?;
+        let mat = MaterializedSource::from_source_with_pulse(
+            output.source,
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+        )
+        .map_err(|e| format!("detail materialize: {e}"))?;
 
         Ok(RenderOutput {
             width: mat.width(),

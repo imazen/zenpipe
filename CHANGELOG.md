@@ -13,6 +13,15 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   input, and core row-driver calls now take `None` or `Some(pulse)`
   (`f7b7760c`). Retained-publication entry signatures stay unchanged.
 
+#### Added (optional pipeline controls)
+
+- `execute_with_pulse`, `MaterializedSource::from_source_with_pulse` and
+  `Session::stream_with_pulse` accept optional borrowed Pulse. Their original
+  required-Stop entry points are deprecated compatibility adapters. Checks
+  precede input pulls, raster allocation and sink finish; lazy session suffixes
+  require a control when drained. Source qualification pending; see
+  `docs/optional-pulse.md`.
+
 #### Changed (optional Pulse source migration)
 
 - Checked-transcode cursors and controlled step/resume calls forward optional
