@@ -86,3 +86,46 @@ edges at 3f4fd14f. Portable resolution and consumer validation are pending.
 The pin guard's self-tests pass, but its real-tree check finds the independent
 wasm-size-shim still pinned to an older AVIF/core cohort. That failure remains
 a landing gate; the harness must be aligned and qualified, not excluded.
+
+Portable resolution at 5440ee60 has one core/meta/pixel/converter family and
+uses only remote Git codec sources. The lock delta includes current-main
+requirements that the branch lock predates: zenfilters requires libblur 0.24.0,
+zenpipe-cmd requires clap 4.6.7, and zenpipe/zenfilters require zenbench 0.1.10
+(resolved 0.1.11). The retained collection decoder requires smallvec 1.16.2
+and num-derive 0.5.1; the new encoder requires Brotli 9. These are dependency
+requirements, not evidence of native behavior. The optional AVIF tuner also
+adds its AOM/SVT backend lock entries; enabling that tuner remains unqualified.
+
+Current main's media shell is retained in the integration merge. Its 34 Node
+controller tests pass after resolving the additive recipe/ignore conflicts.
+The family guard now includes the independent WASM size harness, and all eight
+guard self-tests pass. The size harness's source patches are aligned with the
+root; its lock resolution and native/WASM compilation remain pending.
+
+The portable 5440ee60 codec-profile run passed compilation, all four orientation
+controls, all 27 metadata-scrub controls and strict Clippy for lib/tests. No
+local JXL override was used. Wrapper receipt: rc0, 316 seconds, peak RSS
+0.99 GiB, minimum available 12689 MiB. These describe build/test resource use;
+codec peak-memory and performance remain unmeasured by this run. The root lock
+now records this resolved graph. Independent roots and full API/editor tests
+remain gates before landing.
+
+All six portable application graph roots now resolve and pass the shared-family
+and decoder-pin gates, including the formerly omitted WASM size harness.
+Demo and codec-fuzz initially refused the new decoder's smallvec requirement;
+targeted updates to 1.16.4 fixed resolution without a blanket update. Both
+failed logs remain. Final wrapper: rc0, 5 seconds, peak RSS 0.12 GiB, minimum
+available 14248 MiB.
+
+The codec-fuzz lock had omitted its manifest's TIFF/PDF/SVG/RAW/HEIC closure;
+resolution adds that closure (193 added identities, seven removed). The service
+lock likewise adds its current native metadata planner dependencies. These
+resolutions do not qualify execution of every optional feature or fuzz target.
+The separate API snapshot runner and browser/WASM execution remain unqualified.
+
+The resolved f2aee6b7 export passes `cargo check -p zenpipe --all-targets
+--locked` and the size harness's library check for `wasm32-unknown-unknown`.
+Wrapper receipt: rc0, 57 seconds, peak RSS 0.56 GiB, minimum available
+13599 MiB. This proves target compilation, not browser execution or native
+Pulse cancellation inside WASM. No runtime or pixel guarantee follows from
+that compile gate. Publication tests and API generation are the next gates.

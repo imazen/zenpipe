@@ -22,14 +22,14 @@ step() {
     printf '%s rc=%s\n' "$label" "$rc"
     [[ $rc -eq 0 ]] || status=1
 }
-# Keep all six original locks, including the separately rooted snapshot runner.
+# Keep all original locks, including the snapshot runner and WASM size harness.
 step preserve-locks timeout 45s python3 - "$results" <<'PY'
 from pathlib import Path
 import hashlib,json,sys
 out = Path(sys.argv[1]) / 'before'
 out.mkdir()
 hashes = {}
-for name in ['Cargo.lock','fuzz/Cargo.lock','demo/crate/Cargo.lock','tools/metadata-services/Cargo.lock','zencodecs/fuzz/Cargo.lock','apidoc/Cargo.lock']:
+for name in ['Cargo.lock','fuzz/Cargo.lock','demo/crate/Cargo.lock','tools/metadata-services/Cargo.lock','zencodecs/fuzz/Cargo.lock','apidoc/Cargo.lock','wasm-size-shim/Cargo.lock']:
     data = Path(name).read_bytes()
     dest = out / name
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,7 @@ PY
 [[ -f "$results/before/SHA256.json" ]] || exit 1
 # Resolve before checking the new decoder expectations. No cargo update sweep:
 # preserve existing compatible versions and retain every metadata failure.
-for manifest in Cargo.toml fuzz/Cargo.toml demo/crate/Cargo.toml tools/metadata-services/Cargo.toml zencodecs/fuzz/Cargo.toml apidoc/Cargo.toml; do
+for manifest in Cargo.toml fuzz/Cargo.toml demo/crate/Cargo.toml tools/metadata-services/Cargo.toml zencodecs/fuzz/Cargo.toml apidoc/Cargo.toml wasm-size-shim/Cargo.toml; do
     label=${manifest//\//-}
     step "resolve-$label" timeout 300s bash -c 'exec cargo metadata --format-version 1 --all-features --manifest-path "$1" > "$2"' _ "$manifest" "$results/metadata-$label.json"
 done

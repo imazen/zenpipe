@@ -714,3 +714,14 @@ integration-codec-check config:
 # Strict lint gate for the same complete codec integration profile.
 integration-codec-clippy config:
     cargo clippy --config {{quote(config)}} -p zencodecs --no-default-features --features std,all,jp2-decode,metadata,checked-transcode-async,tonemap --lib --tests --locked -- -D warnings
+
+# Media-suite contract shell (zenpipe#113): deterministic controller
+# oracle, then the Playwright lab spec. The browser leg needs
+# `npm install` in demo/; missing prerequisites fail loudly.
+media-shell-check:
+    node --test demo/tests/media-suite-controller.node.mjs
+    cd demo && npx playwright test media-suite
+
+# Retained JXL collection decoder requires smallvec >=1.16.2. Preserve other locks.
+integration-collection-lock manifest:
+    cargo update --manifest-path {{quote(manifest)}} -p smallvec --precise 1.16.4

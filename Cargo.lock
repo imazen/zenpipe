@@ -24,6 +24,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
+name = "affinity"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "763e484feceb7dd021b21c5c6f81aee06b1594a743455ec7efbf72e6355e447b"
+dependencies = [
+ "cfg-if",
+ "errno",
+ "libc",
+ "num_cpus",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,12 +69,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
 
 [[package]]
+name = "alloc-no-stdlib"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2fb6cfd47bf496ff64095c20eaba0c201404ee38714d4142fcfa1dc334fcc7a"
+
+[[package]]
 name = "alloc-stdlib"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e76a019e91224d279006ff972f1e984179a6e9feb050adba6ce8274aef23195"
 dependencies = [
- "alloc-no-stdlib",
+ "alloc-no-stdlib 2.0.4",
+]
+
+[[package]]
+name = "alloc-stdlib"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5c1865780388bfa186411ab5f247819487fc4864c6e9c3106611fa347586e1"
+dependencies = [
+ "alloc-no-stdlib 3.0.0",
 ]
 
 [[package]]
@@ -280,7 +307,7 @@ checksum = "fca67ba5d317924c02180c576157afd54babe48a76ebc66ce6d34bb8ba08308e"
 dependencies = [
  "byte-slice-cast",
  "bytes",
- "num-derive",
+ "num-derive 0.4.2",
  "num-rational",
  "num-traits",
 ]
@@ -428,9 +455,20 @@ version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cc91aac060a7a1e25823bdccbfb6af1875b88f17c6daac97894eed8207166b3"
 dependencies = [
- "alloc-no-stdlib",
- "alloc-stdlib",
- "brotli-decompressor",
+ "alloc-no-stdlib 2.0.4",
+ "alloc-stdlib 0.2.4",
+ "brotli-decompressor 5.0.3",
+]
+
+[[package]]
+name = "brotli"
+version = "9.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "627b7cfb0578f0eafce087a90fcd40add1231900b69e4d4de2d456260a4f5d81"
+dependencies = [
+ "alloc-no-stdlib 3.0.0",
+ "alloc-stdlib 0.3.0",
+ "brotli-decompressor 6.2.0",
 ]
 
 [[package]]
@@ -439,8 +477,18 @@ version = "5.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a32acac15fe1967bc3986b2a6347dffc965602354ea6f450ad07e8bfd253583"
 dependencies = [
- "alloc-no-stdlib",
- "alloc-stdlib",
+ "alloc-no-stdlib 2.0.4",
+ "alloc-stdlib 0.2.4",
+]
+
+[[package]]
+name = "brotli-decompressor"
+version = "6.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34c6783f42c21c952ad7112b354f0ba2f10760e9decea5b1b60523d6e270faaf"
+dependencies = [
+ "alloc-no-stdlib 3.0.0",
+ "alloc-stdlib 0.3.0",
 ]
 
 [[package]]
@@ -524,6 +572,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+
+[[package]]
 name = "chacha20"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -549,9 +603,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.6"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "473c7e07f409a8d772161724aa8db6a765a2532a70f9667eeb7b49d3d02fbdca"
+checksum = "aa8876b300ab35ba921adea3dfd70157a46249b33f95c9084ae5709785478946"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -559,9 +613,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.6"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b48fea5a88e9ae728a2dcbedbfc0e730f7d60da42e1cb049a83c9fb8b789889"
+checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -571,9 +625,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.4"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d012d2b9d65aca7f18f4d9878a045bc17899bba951561ba5ec3c2ba1eed9a061"
+checksum = "f9c751b79415d4e559e3d1fcf128e09e720eb673a06d26cf6f392d37d75b66e0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1266,7 +1320,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24d285dc30731c8485de5fa732fbdf2b3affdf01e4da7c2135022ca6fa664bf6"
 dependencies = [
- "brotli",
+ "brotli 8.0.4",
  "hayro-postscript",
 ]
 
@@ -1766,13 +1820,13 @@ dependencies = [
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "archmage",
- "brotli",
+ "brotli 9.1.1",
  "bytemuck",
  "enough",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "imgref",
  "jxl-encoder-macros",
  "jxl-encoder-simd",
@@ -1788,17 +1842,17 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "archmage",
  "libm",
@@ -1849,7 +1903,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d032bcec660647828527ff42c6f5776d2fd44b8357f9f6d9ac6dc07218e46"
 dependencies = [
- "brotli-decompressor",
+ "brotli-decompressor 5.0.3",
  "jxl-bitstream",
  "jxl-frame",
  "jxl-grid",
@@ -1881,7 +1935,7 @@ version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d36c662923f47586880211f3bc7c0d83fb3a9b410d278c7bde93450748abeef3"
 dependencies = [
- "brotli-decompressor",
+ "brotli-decompressor 5.0.3",
  "jxl-bitstream",
  "jxl-color",
  "jxl-frame",
@@ -2001,15 +2055,14 @@ dependencies = [
 
 [[package]]
 name = "libblur"
-version = "0.23.3"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57fda0f48231f6b8082f9ecb674a37d44b4c83e6d76ee6912ba914d43c07e414"
+checksum = "be36d686c7565229e89a80815bc7e96a94de55e9764cca2d97e95bae37037c61"
 dependencies = [
  "novtb",
  "num-complex",
  "num-traits",
  "rayon",
- "zaft",
 ]
 
 [[package]]
@@ -2315,6 +2368,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "no_std_io2"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2420,6 +2485,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e98dc3b890f6c23a0f9d3d491a2823d0dea0fa656302a13dd225fa924112a8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2770,6 +2846,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "process-wrap"
+version = "8.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9b56899ac93a78fc49e57d51ca29ceffaa6213ee51af2f8a01b1021ec3b4804"
+dependencies = [
+ "indexmap",
+ "nix",
+ "tracing",
+ "windows",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2971,7 +3059,7 @@ dependencies = [
  "maybe-rayon",
  "new_debug_unreachable",
  "noop_proc_macro",
- "num-derive",
+ "num-derive 0.4.2",
  "num-traits",
  "paste",
  "profiling",
@@ -3122,6 +3210,18 @@ dependencies = [
  "getrandom 0.2.17",
  "libredox",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "regex"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3473,9 +3573,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.15.2"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "spin"
@@ -3496,6 +3596,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e113fb6f3de07a243d434a56ec6f186dfd51cb08448239fe7bcae73f87ff28ff"
 dependencies = [
  "version_check",
+]
+
+[[package]]
+name = "statrs"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3fe7c28c6512e766b0874335db33c94ad7b8f9054228ae1c2abd47ce7d335e"
+dependencies = [
+ "approx",
+ "num-traits",
 ]
 
 [[package]]
@@ -3986,7 +4096,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4334,6 +4456,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "win32job"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6a6724ccfbf34154a8691bd868b0fcd2be2ca3f7b47b32614654f1a01b191c"
+dependencies = [
+ "thiserror 1.0.69",
+ "windows",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4667,19 +4799,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zaft"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "519a1fcad2bfe3f224f7c3b1fb51c45ab04b8b1f6c4adf268df8fdd46d4d5951"
-dependencies = [
- "novtb",
- "num-complex",
- "num-integer",
- "num-traits",
- "pxfm",
-]
-
-[[package]]
 name = "zenanalyze"
 version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeebb725878c5736453#6bbcacb11313923ded6e5eeebb725878c5736453"
@@ -4696,6 +4815,72 @@ dependencies = [
 name = "zenanalyze-api"
 version = "0.1.1"
 source = "git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeebb725878c5736453#6bbcacb11313923ded6e5eeebb725878c5736453"
+
+[[package]]
+name = "zenav1-aom-dsp"
+version = "0.0.1"
+source = "git+https://github.com/imazen/zenav1-aom?rev=6799fe95#6799fe958c87a7f6696113630e5094bdfe115a4f"
+dependencies = [
+ "archmage",
+ "enough",
+ "magetypes",
+]
+
+[[package]]
+name = "zenav1-aom-encode"
+version = "0.0.1"
+source = "git+https://github.com/imazen/zenav1-aom?rev=6799fe95#6799fe958c87a7f6696113630e5094bdfe115a4f"
+dependencies = [
+ "enough",
+ "smallvec",
+ "zenav1-aom-dsp",
+]
+
+[[package]]
+name = "zenav1-svt"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenav1-svt?rev=0ebcb871151327b051fc9d6b1a170b159f25b596#0ebcb871151327b051fc9d6b1a170b159f25b596"
+dependencies = [
+ "almost-enough",
+ "enough",
+ "zenav1-svt-dsp",
+ "zenav1-svt-encoder",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-dsp"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenav1-svt?rev=0ebcb871151327b051fc9d6b1a170b159f25b596#0ebcb871151327b051fc9d6b1a170b159f25b596"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-encoder"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenav1-svt?rev=0ebcb871151327b051fc9d6b1a170b159f25b596#0ebcb871151327b051fc9d6b1a170b159f25b596"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "enough",
+ "magetypes",
+ "smallvec",
+ "whereat",
+ "zenav1-svt-dsp",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-types"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenav1-svt?rev=0ebcb871151327b051fc9d6b1a170b159f25b596#0ebcb871151327b051fc9d6b1a170b159f25b596"
+dependencies = [
+ "enough",
+ "whereat",
+]
 
 [[package]]
 name = "zenavif"
@@ -4720,7 +4905,10 @@ dependencies = [
  "yuv",
  "zenanalyze",
  "zenanalyze-api",
+ "zenav1-aom-encode",
+ "zenav1-svt",
  "zenavif-parse",
+ "zenavif-serialize",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -4755,16 +4943,25 @@ dependencies = [
 
 [[package]]
 name = "zenbench"
-version = "0.1.8"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c366bdec099c47b59c77e42aed577071ce7faefb1cf6a6f3abd16beb02b2f7d3"
+checksum = "09d75419b947440f4a39f5a678ac5a76b4aa6d126ffec94ee83776c28c55fb1d"
 dependencies = [
+ "affinity",
  "clap",
+ "flate2",
  "fs4",
+ "libc",
+ "process-wrap",
+ "raw-cpuid",
+ "regex",
  "serde",
  "serde_json",
+ "sha2",
+ "statrs",
  "sysinfo",
  "terminal_size",
+ "win32job",
 ]
 
 [[package]]
@@ -4796,7 +4993,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4809,7 +5006,7 @@ dependencies = [
 [[package]]
 name = "zencodec-coroutine"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "enough",
  "spin",
@@ -4820,12 +5017,24 @@ dependencies = [
 [[package]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "enough",
  "how-far",
  "tokio",
  "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "zencodec-testkit"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
+dependencies = [
+ "enough",
+ "whereat",
+ "zencodec",
+ "zencodec-io",
  "zenpixels",
 ]
 
@@ -4854,6 +5063,7 @@ dependencies = [
  "zenbitmaps",
  "zencodec",
  "zencodec-io",
+ "zencodec-testkit",
  "zengif",
  "zenjp2",
  "zenjpeg",
@@ -4872,6 +5082,7 @@ dependencies = [
  "zensim-regress",
  "zensvg",
  "zentiff",
+ "zentone",
  "zenwebp",
 ]
 
@@ -5015,7 +5226,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=a76ac76d080295b754d970a3392eed8f964de490#a76ac76d080295b754d970a3392eed8f964de490"
+source = "git+https://github.com/imazen/zenjxl?rev=efa533d010b060d40c375923f2d569ecbe2325fc#efa533d010b060d40c375923f2d569ecbe2325fc"
 dependencies = [
  "enough",
  "imgref",
@@ -5027,6 +5238,7 @@ dependencies = [
  "zencodec",
  "zenjpeg",
  "zenjxl-decoder",
+ "zenmeta",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -5034,16 +5246,16 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "aligned-vec",
  "array-init",
  "atomic_refcell",
- "brotli",
+ "brotli 9.1.1",
  "bytemuck",
  "byteorder",
  "enough",
- "num-derive",
+ "num-derive 0.5.1",
  "num-traits",
  "paste",
  "smallvec",
@@ -5056,17 +5268,17 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "archmage",
  "paste",
@@ -5092,7 +5304,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "roxmltree 0.21.1",
  "zencodec",
@@ -5124,6 +5336,7 @@ name = "zenpdf"
 version = "0.2.0"
 source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
 dependencies = [
+ "flate2",
  "hayro",
  "hayro-syntax",
  "rgb",
@@ -5275,6 +5488,7 @@ dependencies = [
  "zencodec",
  "zencodec-coroutine",
  "zenflate 0.4.1",
+ "zenmeta",
  "zenpixels",
  "zenpixels-convert",
  "zenquant 0.1.3",
@@ -5352,7 +5566,7 @@ dependencies = [
  "log",
  "maybe-rayon",
  "noop_proc_macro",
- "num-derive",
+ "num-derive 0.4.2",
  "num-traits",
  "pastey",
  "profiling",
@@ -5397,6 +5611,7 @@ dependencies = [
  "thiserror 2.0.21",
  "whereat",
  "zencodec",
+ "zenmeta",
  "zenpixels",
 ]
 
@@ -5483,8 +5698,10 @@ name = "zensvg"
 version = "0.1.0"
 source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
 dependencies = [
+ "data-url",
  "enough",
  "flate2",
+ "imagesize",
  "resvg",
  "simplecss",
  "svgtypes",
@@ -5506,6 +5723,7 @@ dependencies = [
  "tiff 0.11.3",
  "whereat",
  "zencodec",
+ "zenmeta",
  "zenpixels",
  "zenpixels-convert",
 ]

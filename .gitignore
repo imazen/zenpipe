@@ -84,3 +84,5 @@ __pycache__/
 *.pyc
 
 !/docs/current-main-integration.md
+
+!/docs/media-suite.md

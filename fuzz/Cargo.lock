@@ -565,7 +565,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "almost-enough",
  "enough",
@@ -678,7 +678,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "roxmltree",
  "zencodec",
@@ -916,7 +916,7 @@ source = "git+https://github.com/imazen/imageflow#cea99d01d37f06c59920293538f76c
 [[patch.unused]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 
 [[patch.unused]]
 name = "tiff"
@@ -946,22 +946,27 @@ source = "git+https://github.com/imazen/zenbitmaps?rev=5abfba282057f8e3eb4ab5bcc
 [[patch.unused]]
 name = "zencodec-coroutine"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 
 [[patch.unused]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
+
+[[patch.unused]]
+name = "zencodec-testkit"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 
 [[patch.unused]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=a76ac76d080295b754d970a3392eed8f964de490#a76ac76d080295b754d970a3392eed8f964de490"
+source = "git+https://github.com/imazen/zenjxl?rev=efa533d010b060d40c375923f2d569ecbe2325fc#efa533d010b060d40c375923f2d569ecbe2325fc"
 
 [[patch.unused]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 
 [[patch.unused]]
 name = "zenpdf"

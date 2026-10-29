@@ -518,12 +518,12 @@ dependencies = [
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "archmage",
  "bytemuck",
  "enough",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "imgref",
  "jxl-encoder-macros",
  "jxl-encoder-simd",
@@ -537,17 +537,17 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
 dependencies = [
  "archmage",
  "libm",
@@ -746,6 +746,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e98dc3b890f6c23a0f9d3d491a2823d0dea0fa656302a13dd225fa924112a8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -1155,9 +1166,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.15.2"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "spin"
@@ -1576,7 +1587,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "almost-enough",
  "enough",
@@ -1701,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=a76ac76d080295b754d970a3392eed8f964de490#a76ac76d080295b754d970a3392eed8f964de490"
+source = "git+https://github.com/imazen/zenjxl?rev=efa533d010b060d40c375923f2d569ecbe2325fc#efa533d010b060d40c375923f2d569ecbe2325fc"
 dependencies = [
  "enough",
  "imgref",
@@ -1719,7 +1730,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -1727,7 +1738,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "enough",
- "num-derive",
+ "num-derive 0.5.1",
  "num-traits",
  "paste",
  "smallvec",
@@ -1740,17 +1751,17 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=ce1a28b41b71b66b19240dce0d1b6f0579c8064d#ce1a28b41b71b66b19240dce0d1b6f0579c8064d"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
 dependencies = [
  "archmage",
  "paste",
@@ -1767,7 +1778,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 dependencies = [
  "roxmltree",
  "zencodec",
@@ -1937,7 +1948,7 @@ dependencies = [
  "log",
  "maybe-rayon",
  "noop_proc_macro",
- "num-derive",
+ "num-derive 0.4.2",
  "num-traits",
  "pastey",
  "profiling",
@@ -2097,12 +2108,17 @@ source = "git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeeb
 [[patch.unused]]
 name = "zencodec-coroutine"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 
 [[patch.unused]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
+
+[[patch.unused]]
+name = "zencodec-testkit"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zencodec?rev=3f4fd14feb9bdfed041e426aaa569b236a201158#3f4fd14feb9bdfed041e426aaa569b236a201158"
 
 [[patch.unused]]
 name = "zenpdf"

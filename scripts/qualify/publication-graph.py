@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Record six resolved graphs and fail on unexpected source families or drift.
+"""Record the resolved graphs and fail on unexpected source families or drift.
 
-This supplements the existing five-lock core/decoder gates. The expectation
+This supplements the core/decoder gates. The expectation
 file identifies a frozen experiment; it is not an alternate Cargo source map.
 """
 from collections import Counter
@@ -13,7 +13,7 @@ import tomllib
 
 LOCKS = ('Cargo.lock', 'fuzz/Cargo.lock', 'demo/crate/Cargo.lock',
          'tools/metadata-services/Cargo.lock', 'zencodecs/fuzz/Cargo.lock',
-         'apidoc/Cargo.lock')
+         'apidoc/Cargo.lock', 'wasm-size-shim/Cargo.lock')
 CORE = {'zencodec', 'zencodec-io', 'zencodec-coroutine', 'zencodec-testkit',
         'zencodec-media', 'zencodec-media-testkit', 'zenmeta'}
 PIXELS = {'zenpixels', 'zenpixels-convert'}
