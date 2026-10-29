@@ -112,8 +112,8 @@ pub(crate) fn read_raw_metadata(data: &[u8]) -> Option<zenraw::exif::ExifMetadat
 ///
 /// Returns `None` if:
 /// - The file is not an Apple DNG with a gain map
+///
 /// Embedded JPEG decoding failures are returned, including cancellation and limits.
-/// - The `raw-decode-gainmap` feature is not enabled
 #[cfg(feature = "raw-decode-gainmap")]
 pub(crate) fn extract_gainmap(
     data: &[u8],
