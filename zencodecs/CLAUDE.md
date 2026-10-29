@@ -8,6 +8,13 @@ See `/home/lilith/work/zendiff/API_COMPARISON.md` for per-codec convergence stat
 
 ## Known Bugs
 
+- Fixed during native row qualification (2026-10-29): `TranscodeSink` converted
+  declaration and row-delivery encoder errors to strings, losing native typed
+  timeout causes. Both hooks now propagate the existing boxed error. JPEG/PNG
+  failing-first and completion controls plus unchanged row tests pass; buffered
+  codecs may observe the stop only at finalization. Scope and receipts:
+  `benchmarks/row_consumers_2026-10-29.md` in the workspace root.
+
 (none currently — cleared 2026-07-05, one bugfix wave:
 - Custom-format registry gating fixed both directions: `decode.rs`'s
   `resolve_format` bypassed `AllowedFormats` entirely for

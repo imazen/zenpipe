@@ -9,10 +9,17 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- Preserve native encoder error causes through `TranscodeSink::begin` and row
+  delivery, including typed Pulse deadline reasons. No signature changes.
+
 - Retain the caller deadline through both grayscale and RGB AVIF gain-map
   auxiliary encodes instead of replacing it with an unstoppable control.
 
 #### Dependency integration
+
+- Align all six consumer graphs with the repaired WebP, TGA and JXL row
+  declarations. Focused native byte, protocol, budget and timeout-cause checks
+  pass; see [qualification](benchmarks/row_consumers_2026-10-29.md) for scope.
 
 - Align all five consumer graphs with owned decode completion in core `eeb1a450`
   and JPEG `c73a3cc9`; existing publication and I/O gates pass without API edits.
