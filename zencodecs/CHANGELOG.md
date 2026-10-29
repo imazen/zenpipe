@@ -217,3 +217,10 @@ All notable changes to `zencodecs` are documented here. Format follows
   `zenjxl::container::is_container` → `zenjxl::is_container`; dyn decoder
   `decode_full_frame()` → `decode()`; zenwebp configs under
   `zenwebp::zencodec::` (4a0b261).
+
+### RAW gain-map control propagation (unreleased)
+
+- Forward retained Pulse and decode limits to embedded JPEG gain-map decoding,
+  and return nested failures rather than treating them as absent gain maps
+  (`01f377a8`). Full codec-profile compilation/strict Clippy and a real JPEG
+  timeout/limit/malformed-input control pass; complete Apple DNG coverage remains separate.

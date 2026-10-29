@@ -407,8 +407,8 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f57
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
 # Application-root selection for zenravif's unpublished registry serializer.
 zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
-# Retained RAW source still needs its owned-Pulse adapter migration.
-# Keep its full-profile/API feature and existing assertions enabled.
+# RAW optional-Pulse adapter; full-profile compilation is qualified.
+# Full corpus/platform qualification remains separate.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "e2c2be837670a8ecf9604eb025a6e9427878f6ca" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.

@@ -217,3 +217,13 @@ metadata tests require carrier preservation while native still encoding bakes
 orientation; separate diagnostic witnesses confirm that bake. The third failure
 exposes zencodecs dropping `OrientationHint` before AVIF decode. Do not weaken
 these assertions to declare the graph release-qualified.
+
+## Fixed: full-profile RAW gain-map controls (2026-10-29)
+
+Paired HEIC/RAW adapters compile under the full generated-API feature profile
+on3ae78770. A nested RAW JPEG gain-map decode still passed None to an owned
+Pulse argument; it now retains the operation's Pulse and limits and propagates
+decode errors instead of reporting absence. Full-profile strict Clippy and
+real JPEG timeout/limit/malformed-input controls pass. Complete Apple DNG
+container coverage and aggregate memory accounting are not established by
+that focused control. See `benchmarks/full_profile_2026-10-29.md`.
