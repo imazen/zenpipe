@@ -272,3 +272,21 @@ Not solved here, and not implied by the still-image tests:
 - **Codec-owned allocations.** Native workspace, encoder-internal buffering and the
   controlled decoders' retained input are not admitted storage, so no
   whole-operation memory bound follows from these budgets.
+
+## Paired pixel runtime qualification (2026-10-29)
+
+With the paired pixel retirement candidate and current core, the complete
+`zenpipe-io-check --features job` suite passes 57 tests with no skips, followed
+by strict all-target Clippy (rc0, 13s, peak RSS 0.55 GiB). This covers the
+committed HTTP simulation, backpressure, Tokio, sources, orientation, resizing,
+JPEG output and image-job controls; it is not a network throughput benchmark.
+Checked publication separately passes 16 unit and 35 native controls, strict
+Clippy and its codec-free build (rc0, 19s, peak RSS 0.68 GiB).
+
+The first pipeline run exposed a retained decoder timeout represented as a raw
+`StepError::Cancelled` rather than the expected `CodecError` category. The
+adapter now adds `Stopped(reason)` while preserving the original driver error
+as its cause. Its unchanged timeout/zero-publication regression fails before
+and passes after this repair. Encoder-originated errors retain their native
+category. No pixel assertions were relaxed. These trials use the isolated
+paired graph; the committed consumer pins remain unchanged.

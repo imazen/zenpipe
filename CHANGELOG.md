@@ -35,6 +35,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   require a control when drained. Focused limits/cache controls and strict Clippy pass (`921a3f9f`); see
   `docs/optional-pulse.md`.
 
+#### Fixed (driver cancellation classification)
+
+- Controlled decode retains a categorized `Stopped(reason)` envelope when the
+  shared decoder observes cancellation before native startup, while keeping
+  the original driver error as its cause. Existing timeout assertions remain
+  unchanged.
+
 #### Fixed (checked publication qualification)
 
 - Optional publication controls and native JPEG/PNG checked transcodes pass the

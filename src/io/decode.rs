@@ -31,6 +31,20 @@ fn refused(refusal: Refusal) -> whereat::At<PipeError> {
 }
 
 fn failed(error: impl core::error::Error + Send + Sync + 'static) -> whereat::At<PipeError> {
+    // A shared decoder can observe cancellation before entering the native
+    // codec. Preserve the same categorized boundary in either case, with the
+    // original driver failure retained as the cause.
+    if let Some(StepError::Cancelled(reason)) =
+        zencodec::find_cause::<StepError<ErasedError>>(&error)
+    {
+        return at!(PipeError::Codec(Box::new(
+            zencodec::CodecError::from_parts(
+                None,
+                zencodec::ErrorCategory::Stopped(*reason),
+                Box::new(error),
+            )
+        )));
+    }
     at!(PipeError::Codec(Box::new(error)))
 }
 
