@@ -69,23 +69,28 @@ fn transcode_sink_preserves_native_deadline_causes() {
                     polls: polls.clone(),
                     fail_at: 1_000_000,
                 }))
-                .build_streaming_encoder(8, 8)
+                .build_streaming_encoder(8, 64)
                 .unwrap();
             let mut sink = TranscodeSink::new(encoder.encoder, encoder.supported);
             let error = if at_begin {
                 polls.store(1_000_000, Ordering::Relaxed);
-                sink.begin(8, 8, PixelDescriptor::RGB8_SRGB).unwrap_err()
+                sink.begin(8, 64, PixelDescriptor::RGB8_SRGB).unwrap_err()
             } else {
-                sink.begin(8, 8, PixelDescriptor::RGB8_SRGB).unwrap();
+                sink.begin(8, 64, PixelDescriptor::RGB8_SRGB).unwrap();
                 let mut rows = sink
-                    .provide_next_buffer(0, 8, 8, PixelDescriptor::RGB8_SRGB)
+                    .provide_next_buffer(0, 64, 8, PixelDescriptor::RGB8_SRGB)
                     .unwrap();
-                for y in 0..8 {
+                for y in 0..64 {
                     rows.row_mut(y).fill(127);
                 }
                 drop(rows);
                 polls.store(1_000_000, Ordering::Relaxed);
-                sink.finish().unwrap_err()
+                // A buffered codec may defer its next checkpoint until native
+                // finalization. Either row delivery or finalization must retain
+                // that checkpoint's typed cause.
+                sink.finish()
+                    .and_then(|()| sink.finish_encode().map(|_| ()))
+                    .unwrap_err()
             };
             let native = zencodec::find_cause::<zencodec::CodecError>(&*error)
                 .unwrap_or_else(|| panic!("{format:?}, begin={at_begin}: lost cause: {error}"));

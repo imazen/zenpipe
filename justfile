@@ -558,8 +558,8 @@ test-dispatched-output:
 
 # Focused native row admission repairs; supplements the full dispatch gate above.
 test-repaired-row-output:
-    cargo test --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --test streamed_bytes -- --nocapture
-    cargo clippy --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --lib --test streamed_bytes -- -D warnings
+    cargo test --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --test pulse_retention --test streamed_bytes -- --nocapture
+    cargo clippy --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --lib --test pulse_retention --test streamed_bytes -- -D warnings
 
 # Independent reader smoke tests; missing tools fail this explicit opt-in gate.
 test-dispatched-oracle:

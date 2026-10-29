@@ -717,9 +717,15 @@ pub fn reconstruct_jpeg_from_jxl(jxl: &[u8]) -> Result<Option<Vec<u8>>> {
 ///
 /// On a decoder, encoder, or writer error after bytes have been sent, abort
 /// the transport and discard the partial file. Never call `finish_encode`
-/// after `push_decode` fails. An encoder or writer failure releases the
-/// encoder and writer; a transport borrowed by the writer must be aborted
-/// by its owner.
+/// after `push_decode` fails. A failure while forwarding a strip, or a writer
+/// failure, releases the encoder and writer; a transport borrowed by the writer
+/// must be aborted by its owner.
+///
+/// Native encoder errors retain their typed causes through declaration, row
+/// delivery and finalization. Inspect them with [`zencodec::find_cause`] rather
+/// than parsing their messages. A buffered encoder may observe cancellation
+/// at finalization instead of while accepting a strip; row input alone does
+/// not promise immediate output or a cancellation-latency bound.
 ///
 /// [`StreamingEncoder`]: crate::dispatch::StreamingEncoder
 /// [`EncodeRequest::build_streaming_encoder`]: crate::EncodeRequest::build_streaming_encoder
