@@ -883,8 +883,8 @@ mod pulse_forwarding {
         fn render_next_frame_to_sink(
             &mut self,
             pulse: Option<&dyn Pulse>,
-            sink: &mut dyn zencodec::DecodeRowSink,
-        ) -> Result<Option<zencodec::OutputInfo>, BoxedError> {
+            sink: &mut dyn zencodec::sink::DecodeRowSink,
+        ) -> Result<Option<zencodec::cost::OutputInfo>, BoxedError> {
             self.1
                 .lock()
                 .unwrap()
@@ -973,7 +973,10 @@ mod pulse_forwarding {
             let mut verify = make_gif_decoder(output);
             for i in 0..3 {
                 let frame = verify.render_next_frame_owned(None).unwrap().unwrap();
-                assert_eq!(frame.duration_ms(), 100);
+                assert_eq!(
+                    frame.duration(),
+                    zencodec::animation::FrameDuration::from_millis(100)
+                );
                 assert_pixel_gray(frame.pixels().as_strided_bytes(), i, 3);
             }
             assert!(verify.render_next_frame_owned(None).unwrap().is_none());
