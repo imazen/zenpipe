@@ -1188,7 +1188,7 @@ pub(crate) fn decision_hint_overrides(
 ///
 /// `control` is the operation's one control. The decoder and encoder jobs hold
 /// it, so they stop inside a frame; the route also checks it between frames and
-/// in each frame's pipeline. Per-call pulses stay `None`. A stop anywhere is
+/// in each frame's pipeline. The same Pulse also reaches each native call. A stop anywhere is
 /// [`PipeError::Cancelled`], and nothing runs after it: not the next frame,
 /// not the static fallback.
 #[allow(clippy::too_many_arguments)] // crate-internal plumbing
@@ -1271,14 +1271,14 @@ pub(crate) fn transcode_animated_nodes(
         Err(_) => return Ok(None),
     };
 
-    let output = crate::animation::transcode_with_stop_and_limits(
+    let output = crate::animation::transcode_with_pulse_and_limits(
         decoder,
         encoder,
         out_w,
         out_h,
         crate::format::RGBA8_SRGB,
         |frame_src, _idx| Ok(crate::bridge::build_pipeline(frame_src, nodes, converters)?.source),
-        Some(control),
+        Some(control.as_pulse()),
         max_frames,
     )?;
 

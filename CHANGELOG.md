@@ -13,6 +13,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   input, and core row-driver calls now take `None` or `Some(pulse)`
   (`f7b7760c`). Retained-publication entry signatures stay unchanged.
 
+#### Added (optional animation controls)
+
+- Animation transcode and frame operations accept optional borrowed Pulse and
+  forward the original value into native decode, encode and finish. Deprecated
+  Stop entry points retain their original signatures. Runtime qualification pending.
+
 #### Added (optional pipeline controls)
 
 - `execute_with_pulse`, `MaterializedSource::from_source_with_pulse` and

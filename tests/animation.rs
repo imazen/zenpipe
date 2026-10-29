@@ -840,3 +840,169 @@ mod animated_webp_frames {
         assert_every_frame(&job(encode(ImageFormat::Gif, &DURATIONS_MS), "webp"));
     }
 }
+
+mod pulse_forwarding {
+    use super::*;
+    use std::any::Any;
+    use std::sync::{Arc, Mutex};
+    use zencodec::Pulse;
+    use zencodec::decode::{BoxedError, DynAnimationFrameDecoder};
+    use zencodec::encode::{DynAnimationFrameEncoder, EncodeOutput};
+
+    type Calls = Arc<Mutex<Vec<(&'static str, Option<usize>)>>>;
+    fn identity(pulse: Option<&dyn Pulse>) -> Option<usize> {
+        pulse.map(|p| p as *const dyn Pulse as *const () as usize)
+    }
+    struct Decoder(Box<dyn DynAnimationFrameDecoder>, Calls);
+    impl DynAnimationFrameDecoder for Decoder {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn info(&self) -> &zencodec::ImageInfo {
+            self.0.info()
+        }
+        fn frame_count(&self) -> Option<u32> {
+            self.0.frame_count()
+        }
+        fn loop_count(&self) -> Option<u32> {
+            self.0.loop_count()
+        }
+        fn render_next_frame_owned(
+            &mut self,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<Option<zencodec::OwnedAnimationFrame>, BoxedError> {
+            self.1.lock().unwrap().push(("decode", identity(pulse)));
+            self.0.render_next_frame_owned(pulse)
+        }
+        fn render_next_frame_to_sink(
+            &mut self,
+            pulse: Option<&dyn Pulse>,
+            sink: &mut dyn zencodec::DecodeRowSink,
+        ) -> Result<Option<zencodec::OutputInfo>, BoxedError> {
+            self.1
+                .lock()
+                .unwrap()
+                .push(("decode_sink", identity(pulse)));
+            self.0.render_next_frame_to_sink(pulse, sink)
+        }
+    }
+    struct Encoder(Box<dyn DynAnimationFrameEncoder>, Calls);
+    impl DynAnimationFrameEncoder for Encoder {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn push_frame(
+            &mut self,
+            pixels: zenpixels::PixelSlice<'_>,
+            duration_ms: u32,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<(), BoxedError> {
+            self.1.lock().unwrap().push(("encode", identity(pulse)));
+            self.0.push_frame(pixels, duration_ms, pulse)
+        }
+        fn finish(self: Box<Self>, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, BoxedError> {
+            self.1.lock().unwrap().push(("finish", identity(pulse)));
+            self.0.finish(pulse)
+        }
+    }
+
+    #[test]
+    fn optional_pulse_reaches_native_frames_without_losing_identity_or_bytes() {
+        let input = build_test_gif(3, 8, 8);
+        let mut baseline = None;
+        let pulse = zencodec::how_far::StopOnly::new(enough::Unstoppable);
+        for control in [None, Some(&pulse as &dyn Pulse)] {
+            let calls = Calls::default();
+            let output = zenpipe::animation::transcode_with_pulse_and_limits(
+                Box::new(Decoder(make_gif_decoder(input.clone()), calls.clone())),
+                Box::new(Encoder(make_gif_encoder(8, 8), calls.clone())),
+                8,
+                8,
+                format::RGBA8_SRGB,
+                |source, _| Ok(source),
+                control,
+                Some(3),
+            )
+            .unwrap()
+            .into_vec();
+            let recorded = calls.lock().unwrap();
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "decode")
+                    .count(),
+                4
+            );
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "encode")
+                    .count(),
+                3
+            );
+            assert_eq!(
+                recorded
+                    .iter()
+                    .filter(|(kind, _)| *kind == "finish")
+                    .count(),
+                1
+            );
+            assert!(
+                recorded
+                    .iter()
+                    .all(|(_, actual)| *actual == identity(control))
+            );
+            if let Some(expected) = &baseline {
+                assert_eq!(&output, expected);
+            } else {
+                baseline = Some(output.clone());
+            }
+            // Read every emitted native frame, including duration and exact solid samples.
+            let mut verify = make_gif_decoder(output);
+            for i in 0..3 {
+                let frame = verify.render_next_frame_owned(None).unwrap().unwrap();
+                assert_eq!(frame.duration_ms(), 100);
+                assert_pixel_gray(frame.pixels().as_strided_bytes(), i, 3);
+            }
+            assert!(verify.render_next_frame_owned(None).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn stopped_animation_never_enters_native_frame_operations() {
+        struct Stopped;
+        impl enough::Stop for Stopped {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                Err(enough::StopReason::Cancelled)
+            }
+        }
+        let calls = Calls::default();
+        let pulse = zencodec::how_far::StopOnly::new(Stopped);
+        let result = zenpipe::animation::transcode_with_pulse(
+            Box::new(Decoder(
+                make_gif_decoder(build_test_gif(1, 8, 8)),
+                calls.clone(),
+            )),
+            Box::new(Encoder(make_gif_encoder(8, 8), calls.clone())),
+            8,
+            8,
+            format::RGBA8_SRGB,
+            |_, _| panic!("cancelled animation constructed a pipeline"),
+            Some(&pulse),
+        );
+        assert!(result.is_err_and(|e| matches!(e.error(), zenpipe::PipeError::Cancelled)));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}

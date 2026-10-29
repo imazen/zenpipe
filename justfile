@@ -319,3 +319,9 @@ pipeline-pulse-check:
     cargo test -p zenpipe --no-default-features --test limits --locked
     cargo clippy -p zenpipe --no-default-features --lib --test limits --locked -- -D warnings
     cargo test -p zenpipe --no-default-features --features std,zennode --lib session:: --locked
+
+# Native GIF forwarding/byte controls and retained-job cancellation.
+animation-pulse-check:
+    cargo test -p zenpipe --no-default-features --test animation --locked
+    cargo clippy -p zenpipe --no-default-features --lib --test animation --locked -- -D warnings
+    cargo test -p zenpipe --no-default-features --features std,job,nodes-gif --lib animation_control_tests --locked
