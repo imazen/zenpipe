@@ -191,3 +191,16 @@ Seven strict-Clippy errors arose because encode-only helpers/imports in
 the helpers to their consuming tests preserves all tests and assertions.
 `just clippy-codec-subsets nodes-avif=avif-decode` passes at b7f8ff79; see
 benchmarks/optional_pipeline_pulse_2026-10-29.md.
+
+## Known Bugs: portable serializer source split (2026-10-29)
+
+The decoder-pin gate fails at3df0dd88 even after root lock qualification:
+zenavif94116d26 selects zenravif aac04acc, which explicitly selects
+zenavif-serialize98c8a501 from the canonical zenavif git repository. Root
+metadata confirms that sole serializer parent. This is a transitive explicit git
+edge, so adding a registry patch or merely refreshing the root lock cannot align
+it with94116d26. Preserve the pin gate. The portable repair needs a coordinated
+zenravif dependency commit, the consuming zenavif pin, and all zenpipe graph roots
+(including the direct parser edge), followed by native encode/readback controls.
+No pixel defect is established by this source-identity finding alone. Existing
+zenavif issue53 concerns historical serializer behavior, not proof of this fix.
