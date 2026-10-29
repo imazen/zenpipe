@@ -188,7 +188,7 @@ fn png_crop_then_planned_png_encode_is_exact() {
         &mut out,
         PolicySet::new(),
         encode_options().with_batch_rows(NonZeroU32::new(5).unwrap()),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(done.schedule, OutputSchedule::FinishFirst);
@@ -201,6 +201,85 @@ fn png_crop_then_planned_png_encode_is_exact() {
         expected.extend_from_slice(&samples[start..start + 61 * 3]);
     }
     assert_eq!(decoded, expected);
+}
+
+#[test]
+fn absent_row_control_preserves_pixels_bytes_and_retained_job_timeout() {
+    use std::sync::atomic::AtomicBool;
+
+    struct Deadline(Arc<AtomicBool>);
+    impl enough::Stop for Deadline {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(enough::StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let (file, samples) = png_fixture(W, H, 3);
+    let mut expected = None;
+    for pulse in [Some(&NoPulse as &dyn zencodec::Pulse), None] {
+        let source = DecodeSource::from_slice(&codecs(), &file, options()).unwrap();
+        let rows = PipelineRows::from_source(source).unwrap();
+        let mut out = Vec::new();
+        let done = row_encode::encode_job(
+            zenpng::PngEncoderConfig::new().with_generic_effort(0).job(),
+            rows,
+            &mut out,
+            PolicySet::new(),
+            encode_options().with_batch_rows(NonZeroU32::new(5).unwrap()),
+            pulse,
+        )
+        .unwrap();
+        assert_eq!(done.schedule, OutputSchedule::FinishFirst);
+        assert_eq!(done.emitted, out.len() as u64);
+        let (w, h, channels, decoded) = read_png(&out);
+        assert_eq!((w, h, channels), (W, H, 3));
+        assert_eq!(decoded, samples);
+        if let Some(expected) = &expected {
+            assert_eq!(&out, expected);
+        } else {
+            expected = Some(out);
+        }
+
+        for retained_on_decoder in [false, true] {
+            let expired = Arc::new(AtomicBool::new(false));
+            let retained = zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(Deadline(
+                expired.clone(),
+            )));
+            let mut codecs = codecs();
+            if retained_on_decoder {
+                codecs = codecs.with_pulse(retained.clone());
+            }
+            let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
+            assert_eq!(source.stats().strips, 0);
+            let rows = PipelineRows::from_source(source).unwrap();
+            let mut job = zenpng::PngEncoderConfig::new().with_generic_effort(0).job();
+            if !retained_on_decoder {
+                job = job.with_pulse(retained);
+            }
+            expired.store(true, Ordering::SeqCst);
+            let mut out = Vec::new();
+            let error = row_encode::encode_job(
+                job,
+                rows,
+                &mut out,
+                PolicySet::new(),
+                encode_options(),
+                pulse,
+            )
+            .unwrap_err();
+            let cause = zencodec::find_cause::<zencodec::CodecError>(&error).unwrap();
+            assert_eq!(
+                cause.category(),
+                zencodec::ErrorCategory::Stopped(enough::StopReason::TimedOut)
+            );
+            assert_eq!(error.error().emitted, 0);
+            assert!(out.is_empty());
+        }
+    }
 }
 
 #[test]
@@ -219,7 +298,7 @@ fn live_and_finish_first_publish_identical_bytes_for_a_streaming_png() {
             &mut out,
             PolicySet::new().require_output_schedule(schedule),
             encode_options(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(done.schedule, schedule);
@@ -235,46 +314,48 @@ fn live_and_finish_first_publish_identical_bytes_for_a_streaming_png() {
 /// `a15c28fd`, where the core binds the policy's own requirements.
 #[test]
 fn required_live_schedule_refuses_a_buffered_png_before_any_pixel_work() {
-    let (file, _) = png_fixture(W, H, 3);
-    let codecs = codecs();
-    let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
-    assert_eq!(source.stats().strips, 0);
-    let pulls = Arc::new(AtomicU64::new(0));
-    let counted = Counted {
-        inner: source,
-        pulls: pulls.clone(),
-    };
-    let rows = PipelineRows::from_source(counted).unwrap();
-    // Effort 19 buffers the image and emits at finish: no live output exists.
-    let job = zenpng::PngEncoderConfig::new()
-        .with_generic_effort(19)
-        .job();
-    let mut out = Vec::new();
-    let error = row_encode::encode_job(
-        job,
-        rows,
-        &mut out,
-        PolicySet::new().require_output_schedule(OutputSchedule::Live),
-        encode_options(),
-        &NoPulse,
-    )
-    .unwrap_err();
-    assert_eq!(error.error().stage, Stage::Policy);
-    assert_eq!(error.error().emitted, 0);
-    assert!(out.is_empty());
-    assert_eq!(pulls.load(Ordering::SeqCst), 0, "a row was requested");
-    let unmet: Vec<_> = error
-        .error()
-        .report
-        .decisions()
-        .flat_map(|d| d.unmet_requirements.iter())
-        .collect();
-    assert!(
-        unmet
-            .iter()
-            .any(|(r, _)| *r == PolicyRequirement::OutputSchedule),
-        "{unmet:?}"
-    );
+    for pulse in [None, Some(&NoPulse as &dyn zencodec::Pulse)] {
+        let (file, _) = png_fixture(W, H, 3);
+        let codecs = codecs();
+        let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
+        assert_eq!(source.stats().strips, 0);
+        let pulls = Arc::new(AtomicU64::new(0));
+        let counted = Counted {
+            inner: source,
+            pulls: pulls.clone(),
+        };
+        let rows = PipelineRows::from_source(counted).unwrap();
+        // Effort 19 buffers the image and emits at finish: no live output exists.
+        let job = zenpng::PngEncoderConfig::new()
+            .with_generic_effort(19)
+            .job();
+        let mut out = Vec::new();
+        let error = row_encode::encode_job(
+            job,
+            rows,
+            &mut out,
+            PolicySet::new().require_output_schedule(OutputSchedule::Live),
+            encode_options(),
+            pulse,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().stage, Stage::Policy);
+        assert_eq!(error.error().emitted, 0);
+        assert!(out.is_empty());
+        assert_eq!(pulls.load(Ordering::SeqCst), 0, "a row was requested");
+        let unmet: Vec<_> = error
+            .error()
+            .report
+            .decisions()
+            .flat_map(|d| d.unmet_requirements.iter())
+            .collect();
+        assert!(
+            unmet
+                .iter()
+                .any(|(r, _)| *r == PolicyRequirement::OutputSchedule),
+            "{unmet:?}"
+        );
+    }
 }
 
 /// The compatibility placement: the requirement also in the driver's deprecated
@@ -283,44 +364,46 @@ fn required_live_schedule_refuses_a_buffered_png_before_any_pixel_work() {
 /// `OutputSchedule`.
 #[test]
 fn required_live_schedule_in_the_preset_is_named_before_any_pixel_work() {
-    let (file, _) = png_fixture(W, H, 3);
-    let codecs = codecs();
-    let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
-    assert_eq!(source.stats().strips, 0);
-    let pulls = Arc::new(AtomicU64::new(0));
-    let counted = Counted {
-        inner: source,
-        pulls: pulls.clone(),
-    };
-    let rows = PipelineRows::from_source(counted).unwrap();
-    // Effort 19 buffers the image and emits at finish: no live output exists.
-    let job = zenpng::PngEncoderConfig::new()
-        .with_generic_effort(19)
-        .job();
-    let live = PolicySet::new().require_output_schedule(OutputSchedule::Live);
-    #[allow(
-        deprecated,
-        reason = "exercises the migration path: a preset still ANDs its requirements"
-    )]
-    let preset = encode_options().with_policy_set(live);
-    let mut out = Vec::new();
-    let error = row_encode::encode_job(job, rows, &mut out, live, preset, &NoPulse).unwrap_err();
-    assert_eq!(error.error().stage, Stage::Policy);
-    assert_eq!(error.error().emitted, 0);
-    assert!(out.is_empty());
-    assert_eq!(pulls.load(Ordering::SeqCst), 0, "a row was requested");
-    let unmet: Vec<_> = error
-        .error()
-        .report
-        .decisions()
-        .flat_map(|d| d.unmet_requirements.iter())
-        .collect();
-    assert!(
-        unmet
-            .iter()
-            .any(|(r, _)| *r == PolicyRequirement::OutputSchedule),
-        "{unmet:?}"
-    );
+    for pulse in [None, Some(&NoPulse as &dyn zencodec::Pulse)] {
+        let (file, _) = png_fixture(W, H, 3);
+        let codecs = codecs();
+        let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
+        assert_eq!(source.stats().strips, 0);
+        let pulls = Arc::new(AtomicU64::new(0));
+        let counted = Counted {
+            inner: source,
+            pulls: pulls.clone(),
+        };
+        let rows = PipelineRows::from_source(counted).unwrap();
+        // Effort 19 buffers the image and emits at finish: no live output exists.
+        let job = zenpng::PngEncoderConfig::new()
+            .with_generic_effort(19)
+            .job();
+        let live = PolicySet::new().require_output_schedule(OutputSchedule::Live);
+        #[allow(
+            deprecated,
+            reason = "exercises the migration path: a preset still ANDs its requirements"
+        )]
+        let preset = encode_options().with_policy_set(live);
+        let mut out = Vec::new();
+        let error = row_encode::encode_job(job, rows, &mut out, live, preset, pulse).unwrap_err();
+        assert_eq!(error.error().stage, Stage::Policy);
+        assert_eq!(error.error().emitted, 0);
+        assert!(out.is_empty());
+        assert_eq!(pulls.load(Ordering::SeqCst), 0, "a row was requested");
+        let unmet: Vec<_> = error
+            .error()
+            .report
+            .decisions()
+            .flat_map(|d| d.unmet_requirements.iter())
+            .collect();
+        assert!(
+            unmet
+                .iter()
+                .any(|(r, _)| *r == PolicyRequirement::OutputSchedule),
+            "{unmet:?}"
+        );
+    }
 }
 
 #[test]
@@ -339,7 +422,7 @@ fn erased_registry_job_matches_the_typed_job_bytes() {
                 &mut out,
                 PolicySet::new(),
                 encode_options(),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         } else {
@@ -350,7 +433,7 @@ fn erased_registry_job_matches_the_typed_job_bytes() {
                 &mut out,
                 PolicySet::new(),
                 encode_options(),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         }
@@ -387,7 +470,7 @@ fn file_source_to_seek_back_file_matches_the_slice_route() {
         destination,
         PolicySet::new(),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let (w, h, _, decoded) = read_png(&std::fs::read(&output).unwrap());
@@ -421,7 +504,7 @@ fn rgba_png_resize_streams_through_the_planned_encoder() {
         &mut streamed,
         PolicySet::new(),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
 

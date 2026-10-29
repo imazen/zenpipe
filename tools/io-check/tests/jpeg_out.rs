@@ -66,7 +66,7 @@ fn planned_rows_reproduce_the_one_shot_bytes() {
             &mut out,
             PolicySet::new(),
             options(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(out, one_shot, "{label}");
@@ -88,7 +88,7 @@ fn a_required_live_schedule_succeeds_only_where_the_configuration_streams() {
             &mut out,
             PolicySet::new().require_output_schedule(OutputSchedule::Live),
             options(),
-            &NoPulse,
+            Some(&NoPulse),
         );
         match result {
             Ok(done) => {
@@ -139,7 +139,7 @@ fn icc_and_orientation_reach_the_jpeg_through_the_job() {
         &mut out,
         PolicySet::new(),
         options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let mut decoder = jpeg_decoder::Decoder::new(Cursor::new(&out));

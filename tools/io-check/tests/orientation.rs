@@ -216,7 +216,7 @@ fn passthrough_keeps_stored_pixels_and_orientation_without_private_exif() {
         &mut out,
         PolicySet::new(),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let (w, h, pixels, exif) = read_png(&out);
@@ -257,7 +257,7 @@ fn rendered_output_is_upright_and_clears_orientation() {
         &mut out,
         PolicySet::new(),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let (expected, ew, eh) = upright_reference(&samples, Orientation::Rotate90);

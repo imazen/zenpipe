@@ -158,7 +158,7 @@ fn schedules_trade_first_output_against_staged_bytes() {
             &mut sink,
             PolicySet::new().require_output_schedule(schedule),
             options(&budget, 16 << 20),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(done.schedule, schedule);
@@ -199,7 +199,7 @@ fn writer_failure_reports_the_confirmed_partial_publication() {
             &mut sink,
             PolicySet::new().require_output_schedule(schedule),
             options(&budget, 16 << 20),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().stage, Stage::Write, "{schedule:?}");
@@ -229,7 +229,7 @@ fn a_source_failure_after_the_live_header_leaves_a_partial_publication() {
             &mut sink,
             PolicySet::new().require_output_schedule(schedule),
             options(&budget, 16 << 20),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().stage, Stage::Read, "{schedule:?}");
@@ -254,7 +254,7 @@ fn the_output_limit_is_a_publication_limit_not_a_precheck() {
             &mut sink,
             PolicySet::new().require_output_schedule(schedule),
             options(&budget, 200),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         assert_eq!(
@@ -292,7 +292,7 @@ fn disk_staging_publishes_the_same_bytes_after_finishing() {
         options(&budget, 16 << 20)
             .with_disk_staging(scratch, NonZeroUsize::new(512).unwrap())
             .unwrap(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(done.schedule, OutputSchedule::FinishFirst);
@@ -319,7 +319,7 @@ fn a_required_wait_bound_is_unknown_and_refuses_before_any_effect() {
         &mut sink,
         PolicySet::new().with_output_wait_limit(1 << 30),
         options(&budget, 16 << 20),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().stage, Stage::Policy);
@@ -361,7 +361,7 @@ fn a_required_wait_bound_in_the_preset_is_named_before_any_effect() {
         &mut sink,
         bound,
         preset,
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().stage, Stage::Policy);

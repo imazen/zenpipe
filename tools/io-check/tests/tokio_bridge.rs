@@ -123,7 +123,7 @@ fn pipeline<S: AsyncSource + 'static>(
         writer,
         PolicySet::new().require_output_schedule(schedule),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )?)
 }
 
@@ -140,7 +140,7 @@ fn sync_reference() -> Vec<u8> {
         &mut out,
         PolicySet::new(),
         encode_options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     out
