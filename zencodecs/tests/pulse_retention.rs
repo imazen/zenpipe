@@ -56,6 +56,48 @@ fn stop_reason(error: &whereat::At<CodecError>) -> Option<StopReason> {
     }
 }
 
+#[test]
+fn transcode_sink_preserves_native_deadline_causes() {
+    use zencodec::decode::DecodeRowSink;
+    use zencodecs::TranscodeSink;
+
+    for format in [ImageFormat::Jpeg, ImageFormat::Png] {
+        for at_begin in [true, false] {
+            let polls = Arc::new(AtomicUsize::new(0));
+            let encoder = EncodeRequest::new(format)
+                .with_pulse(SharedPulse::new(Deadline {
+                    polls: polls.clone(),
+                    fail_at: 1_000_000,
+                }))
+                .build_streaming_encoder(8, 8)
+                .unwrap();
+            let mut sink = TranscodeSink::new(encoder.encoder, encoder.supported);
+            let error = if at_begin {
+                polls.store(1_000_000, Ordering::Relaxed);
+                sink.begin(8, 8, PixelDescriptor::RGB8_SRGB).unwrap_err()
+            } else {
+                sink.begin(8, 8, PixelDescriptor::RGB8_SRGB).unwrap();
+                let mut rows = sink
+                    .provide_next_buffer(0, 8, 8, PixelDescriptor::RGB8_SRGB)
+                    .unwrap();
+                for y in 0..8 {
+                    rows.row_mut(y).fill(127);
+                }
+                drop(rows);
+                polls.store(1_000_000, Ordering::Relaxed);
+                sink.finish().unwrap_err()
+            };
+            let native = zencodec::find_cause::<zencodec::CodecError>(&*error)
+                .unwrap_or_else(|| panic!("{format:?}, begin={at_begin}: lost cause: {error}"));
+            assert_eq!(
+                native.category(),
+                zencodec::ErrorCategory::Stopped(StopReason::TimedOut),
+                "{format:?}, begin={at_begin}"
+            );
+        }
+    }
+}
+
 /// Every stop point of one operation. Failures are collected, not raised, so
 /// one codec's defect does not hide another's result.
 fn each_stop_point(
