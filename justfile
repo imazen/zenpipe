@@ -725,3 +725,12 @@ media-shell-check:
 # Retained JXL collection decoder requires smallvec >=1.16.2. Preserve other locks.
 integration-collection-lock manifest:
     cargo update --manifest-path {{quote(manifest)}} -p smallvec --precise 1.16.4
+
+# ImageJob is feature-gated: default pipeline tests do not compile these paths.
+integration-job-check: integration-job-test integration-job-clippy
+
+integration-job-test:
+    cargo test -p zenpipe --features job,job-ultrahdr,nodes-all,io-tokio,json-schema --lib --tests --locked
+
+integration-job-clippy:
+    cargo clippy -p zenpipe --features job,job-ultrahdr,nodes-all,io-tokio,json-schema --lib --tests --locked -- -D warnings

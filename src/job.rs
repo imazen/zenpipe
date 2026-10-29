@@ -1270,9 +1270,6 @@ pub(crate) fn transcode_animated_nodes(
     if let Some(cl) = codec_limits {
         encode_request = encode_request.with_limits(cl);
     }
-    if let Some(ref stop) = stop {
-        encode_request = encode_request.with_stop(stop.clone());
-    }
     let encoder = match encode_request.animation_frame_encoder(out_w, out_h) {
         Ok(enc) => enc,
         // A stop is the operation's refusal, not a static target.
@@ -1319,9 +1316,7 @@ impl<'a> ImageJob<'a> {
         // The job deadline must reach the codec, not just the strip loop:
         // a single decode call (e.g. a multi-second AV1/JXL frame) runs
         // uncancellable between `source.next()` polls without it.
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
 
         match request.build_streaming_decoder() {
             Ok(decoder) => {
@@ -1335,9 +1330,7 @@ impl<'a> ImageJob<'a> {
                 if let Some(ref cl) = codec_limits {
                     fallback = fallback.with_limits(cl);
                 }
-                if let Some(deadline) = self.deadline() {
-                    fallback = fallback.with_stop(deadline);
-                }
+                fallback = fallback.with_pulse(self.control());
                 let decoded = at_crate!(fallback.decode_full_frame())
                     .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
@@ -1373,9 +1366,7 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             request = request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
         let decoded =
             at_crate!(request.decode_full_frame()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
         let pixels = decoded.pixels();
@@ -1409,9 +1400,7 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             request = request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            request = request.with_stop(deadline);
-        }
+        request = request.with_pulse(self.control());
 
         let (decoded, gain_map) =
             at_crate!(request.decode_gain_map()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
@@ -1670,9 +1659,7 @@ impl<'a> ImageJob<'a> {
         if let Some(ref cl) = codec_limits {
             encode_request = encode_request.with_limits(cl);
         }
-        if let Some(deadline) = self.deadline() {
-            encode_request = encode_request.with_stop(deadline);
-        }
+        encode_request = encode_request.with_pulse(self.control());
 
         #[cfg(feature = "io")]
         if let Some(policy) = self.output_policy {
@@ -1696,40 +1683,37 @@ impl<'a> ImageJob<'a> {
         // These live outside the encode_request borrow scope. Gated on
         // `job-ultrahdr`: without it there is never a gain-map sidecar.
         #[cfg(feature = "job-ultrahdr")]
-        let gain_map_data = output.sidecar.and_then(|sidecar| {
-            if let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind {
-                // GainMapMetadata is a type alias for zencodec::GainMapParams
-                // since ultrahdr-core 0.5 — the sidecar params ARE the metadata.
-                let metadata = params.clone();
-                // Repack to the tight 1- or 3-channel layout GainMap consumers
-                // expect. The channel count follows the ISO 21496-1 metadata,
-                // not pixel inspection; a resized sidecar comes out of the
-                // layout pipeline expanded to RGBA with stride padding.
-                let (width, height) = (sidecar.width(), sidecar.height());
-                let src_ch = sidecar.format().channels() as usize;
-                let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
-                let out_ch = channels as usize;
-                let mut data =
-                    alloc::vec::Vec::with_capacity(width as usize * height as usize * out_ch);
-                for y in 0..height as usize {
-                    let row_start = y * sidecar.stride();
-                    let row = &sidecar.data()[row_start..row_start + width as usize * src_ch];
-                    for px in row.chunks_exact(src_ch) {
-                        for c in 0..out_ch {
-                            data.push(px[c.min(src_ch - 1)]);
-                        }
+        let gain_map_data = output.sidecar.map(|sidecar| {
+            let crate::sidecar::SidecarKind::GainMap { ref params } = sidecar.kind;
+            // GainMapMetadata is a type alias for zencodec::GainMapParams
+            // since ultrahdr-core 0.5 — the sidecar params ARE the metadata.
+            let metadata = params.clone();
+            // Repack to the tight 1- or 3-channel layout GainMap consumers
+            // expect. The channel count follows the ISO 21496-1 metadata,
+            // not pixel inspection; a resized sidecar comes out of the
+            // layout pipeline expanded to RGBA with stride padding.
+            let (width, height) = (sidecar.width(), sidecar.height());
+            let src_ch = sidecar.format().channels();
+            let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
+            let out_ch = channels as usize;
+            let mut data =
+                alloc::vec::Vec::with_capacity(width as usize * height as usize * out_ch);
+            for y in 0..height as usize {
+                let row_start = y * sidecar.stride();
+                let row = &sidecar.data()[row_start..row_start + width as usize * src_ch];
+                for px in row.chunks_exact(src_ch) {
+                    for c in 0..out_ch {
+                        data.push(px[c.min(src_ch - 1)]);
                     }
                 }
-                let gain_map = zencodecs::GainMap {
-                    data,
-                    width,
-                    height,
-                    channels,
-                };
-                Some((gain_map, metadata))
-            } else {
-                None
             }
+            let gain_map = zencodecs::GainMap {
+                data,
+                width,
+                height,
+                channels,
+            };
+            (gain_map, metadata)
         });
 
         // Attach gain map to encoder if the target format supports it.
@@ -1740,14 +1724,11 @@ impl<'a> ImageJob<'a> {
             zencodec::ImageFormat::Jpeg | zencodec::ImageFormat::Avif | zencodec::ImageFormat::Jxl
         );
         #[cfg(feature = "job-ultrahdr")]
-        if target_supports_gainmap {
-            if let Some((ref gm, ref meta)) = gain_map_data {
-                encode_request =
-                    encode_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
-                        gain_map: gm,
-                        metadata: meta,
-                    });
-            }
+        if target_supports_gainmap && let Some((ref gm, ref meta)) = gain_map_data {
+            encode_request = encode_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
+                gain_map: gm,
+                metadata: meta,
+            });
         }
 
         // When a gain map is present, use one-shot encode (gain map embedding
@@ -1810,20 +1791,16 @@ impl<'a> ImageJob<'a> {
                 if let Some(ref cl) = codec_limits {
                     oneshot_request = oneshot_request.with_limits(cl);
                 }
-                if let Some(deadline) = self.deadline() {
-                    oneshot_request = oneshot_request.with_stop(deadline);
-                }
+                oneshot_request = oneshot_request.with_pulse(self.control());
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
                 #[cfg(feature = "job-ultrahdr")]
-                if target_supports_gainmap {
-                    if let Some((ref gm, ref meta)) = gain_map_data {
-                        oneshot_request =
-                            oneshot_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
-                                gain_map: gm,
-                                metadata: meta,
-                            });
-                    }
+                if target_supports_gainmap && let Some((ref gm, ref meta)) = gain_map_data {
+                    oneshot_request =
+                        oneshot_request.with_gain_map(zencodecs::GainMapSource::Precomputed {
+                            gain_map: gm,
+                            metadata: meta,
+                        });
                 }
 
                 let encode_output = at_crate!(oneshot_request.encode(pixels, format.has_alpha()))

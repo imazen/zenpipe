@@ -218,13 +218,13 @@ fn bmp_trace_has_at_least_one_frame_and_boundaries() {
 #[test]
 fn codec_errors_use_codec_variant_not_op_string() {
     for (name, data) in [
-        ("PNG", TRUNCATED_PNG.as_ref()),
-        ("GIF", TRUNCATED_GIF.as_ref()),
-        ("WebP", TRUNCATED_WEBP.as_ref()),
-        ("AVIF", TRUNCATED_AVIF.as_ref()),
-        ("JXL", TRUNCATED_JXL.as_ref()),
-        ("JPEG", TRUNCATED_JPEG.as_ref()),
-        ("BMP", TRUNCATED_BMP.as_ref()),
+        ("PNG", TRUNCATED_PNG),
+        ("GIF", TRUNCATED_GIF),
+        ("WebP", TRUNCATED_WEBP),
+        ("AVIF", TRUNCATED_AVIF),
+        ("JXL", TRUNCATED_JXL),
+        ("JPEG", TRUNCATED_JPEG),
+        ("BMP", TRUNCATED_BMP),
     ] {
         let err = run_job(data).expect_err(&std::format!("{name} should fail"));
         assert!(

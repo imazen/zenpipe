@@ -266,3 +266,14 @@ that focused control. See `benchmarks/full_profile_2026-10-29.md`.
 ### Comparing unpublished API surfaces
 
 `just semver-against <reviewed-source-export>` builds stable-toolchain rustdoc JSON inside the actual workspaces and compares the resulting API graphs at patch level. This preserves root git patches for unpublished dependencies that a synthetic outer workspace loses. `just test-streaming-seam`, `just test-dispatched-output`, and `just streaming-clippy-gate` exercise the dispatched row and transport contract.
+
+## ImageJob optional Pulse integration (2026-10-29)
+
+Fuzz compilation exposed stale with_stop calls in the feature-gated ImageJob
+decode/fallback/encode paths, plus a duplicate animation stop block. Default
+zenpipe tests do not compile the job feature. Those paths now use the existing
+shared control helper; animation retains its already-attached shared Pulse.
+The dedicated integration-job-check recipe covers job and gain-map features.
+The combined job/gain-map/node/Tokio/schema runtime and strict Clippy pass.
+Original deadline/cancellation assertions are retained; see
+`docs/current-main-integration.md` for evidence and the five HDR placeholder gaps.
