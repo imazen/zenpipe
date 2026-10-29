@@ -55,7 +55,7 @@ hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e0bb92b4d0751526b64269ca6dcf25240e91d8bc" }
 # Retained HEIC source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
+heic = { git = "https://github.com/imazen/heic", rev = "f97f1a82469b245e6bdd3ca2f42eabbc393b2734" }
 # Optional-control TIFF source with the matching image-tiff resource-limit fork.
 # Consumer resolution, pixel parity and native qualification remain pending.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
@@ -82,7 +82,7 @@ zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "5abfba282057
 zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f572589dc17b2a9903faa3f" }
 # Retained RAW source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "e2c2be837670a8ecf9604eb025a6e9427878f6ca" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }

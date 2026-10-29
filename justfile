@@ -337,3 +337,7 @@ processing-pulse-check:
 avif-consumer-contract-check:
     cargo test --locked -p zencodecs --no-default-features --features avif-decode,avif-encode --test avif_capability -- --test-threads=1
     cargo clippy --locked -p zencodecs --no-default-features --features avif-decode,avif-encode --lib --test avif_capability -- -D warnings
+
+# Same complete feature profile as the generated zencodecs API surface.
+api-profile-check:
+    cargo check --locked -p zencodecs --features all,jp2-decode,metadata,checked-transcode-async
