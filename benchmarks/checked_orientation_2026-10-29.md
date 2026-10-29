@@ -24,3 +24,8 @@ forwarding and decoded dimensions/orientation, not independent reader parity.
 Full configured API generation and freshness check pass: rc0/36s,
 peak RSS 0.60GiB, minimum available 13269MiB. Generated zencodecs surface
 contains the new method; other generated surfaces are unchanged.
+
+CI found the decoder-pin agreement check still expected the previous native
+revision after manifests/locks were updated. The expected AVIF revision now
+matches tested 0237c6b3. Its seven positive/negative self-tests and repository
+scan (11 manifest entries, 12 lock entries) pass. No checker rule was relaxed.
