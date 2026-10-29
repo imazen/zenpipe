@@ -1,10 +1,10 @@
 //! Positional file input, seekable file output, no resident copy of the input
 //! made by zenpipe (the JPEG/PNG decoders still retain their compressed input).
 //! `cargo run -p zenpipe-io-check --example file_to_file -- in.jpg out.png`
+use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
 use zencodec::operation::{DecodeRequest, PolicySet};
 use zencodec::storage::StorageBudget;
-use zencodec::{CodecSet, NoPulse};
 use zencodec_io::destination::SeekBack;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::{DriveOptions, FileReadAt};
@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         destination,
         PolicySet::new(),
         Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
-        &NoPulse,
+        None,
     )?;
     println!(
         "read {} bytes in {} reads before the first row; wrote {} bytes ({:?})",

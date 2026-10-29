@@ -11,7 +11,7 @@ own samples and read PNG output back with the independent `png` crate).
 ## Slice in, PNG out
 
 ```rust
-use zencodec::{CodecSet, NoPulse, encode::{EncodeJob, EncoderConfig}, operation::PolicySet,
+use zencodec::{CodecSet, encode::{EncodeJob, EncoderConfig}, operation::PolicySet,
                storage::StorageBudget};
 use zencodec_io::row_encode::{self, Options};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
@@ -22,8 +22,15 @@ let rows = PipelineRows::from_source(source)?;
 let job = zenpng::PngEncoderConfig::new().with_generic_effort(0).job();
 let mut out = Vec::new();
 row_encode::encode_job(job, rows, &mut out, PolicySet::new(),
-                       Options::new(StorageBudget::new(16 << 20, 64), 16 << 20), &NoPulse)?;
+                       Options::new(StorageBudget::new(16 << 20, 64), 16 << 20), None)?;
 ```
+
+The row driver's borrowed Pulse is optional. `None` adds no per-call control;
+`Some(pulse)` forwards the full supplied control. Neither form replaces a control
+retained by a decoder or encoder job. `DecodeOptions::with_pulse` and
+`CodecSet::with_pulse` still take owned `SharedPulse` controls, which remain live
+through policy decisions and native work. The adapters forward an optional input
+unchanged until a private local checkpoint needs a no-op control.
 
 Construction reads the input, answers every mandatory decode question through the
 policy, and stops at the final interpretation without adopting it. Geometry,
@@ -75,7 +82,7 @@ let source = DecodeSource::new(&codecs, &DecodeRequest::new(), file, PolicySet::
                                options.with_drive(DriveOptions::new(0, 64 * 1024)))?;
 let destination = zencodec_io::destination::SeekBack::new(std::fs::File::create(&out_path)?)?;
 row_encode::encode_job_to_destination(job, PipelineRows::from_source(source)?, destination,
-                                      PolicySet::new(), encode_options, &NoPulse)?;
+                                      PolicySet::new(), encode_options, None)?;
 ```
 
 A sequential codec cannot skip bytes for a region: its transport cost is the number

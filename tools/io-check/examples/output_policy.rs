@@ -8,10 +8,10 @@
 //! `BoundPolicy::new(requirements, resolver)`.
 use std::num::NonZeroUsize;
 
+use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
 use zencodec::operation::{OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
-use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Options};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
 
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         std::io::sink(),
         live,
         Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
-        &NoPulse,
+        None,
     )
     .unwrap_err();
     println!(
@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         std::fs::File::create(output)?,
         finish_first,
         options,
-        &NoPulse,
+        None,
     )?;
     println!(
         "{} bytes via a disk spool ({:?})",

@@ -10,10 +10,10 @@
 //! configurations.
 use std::num::NonZeroUsize;
 
+use zencodec::CodecSet;
 use zencodec::encode::{EncodeJob, EncoderConfig};
 use zencodec::operation::{DecodeRequest, OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
-use zencodec::{CodecSet, NoPulse};
 use zencodec_io::destination::Forward;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::{DriveOptions, FileReadAt};
@@ -108,7 +108,7 @@ fn run(
         Forward(std::fs::File::create(output)?),
         policy,
         options,
-        &NoPulse,
+        None,
     )?;
     println!(
         "effort {effort} {schedule}: emitted {} B, schedule {:?}, managed decode/encode bytes still reserved {} / {}",

@@ -1,9 +1,9 @@
 //! A Tokio task decodes async bytes and streams the planned encode to an async
 //! writer through the blocking pool. `cargo run -p zenpipe-io-check --example tokio_bridge -- in.png out.png`
+use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
 use zencodec::operation::{DecodeRequest, OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
-use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::tokio_io::BytesSource;
 use zenpipe::io::tokio_bridge::{BlockingReadAt, drive_to_async_writer};
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Error> {
                 writer,
                 PolicySet::new().require_output_schedule(OutputSchedule::Live),
                 Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
-                &NoPulse,
+                None,
             )?)
         },
         &mut file,

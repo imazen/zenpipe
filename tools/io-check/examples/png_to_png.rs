@@ -1,9 +1,9 @@
 //! Smallest route: owned input bytes -> controlled decode -> crop -> planned
 //! PNG encode into memory. `cargo run -p zenpipe-io-check --example png_to_png -- in.png out.png`
+use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
 use zencodec::operation::PolicySet;
 use zencodec::storage::StorageBudget;
-use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Options};
 use zenpipe::Source;
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         &mut out,
         PolicySet::new(),
         Options::new(StorageBudget::new(64 << 20, 1024), 256 << 20),
-        &NoPulse,
+        None,
     )?;
     std::fs::write(output, &out)?;
     println!("{} bytes, schedule {:?}", done.emitted, done.schedule);
