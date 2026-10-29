@@ -13,14 +13,14 @@ description = "Frozen consumer graph for zencodec's checked JPEG/PNG guide"
 
 [dependencies]
 zencodec = { version = "0.2.0", features = ["std"] }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9", features = ["std", "tokio"] }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158", features = ["std", "tokio"] }
 zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "874a3856841bfcf5f8e223ec62d75a159fa42895", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["cms-moxcms"] }
 
 [patch.crates-io]
 # zencodec 0.2 (the Pulse contract and shared encode-planning hooks) is unpublished.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158" }
 # The native JPEG/PNG review branches that implement it.
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }

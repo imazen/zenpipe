@@ -42,6 +42,7 @@ GRAPH_ROOTS = (
     "demo/crate/Cargo.lock",
     "tools/metadata-services/Cargo.lock",
     "zencodecs/fuzz/Cargo.lock",
+    "wasm-size-shim/Cargo.lock",
 )
 
 

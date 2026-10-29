@@ -77,3 +77,12 @@ zenpipe's `ce1a28b4` decoder lacks the frame/layer inspection methods used by th
 collection adapter. Its original `fe819360` collection decoder must be retained
 and qualified with the new shared contract before the application claims layer
 support. Ordinary metadata/profile compilation did not cover this feature.
+
+## Portable graph follow-through
+
+The candidate now selects merged zenjxl efa533d0 and jxl-encoder 11c6eb0c,
+retains the collection-capable decoder fe819360, and aligns explicit core
+edges at 3f4fd14f. Portable resolution and consumer validation are pending.
+The pin guard's self-tests pass, but its real-tree check finds the independent
+wasm-size-shim still pinned to an older AVIF/core cohort. That failure remains
+a landing gate; the harness must be aligned and qualified, not excluded.

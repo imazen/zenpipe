@@ -296,6 +296,7 @@ checked-publication-locks:
     timeout 180s cargo metadata --format-version 1 --manifest-path demo/crate/Cargo.toml > /dev/null
     timeout 180s cargo metadata --format-version 1 --manifest-path tools/metadata-services/Cargo.toml > /dev/null
     timeout 180s cargo metadata --format-version 1 --manifest-path zencodecs/fuzz/Cargo.toml > /dev/null
+    timeout 180s cargo metadata --format-version 1 --manifest-path wasm-size-shim/Cargo.toml > /dev/null
     python3 scripts/check-core-family.py
     python3 scripts/check-decoder-pins.py
 
