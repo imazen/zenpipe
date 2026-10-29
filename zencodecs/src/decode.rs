@@ -173,8 +173,8 @@ impl<'a> DecodeRequest<'a> {
     ///   right choice for targets that can't carry an orientation tag (PNG) or
     ///   for display-ready output.
     ///
-    /// Currently honored by the JPEG and HEIC decoders (the EXIF-orientation
-    /// formats); other adapters ignore it (no stored orientation to bake).
+    /// Currently forwarded to JPEG, HEIC and AVIF decoders. Other adapters
+    /// do not yet forward this hint.
     pub fn with_orientation(mut self, hint: OrientationHint) -> Self {
         self.orientation = hint;
         self
@@ -560,6 +560,7 @@ impl<'a> DecodeRequest<'a> {
                 self.pulse,
                 dp,
                 self.extract_gain_map,
+                self.orientation,
             ),
             Jxl => "jxl-decode" => crate::codecs::jxl_dec::decode(
                 self.data,

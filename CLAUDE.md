@@ -210,3 +210,10 @@ a registry edge; zenavif `f0a3919e` and all five application-root serializer
 patches now agree. Both source/family validators pass on `96972529`; the prior
 failure remains recorded above. Native consumer controls remain a separate gate.
 See `benchmarks/portable_serializer_2026-10-29.md`.
+
+Native gate `avif-consumer-contract-check` on `4fd1d7ec` resolves successfully
+but fails 3 orientation controls (8 pass, 4 pre-existing ignores). Two existing
+metadata tests require carrier preservation while native still encoding bakes
+orientation; separate diagnostic witnesses confirm that bake. The third failure
+exposes zencodecs dropping `OrientationHint` before AVIF decode. Do not weaken
+these assertions to declare the graph release-qualified.

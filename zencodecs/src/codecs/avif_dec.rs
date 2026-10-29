@@ -25,6 +25,7 @@ pub(crate) fn decode(
     pulse: SharedPulse,
     decode_policy: Option<zencodec::decode::DecodePolicy>,
     extract_gain_map: bool,
+    orientation: zencodec::OrientationHint,
 ) -> Result<DecodeOutput> {
     let mut dec = zenavif::AvifDecoderConfig::new();
     // Apply codec config if provided
@@ -35,7 +36,7 @@ pub(crate) fn decode(
     if let Some(lim) = limits {
         dec = dec.with_limits(to_resource_limits(lim));
     }
-    let mut job = dec.job();
+    let mut job = dec.job().with_orientation(orientation);
     if extract_gain_map {
         job = job.with_extract_gain_map(true);
     }
