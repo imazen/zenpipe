@@ -40,22 +40,25 @@ Legend: **✓** working + tested / **○** working but no test / **-** stub / **
 | PNM/PFM | ✓ | 8 / f32 | × | × | × | × | × | × | × |
 | Farbfeld | ✓ | 16 | × | × | × | × | × | × | × |
 
-### Critical pipeline-level findings
+### Pipeline qualification (2026-10-29)
 
-1. **`graph.rs:1608` and `:1617`** — `ensure_fmt!(source, format::RGBA8_SRGB, ...)`
-   force-narrows every decoded image to 8-bit sRGB before the layout/composite
-   nodes run. Bit depth, transfer, and primaries are all lost.
-2. **`sources/resize.rs:46-51`** — refuses any input that isn't `RGBA8_SRGB`.
-3. **`sources/effects.rs:51-53`** — same enforcement on filter / rotation.
-4. **`job.rs:831-840`** — gain map is decoded and stored with `RGB8_SRGB`
-   descriptor regardless of the codec's actual gain-map bit depth/transfer.
-5. **`job.rs:1004-1006`** — encode receives sRGB pixels but the original
-   ICC/CICP from the source. Pixels and metadata silently disagree.
-6. **No tone mapping** — `TransferFunction::Pq` and `Hlg` exist on
-   `PixelDescriptor` but no resize/composite path linearizes them.
+The earlier blanket claim that every pipeline path converts to U8 is obsolete.
+An executable identity witness did find an unconditional U16-to-U8 conversion
+in `ImageJob` layout normalization. That stage now retains channel precision,
+primaries, transfer and signal range. `just job-precision-check` compares every
+16-bit PNG sample, including alpha, with an independent PNG reader through both
+the ordinary and policy-controlled output routes. The padded-input fixture
+fails before the fix and passes after it.
 
-These are not codec bugs; they are pipeline gaps. The codec-level
-infrastructure (per the audit above) is in good shape.
+This is not broad HDR qualification. Several graph operations explicitly request
+RGBA8 working buffers (including Layout, Constrain and ResizeAdvanced), while
+others use linear float buffers. Source inspection alone cannot establish color
+or precision preservation across them. The five ignored cases in
+`tests/wide_gamut_pipeline_gap.rs` remain placeholders, not failing executable
+codec tests. [Issue 114](https://github.com/imazen/zenpipe/issues/114) tracks their
+replacement with real pixel and color oracles. AVIF/JXL high-precision processing,
+reconstruction and the original matrix above need route-specific qualification;
+PNG identity success does not prove them.
 
 ## Test plan: ground-up, codec-by-codec
 
@@ -210,3 +213,25 @@ Fixtures go in `tests/images/` (already exists for some codecs). New:
 - `tests/images/rec2020_pq.avif` — synthetic AVIF Rec.2020 PQ
 - `tests/images/jxl_hdr_inverse.jxl` — JXL with jhgm gain map
 - `tests/images/iphone17_ampf.dng` — AMPF sample
+
+## Identity precision receipts (2026-10-29)
+
+- Test-only `54ad34c0`: PNG16 input is verified against the source rows, then
+  ImageJob returns RGB8; the descriptor assertion fails (rc101, 3s,
+  peak RSS 0.36 GiB). An earlier fixture compile failed on a moved PixelSlice;
+  cloning the borrowed view repaired the fixture without changing assertions.
+- Production `8398de40`: after verified recompilation, the same witness passes
+  (rc0, 2s, peak RSS 0.36 GiB). The first attempt reused an older shared-target
+  artifact; its failed receipt is retained and not treated as fix evidence.
+- `dd9da05c`: independent PNG reader on both output routes, full ImageJob
+  runtime suite and strict Clippy pass (rc0, 50s, peak RSS 0.68 GiB). The five
+  inherited placeholder ignores remain explicit coverage gaps.
+- Final production `4cd773ad`: signal-range control, sample/oracle controls,
+  ImageJob strict Clippy and oracle-test strict Clippy pass (rc0, 20s,
+  peak RSS 0.59 GiB).
+
+All commands use `run-heavy --mem 3G --jobs 2`, isolated locked exports and
+bounded timeouts. Exported Rust source timestamps were refreshed before final
+runs to force rebuilding local packages in the shared Cargo target; source
+bytes and dependency locks were unchanged. These receipts describe validation
+resource usage, not codec performance or a peak-workspace guarantee.

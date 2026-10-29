@@ -1,28 +1,13 @@
-//! Pipeline-level wide-gamut and HDR preservation tests.
+//! Gain-map and ICC carriage controls plus historical HDR test placeholders.
 //!
-//! Coverage note (2026-10-29): five ignored cases below are placeholder panics,
-//! not executable codec witnesses. Their historical comments do not establish
-//! current behavior; graph routing now includes linear-float paths. Replace
-//! them with real fixtures/oracles under zenpipe issue 114 before claiming
-//! those preservation guarantees.
+//! The five ignored cases below still contain placeholder panics. Their old
+//! source locations and explanatory comments are historical hypotheses, not
+//! current evidence. Do not infer a present pixel bug or a passing contract
+//! from them. Issue 114 tracks executable replacements.
 //!
-//! These tests drive HDR / wide-gamut sources through `ImageJob` and assert
-//! that bit depth, transfer function, and primaries survive the pipeline.
-//! They are **expected to fail today** — the assertions document the gap
-//! identified in `docs/hdr-per-codec.md`:
-//!
-//!   `graph.rs:1608` and `:1617` force-narrow every decoded image to
-//!   `RGBA8_SRGB` via `ensure_fmt!`, before the layout/composite nodes
-//!   run. `sources/resize.rs:46-51` and `sources/effects.rs:51-53` enforce
-//!   the same — they refuse non-sRGB input. The result: AVIF Rec.2020 PQ,
-//!   AVIF 10-bit, JXL HDR f32, all silently flatten to 8-bit sRGB before
-//!   re-encoding, with the original ICC/CICP still attached as metadata
-//!   (`job.rs:1004-1006`) — pixels and metadata then disagree.
-//!
-//! Each test is `#[ignore]`d with a note pinning the expected fix site.
-//! When the pipeline gains a wide working space (e.g. `RGBAF32_LINEAR`
-//! routed conditionally via a `WorkingFormat` enum), these tests will
-//! activate and pass without further code changes.
+//! `job_precision` and `zenpipe-io-check::image_job` now separately prove exact
+//! 16-bit PNG identity through ordinary and policy-controlled ImageJob output.
+//! This does not qualify AVIF/JXL, gamut conversion, or processing operations.
 
 // Exercises gain-map / HDR APIs behind `job-ultrahdr` (which implies `job`).
 #![cfg(all(feature = "job-ultrahdr", feature = "nodes-jpeg"))]

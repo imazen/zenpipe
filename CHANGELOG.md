@@ -878,6 +878,14 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Fixes
+
+- Preserve source channel precision and signal range during ImageJob layout
+  normalization. Lossless identity PNG16 jobs retain every sample and alpha
+  on ordinary and policy-controlled output paths; resizing/HDR qualification
+  remains route-specific (`just job-precision-check`).
+
+
 #### Fixed (2026-10-28)
 
 - **A resizing layout with an orientation put uneven padding on the wrong

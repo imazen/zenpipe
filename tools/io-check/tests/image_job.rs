@@ -426,3 +426,54 @@ fn a_crop_node_keeps_exact_pixels_on_both_routes() {
     }
     assert!(wrong.is_empty(), "crop changed samples: {wrong:#?}");
 }
+
+#[test]
+fn identity_png16_matches_independent_decoder_on_both_output_routes() {
+    // RGB values and alpha deliberately contain bits lost by conversion to U8.
+    let values = [1u16, 257, 577, 65534, 32769, 234];
+    let mut storage = vec![0xa5; 64]; // 3 RGBA16 pixels + 8 padding bytes per row
+    let mut expected = Vec::new();
+    for (i, value) in values.into_iter().enumerate() {
+        for (c, sample) in [
+            value,
+            value.wrapping_mul(17),
+            65535 - value,
+            65535 - i as u16,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let offset = (i / 3) * 32 + (i % 3) * 8 + c * 2;
+            storage[offset..offset + 2].copy_from_slice(&sample.to_ne_bytes());
+            expected.extend_from_slice(&sample.to_be_bytes());
+        }
+    }
+    let pixels = PixelSlice::new(&storage, 3, 2, 32, PixelDescriptor::RGBA16_SRGB).unwrap();
+    let input = zenpng::PngEncoderConfig::new()
+        .job()
+        .encode(pixels)
+        .unwrap()
+        .into_vec();
+    for policy in [None, Some(PolicySet::new())] {
+        let mut job = ImageJob::new()
+            .add_input(0, input.clone())
+            .add_output(1)
+            .with_intent(CodecIntent {
+                lossless: Some(zencodecs::BoolKeep::True),
+                ..intent(ImageFormat::Png)
+            });
+        if let Some(policy) = policy {
+            job = job.with_output_policy(policy);
+        }
+        let result = job.run().unwrap();
+        let mut reader = png::Decoder::new(Cursor::new(&result.encode_results[0].bytes))
+            .read_info()
+            .unwrap();
+        let mut data = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut data).unwrap();
+        assert_eq!((info.width, info.height), (3, 2));
+        assert_eq!(info.bit_depth, png::BitDepth::Sixteen);
+        assert_eq!(info.color_type, png::ColorType::Rgba);
+        assert_eq!(&data[..info.buffer_size()], expected.as_slice());
+    }
+}

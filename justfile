@@ -742,4 +742,6 @@ integration-fuzz-check:
 
 # Exact sample preservation through a no-transform, lossless ImageJob.
 job-precision-check:
+    cargo test --locked -p zenpipe --features job,nodes-png --lib job::tests::layout_normalization_keeps_narrow_u16_samples_and_interpretation -- --exact
     cargo test --locked -p zenpipe --features job,nodes-png --test job_precision
+    cargo test --locked -p zenpipe-io-check --features job --test image_job

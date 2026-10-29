@@ -288,3 +288,12 @@ lock, producing a different graph from portable qualification. It now keeps
 the committed graph and builds locked. Ordinary demo/size-shim WASM checks
 pass; threaded release/browser qualification remains separate. See
 `docs/current-main-integration.md`.
+
+## Known Bugs: ImageJob identity precision (2026-10-29)
+
+An executable padded RGBA16 PNG witness showed that unconditional layout
+normalization narrowed a lossless identity ImageJob to RGB8. Normalization now
+retains channel precision and signal range; same-native and independent PNG
+controls cover ordinary and policy-controlled output. Processing nodes still
+have their own format negotiation; this does not qualify HDR resizing or all
+codecs. See `docs/hdr-per-codec.md` and `just job-precision-check`.

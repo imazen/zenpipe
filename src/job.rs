@@ -871,10 +871,9 @@ impl<'a> ImageJob<'a> {
             self.apply_cms(source, &image_info, input_bytes)?
         };
 
-        // 7. Ensure source is RGBA8 for pipeline compatibility.
-        // Preserves the source color primaries — only converts channel layout
-        // and depth (e.g., RGB8 → RGBA8, u16 → u8). Does NOT gamut-map to sRGB.
-        let source = ensure_rgba8(source)?;
+        // 7. Normalize channel layout without discarding source precision.
+        // Individual processing nodes negotiate the formats they need.
+        let source = ensure_rgba(source)?;
 
         // 8. Build source info for orchestration.
         let source_info = crate::orchestrate::SourceImageInfo {
@@ -1819,22 +1818,23 @@ impl<'a> ImageJob<'a> {
     }
 }
 
-/// Convert source to RGBA8 while preserving color primaries and transfer function.
+/// Normalize to RGBA while retaining channel precision and color interpretation.
 ///
-/// Only changes the channel layout (e.g., RGB→RGBA, Gray→RGBA) and depth
-/// (e.g., u16→u8). Does NOT gamut-map — P3 stays P3, Rec.2020 stays Rec.2020.
-fn ensure_rgba8(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
+/// Adding alpha must not quantize an identity job before the encoder receives it.
+/// Processing nodes remain responsible for their own format negotiation.
+fn ensure_rgba(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
     let src_format = source.format();
 
     // Build a target that matches the source primaries and transfer function
-    // but has RGBA u8 layout with straight alpha.
+    // but has RGBA layout with straight alpha at the same channel precision.
     let target = crate::format::PixelFormat::new(
-        crate::ChannelType::U8,
+        src_format.channel_type(),
         crate::ChannelLayout::Rgba,
         Some(crate::AlphaMode::Straight),
         src_format.transfer,
     )
-    .with_primaries(src_format.primaries);
+    .with_primaries(src_format.primaries)
+    .with_signal_range(src_format.signal_range);
 
     if src_format == target {
         return Ok(source);
@@ -1859,6 +1859,21 @@ pub fn get_io_bytes(io: &HashMap<i32, IoSlot>, io_id: i32) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn layout_normalization_keeps_narrow_u16_samples_and_interpretation() {
+        let descriptor = zenpixels::PixelDescriptor::RGBA16_SRGB
+            .with_signal_range(zenpixels::SignalRange::Narrow);
+        let data: Vec<u8> = [4096u16, 60160, 32768, 65535]
+            .into_iter()
+            .flat_map(u16::to_ne_bytes)
+            .collect();
+        let source = crate::sources::MaterializedSource::from_data(data.clone(), 1, 1, descriptor);
+        let normalized = ensure_rgba(Box::new(source)).unwrap();
+        assert_eq!(normalized.format(), descriptor);
+        let output = crate::sources::MaterializedSource::from_source(normalized).unwrap();
+        assert_eq!(&output.data()[..data.len()], data.as_slice());
+    }
 
     // ── Default output format (JSON-JOB-SPEC.md `encode.format`) ──
     //
