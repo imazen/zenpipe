@@ -9,6 +9,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- Strict color fitting no longer asks native codecs to re-admit an already
+  enforced pipeline requirement. Redundant sRGB-to-PNM descriptions succeed;
+  lossy fits and unsupported native emission requirements still refuse.
+
 - Preserve native encoder error causes through `TranscodeSink::begin` and row
   delivery, including typed Pulse deadline reasons. No signature changes.
 

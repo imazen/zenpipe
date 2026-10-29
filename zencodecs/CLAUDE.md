@@ -938,3 +938,12 @@ only after auxiliary work: the old path reached base adaptation, while both
 repaired branches retain the original TimedOut cause. This does not add native
 progress reporting to the Stop-only low-level encoder. See
 `../benchmarks/avif_auxiliary_pulse_2026-10-29.md` and `just avif-gainmap-pulse-check`.
+
+## Known Bugs: strict color-fit native handoff (2026-10-29, fixed)
+
+ARM CI exposed a second admission of pipeline strict color fit by the native
+checked setter, making lossless sRGB-to-PNM refuse. Fitted one-shot/streaming
+paths now clear only the already-enforced strict field; native emission
+requirements remain checked, and unfitted retained jobs keep the full policy.
+All original color-fit assertions and new row/emission controls pass. Evidence:
+`../benchmarks/strict_color_fit_2026-10-29.md`.

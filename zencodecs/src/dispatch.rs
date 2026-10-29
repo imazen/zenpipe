@@ -311,8 +311,11 @@ where
                 job.try_set_orientation_mode(mode)
                     .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
-            if let Some(ep) = params.encode_policy {
-                // Refuse a policy the codec cannot enforce instead of ignoring it.
+            if let Some(mut ep) = params.encode_policy {
+                // Color-fit strictness was enforced above, before conversion.
+                // Do not ask a carrier-free codec to re-admit that discharged
+                // pipeline requirement. All native emission requirements remain.
+                ep.strict = None;
                 job.try_set_policy(ep)
                     .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
@@ -609,8 +612,11 @@ where
         job.try_set_orientation_mode(mode)
             .map_err(|e| at!(CodecError::from_codec(format, e)))?;
     }
-    if let Some(ep) = params.encode_policy {
-        // Refuse a policy the codec cannot enforce instead of ignoring it.
+    if let Some(mut ep) = params.encode_policy {
+        // Color-fit strictness was enforced above, before conversion.
+        // Do not ask a carrier-free codec to re-admit that discharged
+        // pipeline requirement. All native emission requirements remain.
+        ep.strict = None;
         job.try_set_policy(ep)
             .map_err(|e| at!(CodecError::from_codec(format, e)))?;
     }

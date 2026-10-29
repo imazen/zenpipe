@@ -16,6 +16,12 @@
 //! - otherwise the pixels are converted to the closest colour the target
 //!   describes, sRGB, and the description is dropped.
 //!
+//! Strict color-fit admission belongs to this pipeline stage. Once admitted,
+//! one-shot and streaming dispatch clear only `EncodePolicy::strict` before
+//! native setup; color-carrier and metadata-emission requirements still go
+//! through the native checked setter. A retained native job that bypasses this
+//! fitting stage receives the complete policy unchanged.
+//!
 //! Two descriptions can't be converted, and are dropped with the pixels
 //! unchanged: a profile that parses to no colour space at all (no decoder
 //! can apply it either), and, without the `cms` feature, an ICC profile that

@@ -205,6 +205,19 @@ fn strict_allows_fits_that_lose_nothing() {
         .unwrap()
         .into_vec();
     assert_eq!(decoded_rgb(&bytes), px);
+    // The streaming convenience discharges the same strict color-fit check.
+    let mut encoder = EncodeRequest::new(ImageFormat::Pnm)
+        .with_metadata(Metadata::none().with_cicp(Cicp::SRGB))
+        .with_encode_policy(strict())
+        .build_streaming_encoder(W, H)
+        .unwrap();
+    encoder
+        .encoder
+        .begin(W, H, PixelDescriptor::RGB8_SRGB)
+        .unwrap();
+    encoder.encoder.push_rows(slice(&px)).unwrap();
+    let streamed = encoder.encoder.finish().unwrap().into_vec();
+    assert_eq!(decoded_rgb(&streamed), px);
     // P3 into a format that carries it.
     EncodeRequest::new(ImageFormat::Png)
         .with_metadata(Metadata::none().with_cicp(Cicp::DISPLAY_P3))
@@ -233,4 +246,22 @@ fn strict_refuses_conversion_when_descriptor_matches_source_color() {
         .err()
         .expect("streaming must make the same strict decision");
     assert!(format!("{err}").contains("strict"), "{err}");
+}
+
+#[test]
+fn discharging_strict_color_fit_keeps_native_emission_requirements() {
+    let px = pixels();
+    for policy in [
+        strict().with_embed_icc(true),
+        strict().with_embed_exif(true),
+        strict().with_embed_xmp(true),
+    ] {
+        let request = || {
+            EncodeRequest::new(ImageFormat::Pnm)
+                .with_metadata(Metadata::none().with_cicp(Cicp::SRGB))
+                .with_encode_policy(policy)
+        };
+        assert!(request().encode(slice(&px), false).is_err());
+        assert!(request().build_streaming_encoder(W, H).is_err());
+    }
 }

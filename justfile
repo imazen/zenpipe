@@ -750,3 +750,8 @@ job-precision-check:
     cargo test --locked -p zenpipe --features job,nodes-png --lib job::tests::layout_normalization_keeps_narrow_u16_samples_and_interpretation -- --exact
     cargo test --locked -p zenpipe --features job,nodes-png --test job_precision
     cargo test --locked -p zenpipe-io-check --features job --test image_job
+
+# Strict fit belongs to the pipeline; native emission requirements remain checked.
+test-strict-color-fit:
+    cargo test -p zencodecs --locked --no-default-features --features std,cms,png,bitmaps --test color_fit
+    cargo clippy -p zencodecs --locked --no-default-features --features std,cms,png,bitmaps --lib --test color_fit -- -D warnings
