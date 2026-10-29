@@ -9,17 +9,23 @@
 
 ## summary
 #
-#   inherent methods                            8
-#   trait roster entries (type × trait)        12
+#   inherent methods                           13
+#   trait roster entries (type × trait)        21
 #
 # per-module pub lines:
+#   io                                5
 #   sources                           1
 #   tiles                             3
 #   trace                             3
 #   watermark                         1
 
-## items (8 lines)
+## items (13 lines)
 
+pub fn io::DecodeStats::assert_fields_are_eq(&self)
+pub fn io::OrientationCost::assert_fields_are_eq(&self)
+pub fn io::Refusal::assert_fields_are_eq(&self)
+pub fn io::RowStats::assert_fields_are_eq(&self)
+pub fn io::tokio_bridge::Delivered::assert_fields_are_eq(&self)
 pub fn sources::CanvasFill::assert_fields_are_eq(&self)
 pub fn tiles::LevelInfo::assert_fields_are_eq(&self)
 pub fn tiles::PyramidGeometry::assert_fields_are_eq(&self)
@@ -29,11 +35,20 @@ pub fn trace::SlowestStrip::assert_fields_are_eq(&self)
 pub fn trace::StripEvent::assert_fields_are_eq(&self)
 pub fn watermark::WatermarkPlacement::assert_fields_are_eq(&self)
 
-## trait impls (12 types)
+## trait impls (21 types)
 
 animation::FrameInfo: TrivialClone
 bridge::ordering::OptimizationLevel: TrivialClone
 graph::EdgeKind: TrivialClone
+io::DecodeStats: TrivialClone
+io::OrientationCost: TrivialClone
+io::Refusal: TrivialClone
+io::RowStats: TrivialClone
+io::tokio_bridge::Delivered: TrivialClone
+job::CmsMode: TrivialClone
+job::DefaultsPreset: TrivialClone
+job::GainMapMode: TrivialClone
+job::MetadataPolicy: TrivialClone
 limits::Limits: TrivialClone
 sources::CanvasFill: TrivialClone
 tiles::LevelInfo: TrivialClone

@@ -136,3 +136,26 @@ codec-free check. Full API snapshot generation and a subsequent check both
 pass; the generated snapshots are retained in docs/public-api. Wrapper receipt
 for that batch: rc0, 246 seconds, peak RSS 0.88 GiB, minimum available 13122 MiB.
 The broad pipeline runtime and browser-native execution remain separate gates.
+
+The default zenpipe lib/test suite and zenpipe-io-check runtime suites pass:
+704 tests across 48 result groups, zero failures and zero ignored. Wrapper:
+rc0, 100 seconds, peak RSS 0.67 GiB, minimum available 13358 MiB. This does
+not cover the feature-gated ImageJob: subsequent fuzz CI exposed six stale
+with_stop calls and a duplicate animation block there. The correction uses
+the existing control helper without restarting deadlines; dedicated job and
+gain-map feature tests/lint are required before landing.
+
+CI startup also exposed an unsupported sibling_overrides input in the reusable
+workflow. zen-workspace PR 3 adds that switch while preserving the default
+behavior. Fuzz regression setup now explicitly disables source overrides so
+committed dependency graphs, rather than rewritten manifests, are validated.
+
+The combined job/gain-map/all-node/Tokio/schema profile executes 770 runtime
+tests with no failures and five inherited ignored placeholder panics. The
+placeholders are not codec witnesses (issue 114), and their historical comments
+are not current behavior evidence. Strict Clippy subsequently passes after
+mechanical fixes to gain-map branching, a schema test and trace-fixture borrows;
+no assertions were changed. Full API generation/check now also covers this
+consumer feature surface, including ImageJob and tokio_bridge, rather than
+hiding it behind the default-only reference. Final lint/API batch: rc0, 36
+seconds, peak RSS 0.88 GiB, minimum available 13297 MiB.

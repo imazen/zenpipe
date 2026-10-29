@@ -734,3 +734,8 @@ integration-job-test:
 
 integration-job-clippy:
     cargo clippy -p zenpipe --features job,job-ultrahdr,nodes-all,io-tokio,json-schema --lib --tests --locked -- -D warnings
+
+# Compile both independent fuzz roots against their committed portable locks.
+integration-fuzz-check:
+    cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+    cargo check --manifest-path zencodecs/fuzz/Cargo.toml --all-targets --locked

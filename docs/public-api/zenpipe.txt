@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1380 lines (supported surface) | zenpipe.features.txt 0 added (features: none) | zenpipe.internal.txt 20 lines (20 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1380 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 34 lines (34 hidden + 0 excluded-feature)
 
 ## summary
 #

@@ -1,5 +1,11 @@
 //! Pipeline-level wide-gamut and HDR preservation tests.
 //!
+//! Coverage note (2026-10-29): five ignored cases below are placeholder panics,
+//! not executable codec witnesses. Their historical comments do not establish
+//! current behavior; graph routing now includes linear-float paths. Replace
+//! them with real fixtures/oracles under zenpipe issue 114 before claiming
+//! those preservation guarantees.
+//!
 //! These tests drive HDR / wide-gamut sources through `ImageJob` and assert
 //! that bit depth, transfer function, and primaries survive the pipeline.
 //! They are **expected to fail today** — the assertions document the gap
