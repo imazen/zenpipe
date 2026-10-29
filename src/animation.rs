@@ -540,7 +540,7 @@ pub fn transcode_with_stop_and_limits(
         crate::execute_with_pulse(
             pipeline.as_mut(),
             &mut frame_sink,
-            stop.map(|stop| zencodec::how_far::StopOnly::borrowed(stop))
+            stop.map(zencodec::how_far::StopOnly::borrowed)
                 .as_ref()
                 .map(|pulse| pulse as &dyn zencodec::Pulse),
         )?;
