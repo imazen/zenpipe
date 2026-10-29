@@ -89,7 +89,9 @@ zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b21
 # AVIF/parse/MP4 optional-control source, matching the direct parser edge.
 # Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
 # This consumer graph is unbuilt.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
+# Application-root selection for zenravif's unpublished registry serializer.
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
 # zenanalyze-api: unify to one instance with zenpicker/zenpredict's git copy.
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 # zenanalyze main is 0.2.0 and git-only (registry is frozen at 0.1.0). zenjpeg

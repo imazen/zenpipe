@@ -182,7 +182,9 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "efb7e43bee86df097f57
 # AVIF/parse/MP4 optional-control source, matching the direct parser edge.
 # Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
 # This consumer graph is unbuilt.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
+# Application-root selection for zenravif's unpublished registry serializer.
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
 # Retained RAW source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }
