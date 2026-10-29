@@ -76,3 +76,5 @@ demo/crate/target-threaded/
 # Python bytecode from scripts/ (e.g. scripts/check-decoder-pins.py)
 __pycache__/
 *.pyc
+
+!/docs/media-suite.md
