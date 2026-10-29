@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zenpipe media lab — contract shell</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #1a1a1a; --surface: #242424; --border: #333;
+  --text: #e0e0e0; --text-dim: #888; --accent: #4a9eff;
+  --warn: #e0a040; --bad: #e06060; --ok: #60c080;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg); color: var(--text); font-size: 13px;
+  max-width: 760px; margin: 0 auto; padding: 8px 12px 24px;
+}
+header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; }
+h1 { font-size: 15px; font-weight: 600; }
+.badge {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 4px; border: 1px solid;
+}
+.badge-model { color: var(--warn); border-color: var(--warn); background: rgba(224,160,64,0.12); }
+#status { color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-top: 10px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 8px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+label { color: var(--text-dim); }
+select, input[type="checkbox"] { accent-color: var(--accent); }
+select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 6px; font-size: 12px;
+}
+.btn {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-danger:hover { border-color: var(--bad); color: var(--bad); }
+canvas {
+  display: block; background: #111; border: 1px solid var(--border);
+  border-radius: 4px; image-rendering: pixelated; max-width: 100%;
+}
+.canvases { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.fig { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-weight: 500; }
+td .btn { padding: 1px 8px; font-size: 11px; }
+.st { font-weight: 600; }
+.st-queued { color: var(--text-dim); }
+.st-admitted, .st-running { color: var(--accent); }
+.st-cancelling { color: var(--warn); }
+.st-completed { color: var(--ok); }
+.st-failed, .st-cancelled { color: var(--bad); }
+.mem { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; font-variant-numeric: tabular-nums; }
+.mem dt { color: var(--text-dim); }
+.mem dd { margin: 0; }
+.unknown { color: var(--warn); font-weight: 600; }
+#receipts { max-height: 160px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); }
+#receipts li { padding: 1px 0; }
+.notes { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+.notes strong { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>zenpipe media lab</h1>
+  <span id="backend-badge" class="badge badge-model"
+        title="Deterministic model backend. Orchestration evidence only — no codec or memory-performance qualification.">MODEL</span>
+  <a href="../index.html" id="editor-link">Open editor →</a>
+  <span id="status" role="status" aria-live="polite">ready</span>
+</header>
+
+<section aria-labelledby="fixture-h">
+  <h2 id="fixture-h">Generated source</h2>
+  <div class="canvases">
+    <figure>
+      <canvas id="fixture-canvas" width="96" height="64"></canvas>
+      <figcaption class="fig" id="fixture-caption">generation 0</figcaption>
+    </figure>
+    <div>
+      <p class="notes">Deterministic RGBA fixture, 96×64 — every sample is a
+      closed-form function of (x, y, seed). A new source generation reseeds
+      it; completions tagged with an older generation can never replace the
+      preview.</p>
+      <button id="new-gen-btn" class="btn" type="button">New source generation</button>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="controls-h">
+  <h2 id="controls-h">Submit a task</h2>
+  <div class="row">
+    <label for="op-select">Operation</label>
+    <select id="op-select"></select>
+    <label for="estimate-select">Estimate</label>
+    <select id="estimate-select">
+      <option value="known">known</option>
+      <option value="unknown">unknown</option>
+    </select>
+    <label for="strict-check"><input type="checkbox" id="strict-check" checked> strict admission</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="submit-btn" class="btn btn-primary" type="button">Submit</button>
+    <button id="teardown-btn" class="btn btn-danger" type="button">Teardown</button>
+    <span id="reservation-preview" class="notes"></span>
+  </div>
+</section>
+
+<section aria-labelledby="mem-h">
+  <h2 id="mem-h">Accounting</h2>
+  <dl class="mem">
+    <dt>Estimate (next submit)</dt><dd id="mem-estimate">—</dd>
+    <dt>Reserved (declared)</dt><dd id="mem-reserved">0 B</dd>
+    <dt>CPU tokens</dt><dd id="mem-cpu">0 / 2</dd>
+    <dt>Observed peak</dt><dd><span class="unknown">not measured</span> — the model backend reports no peak</dd>
+  </dl>
+</section>
+
+<section aria-labelledby="tasks-h">
+  <h2 id="tasks-h">Tasks</h2>
+  <table id="task-table">
+    <thead><tr>
+      <th scope="col">op</th><th scope="col">kind</th><th scope="col">gen</th>
+      <th scope="col">state</th><th scope="col">estimate</th><th scope="col">reserved</th>
+      <th scope="col">cpu</th><th scope="col"></th>
+    </tr></thead>
+    <tbody id="task-body"><tr><td colspan="8" class="notes">none</td></tr></tbody>
+  </table>
+</section>
+
+<section aria-labelledby="preview-h">
+  <h2 id="preview-h">Preview</h2>
+  <figure>
+    <canvas id="preview-canvas" width="96" height="64"></canvas>
+    <figcaption class="fig" id="preview-caption">no output yet</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="receipts-h">
+  <h2 id="receipts-h">Receipts</h2>
+  <ol id="receipts"></ol>
+</section>
+
+<section aria-labelledby="notes-h">
+  <h2 id="notes-h">What this page does and does not show</h2>
+  <p class="notes">
+    <strong>MODEL backend.</strong> Tasks run the deterministic in-page model
+    over the generated fixture. That qualifies orchestration — state
+    transitions, admission, cancellation, reservations, stale-output
+    rejection — and nothing else. It is <strong>not</strong> codec, memory
+    or native-WASM qualification; unsupported media kinds refuse instead of
+    faking success. Byte reservations are declared accounting — not measured
+    peaks and not proven bounds. Cancellation here is async and cooperative between
+    scheduled steps; no postMessage message can interrupt synchronous WASM,
+    and nothing on this page claims otherwise. Teardown reports any task
+    without a terminal receipt as unresolved, with its held reservation.
+  </p>
+</section>
+
+<script type="module" src="main.mjs"></script>
+</body>
+</html>

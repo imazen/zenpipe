@@ -482,3 +482,10 @@ current-main-metadata-check manifest config:
 current-main-corpus-inventory manifest config list output:
     just current-main-inventory-build {{quote(manifest)}} {{quote(config)}}
     python3 "{{justfile_directory()}}/../imazen-26/tools/metadata-loss-audit/inventory_routes.py" {{quote(list)}} {{quote(output)}} --inventory "{{parent_directory(manifest)}}/target/release/zencodecs" --inventory-commit 841a171c63933a66bd834fab5cbfe0086908cf34 --workers 2
+
+# Media-suite contract shell (zenpipe#113): deterministic controller
+# oracle, then the Playwright lab spec. The browser leg needs
+# `npm install` in demo/; missing prerequisites fail loudly.
+media-shell-check:
+    node --test demo/tests/media-suite-controller.node.mjs
+    cd demo && npx playwright test media-suite
