@@ -74,7 +74,7 @@ fn metadata_and_finish_first_share_one_retained_route_with_unknown_wait() {
             budget: budget.clone(),
             bytes: vec![],
         };
-        let completed = ready.write_to(&mut writer, &NoPulse).unwrap();
+        let completed = ready.write_to(&mut writer, Some(&NoPulse)).unwrap();
         assert_eq!(*completed.output(), writer.bytes.len());
         assert_eq!(writer.bytes, expected);
         assert!(
@@ -232,7 +232,7 @@ fn a_raster_retaining_pulse_stays_alive_and_a_wait_cap_refuses_the_route() {
         budget,
         bytes: vec![],
     };
-    let error = ready.write_to(&mut writer, &pulse).unwrap_err();
+    let error = ready.write_to(&mut writer, Some(&pulse)).unwrap_err();
     assert_eq!(error.error().emitted(), 0);
     assert!(writer.bytes.is_empty());
     assert!(
@@ -389,7 +389,7 @@ fn native_late_descriptions_are_preserved_or_discarded_with_independent_png_read
                     .transcode_for_publication(&codecs, &input, &mut policy)
                     .unwrap_or_else(|e| panic!("{placement:?}: {}", explain(&e)));
                 let mut output = vec![];
-                ready.write_to(&mut output, &NoPulse).unwrap();
+                ready.write_to(&mut output, Some(&NoPulse)).unwrap();
                 let mut decoder = png::Decoder::new(Cursor::new(&output));
                 decoder.set_transformations(png::Transformations::EXPAND);
                 let mut reader = decoder.read_info().unwrap();

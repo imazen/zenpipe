@@ -2,8 +2,9 @@
 //!
 //! [`VerifiedOutput`] is the usable composition: metadata requirements and a
 //! finish-first schedule, then publication under the operation's universal
-//! pulse. That pulse is borrowed while the destination waits, and an arbitrary
-//! pulse may retain anything, a whole raster included. So the route offers
+//! pulse when supplied. `None` adds no publication control. A supplied pulse is
+//! borrowed while the destination waits and may retain a whole raster. The
+//! route cannot constrain a later caller's choice, so it still offers
 //! unknown wait retention, and any required wait cap refuses. The owner keeps
 //! the encoder's own Vec, moved with `EncodeOutput::into_vec` (extras dropped,
 //! no copy); its spare capacity stays.
@@ -19,6 +20,7 @@ const WRITE_CHUNK: usize = 64 * 1024;
 
 /// Verified bytes for one consuming publication. Owns no source, codec, CMS,
 /// callback or backend extras; it is not `Clone`.
+/// It retains no operation pulse; publication control is supplied to `write_to`.
 pub struct VerifiedOutput {
     bytes: Vec<u8>,
     report: OperationReport,
@@ -137,15 +139,21 @@ impl VerifiedOutput {
         }
     }
     /// Write this verified output once, under `pulse` (including interrupted retries and flush). The
-    /// pulse is borrowed for this call only; a blocking write or flush cannot
+    /// `None` adds no per-call control; `Some(pulse)` is borrowed for this call.
+    /// A blocking write or flush cannot
     /// be preempted. Dropping the owner never writes; an error consumes it.
     pub fn write_to<W: Write>(
         self,
         writer: &mut W,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<usize>, At<PublicationError>> {
         let mut emitted = 0;
-        let result = publish(&self.bytes, &mut emitted, writer, pulse);
+        let result = publish(
+            &self.bytes,
+            &mut emitted,
+            writer,
+            pulse.unwrap_or(&zencodec::NoPulse),
+        );
         receipt(result, emitted, self.report)
     }
 }
@@ -322,6 +330,31 @@ mod tests {
     }
 
     #[test]
+    fn absent_or_supplied_noop_control_keeps_publication_bytes_and_receipts() {
+        for pulse in [None, Some(&NoPulse as &dyn zencodec::Pulse)] {
+            let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
+            writer.fail = Some(io::ErrorKind::Interrupted);
+            writer.fail_after = 1;
+            let done = verified().write_to(&mut writer, pulse).unwrap();
+            assert_eq!(*done.output(), 3);
+            assert_eq!(writer.bytes, [1, 2, 3]);
+            assert_eq!((writer.writes, writer.flushes), (4, 1));
+
+            let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
+            writer.fail = Some(io::ErrorKind::BrokenPipe);
+            writer.fail_after = 1;
+            let error = verified().write_to(&mut writer, pulse).unwrap_err();
+            assert_eq!(error.error().emitted(), 1);
+            assert_eq!(writer.bytes, [1]);
+            assert_eq!(writer.flushes, 0);
+            assert_eq!(
+                zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                io::ErrorKind::BrokenPipe
+            );
+        }
+    }
+
+    #[test]
     fn cancellation_before_between_after_the_last_write_and_after_flush_keeps_effects() {
         // (cancelled at entry, cancel after byte, cancel in flush, bytes, flushes)
         for (before, after, flush, count, flushes) in [
@@ -335,7 +368,7 @@ mod tests {
             let mut writer = Writer::new(cancelled);
             writer.cancel_after = after;
             writer.cancel_flush = flush;
-            let error = verified().write_to(&mut writer, &pulse).unwrap_err();
+            let error = verified().write_to(&mut writer, Some(&pulse)).unwrap_err();
             assert_eq!(error.error().emitted(), count);
             assert_eq!(writer.bytes, [1, 2, 3][..count]);
             assert_eq!((writer.writes, writer.flushes), (count, flushes));
@@ -348,7 +381,7 @@ mod tests {
         let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
         writer.fail = Some(io::ErrorKind::Interrupted);
         writer.fail_after = 1;
-        let done = verified().write_to(&mut writer, &NoPulse).unwrap();
+        let done = verified().write_to(&mut writer, Some(&NoPulse)).unwrap();
         assert_eq!(*done.output(), 3);
         assert_eq!(writer.bytes, [1, 2, 3]);
         assert_eq!((writer.writes, writer.flushes), (4, 1));
@@ -359,7 +392,7 @@ mod tests {
         writer.fail = Some(io::ErrorKind::Interrupted);
         writer.fail_after = 1;
         writer.cancel_on_fail = true;
-        let error = verified().write_to(&mut writer, &pulse).unwrap_err();
+        let error = verified().write_to(&mut writer, Some(&pulse)).unwrap_err();
         assert_eq!(error.error().emitted(), 1);
         assert_eq!(writer.bytes, [1]);
         assert_eq!((writer.writes, writer.flushes), (2, 0));
@@ -370,7 +403,9 @@ mod tests {
         let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
         writer.fail = Some(io::ErrorKind::BrokenPipe);
         writer.fail_after = 1;
-        let error = verified().write_to(&mut writer, &NoPulse).unwrap_err();
+        let error = verified()
+            .write_to(&mut writer, Some(&NoPulse))
+            .unwrap_err();
         assert_eq!(error.error().emitted(), 1);
         assert_eq!(writer.bytes, [1]);
         assert_eq!((writer.writes, writer.flushes), (2, 0));
@@ -387,7 +422,7 @@ mod tests {
             let mut writer = Writer::new(cancelled);
             writer.cancel_flush = cancel_flush;
             writer.fail_flush = Some(io::ErrorKind::TimedOut);
-            let error = verified().write_to(&mut writer, &pulse).unwrap_err();
+            let error = verified().write_to(&mut writer, Some(&pulse)).unwrap_err();
             assert_eq!(error.error().emitted(), 3);
             assert_eq!(writer.bytes, [1, 2, 3]);
             assert_eq!((writer.writes, writer.flushes), (3, 1));
@@ -437,7 +472,9 @@ mod tests {
                 cancelled: Arc::new(AtomicBool::new(false)),
                 fail_and_cancel: false,
             };
-            let error = verified().write_to(&mut writer, &NoPulse).unwrap_err();
+            let error = verified()
+                .write_to(&mut writer, Some(&NoPulse))
+                .unwrap_err();
             assert_eq!(error.error().emitted(), 1);
             assert_eq!(writer.accepted, [1]);
             assert_eq!(writer.attempts, 2);
@@ -459,7 +496,7 @@ mod tests {
             cancelled,
             fail_and_cancel: true,
         };
-        let error = verified().write_to(&mut writer, &pulse).unwrap_err();
+        let error = verified().write_to(&mut writer, Some(&pulse)).unwrap_err();
         assert_eq!(error.error().emitted(), 1);
         assert_eq!(writer.accepted, [1]);
         assert_eq!(writer.attempts, 2);
@@ -480,7 +517,7 @@ mod tests {
             fail_and_cancel: false,
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            verified().write_to(&mut writer, &NoPulse)
+            verified().write_to(&mut writer, Some(&NoPulse))
         }));
         assert!(result.is_err());
         assert_eq!(writer.accepted, [1]);
@@ -495,7 +532,7 @@ mod tests {
         let cancelled = Arc::new(AtomicBool::new(true));
         let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
         let mut writer = Writer::new(cancelled);
-        let error = empty.write_to(&mut writer, &pulse).unwrap_err();
+        let error = empty.write_to(&mut writer, Some(&pulse)).unwrap_err();
         assert_eq!(error.error().emitted(), 0);
         assert_eq!((writer.writes, writer.flushes), (0, 0));
         assert!(stopped(&error));

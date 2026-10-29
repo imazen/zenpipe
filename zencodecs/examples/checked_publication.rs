@@ -1,6 +1,6 @@
 //! Convert JPEG to sRGB PNG, then publish only verified output to a file.
 use zencodec::{
-    CodecSet, ImageFormat, NoPulse,
+    CodecSet, ImageFormat,
     operation::{MetadataTransfer, OutputSchedule, PolicySet},
 };
 use zencodecs::checked_transcode::TranscodeRequest;
@@ -36,6 +36,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(input);
     drop(codecs);
     let mut destination = std::fs::File::create(output)?;
-    let _receipt = ready.write_to(&mut destination, &NoPulse)?;
+    let _receipt = ready.write_to(&mut destination, None)?;
     Ok(())
 }
