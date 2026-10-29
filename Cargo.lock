@@ -4700,7 +4700,7 @@ source = "git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeeb
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=f0a3919eb051cd85d204ac6592e5333b067498ef#f0a3919eb051cd85d204ac6592e5333b067498ef"
+source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4731,7 +4731,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=f0a3919eb051cd85d204ac6592e5333b067498ef#f0a3919eb051cd85d204ac6592e5333b067498ef"
+source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4747,7 +4747,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=f0a3919eb051cd85d204ac6592e5333b067498ef#f0a3919eb051cd85d204ac6592e5333b067498ef"
+source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4796,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "zencodec"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zencodec?rev=eeb1a4504c9ed83dd27a9459107260d0a78a47fb#eeb1a4504c9ed83dd27a9459107260d0a78a47fb"
+source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
 dependencies = [
  "almost-enough",
  "enough",
@@ -4809,7 +4809,7 @@ dependencies = [
 [[package]]
 name = "zencodec-coroutine"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=eeb1a4504c9ed83dd27a9459107260d0a78a47fb#eeb1a4504c9ed83dd27a9459107260d0a78a47fb"
+source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
 dependencies = [
  "enough",
  "spin",
@@ -4820,7 +4820,7 @@ dependencies = [
 [[package]]
 name = "zencodec-io"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=eeb1a4504c9ed83dd27a9459107260d0a78a47fb#eeb1a4504c9ed83dd27a9459107260d0a78a47fb"
+source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
 dependencies = [
  "enough",
  "how-far",
@@ -5092,7 +5092,7 @@ dependencies = [
 [[package]]
 name = "zenmeta"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zencodec?rev=eeb1a4504c9ed83dd27a9459107260d0a78a47fb#eeb1a4504c9ed83dd27a9459107260d0a78a47fb"
+source = "git+https://github.com/imazen/zencodec?rev=ab133d2ccecacb9c3da427c14ddd13ffd0b235b9#ab133d2ccecacb9c3da427c14ddd13ffd0b235b9"
 dependencies = [
  "roxmltree 0.21.1",
  "zencodec",

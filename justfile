@@ -351,3 +351,8 @@ avif-gainmap-pulse-check:
     cargo test --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --test avif_gainmap_diagnostic zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap
     cargo test --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --lib auxiliary_gain_map_observes_deadline_before_base_adaptation
     cargo clippy --locked -p zencodecs --no-default-features --features std,avif-decode,avif-encode,jpeg-ultrahdr --lib -- -D warnings
+
+# Explicit stored/baked orientation through application dispatch.
+checked-orientation:
+    cargo test --locked -p zencodecs --no-default-features --features std,avif-encode,avif-decode --test checked_orientation
+    cargo clippy --locked -p zencodecs --no-default-features --features std,jpeg,png,jpeg-ultrahdr,avif-encode,avif-decode --lib --test checked_orientation -- -D warnings

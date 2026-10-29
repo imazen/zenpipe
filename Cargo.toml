@@ -280,10 +280,10 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
 # Optional borrowed Pulse family; source alignment only, original locks retained.
 # Dependencies use version edges, so each consumer root selects this source.
-zencodec = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "eeb1a4504c9ed83dd27a9459107260d0a78a47fb" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
+zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
+zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "ab133d2ccecacb9c3da427c14ddd13ffd0b235b9" }
 # Transitive source prerequisites: dependency patch tables do not propagate.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
@@ -404,9 +404,9 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "a258e93c5bc0b0a5624b
 # AVIF/parse/MP4 optional-control source, matching the direct parser edge.
 # Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
 # This consumer graph is unbuilt.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6" }
 # Application-root selection for zenravif's unpublished registry serializer.
-zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f0a3919eb051cd85d204ac6592e5333b067498ef" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6" }
 # RAW optional-Pulse adapter; full-profile compilation is qualified.
 # Full corpus/platform qualification remains separate.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16" }

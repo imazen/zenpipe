@@ -59,6 +59,7 @@ pub struct EncodeRequest<'a> {
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
+    orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     image_facts: Option<ImageFacts>,
     /// Explicit color signal to emit when the pixel descriptor can't carry it
     /// (e.g. an ICC-resolved source primary set). PNG-only today. See
@@ -91,6 +92,7 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            orientation_mode: None,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -98,6 +100,14 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(feature = "jpeg-ultrahdr")]
             gain_map_source: None,
         }
+    }
+
+    /// Require stored sample orientation or physically upright samples.
+    /// Omission preserves codec defaults. Unsupported codecs refuse before
+    /// encoding; metadata supplies the intrinsic orientation.
+    pub fn with_orientation_mode(mut self, mode: zencodec::encode::EncodeOrientation) -> Self {
+        self.orientation_mode = Some(mode);
+        self
     }
 
     /// Auto-select best format based on image stats and allowed encoders.
@@ -118,6 +128,7 @@ impl<'a> EncodeRequest<'a> {
             codec_config: None,
             policy: None,
             encode_policy: None,
+            orientation_mode: None,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -373,6 +384,13 @@ impl<'a> EncodeRequest<'a> {
     /// the SDR base JPEG quality.
     #[cfg(feature = "jpeg-ultrahdr")]
     pub fn encode_ultrahdr_rgb_f32(self, img: ImgRef<Rgb<f32>>) -> Result<EncodeOutput> {
+        if self.orientation_mode.is_some() {
+            return Err(at!(CodecError::from_codec(
+                ImageFormat::Jpeg,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
+
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
 
@@ -398,6 +416,13 @@ impl<'a> EncodeRequest<'a> {
     /// The `quality` setting controls the SDR base JPEG quality.
     #[cfg(feature = "jpeg-ultrahdr")]
     pub fn encode_ultrahdr_rgba_f32(self, img: ImgRef<Rgba<f32>>) -> Result<EncodeOutput> {
+        if self.orientation_mode.is_some() {
+            return Err(at!(CodecError::from_codec(
+                ImageFormat::Jpeg,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
+
         let default_registry = AllowedFormats::all();
         let registry = self.registry.unwrap_or(&default_registry);
 
@@ -477,6 +502,7 @@ impl<'a> EncodeRequest<'a> {
                 limits: speed_limits.as_ref().or(self.limits),
                 pulse: self.pulse,
                 encode_policy: self.encode_policy,
+                orientation_mode: self.orientation_mode,
                 canvas_width: width,
                 canvas_height: height,
                 loop_count: None,
@@ -598,6 +624,7 @@ impl<'a> EncodeRequest<'a> {
             limits: speed_limits.as_ref().or(self.limits),
             pulse: self.pulse,
             encode_policy: self.encode_policy,
+            orientation_mode: self.orientation_mode,
             cicp: self.cicp,
         };
 
@@ -859,6 +886,13 @@ impl<'a> EncodeRequest<'a> {
         has_alpha: bool,
     ) -> Result<EncodeOutput> {
         let format = self.resolve_encode_format(width, height, has_alpha)?;
+        #[cfg(feature = "jpeg-ultrahdr")]
+        if self.orientation_mode.is_some() && self.gain_map_source.is_some() {
+            return Err(at!(CodecError::from_codec(
+                format,
+                zencodec::UnsupportedOperation::EncodeOrientation
+            )));
+        }
 
         // Pre-flight memory admission: when Limits::max_memory_bytes is set, reject
         // before building the encoder if the calibrated encode estimate exceeds it.
@@ -906,6 +940,7 @@ impl<'a> EncodeRequest<'a> {
             limits,
             pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
+            orientation_mode: self.orientation_mode,
             cicp: self.cicp,
         };
 

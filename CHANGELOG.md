@@ -611,6 +611,10 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 #### Added
 
+- `zencodecs::EncodeRequest::with_orientation_mode` carries a checked stored
+  or baked representation requirement through encoder job construction.
+  Unsupported codec and specialized gain-map routes refuse explicitly.
+
 - **`IMAGEFLOW-PARITY.md`** — verified imageflow gap analysis (imageflow @
   0ba1c9ea vs zenpipe @ da8d8da): full RIAPI key parity matrix, six confirmed
   semantic divergences on the native querystring path, imageflow JSON

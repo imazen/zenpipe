@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 754 lines (supported surface) | zencodecs.features.txt 195 added (features: all,jp2-decode,metadata,checked-transcode-async) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
+# files: zencodecs.txt 755 lines (supported surface) | zencodecs.features.txt 195 added (features: all,jp2-decode,metadata,checked-transcode-async) | zencodecs.internal.txt 24 lines (24 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)        58
 #   pub consts/statics                         10
 #   free functions                             37
-#   inherent methods                          255
+#   inherent methods                          256
 #   struct fields                             131
 #   enum variants                             119
 #   re-exports                                121
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                       7
 #
 # per-module pub lines:
-#   (root)                          339
+#   (root)                          340
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -40,7 +40,7 @@
 #   trace                            48
 #   transcode                        43
 
-## items (718 lines)
+## items (719 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -616,6 +616,7 @@ pub fn EncodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits
 pub fn EncodeRequest<'a>::with_lossless(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_metadata(self, zencodec::metadata::Metadata) -> Self
 pub fn EncodeRequest<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
+pub fn EncodeRequest<'a>::with_orientation_mode(self, zencodec::policy::EncodeOrientation) -> Self
 pub fn EncodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
 pub fn EncodeRequest<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self

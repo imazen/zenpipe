@@ -80,6 +80,7 @@ pub(crate) struct EncodeParams<'a> {
     pub limits: Option<&'a Limits>,
     pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
+    pub orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     /// Explicit color signal to emit (e.g. a source `source_color` resolved from
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
     /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
@@ -184,6 +185,10 @@ where
                 job = job.with_metadata_policy(meta, params.metadata_policy);
             }
             let format = C::format();
+            if let Some(mode) = params.orientation_mode {
+                job.try_set_orientation_mode(mode)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            }
             if let Some(ep) = params.encode_policy {
                 // Refuse a policy the codec cannot enforce instead of ignoring it.
                 job.try_set_policy(ep)
@@ -388,6 +393,10 @@ where
         job = job.with_metadata_policy(meta, params.metadata_policy);
     }
     let format = C::format();
+    if let Some(mode) = params.orientation_mode {
+        job.try_set_orientation_mode(mode)
+            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+    }
     if let Some(ep) = params.encode_policy {
         // Refuse a policy the codec cannot enforce instead of ignoring it.
         job.try_set_policy(ep)
@@ -444,6 +453,10 @@ where
     }
     if let Some(meta) = params.metadata {
         job.set_metadata_policy(meta, params.metadata_policy);
+    }
+    if let Some(mode) = params.orientation_mode {
+        job.try_set_orientation_mode(mode)
+            .map_err(|source| at!(CodecError::Codec { format, source }))?;
     }
     if let Some(policy) = params.encode_policy {
         job.try_set_policy(policy)

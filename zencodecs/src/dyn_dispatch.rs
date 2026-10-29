@@ -608,6 +608,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     pub limits: Option<&'a Limits>,
     pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
+    pub orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     pub canvas_width: u32,
     pub canvas_height: u32,
     pub loop_count: Option<u32>,
@@ -630,6 +631,10 @@ pub(crate) fn dyn_animation_frame_encoder(
             }
             if let Some(meta) = _params.metadata {
                 job = job.with_metadata_policy(meta, _params.metadata_policy);
+            }
+            if let Some(mode) = _params.orientation_mode {
+                job.try_set_orientation_mode(mode)
+                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
             }
             if let Some(ep) = _params.encode_policy {
                 // Refuse a policy the codec cannot enforce instead of ignoring it.
