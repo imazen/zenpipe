@@ -69,3 +69,19 @@ unqualified on this candidate. These changes do not solve the still-only
 Progress production inside native coefficient/filter kernels is not claimed.
 GIF readback here is same-codec, not a new independent decoder oracle. Existing
 native suites retain their prior oracles; no new full cross-codec parity claim.
+
+## Published revision mapping
+
+An inherited empty commit needed a description before pushing the review branch.
+JJ rewrote descendant identities; every corresponding Git tree was checked equal.
+The frozen original run IDs above remain unchanged in the retained receipts.
+
+| Frozen source | Published equivalent |
+|---|---|
+| `5835fc20cfa2b7b32ac85b0ef68af0ada93cf891` | `c640c634ec0b7c23de0413d0227531f2edadfdd3` |
+| `89bad4f756607fceb66d9a839737589c3a7e3558` | `9a77969feb9c37ca424dbb4bd14252874ae0839f` |
+| `6469f4bc2a63b1689e43d6fb5d906a6545364e7c` | `ab3c59f8bf8b5429f3ea9ebcedc83283ad3b6a41` |
+| `ec39a5327245257d8c32051362d6dce97a66600b` | `7d239dd59bfdd6b29e27bd1439b343945d61a17f` |
+| `2c0c89edc205b7b68a05a546e17cfefabea29002` | `14f8cb6e263fe1ac27920ab3ecc31bf3a6cb3da0` |
+| `921a3f9f731fe77f425bc3bec69b238b6a740b80` | `a321b6b6d1b6d363f10c9ff2ba51b0fe411d7a77` |
+| `7c36d596c1b4bc0701948d0554b00b6691e0f27b` | `21173bbaddf74d42c1e0e2fe4b8f43d56dbe2d01` |
