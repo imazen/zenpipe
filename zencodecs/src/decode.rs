@@ -282,6 +282,8 @@ impl<'a> DecodeRequest<'a> {
         let data = self.data;
         // Enable gain map extraction so codecs attach gain map data to extras.
         self.extract_gain_map = true;
+        #[cfg(feature = "raw-decode-gainmap")]
+        let gainmap_controls = (self.limits, self.pulse.clone());
         let output = self.decode_format(format)?;
 
         let gainmap = match format {
@@ -290,7 +292,10 @@ impl<'a> DecodeRequest<'a> {
                 // If standard UltraHDR extraction didn't find a gain map,
                 // try Apple MPF extraction (for AMPF files detected as JPEG).
                 #[cfg(feature = "raw-decode-gainmap")]
-                let gm = gm.or_else(|| extract_raw_gainmap(data));
+                let gm = match gm {
+                    Some(gm) => Some(gm),
+                    None => extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?,
+                };
                 gm
             }
             #[cfg(feature = "avif-decode")]
@@ -299,7 +304,7 @@ impl<'a> DecodeRequest<'a> {
             ImageFormat::Jxl => extract_jxl_gainmap(&output),
             #[cfg(feature = "raw-decode-gainmap")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                extract_raw_gainmap(data)
+                extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?
             }
             _ => None,
         };
@@ -729,8 +734,12 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
 ///
 /// Returns `None` for non-Apple DNGs and generic RAW files.
 #[cfg(feature = "raw-decode-gainmap")]
-fn extract_raw_gainmap(data: &[u8]) -> Option<crate::gainmap::DecodedGainMap> {
-    crate::codecs::raw::extract_gainmap(data)
+fn extract_raw_gainmap(
+    data: &[u8],
+    limits: Option<&Limits>,
+    pulse: SharedPulse,
+) -> Result<Option<crate::gainmap::DecodedGainMap>> {
+    crate::codecs::raw::extract_gainmap(data, limits, pulse)
 }
 
 #[cfg(test)]

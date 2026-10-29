@@ -341,3 +341,7 @@ avif-consumer-contract-check:
 # Same complete feature profile as the generated zencodecs API surface.
 api-profile-check:
     cargo check --locked -p zencodecs --features all,jp2-decode,metadata,checked-transcode-async
+
+raw-gainmap-controls:
+    cargo test --locked -p zencodecs --features raw-decode-gainmap --lib codecs::raw::gainmap_controls
+    cargo clippy --locked -p zencodecs --features all,jp2-decode,metadata,checked-transcode-async --lib -- -D warnings
