@@ -35,6 +35,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
   require a control when drained. Focused limits/cache controls and strict Clippy pass (`921a3f9f`); see
   `docs/optional-pulse.md`.
 
+#### Fixed (checked publication qualification)
+
+- Optional publication controls and native JPEG/PNG checked transcodes pass the
+  existing 16-unit/35-integration suite, strict Clippy/examples and codec-free
+  build on `a0b34b33`; the 22-test metadata scrub target also passes. Standalone
+  metadata services and wider native/API/browser profiles remain unqualified.
+
 #### Changed (consumer graph qualification)
 
 - Core requirements admit the current and next minor (`>=0.2.0, <0.4.0`).

@@ -46,6 +46,7 @@ loses the native stop reason; changing that error contract remains open.
 [The frozen Linux receipt](../benchmarks/optional_pipeline_pulse_2026-10-29.md)
 records pipeline limits/effects, session cache, actual GIF forwarding and bytes,
 retained job cancellation, native lossless JPEG and filter controls, plus strict
-Clippy. Original assertions remain. Full publication/metadata, HEIC/RAW, generated
+Clippy. Original assertions remain. Checked publication and JPEG/PNG metadata scrub also pass; standalone metadata
+services, HEIC/RAW, generated
 API, browser and platform qualification remain separate gates; these focused
 results do not qualify the whole application graph.

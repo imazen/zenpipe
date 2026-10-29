@@ -62,7 +62,7 @@ Inactive Cargo executables/library caches were deleted for disk space, not archi
 
 ## Remaining limits
 
-Full publication/metadata-service qualification, HEIC/RAW optional-Pulse adapters,
+Standalone metadata-service qualification, HEIC/RAW optional-Pulse adapters,
 all portable lock roots, generated APIs, browsers and required platforms remain
 unqualified on this candidate. These changes do not solve the still-only
 `zencodecs::transcode` animation-loss issue or PipeError's stop-reason loss.
@@ -85,3 +85,18 @@ The frozen original run IDs above remain unchanged in the retained receipts.
 | `2c0c89edc205b7b68a05a546e17cfefabea29002` | `14f8cb6e263fe1ac27920ab3ecc31bf3a6cb3da0` |
 | `921a3f9f731fe77f425bc3bec69b238b6a740b80` | `a321b6b6d1b6d363f10c9ff2ba51b0fe411d7a77` |
 | `7c36d596c1b4bc0701948d0554b00b6691e0f27b` | `21173bbaddf74d42c1e0e2fe4b8f43d56dbe2d01` |
+
+## Checked publication follow-through
+
+Frozen published source `a0b34b33f9b8` (root07) passed locked metadata,
+`just checked-publication-check` and the JPEG/PNG metadata-scrub target:
+16 checked-publication unit tests, 35 native integration tests and 22 metadata
+scrub tests. The existing recipe also passes strict Clippy on the checked library,
+integration target and both examples, then the codec-free checked-transcode build.
+No feature/assertion exclusions or lock changes. Original publication cancellation,
+partial-write, retained-owner, metadata inventory and callback controls remain.
+
+Wrapper: rc0, 33 seconds, peak RSS 0.68 GiB, minimum available 14262 MiB,
+peak load 1.42; 3 GiB/two-job cap. This extends the focused Linux qualification;
+standalone metadata-services, full native profile/API, other locks and browser/
+platform gates remain unqualified. Earlier failed receipts remain unchanged.
