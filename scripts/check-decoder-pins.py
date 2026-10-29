@@ -74,13 +74,12 @@ from pathlib import Path
 # in this repo names it: it is selected transitively by whichever zenavif rev is
 # pinned. It IS checked in lockfiles, which is where its rev becomes visible.
 EXPECTED = {
-    "https://github.com/imazen/zenavif": "a7638f6e0655914fb15fe4633ac26425533756c8",
-    "https://github.com/imazen/rav1d-safe": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+    "https://github.com/imazen/zenavif": "94116d266299f347cfd10a75d440a5bc3b598d2c",
+    "https://github.com/imazen/rav1d-safe": "b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
 }
 
-# Packages that come from those repos, for lockfile checking. `zenavif-serialize`
-# lives in its own archived repo and is pinned separately, so it is not here.
-TRACKED_PACKAGES = {"zenavif", "zenavif-parse", "rav1d-safe"}
+# The parser, serializer and MP4 container are members of the selected AVIF source.
+TRACKED_PACKAGES = {"zenavif", "zenavif-parse", "zenavif-serialize", "zenmp4", "rav1d-safe"}
 
 SKIP_DIRS = {"target", ".git", ".jj", "node_modules", ".github"}
 
