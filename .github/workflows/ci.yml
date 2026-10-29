@@ -55,7 +55,7 @@ jobs:
           cargo check --locked --manifest-path wasm-size-shim/Cargo.toml --target wasm32-unknown-unknown --lib
 
   rust:
-    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@main
+    uses: imazen/zen-workspace/.github/workflows/rust-ci.yml@69b7e60780bb44c41b027755565e5a7a64bbbbd1
     with:
       sibling_overrides: false
       # macOS runs on ARM64; preserve the other platform lanes.
@@ -141,7 +141,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: imazen/zen-workspace/.github/actions/setup@682b725a555350afefab5e0f936fbb7955d95a64
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
           sibling-overrides: 'false'
@@ -156,17 +156,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for public-api
+      - uses: dtolnay/rust-toolchain@nightly-2026-10-12 # Match just api-doc
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
 
       - name: Check committed API snapshots are current
         run: cargo test --manifest-path apidoc/Cargo.toml
         env:
           ZEN_API_DOC: check
+          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-12
 
   # 32-bit coverage. i686 is a primary target: it is where `usize` narrowing
   # bugs show up (stride/offset arithmetic that silently fits in 64 bits, byte
@@ -189,9 +191,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: taiki-e/install-action@v2
         with:
           tool: cross
@@ -214,9 +217,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: imazen/zen-workspace/.github/actions/setup@main
+      - uses: imazen/zen-workspace/.github/actions/setup@69b7e60780bb44c41b027755565e5a7a64bbbbd1
         with:
           cache: 'false'
+          sibling-overrides: 'false'
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
