@@ -866,7 +866,9 @@ mod tests {
                     e.error()
                 );
                 // Test gain map extraction directly, bypassing the base decode.
-                let gainmap = crate::codecs::raw::extract_gainmap(&data);
+                let gainmap =
+                    crate::codecs::raw::extract_gainmap(&data, None, SharedPulse::default())
+                        .expect("embedded gain-map decode");
                 check_appledng_gainmap(gainmap.as_ref());
             }
         }
