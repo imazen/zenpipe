@@ -556,6 +556,11 @@ streaming-local-tail:
 test-dispatched-output:
     cargo test --locked -p zencodecs --features jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes -- --nocapture
 
+# Focused native row admission repairs; supplements the full dispatch gate above.
+test-repaired-row-output:
+    cargo test --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --test streamed_bytes -- --nocapture
+    cargo clippy --locked -p zencodecs --no-default-features --features inventory,jpeg,png,webp,jxl-encode,bitmaps-tga --lib --test streamed_bytes -- -D warnings
+
 # Independent reader smoke tests; missing tools fail this explicit opt-in gate.
 test-dispatched-oracle:
     cargo test --locked -p zencodecs --features local-fixtures,jxl-encode,tiff,bitmaps-qoi,bitmaps-tga,bitmaps-hdr --test streamed_bytes independent_decoders_read_every_streamed_format -- --nocapture
