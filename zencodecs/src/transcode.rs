@@ -916,9 +916,7 @@ impl<'a> TranscodeSink<'a> {
         )
         .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
 
-        encoder
-            .push_rows(adapted.as_slice())
-            .map_err(|e| -> SinkError { alloc::format!("push_rows: {e}").into() })?;
+        encoder.push_rows(adapted.as_slice())?;
         self.drain()
     }
 }
@@ -954,9 +952,7 @@ impl DecodeRowSink for TranscodeSink<'_> {
             .encoder
             .as_mut()
             .ok_or_else(|| -> SinkError { "encoder already finished".into() })?;
-        let timing = encoder
-            .begin(width, height, target)
-            .map_err(|e| -> SinkError { alloc::format!("begin: {e}").into() })?;
+        let timing = encoder.begin(width, height, target)?;
         self.timing = Some(timing);
         self.drain()
     }
