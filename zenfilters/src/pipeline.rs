@@ -1003,6 +1003,7 @@ mod tests {
     }
     #[test]
     fn optional_pulse_preserves_pixels_and_refuses_before_writes() {
+        use crate::filters;
         let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
         pipeline.push(Box::new(filters::Exposure { stops: 0.2 }));
         let src = vec![0.5; 8 * 8 * 3];
