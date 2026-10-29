@@ -630,7 +630,7 @@ source = "git+https://github.com/lilith/hayro?rev=2ce50d0164878b8505e118f81dcb1d
 [[patch.unused]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=ac5c7cb9409875bbb09b121dee35a0d658954bf1#ac5c7cb9409875bbb09b121dee35a0d658954bf1"
+source = "git+https://github.com/imazen/heic?rev=f97f1a82469b245e6bdd3ca2f42eabbc393b2734#f97f1a82469b245e6bdd3ca2f42eabbc393b2734"
 
 [[patch.unused]]
 name = "imageflow_riapi"
@@ -730,7 +730,7 @@ source = "git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeeb
 [[patch.unused]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?rev=50f9c6942071abee4f9529c638e25de4072d8bbf#50f9c6942071abee4f9529c638e25de4072d8bbf"
+source = "git+https://github.com/imazen/zenraw?rev=e2c2be837670a8ecf9604eb025a6e9427878f6ca#e2c2be837670a8ecf9604eb025a6e9427878f6ca"
 
 [[patch.unused]]
 name = "zenresize"

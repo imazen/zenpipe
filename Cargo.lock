@@ -1342,13 +1342,14 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=ac5c7cb9409875bbb09b121dee35a0d658954bf1#ac5c7cb9409875bbb09b121dee35a0d658954bf1"
+source = "git+https://github.com/imazen/heic?rev=f97f1a82469b245e6bdd3ca2f42eabbc393b2734#f97f1a82469b245e6bdd3ca2f42eabbc393b2734"
 dependencies = [
  "archmage",
  "bytemuck",
  "enough",
  "garb",
  "heic-core",
+ "how-far",
  "imgref",
  "magetypes",
  "memchr",
@@ -1357,13 +1358,14 @@ dependencies = [
  "ultrahdr-core",
  "whereat",
  "zencodec",
+ "zenmeta",
  "zenpixels",
 ]
 
 [[package]]
 name = "heic-core"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=ac5c7cb9409875bbb09b121dee35a0d658954bf1#ac5c7cb9409875bbb09b121dee35a0d658954bf1"
+source = "git+https://github.com/imazen/heic?rev=f97f1a82469b245e6bdd3ca2f42eabbc393b2734#f97f1a82469b245e6bdd3ca2f42eabbc393b2734"
 dependencies = [
  "archmage",
  "enough",
@@ -5381,11 +5383,12 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?rev=50f9c6942071abee4f9529c638e25de4072d8bbf#50f9c6942071abee4f9529c638e25de4072d8bbf"
+source = "git+https://github.com/imazen/zenraw?rev=e2c2be837670a8ecf9604eb025a6e9427878f6ca#e2c2be837670a8ecf9604eb025a6e9427878f6ca"
 dependencies = [
  "archmage",
  "bytemuck",
  "enough",
+ "how-far",
  "kamadak-exif",
  "magetypes",
  "memchr",
