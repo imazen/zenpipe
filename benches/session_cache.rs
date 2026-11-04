@@ -127,6 +127,7 @@ fn filter_node(r: u32, g: u32, b: u32) -> Box<dyn zennode::NodeInstance> {
         matte_r: r,
         matte_g: g,
         matte_b: b,
+        ..Default::default()
     })
 }
 

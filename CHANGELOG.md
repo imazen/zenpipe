@@ -889,6 +889,14 @@ Three crates.io requirements block a newer release and were left alone on purpos
 
 ### [Unreleased]
 
+#### Changed (BREAKING)
+
+- Mattes blend in linear light by default, so `MatteFlattenOp` and `NodeOp::RemoveAlpha` agree with
+  `AlphaPolicy::CompositeOnto` and imageflow's matte. Partly transparent pixels change: 50% red on white
+  goes from green 127 to 187. `MatteBlend::Encoded`, or `blend=encoded` on `zenpipe.remove_alpha`, keeps the
+  old values for matching a browser. `MatteFlattenOp::new` takes `[r, g, b]` and the blend, and returns `Option`;
+  `NodeOp::RemoveAlpha` gains `blend`.
+
 #### Fixes
 
 - Preserve source channel precision and signal range during ImageJob layout

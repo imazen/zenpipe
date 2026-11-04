@@ -1616,7 +1616,8 @@ impl<'a> ImageJob<'a> {
                         crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
                     );
                 }
-                let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
+                let op = crate::ops::MatteFlattenOp::new(matte, crate::ops::MatteBlend::Linear)
+                    .ok_or_else(|| at!(PipeError::Op("no matte conversion".into())))?;
                 source = Box::new(crate::sources::TransformSource::new(source).push(op));
             } else if let Some(conv) =
                 crate::ops::RowConverterOp::new(format, crate::format::RGB8_SRGB)
