@@ -535,6 +535,7 @@ mod tests {
             matte_r: r,
             matte_g: g,
             matte_b: b,
+            ..Default::default()
         })
     }
 
