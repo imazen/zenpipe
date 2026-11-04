@@ -56,7 +56,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     gain_map: &crate::gainmap::GainMap,
     metadata: &crate::gainmap::GainMapMetadata,
     source_metadata: &zencodec::Metadata,
-    stop: Option<&zencodec::StopToken>,
+    pulse: &crate::SharedPulse,
 ) -> crate::error::Result<crate::encode::EncodeOutput> {
     use imgref::{Img, ImgExt as _};
     use rgb::{Gray, Rgb};
@@ -64,7 +64,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     use zencodec::ImageFormat;
     use zenjxl::GainMapBundle;
 
-    let _ = stop; // JXL encoder doesn't support cancellation yet
+    let _ = pulse; // JXL encoder doesn't support cancellation yet
 
     // 2. Encode the gain map as a bare JXL codestream (lossless for quality)
     let lossless_config = zenjxl::LosslessConfig::default();

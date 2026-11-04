@@ -5,7 +5,7 @@ use alloc::borrow::Cow;
 use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::limits::to_resource_limits;
-use crate::{CodecError, DecodeOutput, ImageInfo, Limits, StopToken};
+use crate::{CodecError, DecodeOutput, ImageInfo, Limits, SharedPulse};
 use whereat::at;
 use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
 
@@ -66,7 +66,7 @@ pub(crate) fn decode(
     data: &[u8],
     codec_config: Option<&CodecConfig>,
     limits: Option<&Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
 ) -> Result<DecodeOutput> {
     let format = detect_raw_format(data).unwrap_or_else(raw_format);
     let dec = build_raw_decoder(codec_config);
@@ -74,9 +74,7 @@ pub(crate) fn decode(
     if let Some(lim) = limits {
         job = job.with_limits(to_resource_limits(lim));
     }
-    if let Some(s) = stop {
-        job = job.with_stop(s);
-    }
+    job = job.with_pulse(pulse);
     job.decoder(Cow::Borrowed(data), &[])
         .map_err(|e| map_err(format, e))?
         .decode()

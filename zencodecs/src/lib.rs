@@ -198,7 +198,6 @@ pub use transcode::{
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
-pub use zencodec::StopToken;
 pub use zencodec::decode::SourceColor;
 /// New in zencodec 0.1.21: field-level metadata retention ([`MetadataPolicy`])
 /// and color-carrier emission ([`ColorEmitPolicy`]). Set them on an
@@ -206,6 +205,7 @@ pub use zencodec::decode::SourceColor;
 /// [`EncodeRequest::with_color_emit_policy`], or on a [`transcode`] via
 /// [`TranscodeOptions`].
 pub use zencodec::{ColorEmitPolicy, MetadataPolicy};
+pub use zencodec::{NoPulse, Pulse, SharedPulse};
 /// EXIF/container orientation: the resolved value ([`Orientation`]) and the
 /// decode-time policy ([`OrientationHint`]) for [`DecodeRequest::with_orientation`].
 pub use zencodec::{Orientation, OrientationHint};

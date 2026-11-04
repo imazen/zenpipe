@@ -17,7 +17,7 @@ use crate::policy::CodecPolicy;
 use crate::quality::{QualityIntent, QualityProfile};
 use crate::select::ImageFacts;
 use crate::speed::EncodeSpeed;
-use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, StopToken};
+use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, SharedPulse};
 use whereat::at;
 use zencodec::encode::EncodePolicy;
 use zencodec::{ColorEmitPolicy, MetadataPolicy};
@@ -50,7 +50,7 @@ pub struct EncodeRequest<'a> {
     speed: Option<EncodeSpeed>,
     lossless: bool,
     limits: Option<&'a Limits>,
-    stop: Option<StopToken>,
+    pulse: SharedPulse,
     metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` when the codec embeds it.
     /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim).
@@ -84,7 +84,7 @@ impl<'a> EncodeRequest<'a> {
             speed: None,
             lossless: false,
             limits: None,
-            stop: None,
+            pulse: SharedPulse::default(),
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
@@ -111,7 +111,7 @@ impl<'a> EncodeRequest<'a> {
             speed: None,
             lossless: false,
             limits: None,
-            stop: None,
+            pulse: SharedPulse::default(),
             metadata: None,
             metadata_policy: MetadataPolicy::PreserveExact,
             registry: None,
@@ -186,9 +186,11 @@ impl<'a> EncodeRequest<'a> {
         self
     }
 
-    /// Set a cancellation token.
-    pub fn with_stop(mut self, stop: StopToken) -> Self {
-        self.stop = Some(stop);
+    /// Retain an operation pulse (cancellation, progress, phase planning) for
+    /// every codec job this request creates. The default is the no-op pulse.
+    /// A cancellation-only source fits through `zencodec::how_far::StopOnly`.
+    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
+        self.pulse = pulse;
         self
     }
 
@@ -385,7 +387,7 @@ impl<'a> EncodeRequest<'a> {
             self.metadata.as_ref(),
             self.codec_config,
             self.limits,
-            self.stop,
+            self.pulse,
         )
     }
 
@@ -410,7 +412,7 @@ impl<'a> EncodeRequest<'a> {
             self.metadata.as_ref(),
             self.codec_config,
             self.limits,
-            self.stop,
+            self.pulse,
         )
     }
 
@@ -473,7 +475,7 @@ impl<'a> EncodeRequest<'a> {
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
                 limits: speed_limits.as_ref().or(self.limits),
-                stop: self.stop,
+                pulse: self.pulse,
                 encode_policy: self.encode_policy,
                 canvas_width: width,
                 canvas_height: height,
@@ -569,7 +571,7 @@ impl<'a> EncodeRequest<'a> {
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits: speed_limits.as_ref().or(self.limits),
-            stop: self.stop,
+            pulse: self.pulse,
             encode_policy: self.encode_policy,
             cicp: self.cicp,
         };
@@ -877,7 +879,7 @@ impl<'a> EncodeRequest<'a> {
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
             limits,
-            stop: self.stop.clone(),
+            pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
             cicp: self.cicp,
         };
@@ -950,7 +952,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     &retained,
-                    self.stop,
+                    self.pulse,
                 );
             }
             #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
@@ -964,7 +966,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     &retained,
-                    self.stop.as_ref(),
+                    &self.pulse,
                 );
             }
             #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
@@ -981,7 +983,7 @@ impl<'a> EncodeRequest<'a> {
                     metadata,
                     &retained,
                     limits,
-                    self.stop.as_ref(),
+                    &self.pulse,
                 );
             }
             return Err(at!(CodecError::UnsupportedOperation {

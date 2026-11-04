@@ -1,5 +1,6 @@
 //! The policy, conversion and output obligations shared by synchronous and async drivers.
 use super::*;
+use zencodec::encode::{EncodeDeclaration, EncodePlanError, InputRequirement};
 
 pub(super) trait PreparedJob: Sized {
     fn prepare(
@@ -103,13 +104,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                         boundary,
                         resolver,
                         self.request.preset,
-                        self.codecs.stop(),
+                        self.codecs.pulse(),
                     )
                     .inspect_err(|e| {
                         self.report.record(e.error().record());
                     })?;
                     self.report.record(record);
-                    held.resume(boundary.id(), action, self.codecs.stop())?;
+                    held.resume(boundary.id(), action, self.codecs.pulse())?;
                     return Ok(false);
                 }
                 if self.final_seen {
@@ -151,6 +152,10 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 )?;
                 conversion.prepare(info.width)?;
                 let output_descriptor = conversion.output_descriptor();
+                let output_color = sink::output_context(&conversion, &current);
+                let declaration =
+                    EncodeDeclaration::new(info.width, info.height, output_descriptor)
+                        .with_color(&output_color);
                 if !output_descriptor.channel_type().is_integer() {
                     return Err(Refusal::UnqualifiedSampleType.into());
                 }
@@ -201,7 +206,36 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                         }
                         offer.resolution = Some(resolution);
                     }
-                    jobs.push((offer, job));
+                    // Plan the retained job against the declared rows before
+                    // the joint question: a route that cannot accept one
+                    // ordered row pass, or refuses this color, is excluded
+                    // here with its native cause instead of after selection.
+                    let plan = match job.plan_encode(&declaration) {
+                        Ok(plan) => plan,
+                        Err(cause) => {
+                            rejections.push(operation::RouteRejection {
+                                preference_index: offer.preference_index,
+                                fidelity: offer.fidelity,
+                                cause: zencodec::CodecSetError::Codec(cause),
+                            });
+                            continue;
+                        }
+                    };
+                    if let Err(cause) = plan.validate(&declaration).and_then(|()| {
+                        if plan.input == InputRequirement::Rows {
+                            Ok(())
+                        } else {
+                            Err(EncodePlanError::InputProtocol)
+                        }
+                    }) {
+                        rejections.push(operation::RouteRejection {
+                            preference_index: offer.preference_index,
+                            fidelity: offer.fidelity,
+                            cause: zencodec::CodecSetError::Codec(Box::new(cause)),
+                        });
+                        continue;
+                    }
+                    jobs.push((offer, job, plan));
                 }
                 if jobs.is_empty() {
                     return Err(
@@ -247,13 +281,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     &offers,
                     resolver,
                     self.request.preset,
-                    self.codecs.stop(),
+                    self.codecs.pulse(),
                 )
                 .inspect_err(|e| {
                     self.report.record(e.error().record());
                 })?;
                 self.report.record(record);
-                let (_, job) = jobs.swap_remove(selected);
+                let (_, job, plan) = jobs.swap_remove(selected);
                 drop(jobs);
                 self.stage = Stage::Encode;
                 let expectation = ExpectedOutput {
@@ -264,12 +298,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     resolution,
                 };
                 let encoder = job.into_encoder()?;
-                held.sink_mut().install(rows, encoder)?;
+                held.sink_mut()
+                    .install(rows, encoder, Arc::new(output_color.clone()), plan)?;
                 self.expected = Some(expectation);
                 held.resume(
                     boundary.id(),
                     BoundaryAction::AdoptInterpretation,
-                    self.codecs.stop(),
+                    self.codecs.pulse(),
                 )?;
             }
             Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => return Ok(true),
@@ -283,7 +318,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
         let encoded = destination.finish_encoder()?;
         self.stage = Stage::Verify;
         self.codecs
-            .stop()
+            .pulse()
             .check()
             .map_err(operation::OperationError::Stopped)?;
         if encoded.data().len() > self.request.output_limit {
@@ -299,7 +334,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
         let decoded = inspector.output_info(encoded.data())?;
         verify_output(&actual, &decoded, &expected)?;
         self.codecs
-            .stop()
+            .pulse()
             .check()
             .map_err(operation::OperationError::Stopped)?;
         Ok(encoded)

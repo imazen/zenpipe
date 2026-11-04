@@ -207,7 +207,7 @@ impl DecodedGainMap {
 pub fn decode_gain_map_source(
     source: &zencodec::gainmap::GainMapSource,
     limits: Option<&crate::Limits>,
-    stop: Option<crate::StopToken>,
+    pulse: crate::SharedPulse,
     registry: &crate::AllowedFormats,
 ) -> crate::error::Result<zencodec::gainmap::DecodedGainMap> {
     use alloc::string::ToString as _;
@@ -239,9 +239,7 @@ pub fn decode_gain_map_source(
             if let Some(lim) = limits {
                 request = request.with_limits(lim);
             }
-            if let Some(st) = stop {
-                request = request.with_stop(st);
-            }
+            request = request.with_pulse(pulse);
 
             let output = request.decode_full_frame()?;
 
