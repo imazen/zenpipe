@@ -6,21 +6,21 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1380 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 34 lines (34 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1387 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 35 lines (35 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       201
+#   pub types (struct/enum/trait/alias)       202
 #   pub consts/statics                         45
 #   free functions                             60
 #   inherent methods                          342
-#   struct fields                             470
-#   enum variants                              61
+#   struct fields                             472
+#   enum variants                              63
 #   re-exports                                 21
-#   trait roster entries (type × trait)       362
+#   trait roster entries (type × trait)       369
 #   auto-trait-complete types                 124
-#   auto-trait exceptions                      38
+#   auto-trait exceptions                      39
 #
 # per-module pub lines:
 #   (root)                          202
@@ -30,10 +30,10 @@
 #   codec                            13
 #   execute_layout                   15
 #   format                           12
-#   graph                           115
+#   graph                           116
 #   limits                           79
 #   lossless                          6
-#   ops                              14
+#   ops                              17
 #   orchestrate                      39
 #   riapi                             2
 #   session                           1
@@ -43,9 +43,9 @@
 #   tiles                            92
 #   trace                           169
 #   watermark                        35
-#   zennode_defs                    211
+#   zennode_defs                    212
 
-## items (1193 lines)
+## items (1198 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -279,6 +279,7 @@ pub graph::NodeOp::Overlay::x: i32
 pub graph::NodeOp::Overlay::y: i32
 pub graph::NodeOp::PixelTransform(alloc::boxed::Box<dyn ops::PixelOp>)
 pub graph::NodeOp::RemoveAlpha
+pub graph::NodeOp::RemoveAlpha::blend: ops::MatteBlend
 pub graph::NodeOp::RemoveAlpha::matte: [u8; 3]
 pub graph::NodeOp::Resize
 pub graph::NodeOp::Resize::filter: core::option::Option<zenresize::filter::Filter>
@@ -362,8 +363,11 @@ pub lossless::LosslessResult::width: u32
 pub fn lossless::try_lossless_jpeg(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, &dyn enough::Stop) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
 pub fn lossless::try_lossless_jpeg_with_pulse(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
 pub mod ops
+#[non_exhaustive] pub enum ops::MatteBlend
+pub ops::MatteBlend::Encoded
+pub ops::MatteBlend::Linear
 pub struct ops::MatteFlattenOp
-pub fn ops::MatteFlattenOp::new(u8, u8, u8) -> Self
+pub fn ops::MatteFlattenOp::new([u8; 3], ops::MatteBlend) -> core::option::Option<Self>
 pub struct ops::RowConverterOp
 pub fn ops::RowConverterOp::from_converter(zenpixels_convert::converter::RowConverter, format::PixelFormat, format::PixelFormat) -> Self
 pub fn ops::RowConverterOp::must(format::PixelFormat, format::PixelFormat) -> Self
@@ -961,6 +965,7 @@ pub zennode_defs::RegionViewport::top_pct: f32
 pub zennode_defs::RegionViewport::top_px: i32
 pub struct zennode_defs::RegionViewportNodeDef
 pub struct zennode_defs::RemoveAlpha
+pub zennode_defs::RemoveAlpha::blend: alloc::string::String
 pub zennode_defs::RemoveAlpha::matte_b: u32
 pub zennode_defs::RemoveAlpha::matte_g: u32
 pub zennode_defs::RemoveAlpha::matte_r: u32
@@ -1241,7 +1246,7 @@ pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
 pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
 
-## trait impls (148 types)
+## trait impls (149 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1264,6 +1269,7 @@ limits::AllocationTracker: Debug, Default
 limits::Deadline: Debug, enough::Stop
 limits::Limits: Clone, Copy, Debug, Default
 lossless::LosslessResult: Debug
+ops::MatteBlend: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 ops::MatteFlattenOp: ops::PixelOp
 ops::RowConverterOp: ops::PixelOp
 ops::ScaleAlphaOp: ops::PixelOp
@@ -1409,6 +1415,7 @@ codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
 limits::AllocationTracker: !Freeze
+ops::MatteFlattenOp: !Freeze !RefUnwindSafe !UnwindSafe
 ops::RowConverterOp: !Freeze !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe
