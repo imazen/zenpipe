@@ -55,7 +55,8 @@ zensally-zentract = { git = "https://github.com/imazen/zensally" }
 zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b8602560390e79891bc5d3d" }
 zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "9ad4582bc51b6259829a421fe1e6564f617d31ce" }
 # Same tested decoder revision as the root, enforced by check-decoder-pins.py.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f2d06fa1bd307a726bdc50f447437e22ebb3f81d" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f2d06fa1bd307a726bdc50f447437e22ebb3f81d" }
 heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }

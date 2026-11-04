@@ -187,7 +187,8 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "469a893fcbce40d96b86
 # commit 83fa5d3edd5137f1b0b1d981625c0ba28ae79a49, an ancestor of the selected
 # dfd01e32. All manifests and authoritative lockfiles must agree; run
 # scripts/check-decoder-pins.py after resolving any workspace.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "f2d06fa1bd307a726bdc50f447437e22ebb3f81d" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "f2d06fa1bd307a726bdc50f447437e22ebb3f81d" }
 # zenraw: registry 0.2.0 predates zencodec's CategorizedError taxonomy entirely;
 # zenraw main is on zencodec 0.1.26. Powers `zencodecs/raw-decode*`.
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "50f9c6942071abee4f9529c638e25de4072d8bbf" }

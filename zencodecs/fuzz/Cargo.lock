@@ -552,6 +552,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "likely_stable"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61f7017d8abea1fc23ff7f01a8147b2656dea3aeb24d519aab6e2177eaf671c"
+dependencies = [
+ "rustc_version",
+]
+
+[[package]]
 name = "linear-srgb"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,11 +875,10 @@ dependencies = [
 
 [[package]]
 name = "rav1d-disjoint-mut"
-version = "0.3.2"
-source = "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87"
+version = "0.4.0"
+source = "git+https://github.com/imazen/rav1d-safe?rev=4161bae4#4161bae4d04dd9ac0de410f4035d8c8d01559393"
 dependencies = [
  "aligned",
- "aligned-vec",
  "loom",
  "spin",
  "zerocopy",
@@ -878,8 +886,8 @@ dependencies = [
 
 [[package]]
 name = "rav1d-safe"
-version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87"
+version = "0.7.0"
+source = "git+https://github.com/imazen/rav1d-safe?rev=4161bae4#4161bae4d04dd9ac0de410f4035d8c8d01559393"
 dependencies = [
  "aligned",
  "archmage",
@@ -889,6 +897,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "enough",
+ "likely_stable",
  "nasm-rs",
  "parking_lot",
  "paste",
@@ -966,6 +975,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "rustix"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1007,6 +1025,12 @@ name = "self_cell"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ab42ca02749e120097e328d91d415325bdf43b1c72c4c8badf37375fe40a813"
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"
@@ -1462,7 +1486,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=a7638f6e0655914fb15fe4633ac26425533756c8#a7638f6e0655914fb15fe4633ac26425533756c8"
+source = "git+https://github.com/imazen/zenavif?rev=f2d06fa1bd307a726bdc50f447437e22ebb3f81d#f2d06fa1bd307a726bdc50f447437e22ebb3f81d"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1489,7 +1513,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=a7638f6e0655914fb15fe4633ac26425533756c8#a7638f6e0655914fb15fe4633ac26425533756c8"
+source = "git+https://github.com/imazen/zenavif?rev=f2d06fa1bd307a726bdc50f447437e22ebb3f81d#f2d06fa1bd307a726bdc50f447437e22ebb3f81d"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1505,7 +1529,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
+source = "git+https://github.com/imazen/zenavif?rev=f2d06fa1bd307a726bdc50f447437e22ebb3f81d#f2d06fa1bd307a726bdc50f447437e22ebb3f81d"
 dependencies = [
  "arrayvec",
  "whereat",
@@ -1794,7 +1818,7 @@ dependencies = [
 [[package]]
 name = "zenrav1e"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenrav1e?rev=9057c4bacf1d8a23974e32de09fd4446a1cc525a#9057c4bacf1d8a23974e32de09fd4446a1cc525a"
+source = "git+https://github.com/imazen/zenrav1e?rev=1ac9ab56#1ac9ab56f664d88b133df7ee1aa75387116c2eb7"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -1827,7 +1851,7 @@ dependencies = [
 [[package]]
 name = "zenravif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/cavif-rs?rev=aac04acc5295b581eac7234ed96bac1553ce51e2#aac04acc5295b581eac7234ed96bac1553ce51e2"
+source = "git+https://github.com/imazen/cavif-rs?rev=214e484#214e484d218e3be0b84ef014f5e327ade5629f56"
 dependencies = [
  "almost-enough",
  "imgref",
