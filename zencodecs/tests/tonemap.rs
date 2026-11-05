@@ -579,3 +579,32 @@ fn hdr_padding_alpha_is_opaque_after_rendering() {
         );
     }
 }
+
+/// Samples of unknown transfer are SDR to the adapter's input list. They once matched its first
+/// entry, PQ, and were tone-mapped.
+#[test]
+fn unknown_transfer_is_not_tone_mapped() {
+    let px: Vec<u8> = [0.5f32, 0.25, 0.75]
+        .into_iter()
+        .flat_map(f32::to_ne_bytes)
+        .collect::<Vec<u8>>()
+        .repeat(2)
+        .repeat(H as usize);
+    let d = PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Unknown);
+    let target = zenpixels_convert::adapt::adapt_for_encode_cow(
+        &px,
+        d,
+        2,
+        H,
+        24,
+        EncodeRequest::new(ImageFormat::Bmp)
+            .build_streaming_encoder(2, H)
+            .unwrap()
+            .supported,
+    )
+    .unwrap()
+    .as_slice()
+    .descriptor();
+    assert_ne!(target.transfer(), TransferFunction::Pq);
+    assert_ne!(target.transfer(), TransferFunction::Hlg);
+}

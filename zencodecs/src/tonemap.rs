@@ -78,11 +78,13 @@ const fn streaming_inputs() -> [PixelDescriptor; 50] {
         PixelDescriptor::RGB16_SRGB,
         PixelDescriptor::RGBA16_SRGB,
     ];
+    // SDR first. Samples of unknown transfer match the first entry of their format, and they
+    // must not become HDR by that match: a Farbfeld image would then be tone-mapped.
     let transfers = [
+        TransferFunction::Srgb,
+        TransferFunction::Linear,
         TransferFunction::Pq,
         TransferFunction::Hlg,
-        TransferFunction::Linear,
-        TransferFunction::Srgb,
     ];
     let primaries = [
         ColorPrimaries::Bt709,
