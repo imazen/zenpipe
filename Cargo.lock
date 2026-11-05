@@ -5048,6 +5048,7 @@ dependencies = [
  "fast-ssim2",
  "heic",
  "imgref",
+ "libm",
  "linear-srgb",
  "moxcms 0.8.1",
  "png",
@@ -5082,7 +5083,6 @@ dependencies = [
  "zensim-regress",
  "zensvg",
  "zentiff",
- "zentone",
  "zenwebp",
 ]
 

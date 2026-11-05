@@ -59,9 +59,8 @@ fn jpeg_tone_maps_with_no_options() {
     let pixels = decoded.pixels();
     let bytes = pixels.descriptor().bytes_per_pixel();
     for px in pixels.row(8).chunks_exact(bytes) {
-        // Written as code values, this PQ gray would show near 148. With no MaxCLL the
-        // peak is 1,000 cd/m², so BT.2408 places 203 cd/m² below SDR white.
-        assert!((224..=234).contains(&px[0]), "{px:?}");
+        // Written as code values, this PQ gray would show near 148.
+        assert!((166..=176).contains(&px[0]), "{px:?}");
     }
 }
 

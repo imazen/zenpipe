@@ -98,7 +98,7 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Bt2408,
+            tone_map_policy: crate::ToneMapPolicy::Bt2446A,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -137,7 +137,7 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Bt2408,
+            tone_map_policy: crate::ToneMapPolicy::Bt2446A,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]

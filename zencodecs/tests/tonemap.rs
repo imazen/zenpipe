@@ -46,7 +46,7 @@ fn desc(transfer: TransferFunction) -> PixelDescriptor {
 fn encode(format: ImageFormat, px: &[u8], w: u32, d: PixelDescriptor, meta: Metadata) -> Vec<u8> {
     let slice = PixelSlice::new(px, w, H, w as usize * 12, d).unwrap();
     EncodeRequest::new(format)
-        .with_tone_map_policy(ToneMapPolicy::Bt2408)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
         .with_metadata(meta)
         .encode(slice, false)
         .unwrap()
@@ -72,7 +72,7 @@ fn encode_chunks(
     chunk: usize,
 ) -> Vec<u8> {
     let mut se = EncodeRequest::new(format)
-        .with_tone_map_policy(ToneMapPolicy::Bt2408)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
         .with_metadata(meta)
         .build_streaming_encoder(w, H)
         .unwrap();
@@ -119,16 +119,9 @@ fn pq_into_bmp_is_tone_mapped_and_streaming_matches() {
     for pair in grays.windows(2) {
         assert!(pair[0] < pair[1], "gray ramp must increase: {grays:?}");
     }
-    assert_eq!(grays[0], 0);
-    assert_eq!(
-        grays[7], 255,
-        "MaxCLL (1000 nits) maps to SDR white: {grays:?}"
-    );
-    // Raw PQ code values shown as sRGB would put 203 nits at 148.
-    assert!(
-        grays[5] >= 200,
-        "203-nit reference white is near 255: {grays:?}"
-    );
+    // The output of this version of the algorithm: `ToneMapPolicy::Bt2446A`. A numeric change
+    // here is a new version. Raw PQ code values shown as sRGB would put 203 nits at 148.
+    assert_eq!(grays, [0, 13, 49, 100, 131, 171, 210, 255]);
     // The colour description is gone: the pixels are sRGB now.
     let info = DecodeRequest::new(&bytes).decode_full_frame().unwrap();
     assert!(info.info().source_color.cicp.is_none());
@@ -242,8 +235,8 @@ fn a_pq_descriptor_without_metadata_is_tone_mapped() {
     let d = desc(TransferFunction::Pq);
     let bytes = encode(ImageFormat::Bmp, &px, w, d, Metadata::none());
     let grays = decoded_first_row(&bytes, w);
-    assert_eq!(grays[7], 255);
-    assert!(grays[5] >= 200, "{grays:?}");
+    // MaxCLL is absent, so the peak is the 1,000 cd/m² default, as in the test above.
+    assert_eq!(grays, [0, 13, 49, 100, 131, 171, 210, 255]);
     assert_eq!(
         encode_streaming(ImageFormat::Bmp, &px, w, d, Metadata::none()),
         bytes
@@ -280,15 +273,15 @@ fn preserve_refuses_on_both_paths() {
 }
 
 #[test]
-fn the_default_is_bt2408_on_both_paths() {
+fn the_default_is_bt2446a_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
     let d = desc(TransferFunction::Pq);
-    assert_eq!(ToneMapPolicy::default(), ToneMapPolicy::Bt2408);
+    assert_eq!(ToneMapPolicy::default(), ToneMapPolicy::Bt2446A);
     for meta in [Metadata::none(), pq_meta()] {
         let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
         let slice = || PixelSlice::new(&px, 2, H, 24, d).unwrap();
         let explicit = request()
-            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
             .encode(slice(), false)
             .unwrap()
             .into_vec();
@@ -397,7 +390,7 @@ fn strict_policy_refuses_tone_mapping_on_both_paths() {
         let request = || {
             EncodeRequest::new(format)
                 .with_metadata(meta.clone())
-                .with_tone_map_policy(ToneMapPolicy::Bt2408)
+                .with_tone_map_policy(ToneMapPolicy::Bt2446A)
                 .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
         };
         assert!(
@@ -423,7 +416,7 @@ fn unsupported_hdr_color_is_an_error_on_both_paths() {
         let request = || {
             EncodeRequest::new(ImageFormat::Bmp)
                 .with_metadata(Metadata::none().with_cicp(cicp))
-                .with_tone_map_policy(ToneMapPolicy::Bt2408)
+                .with_tone_map_policy(ToneMapPolicy::Bt2446A)
         };
         assert!(
             request()
@@ -448,13 +441,13 @@ fn srgb_icc_takes_precedence_over_hdr_cicp() {
         .unwrap()
         .into_vec();
     let actual = request()
-        .with_tone_map_policy(ToneMapPolicy::Bt2408)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
         .encode(PixelSlice::new(&px, 3, H, 9, d).unwrap(), false)
         .unwrap()
         .into_vec();
     assert_eq!(actual, expected);
     let mut se = request()
-        .with_tone_map_policy(ToneMapPolicy::Bt2408)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
         .build_streaming_encoder(3, H)
         .unwrap();
     se.encoder.begin(3, H, d).unwrap();
@@ -476,7 +469,7 @@ fn transcode_sink_reaches_tone_mapping_before_native_format_negotiation() {
         let expected = encode(ImageFormat::Bmp, &px, 3, d, meta.clone());
         let se = EncodeRequest::new(ImageFormat::Bmp)
             .with_metadata(meta)
-            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
             .build_streaming_encoder(3, H)
             .unwrap();
         let mut sink = zencodecs::transcode::TranscodeSink::new(se.encoder, se.supported);
@@ -503,7 +496,7 @@ fn srgba8_explicit_opacity_survives_the_tone_map_adapter() {
         let mut pixels = original.clone();
         let se = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
-            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
             .build_streaming_encoder(2, H)
             .unwrap();
         let encoded = se
@@ -531,7 +524,7 @@ fn srgba8_explicit_opacity_survives_the_tone_map_adapter() {
         let se = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
             .with_metadata(pq_meta())
-            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
             .build_streaming_encoder(2, H)
             .unwrap();
         assert!(
@@ -558,7 +551,7 @@ fn hdr_padding_alpha_is_opaque_after_rendering() {
         let desc = desc.with_alpha(Some(alpha));
         let encoded = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
-            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
             .encode(PixelSlice::new(&data, 1, 1, 16, desc).unwrap(), true)
             .unwrap();
         let decoded = DecodeRequest::new(encoded.data())
