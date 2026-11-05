@@ -8,6 +8,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Fixes
+- zencodecs: the tone-map encoder relabeled samples of unknown transfer, because its streaming input list had no entry for them. Radiance input then clipped where a codec should refuse it, and streaming disagreed with one-shot. `encode_from` also refused on every default encode to an SDR-only format, even without HDR.
 
 - Samples of unknown transfer, such as Farbfeld, matched the first entry of the tone-map adapter's input list and were tone-mapped as PQ. The list now starts with SDR.
 - A PQ or HLG job into JPEG panicked: the matte ran on `RGBA16` rows that had no conversion to `RGBA8`. Opaque HDR now encodes, tone-mapped. Translucent HDR refuses on both encode paths, because compositing needs tone mapping first and that happens inside the encoder.
