@@ -6,6 +6,8 @@ All notable changes to `zencodecs` are documented here. Format follows
 
 ## [Unreleased]
 
+- Tone mapping measures PQ peak from the image rather than trusting MaxCLL, a mastering peak or a 1,000-nit fallback. Row-by-row PQ encodes hold every row until `finish`; HLG still streams.
+
 ### QUEUED BREAKING CHANGES
 
 - No registry baseline exists for zencodecs (crates.io API returned 404 on

@@ -126,7 +126,7 @@ fn pq_into_bmp_is_tone_mapped_and_streaming_matches() {
     let info = DecodeRequest::new(&bytes).decode_full_frame().unwrap();
     assert!(info.info().source_color.cicp.is_none());
 
-    // Same peak (from MaxCLL) on both paths: the same file.
+    // Same measured peak on both paths: the same file.
     assert_eq!(
         encode_streaming(ImageFormat::Bmp, &px, w, d, pq_meta()),
         bytes
@@ -200,12 +200,12 @@ fn hlg_reference_white_matches_pq_reference_white() {
     }
     assert_eq!(grays[4], 255, "HLG peak maps to SDR white");
 
-    let pq = gray_rows(&[pq_code(203.0)]);
-    let mut meta = Metadata::none().with_cicp(PQ_BT2020);
-    meta.content_light_level = Some(ContentLightLevel::new(1000, 400));
+    // Compare at HLG's 1000-nit peak: PQ's is measured, so the image has to contain it.
+    let pq = gray_rows(&[pq_code(203.0), pq_code(1000.0)]);
+    let meta = Metadata::none().with_cicp(PQ_BT2020);
     let pq_white = decoded_first_row(
-        &encode(ImageFormat::Bmp, &pq, 1, desc(TransferFunction::Pq), meta),
-        1,
+        &encode(ImageFormat::Bmp, &pq, 2, desc(TransferFunction::Pq), meta),
+        2,
     )[0];
     assert!(
         grays[3].abs_diff(pq_white) <= 2,
@@ -228,7 +228,7 @@ fn hlg_reference_white_matches_pq_reference_white() {
 
 #[test]
 fn a_pq_descriptor_without_metadata_is_tone_mapped() {
-    // No colour metadata: both paths use the documented 1000-nit fallback.
+    // No colour metadata: both paths measure the same peak.
     let codes: Vec<f32> = NITS.iter().map(|&n| pq_code(n)).collect();
     let px = gray_rows(&codes);
     let w = codes.len() as u32;
@@ -373,6 +373,62 @@ fn peak_and_chunking_do_not_change_rendering() {
             );
         }
     }
+}
+
+#[test]
+fn pq_peak_comes_from_the_whole_image_not_its_metadata() {
+    let render = |nits: [f32; 4], meta: Metadata| {
+        let px: Vec<u8> = nits
+            .into_iter()
+            .flat_map(|n| [pq_code(n); 6])
+            .flat_map(f32::to_ne_bytes)
+            .collect();
+        encode(ImageFormat::Bmp, &px, 2, desc(TransferFunction::Pq), meta)
+    };
+    let image = [50.0, 203.0, 400.0, 1000.0];
+
+    // Declared MaxCLL and mastering peaks change nothing, in either direction.
+    let plain = render(image, Metadata::none());
+    let mut low = Metadata::none();
+    low.content_light_level = Some(ContentLightLevel::new(300, 100));
+    assert_eq!(plain, render(image, low));
+    let mut high = Metadata::none();
+    high.content_light_level = Some(ContentLightLevel::new(10_000, 400));
+    assert_eq!(plain, render(image, high));
+    let mut mastering = Metadata::none();
+    let mut display = zenpixels::hdr::MasteringDisplay::HDR10_REFERENCE;
+    display.max_luminance = 4000.0;
+    mastering.mastering_display = Some(display);
+    assert_eq!(plain, render(image, mastering));
+
+    // A later row raises the peak for the first one, on the row-by-row path as well.
+    let first_at = |peak: f32| {
+        let bytes = render([203.0, 203.0, 203.0, peak], Metadata::none());
+        decoded_first_row(&bytes, 2)[0]
+    };
+    assert!(first_at(4000.0) < first_at(1000.0));
+    let px: Vec<u8> = [203.0, 203.0, 203.0, 4000.0]
+        .into_iter()
+        .flat_map(|n| [pq_code(n); 6])
+        .flat_map(f32::to_ne_bytes)
+        .collect();
+    let d = desc(TransferFunction::Pq);
+    assert_eq!(
+        encode(ImageFormat::Bmp, &px, 2, d, Metadata::none()),
+        encode_chunks(ImageFormat::Bmp, &px, 2, d, Metadata::none(), 1)
+    );
+}
+
+#[test]
+fn a_held_pq_encode_reports_output_at_finish() {
+    let d = desc(TransferFunction::Pq);
+    let mut se = EncodeRequest::new(ImageFormat::Bmp)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
+        .with_metadata(Metadata::none())
+        .build_streaming_encoder(1, 1)
+        .unwrap();
+    let timing = se.encoder.begin(1, 1, d).unwrap();
+    assert_eq!(timing, zencodec::encode::OutputTiming::AT_FINISH);
 }
 
 #[test]

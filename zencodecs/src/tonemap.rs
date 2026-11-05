@@ -54,9 +54,10 @@ pub enum ToneMapPolicy {
     /// SDR-only target are refused.
     Preserve,
     /// BT.2446 Method A onto a 100-nit SDR peak, followed by BT.709 gamut conversion,
-    /// OKLch soft compression and sRGB 8-bit encoding. PQ peak is MaxCLL,
-    /// else mastering-display maximum, else 1000 nits; both encode paths use
-    /// the same fallback. HLG uses the 1000-nit BT.2100 reference display.
+    /// OKLch soft compression and sRGB 8-bit encoding. PQ peak is measured from
+    /// the image, so a row-by-row encode holds every PQ row until `finish`; declared
+    /// MaxCLL and mastering peaks aren't used. HLG uses the 1000-nit BT.2100
+    /// reference display and streams.
     /// Strict encode policy still refuses HDR rendering. This is the default.
     #[default]
     Bt2446A,
@@ -109,10 +110,8 @@ const fn streaming_inputs() -> [PixelDescriptor; 50] {
     out
 }
 
-/// Lowest PQ content peak: BT.2408 reference white. Below it, metadata is not credible.
+/// Lowest PQ content peak: BT.2408 reference white.
 const MIN_PQ_PEAK_NITS: f32 = 203.0;
-/// PQ content peak when nothing better is known: the HDR10 baseline.
-pub(crate) const DEFAULT_PQ_PEAK_NITS: f32 = 1000.0;
 /// HLG reference display peak (BT.2100), the peak after the OOTF.
 pub(crate) const HLG_REFERENCE_PEAK_NITS: f32 = 1000.0;
 
@@ -208,8 +207,6 @@ pub(crate) struct ToneMapPlan {
     /// The source colour; `None` takes it from the pixels' descriptor (the
     /// metadata describes no colour).
     pub(crate) source: Option<Result<HdrSource, String>>,
-    /// The content peak the metadata gives (MaxCLL, else mastering peak).
-    pub(crate) metadata_peak_nits: Option<f32>,
     /// The metadata to encode with: the colour description and HDR
     /// luminance metadata removed, since the pixels are sRGB now.
     pub(crate) metadata: Option<Metadata>,
@@ -253,13 +250,48 @@ impl ToneMapPlan {
         source
     }
 
-    /// Shared content peak for every encode path and chunk size.
-    pub(crate) fn peak(&self, source: HdrSource) -> f32 {
+    /// The content peak for a whole image, the same on every encode path and for any chunk size.
+    ///
+    /// PQ peaks are measured. Declared MaxCLL and mastering peaks aren't used: the BT.2446 Method A
+    /// winners of the tone-map shootout all measure, and declared values can be far from the content.
+    /// HLG has a fixed reference peak, so it needs no measurement and can stream.
+    pub(crate) fn peak(
+        &self,
+        source: HdrSource,
+        whole_image: &PixelSlice<'_>,
+    ) -> Result<f32, String> {
         match source.transfer {
-            HdrTransfer::Hlg => HLG_REFERENCE_PEAK_NITS,
-            HdrTransfer::Pq => self.metadata_peak_nits.unwrap_or(DEFAULT_PQ_PEAK_NITS),
+            HdrTransfer::Hlg => Ok(HLG_REFERENCE_PEAK_NITS),
+            HdrTransfer::Pq => measure_pq_peak(whole_image),
         }
     }
+}
+
+impl HdrSource {
+    /// Whether rendering any row needs every row first.
+    pub(crate) fn needs_whole_image(self) -> bool {
+        self.transfer == HdrTransfer::Pq
+    }
+}
+
+/// The brightest channel of any pixel, in nits: CTA-861.3's MaxCLL, in the source's primaries.
+fn measure_pq_peak(pixels: &PixelSlice<'_>) -> Result<f32, String> {
+    let layout = SampleLayout::of(pixels.descriptor())?;
+    let width = pixels.width() as usize;
+    let mut rgb = vec![[0.0f32; 3]; width];
+    let mut alpha = vec![0.0f32; if layout.alpha { width } else { 0 }];
+    let mut brightest = 0.0f32;
+    for y in 0..pixels.rows() {
+        layout.read_row(pixels.row(y), &mut rgb, &mut alpha);
+        for &code in rgb.as_flattened() {
+            if code.is_finite() && code > brightest {
+                brightest = code;
+            }
+        }
+    }
+    Ok(sanitize_peak(
+        linear_srgb::tf::pq_to_linear(brightest.min(1.0)) * 10_000.0,
+    ))
 }
 
 /// Tone-map a one-shot encode's `pixels` when [`plan`] says so and they are
@@ -279,7 +311,7 @@ pub(crate) fn one_shot(
         return Ok(None);
     };
     let source = source?;
-    let peak = plan.peak(source);
+    let peak = plan.peak(source, pixels)?;
     let buf = tone_map_to_srgb8(pixels, source, peak)?;
     plan.check_alpha(&buf.as_slice())?;
     Ok(Some((buf, plan.metadata)))
@@ -339,7 +371,6 @@ pub(crate) fn plan(
         },
         None => None,
     };
-    let metadata_peak_nits = metadata.and_then(metadata_peak_nits);
     let metadata_has_icc = metadata.is_some_and(|m| m.icc_profile.is_some());
     // With no color description the descriptor is resolved when pixels
     // arrive. Do not retain HDR luminance metadata on the possible SDR result;
@@ -356,7 +387,6 @@ pub(crate) fn plan(
     });
     Some(ToneMapPlan {
         source,
-        metadata_peak_nits,
         metadata,
         strict,
         icc_authority: metadata_has_icc,
@@ -364,28 +394,10 @@ pub(crate) fn plan(
     })
 }
 
-/// MaxCLL when present and non-zero, else the mastering display's peak.
-fn metadata_peak_nits(meta: &Metadata) -> Option<f32> {
-    let cll = meta
-        .content_light_level
-        .map(|c| c.max_content_light_level)
-        .filter(|&m| m > 0)
-        .map(f32::from);
-    let mastering = meta
-        .mastering_display
-        .map(|m| m.max_luminance)
-        .filter(|m| m.is_finite() && *m > 0.0);
-    cll.or(mastering).map(sanitize_peak)
-}
-
 /// Keep a peak inside the range the EETF handles: at least SDR white (a
 /// dimmer peak passes through unchanged anyway) and at most PQ's 10 000.
 fn sanitize_peak(nits: f32) -> f32 {
-    if nits.is_finite() {
-        nits.clamp(MIN_PQ_PEAK_NITS, 10_000.0)
-    } else {
-        DEFAULT_PQ_PEAK_NITS
-    }
+    nits.clamp(MIN_PQ_PEAK_NITS, 10_000.0)
 }
 
 /// How [`tone_map_to_srgb8`] reads a row: f32 or U16 samples, RGB or RGBA.
@@ -603,10 +615,8 @@ mod tests {
         }
         assert_eq!(grays[0], 0);
         assert_eq!(grays[7], 255, "the content peak maps to SDR white");
-        assert!(
-            grays[5] >= 200,
-            "203-nit reference white is near 255: {grays:?}"
-        );
+        // BT.2446 Method A leaves room above reference white: 203 nits isn't near 255 at this peak.
+        assert_eq!(grays, [0, 13, 49, 100, 131, 171, 210, 255]);
     }
 
     #[test]

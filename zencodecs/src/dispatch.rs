@@ -662,6 +662,8 @@ where
             inner: encoder,
             plan,
             supported: C::supported_descriptors(),
+            size: None,
+            held: None,
         }),
         None => encoder,
     };
@@ -890,6 +892,49 @@ struct ToneMappingEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
     plan: crate::tonemap::ToneMapPlan,
     supported: &'static [PixelDescriptor],
+    /// The expected image, from `begin`.
+    size: Option<(u32, u32)>,
+    /// PQ rows wait here until `finish`: the peak needs every row.
+    held: Option<HeldRows>,
+}
+
+/// Rows of one descriptor, tightly packed.
+#[cfg(feature = "tonemap")]
+struct HeldRows {
+    bytes: alloc::vec::Vec<u8>,
+    width: u32,
+    rows: u32,
+    descriptor: PixelDescriptor,
+}
+
+#[cfg(feature = "tonemap")]
+impl HeldRows {
+    fn append(
+        &mut self,
+        rows: &PixelSlice<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        if rows.width() != self.width || rows.descriptor() != self.descriptor {
+            return Err("rows changed width or format during an encode".into());
+        }
+        let row_bytes = self.width as usize * self.descriptor.bytes_per_pixel();
+        let added = row_bytes
+            .checked_mul(rows.rows() as usize)
+            .ok_or("held HDR rows overflow")?;
+        self.bytes.try_reserve(added).map_err(|_| {
+            alloc::format!("allocating {added} bytes to hold HDR rows for peak measurement")
+        })?;
+        for y in 0..rows.rows() {
+            self.bytes.extend_from_slice(&rows.row(y)[..row_bytes]);
+        }
+        self.rows += rows.rows();
+        Ok(())
+    }
+
+    fn as_slice(&self) -> core::result::Result<PixelSlice<'_>, zencodec::encode::BoxedError> {
+        let stride = self.width as usize * self.descriptor.bytes_per_pixel();
+        PixelSlice::new(&self.bytes, self.width, self.rows, stride, self.descriptor)
+            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })
+    }
 }
 
 /// Render before adapting to the native codec's formats. Both operations
@@ -915,7 +960,8 @@ fn with_rendered<R>(
     let toned = match plan.source_for(pixels.descriptor()) {
         Some(source) => {
             let source = source?;
-            let toned = crate::tonemap::tone_map_to_srgb8(&pixels, source, plan.peak(source))?;
+            let peak = plan.peak(source, &pixels)?;
+            let toned = crate::tonemap::tone_map_to_srgb8(&pixels, source, peak)?;
             if real_pixels {
                 plan.check_alpha(&toned.as_slice())?;
             }
@@ -951,6 +997,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
             inner,
             plan,
             supported,
+            ..
         } = *self;
         with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
     }
@@ -993,6 +1040,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
             inner,
             plan,
             supported,
+            ..
         } = *self;
         with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
     }
@@ -1006,9 +1054,16 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
         let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
         let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
+        self.size = Some((width, height));
         // This pixel only finds the format, and its alpha means nothing.
-        with_rendered(&self.plan, px, self.supported, false, |p| {
+        let timing = with_rendered(&self.plan, px, self.supported, false, |p| {
             self.inner.begin(width, height, p.descriptor())
+        })?;
+        Ok(match self.plan.source_for(descriptor) {
+            Some(Ok(source)) if source.needs_whole_image() => {
+                zencodec::encode::OutputTiming::AT_FINISH
+            }
+            _ => timing,
         })
     }
 
@@ -1026,12 +1081,49 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
         &mut self,
         rows: PixelSlice<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        if let Some(Ok(source)) = self.plan.source_for(rows.descriptor())
+            && source.needs_whole_image()
+        {
+            let held = match &mut self.held {
+                Some(held) => held,
+                none => {
+                    let mut bytes = alloc::vec::Vec::new();
+                    // The whole image, up front, so an oversized one fails before its rows arrive.
+                    if let Some((width, height)) = self.size {
+                        let whole = (width as usize)
+                            .checked_mul(height as usize)
+                            .and_then(|n| n.checked_mul(rows.descriptor().bytes_per_pixel()))
+                            .ok_or("held HDR rows overflow")?;
+                        bytes.try_reserve_exact(whole).map_err(|_| {
+                            alloc::format!(
+                                "allocating {whole} bytes to hold HDR rows for peak measurement"
+                            )
+                        })?;
+                    }
+                    none.insert(HeldRows {
+                        bytes,
+                        width: rows.width(),
+                        rows: 0,
+                        descriptor: rows.descriptor(),
+                    })
+                }
+            };
+            return held.append(&rows);
+        }
         with_tone_mapped(&self.plan, rows, self.supported, |p| {
             self.inner.push_rows(p)
         })
     }
 
-    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+    fn finish(
+        mut self: Box<Self>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        if let Some(held) = self.held.take() {
+            let rows = held.as_slice()?;
+            with_tone_mapped(&self.plan, rows, self.supported, |p| {
+                self.inner.push_rows(p)
+            })?;
+        }
         self.inner.finish()
     }
 
