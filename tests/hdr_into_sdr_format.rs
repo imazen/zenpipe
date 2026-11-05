@@ -7,6 +7,8 @@ use zenpixels::{Cicp, ColorPrimaries, PixelBuffer, PixelDescriptor as D, Transfe
 
 /// PQ code for 203 cd/m².
 const REFERENCE_WHITE: u16 = 38_000;
+/// PQ code for 1000 cd/m², on row 0: tone mapping measures the peak, and this sets it.
+const PEAK: u16 = 49_271;
 
 fn pq_png() -> Vec<u8> {
     let d = D::RGBA16_SRGB
@@ -17,7 +19,11 @@ fn pq_png() -> Vec<u8> {
     for y in 0..16 {
         for px in pixels.row_mut(y).as_chunks_mut::<8>().0 {
             for (i, sample) in px.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-                let v = if i == 3 { 65535 } else { REFERENCE_WHITE };
+                let v = match (i, y) {
+                    (3, _) => 65535,
+                    (_, 0) => PEAK,
+                    _ => REFERENCE_WHITE,
+                };
                 *sample = v.to_ne_bytes();
             }
         }
@@ -59,9 +65,8 @@ fn jpeg_tone_maps_with_no_options() {
     let pixels = decoded.pixels();
     let bytes = pixels.descriptor().bytes_per_pixel();
     for px in pixels.row(8).chunks_exact(bytes) {
-        // Written as code values, this PQ gray would show near 148. With no MaxCLL the
-        // peak is 1,000 cd/m², so BT.2408 places 203 cd/m² below SDR white.
-        assert!((224..=234).contains(&px[0]), "{px:?}");
+        // Written as code values, this PQ gray would show near 148.
+        assert!((166..=176).contains(&px[0]), "{px:?}");
     }
 }
 

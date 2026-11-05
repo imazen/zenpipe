@@ -8,6 +8,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Fixes
+- zencodecs measures PQ peak from the image when tone mapping, instead of trusting MaxCLL or a mastering peak and falling back to 1,000 nits. A row-by-row PQ encode now holds every row until `finish`, and `begin` reports `OutputTiming::AT_FINISH`. HLG still streams. `EncodeRequest::with_tone_map_peak` overrides this: `ToneMapPeak::Declared` uses the metadata, `ToneMapPeak::Nits` a given value, and either known peak streams. This changes the output of most PQ images; a flat 203-nit image now renders as white.
 - zencodecs: the tone-map encoder relabeled samples of unknown transfer, because its streaming input list had no entry for them. Radiance input then clipped where a codec should refuse it, and streaming disagreed with one-shot. `encode_from` also refused on every default encode to an SDR-only format, even without HDR.
 
 - Samples of unknown transfer, such as Farbfeld, matched the first entry of the tone-map adapter's input list and were tone-mapped as PQ. The list now starts with SDR.
@@ -39,6 +40,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### QUEUED BREAKING CHANGES
 
+- zencodecs: tone mapping now uses BT.2446 Method A from `zenpixels-convert`, the winner of the 2026-06-22 shootout, and no longer depends on `zentone`. `ToneMapPolicy::Bt2408` becomes `Bt2446A`. Output changes: 203 cd/m² with a 1,000 cd/m² peak gives 171 rather than 229. It adds 97 KB at opt-level 3, down from 193 KB.
 - zencodecs: HDR pixels for a target with neither HDR nor CICP now tone-map by default, and the `tonemap` feature is on by default. `ToneMapPolicy::Preserve` keeps the old refusal, and strict encode policy still refuses. Jobs always have it.
 - `PipelineRows` follows the core row-source trait's optional borrowed Pulse
   input, and core row-driver calls now take `None` or `Some(pulse)`

@@ -63,6 +63,8 @@ pub struct EncodeRequest<'a> {
     orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     #[cfg(feature = "tonemap")]
     tone_map_policy: crate::ToneMapPolicy,
+    #[cfg(feature = "tonemap")]
+    tone_map_peak: crate::ToneMapPeak,
     image_facts: Option<ImageFacts>,
     /// Explicit color signal to emit when the pixel descriptor can't carry it
     /// (e.g. an ICC-resolved source primary set). PNG-only today. See
@@ -98,7 +100,9 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Bt2408,
+            tone_map_policy: crate::ToneMapPolicy::Bt2446A,
+            #[cfg(feature = "tonemap")]
+            tone_map_peak: crate::ToneMapPeak::Measured,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -137,7 +141,9 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Bt2408,
+            tone_map_policy: crate::ToneMapPolicy::Bt2446A,
+            #[cfg(feature = "tonemap")]
+            tone_map_peak: crate::ToneMapPeak::Measured,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -154,6 +160,14 @@ impl<'a> EncodeRequest<'a> {
     #[cfg(feature = "tonemap")]
     pub fn with_tone_map_policy(mut self, policy: crate::ToneMapPolicy) -> Self {
         self.tone_map_policy = policy;
+        self
+    }
+
+    /// Where a PQ tone map's source peak comes from. By default it's measured from the image,
+    /// which holds every row of a row-by-row encode until `finish`.
+    #[cfg(feature = "tonemap")]
+    pub fn with_tone_map_peak(mut self, peak: crate::ToneMapPeak) -> Self {
+        self.tone_map_peak = peak;
         self
     }
 
@@ -666,6 +680,8 @@ impl<'a> EncodeRequest<'a> {
             orientation_mode: self.orientation_mode,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_peak: self.tone_map_peak,
             cicp: self.cicp,
         };
 
@@ -977,6 +993,8 @@ impl<'a> EncodeRequest<'a> {
             orientation_mode: self.orientation_mode,
             #[cfg(feature = "tonemap")]
             tone_map_policy: self.tone_map_policy,
+            #[cfg(feature = "tonemap")]
+            tone_map_peak: self.tone_map_peak,
             cicp: self.cicp,
         };
 

@@ -3337,6 +3337,7 @@ dependencies = [
  "enough",
  "heic",
  "imgref",
+ "libm",
  "linear-srgb",
  "moxcms 0.9.0",
  "rgb",
@@ -3359,7 +3360,6 @@ dependencies = [
  "zenraw",
  "zensvg",
  "zentiff",
- "zentone",
  "zenwebp",
 ]
 
