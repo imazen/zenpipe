@@ -1129,9 +1129,16 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        _source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
-        Err("encode_from is not available when HDR pixels need tone mapping; use push_rows".into())
+        // The encoder fills its own buffer, so this is only HDR if the metadata says so.
+        if self.plan.source_for(PixelDescriptor::RGBA8_SRGB).is_some() {
+            return Err(
+                "encode_from is not available when HDR pixels need tone mapping; use push_rows"
+                    .into(),
+            );
+        }
+        self.inner.encode_from(source)
     }
 }
 

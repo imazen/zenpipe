@@ -68,8 +68,8 @@ pub enum ToneMapPolicy {
 // try HDR-to-SDR conversion before this adapter can apply the request policy.
 pub(crate) const STREAMING_INPUTS: &[PixelDescriptor] = &streaming_inputs();
 
-const fn streaming_inputs() -> [PixelDescriptor; 50] {
-    let mut out = [PixelDescriptor::RGB8_SRGB; 50];
+const fn streaming_inputs() -> [PixelDescriptor; 82] {
+    let mut out = [PixelDescriptor::RGB8_SRGB; 82];
     out[1] = PixelDescriptor::RGBA8_SRGB;
     let formats = [
         PixelDescriptor::RGBF32_LINEAR,
@@ -77,15 +77,18 @@ const fn streaming_inputs() -> [PixelDescriptor; 50] {
         PixelDescriptor::RGB16_SRGB,
         PixelDescriptor::RGBA16_SRGB,
     ];
-    // SDR first. Samples of unknown transfer match the first entry of their format, and they
-    // must not become HDR by that match: a Farbfeld image would then be tone-mapped.
+    // Samples of unknown transfer and primaries match their own entry, so nothing relabels them:
+    // they adapt to the codec exactly as they would without tone mapping. The rest are SDR first,
+    // so that no inexact match becomes HDR.
     let transfers = [
+        TransferFunction::Unknown,
         TransferFunction::Srgb,
         TransferFunction::Linear,
         TransferFunction::Pq,
         TransferFunction::Hlg,
     ];
     let primaries = [
+        ColorPrimaries::Unknown,
         ColorPrimaries::Bt709,
         ColorPrimaries::DisplayP3,
         ColorPrimaries::Bt2020,
