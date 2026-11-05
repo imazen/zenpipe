@@ -251,26 +251,24 @@ fn a_pq_descriptor_without_metadata_is_tone_mapped() {
 }
 
 #[test]
-fn feature_alone_does_not_authorize_tone_mapping() {
+fn preserve_refuses_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
     let d = desc(TransferFunction::Pq);
     for meta in [Metadata::none(), pq_meta()] {
-        let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
-        assert!(
-            request()
-                .encode(PixelSlice::new(&px, 2, H, 24, d).unwrap(), false)
-                .is_err()
-        );
-        assert!(
-            request()
+        let request = || {
+            EncodeRequest::new(ImageFormat::Bmp)
+                .with_metadata(meta.clone())
                 .with_tone_map_policy(ToneMapPolicy::Preserve)
+        };
+        assert!(
+            request()
                 .encode(PixelSlice::new(&px, 2, H, 24, d).unwrap(), false)
                 .is_err()
         );
         let built = request().build_streaming_encoder(2, H);
         if let Ok(mut se) = built {
             // Buffered codecs may reject only at finalization. A successful
-            // file is forbidden unless rendering was explicitly authorized.
+            // file is forbidden.
             let result = se.encoder.begin(2, H, d).and_then(|_| {
                 se.encoder
                     .push_rows(PixelSlice::new(&px, 2, H, 24, d).unwrap())
@@ -279,6 +277,79 @@ fn feature_alone_does_not_authorize_tone_mapping() {
             assert!(result.is_err());
         }
     }
+}
+
+#[test]
+fn the_default_is_bt2408_on_both_paths() {
+    let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
+    let d = desc(TransferFunction::Pq);
+    assert_eq!(ToneMapPolicy::default(), ToneMapPolicy::Bt2408);
+    for meta in [Metadata::none(), pq_meta()] {
+        let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
+        let slice = || PixelSlice::new(&px, 2, H, 24, d).unwrap();
+        let explicit = request()
+            .with_tone_map_policy(ToneMapPolicy::Bt2408)
+            .encode(slice(), false)
+            .unwrap()
+            .into_vec();
+        assert_eq!(
+            request().encode(slice(), false).unwrap().into_vec(),
+            explicit
+        );
+
+        let mut se = request().build_streaming_encoder(2, H).unwrap();
+        se.encoder.begin(2, H, d).unwrap();
+        se.encoder.push_rows(slice()).unwrap();
+        assert_eq!(se.encoder.finish().unwrap().into_vec(), explicit);
+    }
+}
+
+/// Rows with alpha into a format with none, on both paths.
+#[test]
+fn translucent_hdr_refuses_rather_than_dropping_alpha() {
+    let d = PixelDescriptor::RGBAF32_LINEAR
+        .with_transfer(TransferFunction::Pq)
+        .with_primaries(zenpixels::ColorPrimaries::Bt2020);
+    let row = |alpha: f32| -> Vec<u8> {
+        [pq_code(203.0), pq_code(203.0), pq_code(203.0), alpha]
+            .into_iter()
+            .flat_map(f32::to_ne_bytes)
+            .collect::<Vec<u8>>()
+            .repeat(2)
+            .repeat(H as usize)
+    };
+    let streamed = |px: &[u8]| {
+        let mut se = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_metadata(pq_meta())
+            .build_streaming_encoder(2, H)
+            .unwrap();
+        se.encoder.begin(2, H, d).unwrap();
+        se.encoder
+            .push_rows(PixelSlice::new(px, 2, H, 32, d).unwrap())
+            .and_then(|_| se.encoder.finish().map(|_| ()))
+    };
+    assert!(streamed(&row(0.5)).is_err());
+    assert!(streamed(&row(1.0)).is_ok());
+    let shot = |px: &[u8]| {
+        EncodeRequest::new(ImageFormat::Jpeg)
+            .with_metadata(pq_meta())
+            .encode(PixelSlice::new(px, 2, H, 32, d).unwrap(), false)
+    };
+    assert!(shot(&row(0.5)).is_err());
+    assert!(shot(&row(1.0)).is_ok());
+}
+
+#[test]
+fn the_default_still_yields_to_strict_policy() {
+    let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
+    let result = EncodeRequest::new(ImageFormat::Bmp)
+        .with_metadata(pq_meta())
+        .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
+        .encode(
+            PixelSlice::new(&px, 2, H, 24, desc(TransferFunction::Pq)).unwrap(),
+            false,
+        );
+    assert!(result.is_err());
 }
 
 #[test]

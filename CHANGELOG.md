@@ -7,12 +7,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
-### Fixed
-
-- Resizing after a filter no longer darkens the image. Linear `f32` from the filter was narrowed to linear `u8` for the resize, and the output carried those values labeled sRGB: `[200, 100, 50]` became `[147, 32, 8]`.
-
 #### Fixes
 
+- A PQ or HLG job into JPEG panicked: the matte ran on `RGBA16` rows that had no conversion to `RGBA8`. Opaque HDR now encodes, tone-mapped. Translucent HDR refuses on both encode paths, because compositing needs tone mapping first and that happens inside the encoder.
+- Resizing after a filter no longer darkens the image. Linear `f32` from the filter was narrowed to linear `u8` for the resize, and the output carried those values labeled sRGB: `[200, 100, 50]` became `[147, 32, 8]`.
 - Strict color fitting no longer asks native codecs to re-admit an already
   enforced pipeline requirement. Redundant sRGB-to-PNM descriptions succeed;
   lossy fits and unsupported native emission requirements still refuse.
@@ -39,6 +37,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### QUEUED BREAKING CHANGES
 
+- zencodecs: HDR pixels for a target with neither HDR nor CICP now tone-map by default, and the `tonemap` feature is on by default. `ToneMapPolicy::Preserve` keeps the old refusal, and strict encode policy still refuses. Jobs always have it.
 - `PipelineRows` follows the core row-source trait's optional borrowed Pulse
   input, and core row-driver calls now take `None` or `Some(pulse)`
   (`f7b7760c`). Retained-publication entry signatures stay unchanged.

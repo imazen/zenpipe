@@ -98,7 +98,7 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Preserve,
+            tone_map_policy: crate::ToneMapPolicy::Bt2408,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -137,7 +137,7 @@ impl<'a> EncodeRequest<'a> {
             encode_policy: None,
             orientation_mode: None,
             #[cfg(feature = "tonemap")]
-            tone_map_policy: crate::ToneMapPolicy::Preserve,
+            tone_map_policy: crate::ToneMapPolicy::Bt2408,
             image_facts: None,
             cicp: None,
             #[cfg(feature = "jpeg-ultrahdr")]
@@ -147,10 +147,10 @@ impl<'a> EncodeRequest<'a> {
         }
     }
 
-    /// Authorize HDR to SDR rendering for still-image one-shot and row encodes.
-    /// Compiling `tonemap`
-    /// alone preserves the existing encode behavior. Strict encode policy
-    /// still refuses irreversible conversion. HDR-capable targets retain HDR.
+    /// What HDR pixels do for an SDR-only target, in still-image one-shot and row
+    /// encodes. By default they tone-map. [`Preserve`](crate::ToneMapPolicy::Preserve)
+    /// refuses instead. Strict encode policy also refuses irreversible conversion.
+    /// HDR-capable targets retain HDR.
     #[cfg(feature = "tonemap")]
     pub fn with_tone_map_policy(mut self, policy: crate::ToneMapPolicy) -> Self {
         self.tone_map_policy = policy;

@@ -55,7 +55,7 @@ zennode-defs = ["zennode"]
 # web delivery (decode -> resize -> re-encode) builds without the UltraHDR stack.
 # GainMapMetadata is a type alias for zencodec::GainMapParams (ultrahdr-core
 # 0.5); opt in with `job-ultrahdr` for gain-map encode.
-job = ["zennode", "std", "zencodecs/cms"]
+job = ["zennode", "std", "zencodecs/cms", "zencodecs/tonemap"]
 # Opt-in: `job` plus gain-map (UltraHDR) encode via the zencodecs<->zenjpeg
 # bridge. Roundtrip-tested (tests/gainmap_roundtrip.rs).
 job-ultrahdr = ["job", "zencodecs/jpeg-ultrahdr"]

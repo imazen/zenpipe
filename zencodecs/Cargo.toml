@@ -153,14 +153,14 @@ checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-deco
 std = ["zencodec-io?/std", "zenmeta?/std"]
 # Encoded metadata rewriting delegates to enabled codecs.
 metadata = ["zenjpeg?/metadata-rewrite", "zenpng?/metadata-rewrite", "zenjxl?/metadata-rewrite"]
-default = ["inventory", "jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
+default = ["inventory", "jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp", "tonemap"]
 # Inventory walkers are optional per codec; the dispatch convenience enables them by default.
 inventory = ["zenjpeg?/inventory", "zenpng?/inventory", "zenwebp?/inventory", "zengif?/inventory", "zenavif?/inventory", "zenjxl?/inventory", "heic?/inventory", "zentiff?/inventory", "zenraw?/inventory", "zenbitmaps?/inventory", "zenpdf?/inventory", "zensvg?/inventory", "zenjp2?/inventory"]
 
 # Tone-map HDR (PQ/HLG) sources to sRGB when encoding to a target that
-# carries neither HDR nor CICP (JPEG, WebP, GIF, BMP, TIFF), when explicitly
-# authorized by EncodeRequest::with_tone_map_policy, instead of
-# writing HDR code values a reader shows as sRGB. ITU-R BT.2408 EETF with
+# carries neither HDR nor CICP (JPEG, WebP, GIF, BMP, TIFF), unless
+# EncodeRequest::with_tone_map_policy says Preserve, instead of
+# refusing them. ITU-R BT.2408 EETF with
 # the 203-nit reference white as SDR white. See `src/tonemap.rs`.
 tonemap = ["dep:zentone", "linear-srgb/transfer"]
 

@@ -10,7 +10,7 @@
 //!
 //! # When it runs
 //!
-//! The request explicitly selects [`ToneMapPolicy::Bt2408`]. The source colour is PQ or HLG, read from the metadata's CICP, from an
+//! The request leaves [`ToneMapPolicy::Bt2408`], the default, in place. The source colour is PQ or HLG, read from the metadata's CICP, from an
 //! ICC profile that names such a CICP, or (with no colour description at
 //! all) from the pixel descriptor's transfer. The target declares neither
 //! `EncodeCapabilities::hdr()` nor `cicp()`. That covers JPEG, WebP, GIF,
@@ -48,19 +48,19 @@ use zenpixels::{
 };
 use zentone::ToneMap as _;
 
-/// Per-request permission to render HDR pixels for an SDR-only target.
-/// Compiling the `tonemap` feature only makes this capability available.
+/// What to do with HDR pixels for an SDR-only target.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ToneMapPolicy {
-    /// Keep the existing color fitting contract, including its errors.
-    #[default]
+    /// Keep the color fitting contract, including its errors: HDR pixels for an
+    /// SDR-only target are refused.
     Preserve,
     /// BT.2408 EETF onto 203-nit SDR white, followed by BT.709 gamut
     /// conversion, soft clipping and sRGB 8-bit encoding. PQ peak is MaxCLL,
     /// else mastering-display maximum, else 1000 nits; both encode paths use
     /// the same fallback. HLG uses the 1000-nit BT.2100 reference display.
-    /// Strict encode policy still refuses HDR rendering.
+    /// Strict encode policy still refuses HDR rendering. This is the default.
+    #[default]
     Bt2408,
 }
 
@@ -212,9 +212,25 @@ pub(crate) struct ToneMapPlan {
     pub(crate) metadata: Option<Metadata>,
     strict: bool,
     icc_authority: bool,
+    native_alpha: bool,
 }
 
 impl ToneMapPlan {
+    /// Refuses rendered rows that are translucent for a format with no alpha. Encoding
+    /// would drop alpha that matters, and a matte would have to follow tone mapping.
+    pub(crate) fn check_alpha(&self, rendered: &PixelSlice<'_>) -> Result<(), String> {
+        let translucent = !self.native_alpha
+            && rendered.descriptor().has_alpha()
+            && (0..rendered.rows()).any(|y| {
+                let row = rendered.row(y).as_chunks::<4>().0;
+                row.iter().any(|px| px[3] != 255)
+            });
+        if translucent {
+            return Err("translucent HDR for a format with no alpha needs a matte".to_string());
+        }
+        Ok(())
+    }
+
     /// The source for `desc`'s pixels, or `None` when they aren't HDR.
     pub(crate) fn source_for(&self, desc: PixelDescriptor) -> Option<Result<HdrSource, String>> {
         let source = match &self.source {
@@ -262,6 +278,7 @@ pub(crate) fn one_shot(
     let source = source?;
     let peak = plan.peak(source);
     let buf = tone_map_to_srgb8(pixels, source, peak)?;
+    plan.check_alpha(&buf.as_slice())?;
     Ok(Some((buf, plan.metadata)))
 }
 
@@ -340,6 +357,7 @@ pub(crate) fn plan(
         metadata,
         strict,
         icc_authority: metadata_has_icc,
+        native_alpha: caps.native_alpha(),
     })
 }
 

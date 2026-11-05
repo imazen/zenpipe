@@ -901,14 +901,25 @@ fn with_tone_mapped<R>(
     supported: &[PixelDescriptor],
     consume: impl FnOnce(PixelSlice<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
 ) -> core::result::Result<R, zencodec::encode::BoxedError> {
+    with_rendered(plan, pixels, supported, true, consume)
+}
+
+#[cfg(feature = "tonemap")]
+fn with_rendered<R>(
+    plan: &crate::tonemap::ToneMapPlan,
+    pixels: PixelSlice<'_>,
+    supported: &[PixelDescriptor],
+    real_pixels: bool,
+    consume: impl FnOnce(PixelSlice<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
+) -> core::result::Result<R, zencodec::encode::BoxedError> {
     let toned = match plan.source_for(pixels.descriptor()) {
         Some(source) => {
             let source = source?;
-            Some(crate::tonemap::tone_map_to_srgb8(
-                &pixels,
-                source,
-                plan.peak(source),
-            )?)
+            let toned = crate::tonemap::tone_map_to_srgb8(&pixels, source, plan.peak(source))?;
+            if real_pixels {
+                plan.check_alpha(&toned.as_slice())?;
+            }
+            Some(toned)
         }
         None => None,
     };
@@ -995,7 +1006,8 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
         let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
         let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        with_tone_mapped(&self.plan, px, self.supported, |p| {
+        // This pixel only finds the format, and its alpha means nothing.
+        with_rendered(&self.plan, px, self.supported, false, |p| {
             self.inner.begin(width, height, p.descriptor())
         })
     }

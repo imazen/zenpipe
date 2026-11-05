@@ -1600,7 +1600,13 @@ impl<'a> ImageJob<'a> {
 
         // Handle alpha removal for formats that don't support it (JPEG).
         let target_format = decision.format;
-        let needs_alpha_removal = !target_format.supports_alpha() && format.has_alpha();
+        // HDR keeps its alpha for now. zencodecs tone-maps inside the encoder, and a matte
+        // only means something after that. Opaque HDR encodes, translucent HDR refuses.
+        let hdr = matches!(
+            format.transfer,
+            crate::TransferFunction::Pq | crate::TransferFunction::Hlg
+        );
+        let needs_alpha_removal = !target_format.supports_alpha() && format.has_alpha() && !hdr;
 
         if needs_alpha_removal {
             let matte = decision.matte.unwrap_or([255, 255, 255]);
@@ -1608,10 +1614,13 @@ impl<'a> ImageJob<'a> {
                 // Composite onto the requested matte color, then drop alpha
                 // (MatteFlattenOp: RGBA8 → RGB8). The old path was a bare
                 // RGBA→RGB conversion that ignored the configured matte.
-                if format != crate::format::RGBA8_SRGB
-                    && let Some(conv) =
-                        crate::ops::RowConverterOp::new(format, crate::format::RGBA8_SRGB)
-                {
+                if format != crate::format::RGBA8_SRGB {
+                    let conv = crate::ops::RowConverterOp::new(format, crate::format::RGBA8_SRGB)
+                        .ok_or_else(|| {
+                        at!(PipeError::Op(alloc::format!(
+                            "no conversion from {format} to composite on a matte"
+                        )))
+                    })?;
                     source = Box::new(
                         crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
                     );
