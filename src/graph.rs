@@ -1369,12 +1369,16 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let mut source = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(source);
-                // Sources tagged TransferFunction::Linear — gain-map sidecars
-                // (zenpipe#41) or genuinely linear-light data — are resampled
-                // in their own domain: the working format keeps the Linear
-                // transfer, which zenresize maps to raw u8↔f32 with no gamma
-                // round-trip. Everything else works in sRGB as before.
-                let working = if source.format().transfer == crate::TransferFunction::Linear {
+                // Eight-bit sources tagged TransferFunction::Linear, which means
+                // gain-map sidecars (zenpipe#41), are resampled in their own domain:
+                // the working format keeps the Linear transfer, which zenresize maps
+                // to raw u8↔f32 with no gamma round-trip. Everything else works in
+                // sRGB, including linear f32 from a filter: narrowing that to linear
+                // u8 would crush the shadows.
+                let source_format = source.format();
+                let working = if source_format.transfer == crate::TransferFunction::Linear
+                    && source_format.channel_type() == zenpixels::ChannelType::U8
+                {
                     format::RGBA8_LINEAR
                 } else {
                     format::RGBA8_SRGB

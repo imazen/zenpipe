@@ -7,6 +7,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+### Fixed
+
+- Resizing after a filter no longer darkens the image. Linear `f32` from the filter was narrowed to linear `u8` for the resize, and the output carried those values labeled sRGB: `[200, 100, 50]` became `[147, 32, 8]`.
+
 #### Fixes
 
 - Strict color fitting no longer asks native codecs to re-admit an already
