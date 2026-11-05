@@ -82,7 +82,9 @@ pub fn build_pipeline_dag(
         .map(|(_, s)| (s.width(), s.height()))
         .unwrap_or((0, 0));
 
-    let mut graph = PipelineGraph::new();
+    // See `bridge::mod`: the job API's narrowing, named.
+    let mut graph = PipelineGraph::new()
+        .with_conversion_resolver(crate::graph::narrow_where_a_node_has_no_deeper_path);
     // Map from DAG index to graph NodeId.
     let mut dag_to_graph: Vec<Option<crate::graph::NodeId>> = alloc::vec![None; dag.len()];
 
