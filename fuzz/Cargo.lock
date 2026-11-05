@@ -582,6 +582,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "imgref",
+ "libm",
  "linear-srgb",
  "moxcms",
  "rgb",

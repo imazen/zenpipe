@@ -9,6 +9,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- Samples of unknown transfer, such as Farbfeld, matched the first entry of the tone-map adapter's input list and were tone-mapped as PQ. The list now starts with SDR.
 - A PQ or HLG job into JPEG panicked: the matte ran on `RGBA16` rows that had no conversion to `RGBA8`. Opaque HDR now encodes, tone-mapped. Translucent HDR refuses on both encode paths, because compositing needs tone mapping first and that happens inside the encoder.
 - Resizing after a filter no longer darkens the image. Linear `f32` from the filter was narrowed to linear `u8` for the resize, and the output carried those values labeled sRGB: `[200, 100, 50]` became `[147, 32, 8]`.
 - Strict color fitting no longer asks native codecs to re-admit an already
