@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 783 lines (supported surface) | zencodecs.features.txt 163 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 21 lines (21 hidden + 0 excluded-feature)
+# files: zencodecs.txt 789 lines (supported surface) | zencodecs.features.txt 163 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 22 lines (22 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)        61
+#   pub types (struct/enum/trait/alias)        62
 #   pub consts/statics                         10
 #   free functions                             39
-#   inherent methods                          268
+#   inherent methods                          269
 #   struct fields                             131
-#   enum variants                             121
+#   enum variants                             124
 #   re-exports                                129
-#   trait roster entries (type × trait)       108
+#   trait roster entries (type × trait)       113
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                  25
+#   auto-trait-complete types                  26
 #   auto-trait exceptions                       7
 #
 # per-module pub lines:
-#   (root)                          347
+#   (root)                          352
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -41,7 +41,7 @@
 #   trace                            48
 #   transcode                        54
 
-## items (746 lines)
+## items (751 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -529,6 +529,10 @@ pub enum SupplementPolicy [also: transcode]
 pub SupplementPolicy::Only(transcode::SupplementSet)
 pub SupplementPolicy::Preserve
 pub SupplementPolicy::Strip
+#[non_exhaustive] pub enum ToneMapPeak
+pub ToneMapPeak::Declared
+pub ToneMapPeak::Measured
+pub ToneMapPeak::Nits(f32)
 #[non_exhaustive] pub enum ToneMapPolicy
 pub ToneMapPolicy::Bt2446A
 pub ToneMapPolicy::Preserve
@@ -644,6 +648,7 @@ pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_quality_profile(self, quality::QualityProfile) -> Self
 pub fn EncodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
 pub fn EncodeRequest<'a>::with_speed(self, speed::EncodeSpeed) -> Self
+pub fn EncodeRequest<'a>::with_tone_map_peak(self, ToneMapPeak) -> Self
 pub fn EncodeRequest<'a>::with_tone_map_policy(self, ToneMapPolicy) -> Self
 pub struct FormatDecision [also: decision]
 pub FormatDecision::format: zencodec::format::ImageFormat
@@ -790,11 +795,12 @@ pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::Qua
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
 pub type TranscodeWriter<'a> = alloc::boxed::Box<(dyn core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a)> [also: transcode]
 
-## trait impls (28 types)
+## trait impls (29 types)
 
 AllowedFormats: Clone, Copy, Debug, Default
 CodecError: Debug, Display, Error
 FormatSet: Clone, Copy, Debug, Default, Eq, PartialEq
+ToneMapPeak: Clone, Copy, Debug, Default, PartialEq
 ToneMapPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 codec_id::CodecId: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 config::CodecConfig: Debug, Default
@@ -824,7 +830,7 @@ impl<C> AnyEncoder for C where C: zencodec::traits::encoding::EncoderConfig, <<C
 
 ## auto traits
 
-25 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+26 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 ConfiguredJob: !RefUnwindSafe !Send !Sync !UnwindSafe
 DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe

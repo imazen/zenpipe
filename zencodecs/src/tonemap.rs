@@ -46,6 +46,25 @@ use zenpixels::{
     PixelSlice, SignalRange, TransferFunction,
 };
 
+/// Where a PQ tone map's source peak comes from.
+///
+/// HLG doesn't use this: its peak is the 1000-nit BT.2100 reference display.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub enum ToneMapPeak {
+    /// The brightest channel in the image. A row-by-row encode holds every PQ row until
+    /// `finish`. This is the default: the best-scoring tone maps measured, and declared values
+    /// can be far from the content.
+    #[default]
+    Measured,
+    /// MaxCLL, else the mastering display's maximum, from the metadata. Measures when it has
+    /// neither. With either, a row-by-row encode streams, and every image in a sequence renders against
+    /// the same peak.
+    Declared,
+    /// This many nits, limited to 203..=10000. A row-by-row encode streams.
+    Nits(f32),
+}
+
 /// What to do with HDR pixels for an SDR-only target.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -54,10 +73,9 @@ pub enum ToneMapPolicy {
     /// SDR-only target are refused.
     Preserve,
     /// BT.2446 Method A onto a 100-nit SDR peak, followed by BT.709 gamut conversion,
-    /// OKLch soft compression and sRGB 8-bit encoding. PQ peak is measured from
-    /// the image, so a row-by-row encode holds every PQ row until `finish`; declared
-    /// MaxCLL and mastering peaks aren't used. HLG uses the 1000-nit BT.2100
-    /// reference display and streams.
+    /// OKLch soft compression and sRGB 8-bit encoding. [`ToneMapPeak`] says where PQ's
+    /// peak comes from; by default it's measured from the image. HLG uses the 1000-nit
+    /// BT.2100 reference display and streams.
     /// Strict encode policy still refuses HDR rendering. This is the default.
     #[default]
     Bt2446A,
@@ -210,6 +228,8 @@ pub(crate) struct ToneMapPlan {
     /// The source colour; `None` takes it from the pixels' descriptor (the
     /// metadata describes no colour).
     pub(crate) source: Option<Result<HdrSource, String>>,
+    /// The peak if it's known before the pixels, otherwise `None`: measure.
+    known_peak_nits: Option<f32>,
     /// The metadata to encode with: the colour description and HDR
     /// luminance metadata removed, since the pixels are sRGB now.
     pub(crate) metadata: Option<Metadata>,
@@ -254,26 +274,21 @@ impl ToneMapPlan {
     }
 
     /// The content peak for a whole image, the same on every encode path and for any chunk size.
-    ///
-    /// PQ peaks are measured. Declared MaxCLL and mastering peaks aren't used: the BT.2446 Method A
-    /// winners of the tone-map shootout all measure, and declared values can be far from the content.
-    /// HLG has a fixed reference peak, so it needs no measurement and can stream.
     pub(crate) fn peak(
         &self,
         source: HdrSource,
         whole_image: &PixelSlice<'_>,
     ) -> Result<f32, String> {
-        match source.transfer {
-            HdrTransfer::Hlg => Ok(HLG_REFERENCE_PEAK_NITS),
-            HdrTransfer::Pq => measure_pq_peak(whole_image),
+        match (source.transfer, self.known_peak_nits) {
+            (HdrTransfer::Hlg, _) => Ok(HLG_REFERENCE_PEAK_NITS),
+            (HdrTransfer::Pq, Some(nits)) => Ok(nits),
+            (HdrTransfer::Pq, None) => measure_pq_peak(whole_image),
         }
     }
-}
 
-impl HdrSource {
-    /// Whether rendering any row needs every row first.
-    pub(crate) fn needs_whole_image(self) -> bool {
-        self.transfer == HdrTransfer::Pq
+    /// Whether rendering any row of `source` needs every row first.
+    pub(crate) fn needs_whole_image(&self, source: HdrSource) -> bool {
+        source.transfer == HdrTransfer::Pq && self.known_peak_nits.is_none()
     }
 }
 
@@ -305,9 +320,10 @@ pub(crate) fn one_shot(
     metadata: Option<&Metadata>,
     caps: &EncodeCapabilities,
     policy: ToneMapPolicy,
+    peak: ToneMapPeak,
     strict: bool,
 ) -> Result<Option<(PixelBuffer, Option<Metadata>)>, String> {
-    let Some(plan) = plan(metadata, caps, policy, strict) else {
+    let Some(plan) = plan(metadata, caps, policy, peak, strict) else {
         return Ok(None);
     };
     let Some(source) = plan.source_for(pixels.descriptor()) else {
@@ -334,6 +350,7 @@ pub(crate) fn plan(
     metadata: Option<&Metadata>,
     caps: &EncodeCapabilities,
     policy: ToneMapPolicy,
+    peak: ToneMapPeak,
     strict: bool,
 ) -> Option<ToneMapPlan> {
     if policy == ToneMapPolicy::Preserve || !target_needs_tone_map(caps) {
@@ -375,6 +392,7 @@ pub(crate) fn plan(
         None => None,
     };
     let metadata_has_icc = metadata.is_some_and(|m| m.icc_profile.is_some());
+    let declared = metadata.and_then(declared_peak_nits);
     // With no color description the descriptor is resolved when pixels
     // arrive. Do not retain HDR luminance metadata on the possible SDR result;
     // non-color metadata remains intact.
@@ -388,13 +406,34 @@ pub(crate) fn plan(
         out.mastering_display = None;
         out
     });
+    let known_peak_nits = match peak {
+        ToneMapPeak::Measured => None,
+        ToneMapPeak::Nits(nits) if nits.is_finite() => Some(sanitize_peak(nits)),
+        ToneMapPeak::Nits(_) => None,
+        ToneMapPeak::Declared => declared,
+    };
     Some(ToneMapPlan {
         source,
+        known_peak_nits,
         metadata,
         strict,
         icc_authority: metadata_has_icc,
         native_alpha: caps.native_alpha(),
     })
+}
+
+/// MaxCLL when present and non-zero, else the mastering display's peak.
+fn declared_peak_nits(meta: &Metadata) -> Option<f32> {
+    let cll = meta
+        .content_light_level
+        .map(|c| c.max_content_light_level)
+        .filter(|&m| m > 0)
+        .map(f32::from);
+    let mastering = meta
+        .mastering_display
+        .map(|m| m.max_luminance)
+        .filter(|m| m.is_finite() && *m > 0.0);
+    cll.or(mastering).map(sanitize_peak)
 }
 
 /// Keep a peak inside the range the EETF handles: at least SDR white (a
@@ -654,9 +693,16 @@ mod tests {
                 meta.cicp = Some(Cicp::new(1, 16, 0, true));
             }
             let caps = EncodeCapabilities::new();
-            let (_, output) = one_shot(&slice, Some(&meta), &caps, ToneMapPolicy::Bt2446A, false)
-                .unwrap()
-                .unwrap();
+            let (_, output) = one_shot(
+                &slice,
+                Some(&meta),
+                &caps,
+                ToneMapPolicy::Bt2446A,
+                ToneMapPeak::Measured,
+                false,
+            )
+            .unwrap()
+            .unwrap();
             let output = output.unwrap();
             assert!(output.icc_profile.is_none());
             assert!(output.cicp.is_none());
@@ -664,10 +710,16 @@ mod tests {
             assert!(output.mastering_display.is_none());
             assert_eq!(output.xmp, meta.xmp);
             // This is the metadata stamped onto the streaming codec job.
-            let streamed = plan(Some(&meta), &caps, ToneMapPolicy::Bt2446A, false)
-                .unwrap()
-                .metadata
-                .unwrap();
+            let streamed = plan(
+                Some(&meta),
+                &caps,
+                ToneMapPolicy::Bt2446A,
+                ToneMapPeak::Measured,
+                false,
+            )
+            .unwrap()
+            .metadata
+            .unwrap();
             assert!(streamed.content_light_level.is_none());
             assert!(streamed.mastering_display.is_none());
             assert_eq!(streamed.xmp, meta.xmp);
@@ -683,6 +735,7 @@ mod tests {
                 Some(&meta),
                 &EncodeCapabilities::new(),
                 ToneMapPolicy::Bt2446A,
+                ToneMapPeak::Measured,
                 false
             )
             .is_none()
@@ -763,6 +816,7 @@ mod tests {
             Some(&meta),
             &EncodeCapabilities::new(),
             ToneMapPolicy::Bt2446A,
+            ToneMapPeak::Measured,
             false,
         )
         .unwrap();

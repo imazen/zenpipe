@@ -657,3 +657,68 @@ fn unknown_transfer_is_not_tone_mapped() {
     assert_ne!(target.transfer(), TransferFunction::Pq);
     assert_ne!(target.transfer(), TransferFunction::Hlg);
 }
+
+#[test]
+fn the_peak_can_be_declared_or_given_and_then_streams() {
+    use zencodecs::ToneMapPeak;
+    let d = desc(TransferFunction::Pq);
+    let px: Vec<u8> = [203.0, 203.0, 203.0, 400.0]
+        .into_iter()
+        .flat_map(|n| [pq_code(n); 6])
+        .flat_map(f32::to_ne_bytes)
+        .collect();
+    let mut declared = Metadata::none();
+    declared.content_light_level = Some(ContentLightLevel::new(4000, 400));
+    let render = |meta: Metadata, peak: ToneMapPeak| {
+        let bytes = EncodeRequest::new(ImageFormat::Bmp)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
+            .with_tone_map_peak(peak)
+            .with_metadata(meta)
+            .encode(PixelSlice::new(&px, 2, H, 24, d).unwrap(), false)
+            .unwrap()
+            .into_vec();
+        decoded_first_row(&bytes, 2)[0]
+    };
+    let measured = render(declared.clone(), ToneMapPeak::Measured);
+    let from_metadata = render(declared.clone(), ToneMapPeak::Declared);
+    let given = render(Metadata::none(), ToneMapPeak::Nits(4000.0));
+    assert!(from_metadata < measured, "{from_metadata} vs {measured}");
+    assert_eq!(from_metadata, given);
+    // Nothing declared: it measures.
+    assert_eq!(
+        render(Metadata::none(), ToneMapPeak::Declared),
+        render(Metadata::none(), ToneMapPeak::Measured)
+    );
+
+    // A known peak needs no held rows.
+    let timing = |meta: Metadata, peak: ToneMapPeak| {
+        let mut se = EncodeRequest::new(ImageFormat::Bmp)
+            .with_tone_map_policy(ToneMapPolicy::Bt2446A)
+            .with_tone_map_peak(peak)
+            .with_metadata(meta)
+            .build_streaming_encoder(2, H)
+            .unwrap();
+        se.encoder.begin(2, H, d).unwrap()
+    };
+    let held = zencodec::encode::OutputTiming::AT_FINISH;
+    assert_eq!(timing(Metadata::none(), ToneMapPeak::Measured), held);
+    assert_eq!(timing(Metadata::none(), ToneMapPeak::Declared), held);
+    // A row-by-row encode and a one-shot still agree with a given peak.
+    let mut se = EncodeRequest::new(ImageFormat::Bmp)
+        .with_tone_map_policy(ToneMapPolicy::Bt2446A)
+        .with_tone_map_peak(ToneMapPeak::Nits(4000.0))
+        .with_metadata(Metadata::none())
+        .build_streaming_encoder(2, H)
+        .unwrap();
+    se.encoder.begin(2, H, d).unwrap();
+    for y in 0..H as usize {
+        let row = &px[y * 24..(y + 1) * 24];
+        se.encoder
+            .push_rows(PixelSlice::new(row, 2, 1, 24, d).unwrap())
+            .unwrap();
+    }
+    let mut out = Vec::new();
+    se.encoder.take_output(&mut out);
+    out.extend_from_slice(se.encoder.finish().unwrap().data());
+    assert_eq!(decoded_first_row(&out, 2)[0], given);
+}

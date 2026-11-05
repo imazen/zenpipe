@@ -84,6 +84,8 @@ pub(crate) struct EncodeParams<'a> {
     pub orientation_mode: Option<zencodec::encode::EncodeOrientation>,
     #[cfg(feature = "tonemap")]
     pub tone_map_policy: crate::ToneMapPolicy,
+    #[cfg(feature = "tonemap")]
+    pub tone_map_peak: crate::ToneMapPeak,
     /// Explicit color signal to emit (e.g. a source `source_color` resolved from
     /// an ICC profile that the pixel descriptor's color-space enum can't carry).
     /// Currently honored by the PNG encoder (cICP chunk). `None` lets the encoder
@@ -217,6 +219,7 @@ where
                 upright.as_ref(),
                 <C as zencodec::encode::EncoderConfig>::capabilities(),
                 params.tone_map_policy,
+                params.tone_map_peak,
                 strict,
             )
             .map_err(|e| {
@@ -565,13 +568,14 @@ where
             })?;
     }
     // HDR strips into a target that carries neither HDR nor CICP are
-    // tone-mapped to sRGB (see `crate::tonemap`). A strip can't be measured
-    // up front, so the content peak comes from the metadata or the default.
+    // tone-mapped to sRGB (see `crate::tonemap`). PQ rows wait for a measured peak unless the request
+    // gives one.
     #[cfg(feature = "tonemap")]
     let tone_map = crate::tonemap::plan(
         upright.as_ref(),
         <C as zencodec::encode::EncoderConfig>::capabilities(),
         params.tone_map_policy,
+        params.tone_map_peak,
         strict,
     );
     #[cfg(feature = "tonemap")]
@@ -1060,7 +1064,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
             self.inner.begin(width, height, p.descriptor())
         })?;
         Ok(match self.plan.source_for(descriptor) {
-            Some(Ok(source)) if source.needs_whole_image() => {
+            Some(Ok(source)) if self.plan.needs_whole_image(source) => {
                 zencodec::encode::OutputTiming::AT_FINISH
             }
             _ => timing,
@@ -1082,7 +1086,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
         rows: PixelSlice<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
         if let Some(Ok(source)) = self.plan.source_for(rows.descriptor())
-            && source.needs_whole_image()
+            && self.plan.needs_whole_image(source)
         {
             let held = match &mut self.held {
                 Some(held) => held,

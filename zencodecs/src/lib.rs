@@ -168,7 +168,7 @@ pub mod speed;
 #[cfg(feature = "tonemap")]
 mod tonemap;
 #[cfg(feature = "tonemap")]
-pub use tonemap::ToneMapPolicy;
+pub use tonemap::{ToneMapPeak, ToneMapPolicy};
 pub mod trace;
 pub mod transcode;
 #[cfg(feature = "zennode")]
