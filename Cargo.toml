@@ -312,8 +312,8 @@ zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b2
 # The precision policy (imazen/zenpixels feat/precision-policy), and the two crates it patches.
 garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "05f3dc6bbc4d76f6225c1a85a38c58df4930e46d" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "05f3dc6bbc4d76f6225c1a85a38c58df4930e46d" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5dd7bfc8bc72c4318960ae93d80a7bdbce39897f" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5dd7bfc8bc72c4318960ae93d80a7bdbce39897f" }
 # The consumed ultrahdr-core package uses version edges for shared types.
 # Match the source selected by the optional-control codec roots.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
