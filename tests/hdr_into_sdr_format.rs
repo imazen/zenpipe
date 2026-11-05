@@ -7,6 +7,8 @@ use zenpixels::{Cicp, ColorPrimaries, PixelBuffer, PixelDescriptor as D, Transfe
 
 /// PQ code for 203 cd/m².
 const REFERENCE_WHITE: u16 = 38_000;
+/// PQ code for 1000 cd/m², on row 0: tone mapping measures the peak, and this sets it.
+const PEAK: u16 = 49_271;
 
 fn pq_png() -> Vec<u8> {
     let d = D::RGBA16_SRGB
@@ -17,7 +19,11 @@ fn pq_png() -> Vec<u8> {
     for y in 0..16 {
         for px in pixels.row_mut(y).as_chunks_mut::<8>().0 {
             for (i, sample) in px.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-                let v = if i == 3 { 65535 } else { REFERENCE_WHITE };
+                let v = match (i, y) {
+                    (3, _) => 65535,
+                    (_, 0) => PEAK,
+                    _ => REFERENCE_WHITE,
+                };
                 *sample = v.to_ne_bytes();
             }
         }
