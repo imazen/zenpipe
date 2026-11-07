@@ -194,9 +194,9 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
 name = "archmage"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
+checksum = "67dcf4e0bcce8da7704d177f604cf43299777de9d0f052ffe8822ab188de2820"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -205,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
+checksum = "8ec18ef9ee506a934ab4f46f204f1d1d83528283d5400df800688748268b82bc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2234,12 +2234,11 @@ source = "git+https://github.com/DanielKeep/rust-custom-derive.git#1252f258cdb9b
 
 [[package]]
 name = "magetypes"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
+checksum = "f509b5e651143f19077f1d3874e87d1f8ed617f7c257f60e38d58f27563e0f98"
 dependencies = [
  "archmage",
- "libm",
  "rustversion",
 ]
 
@@ -3012,7 +3011,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.4.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
+source = "git+https://github.com/imazen/rav1d-safe?rev=68e499ec455dc6bc29ee4b69abd64022a6099411#68e499ec455dc6bc29ee4b69abd64022a6099411"
 dependencies = [
  "aligned",
  "loom",
@@ -3023,7 +3022,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.7.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
+source = "git+https://github.com/imazen/rav1d-safe?rev=68e499ec455dc6bc29ee4b69abd64022a6099411#68e499ec455dc6bc29ee4b69abd64022a6099411"
 dependencies = [
  "aligned",
  "archmage",
@@ -4895,7 +4894,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7#a93b9fbe85a922524c1a259eedd52c7fd3b526a7"
+source = "git+https://github.com/imazen/zenavif?rev=0da9db45cd7554ae98db6c09976356a473490b73#0da9db45cd7554ae98db6c09976356a473490b73"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4917,13 +4916,29 @@ dependencies = [
  "zenanalyze-api",
  "zenav1-aom-encode",
  "zenav1-svt",
- "zenavif-parse",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=0da9db45cd7554ae98db6c09976356a473490b73)",
  "zenavif-serialize",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
  "zenpredict 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=6bbcacb11313923ded6e5eeebb725878c5736453)",
  "zenravif",
+]
+
+[[package]]
+name = "zenavif-parse"
+version = "0.7.0"
+source = "git+https://github.com/imazen/zenavif?rev=0da9db45cd7554ae98db6c09976356a473490b73#0da9db45cd7554ae98db6c09976356a473490b73"
+dependencies = [
+ "arrayvec 0.7.8",
+ "bitreader",
+ "byteorder",
+ "enough",
+ "fallible_collections",
+ "leb128",
+ "log",
+ "whereat",
+ "zencodec",
 ]
 
 [[package]]
@@ -4945,7 +4960,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7#a93b9fbe85a922524c1a259eedd52c7fd3b526a7"
+source = "git+https://github.com/imazen/zenavif?rev=0da9db45cd7554ae98db6c09976356a473490b73#0da9db45cd7554ae98db6c09976356a473490b73"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -5069,7 +5084,7 @@ dependencies = [
  "whereat",
  "zenanalyze-api",
  "zenavif",
- "zenavif-parse",
+ "zenavif-parse 0.7.0 (git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7)",
  "zenbitmaps",
  "zencodec",
  "zencodec-io",
