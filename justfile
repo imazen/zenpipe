@@ -755,3 +755,10 @@ job-precision-check:
 test-strict-color-fit:
     cargo test -p zencodecs --locked --no-default-features --features std,cms,png,bitmaps --test color_fit
     cargo clippy -p zencodecs --locked --no-default-features --features std,cms,png,bitmaps --lib --test color_fit -- -D warnings
+
+# Consumer reproduction may provide an isolated --manifest-path snapshot.
+layout-crop-check *CARGO_ARGS:
+    cargo test -p zenlayout --all-features --all-targets {{CARGO_ARGS}}
+    cargo test -p zenlayout --no-default-features --features smart-crop {{CARGO_ARGS}}
+    cargo test -p zenlayout --all-features --doc {{CARGO_ARGS}}
+    cargo clippy -p zenlayout --all-targets --all-features {{CARGO_ARGS}} -- -D warnings

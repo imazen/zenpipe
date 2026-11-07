@@ -37,6 +37,13 @@ sources`.
 
 ## Known Bugs
 
+- Fixed 2026-11-07: independently rounded Maximal smart-crop origins/extents
+  could exceed the source by one pixel (400x300, x=38, width=363). Constrain
+  the integer origin while retaining the rounded extent. A transposed-pair
+  regression preserves the original 363-pixel extent and requires in-bounds
+  rectangles. Found by the zensally aspect/refinement evaluation.
+
+
 - Fixed in the optional Pulse candidate (2026-10-29): pipeline execution pulled
   a source before checking cancellation and could finish a sink after a cancelled
   empty pull. New effect controls require zero source reads for pre-cancellation

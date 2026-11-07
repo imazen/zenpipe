@@ -8,6 +8,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 ### [Unreleased]
 
 #### Fixes
+
+- zenlayout: keep independently rounded Maximal crop rectangles within the
+  source by constraining the integer origin, preserving the rounded extent.
+  Horizontal and vertical half-pixel regressions cover the one-pixel overflow.
 - zencodecs: the tone-map encoder relabeled samples of unknown transfer, because its streaming input list had no entry for them. Radiance input then clipped where a codec should refuse it, and streaming disagreed with one-shot. `encode_from` also refused on every default encode to an SDR-only format, even without HDR.
 
 - Samples of unknown transfer, such as Farbfeld, matched the first entry of the tone-map adapter's input list and were tone-mapped as PQ. The list now starts with SDR.

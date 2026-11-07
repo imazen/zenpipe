@@ -327,9 +327,12 @@ fn maximal_crop(
         return None;
     }
 
+    // Independently rounded half-pixel origins and extents can overshoot
+    // the source by one pixel. Keep the rounded extent and constrain the
+    // integer origin to its feasible range.
     Some(Rect {
-        x: sx1.round() as u32,
-        y: sy1.round() as u32,
+        x: (sx1.round() as u32).min(src_w - crop_w),
+        y: (sy1.round() as u32).min(src_h - crop_h),
         width: crop_w,
         height: crop_h,
     })
@@ -769,6 +772,7 @@ fn clamp_f64(v: f64, lo: f64, hi: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     fn focus(x1: f32, y1: f32, x2: f32, y2: f32, weight: f32) -> FocusRect {
         FocusRect {
@@ -1162,6 +1166,47 @@ mod tests {
                 batch[i], single,
                 "batch[{i}] should match individual compute_crop"
             );
+        }
+    }
+
+    #[test]
+    fn maximal_half_pixel_edges_keep_rounded_extent_inside_source() {
+        for transpose in [false, true] {
+            let mut data = alloc::vec![0.; 256 * 256];
+            for y in 100..140 {
+                for x in 100..216 {
+                    data[if transpose { x * 256 + y } else { y * 256 + x }] = 1.;
+                }
+            }
+            let (w, h, rw, rh) = if transpose {
+                (300, 400, 9, 16)
+            } else {
+                (400, 300, 16, 9)
+            };
+            let map = HeatMap {
+                data,
+                width: 256,
+                height: 256,
+            };
+            let crop = compute_crop(
+                w,
+                h,
+                &[],
+                Some(&map),
+                &CropConfig {
+                    target_aspect: AspectRatio { w: rw, h: rh },
+                    mode: CropMode::Maximal,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert!(crop.x + crop.width <= w, "{crop:?} outside {w}x{h}");
+            assert!(crop.y + crop.height <= h, "{crop:?} outside {w}x{h}");
+            if transpose {
+                assert_eq!((crop.y, crop.height), (37, 363));
+            } else {
+                assert_eq!((crop.x, crop.width), (37, 363));
+            }
         }
     }
 
