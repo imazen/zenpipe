@@ -1396,7 +1396,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=20aaffed1213a831b113729db958d57ec29a1a53#20aaffed1213a831b113729db958d57ec29a1a53"
+source = "git+https://github.com/imazen/heic?rev=869c5d653e40f54b1ae1dbd618ad457ef1084b95#869c5d653e40f54b1ae1dbd618ad457ef1084b95"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1409,7 +1409,7 @@ dependencies = [
  "memchr",
  "rgb",
  "safe_unaligned_simd",
- "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=7e9d296c9e037e626234c9f0e8673d48278f83f0)",
+ "ultrahdr-core",
  "whereat",
  "zencodec",
  "zenmeta",
@@ -1419,7 +1419,7 @@ dependencies = [
 [[package]]
 name = "heic-core"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=20aaffed1213a831b113729db958d57ec29a1a53#20aaffed1213a831b113729db958d57ec29a1a53"
+source = "git+https://github.com/imazen/heic?rev=869c5d653e40f54b1ae1dbd618ad457ef1084b95#869c5d653e40f54b1ae1dbd618ad457ef1084b95"
 dependencies = [
  "archmage",
  "enough",
@@ -1833,7 +1833,7 @@ dependencies = [
  "once_cell",
  "rgb",
  "thiserror 2.0.21",
- "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
+ "ultrahdr-core",
  "whereat",
  "zenjpeg",
  "zenpixels-convert",
@@ -4202,26 +4202,6 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "ultrahdr-core"
 version = "0.6.0"
-source = "git+https://github.com/imazen/ultrahdr?rev=7e9d296c9e037e626234c9f0e8673d48278f83f0#7e9d296c9e037e626234c9f0e8673d48278f83f0"
-dependencies = [
- "archmage",
- "bytemuck",
- "enough",
- "half",
- "linear-srgb",
- "magetypes",
- "thiserror 2.0.21",
- "whereat",
- "zencodec",
- "zenmeta",
- "zenpixels",
- "zenpixels-convert",
- "zentone",
-]
-
-[[package]]
-name = "ultrahdr-core"
-version = "0.6.0"
 source = "git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9#ade3c857f5541aaff3828e0c7fad073bfe109fd9"
 dependencies = [
  "archmage",
@@ -4930,7 +4910,7 @@ dependencies = [
  "safe_unaligned_simd",
  "serde_json",
  "thiserror 2.0.21",
- "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
+ "ultrahdr-core",
  "whereat",
  "yuv",
  "zenanalyze",
@@ -5085,7 +5065,7 @@ dependencies = [
  "rgb",
  "thiserror 2.0.21",
  "turbojpeg",
- "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
+ "ultrahdr-core",
  "whereat",
  "zenanalyze-api",
  "zenavif",
@@ -5242,7 +5222,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror 2.0.21",
  "tinyvec",
- "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
+ "ultrahdr-core",
  "whereat",
  "zencodec",
  "zencodec-coroutine",
