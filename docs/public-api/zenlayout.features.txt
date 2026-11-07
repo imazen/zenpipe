@@ -1,5 +1,5 @@
 # zenlayout public API — additions from non-default features
-# features: riapi,smart-crop,std,svg
+# features: alloc,riapi,smart-crop,std,svg
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
