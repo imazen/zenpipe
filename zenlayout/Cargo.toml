@@ -13,10 +13,12 @@ exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".super
 
 [features]
 default = ["std"]
-std = ["num-traits/std"]
+std = ["alloc", "num-traits/std"]
+# Retain the published 0.2.2 feature name for existing consumers.
+alloc = []
 svg = ["std"]
-riapi = []
-smart-crop = []
+riapi = ["alloc"]
+smart-crop = ["alloc"]
 # zennode = ["dep:zennode", "alloc"]
 
 [dependencies]

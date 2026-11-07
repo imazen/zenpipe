@@ -9,6 +9,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- zenlayout: retain the published `alloc` feature and its feature implications
+  for existing consumers of the monorepo package.
+
 - zenlayout: keep independently rounded Maximal crop rectangles within the
   source by constraining the integer origin, preserving the rounded extent.
   Horizontal and vertical half-pixel regressions cover the one-pixel overflow.
