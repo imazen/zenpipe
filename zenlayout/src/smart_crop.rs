@@ -251,7 +251,19 @@ fn minimal_crop(
             config.min_focus_visibility,
         );
     } else if let Some(hm) = heatmap {
-        shift_for_heatmap_coverage(&mut x, &mut y, cw, ch, sw, sh, hm);
+        let origin = heatmap_crop_origin(
+            hm,
+            src_w,
+            src_h,
+            Rect {
+                x: x.round() as u32,
+                y: y.round() as u32,
+                width: crop_w,
+                height: crop_h,
+            },
+        );
+        x = origin.0 as f64;
+        y = origin.1 as f64;
     }
 
     Some(Rect {
@@ -330,12 +342,16 @@ fn maximal_crop(
     // Independently rounded half-pixel origins and extents can overshoot
     // the source by one pixel. Keep the rounded extent and constrain the
     // integer origin to its feasible range.
-    Some(Rect {
+    let mut crop = Rect {
         x: (sx1.round() as u32).min(src_w - crop_w),
         y: (sy1.round() as u32).min(src_h - crop_h),
         width: crop_w,
         height: crop_h,
-    })
+    };
+    if !has_regions && let Some(hm) = heatmap {
+        (crop.x, crop.y) = heatmap_crop_origin(hm, src_w, src_h, crop);
+    }
+    Some(crop)
 }
 
 // ---------------------------------------------------------------------------
@@ -728,37 +744,131 @@ fn shift_for_focus_visibility(
     }
 }
 
-/// Shift crop to maximize coverage of the hot region in the heatmap.
-fn shift_for_heatmap_coverage(
-    x: &mut f64,
-    y: &mut f64,
-    cw: f64,
-    ch: f64,
-    sw: f64,
-    sh: f64,
-    hm: &HeatMap,
-) {
-    let (bx1, by1, bx2, by2) = heatmap_bbox(hm, 0.3);
-    let hm_x1 = bx1 * sw;
-    let hm_y1 = by1 * sh;
-    let hm_x2 = bx2 * sw;
-    let hm_y2 = by2 * sh;
-
-    if hm_y1 < *y {
-        // Hot region extends above the crop (or is taller than the crop) — prioritize top
-        *y = clamp_f64(hm_y1, 0.0, sh - ch);
-    } else if hm_y2 > *y + ch {
-        *y = clamp_f64(hm_y2 - ch, 0.0, sh - ch);
+/// Candidate integer origins around every slope change of the box integral.
+/// Between these points its dependence on the origin is bilinear, so an
+/// integer maximum lies at a candidate on each axis. Keep the previous origin
+/// as well, to retain composition when several positions capture equal mass.
+fn heatmap_axis_origins(source: u32, crop: u32, cells: u32, previous: u32) -> Vec<u32> {
+    let limit = source - crop;
+    let mut positions = alloc::vec![0, limit, previous.min(limit)];
+    if limit != 0 {
+        for edge in 0..=cells {
+            let source_edge = edge as f64 * source as f64 / cells as f64;
+            for position in [source_edge, source_edge - crop as f64] {
+                let p = clamp_f64(position, 0., limit as f64);
+                positions.push(p.floor() as u32);
+                positions.push(p.ceil() as u32);
+            }
+        }
     }
+    positions.sort_unstable();
+    positions.dedup();
+    positions
+}
 
-    if hm_x1 < *x && hm_x2 > *x + cw {
-        let hm_cx = (hm_x1 + hm_x2) / 2.0;
-        *x = clamp_f64(hm_cx - cw / 2.0, 0.0, sw - cw);
-    } else if hm_x1 < *x {
-        *x = clamp_f64(hm_x1, 0.0, sw - cw);
-    } else if hm_x2 > *x + cw {
-        *x = clamp_f64(hm_x2 - cw, 0.0, sw - cw);
+fn heatmap_weight(value: f32) -> f64 {
+    if value.is_finite() && value > 0. {
+        (value as f64) * (value as f64)
+    } else {
+        0.
     }
+}
+
+/// Add/remove a horizontal strip, including fractional boundary rows.
+fn heatmap_strip(hm: &HeatMap, columns: &mut [f64], top: f64, bottom: f64, sign: f64) {
+    let top = clamp_f64(top, 0., hm.height as f64);
+    let bottom = clamp_f64(bottom, top, hm.height as f64);
+    for row in top.floor() as usize..bottom.ceil() as usize {
+        let fraction = (bottom.min(row as f64 + 1.) - top.max(row as f64)) * sign;
+        let offset = row * columns.len();
+        for (column, &value) in columns
+            .iter_mut()
+            .zip(&hm.data[offset..offset + hm.width as usize])
+        {
+            *column += fraction * heatmap_weight(value);
+        }
+    }
+}
+
+fn heatmap_prefix_at(prefix: &[f64], x: f64) -> f64 {
+    let cell = (x.floor() as usize).min(prefix.len() - 1);
+    if cell + 1 == prefix.len() {
+        prefix[cell]
+    } else {
+        prefix[cell] + (x - cell as f64) * (prefix[cell + 1] - prefix[cell])
+    }
+}
+
+/// Maximize retained squared heatmap mass at the already chosen crop size.
+/// Each map cell covers its source-space bin. Sliding vertical strips and a
+/// horizontal prefix sum use O(width + height) scratch, without a 2D integral
+/// table or scanning source-image pixels. Explicit focus regions bypass this.
+fn heatmap_crop_origin(hm: &HeatMap, sw: u32, sh: u32, crop: Rect) -> (u32, u32) {
+    let Rect {
+        x: previous_x,
+        y: previous_y,
+        width: cw,
+        height: ch,
+    } = crop;
+    if hm.width == 0 || hm.height == 0 {
+        return (previous_x, previous_y);
+    }
+    let total: f64 = hm.data.iter().map(|&v| heatmap_weight(v)).sum();
+    if total == 0. {
+        return (previous_x, previous_y);
+    }
+    let xs = heatmap_axis_origins(sw, cw, hm.width, previous_x);
+    let ys = heatmap_axis_origins(sh, ch, hm.height, previous_y);
+    let x_scale = hm.width as f64 / sw as f64;
+    let y_scale = hm.height as f64 / sh as f64;
+    let width = cw as f64 * x_scale;
+    let height = ch as f64 * y_scale;
+    let mut columns = alloc::vec![0.; hm.width as usize];
+    let mut prefix = alloc::vec![0.; hm.width as usize + 1];
+    heatmap_strip(hm, &mut columns, 0., height, 1.);
+    let mut previous_top = 0.;
+    let mut best = (previous_x, previous_y);
+    let mut best_score = f64::NEG_INFINITY;
+    let mut best_distance = f64::INFINITY;
+    // Roundoff bound for accumulated row/column sums; this only resolves
+    // numerically equal plateaus, rather than fitting a salience threshold.
+    let epsilon = total * f64::EPSILON * (hm.width as f64 + hm.height as f64) * 16.;
+    for y in ys {
+        let top = y as f64 * y_scale;
+        heatmap_strip(
+            hm,
+            &mut columns,
+            previous_top,
+            top.min(previous_top + height),
+            -1.,
+        );
+        heatmap_strip(
+            hm,
+            &mut columns,
+            top.max(previous_top + height),
+            top + height,
+            1.,
+        );
+        previous_top = top;
+        for (i, &value) in columns.iter().enumerate() {
+            prefix[i + 1] = prefix[i] + value;
+        }
+        for &x in &xs {
+            let left = x as f64 * x_scale;
+            let score = heatmap_prefix_at(&prefix, left + width) - heatmap_prefix_at(&prefix, left);
+            let dx = x as f64 - previous_x as f64;
+            let dy = y as f64 - previous_y as f64;
+            let distance = dx * dx + dy * dy;
+            if score > best_score + epsilon
+                || ((score - best_score).abs() <= epsilon && distance < best_distance)
+            {
+                best = (x, y);
+                best_score = score;
+                best_distance = distance;
+            }
+        }
+    }
+    best
 }
 
 fn clamp_f64(v: f64, lo: f64, hi: f64) -> f64 {
@@ -1166,6 +1276,129 @@ mod tests {
                 batch[i], single,
                 "batch[{i}] should match individual compute_crop"
             );
+        }
+    }
+
+    #[test]
+    fn heatmap_position_matches_exhaustive_source_pixel_oracle() {
+        // Independent integration of fractional source-space cell overlap;
+        // do not reuse the streaming strips or prefix helpers under test.
+        fn score(hm: &HeatMap, sw: u32, sh: u32, r: Rect) -> f64 {
+            let mut sum = 0.;
+            for row in 0..hm.height {
+                for col in 0..hm.width {
+                    let left = col as f64 * sw as f64 / hm.width as f64;
+                    let right = (col + 1) as f64 * sw as f64 / hm.width as f64;
+                    let top = row as f64 * sh as f64 / hm.height as f64;
+                    let bottom = (row + 1) as f64 * sh as f64 / hm.height as f64;
+                    let dx = (right.min((r.x + r.width) as f64) - left.max(r.x as f64)).max(0.);
+                    let dy = (bottom.min((r.y + r.height) as f64) - top.max(r.y as f64)).max(0.);
+                    let v = hm.data[(row * hm.width + col) as usize] as f64;
+                    sum += dx * dy * v * v;
+                }
+            }
+            sum
+        }
+        for seed in 0..7 {
+            let hm = HeatMap {
+                width: 3,
+                height: 4,
+                data: (0..12)
+                    .map(|i| ((i * 19 + seed * 7) % 29) as f32 / 28.)
+                    .collect(),
+            };
+            for (sw, sh) in [(7, 11), (11, 17)] {
+                for width in [1, 3, sw] {
+                    for height in [1, 5, sh] {
+                        let initial = Rect {
+                            x: (sw - width) / 2,
+                            y: (sh - height) / 2,
+                            width,
+                            height,
+                        };
+                        let (x, y) = heatmap_crop_origin(&hm, sw, sh, initial);
+                        let got = score(&hm, sw, sh, Rect { x, y, ..initial });
+                        let mut oracle = 0f64;
+                        for y in 0..=sh - height {
+                            for x in 0..=sw - width {
+                                oracle = oracle.max(score(&hm, sw, sh, Rect { x, y, ..initial }));
+                            }
+                        }
+                        assert!(
+                            (got - oracle).abs() < 1e-10,
+                            "seed {seed}, {sw}x{sh}, {initial:?}, got {got}, oracle {oracle}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn equal_heatmap_mass_retains_previous_composition() {
+        for value in [0., 0.1, 1.] {
+            let hm = HeatMap {
+                width: 7,
+                height: 9,
+                data: vec![value; 63],
+            };
+            let r = Rect {
+                x: 3,
+                y: 5,
+                width: 5,
+                height: 7,
+            };
+            assert_eq!(heatmap_crop_origin(&hm, 17, 23, r), (3, 5));
+        }
+    }
+
+    #[test]
+    fn dominant_heatmap_band_is_not_displaced_by_distant_weak_speckles() {
+        // Geometry of the reported 00084919 stretch map: a broad, strong
+        // upper band and a much smaller, weaker patch near the bottom.
+        for transpose in [false, true] {
+            let mut data = vec![0.; 256 * 256];
+            for (xs, xe, ys, ye, value) in [(8, 248, 20, 42, 1.), (80, 110, 208, 216, 0.55)] {
+                for y in ys..ye {
+                    for x in xs..xe {
+                        data[if transpose { x * 256 + y } else { y * 256 + x }] = value;
+                    }
+                }
+            }
+            let hm = HeatMap {
+                data,
+                width: 256,
+                height: 256,
+            };
+            let (sw, sh, ratio) = if transpose {
+                (1024, 128, LANDSCAPE_16_9)
+            } else {
+                (128, 1024, PORTRAIT_9_16)
+            };
+            for mode in [CropMode::Minimal, CropMode::Maximal] {
+                let crop = compute_crop(
+                    sw,
+                    sh,
+                    &[],
+                    Some(&hm),
+                    &CropConfig {
+                        target_aspect: ratio,
+                        mode,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                assert_crop_inside(&crop, sw, sh);
+                let (start, extent) = if transpose {
+                    (crop.x, crop.width)
+                } else {
+                    (crop.y, crop.height)
+                };
+                assert!(
+                    start <= 80 && start + extent >= 168,
+                    "{mode:?}: {crop:?} discards the dominant band"
+                );
+            }
         }
     }
 

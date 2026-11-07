@@ -37,6 +37,15 @@ sources`.
 
 ## Known Bugs
 
+- Fixed 2026-11-07: heatmap-only crop placement could discard a dominant
+  subject to include distant weak speckles in the bounding box. The user
+  identified stretch 00084919 / canvas-1x8-p0 / 9:16, y=637. Both modes now
+  maximize retained squared heatmap mass at their existing crop dimensions.
+  The candidate grid includes all integer maxima of the piecewise box integral;
+  a source-pixel exhaustive oracle checks fractional cell boundaries. Equal
+  mass preserves previous composition; explicit focus-region behavior stays
+  separate. Scratch is linear in map dimensions, with no 2D integral table.
+
 - Fixed 2026-11-07: independently rounded Maximal smart-crop origins/extents
   could exceed the source by one pixel (400x300, x=38, width=363). Constrain
   the integer origin while retaining the rounded extent. A transposed-pair

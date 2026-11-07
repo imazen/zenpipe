@@ -9,6 +9,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- zenlayout: position heatmap-only crops by retained squared saliency mass
+  rather than a bounding box that can include distant weak speckles. Keep
+  crop sizes and focus-region behavior; preserve composition on equal-mass
+  plateaus. Covers the reported 00084919 geometry and an independent exhaustive
+  source-pixel oracle.
+
 - zenlayout: retain the published `alloc` feature and its feature implications
   for existing consumers of the monorepo package.
 
