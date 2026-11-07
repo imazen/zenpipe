@@ -84,7 +84,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "a93b9fbe85a922524c1a259eedd52c7fd3b526a7", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # TIFF decode/encode through the optional-control extras source and its
 # matching image-tiff fork, selected by each consumer's root patch table.
@@ -114,7 +114,7 @@ zenpdf = { version = "0.2.0", optional = true, default-features = false, feature
 zennode = { version = "0.1.1", default-features = false, features = ["derive"], optional = true }
 
 # Color management (optional)
-moxcms = { version = ">=0.8.1, <0.10", optional = true, default-features = false }
+moxcms = { version = "0.9.2", optional = true, default-features = false }
 
 # Quality-targeted transcode scorer (optional): zensim Profile-A metric for the
 # general decode→re-encode quality loop (transcode_to_quality). Lean build — no
