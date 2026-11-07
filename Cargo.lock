@@ -1396,7 +1396,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "heic"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=c67cffe461ade38e4ca1c9bb36175dc67e724c07#c67cffe461ade38e4ca1c9bb36175dc67e724c07"
+source = "git+https://github.com/imazen/heic?rev=20aaffed1213a831b113729db958d57ec29a1a53#20aaffed1213a831b113729db958d57ec29a1a53"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1409,7 +1409,7 @@ dependencies = [
  "memchr",
  "rgb",
  "safe_unaligned_simd",
- "ultrahdr-core",
+ "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=7e9d296c9e037e626234c9f0e8673d48278f83f0)",
  "whereat",
  "zencodec",
  "zenmeta",
@@ -1419,7 +1419,7 @@ dependencies = [
 [[package]]
 name = "heic-core"
 version = "0.2.0"
-source = "git+https://github.com/imazen/heic?rev=c67cffe461ade38e4ca1c9bb36175dc67e724c07#c67cffe461ade38e4ca1c9bb36175dc67e724c07"
+source = "git+https://github.com/imazen/heic?rev=20aaffed1213a831b113729db958d57ec29a1a53#20aaffed1213a831b113729db958d57ec29a1a53"
 dependencies = [
  "archmage",
  "enough",
@@ -1820,7 +1820,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
+source = "git+https://github.com/imazen/jxl-encoder?rev=13b04b6b71c8847b1d95414586c3a8c0023355ef#13b04b6b71c8847b1d95414586c3a8c0023355ef"
 dependencies = [
  "archmage",
  "brotli 9.1.1",
@@ -1833,7 +1833,7 @@ dependencies = [
  "once_cell",
  "rgb",
  "thiserror 2.0.21",
- "ultrahdr-core",
+ "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
  "whereat",
  "zenjpeg",
  "zenpixels-convert",
@@ -1842,7 +1842,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
+source = "git+https://github.com/imazen/jxl-encoder?rev=13b04b6b71c8847b1d95414586c3a8c0023355ef#13b04b6b71c8847b1d95414586c3a8c0023355ef"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1852,7 +1852,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=11c6eb0ce91fb92786e778cac4b75b34c3dac4e3#11c6eb0ce91fb92786e778cac4b75b34c3dac4e3"
+source = "git+https://github.com/imazen/jxl-encoder?rev=13b04b6b71c8847b1d95414586c3a8c0023355ef#13b04b6b71c8847b1d95414586c3a8c0023355ef"
 dependencies = [
  "archmage",
  "libm",
@@ -2318,6 +2318,16 @@ name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
+dependencies = [
+ "num-traits",
+ "pxfm",
+]
+
+[[package]]
+name = "moxcms"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "561875e11b3d8618524f974f85e4bbd05a64a112b8f7541ffcc236b5166c0564"
 dependencies = [
  "num-traits",
  "pxfm",
@@ -4210,6 +4220,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ultrahdr-core"
+version = "0.6.0"
+source = "git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9#ade3c857f5541aaff3828e0c7fad073bfe109fd9"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "enough",
+ "half",
+ "linear-srgb",
+ "magetypes",
+ "thiserror 2.0.21",
+ "whereat",
+ "zencodec",
+ "zenmeta",
+ "zenpixels",
+ "zenpixels-convert",
+ "zentone",
+]
+
+[[package]]
 name = "unicase"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4885,7 +4915,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
+source = "git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7#a93b9fbe85a922524c1a259eedd52c7fd3b526a7"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -4900,7 +4930,7 @@ dependencies = [
  "safe_unaligned_simd",
  "serde_json",
  "thiserror 2.0.21",
- "ultrahdr-core",
+ "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
  "whereat",
  "yuv",
  "zenanalyze",
@@ -4919,7 +4949,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
+source = "git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7#a93b9fbe85a922524c1a259eedd52c7fd3b526a7"
 dependencies = [
  "arrayvec 0.7.8",
  "bitreader",
@@ -4935,7 +4965,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6#0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6"
+source = "git+https://github.com/imazen/zenavif?rev=a93b9fbe85a922524c1a259eedd52c7fd3b526a7#a93b9fbe85a922524c1a259eedd52c7fd3b526a7"
 dependencies = [
  "arrayvec 0.7.8",
  "whereat",
@@ -4967,7 +4997,7 @@ dependencies = [
 [[package]]
 name = "zenbitmaps"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenbitmaps?rev=9d71b356f290f6438b810cc53d99f29301f6d247#9d71b356f290f6438b810cc53d99f29301f6d247"
+source = "git+https://github.com/imazen/zenbitmaps?rev=a690400254ff9f0eba576a89b8e648f7ff790b3f#a690400254ff9f0eba576a89b8e648f7ff790b3f"
 dependencies = [
  "enough",
  "imgref",
@@ -5049,13 +5079,13 @@ dependencies = [
  "heic",
  "imgref",
  "linear-srgb",
- "moxcms 0.8.1",
+ "moxcms 0.9.2",
  "png",
  "rayon",
  "rgb",
  "thiserror 2.0.21",
  "turbojpeg",
- "ultrahdr-core",
+ "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
  "whereat",
  "zenanalyze-api",
  "zenavif",
@@ -5195,7 +5225,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=c73a3cc90997c0553832243daba383ac3086dc98#c73a3cc90997c0553832243daba383ac3086dc98"
+source = "git+https://github.com/imazen/zenjpeg?rev=9274e38073684876c4283918251f5ccdb4a0b02f#9274e38073684876c4283918251f5ccdb4a0b02f"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -5212,7 +5242,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror 2.0.21",
  "tinyvec",
- "ultrahdr-core",
+ "ultrahdr-core 0.6.0 (git+https://github.com/imazen/ultrahdr?rev=ade3c857f5541aaff3828e0c7fad073bfe109fd9)",
  "whereat",
  "zencodec",
  "zencodec-coroutine",
@@ -5220,7 +5250,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zentone",
- "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=c73a3cc90997c0553832243daba383ac3086dc98)",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=9274e38073684876c4283918251f5ccdb4a0b02f)",
 ]
 
 [[package]]
@@ -5246,7 +5276,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=e1c366b089b29511ef66f1b5af5d9e208dbff5d1#e1c366b089b29511ef66f1b5af5d9e208dbff5d1"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -5268,7 +5298,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=e1c366b089b29511ef66f1b5af5d9e208dbff5d1#e1c366b089b29511ef66f1b5af5d9e208dbff5d1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5278,7 +5308,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=e1c366b089b29511ef66f1b5af5d9e208dbff5d1#e1c366b089b29511ef66f1b5af5d9e208dbff5d1"
 dependencies = [
  "archmage",
  "paste",
@@ -5370,7 +5400,7 @@ dependencies = [
  "imageflow_types",
  "imgref",
  "linear-srgb",
- "moxcms 0.8.1",
+ "moxcms 0.9.2",
  "rgb",
  "serde_json",
  "tokio",
@@ -5438,7 +5468,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
+source = "git+https://github.com/imazen/zenpixels?rev=18afc75f1fd40c7feafeef6deae4df8e97e5e1b9#18afc75f1fd40c7feafeef6deae4df8e97e5e1b9"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -5449,7 +5479,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
+source = "git+https://github.com/imazen/zenpixels?rev=18afc75f1fd40c7feafeef6deae4df8e97e5e1b9#18afc75f1fd40c7feafeef6deae4df8e97e5e1b9"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5469,7 +5499,7 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenpng?rev=7b6d1436db5d771fc43226c146847fc76305afde#7b6d1436db5d771fc43226c146847fc76305afde"
+source = "git+https://github.com/imazen/zenpng?rev=8605d8c4443e3bff6273cde438d3adfa0cbdb2b8#8605d8c4443e3bff6273cde438d3adfa0cbdb2b8"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -5597,7 +5627,7 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?rev=799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16#799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16"
+source = "git+https://github.com/imazen/zenraw?rev=223c6c240f7cda77327e54f972f730766e28653f#223c6c240f7cda77327e54f972f730766e28653f"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5618,7 +5648,7 @@ dependencies = [
 [[package]]
 name = "zenresize"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenresize?rev=5b4e14e33a1cd49bd9e08287858d2f534526ac25#5b4e14e33a1cd49bd9e08287858d2f534526ac25"
+source = "git+https://github.com/imazen/zenresize?rev=dc40e8e642d191c5f45c04745d3cbf29e2fccdd6#dc40e8e642d191c5f45c04745d3cbf29e2fccdd6"
 dependencies = [
  "archmage",
  "imgref",
@@ -5758,7 +5788,7 @@ source = "git+https://github.com/imazen/zentract#556d02933666bf7a4daf1f8491719e5
 [[package]]
 name = "zenwebp"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenwebp?rev=2e58d1e54a285bb3ae2db629cc2a3202411cd08e#2e58d1e54a285bb3ae2db629cc2a3202411cd08e"
+source = "git+https://github.com/imazen/zenwebp?rev=eb96de80bc72eee823241970e03a25f6af50e61a#eb96de80bc72eee823241970e03a25f6af50e61a"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -5796,7 +5826,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=c73a3cc90997c0553832243daba383ac3086dc98#c73a3cc90997c0553832243daba383ac3086dc98"
+source = "git+https://github.com/imazen/zenjpeg?rev=9274e38073684876c4283918251f5ccdb4a0b02f#9274e38073684876c4283918251f5ccdb4a0b02f"
 dependencies = [
  "archmage",
  "imgref",
