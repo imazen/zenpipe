@@ -305,7 +305,7 @@ hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "9274e38073684876c4283918251f5ccdb4a0b02f" }
 # Retained HEIC source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-heic = { git = "https://github.com/imazen/heic", rev = "20aaffed1213a831b113729db958d57ec29a1a53" }
+heic = { git = "https://github.com/imazen/heic", rev = "869c5d653e40f54b1ae1dbd618ad457ef1084b95" }
 # Optional-control TIFF source with the matching image-tiff resource-limit fork.
 # Consumer resolution, pixel parity and native qualification remain pending.
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
