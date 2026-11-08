@@ -9,6 +9,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- zencodecs/zenpipe: retain explicit resource limits during JPEG header probes
+  and decode estimation, including a caller-selected pixel budget above the
+  unchanged default. ImageJob probes use the same limited request path.
+
 - zenlayout: position heatmap-only crops by retained squared saliency mass
   rather than a bounding box that can include distant weak speckles. Keep
   crop sizes and focus-region behavior; preserve composition on equal-mass

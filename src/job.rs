@@ -644,11 +644,13 @@ impl<'a> ImageJob<'a> {
             }
         };
 
-        let image_info = at_crate!(zencodecs::from_bytes_with_registry(
-            input_bytes,
-            &self.registry
-        ))
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+        let mut request = zencodecs::DecodeRequest::new(input_bytes).with_registry(&self.registry);
+        if let Some(limits) = codec_limits.as_ref() {
+            request = request.with_limits(limits);
+        }
+        let image_info =
+            at_crate!(request.probe()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         Ok(DecodeInfo {
             io_id: self.decode_io_id,
@@ -682,11 +684,13 @@ impl<'a> ImageJob<'a> {
         };
 
         // 2. Probe the source.
-        let image_info = at_crate!(zencodecs::from_bytes_with_registry(
-            input_bytes,
-            &self.registry
-        ))
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+        let mut request = zencodecs::DecodeRequest::new(input_bytes).with_registry(&self.registry);
+        if let Some(limits) = codec_limits.as_ref() {
+            request = request.with_limits(limits);
+        }
+        let image_info =
+            at_crate!(request.probe()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
         // Enforce dimension and total pixel limits before decoding.
         if let Some(ref limits) = self.limits {
@@ -2297,6 +2301,30 @@ mod tests {
             enc.push(&pixels, h as usize, stride, enough::Unstoppable)
                 .expect("push rows");
             enc.finish().expect("finish encode")
+        }
+
+        #[test]
+        fn jpeg_probe_obeys_explicit_large_and_small_budgets() {
+            let mut bytes = make_test_jpeg();
+            let offset = bytes.windows(2).position(|m| m == [0xff, 0xc0]).unwrap();
+            bytes[offset + 5..offset + 7].copy_from_slice(&14173_u16.to_be_bytes());
+            bytes[offset + 7..offset + 9].copy_from_slice(&11339_u16.to_be_bytes());
+            assert!(ImageJob::new().add_input_ref(0, &bytes).probe().is_err());
+            let limits = Limits::NONE.with_max_pixels(200_000_000);
+            let info = ImageJob::new()
+                .with_limits(limits)
+                .add_input_ref(0, &bytes)
+                .probe()
+                .unwrap();
+            assert_eq!((info.width, info.height), (11339, 14173));
+            let tight = Limits::NONE.with_max_pixels(120_000_000);
+            assert!(
+                ImageJob::new()
+                    .with_limits(tight)
+                    .add_input_ref(0, &bytes)
+                    .probe()
+                    .is_err()
+            );
         }
 
         #[test]

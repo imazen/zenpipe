@@ -72,8 +72,12 @@ pub fn from_bytes_format(data: &[u8], format: ImageFormat) -> Result<ImageInfo> 
 }
 
 /// Probe format — used by DecodeRequest::probe().
-pub(crate) fn probe_format(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
-    probe_format_full(data, format)
+pub(crate) fn probe_format(
+    data: &[u8],
+    format: ImageFormat,
+    limits: Option<&crate::Limits>,
+) -> Result<ImageInfo> {
+    probe_format_limited(data, format, limits)
 }
 
 /// Compute actual decode output dimensions for an image.
@@ -153,19 +157,27 @@ const PROBE_CAP: usize = 256 * 1024;
 /// Tries with capped input first to avoid scanning pixel data in large files.
 /// Falls back to full data if the capped probe fails.
 fn probe_format_full(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
+    probe_format_limited(data, format, None)
+}
+
+fn probe_format_limited(
+    data: &[u8],
+    format: ImageFormat,
+    limits: Option<&crate::Limits>,
+) -> Result<ImageInfo> {
     if data.len() > PROBE_CAP {
-        if let Ok(info) = probe_codec(&data[..PROBE_CAP], format) {
+        if let Ok(info) = probe_codec(&data[..PROBE_CAP], format, limits) {
             return Ok(info);
         }
         // Capped probe failed -- retry with full data and warn
-        let mut info = probe_codec(data, format)?;
+        let mut info = probe_codec(data, format, limits)?;
         info.warnings.push(alloc::format!(
             "metadata located beyond {}KB fast-probe cap; required full scan",
             PROBE_CAP / 1024
         ));
         return Ok(info);
     }
-    probe_codec(data, format)
+    probe_codec(data, format, limits)
 }
 
 /// Set gain map presence based on format capabilities.
@@ -208,10 +220,16 @@ fn finalize_gain_map_presence(info: &mut ImageInfo) {
 }
 
 /// Dispatch to the format-specific codec probe (requires codec feature).
-fn probe_codec(data: &[u8], format: ImageFormat) -> Result<ImageInfo> {
+fn probe_codec(
+    data: &[u8],
+    format: ImageFormat,
+    limits: Option<&crate::Limits>,
+) -> Result<ImageInfo> {
+    #[cfg(not(feature = "jpeg"))]
+    let _ = limits;
     let mut info = dispatch_format! {
         format, unsupported = return Err(at!(CodecError::UnsupportedFormat(format)));
-        Jpeg => "jpeg" => crate::codecs::jpeg::probe(data)?,
+        Jpeg => "jpeg" => crate::codecs::jpeg::probe_with_limits(data, limits)?,
         WebP => "webp" => crate::codecs::webp::probe(data)?,
         Gif => "gif" => crate::codecs::gif::probe(data)?,
         Png => "png" => crate::codecs::png::probe(data)?,

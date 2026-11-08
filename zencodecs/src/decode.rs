@@ -457,7 +457,13 @@ impl<'a> DecodeRequest<'a> {
     /// Cheaper than `decode()` — only parses headers.
     pub fn probe(&self) -> Result<ImageInfo> {
         let format = self.resolve_format()?;
-        crate::info::probe_format(self.data, format)
+        let info = crate::info::probe_format(self.data, format, self.limits)?;
+        if let Some(limits) = self.limits {
+            limits
+                .check_image_info(&info)
+                .map_err(|e| at!(CodecError::LimitExceeded(alloc::format!("{e}"))))?;
+        }
+        Ok(info)
     }
 
     /// Estimate decode peak memory + wall time **without decoding**.
@@ -478,7 +484,7 @@ impl<'a> DecodeRequest<'a> {
         &self,
         format: ImageFormat,
     ) -> Result<(ImageCharacteristics, ResourceEstimate)> {
-        let info = crate::info::probe_format(self.data, format)?;
+        let info = self.probe()?;
         // The pipeline decodes to a 4-byte RGBA8/BGRA8 frame; size the estimate to
         // that intermediate (conservative for narrower native outputs).
         let image = ImageCharacteristics::new(

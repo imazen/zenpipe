@@ -21,9 +21,12 @@ use zencodec::decode::{Decode, DecodeJob as _, DecoderConfig as _};
 ///
 /// Uses `Permissive` strictness so we can extract dimensions and metadata from
 /// structurally damaged files that would fail a full decode.
-pub(crate) fn probe(data: &[u8]) -> Result<ImageInfo> {
-    let info = zenjpeg::decoder::DecodeConfig::new()
-        .permissive()
+pub(crate) fn probe_with_limits(data: &[u8], limits: Option<&Limits>) -> Result<ImageInfo> {
+    let mut config = zenjpeg::decoder::DecodeConfig::new().permissive();
+    if let Some(max_pixels) = limits.and_then(|limits| limits.max_pixels) {
+        config = config.max_pixels(max_pixels);
+    }
+    let info = config
         .read_info(data)
         .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
     Ok(jpeg_info_to_image_info(&info))

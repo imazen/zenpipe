@@ -14,7 +14,7 @@
 //! ```ignore
 //! dispatch_format! {
 //!     format, unsupported = Err(at!(CodecError::UnsupportedFormat(format)));
-//!     Jpeg => "jpeg" => crate::codecs::jpeg::probe(data)?,
+//!     Jpeg => "jpeg" => crate::codecs::jpeg::probe_with_limits(data, None)?,
 //!     WebP => "webp" => crate::codecs::webp::probe(data)?;
 //!     ImageFormat::Custom(def) if def.name == "dng" => raw::probe(data)?,
 //!     _ => return Err(at!(CodecError::UnsupportedFormat(format))),

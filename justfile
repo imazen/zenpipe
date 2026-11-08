@@ -762,3 +762,11 @@ layout-crop-check *CARGO_ARGS:
     cargo test -p zenlayout --no-default-features --features smart-crop {{CARGO_ARGS}}
     cargo test -p zenlayout --all-features --doc {{CARGO_ARGS}}
     cargo clippy -p zenlayout --all-targets --all-features {{CARGO_ARGS}} -- -D warnings
+# Caller-selected JPEG probe budgets, with unchanged default/tight rejection.
+jpeg-probe-limit-check target:
+    CARGO_TARGET_DIR={{target}} cargo test --locked -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif --test jpeg_probe_limits --test stop_and_limits
+    CARGO_TARGET_DIR={{target}} cargo test --locked -p zenpipe --no-default-features --features job,nodes-jpeg,nodes-png,nodes-layout,nodes-resize --lib job::tests::e2e_jpeg
+
+jpeg-probe-limit-clippy target:
+    CARGO_TARGET_DIR={{target}} cargo clippy --locked -p zencodecs --no-default-features --features std,cms,jpeg,png,webp,gif --test jpeg_probe_limits --test stop_and_limits -- -D warnings
+    CARGO_TARGET_DIR={{target}} cargo clippy --locked -p zenpipe --no-default-features --features job,nodes-jpeg,nodes-png,nodes-layout,nodes-resize --lib -- -D warnings

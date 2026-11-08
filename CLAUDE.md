@@ -37,6 +37,14 @@ sources`.
 
 ## Known Bugs
 
+- Fixed 2026-11-08: ImageJob and DecodeRequest header probes ignored explicit
+  resource limits. A caller allowing200MP still hit JPEG's default120MP cap
+  before decode. Probes now forward the explicit JPEG pixel budget and enforce
+  the caller's image limits; estimation uses that same probe. Free-function
+  defaults and tighter/disabled-format rejection remain unchanged. Header
+  regressions and a real160,707,647-pixel owned preview pass; see
+  benchmarks/jpeg_probe_limits_2026-11-08.md.
+
 - Fixed 2026-11-07: heatmap-only crop placement could discard a dominant
   subject to include distant weak speckles in the bounding box. The user
   identified stretch 00084919 / canvas-1x8-p0 / 9:16, y=637. Both modes now
