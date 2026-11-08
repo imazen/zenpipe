@@ -495,8 +495,8 @@ fn verify_output(
             && meta.icc_profile.is_none()
             && meta.cicp.is_none();
         if !(authority.cicp == Some(cicp) && meta.icc_profile.is_none()) && !implicit_srgb {
-            use zenpixels_convert::icc_profiles::{SynthesizedIcc, synthesize_icc_for_cicp};
-            let equivalent = match synthesize_icc_for_cicp(cicp) {
+            use zenpixels_convert::icc_profiles::SynthesizedIcc;
+            let equivalent = match SynthesizedIcc::for_cicp(cicp) {
                 SynthesizedIcc::Profile(bytes) => {
                     meta.icc_profile.as_deref() == Some(bytes.as_ref())
                         && (authority.icc.is_some() || authority.cicp == Some(cicp))

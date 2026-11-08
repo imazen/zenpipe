@@ -2,7 +2,7 @@
 //!
 //! Uses [`dispatch::build_encoder`](crate::dispatch::build_encoder) for format dispatch.
 //! Each codec's `Encoder` trait impl handles pixel format dispatch internally;
-//! pixel format negotiation is handled by [`zenpixels_convert::adapt::adapt_for_encode_cow`].
+//! pixel format negotiation is handled by [`zenpixels_convert::adapt::adapt_raw_rows_for_encode`].
 
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
@@ -492,33 +492,35 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// Returns a [`StreamingEncoder`] containing:
     /// - A `DynEncoder` that accepts rows via `push_rows()` / `finish()`
-    /// - The encoder's `supported` pixel descriptors (for `adapt_for_encode_cow`)
+    /// - The encoder's `supported` pixel descriptors (for `adapt_raw_rows_for_encode`)
     /// - The resolved output `format`
     ///
     /// The caller is responsible for pixel format conversion per-strip via
-    /// [`adapt_for_encode_cow`]. This avoids materializing the full image for
+    /// [`adapt_raw_rows_for_encode`]. This avoids materializing the full image for
     /// format conversion — only a strip-sized buffer is needed.
     ///
     /// Codecs that require the full image (WebP, AVIF) buffer internally
     /// inside their `push_rows()` implementation. That's the codec's
     /// decision — the pipeline never buffers.
     ///
-    /// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
+    /// [`adapt_raw_rows_for_encode`]: zenpixels_convert::adapt::adapt_raw_rows_for_encode
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// use zencodecs::{EncodeRequest, ImageFormat};
-    /// use zenpixels_convert::adapt::adapt_for_encode_cow;
+    /// use zenpixels_convert::adapt::adapt_raw_rows_for_encode;
     ///
     /// let se = EncodeRequest::new(ImageFormat::Jpeg)
     ///     .with_quality(85.0)
     ///     .build_streaming_encoder(1920, 1080)?;
     ///
     /// // Per strip:
-    /// let adapted = adapt_for_encode_cow(
+    /// let adapted = adapt_raw_rows_for_encode(
     ///     strip_bytes, descriptor, width, strip_rows, stride,
     ///     se.supported,
+    ///     &zenpixels_convert::ConvertOptions::permissive()
+    ///         .with_alpha_policy(zenpixels_convert::AlphaPolicy::DiscardUnchecked),
     /// )?;
     /// se.encoder.push_rows(adapted.as_slice())?;
     ///
@@ -914,13 +916,15 @@ impl<'a> EncodeRequest<'a> {
         // Use zenpixels to negotiate the cheapest pixel format conversion.
         // Returns Cow::Borrowed (zero-copy) when the input already matches
         // one of the encoder's supported formats.
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        let adapted = zenpixels_convert::adapt::adapt_raw_rows_for_encode(
             data,
             descriptor,
             width,
             height,
             stride,
             built.supported,
+            &zenpixels_convert::ConvertOptions::permissive()
+                .with_alpha_policy(zenpixels_convert::AlphaPolicy::DiscardUnchecked),
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(

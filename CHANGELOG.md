@@ -7,6 +7,13 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Fixed
+
+- Frozen policy integration uses public ICC identification, synthesis, output
+  finalization and raw-row adaptation facades. The row adapter retains the
+  former permissive depth/channel policy and unchecked alpha removal; this
+  compatibility change does not strengthen those legacy policies.
+
 #### QUEUED BREAKING CHANGES
 
 - `PipelineRows` follows the core row-source trait's optional borrowed Pulse

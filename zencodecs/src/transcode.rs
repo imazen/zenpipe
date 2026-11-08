@@ -10,7 +10,7 @@
 //!
 //! [`TranscodeSink`] is the low-level streaming bridge. It implements
 //! [`DecodeRowSink`] and forwards decoded strips directly to an encoder's
-//! `push_rows()`, converting pixel formats per-strip via `adapt_for_encode_cow`.
+//! `push_rows()`, converting pixel formats per-strip via `adapt_raw_rows_for_encode`.
 //! No full-image buffer is ever allocated by the sink — only a strip-sized
 //! conversion buffer when the decoded pixel format doesn't match the
 //! encoder's native format.
@@ -336,7 +336,7 @@ pub fn transcode(
                     (None, None) => zenpixels::ColorOrigin::assumed(),
                 }
                 .with_color_authority(source_color.color_authority);
-                let ready = zenpixels_convert::finalize_for_output_with(
+                let ready = zenpixels_convert::EncodeReady::finalize(
                     &buffer,
                     &origin,
                     zenpixels_convert::output::OutputProfile::Named(zenpixels::Cicp::SRGB),
@@ -788,13 +788,15 @@ impl<'a> TranscodeSink<'a> {
         let strip_data = &self.strip_buf[..data_len];
 
         // Adapt pixel format per-strip — zero-copy when format already matches
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        let adapted = zenpixels_convert::adapt::adapt_raw_rows_for_encode(
             strip_data,
             pending.descriptor,
             pending.width,
             pending.height,
             stride,
             self.supported,
+            &zenpixels_convert::ConvertOptions::permissive()
+                .with_alpha_policy(zenpixels_convert::AlphaPolicy::DiscardUnchecked),
         )
         .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
 

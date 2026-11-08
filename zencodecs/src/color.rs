@@ -19,7 +19,7 @@ use zencodec::decode::SourceColor;
 /// (primaries/TRC comparison, see `cms::is_srgb_icc_structural`) for the
 /// long tail.
 pub fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
-    zenpixels::icc::is_common_srgb(icc_bytes)
+    zenpixels::icc::IccIdentification::is_common_srgb(icc_bytes)
 }
 
 /// Extension trait for sRGB detection on [`SourceColor`].

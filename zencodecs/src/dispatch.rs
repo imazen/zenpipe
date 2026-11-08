@@ -283,13 +283,15 @@ where
 
         // Negotiate pixel format -- convert input to something the encoder supports
         let pixel_data = pixels.contiguous_bytes();
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        let adapted = zenpixels_convert::adapt::adapt_raw_rows_for_encode(
             &pixel_data,
             pixels.descriptor(),
             pixels.width(),
             pixels.rows(),
             pixels.descriptor().aligned_stride(pixels.width()),
             C::supported_descriptors(),
+            &zenpixels_convert::ConvertOptions::permissive()
+                .with_alpha_policy(zenpixels_convert::AlphaPolicy::DiscardUnchecked),
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(
@@ -321,13 +323,13 @@ where
 /// A streaming encoder: a `DynEncoder` + its supported pixel descriptors.
 ///
 /// The caller pushes strips via [`DynEncoder::push_rows()`] and finalizes
-/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode_cow`] per-strip
+/// with [`DynEncoder::finish()`]. Use [`adapt_raw_rows_for_encode`] per-strip
 /// to convert pixel formats without materializing the full image.
 ///
 /// All codec encoders are `'static` (they clone/Arc their config), so this
 /// type has no lifetime parameter.
 ///
-/// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
+/// [`adapt_raw_rows_for_encode`]: zenpixels_convert::adapt::adapt_raw_rows_for_encode
 pub struct StreamingEncoder {
     /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
     ///
@@ -335,7 +337,7 @@ pub struct StreamingEncoder {
     /// or used in `zenpipe::codec::EncoderSink`.
     pub encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
     /// Pixel formats this encoder accepts natively (from codec's `supported_descriptors()`).
-    /// Pass to `adapt_for_encode_cow` to pick the cheapest conversion.
+    /// Pass to `adapt_raw_rows_for_encode` to pick the cheapest conversion.
     pub supported: &'static [PixelDescriptor],
     /// The resolved output format.
     pub format: ImageFormat,

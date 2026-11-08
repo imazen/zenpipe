@@ -300,7 +300,7 @@ pub fn synthesize_icc_from_gama(
 
 /// Synthesize an ICC profile for CICP code points.
 ///
-/// Delegates to [`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp`] —
+/// Delegates to [`zenpixels_convert::icc_profiles::SynthesizedIcc::for_cicp`] —
 /// the bundled, transfer-aware profile set covering the full assigned H.273
 /// grid with no CMS (byte-equality-tested against moxcms synthesis).
 ///
@@ -316,7 +316,7 @@ pub fn synthesize_icc_from_cicp(cicp: zencodec::Cicp) -> Option<Vec<u8>> {
     if matches!(cicp.transfer_characteristics, 16 | 18) {
         return None;
     }
-    match zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp) {
+    match zenpixels_convert::icc_profiles::SynthesizedIcc::for_cicp(cicp) {
         zenpixels_convert::icc_profiles::SynthesizedIcc::Profile(bytes) => Some(bytes.into_owned()),
         _ => None,
     }
