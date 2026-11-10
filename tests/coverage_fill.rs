@@ -763,7 +763,10 @@ fn graph_overlay_with_reduced_opacity() {
 fn graph_remove_alpha_semi_transparent() {
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
-    let rm = g.add_node(NodeOp::RemoveAlpha { matte: [0, 0, 0] });
+    let rm = g.add_node(NodeOp::RemoveAlpha {
+        matte: [0, 0, 0],
+        blend: Default::default(),
+    });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
     g.add_edge(rm, out, EdgeKind::Input);
@@ -1193,6 +1196,7 @@ fn estimate_remove_alpha() {
     let src = g.add_node(NodeOp::Source);
     let rm = g.add_node(NodeOp::RemoveAlpha {
         matte: [255, 255, 255],
+        blend: Default::default(),
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);

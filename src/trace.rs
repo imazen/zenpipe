@@ -2054,8 +2054,15 @@ pub fn node_op_description(op: &crate::graph::NodeOp) -> String {
         NodeOp::Filter(_) => "filter pipeline".into(),
         #[cfg(feature = "std")]
         NodeOp::IccTransform { .. } => "ICC transform".into(),
-        NodeOp::RemoveAlpha { matte } => {
-            format!("matte=#{:02x}{:02x}{:02x}", matte[0], matte[1], matte[2])
+        NodeOp::RemoveAlpha { matte, blend } => {
+            let suffix = match blend {
+                crate::ops::MatteBlend::Encoded => " encoded",
+                _ => "",
+            };
+            format!(
+                "matte=#{:02x}{:02x}{:02x}{suffix}",
+                matte[0], matte[1], matte[2]
+            )
         }
         NodeOp::AddAlpha => String::new(),
         NodeOp::Overlay {

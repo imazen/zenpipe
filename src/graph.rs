@@ -400,6 +400,8 @@ pub enum NodeOp {
     RemoveAlpha {
         /// Matte color [R, G, B] in sRGB.
         matte: [u8; 3],
+        /// Which values it blends with.
+        blend: crate::ops::MatteBlend,
     },
 
     /// Add an opaque alpha channel to an RGB source.
@@ -1843,7 +1845,7 @@ impl PipelineGraph {
                 ))
             }
 
-            NodeOp::RemoveAlpha { matte } => {
+            NodeOp::RemoveAlpha { matte, blend } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.compile_node(input_id, sources, depth + 1)?;
                 let meta = capture_meta!(upstream);
@@ -1854,7 +1856,8 @@ impl PipelineGraph {
                     return Ok((upstream, meta));
                 }
                 let upstream = ensure_fmt!(upstream, format::RGBA8_SRGB, "RemoveAlpha")?;
-                let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
+                let op = crate::ops::MatteFlattenOp::new(matte, blend)
+                    .ok_or_else(|| at!(PipeError::Op("RemoveAlpha: no matte conversion".into())))?;
                 Ok((Box::new(TransformSource::new(upstream).push(op)), meta))
             }
 

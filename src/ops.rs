@@ -132,24 +132,59 @@ impl PixelOp for RowConverterOp {
 // Alpha operations
 // =========================================================================
 
+/// Which values a matte blends with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum MatteBlend {
+    /// Blend in linear light, like `AlphaPolicy::CompositeOnto` and imageflow's own matte.
+    #[default]
+    Linear,
+    /// Blend the encoded sRGB values. Use this only to match a renderer that composites
+    /// without decoding, which is commonly what browsers do for CSS. Partly transparent
+    /// colors come out darker than in linear light: 50% red on white gives green 127, not 187.
+    Encoded,
+}
+
 /// Composite RGBA8 onto a solid sRGB matte, producing RGB8.
-///
-/// Blends in sRGB-encoded space (i.e. no gamma decode), matching browser
-/// CSS/canvas compositing behavior.
-///
-/// Formula per channel: `out = (src * alpha + matte * (255 - alpha) + 127) / 255`
 pub struct MatteFlattenOp {
-    matte: [u8; 3],
+    kernel: MatteKernel,
+}
+
+enum MatteKernel {
+    Linear(RowConverterOp),
+    Encoded([u8; 3]),
 }
 
 impl MatteFlattenOp {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { matte: [r, g, b] }
+    /// Returns `None` if the converter has no path, which RGBA8 to RGB8 always has.
+    pub fn new(matte: [u8; 3], blend: MatteBlend) -> Option<Self> {
+        let kernel = match blend {
+            MatteBlend::Linear => {
+                let [r, g, b] = matte;
+                let options =
+                    zenpixels_convert::policy::ConvertOptions::permissive().with_alpha_policy(
+                        zenpixels_convert::policy::AlphaPolicy::CompositeOnto { r, g, b },
+                    );
+                MatteKernel::Linear(RowConverterOp::new_explicit(
+                    format::RGBA8_SRGB,
+                    format::RGB8_SRGB,
+                    &options,
+                )?)
+            }
+            MatteBlend::Encoded => MatteKernel::Encoded(matte),
+        };
+        Some(Self { kernel })
     }
 }
 
 impl PixelOp for MatteFlattenOp {
-    fn apply(&mut self, input: &[u8], output: &mut [u8], _width: u32, _height: u32) {
+    fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
+        let matte = match &mut self.kernel {
+            MatteKernel::Linear(converter) => {
+                return converter.apply(input, output, width, height);
+            }
+            MatteKernel::Encoded(matte) => *matte,
+        };
         // Iterate by chunks_exact — let the slice length bound the loop
         // rather than computing `width * height` (which overflows on
         // 32-bit for large dims, audit M7).
@@ -159,7 +194,7 @@ impl PixelOp for MatteFlattenOp {
             let a = p[3] as u32;
             let inv = 255 - a;
             for c in 0..3 {
-                o[c] = ((p[c] as u32 * a + self.matte[c] as u32 * inv + 127) / 255) as u8;
+                o[c] = ((p[c] as u32 * a + matte[c] as u32 * inv + 127) / 255) as u8;
             }
         }
     }
