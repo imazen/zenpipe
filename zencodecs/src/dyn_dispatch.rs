@@ -41,7 +41,7 @@ fn wrap_enc_boxed(format: ImageFormat, e: zencodec::encode::BoxedError) -> where
 pub(crate) struct DecodeParams<'a> {
     pub data: &'a [u8],
     pub codec_config: Option<&'a CodecConfig>,
-    pub limits: Option<&'a Limits>,
+    pub limits: Option<Limits>,
     pub pulse: SharedPulse,
     pub preferred: &'a [zenpixels::PixelDescriptor],
     pub decode_policy: Option<zencodec::decode::DecodePolicy>,
@@ -115,7 +115,7 @@ pub(crate) fn dyn_push_decode(
             let config = $config;
             let mut job = config.job();
             if let Some(lim) = params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
@@ -138,7 +138,7 @@ pub(crate) fn dyn_push_decode(
             let config = $config;
             let mut job = config.job();
             if let Some(lim) = params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
@@ -161,7 +161,10 @@ pub(crate) fn dyn_push_decode(
         ImageFormat::Jpeg => Err(at!(CodecError::UnsupportedFormat(format))),
 
         #[cfg(feature = "webp")]
-        ImageFormat::WebP => push_dec_at!(build_webp_decoder(params.codec_config, params.limits)),
+        ImageFormat::WebP => push_dec_at!(build_webp_decoder(
+            params.codec_config,
+            params.limits.as_ref()
+        )),
         #[cfg(not(feature = "webp"))]
         ImageFormat::WebP => Err(at!(CodecError::UnsupportedFormat(format))),
 
@@ -259,11 +262,11 @@ pub(crate) fn dyn_animation_frame_decoder(
     format: ImageFormat,
     params: &DecodeParams<'_>,
 ) -> Result<Box<dyn zencodec::decode::DynAnimationFrameDecoder>> {
-    let config = build_dyn_decoder_config(format, params.codec_config, params.limits)?;
+    let config = build_dyn_decoder_config(format, params.codec_config, params.limits.as_ref())?;
     let mut job = config.dyn_job();
     job.set_pulse(params.pulse.clone());
     if let Some(lim) = params.limits {
-        job.set_limits(to_resource_limits(lim));
+        job.set_limits(to_resource_limits(&lim));
     }
     if let Some(dp) = params.decode_policy {
         // Refuse a policy the codec cannot enforce instead of ignoring it.
@@ -455,7 +458,7 @@ pub(crate) fn dyn_streaming_decoder(
             let config = $config;
             let mut job = config.job();
             if let Some(lim) = params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
@@ -499,7 +502,7 @@ pub(crate) fn dyn_streaming_decoder(
         ImageFormat::Jpeg => {
             let mut job = build_jpeg_decoder(params.codec_config).job();
             if let Some(lim) = params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
@@ -519,7 +522,7 @@ pub(crate) fn dyn_streaming_decoder(
         ImageFormat::Png => {
             let mut job = zenpng::PngDecoderConfig::new().job();
             if let Some(lim) = params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             job = job.with_pulse(params.pulse.clone());
             if let Some(dp) = params.decode_policy {
@@ -606,7 +609,7 @@ pub(crate) struct AnimEncodeParams<'a> {
     /// Retention policy applied to `metadata` at the codec boundary.
     pub metadata_policy: zencodec::MetadataPolicy,
     pub codec_config: Option<&'a CodecConfig>,
-    pub limits: Option<&'a Limits>,
+    pub limits: Option<Limits>,
     pub pulse: SharedPulse,
     pub encode_policy: Option<zencodec::encode::EncodePolicy>,
     pub orientation_mode: Option<zencodec::encode::EncodeOrientation>,
@@ -635,7 +638,7 @@ pub(crate) fn dyn_animation_frame_encoder(
             let mut job = config.job();
             job = job.with_pulse(_params.pulse);
             if let Some(lim) = _params.limits {
-                job = job.with_limits(to_resource_limits(lim));
+                job = job.with_limits(to_resource_limits(&lim));
             }
             if let Some(meta) = _params.metadata {
                 job = job.with_metadata_policy(

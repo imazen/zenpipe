@@ -754,3 +754,70 @@ fn limits_animation_total_pixels_to_sink_path() {
         "second frame exceeds a one-frame max_total_pixels budget"
     );
 }
+
+// ===========================================================================
+// 6. Default Limits — absent limits get bounded server-safe defaults
+// ===========================================================================
+//
+// DecodeRequest without an explicit `with_limits` must NOT decode unbounded:
+// an attacker-controlled header declaring huge dimensions has to be rejected
+// before pixel work starts. `Limits::none()` remains the explicit opt-out.
+
+/// CRC-32 (IEEE) for hand-crafted PNG chunks.
+fn crc32_ieee(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xEDB8_8320 & 0u32.wrapping_sub(crc & 1));
+        }
+    }
+    !crc
+}
+
+/// A PNG declaring `w`x`h` 8-bit RGBA pixels, header only (no IDAT).
+fn png_header(w: u32, h: u32) -> Vec<u8> {
+    let mut png = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    let mut ihdr = Vec::with_capacity(17);
+    ihdr.extend_from_slice(b"IHDR");
+    ihdr.extend_from_slice(&w.to_be_bytes());
+    ihdr.extend_from_slice(&h.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+    let crc = crc32_ieee(&ihdr);
+    png.extend_from_slice(&13u32.to_be_bytes());
+    png.extend_from_slice(&ihdr);
+    png.extend_from_slice(&crc.to_be_bytes());
+    png
+}
+
+#[test]
+#[cfg(feature = "png")]
+fn default_limits_apply_server_bounds() {
+    // 20000x20000 exceeds the server defaults (16384 max dimension, 120MP)
+    // while staying a legal PNG header.
+    let png = png_header(20_000, 20_000);
+
+    // No limits supplied: server-safe defaults apply and probe rejects it.
+    let err = DecodeRequest::new(&png).probe().unwrap_err();
+    assert!(
+        is_limit_error(&err),
+        "expected a limit error with default bounds, got {err:?}"
+    );
+
+    // Explicit Limits::none() remains the unbounded opt-out.
+    let info = DecodeRequest::new(&png)
+        .with_limits(&Limits::none())
+        .probe()
+        .expect("probe with Limits::none() should succeed");
+    assert_eq!((info.width, info.height), (20_000, 20_000));
+
+    // An explicit custom limit still applies over the server default.
+    let err = DecodeRequest::new(&png)
+        .with_limits(&Limits::none().with_max_width(10))
+        .probe()
+        .unwrap_err();
+    assert!(
+        is_limit_error(&err),
+        "expected a limit error with a custom bound, got {err:?}"
+    );
+}

@@ -283,7 +283,12 @@ impl<'a> DecodeRequest<'a> {
         // Enable gain map extraction so codecs attach gain map data to extras.
         self.extract_gain_map = true;
         #[cfg(feature = "raw-decode-gainmap")]
-        let gainmap_controls = (self.limits, self.pulse.clone());
+        let gainmap_eff = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
+        #[cfg(feature = "raw-decode-gainmap")]
+        let gainmap_controls = (Some(&gainmap_eff), self.pulse.clone());
         let output = self.decode_format(format)?;
 
         let gainmap = match format {
@@ -457,12 +462,13 @@ impl<'a> DecodeRequest<'a> {
     /// Cheaper than `decode()` — only parses headers.
     pub fn probe(&self) -> Result<ImageInfo> {
         let format = self.resolve_format()?;
-        let info = crate::info::probe_format(self.data, format, self.limits)?;
-        if let Some(limits) = self.limits {
-            limits
-                .check_image_info(&info)
-                .map_err(|e| at!(CodecError::LimitExceeded(alloc::format!("{e}"))))?;
-        }
+        let eff = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
+        let info = crate::info::probe_format(self.data, format, Some(&eff))?;
+        eff.check_image_info(&info)
+            .map_err(|e| at!(CodecError::LimitExceeded(alloc::format!("{e}"))))?;
         Ok(info)
     }
 
@@ -500,14 +506,15 @@ impl<'a> DecodeRequest<'a> {
     /// Pre-flight memory admission: when `limits.max_memory_bytes` is set, reject
     /// (before constructing any decoder) if the calibrated decode est exceeds it.
     fn check_decode_admission(&self, format: ImageFormat) -> Result<()> {
-        let Some(limits) = self.limits else {
-            return Ok(());
-        };
+        let limits = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
         if limits.max_memory_bytes.is_none() {
             return Ok(());
         }
         let (image, est) = self.decode_estimate(format)?;
-        crate::estimate::check_estimate_against_limits(&est, &image, limits)
+        crate::estimate::check_estimate_against_limits(&est, &image, &limits)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -518,7 +525,11 @@ impl<'a> DecodeRequest<'a> {
         crate::dyn_dispatch::DecodeParams {
             data: self.data,
             codec_config: self.codec_config,
-            limits: self.limits,
+            limits: Some(
+                self.limits
+                    .copied()
+                    .unwrap_or_else(crate::limits::server_limits),
+            ),
             pulse: self.pulse.clone(),
             preferred: &[],
             decode_policy: self.decode_policy,
@@ -531,6 +542,12 @@ impl<'a> DecodeRequest<'a> {
         // Pre-flight: reject over-budget decodes before constructing the decoder.
         self.check_decode_admission(format)?;
         let dp = self.decode_policy;
+        // Unset limits mean bounded server defaults, not unbounded; an
+        // explicit `Limits::none()` remains the opt-out.
+        let eff = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
         // ReconstructHdr returns HDR pixels only from decoders that advertise the
         // capability — JPEG UltraHDR (gain maps); every
         // other format errors here rather than silently returning an SDR buffer
@@ -549,7 +566,7 @@ impl<'a> DecodeRequest<'a> {
             Jpeg => "jpeg" => crate::codecs::jpeg::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                Some(&eff),
                 self.pulse,
                 dp,
                 self.gain_map_render,
@@ -558,16 +575,16 @@ impl<'a> DecodeRequest<'a> {
             WebP => "webp" => crate::codecs::webp::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                Some(&eff),
                 self.pulse,
                 dp,
             ),
-            Gif => "gif" => crate::codecs::gif::decode(self.data, self.limits, self.pulse, dp),
-            Png => "png" => crate::codecs::png::decode(self.data, self.limits, self.pulse, dp),
+            Gif => "gif" => crate::codecs::gif::decode(self.data, Some(&eff), self.pulse, dp),
+            Png => "png" => crate::codecs::png::decode(self.data, Some(&eff), self.pulse, dp),
             Avif => "avif-decode" => crate::codecs::avif_dec::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                Some(&eff),
                 self.pulse,
                 dp,
                 self.extract_gain_map,
@@ -575,44 +592,44 @@ impl<'a> DecodeRequest<'a> {
             ),
             Jxl => "jxl-decode" => crate::codecs::jxl_dec::decode(
                 self.data,
-                self.limits,
+                Some(&eff),
                 self.pulse,
                 dp,
                 self.extract_gain_map,
             ),
             Heic => "heic-decode" => crate::codecs::heic::decode(
                 self.data,
-                self.limits,
+                Some(&eff),
                 self.pulse,
                 dp,
                 self.gain_map_render,
                 self.extract_gain_map,
                 self.orientation,
             ),
-            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, self.limits, self.pulse, dp),
-            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, self.limits, self.pulse, dp),
-            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, self.limits, self.pulse, dp),
-            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, self.limits, self.pulse, dp),
-            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, self.limits, self.pulse, dp),
-            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, self.limits, self.pulse, dp),
-            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, self.limits, self.pulse, dp);
+            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, Some(&eff), self.pulse, dp),
+            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, Some(&eff), self.pulse, dp),
+            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, Some(&eff), self.pulse, dp),
+            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, Some(&eff), self.pulse, dp),
+            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, Some(&eff), self.pulse, dp),
+            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, Some(&eff), self.pulse, dp),
+            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, Some(&eff), self.pulse, dp);
             // RAW/DNG: Custom format from zenraw
             #[cfg(feature = "raw-decode")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.pulse)
+                crate::codecs::raw::decode(self.data, self.codec_config, Some(&eff), self.pulse)
             }
             // JPEG 2000
             #[cfg(feature = "jp2-decode")]
-            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.pulse, dp),
+            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, Some(&eff), self.pulse, dp),
             // SVG/SVGZ
             #[cfg(feature = "svg")]
             ImageFormat::Custom(def) if def.name == "svg" => {
-                crate::codecs::svg::decode(self.data, self.limits, self.pulse, dp)
+                crate::codecs::svg::decode(self.data, Some(&eff), self.pulse, dp)
             }
             // PDF: Custom format from zenpdf (renders page 0)
             #[cfg(feature = "pdf-decode")]
             ImageFormat::Custom(def) if def.name == "pdf" => {
-                crate::codecs::pdf::decode(self.data, self.limits, self.pulse, dp)
+                crate::codecs::pdf::decode(self.data, Some(&eff), self.pulse, dp)
             }
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }

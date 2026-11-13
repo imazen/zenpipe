@@ -32,3 +32,20 @@ pub use enough::Stop;
 pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec::ResourceLimits {
     *limits
 }
+
+/// Effective limits applied when the caller passes none.
+///
+/// Passing no `with_limits` at all now decodes under bounded, server-safe
+/// defaults (16384 max dimension, 120 MP, 4 GiB memory, 10 000 frames,
+/// 1 Gpixel across all frames) instead of running unbounded: an unset limit
+/// is the common case, not an informed opt-out. To run truly unbounded a
+/// caller still opts out explicitly by passing `Limits::none()`.
+pub(crate) fn server_limits() -> Limits {
+    Limits::none()
+        .with_max_pixels(120_000_000)
+        .with_max_width(16_384)
+        .with_max_height(16_384)
+        .with_max_frames(10_000)
+        .with_max_total_pixels(1_000_000_000)
+        .with_max_memory(4 * 1024 * 1024 * 1024)
+}
