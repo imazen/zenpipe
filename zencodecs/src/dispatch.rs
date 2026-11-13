@@ -637,15 +637,24 @@ where
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
         if orientation != zencodec::Orientation::Identity {
             Box::new(
-                BufferedRowEncoder::new(encoder, params.limits.copied().unwrap_or_default())
-                    .with_orientation(orientation),
+                BufferedRowEncoder::new(
+                    encoder,
+                    params
+                        .limits
+                        .copied()
+                        .unwrap_or_else(crate::limits::server_limits),
+                )
+                .with_orientation(orientation),
             )
         } else if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
             encoder
         } else {
             Box::new(BufferedRowEncoder::new(
                 encoder,
-                params.limits.copied().unwrap_or_default(),
+                params
+                    .limits
+                    .copied()
+                    .unwrap_or_else(crate::limits::server_limits),
             ))
         };
     #[cfg(feature = "tonemap")]
