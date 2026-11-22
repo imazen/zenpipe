@@ -84,6 +84,20 @@ pub fn estimate_encode(
         #[cfg(feature = "gif")]
         ImageFormat::Gif => Ok(crate::codecs::gif::build_gif_encoding(codec_config)
             .estimate_encode_resources(image, compute)),
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Pnm => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "bitmaps-bmp")]
+        ImageFormat::Bmp => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "bitmaps")]
+        ImageFormat::Farbfeld => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "tiff")]
+        ImageFormat::Tiff => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "bitmaps-qoi")]
+        ImageFormat::Qoi => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "bitmaps-tga")]
+        ImageFormat::Tga => Ok(ResourceEstimate::unknown()),
+        #[cfg(feature = "bitmaps-hdr")]
+        ImageFormat::Hdr => Ok(ResourceEstimate::unknown()),
         _ => Err(whereat::at!(CodecError::UnsupportedFormat(format))),
     }
 }
@@ -365,17 +379,49 @@ mod tests {
     fn unsupported_encode_format_errors() {
         let c = chars(64, 64);
         let env = ComputeEnvironment::conservative();
-        // Pnm has no encoder wired → error.
-        assert!(
-            estimate_encode(
-                ImageFormat::Pnm,
-                &QualityIntent::from_quality(75.0),
-                None,
-                &c,
-                &env
-            )
-            .is_err()
-        );
+        let q = QualityIntent::from_quality(75.0);
+        // Heic is decode-only (no encoder wired) → error.
+        assert!(estimate_encode(ImageFormat::Heic, &q, None, &c, &env).is_err());
+        #[cfg(not(feature = "bitmaps"))]
+        assert!(estimate_encode(ImageFormat::Pnm, &q, None, &c, &env).is_err());
+    }
+
+    #[test]
+    fn unmodeled_enabled_encoders_return_unknown_estimate() {
+        let c = chars(64, 64);
+        let env = ComputeEnvironment::conservative();
+        let q = QualityIntent::from_quality(75.0);
+        let _ = (&c, &env, &q);
+        #[cfg(feature = "bitmaps")]
+        for fmt in [ImageFormat::Pnm, ImageFormat::Farbfeld] {
+            let est = estimate_encode(fmt, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none(), "{fmt:?}");
+        }
+        #[cfg(feature = "bitmaps-bmp")]
+        {
+            let est = estimate_encode(ImageFormat::Bmp, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none());
+        }
+        #[cfg(feature = "tiff")]
+        {
+            let est = estimate_encode(ImageFormat::Tiff, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none());
+        }
+        #[cfg(feature = "bitmaps-qoi")]
+        {
+            let est = estimate_encode(ImageFormat::Qoi, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none());
+        }
+        #[cfg(feature = "bitmaps-tga")]
+        {
+            let est = estimate_encode(ImageFormat::Tga, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none());
+        }
+        #[cfg(feature = "bitmaps-hdr")]
+        {
+            let est = estimate_encode(ImageFormat::Hdr, &q, None, &c, &env).unwrap();
+            assert!(est.peak_memory_bytes_est().is_none());
+        }
     }
 
     #[test]
