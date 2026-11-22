@@ -71,7 +71,7 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a3cc90997c05538
 heic = { git = "https://github.com/imazen/heic", rev = "c67cffe461ade38e4ca1c9bb36175dc67e724c07" }
 # Optional-control TIFF source with the matching image-tiff resource-limit fork.
 # Consumer resolution, pixel parity and native qualification remain pending.
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "dc37b3ecf6d174048978125b47eac4651fe135bc" }
 # Prepared row conversion with current color context (zenpixels PR 92).
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
@@ -192,7 +192,7 @@ zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "0237c6b3
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "dc37b3ecf6d174048978125b47eac4651fe135bc" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]

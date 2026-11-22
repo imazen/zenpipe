@@ -126,7 +126,7 @@ enough.workspace = true
 # Version edge: the core family comes from the root [patch.crates-io].
 zencodec-io = { version = "0.1.0", optional = true }
 # Blocking-pool bridge for async sources and writers (`io-tokio`).
-tokio = { version = "1.53.3", default-features = false, features = ["rt", "sync", "io-util"], optional = true }
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "sync", "io-util"], optional = true }
 # Error location tracking (re-exported by zenpixels for BufferError)
 whereat.workspace = true
 # Linear ↔ sRGB color space conversion (LUT-based, no_std)
@@ -171,7 +171,7 @@ zenavif_tuner = { package = "zenavif", version = "0.2.0", features = ["auto-tune
 # `zenavif::encode_rgb8` takes an `almost_enough::StopToken`, so the
 # `avif-autotune` consumer needs the type. Pinned to the exact version zenavif
 # itself depends on so the two unify rather than resolving twice.
-almost-enough = { version = "0.4.4", default-features = false, optional = true }
+almost-enough = { version = "0.4.5", default-features = false, optional = true }
 # The pixel-view types `zenavif::encode_rgb8` takes. Pinned to the exact
 # versions zenavif itself depends on so the types UNIFY — a second resolution
 # of either would make the call site fail to typecheck for a reason that reads
@@ -195,7 +195,7 @@ zensally-zentract = { version = "0.1.0", default-features = false, features = ["
 [dev-dependencies]
 # Perceptual metric for the pristine_kernel_ab example only — dev-only, so it
 # never enters the published dependency graph.
-fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+fast-ssim2 = { version = "0.9.1", features = ["imgref"] }
 # Dev-deps enable extra features on the optional codec crates above.
 # zenjpeg and zengif are used in integration tests (streaming_codec, bridge_codec).
 zenjpeg = { version = "0.9.0", features = ["zencodec"] }
@@ -208,7 +208,7 @@ serde_json.workspace = true
 codec-corpus = "1.1.0"
 imgref = "1.12.3"
 rgb = { version = "0.8.53", features = ["as-bytes"] }
-zenbench = "0.1.10"
+zenbench = "0.1.11"
 zenbitmaps = { version = "0.2.0", features = ["bmp"] }
 
 # Artifact-free 1/N downscale references from lossy corpus sources.
@@ -257,7 +257,7 @@ exclude = ["apidoc", "demo/crate", "wasm-size-shim"]
 
 [workspace.dependencies]
 # ── Shared across 3+ members ──
-enough = { version = "0.4.4", default-features = false }
+enough = { version = "0.4.5", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
 bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
 linear-srgb = { version = "0.6.12", default-features = false }
@@ -266,7 +266,7 @@ zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 zencodec = { version = ">=0.2.0, <0.4.0", default-features = false }
 # ── Serialization ──
 serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 # ── Workspace members ──
 zenfilters = { path = "zenfilters", version = "0.1.0" }
 zencodecs = { path = "zencodecs", version = "0.1.0", default-features = false }
@@ -308,7 +308,7 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c73a3cc90997c05538
 heic = { git = "https://github.com/imazen/heic", rev = "c67cffe461ade38e4ca1c9bb36175dc67e724c07" }
 # Optional-control TIFF source with the matching image-tiff resource-limit fork.
 # Consumer resolution, pixel parity and native qualification remain pending.
-zentiff = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "dc37b3ecf6d174048978125b47eac4651fe135bc" }
 # Prepared row conversion with current color context (zenpixels PR 92).
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
@@ -429,7 +429,7 @@ zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "0237c6b3
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "799ac0a1fd9cba997f4c054d3cf4a5d0ec0a2e16" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
-zenpdf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc" }
+zenpdf = { git = "https://github.com/imazen/zenextras", rev = "dc37b3ecf6d174048978125b47eac4651fe135bc" }
 
 # Override zenresize's git dep on zenlayout to use our workspace copy
 [patch."https://github.com/imazen/zenlayout.git"]

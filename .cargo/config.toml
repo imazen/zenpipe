@@ -9,3 +9,6 @@
 # 0.2.15), so the dogfood intent is preserved; it just locks cleanly now.
 #
 # (Intentionally empty — no active override here.)
+
+[net]
+git-fetch-with-cli = true

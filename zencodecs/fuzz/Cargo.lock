@@ -1137,9 +1137,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.18"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "jobserver"
@@ -1386,9 +1386,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.189"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "libflate"
@@ -2386,9 +2386,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.151"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
  "itoa",
  "memchr",
@@ -2854,9 +2854,9 @@ checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.24"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "unicode-script"
@@ -3406,8 +3406,9 @@ dependencies = [
 [[package]]
 name = "zenjp2"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 dependencies = [
+ "bytemuck",
  "enough",
  "hayro-jpeg2000 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
@@ -3517,8 +3518,9 @@ dependencies = [
 [[package]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 dependencies = [
+ "bytemuck",
  "flate2",
  "hayro",
  "hayro-syntax",
@@ -3689,8 +3691,9 @@ dependencies = [
 [[package]]
 name = "zensvg"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 dependencies = [
+ "bytemuck",
  "data-url",
  "enough",
  "flate2",
@@ -3708,7 +3711,7 @@ dependencies = [
 [[package]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 dependencies = [
  "bytemuck",
  "enough",

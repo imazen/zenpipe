@@ -9,6 +9,9 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- ci: set `CARGO_NET_GIT_FETCH_WITH_CLI=true` in CI/Fuzz/WASM workflows and `[net] git-fetch-with-cli = true` in `.cargo/config.toml` so macOS runners fetch nested git submodules with system Git instead of Cargo's libgit2 (`SecureTransport`).
+- chore(deps): update lockfiles across all 6 workspaces (`almost-enough 0.4.5`, `enough 0.4.5`, `fast-ssim2 0.9.1`, `serde_json 1.0.154`, `thiserror 2.0.21`, `tokio 1.54.1`, `zenbench 0.1.11`, `zenutils-apidoc 0.1.1`, `zennode`, `imageflow`), and advance `zenextras` (`zentiff`, `zenpdf`, `zensvg`, `zenjp2`) to `dc37b3ec`.
+
 - zencodecs: use `probe_full` in the HEIC container probe so `zencodecs::from_bytes` preserves container `source_color` (ICC profile and CICP) and gain-map parameters (#81).
 
 - zencodecs: populate `ImageInfo::is_progressive` from `JpegMode::{Progressive, ArithmeticProgressive}` in the JPEG header probe (#82).

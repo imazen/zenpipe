@@ -35,7 +35,7 @@ local-darktable = ["local-fixtures"]
 
 [dependencies]
 archmage = { version = "0.9.30", features = ["avx512"] }
-enough = "0.4.4"
+enough = "0.4.5"
 # Optional shared operation control.
 how-far = { version = "0.1.0", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"], optional = true }
@@ -54,7 +54,7 @@ zenquant = { version = "0.1.3", default-features = false, optional = true }
 imgref = "1.12.3"
 palette = { version = "0.7.7", default-features = false, features = ["std"] }
 rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
-almost-enough = "0.4.4"
+almost-enough = "0.4.5"
 # Shared optional operation control; no runtime or observer allocation required.
 how-far = { version = "0.1.0", default-features = false }
 # 0.3.0 unpublished (crates.io tops out at 0.2.7); resolved by the workspace-root
@@ -71,7 +71,7 @@ zencodecs = { workspace = true, features = ["std", "jpeg", "png", "webp"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # zenraw disabled — core2 crate fully yanked, breaks rawler→libflate chain
 # zenraw = { version = "0.1", features = ["rawler", "darktable", "exif", "apple"] }
-zenbench = { version = "0.1.10", features = ["criterion-compat"] }
+zenbench = { version = "0.1.11", features = ["criterion-compat"] }
 # DEV-only: lets benches/kernel_tiers.rs disable the baseline SIMD token (NEON
 # on aarch64) so the "scalar" arm is real rather than a second measurement of
 # the SIMD path. Feature unification applies this to test/bench builds only.

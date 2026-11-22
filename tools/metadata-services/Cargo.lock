@@ -196,9 +196,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+checksum = "735eaa21a6a5ffb2e84362faaeb90c05ba8e19797ca30428478cb6ea3a4921bc"
 
 [[package]]
 name = "how-far"
@@ -496,9 +496,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.26"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "whereat"
@@ -836,7 +836,7 @@ source = "git+https://github.com/imazen/zennode#d4d10a5114df937b79c3fd7d58c3b3b1
 [[patch.unused]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 
 [[patch.unused]]
 name = "zenpredict"
@@ -876,7 +876,7 @@ source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe3
 [[patch.unused]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 
 [[patch.unused]]
 name = "zenwebp"

@@ -45,7 +45,7 @@ checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -77,7 +77,7 @@ checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -372,9 +372,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.9"
+version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
+checksum = "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -398,7 +398,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -614,7 +614,7 @@ dependencies = [
 [[package]]
 name = "zennode"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zennode#d4d10a5114df937b79c3fd7d58c3b3b1ded5ee79"
+source = "git+https://github.com/imazen/zennode#b6a402eabc8d867cf64e828e51e0e4a564b061a4"
 dependencies = [
  "zennode-derive",
 ]
@@ -622,11 +622,11 @@ dependencies = [
 [[package]]
 name = "zennode-derive"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zennode#d4d10a5114df937b79c3fd7d58c3b3b1ded5ee79"
+source = "git+https://github.com/imazen/zennode#b6a402eabc8d867cf64e828e51e0e4a564b061a4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -874,7 +874,7 @@ source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2
 [[patch.unused]]
 name = "zenpdf"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"
 
 [[patch.unused]]
 name = "zenpredict"
@@ -909,4 +909,4 @@ source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe3
 [[patch.unused]]
 name = "zentiff"
 version = "0.1.2"
-source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
+source = "git+https://github.com/imazen/zenextras?rev=dc37b3ecf6d174048978125b47eac4651fe135bc#dc37b3ecf6d174048978125b47eac4651fe135bc"

@@ -39,7 +39,7 @@ required-features = ["job"]
 [dev-dependencies]
 # `PipelineGraph::compile` takes its source map as this type (zenpipe's version).
 hashbrown = "0.16.1"
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "fs"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "fs"] }
 # Independent PNG reader: a test oracle only.
 png = "0.18"
 # Independent JPEG reader: a test oracle only.
