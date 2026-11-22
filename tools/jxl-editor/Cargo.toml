@@ -1,0 +1,34 @@
+[package]
+name = "jxl-editor-codecs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "459e86b79b3ea15ab3575404c8faae5db4c2c399", default-features = false }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "025852d2d13dc49b42fc484703d8c5bf6f4fa013", default-features = false, features = ["wasm128", "cms", "jpeg"] }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "2099470337b8f2089a49f208d6b6bbacd2f8e485", default-features = false, features = ["planar"] }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "b0ae9ae2211726c14b7d8fe696fb3c374acc8f83", default-features = false }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"
+
+[profile.test]
+debug = 0
+incremental = false
+
+[patch.crates-io]
+# Zencodec PR 214 and encoder conversion retain the native 0.3.1 layout.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
