@@ -46,3 +46,65 @@ test("rejects duplicate and missing asset boxes and unknown manifest versions", 
   const extraManifest = await bytes(new Blob([saved, ...box("zned", tex.encode("{}"))]));
   assert.throws(() => readProject(extraManifest), /manifest/i);
 });
+
+test("round-trips timeline, manual splines, coding options and CMYK raw samples", async () => {
+  const frameId1 = "016f1c0a-23c7-4478-b25c-acde0000f001";
+  const frameId2 = "016f1c0a-23c7-4478-b25c-acde0000f002";
+  const splineId = "016f1c0a-23c7-4478-b25c-acde0000f010";
+  const richManifest = {
+    ...manifest,
+    timeline: {
+      enabled: true,
+      tpsNumerator: 1000,
+      tpsDenominator: 1,
+      loops: 2,
+      frames: [
+        {
+          id: frameId1,
+          name: "Frame 1",
+          duration: 180,
+          timecode: 100,
+          blendMode: "auto",
+          blendSource: null,
+          saveAsReference: 1,
+          referenceOnly: false,
+          layerOverrides: { [id]: { visible: true, opacity: 0.75, x: 2, y: -1, scale: 1.25, angle: -43, exposure: 0.15, contrast: 1, saturation: 0.82 } },
+        },
+        {
+          id: frameId2,
+          name: "Frame 2",
+          duration: 320,
+          timecode: 200,
+          blendMode: "replace",
+          blendSource: null,
+          saveAsReference: null,
+          referenceOnly: false,
+          layerOverrides: { [id]: { visible: true, opacity: 1, x: 6, y: 4, scale: 1, angle: 0, exposure: 0, contrast: 1, saturation: 1 } },
+        },
+      ],
+    },
+    splines: [
+      {
+        id: splineId,
+        name: "Arc 1",
+        colorHex: "#f5dc3c",
+        sigma: 1.5,
+        controlPoints: [[2, 3], [8, 12]],
+        colorDct: [Array(32).fill(0), Array(32).fill(0), Array(32).fill(0)],
+        sigmaDct: [1.06, ...Array(31).fill(0)],
+        bakeIntoSource: true,
+      },
+    ],
+    coding: { mode: "vardct", distance: 1.5, effort: 5, progressive: "quantized_ac" },
+    cmyk: { enabled: true, bitDepth: 8, mode: "modular", distance: 1, effort: 3, iccName: "Test CMYK", origin: "source", channelOffsets: [0, 0, 0, 0] },
+  };
+  const fakeIcc = new Uint8Array(128);
+  fakeIcc.set(tex.encode("CMYK"), 16);
+  const cmykSamples = new Uint8Array(13 * 17 * 4).fill(200);
+  const output = await bytes(writeProject(bare, richManifest, assets, [], { samples: cmykSamples, icc: fakeIcc }));
+  const reloaded = readProject(output);
+  assert.deepEqual(reloaded.manifest, richManifest);
+  assert.deepEqual(reloaded.cmykData.samples, cmykSamples);
+  assert.deepEqual(reloaded.cmykData.icc, fakeIcc);
+  assert.equal(reloaded.preserved.length, 0);
+});

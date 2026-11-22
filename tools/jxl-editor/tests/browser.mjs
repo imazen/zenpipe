@@ -4,13 +4,19 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { extname } from "node:path";
 import { chromium } from "playwright";
-import init, { decode_jxl, encode_jxl, encode_layers } from "../dist/wasm/relaxed/jxl_editor_codecs.js";
+import init, {
+  decode_jxl, encode_cmyk_jxl, encode_jxl, encode_layers, generate_minimal_cmyk_icc,
+} from "../dist/wasm/relaxed/jxl_editor_codecs.js";
+import initNative, {
+  native_extract_cmyk, native_jxl_info, native_jxl_timeline,
+} from "../dist/wasm/relaxed/jxl_editor_native.js";
 import { box, jxlBoxes, opaqueBoxes, readProject } from "../web/project.mjs";
 
 const baseUrl = process.env.EDITOR_URL ?? "http://127.0.0.1:3761";
 const output = process.env.EDITOR_OUTPUT ?? "test-results";
 await mkdir(output, { recursive: true });
 await init({ module_or_path: await readFile(new URL("../dist/wasm/relaxed/jxl_editor_codecs_bg.wasm", import.meta.url)) });
+await initNative({ module_or_path: await readFile(new URL("../dist/wasm/relaxed/jxl_editor_native_bg.wasm", import.meta.url)) });
 
 function rgba(width, height, pixel) {
   const result = new Uint8Array(width * height * 4);
@@ -247,6 +253,329 @@ try {
   assert.equal(await photo.evaluate(() => document.documentElement.scrollWidth), 390);
   await photo.screenshot({ path: `${output}/mobile.png`, fullPage: true });
   await photo.close();
+
+  // ── Native JPEG XL Timeline (Animation): create, edit per-frame, play, save/reopen, export ──
+  {
+    const tl = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const tlErrors = [];
+    tl.on("pageerror", error => tlErrors.push(error.message));
+    await tl.goto(baseUrl);
+    await tl.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    async function waitReady(textMatch) {
+      if (textMatch) await tl.locator("#status").filter({ hasText: textMatch }).waitFor();
+      await tl.waitForFunction(() => !document.getElementById("save").disabled);
+    }
+    async function dl(btnName, savePath, extPattern) {
+      const ev = tl.waitForEvent("download");
+      await tl.getByRole("button", { name: btnName, exact: true }).click();
+      const file = await ev;
+      assert.match(file.suggestedFilename(), extPattern);
+      await file.saveAs(savePath);
+      return await readFile(savePath);
+    }
+    await tl.locator("#open-file").setInputFiles({ name: "anim-base.jxl", mimeType: "image/jxl", buffer: source });
+    await waitReady("Image opened");
+    const addChooser = tl.waitForEvent("filechooser");
+    await tl.getByRole("button", { name: "Add layers", exact: true }).click();
+    await (await addChooser).setFiles({ name: "overlay.jxl", mimeType: "image/jxl", buffer: Buffer.from(second) });
+    await waitReady("Layer added");
+
+    await tl.getByRole("button", { name: "Timeline", exact: true }).click();
+    await tl.locator("#timeline-loops").fill("2");
+    await tl.locator("#timeline-loops").dispatchEvent("change");
+    await tl.locator("#frame-name").fill("Intro");
+    await tl.locator("#frame-name").dispatchEvent("change");
+    await tl.locator("#frame-duration").fill("150");
+    await tl.locator("#frame-duration").dispatchEvent("change");
+    await tl.locator("#frame-timecode").fill("100");
+    await tl.locator("#frame-timecode").dispatchEvent("change");
+
+    // Add frame 2 and move overlay independently on frame 2
+    await tl.getByRole("button", { name: "+ Frame", exact: true }).click();
+    await tl.locator("#frame-name").fill("Shift");
+    await tl.locator("#frame-name").dispatchEvent("change");
+    await tl.locator("#frame-duration").fill("250");
+    await tl.locator("#frame-duration").dispatchEvent("change");
+    await tl.locator("#frame-timecode").fill("200");
+    await tl.locator("#frame-timecode").dispatchEvent("change");
+    await tl.locator("#position-x").fill("12");
+    await tl.locator("#position-x").dispatchEvent("change");
+    await tl.locator("#position-y").fill("8");
+    await tl.locator("#position-y").dispatchEvent("change");
+
+    // Add frame 3 and hide overlay on frame 3 only
+    await tl.getByRole("button", { name: "+ Frame", exact: true }).click();
+    await tl.locator("#frame-name").fill("Clean");
+    await tl.locator("#frame-name").dispatchEvent("change");
+    await tl.locator("#frame-duration").fill("350");
+    await tl.locator("#frame-duration").dispatchEvent("change");
+    await tl.locator("#frame-timecode").fill("300");
+    await tl.locator("#frame-timecode").dispatchEvent("change");
+    await tl.getByRole("button", { name: "Hide overlay.jxl" }).click();
+
+    // Capture exact expected pixels of each frame directly from the editor canvas
+    const readCanvas = () => tl.locator("#canvas").evaluate(el =>
+      Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data));
+    const frameButtons = tl.locator(".timeline-frame");
+    assert.equal(await frameButtons.count(), 3);
+    const expectedFrames = [];
+    for (let i = 0; i < 3; i++) {
+      await frameButtons.nth(i).click();
+      await tl.evaluate(() => new Promise(requestAnimationFrame));
+      const px = Buffer.from(await readCanvas());
+      expectedFrames.push(px);
+      await writeFile(`${output}/timeline-f${i}.rgba`, px);
+    }
+    assert.notDeepEqual(expectedFrames[0], expectedFrames[1]);
+    assert.notDeepEqual(expectedFrames[1], expectedFrames[2]);
+
+    // Verify Play advances frames, then Pause
+    await frameButtons.nth(0).click();
+    await tl.getByRole("button", { name: "Play", exact: true }).click();
+    await tl.waitForFunction(() => document.getElementById("timeline-counter").textContent !== "Frame 1 / 3");
+    await tl.getByRole("button", { name: "Pause", exact: true }).click();
+    await tl.screenshot({ path: `${output}/timeline.png` });
+
+    // Verify 390px mobile viewport with Timeline dock open has no horizontal overflow
+    await tl.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await tl.evaluate(() => document.documentElement.scrollWidth), 390);
+    await tl.setViewportSize({ width: 1400, height: 940 });
+
+    const tlProject = await dl("Save project", `${output}/timeline.project.jxl`, /\.project\.jxl$/);
+    await waitReady("Project saved");
+    const tlInfo = JSON.parse(native_jxl_info(tlProject));
+    assert.equal(tlInfo.animation.ticksNumerator, 1000);
+    assert.equal(tlInfo.animation.loopCount, 2);
+    assert.equal(tlInfo.animation.hasTimecodes, true);
+    assert.equal(tlInfo.frames.length, 3);
+    assert.deepEqual(tlInfo.frames.map(f => f.name), ["Intro", "Shift", "Clean"]);
+    assert.deepEqual(tlInfo.frames.map(f => f.durationTicks), [150, 250, 350]);
+    assert.deepEqual(tlInfo.frames.map(f => f.timecode), [100, 200, 300]);
+    const decodedTl = native_jxl_timeline(tlProject);
+    const decodedPx = decodedTl.into_pixels();
+    const fBytes = 127 * 93 * 4;
+    for (let i = 0; i < 3; i++) {
+      assert.deepEqual(Buffer.from(decodedPx.subarray(i * fBytes, (i + 1) * fBytes)), expectedFrames[i]);
+    }
+
+    // Reopen .project.jxl and verify per-frame editable state survived
+    await tl.reload();
+    await tl.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await tl.locator("#open-file").setInputFiles({ name: "timeline.project.jxl", mimeType: "image/jxl", buffer: tlProject });
+    await waitReady("Project reopened");
+    assert.equal(await tl.locator(".timeline-frame").count(), 3);
+    await tl.locator(".timeline-frame").nth(1).click();
+    assert.equal(await tl.locator("#position-x").inputValue(), "12");
+    assert.equal(await tl.locator("#position-y").inputValue(), "8");
+    assert.equal(await tl.locator("#frame-duration").inputValue(), "250");
+    await tl.locator(".timeline-frame").nth(2).click();
+    assert.equal(await tl.getByRole("button", { name: "Show overlay.jxl" }).count(), 1);
+
+    // Export standalone animated .jxl and reopen it directly as an editable timeline
+    const tlFlat = await dl("Export JXL", `${output}/timeline.jxl`, /\.jxl$/);
+    assert.equal(readProject(tlFlat), null);
+    const flatInfo = JSON.parse(native_jxl_info(tlFlat));
+    assert.equal(flatInfo.frames.length, 3);
+    assert.deepEqual(flatInfo.frames.map(f => f.durationTicks), [150, 250, 350]);
+    await tl.reload();
+    await tl.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await tl.locator("#open-file").setInputFiles({ name: "timeline.jxl", mimeType: "image/jxl", buffer: tlFlat });
+    await waitReady("Image opened");
+    assert.equal(await tl.locator(".timeline-frame").count(), 3);
+    assert.equal(await tl.locator("#timeline-loops").inputValue(), "2");
+    assert.deepEqual(tlErrors, []);
+    await tl.close();
+  }
+
+  // ── Native JPEG XL Manual Splines: author, preview, save/reopen, export + bitstream flag check ──
+  {
+    const sp = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const spErrors = [];
+    sp.on("pageerror", error => spErrors.push(error.message));
+    const darkBg = rgba(96, 64, () => [20, 26, 38, 255]);
+    const darkJxl = encode_jxl(darkBg, 96, 64, 96 * 4);
+    await sp.goto(baseUrl);
+    await sp.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sp.locator("#open-file").setInputFiles({ name: "dark.jxl", mimeType: "image/jxl", buffer: Buffer.from(darkJxl) });
+    await sp.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    await sp.getByRole("button", { name: "Splines", exact: true }).click();
+    await sp.getByText("Manual JPEG XL splines require VarDCT lossy coding.").waitFor();
+    await sp.getByRole("button", { name: "Switch to VarDCT still", exact: true }).click();
+    await sp.getByRole("button", { name: "+ Add spline", exact: true }).click();
+    await sp.locator("#status").filter({ hasText: "Manual JPEG XL spline added" }).waitFor();
+    await sp.locator("#spline-points").fill("12, 32\n48, 16\n84, 32");
+    await sp.locator("#spline-points").dispatchEvent("change");
+    await sp.evaluate(() => new Promise(requestAnimationFrame));
+    await sp.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    // Click canvas to append 4th control point
+    await sp.getByRole("button", { name: "Click canvas to add points", exact: true }).click();
+    const boxBounds = await sp.locator("#canvas").boundingBox();
+    await sp.mouse.click(boxBounds.x + boxBounds.width * 70 / 96, boxBounds.y + boxBounds.height * 48 / 64);
+    await sp.waitForFunction(() => document.getElementById("spline-points").value.trim().split("\n").length === 4);
+    await sp.evaluate(() => new Promise(requestAnimationFrame));
+    await sp.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    // Verify canvas live preview visibly shows yellow spline at midpoint (48, 16)
+    const previewMid = await sp.locator("#canvas").evaluate(el => {
+      const px = Math.round(48 * el.width / 96);
+      const py = Math.round(16 * el.height / 64);
+      return Array.from(el.getContext("2d").getImageData(px, py, 1, 1).data);
+    });
+    assert.ok(previewMid[0] > 140 && previewMid[1] > 120, `expected bright yellow spline preview, got ${previewMid}`);
+    await sp.screenshot({ path: `${output}/splines.png` });
+
+    const spSaveEv = sp.waitForEvent("download");
+    await sp.getByRole("button", { name: "Save project", exact: true }).click();
+    const spSaveFile = await spSaveEv;
+    assert.match(spSaveFile.suggestedFilename(), /\.project\.jxl$/);
+    await spSaveFile.saveAs(`${output}/splines.project.jxl`);
+    const spProject = await readFile(`${output}/splines.project.jxl`);
+    const spInfo = JSON.parse(native_jxl_info(spProject));
+    assert.equal(spInfo.frames[0].coding.encoding, "VarDCT");
+    assert.equal(spInfo.frames[0].coding.flags.splines, true);
+    assert.ok(spInfo.vardctQuantizer?.globalScale >= 1);
+
+    // Reopen .project.jxl and verify spline remains editable with 4 control points
+    await sp.reload();
+    await sp.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sp.locator("#open-file").setInputFiles({ name: "splines.project.jxl", mimeType: "image/jxl", buffer: spProject });
+    await sp.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await sp.getByRole("button", { name: "Splines", exact: true }).click();
+    assert.equal((await sp.locator("#spline-points").inputValue()).trim().split("\n").length, 4);
+
+    const spExpEv = sp.waitForEvent("download");
+    await sp.getByRole("button", { name: "Export JXL", exact: true }).click();
+    const spExpFile = await spExpEv;
+    assert.match(spExpFile.suggestedFilename(), /\.jxl$/);
+    await spExpFile.saveAs(`${output}/splines.jxl`);
+    const spFlat = await readFile(`${output}/splines.jxl`);
+    const spFlatInfo = JSON.parse(native_jxl_info(spFlat));
+    assert.equal(spFlatInfo.frames[0].coding.flags.splines, true);
+    assert.deepEqual(spErrors, []);
+    await sp.close();
+  }
+
+  // ── Coding Modes (VarDCT Progressive/LF/Noise/Resampling + Modular Group/Squeeze/RCT) & CMYK ──
+  {
+    const cm = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const cmErrors = [];
+    cm.on("pageerror", error => cmErrors.push(error.message));
+    const grad = rgba(64, 48, (x, y) => [(x * 4) % 256, (y * 5) % 256, ((x + y) * 3) % 256, 255]);
+    const gradJxl = encode_jxl(grad, 64, 48, 64 * 4);
+    await writeFile(`${output}/coding-modular.rgba`, grad);
+    await cm.goto(baseUrl);
+    await cm.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await cm.locator("#open-file").setInputFiles({ name: "coding.jxl", mimeType: "image/jxl", buffer: Buffer.from(gradJxl) });
+    await cm.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    await cm.getByRole("button", { name: "Coding", exact: true }).click();
+
+    // VarDCT progressive AC + LF frame + photon noise + gaborish off + EPF 0
+    await cm.locator("#coding-mode").selectOption("vardct");
+    await cm.locator("#coding-progressive").selectOption("dc_vlf_lf_ac");
+    await cm.locator("#coding-progressive-dc").selectOption("1");
+    await cm.locator("#coding-noise-mode").selectOption("photon_iso");
+    await cm.locator("#coding-photon-iso").fill("3200");
+    await cm.locator("#coding-photon-iso").dispatchEvent("change");
+    await cm.locator("#coding-gaborish").selectOption("off");
+    await cm.locator("#coding-epf").selectOption("0");
+    let dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/coding-vardct.jxl`);
+    const vInfo = JSON.parse(native_jxl_info(await readFile(`${output}/coding-vardct.jxl`)));
+    assert.equal(vInfo.frames[0].coding.encoding, "VarDCT");
+    assert.equal(vInfo.frames[0].coding.numPasses, 3);
+    assert.equal(vInfo.frames[0].coding.flags.useLfFrame, true);
+    assert.equal(vInfo.frames[0].coding.flags.noise, true);
+    assert.equal(vInfo.frames[0].coding.gaborish, false);
+    assert.equal(vInfo.frames[0].coding.epfIters, 0);
+    assert.ok(vInfo.vardctQuantizer?.globalScale >= 1);
+
+    // VarDCT spatial resampling 2x
+    await cm.locator("#coding-progressive-dc").selectOption("0");
+    await cm.locator("#coding-resampling").selectOption("2");
+    dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/coding-resamp.jxl`);
+    const rInfo = JSON.parse(native_jxl_info(await readFile(`${output}/coding-resamp.jxl`)));
+    assert.equal(rInfo.frames[0].coding.upsampling, 2);
+
+    // Modular squeeze + group size 128 + YCoCg RCT + save/reopen persistence
+    await cm.locator("#coding-mode").selectOption("modular");
+    await cm.locator("#coding-squeeze").check();
+    await cm.locator("#coding-group-size").selectOption("0");
+    await cm.locator("#coding-rct").selectOption("ycocg");
+    dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/coding-modular.jxl`);
+    const modBytes = await readFile(`${output}/coding-modular.jxl`);
+    const mInfo = JSON.parse(native_jxl_info(modBytes));
+    assert.equal(mInfo.frames[0].coding.encoding, "Modular");
+    assert.equal(mInfo.frames[0].coding.modularGroupSize, 128);
+    assert.deepEqual(Buffer.from(decode_jxl(modBytes).into_pixels()), Buffer.from(grad));
+
+    // CMYK lossless exact round-trip + save/reopen + lossy CMYK export
+    const icc = generate_minimal_cmyk_icc();
+    const cmykSwatches = new Uint8Array(24 * 16 * 4);
+    const pal = [[255,255,255,255],[0,255,255,255],[255,0,255,255],[255,255,0,255],[255,255,255,0],[64,128,192,224]];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 24; x++) {
+      cmykSwatches.set(pal[Math.floor(y / 8) * 3 + Math.floor(x / 8)], (y * 24 + x) * 4);
+    }
+    const cmykSrc = encode_cmyk_jxl(cmykSwatches, 24, 16, 8, icc, JSON.stringify({ mode: "modular", effort: 3 }));
+    await writeFile(`${output}/cmyk-lossless.cmyk8`, cmykSwatches);
+    await writeFile(`${output}/cmyk-expected.icc`, icc);
+
+    await cm.reload();
+    await cm.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await cm.locator("#open-file").setInputFiles({ name: "swatches-cmyk.jxl", mimeType: "image/jxl", buffer: Buffer.from(cmykSrc) });
+    await cm.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    await cm.getByRole("button", { name: "Coding", exact: true }).click();
+    assert.equal(await cm.locator("#coding-color-model").inputValue(), "cmyk");
+    assert.equal(await cm.locator("#cmyk-bits").inputValue(), "8");
+    assert.equal(await cm.locator("#cmyk-mode").inputValue(), "modular");
+    await cm.getByText("C=255 M=255 Y=255 K=255").waitFor();
+
+    dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Save project", exact: true }).click();
+    const cmykProjFile = await dlEv;
+    assert.equal(cmykProjFile.suggestedFilename(), "swatches-cmyk.project.jxl");
+    await cmykProjFile.saveAs(`${output}/cmyk-lossless.project.jxl`);
+    const cmykProjBytes = await readFile(`${output}/cmyk-lossless.project.jxl`);
+
+    // Reopen CMYK .project.jxl and confirm exact CMYK samples & ICC survive
+    await cm.reload();
+    await cm.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await cm.locator("#open-file").setInputFiles({ name: "swatches-cmyk.project.jxl", mimeType: "image/jxl", buffer: cmykProjBytes });
+    await cm.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await cm.getByRole("button", { name: "Coding", exact: true }).click();
+    assert.equal(await cm.locator("#coding-color-model").inputValue(), "cmyk");
+    await cm.getByText("C=255 M=255 Y=255 K=255").waitFor();
+
+    dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/cmyk-lossless.jxl`);
+    const cmykOutBytes = await readFile(`${output}/cmyk-lossless.jxl`);
+    const cmykOutInfo = JSON.parse(native_jxl_info(cmykOutBytes));
+    assert.equal(cmykOutInfo.codestreamLevel, 10);
+    assert.equal(cmykOutInfo.profile.cmyk, true);
+    assert.equal(cmykOutInfo.extraChannels[0].type, "Black");
+    const ext = native_extract_cmyk(cmykOutBytes);
+    assert.deepEqual(ext.take_samples(), cmykSwatches);
+    assert.deepEqual(ext.take_icc(), icc);
+    ext.free();
+
+    // Switch CMYK to VarDCT lossy (ICC -> linear sRGB XYB + preserved Black extra channel)
+    await cm.locator("#cmyk-mode").selectOption("vardct");
+    await cm.getByText(/converts CMY\/K via the embedded ICC to linear sRGB XYB/).waitFor();
+    dlEv = cm.waitForEvent("download");
+    await cm.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/cmyk-lossy.jxl`);
+    const cmykLossyBytes = await readFile(`${output}/cmyk-lossy.jxl`);
+    const cmykLossyInfo = JSON.parse(native_jxl_info(cmykLossyBytes));
+    assert.equal(cmykLossyInfo.codestreamLevel, 10);
+    assert.equal(cmykLossyInfo.xybEncoded, true);
+    assert.equal(cmykLossyInfo.extraChannels[0].type, "Black");
+    assert.deepEqual(cmErrors, []);
+    await cm.close();
+  }
 
   if (process.env.EDITOR_JPEG_CARRIER) {
     const resources = await browser.newPage({ acceptDownloads: true });

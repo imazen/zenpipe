@@ -1,5 +1,15 @@
 #![forbid(unsafe_code)]
 
+mod author;
+mod cmyk;
+mod splines;
+pub use author::{encode_jxl_configured, encode_timeline, encode_timeline_configured};
+pub use cmyk::{
+    encode_cmyk_jxl, generate_minimal_cmyk_icc, preview_cmyk_to_rgba8, rgba8_to_cmyk8_jxl,
+    rgba8_to_cmyk16_jxl,
+};
+pub use splines::{render_splines_rgba, spline_color_dct_from_srgb};
+
 use core::num::NonZeroU32;
 use jxl_encoder::{AnimationFrame, AnimationParams, Limits, LosslessConfig, PixelLayout};
 use zencodec::ResourceLimits;

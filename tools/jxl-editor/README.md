@@ -28,21 +28,25 @@ by 10 pixels. Space shows the original while held.
 presentation and a private editing payload. Reopen it through **Open image**.
 **Export JXL** writes a standalone presentation. **Download source** retrieves
 the selected layer's imported file byte for byte, including the first SVG
-source and the full original JPEG XL codestream and metadata. In an open
-JPEG XL, use **Native JXL** to select a local frame, inspect its channels
-and container, or add a frame to the layer stack. [Native tools and coverage](docs/native-jxl.md)
+source and the full original JPEG XL codestream and metadata. Use **Timeline**
+for native multi-frame JPEG XL animations, **Coding** for Modular/VarDCT knobs
+and Level 10 CMYK (`Cmyk8`/`Cmyk16`), **Splines** for native VarDCT Gaussian
+splines, and **Native JXL** for frame, channel, bitstream-flag, ICC, box, and
+JPEG reconstruction tools. [Native tools and coverage](docs/native-jxl.md)
 
 ## File format
 
-The version 1 profile uses four skippable application boxes in an ISO/IEC
+The version 1 profile uses skippable application boxes in an ISO/IEC
 18181-2 container. Image assets and vector renditions are lossless.
 
 | Box | Contents |
 | --- | --- |
-| `zned` | UTF-8 JSON with version, canvas dimensions, original layer ID, and layers ordered bottom to top. Each layer has a UUID, name, media type, pixel dimensions, visibility, opacity, transform, and adjustment values. An optional `filterEngine` records the pixel interpretation. |
+| `zned` | UTF-8 JSON with version, canvas dimensions, original layer ID, layers ordered bottom to top, optional `filterEngine`, and optional `timeline`, `splines`, `coding`, and `cmyk` authoring state. |
 | `znas` | 36 ASCII bytes of layer UUID followed by the exact imported raster or SVG file bytes. |
 | `znvs` | The same UUID prefix followed by the current UTF-8 SVG source when the user has edited it. |
 | `znrv` | The same UUID prefix followed by the SVG's lossless JPEG XL raster rendition. |
+| `zncm` | Optional raw CMYK sample buffer: 1-byte bit depth (`8` or `16`) followed by JXL-convention inverted-ink samples (`0 = full ink`, `max = no ink`). |
+| `znic` | Optional attached CMYK ICC profile bytes paired with `zncm`. |
 
 SVG renders run in an isolated browser image context. Reopening uses the
 stored rendition. Editing renders a new image and preserves the imported SVG

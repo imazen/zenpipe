@@ -17,25 +17,52 @@ function initialize() {
   })();
 }
 
+async function loadNative(optimized) {
+  return native ??= (async () => {
+    const module = optimized ? await import("./wasm/relaxed/jxl_editor_native.js")
+      : await import("./wasm/baseline/jxl_editor_native.js");
+    await module.default();
+    return module;
+  })();
+}
+
 self.onmessage = async ({ data }) => {
   const { id, method } = data;
   try {
     const { codec, mode, optimized } = await initialize();
     if (method === "init") {
       self.postMessage({ id, value: mode });
-    } else if (["nativeInfo", "nativeFrame", "nativeIcc", "nativeJpeg"].includes(method)) {
-      const nativeModule = await (native ??= (async () => {
-        const module = optimized ? await import("./wasm/relaxed/jxl_editor_native.js")
-          : await import("./wasm/baseline/jxl_editor_native.js");
-        await module.default();
-        return module;
-      })());
+    } else if (["nativeInfo", "nativeFrame", "nativeIcc", "nativeJpeg", "nativeTimeline", "nativeCmyk"].includes(method)) {
+      const nativeModule = await loadNative(optimized);
       if (method === "nativeInfo") {
         self.postMessage({ id, value: JSON.parse(nativeModule.native_jxl_info(data.bytes)) });
       } else if (method === "nativeIcc" || method === "nativeJpeg") {
         const value = method === "nativeIcc" ? nativeModule.native_embedded_icc(data.bytes)
           : nativeModule.native_reconstruct_jpeg(data.bytes);
         self.postMessage({ id, value }, [value.buffer]);
+      } else if (method === "nativeTimeline") {
+        const timeline = nativeModule.native_jxl_timeline(data.bytes);
+        const info = JSON.parse(timeline.info());
+        const width = timeline.width();
+        const height = timeline.height();
+        const pixels = timeline.into_pixels();
+        self.postMessage({ id, value: { info, width, height, pixels } }, [pixels.buffer]);
+      } else if (method === "nativeCmyk") {
+        const cmyk = nativeModule.native_extract_cmyk(data.bytes);
+        try {
+          const width = cmyk.width();
+          const height = cmyk.height();
+          const bitDepth = cmyk.bit_depth();
+          const usesOriginalProfile = cmyk.uses_original_profile();
+          const samples = cmyk.take_samples();
+          const icc = cmyk.take_icc();
+          self.postMessage({
+            id,
+            value: { width, height, bitDepth, usesOriginalProfile, samples, icc },
+          }, [samples.buffer, icc.buffer]);
+        } finally {
+          cmyk.free();
+        }
       } else {
         const frame = nativeModule.native_jxl_frame(data.bytes, data.index);
         try {
@@ -64,9 +91,41 @@ self.onmessage = async ({ data }) => {
     } else if (method === "encode") {
       const value = codec.encode_jxl(data.pixels, data.width, data.height, data.stride);
       self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "encodeConfigured") {
+      const value = codec.encode_jxl_configured(
+        data.pixels, data.width, data.height, JSON.stringify(data.options));
+      self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "encodeTimeline") {
+      const value = codec.encode_timeline_configured(
+        data.pixels, data.width, data.height, JSON.stringify(data.options));
+      self.postMessage({ id, value }, [value.buffer]);
     } else if (method === "encodeLayers") {
       const value = codec.encode_layers(data.pixels, data.expected, data.width, data.height, data.ids);
       self.postMessage({ id, value }, value ? [value.buffer] : []);
+    } else if (method === "renderSplines") {
+      const value = codec.render_splines_rgba(
+        data.pixels, data.width, data.height, JSON.stringify(data.splines));
+      self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "splineColorDct") {
+      const value = codec.spline_color_dct_from_srgb(
+        data.fgR, data.fgG, data.fgB, data.bgR, data.bgG, data.bgB, data.sigma);
+      self.postMessage({ id, value: Array.from(value) });
+    } else if (method === "minimalCmykIcc") {
+      const value = codec.generate_minimal_cmyk_icc();
+      self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "rgbaToCmyk") {
+      const value = data.bitDepth === 16
+        ? codec.rgba8_to_cmyk16_jxl(data.pixels)
+        : codec.rgba8_to_cmyk8_jxl(data.pixels);
+      self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "encodeCmyk") {
+      const value = codec.encode_cmyk_jxl(
+        data.samples, data.width, data.height, data.bitDepth, data.icc, JSON.stringify(data.options));
+      self.postMessage({ id, value }, [value.buffer]);
+    } else if (method === "previewCmyk") {
+      const value = codec.preview_cmyk_to_rgba8(
+        data.samples, data.width, data.height, data.bitDepth, data.icc);
+      self.postMessage({ id, value }, [value.buffer]);
     } else if (method === "decode") {
       const raster = codec.decode_jxl(data.bytes);
       const width = raster.width();

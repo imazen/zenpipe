@@ -21,6 +21,8 @@
     </div>
     <input id="open-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
     <input id="layer-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" multiple hidden>
+    <input id="timeline-frame-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
+    <input id="cmyk-icc-file" type="file" accept=".icc,.icm" hidden>
   </header>
   <main class="workspace">
     <section class="viewer" aria-label="Canvas workspace">
@@ -28,6 +30,7 @@
         <div class="controls">
           <button id="undo" type="button" title="Undo (Ctrl/⌘ Z)" disabled>Undo</button>
           <button id="redo" type="button" title="Redo (Ctrl/⌘ Shift Z)" disabled>Redo</button>
+          <button id="timeline-toggle" type="button" aria-pressed="false" disabled>Timeline</button>
         </div>
         <span id="dimensions"></span>
         <div class="controls">
@@ -48,8 +51,70 @@
         <div id="canvas-wrap" class="canvas-wrap" hidden>
           <canvas id="canvas" aria-label="Move the selected layer on the canvas" tabindex="0"></canvas>
           <div id="outline" class="outline" hidden></div>
+          <svg id="spline-overlay" class="spline-overlay" hidden aria-hidden="true"></svg>
         </div>
       </div>
+      <section id="timeline-dock" class="timeline-dock" hidden aria-label="Native JPEG XL animation timeline">
+        <div class="timeline-bar">
+          <div class="controls">
+            <label class="inline-check"><input id="timeline-enabled" type="checkbox"> Native animation</label>
+            <button id="timeline-play" type="button" disabled>Play</button>
+            <button id="timeline-prev" type="button" aria-label="Previous frame" disabled>◀</button>
+            <span id="timeline-counter">Frame 1 / 1</span>
+            <button id="timeline-next" type="button" aria-label="Next frame" disabled>▶</button>
+          </div>
+          <div class="controls timeline-clock">
+            <label>TPS <input id="timeline-tps-num" type="number" min="1" max="1073741824" step="1" value="1000"></label>
+            <label>/ <input id="timeline-tps-den" type="number" min="1" max="1024" step="1" value="1"></label>
+            <label>Loops <input id="timeline-loops" type="number" min="0" max="65535" step="1" value="0" title="0 = infinite"></label>
+            <label class="inline-check"><input id="timeline-auto-delta" type="checkbox"> Auto delta</label>
+          </div>
+          <div class="controls">
+            <button id="timeline-add" type="button">+ Frame</button>
+            <button id="timeline-dup" type="button">Duplicate</button>
+            <button id="timeline-import" type="button">+ Image frame</button>
+            <button id="timeline-move-left" type="button" title="Move frame earlier">Move ◀</button>
+            <button id="timeline-move-right" type="button" title="Move frame later">Move ▶</button>
+            <button id="timeline-delete" type="button">Delete frame</button>
+          </div>
+        </div>
+        <ol id="timeline-frames" class="timeline-frames" aria-label="Animation frames"></ol>
+        <div class="timeline-frame-editor">
+          <label>Frame name <input id="frame-name" type="text" maxlength="1019"></label>
+          <label>Duration (ticks) <input id="frame-duration" type="number" min="0" max="2147483647" step="1"></label>
+          <span id="frame-duration-ms" class="muted-note"></span>
+          <label>Timecode <input id="frame-timecode" type="number" min="0" max="4294967295" step="1" placeholder="None"></label>
+          <label>Blend
+            <select id="frame-blend">
+              <option value="auto">Auto (crop/replace)</option>
+              <option value="replace">Replace</option>
+              <option value="blend">Blend (color)</option>
+              <option value="add">Add</option>
+              <option value="alpha_weighted_add">Alpha-weighted add</option>
+              <option value="mul">Multiply</option>
+            </select>
+          </label>
+          <label>Blend source
+            <select id="frame-blend-source">
+              <option value="">Auto</option>
+              <option value="0">Slot 0</option>
+              <option value="1">Slot 1</option>
+              <option value="2">Slot 2</option>
+              <option value="3">Slot 3</option>
+            </select>
+          </label>
+          <label>Save ref
+            <select id="frame-save-ref">
+              <option value="">Auto</option>
+              <option value="0">Slot 0</option>
+              <option value="1">Slot 1</option>
+              <option value="2">Slot 2</option>
+              <option value="3">Slot 3</option>
+            </select>
+          </label>
+          <label class="inline-check"><input id="frame-ref-only" type="checkbox"> Reference only</label>
+        </div>
+      </section>
       <footer class="statusbar"><span id="status" role="status" aria-live="polite">Starting codec…</span><span id="engine"></span></footer>
     </section>
     <aside class="inspector" aria-label="Layer inspector">
@@ -65,6 +130,8 @@
       <section class="properties">
         <div class="tabs" role="group" aria-label="Inspector view">
           <button id="properties-tab" type="button" aria-pressed="true">Adjustments</button>
+          <button id="coding-tab" type="button" aria-pressed="false" disabled>Coding</button>
+          <button id="splines-tab" type="button" aria-pressed="false" disabled>Splines</button>
           <button id="history-tab" type="button" aria-pressed="false">History</button>
           <button id="native-tab" type="button" aria-pressed="false" disabled>Native JXL</button>
         </div>
@@ -85,9 +152,241 @@
             </div>
           </fieldset>
         </div>
+        <div id="coding-panel" class="subpanel" hidden>
+          <fieldset id="coding-fields" disabled>
+            <label>Output color model
+              <select id="coding-color-model">
+                <option value="rgba">RGBA sRGB (8-bit canvas)</option>
+                <option value="cmyk">CMYK + Black extra channel (Level 10)</option>
+              </select>
+            </label>
+            <div id="cmyk-controls" hidden>
+              <p id="cmyk-semantics-note" class="notice"></p>
+              <div class="coordinates">
+                <label>Precision
+                  <select id="cmyk-bits">
+                    <option value="8">8-bit (Cmyk8)</option>
+                    <option value="16">16-bit (Cmyk16)</option>
+                  </select>
+                </label>
+                <label>CMYK coding
+                  <select id="cmyk-mode">
+                    <option value="modular">Modular lossless (exact ink)</option>
+                    <option value="vardct">VarDCT lossy (ICC → XYB + K)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="coordinates" id="cmyk-vardct-opts" hidden>
+                <label>Distance <input id="cmyk-distance" type="number" min="0.01" max="15" step="0.1" value="1.0"></label>
+                <label>Effort <input id="cmyk-effort" type="number" min="1" max="10" step="1" value="4"></label>
+              </div>
+              <p id="cmyk-icc-status" class="muted-note"></p>
+              <div class="asset-actions">
+                <button id="cmyk-icc-load" type="button">Load CMYK ICC</button>
+                <button id="cmyk-icc-builtin" type="button">Use built-in CMYK ICC</button>
+              </div>
+              <h3>CMYK Ink Offsets</h3>
+              <p class="muted-note">JXL ink convention: 0 = full ink, max = no ink. Zero offsets preserve exact CMYK codes.</p>
+              <div class="cmyk-sliders">
+                <label class="adjustment"><span>Cyan <output id="cmyk-val-0">0%</output></span><input id="cmyk-offset-0" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label class="adjustment"><span>Magenta <output id="cmyk-val-1">0%</output></span><input id="cmyk-offset-1" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label class="adjustment"><span>Yellow <output id="cmyk-val-2">0%</output></span><input id="cmyk-offset-2" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label class="adjustment"><span>Black (K) <output id="cmyk-val-3">0%</output></span><input id="cmyk-offset-3" type="range" min="-0.5" max="0.5" step="0.01" value="0"></label>
+              </div>
+              <div class="asset-actions">
+                <button id="cmyk-reset-offsets" type="button">Reset ink offsets</button>
+              </div>
+              <p id="cmyk-sample-info" class="muted-note"></p>
+            </div>
+            <div id="rgba-coding-controls">
+              <label>Coding mode
+                <select id="coding-mode">
+                  <option value="modular">Modular (Lossless / Near-lossless)</option>
+                  <option value="vardct">VarDCT (Lossy XYB)</option>
+                </select>
+              </label>
+              <div class="coordinates">
+                <label>Effort (1–10) <input id="coding-effort" type="number" min="1" max="10" step="1" value="3"></label>
+                <label>Faster decode (0–4) <input id="coding-faster-decoding" type="number" min="0" max="4" step="1" value="0"></label>
+              </div>
+              <div id="coding-modular-group">
+                <h3>Modular Options</h3>
+                <label class="inline-check"><input id="coding-lossy-palette" type="checkbox"> Lossy delta palette</label>
+                <label class="inline-check"><input id="coding-squeeze" type="checkbox"> Responsive Haar squeeze</label>
+                <label>Palette color cap <input id="coding-palette-colors" type="number" min="0" max="65536" step="1" placeholder="Auto (0 = off)"></label>
+                <label>RCT transform
+                  <select id="coding-rct">
+                    <option value="auto">Auto</option>
+                    <option value="none">None (RGB)</option>
+                    <option value="subtract_green">Subtract Green</option>
+                    <option value="ycocg">YCoCg</option>
+                    <option value="gbr_subgr">GBR + Subtract Green</option>
+                  </select>
+                </label>
+                <div class="coordinates">
+                  <label>Group size
+                    <select id="coding-group-size">
+                      <option value="">Auto</option>
+                      <option value="0">128 px</option>
+                      <option value="1">256 px</option>
+                      <option value="2">512 px</option>
+                      <option value="3">1024 px</option>
+                    </select>
+                  </label>
+                  <label>Predictor
+                    <select id="coding-predictor">
+                      <option value="">Auto</option>
+                      <option value="0">0 (Zero)</option>
+                      <option value="1">1 (Left)</option>
+                      <option value="2">2 (Top)</option>
+                      <option value="5">5 (Gradient)</option>
+                      <option value="6">6 (Weighted)</option>
+                      <option value="14">14 (RIGED)</option>
+                      <option value="15">15 (Variable)</option>
+                    </select>
+                  </label>
+                </div>
+                <label>Modular patches
+                  <select id="coding-modular-patches">
+                    <option value="auto">Auto</option>
+                    <option value="on">Force on</option>
+                    <option value="off">Force off</option>
+                  </select>
+                </label>
+              </div>
+              <div id="coding-vardct-group" hidden>
+                <h3>VarDCT Options</h3>
+                <label class="adjustment"><span>Distance (Butteraugli) <output id="coding-distance-val">1.00</output></span>
+                  <input id="coding-distance" type="range" min="0.05" max="15" step="0.05" value="1">
+                </label>
+                <label>Progressive AC
+                  <select id="coding-progressive">
+                    <option value="single">Single pass</option>
+                    <option value="quantized_ac">2-pass Quantized AC → Full AC</option>
+                    <option value="dc_vlf_lf_ac">3-pass DC/VLF → LF → Full AC</option>
+                  </select>
+                </label>
+                <label>Progressive DC (LF frame)
+                  <select id="coding-progressive-dc">
+                    <option value="0">Off</option>
+                    <option value="1">1 LF frame (still only)</option>
+                  </select>
+                </label>
+                <label>Noise synthesis
+                  <select id="coding-noise-mode">
+                    <option value="off">Off</option>
+                    <option value="content">Content estimated</option>
+                    <option value="photon_iso">Photon noise ISO</option>
+                    <option value="manual_lut">Manual 8-point LUT</option>
+                  </select>
+                </label>
+                <label id="coding-photon-iso-row" hidden>Photon ISO (1–50000) <input id="coding-photon-iso" type="number" min="1" max="50000" step="50" value="1600"></label>
+                <label id="coding-manual-lut-row" hidden>Manual LUT (8 comma values 0–1) <input id="coding-manual-lut" type="text" value="0.02,0.025,0.025,0.02,0.015,0.01,0.008,0.004"></label>
+                <label class="inline-check"><input id="coding-denoise" type="checkbox"> Wiener denoise pre-filter</label>
+                <div class="coordinates">
+                  <label>Patches
+                    <select id="coding-vardct-patches">
+                      <option value="auto">Auto</option>
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                  <label>Gaborish
+                    <select id="coding-gaborish">
+                      <option value="auto">Auto</option>
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="coordinates">
+                  <label>EPF level
+                    <select id="coding-epf">
+                      <option value="-1">Auto</option>
+                      <option value="0">0 (Off)</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                    </select>
+                  </label>
+                  <label>Spatial resampling
+                    <select id="coding-resampling">
+                      <option value="1">1× (Full)</option>
+                      <option value="2">2× (Still only)</option>
+                      <option value="4">4× (Still only)</option>
+                      <option value="8">8× (Still only)</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="coordinates">
+                  <label>Alpha distance <input id="coding-alpha-distance" type="number" min="0" max="15" step="0.1" value="0" title="0 = lossless alpha"></label>
+                  <label>Strategy
+                    <select id="coding-strategy">
+                      <option value="zenjxl">Zenjxl</option>
+                      <option value="libjxl">Libjxl parity</option>
+                      <option value="lean_faster">LeanFaster</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="inline-check"><input id="coding-alpha-squeeze" type="checkbox"> Lossy alpha squeeze</label>
+                <label class="inline-check"><input id="coding-center-first" type="checkbox"> Center-first AC groups (&gt;256 px)</label>
+                <label class="inline-check"><input id="coding-auto-splines" type="checkbox"> Auto thin-feature splines (effort ≥ 7)</label>
+                <p id="coding-chroma-note" class="muted-note">Chroma subsampling: 4:4:4 XYB only in this build (4:2:2 / 4:2:0 / 4:4:0 YCbCr encoding requires jxl-encoder jpeg-reencoding + chroma-subsampling features).</p>
+              </div>
+              <label class="inline-check"><input id="coding-keep-invisible" type="checkbox" checked> Keep RGB under alpha = 0</label>
+              <label>Container box wrapper
+                <select id="coding-container">
+                  <option value="auto">Auto</option>
+                  <option value="always">Always</option>
+                  <option value="never">Never (bare codestream)</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+        <div id="splines-panel" class="subpanel" hidden>
+          <div id="splines-compat" class="notice" hidden>
+            <p id="splines-compat-text"></p>
+            <button id="splines-enable-vardct" type="button">Switch to VarDCT still</button>
+          </div>
+          <div class="asset-actions">
+            <button id="spline-add" type="button">+ Add spline</button>
+            <button id="spline-delete" type="button" disabled>Delete spline</button>
+            <button id="spline-pick-mode" type="button" aria-pressed="false" disabled>Click canvas to add points</button>
+          </div>
+          <label class="inline-check"><input id="spline-bake" type="checkbox" checked> Bake visible spline into VarDCT target</label>
+          <p class="muted-note">JXL subtracts splines from XYB before VarDCT so decoders add them back. Baking puts the authored stroke into the target image and bitstream.</p>
+          <ol id="spline-list" class="spline-list" aria-label="Manual JPEG XL splines"></ol>
+          <fieldset id="spline-editor" hidden>
+            <label class="name-field">Name <input id="spline-name" type="text" maxlength="255"></label>
+            <div class="coordinates">
+              <label>Stroke color <input id="spline-color" type="color" value="#f5dc3c"></label>
+              <label>Sigma width <input id="spline-sigma" type="number" min="0.5" max="12" step="0.1" value="1.8"></label>
+            </div>
+            <label>Control points (x,y per line)
+              <textarea id="spline-points" rows="4" spellcheck="false"></textarea>
+            </label>
+            <p id="spline-error" class="error-text" role="alert"></p>
+            <details>
+              <summary>Advanced XYB &amp; Sigma DCT[0]</summary>
+              <div class="coordinates">
+                <label>X DCT[0] <input id="spline-dct-x0" type="number" step="0.001"></label>
+                <label>Y DCT[0] <input id="spline-dct-y0" type="number" step="0.001"></label>
+              </div>
+              <div class="coordinates">
+                <label>B DCT[0] <input id="spline-dct-b0" type="number" step="0.001"></label>
+                <label>Sigma DCT[0] <input id="spline-dct-s0" type="number" step="0.01"></label>
+              </div>
+            </details>
+          </fieldset>
+        </div>
         <ol id="history" hidden aria-label="Edit history"></ol>
         <div id="native-panel" hidden>
           <p id="native-source-name"></p>
+          <div class="asset-actions">
+            <button id="native-import-timeline" type="button" hidden>Import animation to timeline</button>
+            <button id="native-load-cmyk" type="button" hidden>Edit in CMYK mode</button>
+          </div>
           <details open><summary>Source frames and channels</summary>
             <label>Source frame <select id="native-frame" disabled></select></label>
             <label>Preview channel <select id="native-plane" disabled></select></label>

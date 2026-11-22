@@ -1,20 +1,25 @@
 #![forbid(unsafe_code)]
 
+mod inspect;
+
 use core::fmt::Display;
+use core::num::NonZeroU32;
 
 use serde_json::{Value, json};
 use zenjxl_decoder::api::{
-    ExtraChannel, JxlCms, JxlColorEncoding, JxlColorProfile, JxlColorType, JxlDataFormat,
-    JxlDecoder, JxlDecoderOptions, JxlFrameHeader, JxlLayerBlend, JxlLayerInfo, JxlOutputBuffer,
-    JxlPixelFormat, MoxCms, ProcessingResult, states,
+    Endianness, ExtraChannel, JxlCms, JxlCodestreamLevel, JxlColorEncoding, JxlColorProfile,
+    JxlColorType, JxlDataFormat, JxlDecoder, JxlDecoderLimits, JxlDecoderOptions, JxlFrameHeader,
+    JxlLayerBlend, JxlLayerInfo, JxlOutputBuffer, JxlPixelFormat, MoxCms, Orientation,
+    ProcessingResult, states,
 };
-use zenjxl_decoder::api::{JxlCodestreamLevel, JxlDecoderLimits, Orientation};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 const MAX_NATIVE_FRAMES: usize = 128;
 const MAX_NATIVE_SAMPLES: usize = 16_000_000;
+const MAX_TIMELINE_DECODE_FRAMES: usize = 64;
+const MAX_TIMELINE_DECODE_BYTES: usize = 64_000_000;
 
 fn complete<T, U, E: Display>(step: Result<ProcessingResult<T, U>, E>) -> Result<T, String> {
     match step.map_err(|error| error.to_string())? {
@@ -70,7 +75,12 @@ fn describe_blend(blend: &JxlLayerBlend) -> Value {
     })
 }
 
-fn describe_frame(layer: &JxlLayerInfo, frame: &JxlFrameHeader, timecode: Option<u32>) -> Value {
+fn describe_frame(
+    layer: &JxlLayerInfo,
+    frame: &JxlFrameHeader,
+    timecode: Option<u32>,
+    coding: Option<Value>,
+) -> Value {
     json!({
         "name": frame.name,
         "origin": layer.origin,
@@ -82,7 +92,8 @@ fn describe_frame(layer: &JxlLayerInfo, frame: &JxlFrameHeader, timecode: Option
         "durationTicks": layer.duration_ticks,
         "durationMilliseconds": frame.duration,
         "timecode": timecode,
-        "isLast": layer.is_last
+        "isLast": layer.is_last,
+        "coding": coding,
     })
 }
 
@@ -95,11 +106,48 @@ fn describe_profile(profile: &JxlColorProfile) -> Value {
     }
 }
 
+fn probe_vardct_quantizer(bytes: &[u8]) -> Option<Value> {
+    let mut input = bytes;
+    let options = JxlDecoderOptions::default()
+        .with_limits(source_limits())
+        .with_coalescing(true)
+        .with_skip_preview(true);
+    let mut decoder = match JxlDecoder::new(options).process(&mut input) {
+        Ok(ProcessingResult::Complete { result }) => result,
+        _ => return None,
+    };
+    let (w, h) = decoder.basic_info().size;
+    if w * h > 2_000_000 || !decoder.has_more_frames() {
+        return None;
+    }
+    let num_ec = decoder.basic_info().extra_channels.len();
+    decoder.set_pixel_format(JxlPixelFormat::rgba8(num_ec));
+    let frame = match decoder.process(&mut input) {
+        Ok(ProcessingResult::Complete { result }) => result,
+        _ => return None,
+    };
+    let mut rgba = vec![0u8; w * h * 4];
+    let mut bufs = [JxlOutputBuffer::new(&mut rgba, h, w * 4)];
+    let next = match frame.process(&mut input, &mut bufs) {
+        Ok(ProcessingResult::Complete { result }) => result,
+        _ => return None,
+    };
+    if let Some(q) = next.vardct_quantizer() {
+        return Some(json!({
+            "globalScale": q.global_scale,
+            "quantLf": q.quant_lf,
+            "invGlobalScale": q.inv_global_scale(),
+        }));
+    }
+    None
+}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn native_jxl_info(bytes: &[u8]) -> Result<String, String> {
+    let container = inspect::extract_codestream(bytes);
     let mut input = bytes;
     let mut decoder = initialize(&mut input, true)?;
-    let info = decoder.basic_info();
+    let info = decoder.basic_info().clone();
     let extras = info
         .extra_channels
         .iter()
@@ -123,6 +171,10 @@ pub fn native_jxl_info(bytes: &[u8]) -> Result<String, String> {
         "orientation": info.intrinsic_orientation as u8,
         "bits": info.bit_depth.bits_per_sample(),
         "sampleFormat": format!("{:?}", info.bit_depth),
+        "usesOriginalProfile": info.uses_original_profile,
+        "xybEncoded": !info.uses_original_profile,
+        "codestreamLevel": container.as_ref().map_or(5, |c| c.codestream_level),
+        "isContainer": container.as_ref().is_some_and(|c| c.is_container),
         "intrinsicSize": info.intrinsic_size,
         "previewSize": info.preview_size,
         "profile": describe_profile(decoder.embedded_color_profile()),
@@ -140,18 +192,54 @@ pub fn native_jxl_info(bytes: &[u8]) -> Result<String, String> {
         })),
         "extraChannels": extras,
     });
+    let frame_ctx = inspect::FrameHeaderContext {
+        xyb_encoded: !info.uses_original_profile,
+        num_extra_channels: info.extra_channels.len() as u32,
+        img_width: info.coded_size.0 as u32,
+        img_height: info.coded_size.1 as u32,
+        have_animation: info.animation.is_some(),
+        have_timecodes: info.animation.as_ref().is_some_and(|a| a.have_timecodes),
+    };
     let mut frames = Vec::new();
+    let mut frame_index = 0usize;
     while decoder.has_more_frames() {
         let frame = complete(decoder.process(&mut input))?;
         let layer = frame.frame_layer_info().map_err(|e| e.to_string())?;
-        frames.push(describe_frame(
-            &layer,
-            &frame.frame_header(),
-            frame.frame_timecode(),
-        ));
+        let hdr = frame.frame_header();
+        let tc = frame.frame_timecode();
+        // Read exact bitstream coding flags using the scanned frame's file_offset.
+        let coding = frame
+            .scanned_frames()
+            .get(frame_index)
+            .and_then(|sf| sf.file_offset)
+            .and_then(|file_off| {
+                let cs = container.as_ref()?;
+                let cs_off = cs.file_to_codestream_offset(file_off)?;
+                inspect::parse_frame_header_json(cs.codestream.get(cs_off..)?, &frame_ctx)
+            });
+        frames.push(describe_frame(&layer, &hdr, tc, coding));
+        frame_index += 1;
         decoder = complete(frame.skip_frame(&mut input))?;
     }
     summary["frames"] = json!(frames);
+    summary["exifBytes"] = json!(decoder.exif().map(|b| b.len()));
+    summary["xmpBytes"] = json!(decoder.xmp().map(|b| b.len()));
+    summary["hasGainMap"] = json!(decoder.gain_map().is_some());
+    summary["hasFrameIndex"] = json!(decoder.frame_index().is_some());
+    summary["keyframes"] = json!(
+        decoder
+            .scanned_frames()
+            .iter()
+            .map(|sf| json!({
+                "index": sf.index,
+                "isKeyframe": sf.is_keyframe,
+                "fileOffset": sf.file_offset,
+            }))
+            .collect::<Vec<_>>()
+    );
+    if !info.uses_original_profile {
+        summary["vardctQuantizer"] = json!(probe_vardct_quantizer(bytes));
+    }
     Ok(summary.to_string())
 }
 
@@ -173,6 +261,206 @@ pub fn native_reconstruct_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
     zenjxl_decoder::reconstruct_jpeg_with(bytes, options)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "The source has no reconstructible original JPEG.".into())
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct NativeTimeline {
+    info: String,
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+impl NativeTimeline {
+    pub fn info(&self) -> String {
+        self.info.clone()
+    }
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+    pub fn into_pixels(self) -> Vec<u8> {
+        self.pixels
+    }
+}
+
+/// Decode all visible coalesced animation frames into RGBA8 in display orientation,
+/// preserving exact animation clock, loop count, frame names, durations and timecodes.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn native_jxl_timeline(bytes: &[u8]) -> Result<NativeTimeline, String> {
+    if bytes.len() > 128 * 1024 * 1024 {
+        return Err("The JPEG XL source exceeds 128 MiB.".into());
+    }
+    let options = JxlDecoderOptions::default()
+        .with_limits(source_limits())
+        .with_coalescing(true)
+        .with_adjust_orientation(true)
+        .with_skip_preview(true)
+        .with_cms(Box::new(MoxCms))
+        .with_dither_u8(false);
+    let mut input = bytes;
+    let mut decoder = complete(JxlDecoder::new(options).process(&mut input))?;
+    let info = decoder.basic_info().clone();
+    let (width, height) = info.size;
+    check_dimensions(width, height)?;
+    let frame_bytes = width
+        .checked_mul(height)
+        .and_then(|n| n.checked_mul(4))
+        .ok_or_else(|| "Animation frame buffer size overflow.".to_string())?;
+    let num_ec = info.extra_channels.len();
+    let alpha_associated = info
+        .extra_channels
+        .iter()
+        .any(|ch| ch.ec_type == ExtraChannel::Alpha && ch.alpha_associated);
+    decoder.set_pixel_format(JxlPixelFormat::rgba8(num_ec));
+
+    let mut all_pixels = Vec::new();
+    let mut frames_meta = Vec::new();
+    while decoder.has_more_frames() {
+        if frames_meta.len() >= MAX_TIMELINE_DECODE_FRAMES {
+            return Err("Animation exceeds the 64-frame timeline limit.".into());
+        }
+        if all_pixels.len().saturating_add(frame_bytes) > MAX_TIMELINE_DECODE_BYTES {
+            return Err("Animation exceeds the 64 MB decoded timeline budget.".into());
+        }
+        let frame = complete(decoder.process(&mut input))?;
+        let hdr = frame.frame_header();
+        let layer = frame.frame_layer_info().ok();
+        let tc = frame.frame_timecode();
+        let mut rgba = vec![0u8; frame_bytes];
+        let mut bufs = [JxlOutputBuffer::new(&mut rgba, height, width * 4)];
+        decoder = complete(frame.process(&mut input, &mut bufs))?;
+        if alpha_associated {
+            for px in rgba.as_chunks_mut::<4>().0 {
+                if let Some(a) = NonZeroU32::new(u32::from(px[3])) {
+                    for v in &mut px[..3] {
+                        *v = ((u32::from(*v) * 255 + a.get() / 2) / a.get()).min(255) as u8;
+                    }
+                }
+            }
+        }
+        all_pixels.extend_from_slice(&rgba);
+        frames_meta.push(json!({
+            "name": hdr.name,
+            "durationTicks": layer.as_ref().map_or(0, |l| l.duration_ticks),
+            "durationMilliseconds": hdr.duration,
+            "timecode": tc,
+        }));
+    }
+    let meta = json!({
+        "width": width,
+        "height": height,
+        "animation": info.animation.as_ref().map(|a| json!({
+            "tpsNumerator": a.tps_numerator,
+            "tpsDenominator": a.tps_denominator,
+            "loops": a.num_loops,
+            "hasTimecodes": a.have_timecodes,
+        })),
+        "frames": frames_meta,
+    });
+    Ok(NativeTimeline {
+        info: meta.to_string(),
+        width: width as u32,
+        height: height as u32,
+        pixels: all_pixels,
+    })
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct NativeCmyk {
+    width: u32,
+    height: u32,
+    bit_depth: u8,
+    uses_original_profile: bool,
+    samples: Vec<u8>,
+    icc: Vec<u8>,
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+impl NativeCmyk {
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+    pub fn bit_depth(&self) -> u8 {
+        self.bit_depth
+    }
+    pub fn uses_original_profile(&self) -> bool {
+        self.uses_original_profile
+    }
+    pub fn take_samples(&mut self) -> Vec<u8> {
+        core::mem::take(&mut self.samples)
+    }
+    pub fn take_icc(&mut self) -> Vec<u8> {
+        core::mem::take(&mut self.icc)
+    }
+}
+
+/// Extract exact coalesced CMYK samples (8-bit or 16-bit LE in JXL inverted ink convention:
+/// `0 = full ink`, `max = no ink`) and embedded CMYK ICC profile bytes from a CMYK JPEG XL.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn native_extract_cmyk(bytes: &[u8]) -> Result<NativeCmyk, String> {
+    if bytes.len() > 128 * 1024 * 1024 {
+        return Err("The JPEG XL source exceeds 128 MiB.".into());
+    }
+    let options = JxlDecoderOptions::default()
+        .with_limits(source_limits())
+        .with_coalescing(true)
+        .with_adjust_orientation(true)
+        .with_skip_preview(true)
+        .with_dither_u8(false);
+    let mut input = bytes;
+    let mut decoder = complete(JxlDecoder::new(options).process(&mut input))?;
+    let icc = match decoder.embedded_color_profile() {
+        JxlColorProfile::Icc(b) if decoder.embedded_color_profile().is_cmyk() => b.clone(),
+        _ => return Err("The JPEG XL source does not have an embedded CMYK ICC profile.".into()),
+    };
+    let info = decoder.basic_info().clone();
+    if !info
+        .extra_channels
+        .iter()
+        .any(|c| c.ec_type == ExtraChannel::Black)
+    {
+        return Err("The JPEG XL source has no Black extra channel.".into());
+    }
+    let (width, height) = info.size;
+    check_dimensions(width, height)?;
+    let wide = info.bit_depth.bits_per_sample() > 8;
+    let bit_depth = if wide { 16u8 } else { 8u8 };
+    let bpp = if wide { 8usize } else { 4usize };
+    let total_bytes = width
+        .checked_mul(height)
+        .and_then(|n| n.checked_mul(bpp))
+        .ok_or_else(|| "CMYK output size overflow.".to_string())?;
+    decoder.set_pixel_format(JxlPixelFormat {
+        color_type: JxlColorType::Cmyk,
+        color_data_format: Some(if wide {
+            JxlDataFormat::U16 {
+                endianness: Endianness::LittleEndian,
+                bit_depth: 16,
+            }
+        } else {
+            JxlDataFormat::U8 { bit_depth: 8 }
+        }),
+        extra_channel_format: vec![None; info.extra_channels.len()],
+    });
+    let frame = complete(decoder.process(&mut input))?;
+    let mut samples = vec![0u8; total_bytes];
+    let mut bufs = [JxlOutputBuffer::new(&mut samples, height, width * bpp)];
+    complete(frame.process(&mut input, &mut bufs))?;
+    Ok(NativeCmyk {
+        width: width as u32,
+        height: height as u32,
+        bit_depth,
+        uses_original_profile: info.uses_original_profile,
+        samples,
+        icc,
+    })
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -211,8 +499,6 @@ fn oriented_origin(
     size: (usize, usize),
     canvas: (usize, usize),
 ) -> [i64; 2] {
-    // Derive the signed affine map from the shared pixel orientation. The
-    // translated crop may start outside the coded canvas.
     let (u, v) = orientation.display_pixel((0, 0), (2, 2));
     let (ux, vx) = orientation.display_pixel((1, 0), (2, 2));
     let (uy, vy) = orientation.display_pixel((0, 1), (2, 2));
@@ -295,7 +581,7 @@ pub fn native_jxl_frame(bytes: &[u8], selected: u32) -> Result<NativeFrame, Stri
             plane.resize(count, 0.0_f32);
             samples.push(plane);
         }
-        let mut info = describe_frame(&layer, &frame.frame_header(), frame.frame_timecode());
+        let mut info = describe_frame(&layer, &frame.frame_header(), frame.frame_timecode(), None);
         info["planeColorChannels"] = json!(channels);
         info["planeColorModel"] = json!(format!("{color_type:?}"));
         info["planeProfile"] = describe_profile(&profile);

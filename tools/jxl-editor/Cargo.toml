@@ -12,7 +12,9 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "459e86b79b3ea15ab3575404c8faae5db4c2c399", default-features = false }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "459e86b79b3ea15ab3575404c8faae5db4c2c399", default-features = false, features = ["std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "025852d2d13dc49b42fc484703d8c5bf6f4fa013", default-features = false, features = ["wasm128", "cms", "jpeg"] }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "2099470337b8f2089a49f208d6b6bbacd2f8e485", default-features = false, features = ["planar"] }
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "b0ae9ae2211726c14b7d8fe696fb3c374acc8f83", default-features = false }

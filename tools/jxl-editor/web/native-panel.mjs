@@ -20,7 +20,9 @@ function options(select, names) {
   select.disabled = !names.length;
 }
 
-export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer, report, status }) {
+export function makeNativeInspector({
+  run, download, canvasFrom, addNativeLayer, importNativeTimeline, loadNativeCmyk, report, status,
+}) {
   let source;
   let sourceName;
   let summary;
@@ -43,6 +45,8 @@ export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer,
     $("native-box-download").disabled = busy || !boxes.length;
     $("native-icc").disabled = busy;
     $("native-jpeg").disabled = busy;
+    $("native-import-timeline").disabled = busy || !summary;
+    $("native-load-cmyk").disabled = busy || !summary?.profile?.cmyk;
   }
 
   function renderFrame() {
@@ -53,7 +57,11 @@ export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer,
     if (!frame) return;
     const channel = channels[Number($("native-plane").value)];
     const { info, planes } = frame;
-    $("native-frame-json").textContent = JSON.stringify(info, null, 2);
+    const frameIdx = Number($("native-frame").value);
+    const mergedInfo = summary?.frames?.[frameIdx]?.coding
+      ? { ...info, coding: summary.frames[frameIdx].coding }
+      : info;
+    $("native-frame-json").textContent = JSON.stringify(mergedInfo, null, 2);
     const [x, y] = info.origin;
     const [w, h] = info.size;
     $("native-info").textContent = `${w} × ${h} at (${x}, ${y}) · ${info.colorBlend.mode}`;
@@ -136,6 +144,14 @@ export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer,
       report(error);
     }
   };
+  $("native-import-timeline").onclick = () => {
+    if (busy || !source || !importNativeTimeline) return;
+    run("Importing animation frames to timeline…", () => importNativeTimeline(source, sourceName));
+  };
+  $("native-load-cmyk").onclick = () => {
+    if (busy || !source || !summary?.profile?.cmyk || !loadNativeCmyk) return;
+    run("Loading exact CMYK samples…", () => loadNativeCmyk(source, sourceName));
+  };
   $("native-plane-download").onclick = () => {
     if (!frame) return;
     const index = channels[Number($("native-plane").value)].plane;
@@ -179,6 +195,8 @@ export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer,
       request++;
       boxes = asset ? jxlBoxes(asset.source) : [];
       $("native-icc").hidden = true;
+      $("native-import-timeline").hidden = true;
+      $("native-load-cmyk").hidden = true;
       $("native-jpeg").hidden = !boxes.some(box => box.type === "jbrd" ||
         (box.type === "brob" && String.fromCharCode(...box.data.subarray(0, 4)) === "jbrd"));
       options($("native-frame"), []);
@@ -200,9 +218,12 @@ export function makeNativeInspector({ run, download, canvasFrom, addNativeLayer,
         $("native-image-json").textContent = JSON.stringify({ ...summary, frames: undefined }, null, 2);
         $("native-image-details").hidden = false;
         $("native-icc").hidden = !summary.profile.iccBytes;
+        $("native-import-timeline").hidden = !(summary.animation || summary.frames.length > 1);
+        $("native-load-cmyk").hidden = !summary.profile.cmyk;
         options($("native-frame"), summary.frames.map((layer, i) => {
           const [w, h] = layer.size;
-          return `Frame ${i + 1} · ${w} × ${h} · ${layer.colorBlend.mode}`;
+          const enc = layer.coding?.encoding ? ` · ${layer.coding.encoding}` : "";
+          return `Frame ${i + 1} · ${w} × ${h} · ${layer.colorBlend.mode}${enc}`;
         }));
         if (summary.frames.length) await loadFrame(0);
         const count = summary.frames.length;
