@@ -1276,8 +1276,12 @@ impl PipelineTrace {
             }
         } else {
             // Fallback: draw linear edges between adjacent entries.
-            for i in 0..self.entries.len().saturating_sub(1) {
-                let e = &self.entries[i];
+            for (i, e) in self
+                .entries
+                .iter()
+                .take(self.entries.len().saturating_sub(1))
+                .enumerate()
+            {
                 let x1 = margin + i as u32 * (node_w + gap) + node_w;
                 let x2 = margin + (i as u32 + 1) * (node_w + gap);
                 let cy = margin + node_h / 2;

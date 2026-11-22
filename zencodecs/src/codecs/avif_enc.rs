@@ -198,6 +198,7 @@ fn extract_av1_from_avif(avif_data: &[u8]) -> crate::error::Result<alloc::vec::V
 #[cfg(all(test, feature = "avif-decode", feature = "jpeg-ultrahdr"))]
 mod pulse_tests {
     use super::*;
+    use alloc::{vec, vec::Vec};
     use zencodec::enough::{Stop, StopReason};
     use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report};
 

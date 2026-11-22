@@ -518,7 +518,7 @@ mod metadata_retention_tests {
                 .unwrap()
                 .into_vec();
             assert!(!output.windows(11).any(|w| w == b"PRIVATE-XMP"));
-            let info = probe(&output).unwrap();
+            let info = probe_with_limits(&output, None).unwrap();
             assert_eq!(info.orientation, Orientation::Rotate90);
             assert_eq!(
                 output.windows(13).any(|w| w == b"PUBLIC-ARTIST"),
