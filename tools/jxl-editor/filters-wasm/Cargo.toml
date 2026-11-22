@@ -1,0 +1,32 @@
+[package]
+name = "jxl-editor-filters"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zenfilters = { path = "../../../zenfilters" }
+filter-pixels = { package = "zenpixels", version = ">=0.3.1, <0.4.0" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"
+
+[profile.test]
+debug = 0
+incremental = false
+
+[patch.crates-io]
+# Match the Zenpipe workspace's filter and gamut conversion ABI.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "18afc75f1fd40c7feafeef6deae4df8e97e5e1b9" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "18afc75f1fd40c7feafeef6deae4df8e97e5e1b9" }

@@ -5,22 +5,33 @@ const relaxedProbe = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0,
   10, 12, 1, 10, 0, 32, 0, 32, 0, 253, 128, 2, 26, 11);
 
 let ready;
+let filters;
 function initialize() {
   return ready ??= (async () => {
     const optimized = WebAssembly.validate(relaxedProbe);
     const codec = optimized ? await import("./wasm/relaxed/jxl_editor_codecs.js")
       : await import("./wasm/baseline/jxl_editor_codecs.js");
     await codec.default();
-    return { codec, mode: optimized ? "Relaxed SIMD" : "Wasm compatibility" };
+    return { codec, optimized, mode: optimized ? "Relaxed SIMD" : "Wasm compatibility" };
   })();
 }
 
 self.onmessage = async ({ data }) => {
   const { id, method } = data;
   try {
-    const { codec, mode } = await initialize();
+    const { codec, mode, optimized } = await initialize();
     if (method === "init") {
       self.postMessage({ id, value: mode });
+    } else if (method === "filter") {
+      const filterModule = await (filters ??= (async () => {
+        const module = optimized ? await import("./wasm/relaxed/jxl_editor_filters.js")
+          : await import("./wasm/baseline/jxl_editor_filters.js");
+        await module.default();
+        return module;
+      })());
+      const value = filterModule.filter_rgba(data.pixels, data.width, data.height,
+        data.exposure, data.contrast, data.saturation);
+      self.postMessage({ id, value }, [value.buffer]);
     } else if (method === "encode") {
       const value = codec.encode_jxl(data.pixels, data.width, data.height, data.stride);
       self.postMessage({ id, value }, [value.buffer]);

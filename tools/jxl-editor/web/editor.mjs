@@ -1,4 +1,5 @@
 import { codec } from "./codec.mjs";
+import { ZEN_FILTERS, hasAdjustments, previewFilter, renderFilter } from "./filters.mjs";
 import {
   checkDimensions, isJxl, MAX_FILE, MAX_LAYERS, MAX_PIXELS, MAX_SVG, opaqueBoxes,
   RASTER_TYPES, readProject, writeImage, writeProject,
@@ -168,7 +169,7 @@ async function open(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const project = isJxl(bytes) ? readProject(bytes) : null;
   if (project) {
-    if (!hasCanvasFilters && project.manifest.layers.some(hasAdjustments)) {
+    if (project.manifest.filterEngine !== ZEN_FILTERS && !hasCanvasFilters && project.manifest.layers.some(hasAdjustments)) {
       throw new Error("This browser cannot render the project’s exposure, contrast or saturation.");
     }
     checkAssets(project.manifest.layers, project.assets);
@@ -190,7 +191,7 @@ async function open(file) {
     return;
   }
   const { layer, asset } = await makeLayer(file, bytes);
-  const manifest = { version: 1, width: layer.width, height: layer.height, originalId: layer.id, layers: [layer] };
+  const manifest = { version: 1, filterEngine: ZEN_FILTERS, width: layer.width, height: layer.height, originalId: layer.id, layers: [layer] };
   const assets = new Map([[layer.id, asset]]);
   install({ manifest, assets, preserved: layer.mime === "image/jxl" ? opaqueBoxes(bytes) : [] },
     "Opened image", file.name, true);
@@ -258,7 +259,7 @@ function removeLayer() {
   storeState({ manifest: { ...manifest, layers, originalId }, assets, preserved }, "Deleted layer");
 }
 
-function drawLayers(context, state, width, height, original = false) {
+function drawLayers(context, state, width, height, original = false, rasters = new Map()) {
   const { manifest, assets } = state;
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, width, height);
@@ -270,24 +271,20 @@ function drawLayers(context, state, width, height, original = false) {
   }
   context.imageSmoothingQuality = "high";
   for (const layer of manifest.layers) {
-    if (layer.visible && layer.opacity) drawLayer(context, layer, assets.get(layer.id));
+    if (layer.visible && layer.opacity) drawLayer(context, layer, rasters.get(layer.id) ?? assets.get(layer.id).canvas, manifest.filterEngine);
   }
 }
 
-function hasAdjustments(layer) {
-  return layer.exposure !== 0 || layer.contrast !== 1 || layer.saturation !== 1;
-}
-
-function drawLayer(context, layer, asset) {
+function drawLayer(context, layer, source, filterEngine) {
   context.save();
   context.translate(layer.x, layer.y);
   context.rotate(layer.angle * Math.PI / 180);
   context.scale(layer.scale, layer.scale);
   context.globalAlpha = layer.opacity;
-  if (hasCanvasFilters && hasAdjustments(layer)) {
+  if (filterEngine !== ZEN_FILTERS && hasCanvasFilters && hasAdjustments(layer)) {
     context.filter = `brightness(${2 ** layer.exposure}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
   }
-  context.drawImage(asset.canvas, 0, 0);
+  context.drawImage(source, 0, 0);
   context.restore();
 }
 
@@ -309,7 +306,18 @@ function paint() {
   preview.style.height = `${height * scale}px`;
   $("fit").textContent = zoom === null ? `Fit · ${Math.round(scale * 100)}%` : `${Math.round(scale * 100)}%`;
   const state = gesture?.state ?? current;
-  drawLayers(ctx, state, w, h, compare || comparingKey);
+  const rasters = new Map();
+  let pending = false;
+  if (!compare && !comparingKey && state.manifest.filterEngine === ZEN_FILTERS) {
+    for (const layer of state.manifest.layers) {
+      if (!layer.visible || !layer.opacity || !hasAdjustments(layer)) continue;
+      const filtered = previewFilter(state.assets.get(layer.id), layer, requestPaint, report);
+      rasters.set(layer.id, filtered.canvas);
+      pending ||= filtered.pending;
+    }
+  }
+  preview.toggleAttribute("data-filter-pending", pending);
+  drawLayers(ctx, state, w, h, compare || comparingKey, rasters);
   const layer = state.manifest.layers.find(entry => entry.id === selected);
   const outline = $("outline");
   outline.hidden = !layer?.visible || compare || comparingKey || state.manifest.layers.length === 1;
@@ -406,7 +414,7 @@ function update() {
     const input = $(`adjust-${key}`);
     const value = layer?.[key] ?? defaults[key];
     input.value = value;
-    input.disabled = !hasCanvasFilters && ["exposure", "contrast", "saturation"].includes(key);
+    input.disabled = current?.manifest.filterEngine !== ZEN_FILTERS && !hasCanvasFilters && ["exposure", "contrast", "saturation"].includes(key);
     $(`value-${key}`).value = format(value);
   }
   const layerList = $("layer-list");
@@ -511,7 +519,7 @@ function originalPassthrough(state) {
     Object.entries(defaults).every(([key, value]) => layer[key] === value);
 }
 
-async function encodePresentation(canvas, state, includeLayers) {
+async function encodePresentation(canvas, state, includeLayers, rasters) {
   const { width, height } = canvas;
   const context = canvas.getContext("2d");
   const { data: expected } = context.getImageData(0, 0, width, height);
@@ -524,7 +532,7 @@ async function encodePresentation(canvas, state, includeLayers) {
     // filter and alpha-rounding semantics at all points in the stack.
     context.clearRect(0, 0, width, height);
     visible.forEach((layer, index) => {
-      drawLayer(context, layer, state.assets.get(layer.id));
+      drawLayer(context, layer, rasters.get(layer.id) ?? state.assets.get(layer.id).canvas, state.manifest.filterEngine);
       const cumulative = index + 1 === visible.length ? expected : context.getImageData(0, 0, width, height).data;
       pixels.set(cumulative, index * expected.byteLength);
     });
@@ -556,8 +564,16 @@ async function saveProject(project) {
     const canvas = document.createElement("canvas");
     canvas.width = state.manifest.width;
     canvas.height = state.manifest.height;
-    drawLayers(canvas.getContext("2d"), state, canvas.width, canvas.height);
-    flattened = await encodePresentation(canvas, state, project);
+    const rasters = new Map();
+    if (state.manifest.filterEngine === ZEN_FILTERS) {
+      for (const layer of state.manifest.layers) {
+        if (layer.visible && layer.opacity && hasAdjustments(layer)) {
+          rasters.set(layer.id, await renderFilter(state.assets.get(layer.id), layer));
+        }
+      }
+    }
+    drawLayers(canvas.getContext("2d"), state, canvas.width, canvas.height, false, rasters);
+    flattened = await encodePresentation(canvas, state, project, rasters);
   }
   if (project) {
     const assets = new Map(state.assets);

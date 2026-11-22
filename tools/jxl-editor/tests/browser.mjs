@@ -123,6 +123,7 @@ try {
   const preview = () => canvas.evaluate(el => Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data));
   // Wait for the final queued paint so the actual canvas is the pixel oracle.
   await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
   const expected = Buffer.from(await preview());
   const saved = await capture("Save project", `${output}/gradient.project.jxl`);
   await waitStatus("Project saved");
@@ -132,6 +133,7 @@ try {
   assert.equal(project.manifest.layers[2].visible, false);
   assert.equal(project.manifest.layers[1].opacity, 0.99);
   assert.equal(project.manifest.layers[1].exposure, 0.01);
+  assert.equal(project.manifest.filterEngine, "zenfilters-v1");
   assert.deepEqual(Buffer.from(project.assets.get(project.manifest.layers[0].id).source), source);
   assert.deepEqual(Buffer.from(project.assets.get(project.manifest.layers[2].id).source), Buffer.from(second));
   const vector = project.assets.get(project.manifest.layers[1].id);
@@ -148,6 +150,7 @@ try {
   await open.setInputFiles({ name: "gradient.project.jxl", mimeType: "image/jxl", buffer: saved });
   await waitStatus("Project reopened");
   await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
   assert.deepEqual(Buffer.from(await preview()), expected);
   assert.equal(await page.locator(".layer").count(), 3);
   await page.getByRole("button", { name: "vector.svg SVG" }).click();

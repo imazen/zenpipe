@@ -132,6 +132,9 @@ function inRange(value, min, max) {
 
 export function validateManifest(manifest) {
   if (manifest?.version !== 1) throw new Error("This editor project version is unsupported.");
+  if (manifest.filterEngine !== undefined && manifest.filterEngine !== "zenfilters-v1") {
+    throw new Error("This editor project uses an unsupported filter engine.");
+  }
   checkDimensions(manifest.width, manifest.height);
   const { layers } = manifest;
   if (!Array.isArray(layers) || layers.length === 0 || layers.length > MAX_LAYERS) {

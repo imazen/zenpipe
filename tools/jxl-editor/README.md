@@ -16,7 +16,10 @@ sample by NPS / David Restivo by SHA-256.
 
 Open a JPEG XL, JPEG, PNG, WebP, AVIF or SVG. Add layers from the inspector,
 move them on the canvas, and set their opacity, position, scale, rotation
-and adjustments. Select an SVG to edit its markup. Keyboard controls
+and adjustments. Exposure, contrast, and saturation use the same ZenFilters
+Oklab pipeline as Zenpipe's `zeneditor`. The worker filters a separate raster
+and the project stores the source and parameter values. Select an SVG to edit
+its markup. Keyboard controls
 include Ctrl/⌘+O, Ctrl/⌘+S, Ctrl/⌘+Z, Ctrl/⌘+Shift+Z, 0 to fit,
 and arrow keys to nudge a layer when the canvas has focus. Shift nudges
 by 10 pixels. Space shows the original while held.
@@ -34,7 +37,7 @@ The version 1 profile uses four skippable application boxes in an ISO/IEC
 
 | Box | Contents |
 | --- | --- |
-| `zned` | UTF-8 JSON with version, canvas dimensions, original layer ID, and layers ordered bottom to top. Each layer has a UUID, name, media type, pixel dimensions, visibility, opacity, transform, and adjustment values. |
+| `zned` | UTF-8 JSON with version, canvas dimensions, original layer ID, and layers ordered bottom to top. Each layer has a UUID, name, media type, pixel dimensions, visibility, opacity, transform, and adjustment values. An optional `filterEngine` records the pixel interpretation. |
 | `znas` | 36 ASCII bytes of layer UUID followed by the exact imported raster or SVG file bytes. |
 | `znvs` | The same UUID prefix followed by the current UTF-8 SVG source when the user has edited it. |
 | `znrv` | The same UUID prefix followed by the SVG's lossless JPEG XL raster rendition. |
@@ -63,6 +66,12 @@ frames open as a coalesced raster layer. Source-local editable frame pixels
 require decoder support for uncoalesced output.
 
 ## Codec pins and validation
+
+`filters-wasm/Cargo.lock` uses Zenpipe's ZenPixels Convert and ZenPixels
+0.3.1 revision `18afc75f1fd40c7feafeef6deae4df8e97e5e1b9`. The codec uses
+Zencodec's plane-capable 0.3.1 revision. Separate Wasm modules preserve both
+dependency sets. New projects use `zenfilters-v1`. Earlier projects keep their
+original Canvas 2D filter semantics.
 
 `Cargo.lock` records all Git revisions. The worker's pixel views use
 ZenPixels 0.4 PR 165 at `2099470337b8f2089a49f208d6b6bbacd2f8e485`.

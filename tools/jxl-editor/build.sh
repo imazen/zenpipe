@@ -28,6 +28,10 @@ for mode in "$@"; do
     esac
     RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
         cargo build --locked --release --target wasm32-unknown-unknown
-    wasm-bindgen --target web --no-typescript --out-dir "dist/wasm/$mode" \
-        "target/$mode/wasm32-unknown-unknown/release/jxl_editor_codecs.wasm"
+    RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
+        cargo build --locked --release --target wasm32-unknown-unknown --manifest-path filters-wasm/Cargo.toml
+    for module in codecs filters; do
+        wasm-bindgen --target web --no-typescript --out-dir "dist/wasm/$mode" \
+            "target/$mode/wasm32-unknown-unknown/release/jxl_editor_${module}.wasm"
+    done
 done
