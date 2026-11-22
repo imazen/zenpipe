@@ -11,6 +11,11 @@ This is the canonical monorepo for the zenpipe pipeline plus the
 [`zenlayout`](https://github.com/imazen/zenpipe/tree/main/zenlayout)
 member crates (whose standalone repositories now redirect here).
 
+## Browser editor
+
+[JPEG XL Photo Studio](tools/jxl-editor/) opens, edits, and saves layered
+JPEG XL projects in the browser using a Rust WebAssembly codec worker.
+
 ## Quick start
 
 ```toml

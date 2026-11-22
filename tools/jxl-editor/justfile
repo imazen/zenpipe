@@ -1,0 +1,30 @@
+build:
+    bash ./build.sh
+
+serve port="3761":
+    python3 -m http.server {{port}} --bind 0.0.0.0 --directory dist
+
+test:
+    cargo test --locked
+    node --test tests/project.test.mjs
+
+browser:
+    npm run test:browser
+
+wasm-audit:
+    #!/usr/bin/env bash
+    set -eu
+    wasm-tools validate dist/wasm/relaxed/jxl_editor_codecs_bg.wasm
+    wasm-tools validate --features=-simd,-relaxed-simd dist/wasm/baseline/jxl_editor_codecs_bg.wasm
+    if rejection=$(wasm-tools validate --features=-relaxed-simd dist/wasm/relaxed/jxl_editor_codecs_bg.wasm 2>&1); then
+        echo "Expected a relaxed SIMD instruction in the optimized binary" >&2
+        exit 1
+    fi
+    if [[ "$rejection" != *"relaxed SIMD support is not enabled"* ]]; then
+        printf '%s\n' "$rejection" >&2
+        exit 1
+    fi
+    echo "Verified relaxed SIMD instructions and a baseline without SIMD"
+
+oracle output="test-results":
+    python3 tests/oracle.py "{{output}}"

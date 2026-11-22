@@ -7,6 +7,10 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+
+- JPEG XL Photo Studio in `tools/jxl-editor` saves editable raster and SVG layers in skippable boxes alongside a standard presentation. Its WebAssembly codec backend (`2ee83fdd`) supports relaxed SIMD and baseline workers.
+
 #### Fixes
 
 - chore(deps): upgrade `zenfilters` and all 6 workspace lockfiles (`zenpipe`, `fuzz`, `demo/crate`, `tools/metadata-services`, `zencodecs/fuzz`, `wasm-size-shim`) onto `archmage` / `archmage-macros` / `magetypes 0.9.33` (`magemath 0.1.1`), migrate `zenfilters` SIMD helpers (`MulAddCompat` -> `mul_add_relaxed` with bit-exact polynomial compatibility wrappers), and advance the pinned `zenavif` (`4221a7c0`, `rav1d-safe` `1c1377c4` with wasm32/aarch64 `incant` import fix) and sibling `0.9.33` codec revisions across all manifests.

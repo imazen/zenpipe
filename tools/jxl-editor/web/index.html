@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171a20">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'">
+  <title>JPEG XL Studio</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./editor.mjs"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark" aria-hidden="true">◇</span><span>JPEG XL <small>Photo Studio</small></span></div>
+    <div class="document-name"><strong id="title">Untitled</strong><span id="dirty" hidden>Unsaved changes</span></div>
+    <div class="file-actions">
+      <button id="open" type="button">Open image</button>
+      <button id="save" class="primary" type="button" disabled>Save project</button>
+      <button id="export" type="button" disabled>Export JXL</button>
+    </div>
+    <input id="open-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
+    <input id="layer-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" multiple hidden>
+  </header>
+  <main class="workspace">
+    <section class="viewer" aria-label="Canvas workspace">
+      <div class="viewer-bar">
+        <div class="controls">
+          <button id="undo" type="button" title="Undo (Ctrl/⌘ Z)" disabled>Undo</button>
+          <button id="redo" type="button" title="Redo (Ctrl/⌘ Shift Z)" disabled>Redo</button>
+        </div>
+        <span id="dimensions"></span>
+        <div class="controls">
+          <button id="compare" type="button" title="Show original (hold Space)" aria-pressed="false" disabled>Original</button>
+          <button id="zoom-out" type="button" aria-label="Zoom out" disabled>−</button>
+          <button id="fit" type="button" title="Fit canvas (0)" disabled>Fit</button>
+          <button id="zoom-in" type="button" aria-label="Zoom in" disabled>+</button>
+        </div>
+      </div>
+      <div id="stage" class="stage">
+        <div id="empty" class="empty">
+          <div class="empty-mark" aria-hidden="true">◇</div>
+          <h1>Open a photo</h1>
+          <p>Drop a photo, an SVG, or a JPEG XL project here.</p>
+          <div class="empty-actions"><button id="empty-open" class="primary" type="button">Choose file</button><button id="sample" type="button">Try a sample</button></div>
+          <p class="credit">Sample photo by NPS / David Restivo.</p>
+        </div>
+        <div id="canvas-wrap" class="canvas-wrap" hidden>
+          <canvas id="canvas" aria-label="Move the selected layer on the canvas" tabindex="0"></canvas>
+          <div id="outline" class="outline" hidden></div>
+        </div>
+      </div>
+      <footer class="statusbar"><span id="status" role="status" aria-live="polite">Starting codec…</span><span id="engine"></span></footer>
+    </section>
+    <aside class="inspector" aria-label="Layer inspector">
+      <section class="layers">
+        <div class="section-heading"><h2>Layers</h2><button id="add" type="button" disabled>+ Add layer</button></div>
+        <ol id="layer-list" aria-label="Layers, top first"></ol>
+        <div class="layer-actions">
+          <button id="raise" type="button" title="Move layer up" disabled>Raise</button>
+          <button id="lower" type="button" title="Move layer down" disabled>Lower</button>
+          <button id="remove" type="button" disabled>Delete</button>
+        </div>
+      </section>
+      <section class="properties">
+        <div class="tabs" role="group" aria-label="Inspector view">
+          <button id="properties-tab" type="button" aria-pressed="true">Adjustments</button>
+          <button id="history-tab" type="button" aria-pressed="false">History</button>
+        </div>
+        <div id="properties">
+          <fieldset id="fields" disabled>
+            <label class="name-field">Name <input id="layer-name" maxlength="255" type="text"></label>
+            <div id="sliders"></div>
+            <h3>Transform</h3>
+            <div class="coordinates">
+              <label>X <input id="position-x" type="number" min="-32768" max="32768" step="1"></label>
+              <label>Y <input id="position-y" type="number" min="-32768" max="32768" step="1"></label>
+            </div>
+            <div id="transforms"></div>
+            <button id="edit-svg" type="button" hidden>Edit SVG source</button>
+            <div class="asset-actions">
+              <button id="reset" type="button">Reset adjustments</button>
+              <button id="source-download" type="button">Download source</button>
+            </div>
+          </fieldset>
+        </div>
+        <ol id="history" hidden aria-label="Edit history"></ol>
+      </section>
+    </aside>
+  </main>
+  <dialog id="svg-dialog">
+    <form id="svg-form">
+      <h2>Edit SVG source</h2>
+      <label for="svg-source">SVG markup</label>
+      <textarea id="svg-source" rows="14" spellcheck="false" required></textarea>
+      <p id="svg-error" role="alert"></p>
+      <div class="dialog-actions"><button id="svg-cancel" type="button">Cancel</button><button id="svg-apply" class="primary" type="submit">Apply SVG</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

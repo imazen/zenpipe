@@ -1,0 +1,12 @@
+{
+  "name": "jxl-editor-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/project.test.mjs",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}
