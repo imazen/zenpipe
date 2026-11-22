@@ -7,6 +7,7 @@ serve port="3761":
 test:
     cargo test --locked
     cargo test --locked --manifest-path filters-wasm/Cargo.toml --target-dir target
+    cargo test --locked --manifest-path native-wasm/Cargo.toml --target-dir target
     node --test tests/project.test.mjs
 
 browser:
@@ -15,8 +16,10 @@ browser:
 wasm-audit:
     #!/usr/bin/env bash
     set -eu
-    wasm-tools validate dist/wasm/relaxed/jxl_editor_codecs_bg.wasm
-    wasm-tools validate --features=-simd,-relaxed-simd dist/wasm/baseline/jxl_editor_codecs_bg.wasm
+    for module in codecs filters native; do
+        wasm-tools validate "dist/wasm/relaxed/jxl_editor_${module}_bg.wasm"
+        wasm-tools validate --features=-simd,-relaxed-simd "dist/wasm/baseline/jxl_editor_${module}_bg.wasm"
+    done
     if rejection=$(wasm-tools validate --features=-relaxed-simd dist/wasm/relaxed/jxl_editor_codecs_bg.wasm 2>&1); then
         echo "Expected a relaxed SIMD instruction in the optimized binary" >&2
         exit 1
@@ -29,3 +32,6 @@ wasm-audit:
 
 oracle output="test-results":
     python3 tests/oracle.py "{{output}}"
+
+browser-jpeg carrier icc:
+    EDITOR_JPEG_CARRIER="{{carrier}}" EDITOR_ICC_EXPECTED="{{icc}}" npm run test:browser

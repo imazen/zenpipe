@@ -1,4 +1,5 @@
 import { codec } from "./codec.mjs";
+import { makeNativeInspector } from "./native-panel.mjs";
 import { ZEN_FILTERS, hasAdjustments, previewFilter, renderFilter } from "./filters.mjs";
 import {
   checkDimensions, isJxl, MAX_FILE, MAX_LAYERS, MAX_PIXELS, MAX_SVG, opaqueBoxes,
@@ -32,6 +33,7 @@ let animation;
 let gesture;
 let sliderKey;
 let dragged;
+let inspectorView = "properties";
 const ctx = preview.getContext("2d");
 const hasCanvasFilters = "filter" in ctx;
 
@@ -157,6 +159,7 @@ function install(state, label, newTitle, alreadySaved) {
   zoom = null;
   compare = false;
   comparingKey = false;
+  showInspector("properties");
   selected = state.manifest.layers.at(-1).id;
   title = newTitle.replace(/\.(?:project\.jxl|jxl|jpg|jpeg|png|webp|svg|avif)$/i, "");
   saved = alreadySaved ? state : null;
@@ -181,7 +184,14 @@ async function open(file) {
         text.decode(asset.source);
         text.decode(svgSource(asset));
       }
-      asset.canvas = await decodeSource(asset.rendition ?? asset.source, asset.rendition ? "image/jxl" : layer.mime);
+      if (layer.nativeFrame !== undefined) {
+        const frame = await codec("nativeFrame", { bytes: asset.source, index: layer.nativeFrame });
+        if (!frame.preview.length) throw new Error(frame.previewError);
+        const [width, height] = frame.info.displaySize;
+        asset.canvas = canvasFrom({ width, height, pixels: frame.preview });
+      } else {
+        asset.canvas = await decodeSource(asset.rendition ?? asset.source, asset.rendition ? "image/jxl" : layer.mime);
+      }
       if (layer.width !== asset.canvas.width || layer.height !== asset.canvas.height) {
         throw new Error("A layer’s stored dimensions do not match its image.");
       }
@@ -417,6 +427,13 @@ function update() {
     input.disabled = current?.manifest.filterEngine !== ZEN_FILTERS && !hasCanvasFilters && ["exposure", "contrast", "saturation"].includes(key);
     $(`value-${key}`).value = format(value);
   }
+  const nativeSource = layer?.mime === "image/jxl" ? layer : originalLayer();
+  const nativeAsset = nativeSource?.mime === "image/jxl" && current.assets.get(nativeSource.id);
+  $("native-tab").disabled = !nativeAsset;
+  const sourceChanged = nativeInspector.setSource(nativeAsset || null, nativeSource?.name);
+  nativeInspector.setBusy(busy);
+  if (!nativeAsset && inspectorView === "native") showInspector("properties");
+  if (nativeAsset && sourceChanged && inspectorView === "native") queueMicrotask(nativeInspector.inspect);
   const layerList = $("layer-list");
   const focused = layerList.contains(document.activeElement);
   layerList.replaceChildren();
@@ -462,7 +479,9 @@ function update() {
     const name = document.createElement("span");
     name.textContent = entry.name;
     const detail = document.createElement("small");
-    detail.textContent = entry.mime === "image/svg+xml" ? "SVG" : `${entry.width} × ${entry.height}`;
+    detail.textContent = entry.mime === "image/svg+xml" ? "SVG"
+      : entry.nativeFrame !== undefined ? `Native JXL frame ${entry.nativeFrame + 1}`
+      : `${entry.width} × ${entry.height}`;
     name.append(detail);
     pick.append(thumbnail, name);
     pick.addEventListener("click", () => { selected = entry.id; compare = false; update(); });
@@ -642,14 +661,44 @@ for (const axis of ["x", "y"]) {
   };
 }
 
-function showHistory(show) {
-  $("history").hidden = !show;
-  $("properties").hidden = show;
-  $("history-tab").setAttribute("aria-pressed", String(show));
-  $("properties-tab").setAttribute("aria-pressed", String(!show));
+function showInspector(view) {
+  inspectorView = view;
+  $("history").hidden = view !== "history";
+  $("properties").hidden = view !== "properties";
+  $("native-panel").hidden = view !== "native";
+  for (const id of ["history", "properties", "native"]) {
+    $(`${id}-tab`).setAttribute("aria-pressed", String(view === id));
+  }
 }
-$("history-tab").onclick = () => showHistory(true);
-$("properties-tab").onclick = () => showHistory(false);
+
+function addNativeLayer(asset, frame, index) {
+  if (current.manifest.layers.length === MAX_LAYERS) throw new Error("A project can hold up to 32 layers.");
+  const { nativeFrame } = activeLayer();
+  const { displaySize: [width, height], displayOrigin: [x, y], name } = frame.info;
+  if (Math.abs(x) > 32768 || Math.abs(y) > 32768) {
+    throw new Error("This native frame’s origin exceeds the editor position range.");
+  }
+  const canvas = canvasFrom({ width, height, pixels: frame.preview });
+  const layer = { id: newId(), name: (nativeFrame === index || !name ? `Native frame ${index + 1}` : name).slice(0, 255),
+    mime: "image/jxl", width, height, ...defaults, x, y, nativeFrame: index };
+  const layers = [...current.manifest.layers, layer];
+  const assets = new Map(current.assets);
+  assets.set(layer.id, { source: asset.source, canvas, rendition: null });
+  checkAssets(layers, assets);
+  selected = layer.id;
+  compare = false;
+  storeState({ ...current, manifest: { ...current.manifest, layers }, assets }, "Added native JPEG XL frame");
+  showInspector("properties");
+  status("Source-local frame added to Layers");
+}
+
+const nativeInspector = makeNativeInspector({ run, download, canvasFrom, addNativeLayer, report, status });
+$("history-tab").onclick = () => showInspector("history");
+$("properties-tab").onclick = () => showInspector("properties");
+$("native-tab").onclick = () => {
+  showInspector("native");
+  nativeInspector.inspect();
+};
 
 $("edit-svg").onclick = () => {
   $("svg-error").textContent = "";

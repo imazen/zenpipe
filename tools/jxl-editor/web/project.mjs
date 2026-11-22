@@ -155,6 +155,11 @@ export function validateManifest(manifest) {
         !inRange(layer.contrast, 0, 2) || !inRange(layer.saturation, 0, 2)) {
       throw new Error("Invalid editor layer settings.");
     }
+    if (layer.nativeFrame !== undefined &&
+        (layer.mime !== "image/jxl" || !Number.isInteger(layer.nativeFrame) ||
+          layer.nativeFrame < 0 || layer.nativeFrame >= 128)) {
+      throw new Error("Invalid native JPEG XL frame reference.");
+    }
     checkDimensions(layer.width, layer.height);
     seen.add(layer.id);
   }

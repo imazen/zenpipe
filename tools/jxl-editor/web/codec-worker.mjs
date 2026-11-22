@@ -6,6 +6,7 @@ const relaxedProbe = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0,
 
 let ready;
 let filters;
+let native;
 function initialize() {
   return ready ??= (async () => {
     const optimized = WebAssembly.validate(relaxedProbe);
@@ -22,6 +23,34 @@ self.onmessage = async ({ data }) => {
     const { codec, mode, optimized } = await initialize();
     if (method === "init") {
       self.postMessage({ id, value: mode });
+    } else if (["nativeInfo", "nativeFrame", "nativeIcc", "nativeJpeg"].includes(method)) {
+      const nativeModule = await (native ??= (async () => {
+        const module = optimized ? await import("./wasm/relaxed/jxl_editor_native.js")
+          : await import("./wasm/baseline/jxl_editor_native.js");
+        await module.default();
+        return module;
+      })());
+      if (method === "nativeInfo") {
+        self.postMessage({ id, value: JSON.parse(nativeModule.native_jxl_info(data.bytes)) });
+      } else if (method === "nativeIcc" || method === "nativeJpeg") {
+        const value = method === "nativeIcc" ? nativeModule.native_embedded_icc(data.bytes)
+          : nativeModule.native_reconstruct_jpeg(data.bytes);
+        self.postMessage({ id, value }, [value.buffer]);
+      } else {
+        const frame = nativeModule.native_jxl_frame(data.bytes, data.index);
+        try {
+          const info = JSON.parse(frame.info());
+          const preview = frame.take_preview();
+          const previewError = frame.preview_error();
+          const planes = data.includePlanes
+            ? Array.from({ length: frame.plane_count() }, (_, i) => frame.take_plane(i))
+            : [];
+          self.postMessage({ id, value: { info, preview, previewError, planes } },
+            [preview.buffer, ...planes.map(plane => plane.buffer)]);
+        } finally {
+          frame.free();
+        }
+      }
     } else if (method === "filter") {
       const filterModule = await (filters ??= (async () => {
         const module = optimized ? await import("./wasm/relaxed/jxl_editor_filters.js")

@@ -66,6 +66,7 @@
         <div class="tabs" role="group" aria-label="Inspector view">
           <button id="properties-tab" type="button" aria-pressed="true">Adjustments</button>
           <button id="history-tab" type="button" aria-pressed="false">History</button>
+          <button id="native-tab" type="button" aria-pressed="false" disabled>Native JXL</button>
         </div>
         <div id="properties">
           <fieldset id="fields" disabled>
@@ -85,6 +86,30 @@
           </fieldset>
         </div>
         <ol id="history" hidden aria-label="Edit history"></ol>
+        <div id="native-panel" hidden>
+          <p id="native-source-name"></p>
+          <details open><summary>Source frames and channels</summary>
+            <label>Source frame <select id="native-frame" disabled></select></label>
+            <label>Preview channel <select id="native-plane" disabled></select></label>
+            <canvas id="native-preview" hidden aria-label="Local JPEG XL frame"></canvas>
+            <p id="native-info"></p>
+            <div class="asset-actions">
+              <button id="native-add" type="button" disabled>Add frame as layer</button>
+              <button id="native-plane-download" type="button" disabled>Download F32 samples</button>
+            </div>
+            <details id="native-frame-details" hidden><summary>Frame fields</summary><pre id="native-frame-json"></pre></details>
+          </details>
+          <details id="native-image-details" hidden><summary>Image header fields</summary>
+            <pre id="native-image-json"></pre>
+            <button id="native-icc" type="button" hidden>Download embedded ICC</button>
+          </details>
+          <details><summary>Container boxes</summary>
+            <label>Box <select id="native-box" aria-label="Box"></select></label>
+            <button id="native-box-download" type="button">Download box</button>
+            <button id="native-jpeg" type="button" hidden>Reconstruct original JPEG</button>
+            <p id="native-box-status"></p>
+          </details>
+        </div>
       </section>
     </aside>
   </main>

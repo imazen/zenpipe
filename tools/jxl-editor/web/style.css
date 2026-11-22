@@ -112,7 +112,7 @@ h3 { margin: 14px 0 7px; }
 .layer-pick span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .layer-pick small { display: block; font-size: .73rem; color: var(--muted); }
 .layer-actions { padding: 8px 12px 12px; }
-.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 10px; }
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding: 0 10px; }
 .tabs button { border: 0; border-radius: 0; margin-bottom: -1px; background: transparent; color: var(--muted); padding: 10px; }
 .tabs [aria-pressed="true"] { color: var(--accent); border-bottom: 2px solid var(--accent); }
 fieldset { border: 0; margin: 0; padding: 12px; min-width: 0; }
@@ -157,3 +157,12 @@ textarea { resize: vertical; font: .88rem/1.5 ui-monospace, monospace; }
 @media (max-width: 430px) {
   .file-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-basis: 100%; }
 }
+#native-panel { padding: 12px; }
+#native-source-name { margin: 0 0 10px; overflow-wrap: anywhere; color: var(--muted); }
+#native-panel details { margin-bottom: 12px; }
+#native-panel summary { cursor: pointer; font-weight: 650; }
+#native-panel label { display: grid; gap: 3px; margin: 8px 0; color: var(--muted); }
+#native-panel select { max-width: 100%; min-width: 0; padding: 4px; font: inherit; }
+#native-panel pre { border: 1px solid var(--line); background: #161a20; padding: 8px; max-height: 230px; overflow: auto; }
+#native-preview { max-width: 100%; max-height: 180px; height: auto; margin: 8px auto; cursor: default; }
+#native-info, #native-box-status { color: var(--muted); font-size: .87rem; }
