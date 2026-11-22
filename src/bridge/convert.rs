@@ -523,7 +523,16 @@ pub(crate) fn convert_remove_alpha(node: &dyn NodeInstance) -> crate::PipeResult
         param_u32(node, "matte_g").unwrap_or(255) as u8,
         param_u32(node, "matte_b").unwrap_or(255) as u8,
     ];
-    Ok(NodeOp::RemoveAlpha { matte })
+    let blend = match param_str(node, "blend").as_deref() {
+        Ok("linear") | Err(_) => crate::ops::MatteBlend::Linear,
+        Ok("encoded") => crate::ops::MatteBlend::Encoded,
+        Ok(other) => {
+            return Err(at!(PipeError::Op(alloc::format!(
+                "remove_alpha: unknown blend '{other}', expected linear or encoded"
+            ))));
+        }
+    };
+    Ok(NodeOp::RemoveAlpha { matte, blend })
 }
 
 /// Convert a `zenpipe.round_corners` node to `NodeOp::Materialize` with mask application.

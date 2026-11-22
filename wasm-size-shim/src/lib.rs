@@ -104,7 +104,7 @@ fn generic_decode(config: &dyn DynDecoderConfig, data: &[u8], ow: *mut u32, oh: 
 #[unsafe(no_mangle)] pub extern "C" fn op_alpha(sp:*const u8,sl:u32,sw:u32,sh:u32,mr:u8,mg:u8,mb:u8)->*mut u8{
     let s=unsafe{core::slice::from_raw_parts(sp,sl as usize)}; let f=format::RGBA8_SRGB;
     let mut g=PipelineGraph::new(); let sn=g.add_node(NodeOp::Source);
-    let rn=g.add_node(NodeOp::RemoveAlpha{matte:[mr,mg,mb]}); let an=g.add_node(NodeOp::AddAlpha); let on=g.add_node(NodeOp::Output);
+    let rn=g.add_node(NodeOp::RemoveAlpha{matte:[mr,mg,mb],blend:zenpipe::ops::MatteBlend::Linear}); let an=g.add_node(NodeOp::AddAlpha); let on=g.add_node(NodeOp::Output);
     g.add_edge(sn,rn,EdgeKind::Input); g.add_edge(rn,an,EdgeKind::Input); g.add_edge(an,on,EdgeKind::Input);
     match g.compile(msrc(&[sn],&[(sw,sh)],&[f],&[s])){Ok(p)=>ret(drain(p)),Err(_)=>core::ptr::null_mut()}
 }

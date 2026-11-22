@@ -68,6 +68,7 @@ fn remove_alpha_opaque_pixels() {
     let src = g.add_node(NodeOp::Source);
     let rm = g.add_node(NodeOp::RemoveAlpha {
         matte: [255, 255, 255],
+        blend: Default::default(),
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
@@ -93,6 +94,7 @@ fn remove_alpha_transparent_white_matte() {
     let src = g.add_node(NodeOp::Source);
     let rm = g.add_node(NodeOp::RemoveAlpha {
         matte: [255, 255, 255],
+        blend: Default::default(),
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
@@ -110,11 +112,12 @@ fn remove_alpha_transparent_white_matte() {
 
 #[test]
 fn remove_alpha_50_percent() {
-    // 50% red on white → ~(255, 127, 127)
+    // 50% red on white, blended in linear light
     let mut g = PipelineGraph::new();
     let src = g.add_node(NodeOp::Source);
     let rm = g.add_node(NodeOp::RemoveAlpha {
         matte: [255, 255, 255],
+        blend: Default::default(),
     });
     let out = g.add_node(NodeOp::Output);
     g.add_edge(src, rm, EdgeKind::Input);
@@ -126,11 +129,7 @@ fn remove_alpha_50_percent() {
     let mut pipeline = g.compile(sources).unwrap();
     let data = drain(pipeline.as_mut());
     for px in data.as_chunks::<3>().0.iter() {
-        // 255*128/255 + 255*127/255 ≈ 128 + 127 = 255 for R
-        assert!(px[0] > 250, "R: {}", px[0]);
-        // 0*128/255 + 255*127/255 ≈ 127 for G
-        assert!((px[1] as i16 - 127).unsigned_abs() <= 1, "G: {}", px[1]);
-        assert!((px[2] as i16 - 127).unsigned_abs() <= 1, "B: {}", px[2]);
+        assert_eq!(*px, [255, 187, 187]);
     }
 }
 

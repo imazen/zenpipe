@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           13
-#   trait roster entries (type × trait)        21
+#   trait roster entries (type × trait)        22
 #
 # per-module pub lines:
 #   io                                5
@@ -35,7 +35,7 @@ pub fn trace::SlowestStrip::assert_fields_are_eq(&self)
 pub fn trace::StripEvent::assert_fields_are_eq(&self)
 pub fn watermark::WatermarkPlacement::assert_fields_are_eq(&self)
 
-## trait impls (21 types)
+## trait impls (22 types)
 
 animation::FrameInfo: TrivialClone
 bridge::ordering::OptimizationLevel: TrivialClone
@@ -50,6 +50,7 @@ job::DefaultsPreset: TrivialClone
 job::GainMapMode: TrivialClone
 job::MetadataPolicy: TrivialClone
 limits::Limits: TrivialClone
+ops::MatteBlend: TrivialClone
 sources::CanvasFill: TrivialClone
 tiles::LevelInfo: TrivialClone
 tiles::PyramidGeometry: TrivialClone

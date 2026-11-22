@@ -967,8 +967,8 @@ impl FillRect {
 
 /// Remove alpha channel by compositing onto a solid matte color.
 ///
-/// Produces RGB output suitable for JPEG encoding. The compositing is done
-/// in sRGB space (matching browser behavior for CSS background-color).
+/// Produces RGB output suitable for JPEG encoding. Blends in linear light unless
+/// `blend` is `encoded`.
 ///
 /// JSON: `{ "matte_r": 255, "matte_g": 255, "matte_b": 255 }`
 #[derive(Node, Clone, Debug)]
@@ -984,6 +984,10 @@ pub struct RemoveAlpha {
     /// Matte blue channel (sRGB, 0–255).
     #[param(range(0..=255), default = 255)]
     pub matte_b: u32,
+    /// `linear` blends in linear light. `encoded` blends the sRGB values without decoding, which
+    /// is commonly what browsers do for CSS; use it only to match one.
+    #[param(default = "linear")]
+    pub blend: String,
 }
 
 impl Default for RemoveAlpha {
@@ -992,6 +996,7 @@ impl Default for RemoveAlpha {
             matte_r: 255,
             matte_g: 255,
             matte_b: 255,
+            blend: "linear".into(),
         }
     }
 }
