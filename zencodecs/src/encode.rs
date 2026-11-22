@@ -427,13 +427,17 @@ impl<'a> EncodeRequest<'a> {
             return Err(at!(CodecError::DisabledFormat(ImageFormat::Jpeg)));
         }
 
+        let eff = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
         crate::codecs::jpeg::encode_ultrahdr_rgb_f32(
             img,
             self.quality,
             self.gainmap_quality,
             self.metadata.as_ref(),
             self.codec_config,
-            self.limits,
+            Some(&eff),
             self.pulse,
         )
     }
@@ -459,13 +463,17 @@ impl<'a> EncodeRequest<'a> {
             return Err(at!(CodecError::DisabledFormat(ImageFormat::Jpeg)));
         }
 
+        let eff = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
         crate::codecs::jpeg::encode_ultrahdr_rgba_f32(
             img,
             self.quality,
             self.gainmap_quality,
             self.metadata.as_ref(),
             self.codec_config,
-            self.limits,
+            Some(&eff),
             self.pulse,
         )
     }
@@ -531,7 +539,13 @@ impl<'a> EncodeRequest<'a> {
                 metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
-                limits: speed_limits.as_ref().or(self.limits),
+                limits: Some(
+                    speed_limits
+                        .as_ref()
+                        .or(self.limits)
+                        .copied()
+                        .unwrap_or_else(crate::limits::server_limits),
+                ),
                 pulse: self.pulse,
                 encode_policy: self.encode_policy,
                 orientation_mode: self.orientation_mode,
@@ -649,6 +663,13 @@ impl<'a> EncodeRequest<'a> {
         let resolved_quality = self.resolve_quality();
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
+        // Unset limits mean bounded server defaults, not unbounded; an
+        // explicit `Limits::none()` remains the opt-out.
+        let limits_eff = speed_limits
+            .as_ref()
+            .or(self.limits)
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
 
         let params = crate::dispatch::EncodeParams {
             quality: Some(resolved_quality),
@@ -660,7 +681,7 @@ impl<'a> EncodeRequest<'a> {
             metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
-            limits: speed_limits.as_ref().or(self.limits),
+            limits: Some(&limits_eff),
             pulse: self.pulse,
             encode_policy: self.encode_policy,
             orientation_mode: self.orientation_mode,
@@ -931,9 +952,11 @@ impl<'a> EncodeRequest<'a> {
         // before building the encoder if the calibrated encode estimate exceeds it.
         // Gated on the est (the admission-safe upper bound), matching the decode path;
         // the est already includes the input frame, so we do not add it on top.
-        if let Some(limits) = self.limits
-            && limits.max_memory_bytes.is_some()
-        {
+        let admission_limits = self
+            .limits
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
+        if admission_limits.max_memory_bytes.is_some() {
             let image = ImageCharacteristics::new(width, height, descriptor);
             let est = estimate_encode(
                 format,
@@ -942,13 +965,17 @@ impl<'a> EncodeRequest<'a> {
                 &image,
                 &ComputeEnvironment::conservative(),
             )?;
-            check_estimate_against_limits(&est, &image, limits)?;
+            check_estimate_against_limits(&est, &image, &admission_limits)?;
         }
 
         let resolved_quality = self.resolve_quality();
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
-        let limits = speed_limits.as_ref().or(self.limits);
+        let limits = speed_limits
+            .as_ref()
+            .or(self.limits)
+            .copied()
+            .unwrap_or_else(crate::limits::server_limits);
 
         #[cfg(feature = "jpeg-ultrahdr")]
         let gain_map_source_metadata = if self.gain_map_source.is_some() {
@@ -971,7 +998,7 @@ impl<'a> EncodeRequest<'a> {
             metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
-            limits,
+            limits: Some(&limits),
             pulse: self.pulse.clone(),
             encode_policy: self.encode_policy,
             orientation_mode: self.orientation_mode,
@@ -1082,7 +1109,7 @@ impl<'a> EncodeRequest<'a> {
                     gain_map,
                     metadata,
                     &retained,
-                    limits,
+                    Some(&limits),
                     &self.pulse,
                 );
             }
