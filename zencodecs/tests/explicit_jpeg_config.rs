@@ -70,3 +70,50 @@ fn short_fixed_table_canvas_keeps_the_complete_file_until_finish() {
         assert_eq!(encoder.finish().unwrap().data(), whole.data());
     }
 }
+
+#[test]
+fn explicit_jpeg_codec_config_keeps_baseline_and_matches_native() {
+    use imgref::Img;
+    use rgb::Rgb;
+
+    let (w, h) = (64usize, 64usize);
+    let mut rgb = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            rgb.push(Rgb::new(
+                ((x * 13 + y * 29) & 0xFF) as u8,
+                (((x * 37) ^ (y * 11)) & 0xFF) as u8,
+                ((x + y) * 7) as u8,
+            ));
+        }
+    }
+
+    let jpeg = EncoderConfig::ycbcr(100.0, ChromaSubsampling::None)
+        .force_baseline()
+        .aq_enabled(false)
+        .deringing(false);
+    let cfg = CodecConfig::default().with_jpeg_encoder(jpeg.clone());
+    let out = EncodeRequest::new(ImageFormat::Jpeg)
+        .with_codec_config(&cfg)
+        .encode_full_frame_rgb8(Img::new(&rgb[..], w, h))
+        .unwrap()
+        .into_vec();
+
+    // Baseline SOF0 must be present and progressive SOF2 must not be emitted.
+    assert!(out.windows(2).any(|m| m == [0xFF, 0xC0]));
+    assert!(!out.windows(2).any(|m| m == [0xFF, 0xC2]));
+    assert!(!zencodecs::from_bytes(&out).unwrap().is_progressive);
+
+    let mut raw_bytes = Vec::with_capacity(w * h * 3);
+    for px in &rgb {
+        raw_bytes.extend_from_slice(&[px.r, px.g, px.b]);
+    }
+    let mut direct_enc = jpeg
+        .encode_from_bytes(w as u32, h as u32, PixelLayout::Rgb8Srgb)
+        .unwrap();
+    direct_enc
+        .push(&raw_bytes, h, w * 3, zencodec::Unstoppable)
+        .unwrap();
+    let direct = direct_enc.finish().unwrap();
+    assert_eq!(out, direct);
+}

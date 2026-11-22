@@ -9,6 +9,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- zencodecs: use `probe_full` in the HEIC container probe so `zencodecs::from_bytes` preserves container `source_color` (ICC profile and CICP) and gain-map parameters (#81).
+
+- zencodecs: populate `ImageInfo::is_progressive` from `JpegMode::{Progressive, ArithmeticProgressive}` in the JPEG header probe (#82).
+
+- zencodecs: return `ResourceEstimate::unknown()` from `estimate_encode` for compiled unmodeled encoders (`Bmp`, `Pnm`, `Farbfeld`, `Tiff`, `Qoi`, `Tga`, `Hdr`) instead of `UnsupportedFormat`, and resolve Rust 1.100 Clippy and `jpeg-ultrahdr` test compilation errors on `main`.
+
 - zencodecs/zenpipe: retain explicit resource limits during JPEG header probes
   and decode estimation, including a caller-selected pixel budget above the
   unchanged default. ImageJob probes use the same limited request path.
