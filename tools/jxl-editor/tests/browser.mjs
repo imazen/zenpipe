@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { extname } from "node:path";
 import { chromium } from "playwright";
-import init, { decode_jxl, encode_jxl } from "../dist/wasm/relaxed/jxl_editor_codecs.js";
+import init, { decode_jxl, encode_jxl, encode_layers } from "../dist/wasm/relaxed/jxl_editor_codecs.js";
 import { box, jxlBoxes, opaqueBoxes, readProject } from "../web/project.mjs";
 
 const baseUrl = process.env.EDITOR_URL ?? "http://127.0.0.1:3761";
@@ -71,6 +71,8 @@ try {
     const downloaded = page.waitForEvent("download");
     await page.getByRole("button", { name: button, exact: true }).click();
     const file = await downloaded;
+    if (button === "Save project") assert.match(file.suggestedFilename(), /\.project\.jxl$/);
+    if (button === "Export JXL") assert.match(file.suggestedFilename(), /\.jxl$/);
     await file.saveAs(path);
     return await readFile(path);
   }
@@ -167,6 +169,74 @@ try {
   await page.screenshot({ path: `${output}/editor.png` });
   await page.close();
 
+  const native = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+  const nativeBase = rgba(64, 41, () => [30, 70, 110, 255]);
+  const nativeFinal = rgba(64, 41, (x, y) => x >= 9 && x < 14 && y >= 7 && y < 11 ? [220, 110, 55, 190] : [30, 70, 110, 255]);
+  const nativeIds = "00000000-0000-4000-8000-000000000001,00000000-0000-4000-8000-000000000002";
+  const nativeFile = encode_layers(Buffer.concat([nativeBase, nativeFinal]), nativeFinal, 64, 41, nativeIds);
+  assert.ok(nativeFile);
+  const nativeInput = jxlBoxes(nativeFile).length
+    ? Buffer.concat([nativeFile, ...box("wxyz", Uint8Array.of(2, 7, 1))])
+    : Buffer.concat([signature, ...box("jxlc", nativeFile), ...box("wxyz", Uint8Array.of(2, 7, 1))]);
+  await native.goto(baseUrl);
+  await native.locator("#open-file").setInputFiles({ name: "native.jxl", mimeType: "image/jxl", buffer: nativeInput });
+  await native.getByText("Image opened", { exact: true }).waitFor();
+  await native.getByRole("button", { name: "Native JXL", exact: true }).click();
+  await native.getByText("2 native JPEG XL frames", { exact: true }).waitFor();
+  await native.getByLabel("Source frame").selectOption("1");
+  await native.getByText("5 × 4 at (9, 7) · Replace", { exact: true }).waitFor();
+  const info = JSON.parse(await native.locator("#native-frame-json").textContent());
+  assert.deepEqual(info.origin, [9, 7]);
+  assert.deepEqual(info.size, [5, 4]);
+  assert.equal(info.colorBlend.sourceReference, 1);
+  await native.getByLabel("Preview channel").selectOption({ label: "Alpha" });
+  const rawDownload = native.waitForEvent("download");
+  await native.getByRole("button", { name: "Download F32 samples" }).click();
+  const raw = await rawDownload;
+  assert.equal(raw.suggestedFilename(), "jxl-frame-2-plane-1.f32le");
+  const sourceAlpha = await readFile(await raw.path());
+  assert.equal(sourceAlpha.byteLength, 5 * 4 * 4);
+  for (let i = 0; i < sourceAlpha.length; i += 4) {
+    assert.equal(sourceAlpha.readFloatLE(i), Math.fround(190 / 255));
+  }
+  await native.getByText("Container boxes", { exact: true }).click();
+  await native.getByLabel("Box", { exact: true }).selectOption({ label: "wxyz · 3 bytes" });
+  const boxDownload = native.waitForEvent("download");
+  await native.getByRole("button", { name: "Download box" }).click();
+  const boxFile = await boxDownload;
+  assert.deepEqual(await readFile(await boxFile.path()), Buffer.concat(box("wxyz", Uint8Array.of(2, 7, 1))));
+  await native.screenshot({ path: `${output}/native.png` });
+  await native.getByRole("button", { name: "Add frame as layer" }).click();
+  await native.getByText("Source-local frame added to Layers", { exact: true }).waitFor();
+  assert.equal(await native.locator("#position-x").inputValue(), "9");
+  assert.equal(await native.locator("#position-y").inputValue(), "7");
+  await native.evaluate(() => new Promise(requestAnimationFrame));
+  const presentation = await native.locator("#canvas").evaluate(el =>
+    Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data));
+  await writeFile(`${output}/native.rgba`, Buffer.from(presentation));
+  await writeFile(`${output}/native-source.rgba`, nativeFinal);
+  const nativeDownload = native.waitForEvent("download");
+  await native.getByRole("button", { name: "Save project", exact: true }).click();
+  const nativeSave = await nativeDownload;
+  assert.equal(nativeSave.suggestedFilename(), "native.project.jxl");
+  const nativeProject = await readFile(await nativeSave.path());
+  assert.deepEqual(Buffer.from(decode_jxl(nativeProject).into_pixels()), Buffer.from(presentation));
+  const nativeManifest = readProject(nativeProject);
+  const extracted = nativeManifest.manifest.layers[1];
+  assert.equal(extracted.nativeFrame, 1);
+  assert.deepEqual(Buffer.from(nativeManifest.assets.get(extracted.id).source), nativeInput);
+  await native.reload();
+  await native.locator("#open-file").setInputFiles({
+    name: nativeSave.suggestedFilename(), mimeType: "image/jxl", buffer: nativeProject,
+  });
+  await native.getByText("Project reopened · original assets restored", { exact: true }).waitFor();
+  assert.equal(await native.locator("#position-x").inputValue(), "9");
+  assert.equal(await native.locator("#position-y").inputValue(), "7");
+  await writeFile(`${output}/native-source.jxl`, nativeInput);
+  await writeFile(`${output}/native.project.jxl`, nativeProject);
+  await writeFile(`${output}/native-alpha.f32le`, sourceAlpha);
+  await native.close();
+
   const photo = await browser.newPage({ viewport: { width: 1400, height: 940 } });
   await photo.goto(baseUrl);
   await photo.getByRole("button", { name: "Try a sample" }).click();
@@ -177,6 +247,32 @@ try {
   assert.equal(await photo.evaluate(() => document.documentElement.scrollWidth), 390);
   await photo.screenshot({ path: `${output}/mobile.png`, fullPage: true });
   await photo.close();
+
+  if (process.env.EDITOR_JPEG_CARRIER) {
+    const resources = await browser.newPage({ acceptDownloads: true });
+    await resources.goto(baseUrl);
+    const carrier = await readFile(process.env.EDITOR_JPEG_CARRIER);
+    await resources.locator("#open-file").setInputFiles({
+      name: "reconstruction.jxl", mimeType: "image/jxl", buffer: carrier,
+    });
+    await resources.getByText("Image opened", { exact: true }).waitFor();
+    await resources.getByRole("button", { name: "Native JXL", exact: true }).click();
+    await resources.getByText("Image header fields", { exact: true }).click();
+    const iccDownload = resources.waitForEvent("download");
+    await resources.getByRole("button", { name: "Download embedded ICC" }).click();
+    const icc = await iccDownload;
+    assert.equal(icc.suggestedFilename(), "reconstruction.icc");
+    assert.deepEqual(await readFile(await icc.path()), await readFile(process.env.EDITOR_ICC_EXPECTED));
+    await resources.getByText("Container boxes", { exact: true }).click();
+    const jpgDownload = resources.waitForEvent("download");
+    await resources.getByRole("button", { name: "Reconstruct original JPEG" }).click();
+    const jpg = await jpgDownload;
+    assert.equal(jpg.suggestedFilename(), "reconstruction.jpg");
+    const original = await readFile(new URL("../dist/sample.jpg", import.meta.url));
+    assert.deepEqual(await readFile(await jpg.path()), original);
+    console.log("Embedded ICC and reconstructed JPEG downloaded byte for byte.");
+    await resources.close();
+  }
 
   // Serve a worker whose capability probe reports the unsupported branch.
   // This avoids dependence on obsolete Chromium V8 switches or interception
@@ -212,12 +308,17 @@ try {
     const download = baseline.waitForEvent("download");
     await baseline.getByRole("button", { name: "Save project" }).click();
     const fallbackPath = `${output}/fallback.project.jxl`;
-    await (await download).saveAs(fallbackPath);
+    const file = await download;
+    assert.equal(file.suggestedFilename(), "fallback.project.jxl");
+    await file.saveAs(fallbackPath);
     const fallbackFile = await readFile(fallbackPath);
     assert.equal(readProject(fallbackFile).manifest.layers[0].exposure, 0.01);
     await baseline.reload();
     await baseline.locator("#open-file").setInputFiles({ name: "fallback.project.jxl", mimeType: "image/jxl", buffer: fallbackFile });
     await baseline.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await baseline.getByRole("button", { name: "Native JXL", exact: true }).click();
+    await baseline.getByText("1 native JPEG XL frame", { exact: true }).waitFor();
+    await baseline.getByRole("button", { name: "Add frame as layer", exact: true }).waitFor();
     await baseline.close();
   } finally {
     fallbackServer.close();

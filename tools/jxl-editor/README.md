@@ -7,7 +7,7 @@ Rust JPEG XL encoder and decoder.
 
 ## Run
 
-Install the Rust `wasm32-unknown-unknown` target, wasm-bindgen CLI 0.2.129,
+Install Rust 1.93 or later with the `wasm32-unknown-unknown` target, wasm-bindgen CLI 0.2.129,
 and `just`. From this directory, run `just build` and `just serve`. The static
 `dist/` directory can also be served by another HTTP server with
 `application/wasm` enabled. The build pins the public-domain
@@ -28,7 +28,9 @@ by 10 pixels. Space shows the original while held.
 presentation and a private editing payload. Reopen it through **Open image**.
 **Export JXL** writes a standalone presentation. **Download source** retrieves
 the selected layer's imported file byte for byte, including the first SVG
-source and the full original JPEG XL codestream and metadata.
+source and the full original JPEG XL codestream and metadata. In an open
+JPEG XL, use **Native JXL** to select a local frame, inspect its channels
+and container, or add a frame to the layer stack. [Native tools and coverage](docs/native-jxl.md)
 
 ## File format
 
@@ -61,9 +63,9 @@ available in the project payload. An edited presentation uses lossless 8-bit
 sRGB RGBA from Canvas 2D with orientation applied. Source-specific metadata
 such as gain maps, ICC profiles and JPEG reconstruction data stay with the
 source bytes because they describe the original image. Unrecognized boxes
-in the primary JXL are also retained in the outer envelope. Third-party JXL
-frames open as a coalesced raster layer. Source-local editable frame pixels
-require decoder support for uncoalesced output.
+in the primary JXL are also retained in the outer envelope. JPEG XL initially
+opens with the coalesced presentation. A layer with a `nativeFrame` index
+instead reopens the selected regular frame from its preserved JPEG XL bytes.
 
 ## Codec pins and validation
 
@@ -93,5 +95,5 @@ For the legacy decode check set `DJXL` to djxl v0.12.0 at `a7a9c78`
 and `JXL_RS` to the upstream jxl-rs CLI at
 `f370be423933628eb7f783f1b61d4c765eca5f79`. Run
 `just oracle test-results` after the browser test. It checks the native
-layer presentation, ordinary still, and odd strided RGBA exactly against
+layer presentations, ordinary still, and odd strided RGBA exactly against
 the source pixels captured in the browser test. The oracle script uses Pillow.

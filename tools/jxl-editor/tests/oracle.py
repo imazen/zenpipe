@@ -19,6 +19,8 @@ cases = [
     ("gradient.project", "gradient", (127, 93)),
     ("gradient", "gradient", (127, 93)),
     ("odd-strided", "odd-strided", (3, 2)),
+    ("native-source", "native-source", (64, 41)),
+    ("native.project", "native", (64, 41)),
 ]
 for name, expected, size in cases:
     source = directory / f"{name}.jxl"
