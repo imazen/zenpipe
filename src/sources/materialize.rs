@@ -157,6 +157,30 @@ impl MaterializedSource {
         }
     }
 
+    /// Read these samples for what the source really carries, for
+    /// [`PipelineGraph::with_source_precision`](crate::graph::PipelineGraph::with_source_precision).
+    ///
+    /// Materializing is the cost of asking, so nothing calls this for you. `None` adds no
+    /// per-call control. Returns `PipeError::Cancelled` on cancellation.
+    pub fn scan_source_precision(
+        &self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> crate::PipeResult<zenpixels::precision::SourcePrecision> {
+        use zenpixels_convert::PixelSliceConvertExt;
+        let pixels = zenpixels::PixelSlice::new(
+            &self.data,
+            self.width,
+            self.height,
+            self.stride(),
+            self.format,
+        )
+        .map_err(|e| at!(crate::error::PipeError::Op(alloc::format!("{e}"))))?;
+        let control: &dyn zencodec::Pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        pixels
+            .scan_source_precision(control)
+            .map_err(|_| at!(crate::error::PipeError::Cancelled))
+    }
+
     /// Set output strip height.
     pub fn with_strip_height(mut self, h: u32) -> Self {
         self.strip_height = h.min(self.height);

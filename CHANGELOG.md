@@ -7,6 +7,12 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 ### [Unreleased]
 
+#### Added
+- `PipelineGraph::with_conversion_policy`, `with_conversion_resolver`, `with_source_precision` and `working_format_plan`, and `MaterializedSource::scan_source_precision`: each node's working format now comes from zenpixels' precision policy, once, for `compile` and `estimate` alike.
+
+#### Changed
+- A real 16-bit or float source on a `PipelineGraph` refuses at `compile` and `estimate` when a node has no path that holds it, instead of narrowing to `RGBA8` unannounced. `Resize` runs such a source in `f32`. The job API keeps narrowing where Layout and Constrain have no deeper path, through a named resolver.
+
 #### Fixes
 
 - zencodecs: use `probe_full` in the HEIC container probe so `zencodecs::from_bytes` preserves container `source_color` (ICC profile and CICP) and gain-map parameters (#81).

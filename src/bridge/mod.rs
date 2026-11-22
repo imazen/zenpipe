@@ -221,7 +221,10 @@ pub fn compile_nodes(
         None
     };
 
-    let mut graph = PipelineGraph::new();
+    // Layout and Constrain have no path deeper than 8 bits yet, and the job API has always narrowed
+    // there. Named here rather than refusing every 16-bit resize job.
+    let mut graph = PipelineGraph::new()
+        .with_conversion_resolver(crate::graph::narrow_where_a_node_has_no_deeper_path);
     let source_id = graph.add_node(NodeOp::Source);
 
     let last_id = if let Some((first, last)) =

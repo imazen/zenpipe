@@ -46,8 +46,11 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use crate::Source;
+
+mod working;
 #[allow(unused_imports)]
 use whereat::at;
+pub(crate) use working::narrow_where_a_node_has_no_deeper_path;
 
 use crate::error::PipeError;
 use crate::format::{self, PixelFormat};
@@ -556,6 +559,7 @@ pub struct PipelineGraph {
     /// Trace facade — inactive by default, zero-cost no-ops.
     #[cfg(feature = "std")]
     tracer: crate::trace::Tracer,
+    working: working::WorkingFormats,
 }
 
 impl PipelineGraph {
@@ -565,7 +569,65 @@ impl PipelineGraph {
             edges: Vec::new(),
             #[cfg(feature = "std")]
             tracer: crate::trace::Tracer::inactive(),
+            working: working::WorkingFormats::default(),
         }
+    }
+
+    /// Requirements and the preset that choose each node's working format.
+    ///
+    /// By default a node can't work in a format below what its sources carry, so a real 16-bit
+    /// source through a node with no deeper path refuses at `compile` and `estimate`. Dropping
+    /// bits takes a preset that says so, or a [resolver](Self::with_conversion_resolver).
+    #[must_use]
+    pub fn with_conversion_policy(
+        mut self,
+        policy: zenpixels::precision::ConversionPolicy,
+    ) -> Self {
+        self.working.policy = policy;
+        self
+    }
+
+    /// Ask this for each node's working format before the preset. Whatever it chooses is allowed.
+    #[must_use]
+    pub fn with_conversion_resolver(
+        mut self,
+        resolver: impl Fn(
+            zenpixels::precision::ConversionQuestion<'_>,
+        )
+            -> Result<zenpixels::precision::ConversionDecision, whereat::At<PipeError>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.working.resolver = Some(Box::new(resolver));
+        self
+    }
+
+    /// What this source really carries, where that's less than its storage: a decoder's
+    /// declaration, or [`MaterializedSource::scan_source_precision`](crate::sources::MaterializedSource::scan_source_precision).
+    #[must_use]
+    pub fn with_source_precision(
+        mut self,
+        source: NodeId,
+        precision: zenpixels::precision::SourcePrecision,
+    ) -> Self {
+        self.working.declared.insert(source, precision);
+        self
+    }
+
+    /// The working format each node will use and anything it drops, as `compile` will choose them.
+    /// `None` when no node on the main chain chooses a format.
+    pub fn working_format_plan(
+        &self,
+        source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
+    ) -> crate::PipeResult<Option<zenpixels::precision::ChainPlan>> {
+        self.validate()?;
+        let (_, plan) = self.plan_working_formats(
+            source_info
+                .iter()
+                .map(|(&id, info)| (id, info.format, info.width)),
+        )?;
+        Ok(plan)
     }
 
     /// Add a node and return its ID.
@@ -712,8 +774,13 @@ impl PipelineGraph {
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
             .unwrap(); // safe: validate() ensures exactly one Output
 
+        let (planned, _) = self.plan_working_formats(
+            source_info
+                .iter()
+                .map(|(&id, info)| (id, info.format, info.width)),
+        )?;
         let mut estimate = ResourceEstimate::default();
-        let dims = self.estimate_node(output_id, source_info, &mut estimate, 0)?;
+        let dims = self.estimate_node(output_id, source_info, &planned, &mut estimate, 0)?;
         estimate.output_width = dims.width;
         estimate.output_height = dims.height;
         estimate.output_format = dims.format;
@@ -724,6 +791,7 @@ impl PipelineGraph {
         &self,
         node_id: NodeId,
         source_info: &hashbrown::HashMap<NodeId, SourceInfo>,
+        planned: &hashbrown::HashMap<NodeId, PixelFormat>,
         est: &mut ResourceEstimate,
         depth: usize,
     ) -> crate::PipeResult<SourceInfo> {
@@ -747,12 +815,13 @@ impl PipelineGraph {
 
             NodeOp::Output => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                self.estimate_node(input_id, source_info, est, depth + 1)
+                self.estimate_node(input_id, source_info, planned, est, depth + 1)
             }
 
             NodeOp::Crop { w, h, .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 // Strip buffer for crop output
                 est.streaming_bytes += strip_mem(*w, upstream.format);
                 Ok(SourceInfo {
@@ -764,9 +833,13 @@ impl PipelineGraph {
 
             NodeOp::Resize { w, h, .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
-                // Cost-aware: f32 linear sources use ResizeF32Source (no u8 roundtrip).
-                let out_fmt = if upstream.format == format::RGBAF32_LINEAR {
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
+                // Cost-aware: f32 linear sources use ResizeF32Source (no u8 roundtrip), and the
+                // plan sends a source that eight bits can't hold there too.
+                let out_fmt = if upstream.format == format::RGBAF32_LINEAR
+                    || planned.get(&node_id) == Some(&format::RGBAF32_LINEAR)
+                {
                     format::RGBAF32_LINEAR
                 } else {
                     format::RGBA8_SRGB
@@ -792,7 +865,8 @@ impl PipelineGraph {
                 ..
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let (in_w, in_h) = if let Some(exif) = orientation {
                     let o = zenlayout::Orientation::from_exif(*exif)
                         .unwrap_or(zenlayout::Orientation::Identity);
@@ -843,7 +917,8 @@ impl PipelineGraph {
 
             NodeOp::Layout { plan, .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let out_w = plan.canvas.width;
                 let out_h = plan.canvas.height;
                 let kernel_rows = 16u64;
@@ -898,8 +973,8 @@ impl PipelineGraph {
             NodeOp::LayoutComposite { plan, .. } => {
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
-                let fg = self.estimate_node(fg_id, source_info, est, depth + 1)?;
-                let bg = self.estimate_node(bg_id, source_info, est, depth + 1)?;
+                let fg = self.estimate_node(fg_id, source_info, planned, est, depth + 1)?;
+                let bg = self.estimate_node(bg_id, source_info, planned, est, depth + 1)?;
                 let out_w = plan.canvas.width.max(bg.width);
                 let out_h = plan.canvas.height.max(bg.height);
                 let kernel_rows = 16u64;
@@ -915,7 +990,8 @@ impl PipelineGraph {
 
             NodeOp::ResizeAdvanced(config) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let out_w = config.total_output_width();
                 let out_h = config.total_output_height();
                 let kernel_rows = 16u64;
@@ -931,7 +1007,8 @@ impl PipelineGraph {
 
             NodeOp::Orient(_) | NodeOp::AutoOrient(_) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let orientation = match op {
                     NodeOp::Orient(o) => *o,
                     NodeOp::AutoOrient(exif) => zenlayout::Orientation::from_exif(*exif)
@@ -959,7 +1036,8 @@ impl PipelineGraph {
 
             NodeOp::PixelTransform(_) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 // Strip buffer for transform output (format may change)
                 est.streaming_bytes += strip_mem(upstream.width, upstream.format);
                 Ok(upstream)
@@ -968,8 +1046,8 @@ impl PipelineGraph {
             NodeOp::Composite { .. } => {
                 let bg_id = self.find_input(node_id, EdgeKind::Canvas)?;
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
-                let bg = self.estimate_node(bg_id, source_info, est, depth + 1)?;
-                let _fg = self.estimate_node(fg_id, source_info, est, depth + 1)?;
+                let bg = self.estimate_node(bg_id, source_info, planned, est, depth + 1)?;
+                let _fg = self.estimate_node(fg_id, source_info, planned, est, depth + 1)?;
                 est.streaming_bytes += strip_mem(bg.width, format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
                     width: bg.width,
@@ -981,7 +1059,8 @@ impl PipelineGraph {
             #[cfg(feature = "std")]
             NodeOp::Filter(pipeline) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 if pipeline.has_neighborhood_filter() {
                     let overlap = pipeline.max_neighborhood_radius(upstream.width, upstream.height);
                     // Windowed filter: strip_height + 2*overlap rows
@@ -1001,14 +1080,16 @@ impl PipelineGraph {
             #[cfg(feature = "std")]
             NodeOp::IccTransform { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 est.streaming_bytes += strip_mem(upstream.width, upstream.format);
                 Ok(upstream)
             }
 
             NodeOp::RemoveAlpha { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let out_fmt = format::RGB8_SRGB;
                 // Short-circuit: no extra buffers needed when upstream
                 // already lacks alpha (matte compositing is skipped).
@@ -1029,7 +1110,8 @@ impl PipelineGraph {
 
             NodeOp::AddAlpha => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 let out_fmt = format::RGBA8_SRGB;
                 est.streaming_bytes += strip_mem(upstream.width, out_fmt);
                 Ok(SourceInfo {
@@ -1046,7 +1128,8 @@ impl PipelineGraph {
                 ..
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 // Overlay image is held in memory
                 let ov_mem = *ov_w as u64 * *ov_h as u64 * ov_fmt.bytes_per_pixel() as u64;
                 est.streaming_bytes += ov_mem;
@@ -1073,7 +1156,8 @@ impl PipelineGraph {
                 ..
             } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 // Use checked_add so an estimate that would wrap u32 is rejected
                 // before downstream limit checks see an undercount (audit H7).
                 let new_w = upstream
@@ -1105,7 +1189,8 @@ impl PipelineGraph {
 
             NodeOp::FillRect { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
@@ -1117,7 +1202,8 @@ impl PipelineGraph {
             // Worst case: dimensions unchanged, full materialization
             NodeOp::CropWhitespace { .. } | NodeOp::Analyze(_) => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
@@ -1128,7 +1214,8 @@ impl PipelineGraph {
 
             NodeOp::Materialize { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
-                let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
+                let upstream =
+                    self.estimate_node(input_id, source_info, planned, est, depth + 1)?;
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
@@ -1155,8 +1242,22 @@ impl PipelineGraph {
             .iter()
             .position(|n| matches!(&n.op, Some(NodeOp::Output)))
             .unwrap();
+        self.plan_compile(&sources)?;
 
         self.compile_node(output_id, &mut sources, 0)
+    }
+
+    fn plan_compile(
+        &mut self,
+        sources: &hashbrown::HashMap<NodeId, Box<dyn Source>>,
+    ) -> crate::PipeResult<()> {
+        let (planned, _) = self.plan_working_formats(
+            sources
+                .iter()
+                .map(|(&id, source)| (id, source.format(), source.width())),
+        )?;
+        self.working.planned = planned;
+        Ok(())
     }
 
     /// Compile with tracing enabled. Returns the pipeline source and collected trace.
@@ -1172,6 +1273,7 @@ impl PipelineGraph {
     ) -> TracedPipelineResult {
         let compile_start = std::time::Instant::now();
         self.validate()?;
+        self.plan_compile(&sources)?;
         let trace =
             alloc::sync::Arc::new(std::sync::Mutex::new(crate::trace::PipelineTrace::new()));
         if config.memory_timeline {
@@ -1520,10 +1622,12 @@ impl PipelineGraph {
 
                 // Cost-aware format selection: if upstream is already f32 linear
                 // (4 channels), use ResizeF32Source to avoid an unnecessary
-                // f32->u8->resize roundtrip. Otherwise convert to RGBA8_SRGB.
-                let use_f32 = upstream.format() == format::RGBAF32_LINEAR;
+                // f32->u8->resize roundtrip. The plan sends a source that eight bits
+                // can't hold there too. Otherwise convert to RGBA8_SRGB.
+                let use_f32 = upstream.format() == format::RGBAF32_LINEAR
+                    || self.working.planned.get(&node_id) == Some(&format::RGBAF32_LINEAR);
                 let upstream = if use_f32 {
-                    upstream
+                    ensure_fmt!(upstream, format::RGBAF32_LINEAR, "Resize")?
                 } else {
                     ensure_fmt!(upstream, format::RGBA8_SRGB, "Resize")?
                 };
