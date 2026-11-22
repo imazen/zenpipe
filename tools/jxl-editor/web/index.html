@@ -15,6 +15,7 @@
     <div class="document-name"><strong id="title">Untitled</strong><span id="dirty" hidden>Unsaved changes</span></div>
     <div class="file-actions">
       <button id="open" type="button">Open image</button>
+      <button id="add" type="button">Add layers</button>
       <button id="save" class="primary" type="button" disabled>Save project</button>
       <button id="export" type="button" disabled>Export JXL</button>
     </div>
@@ -40,7 +41,7 @@
         <div id="empty" class="empty">
           <div class="empty-mark" aria-hidden="true">◇</div>
           <h1>Open a photo</h1>
-          <p>Drop a photo, an SVG, or a JPEG XL project here.</p>
+          <p>Open a photo or project, or drop several images to start with layers.</p>
           <div class="empty-actions"><button id="empty-open" class="primary" type="button">Choose file</button><button id="sample" type="button">Try a sample</button></div>
           <p class="credit">Sample photo by NPS / David Restivo.</p>
         </div>
@@ -53,7 +54,7 @@
     </section>
     <aside class="inspector" aria-label="Layer inspector">
       <section class="layers">
-        <div class="section-heading"><h2>Layers</h2><button id="add" type="button" disabled>+ Add layer</button></div>
+        <div class="section-heading"><h2>Layers</h2><button id="add-panel" type="button" aria-label="Add layers from the Layers panel">+ Add</button></div>
         <ol id="layer-list" aria-label="Layers, top first"></ol>
         <div class="layer-actions">
           <button id="raise" type="button" title="Move layer up" disabled>Raise</button>

@@ -57,11 +57,15 @@ try {
   await page.goto(baseUrl);
   await page.getByText("Relaxed SIMD", { exact: true }).waitFor();
   const open = page.locator("#open-file");
-  const layer = page.locator("#layer-file");
   const status = page.locator("#status");
   async function waitStatus(value) {
     await status.filter({ hasText: value }).waitFor();
     await page.waitForFunction(() => !document.getElementById("save").disabled);
+  }
+  async function chooseLayers(button, file) {
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: button, exact: true }).click();
+    await (await chooser).setFiles(file);
   }
   async function capture(button, path) {
     const downloaded = page.waitForEvent("download");
@@ -71,15 +75,15 @@ try {
     return await readFile(path);
   }
 
-  await open.setInputFiles({ name: "gradient.jxl", mimeType: "image/jxl", buffer: source });
+  await chooseLayers("Add layers", { name: "gradient.jxl", mimeType: "image/jxl", buffer: source });
   await waitStatus("Image opened");
   const unedited = await capture("Save project", `${output}/unedited.project.jxl`);
   assert.deepEqual(jxlBoxes(unedited).find(box => box.type === "jxlc").data,
     jxlBoxes(source).find(box => box.type === "jxlc").data);
   assert.equal(opaqueBoxes(unedited).length, 1);
-  await layer.setInputFiles({ name: "overlay.jxl", mimeType: "image/jxl", buffer: Buffer.from(second) });
+  await chooseLayers("Add layers", { name: "overlay.jxl", mimeType: "image/jxl", buffer: Buffer.from(second) });
   await waitStatus("Layer added");
-  await layer.setInputFiles({ name: "vector.svg", mimeType: "image/svg+xml", buffer: Buffer.from(svg) });
+  await chooseLayers("Add layers from the Layers panel", { name: "vector.svg", mimeType: "image/svg+xml", buffer: Buffer.from(svg) });
   await waitStatus("Layer added");
   assert.equal(await page.locator(".layer").count(), 3);
   assert.equal(await page.evaluate(() => svgExecuted), false);

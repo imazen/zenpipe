@@ -154,3 +154,6 @@ textarea { resize: vertical; font: .88rem/1.5 ui-monospace, monospace; }
   .viewer-bar { flex-wrap: wrap; gap: 6px; padding-inline: 8px; }
   .viewer-bar button { padding-inline: 7px; }
 }
+@media (max-width: 430px) {
+  .file-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-basis: 100%; }
+}

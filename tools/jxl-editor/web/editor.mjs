@@ -390,8 +390,8 @@ function update() {
   $("empty").hidden = hasDoc;
   $("canvas-wrap").hidden = !hasDoc;
   $("dimensions").textContent = hasDoc ? `${current.manifest.width} × ${current.manifest.height} px` : "";
-  for (const id of ["save", "export", "add", "compare", "fit", "zoom-in", "zoom-out"]) $(id).disabled = !hasDoc || busy;
-  for (const id of ["open", "empty-open", "sample"]) $(id).disabled = busy;
+  for (const id of ["save", "export", "compare", "fit", "zoom-in", "zoom-out"]) $(id).disabled = !hasDoc || busy;
+  for (const id of ["open", "add", "add-panel", "empty-open", "sample"]) $(id).disabled = busy;
   $("undo").disabled = cursor < 1 || busy;
   $("redo").disabled = cursor >= history.length - 1 || busy;
   $("raise").disabled = !layer || index === layers.length - 1 || busy;
@@ -586,6 +586,7 @@ function bindFile(button, input, callback) {
 }
 bindFile("open", "open-file", files => open(files[0]));
 bindFile("add", "layer-file", addLayers);
+$("add-panel").onclick = () => $("layer-file").click();
 $("empty-open").onclick = () => $("open-file").click();
 $("sample").onclick = () => run("Opening sample…", async () => {
   const response = await fetch("./sample.jpg");
@@ -731,7 +732,10 @@ stage.addEventListener("drop", event => {
   event.preventDefault();
   stage.removeAttribute("data-drop");
   const files = [...event.dataTransfer.files];
-  if (files.length) run("Reading image…", () => files.length > 1 ? addLayers(files) : open(files[0]));
+  if (files.length) run("Reading image…", () => {
+    if (!current && files.length === 1) return open(files[0]);
+    return addLayers(files);
+  });
 });
 
 window.addEventListener("keydown", event => {
