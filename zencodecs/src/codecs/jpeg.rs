@@ -40,7 +40,11 @@ fn jpeg_info_to_image_info(info: &zenjpeg::decoder::JpegInfo) -> ImageInfo {
         ImageFormat::Jpeg,
     )
     .with_bit_depth(info.precision)
-    .with_channel_count(info.num_components);
+    .with_channel_count(info.num_components)
+    .with_progressive(matches!(
+        info.mode,
+        zenjpeg::decoder::JpegMode::Progressive | zenjpeg::decoder::JpegMode::ArithmeticProgressive
+    ));
     if let Some(ref icc) = info.icc_profile {
         ii = ii.with_icc_profile(icc.clone());
     }
@@ -406,6 +410,60 @@ pub(crate) fn encode_with_precomputed_gainmap(
     .map_err(|e| at!(CodecError::from_codec(ImageFormat::Jpeg, e)))?;
 
     Ok(EncodeOutput::new(out, ImageFormat::Jpeg))
+}
+
+#[cfg(test)]
+mod progressive_probe_tests {
+    use super::*;
+    use crate::EncodeRequest;
+    use crate::config::CodecConfig;
+    use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig};
+    use zenpixels::{PixelDescriptor, PixelSlice};
+
+    fn test_rgb8(w: u32, h: u32) -> alloc::vec::Vec<u8> {
+        let mut buf = alloc::vec::Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                buf.push(((x.wrapping_mul(17)) ^ (y.wrapping_mul(31))) as u8);
+                buf.push((x.wrapping_mul(7) + y.wrapping_mul(13)) as u8);
+                buf.push(((x ^ y).wrapping_mul(23)) as u8);
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn jpeg_probe_reports_baseline_vs_progressive() {
+        let (w, h) = (32u32, 32u32);
+        let raw = test_rgb8(w, h);
+        let px = PixelSlice::new(&raw, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+
+        let baseline_cfg = CodecConfig::default().with_jpeg_encoder(
+            EncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter).force_baseline(),
+        );
+        let baseline = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_codec_config(&baseline_cfg)
+            .encode(px.clone(), false)
+            .unwrap()
+            .into_vec();
+        assert!(baseline.windows(2).any(|m| m == [0xFF, 0xC0]));
+        assert!(!probe_with_limits(&baseline, None).unwrap().is_progressive);
+        assert!(!crate::from_bytes(&baseline).unwrap().is_progressive);
+
+        let progressive = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_quality(85.0)
+            .with_effort(1)
+            .encode(px, false)
+            .unwrap()
+            .into_vec();
+        assert!(progressive.windows(2).any(|m| m == [0xFF, 0xC2]));
+        assert!(
+            probe_with_limits(&progressive, None)
+                .unwrap()
+                .is_progressive
+        );
+        assert!(crate::from_bytes(&progressive).unwrap().is_progressive);
+    }
 }
 
 #[cfg(all(test, feature = "jpeg-ultrahdr"))]
