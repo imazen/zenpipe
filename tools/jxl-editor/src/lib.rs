@@ -128,7 +128,6 @@ pub fn encode_layers(
     let Ok(encoded) = LosslessConfig::new()
         .with_effort(3)
         .with_keep_invisible(true)
-        .with_auto_delta_frames(true)
         .encode_animation_with_limits(
             width,
             height,
@@ -149,16 +148,21 @@ pub fn encode_layers(
     )
 }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn decode_jxl(bytes: &[u8]) -> Result<Raster, String> {
-    limits()
-        .check_input_size(bytes.len() as u64)
-        .map_err(|e| e.to_string())?;
+fn decoder_limits() -> JxlDecoderLimits {
     let mut decode_limits = JxlDecoderLimits::restrictive()
         .with_max_pixels(MAX_PIXELS as usize)
         .with_max_reference_frames(4)
         .with_max_memory_bytes(MAX_CODEC_MEMORY);
     decode_limits.max_codestream_level = JxlCodestreamLevel::Level10;
+    decode_limits
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn decode_jxl(bytes: &[u8]) -> Result<Raster, String> {
+    limits()
+        .check_input_size(bytes.len() as u64)
+        .map_err(|e| e.to_string())?;
+    let decode_limits = decoder_limits();
     let header = zenjxl_decoder::read_header_with(bytes, decode_limits.clone())
         .map_err(|e| e.to_string())?;
     let (width, height) = header.info.size;

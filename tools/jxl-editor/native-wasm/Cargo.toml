@@ -1,0 +1,28 @@
+[package]
+name = "jxl-editor-native"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bytemuck = "1.25.2"
+serde_json = "1.0.154"
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "907b91b9015b739e8ce34c17a45538e5a3158ad6", default-features = false, features = ["wasm128", "cms", "jpeg"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"
+
+[profile.test]
+debug = 0
+incremental = false
