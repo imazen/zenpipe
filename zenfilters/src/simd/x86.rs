@@ -120,7 +120,7 @@ fn power_contrast_plane_simd(token: X64V3Token, plane: &mut [f32], exp: f32, sca
     for chunk in chunks {
         let v = f32x8::load_t(token, &*chunk);
         // pow_midp handles v=0 correctly (returns 0)
-        let powered = v.max(zero_v).pow_lowp_unchecked(exp);
+        let powered = v.max(zero_v).pow_lowp_unchecked_compat(exp);
         (powered * scale_v).store(chunk);
     }
     for v in tail {
@@ -162,7 +162,7 @@ fn sigmoid_tone_map_plane_simd(token: X64V3Token, plane: &mut [f32], contrast: f
         // Compute ratio = (1-x)/x, handling x near 0 by clamping
         let x_safe = x.max(f32x8::splat_t(token, 1e-7));
         let ratio = (one_v - x_safe) * x_safe.recip();
-        let powered = ratio.pow_lowp_unchecked(contrast);
+        let powered = ratio.pow_lowp_unchecked_compat(contrast);
         let result = (one_v + powered).recip();
 
         // Blend: use 0.0 where x <= 0, 1.0 where x >= 1
@@ -508,9 +508,9 @@ fn scatter_oklab_simd(
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
         // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
         let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
@@ -728,9 +728,9 @@ fn scatter_srgb_u8_to_oklab_rite(
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
         // Cube root (SIMD lowp — 1 Halley iteration, 1.8× faster than midp)
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         // M2: LMS^(1/3) → Oklab (FMA chains)
         let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
@@ -996,7 +996,7 @@ fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, p
         // normalized = min(chroma / MAX_CHROMA, 1.0)
         let normalized = (chroma * inv_max_chroma_v).min(one_v);
         // protection_factor = (1 - normalized)^protection
-        let pf = (one_v - normalized).pow_lowp_unchecked(protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(protection);
         // scale = 1 + amount * pf
         let scale = amount_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
@@ -1098,7 +1098,7 @@ fn fused_adjust_l_rite(
         // 2+3. White point * exposure (combined multiply)
         v *= wp_exp_v;
         // 4. Contrast: power curve v^exp * scale, pivot at middle grey
-        v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
+        v = v.max(zero_v).pow_lowp_unchecked_compat(contrast_exp) * cs_v;
         // 5. Shadows: mask = max(1 - v*2, 0), v += mask² * shadows*0.5
         let sm = (one_v - v * two_v).max(zero_v);
         v = (sm * sm).mul_add_compat(shadows_half, v);
@@ -1170,7 +1170,7 @@ fn fused_adjust_ab_rite(
         // Vibrance
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(vib_protection);
         let scale = vib_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
@@ -1589,9 +1589,9 @@ fn fused_interleaved_adjust_rite(
         let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         let mut ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
         let mut ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
@@ -1600,7 +1600,7 @@ fn fused_interleaved_adjust_rite(
         // ── L adjustments (all in-register) ──
         ok_l = ((ok_l - bp_v) * inv_range_v).max(zero_v);
         ok_l *= wp_exp_v;
-        ok_l = ok_l.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
+        ok_l = ok_l.max(zero_v).pow_lowp_unchecked_compat(contrast_exp) * cs_v;
         let sm = (one_v - ok_l * two_v).max(zero_v);
         ok_l = (sm * sm).mul_add_compat(shadows_half, ok_l);
         let hm = ((ok_l - half_v) * two_v).max(zero_v).min(one_v);
@@ -1618,7 +1618,7 @@ fn fused_interleaved_adjust_rite(
         ok_b *= sat_v;
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(vib_protection);
         let vib_scale = vib_v.mul_add_compat(pf, one_v);
         ok_a *= vib_scale;
         ok_b *= vib_scale;

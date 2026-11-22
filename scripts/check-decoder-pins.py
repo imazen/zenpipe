@@ -74,8 +74,8 @@ from pathlib import Path
 # in this repo names it: it is selected transitively by whichever zenavif rev is
 # pinned. It IS checked in lockfiles, which is where its rev becomes visible.
 EXPECTED = {
-    "https://github.com/imazen/zenavif": "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6",
-    "https://github.com/imazen/rav1d-safe": "b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+    "https://github.com/imazen/zenavif": "4221a7c03c99ad72b21057da6fbed643dff4956f",
+    "https://github.com/imazen/rav1d-safe": "1c1377c44136770483af55770088a68f54bc87cd",
 }
 
 # The parser, serializer and MP4 container are members of the selected AVIF source.

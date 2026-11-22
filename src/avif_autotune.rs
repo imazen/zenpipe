@@ -52,6 +52,7 @@
 //! intended forward backend for imageflow v3 but is not wired into it
 //! today, so this lands on the zenpipe side only.
 
+use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -136,7 +137,7 @@ pub struct AvifAutotune {
 
 enum Inner {
     Stub(StubTuner),
-    Model(AvifTuner),
+    Model(Box<AvifTuner>),
 }
 
 impl AvifAutotune {
@@ -167,7 +168,7 @@ impl AvifAutotune {
     pub fn from_bake(bytes: &[u8]) -> Result<Self, AvifAutotuneError> {
         AvifTuner::from_bytes(bytes)
             .map(|t| Self {
-                inner: Inner::Model(t),
+                inner: Inner::Model(Box::new(t)),
             })
             .map_err(|e| AvifAutotuneError::Bake(e.to_string()))
     }
@@ -224,7 +225,9 @@ impl AvifAutotune {
             )));
         }
         let px: Vec<rgb::Rgb<u8>> = rgb
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| rgb::Rgb::new(c[0], c[1], c[2]))
             .collect();
         let img = imgref::Img::new(px, width as usize, height as usize);

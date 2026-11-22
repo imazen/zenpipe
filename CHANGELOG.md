@@ -9,6 +9,7 @@ All notable changes to the zenpipe workspace are documented here, per crate.
 
 #### Fixes
 
+- chore(deps): upgrade `zenfilters` and all 6 workspace lockfiles (`zenpipe`, `fuzz`, `demo/crate`, `tools/metadata-services`, `zencodecs/fuzz`, `wasm-size-shim`) onto `archmage` / `archmage-macros` / `magetypes 0.9.33` (`magemath 0.1.1`), migrate `zenfilters` SIMD helpers (`MulAddCompat` -> `mul_add_relaxed` with bit-exact polynomial compatibility wrappers), and advance the pinned `zenavif` (`4221a7c0`, `rav1d-safe` `1c1377c4` with wasm32/aarch64 `incant` import fix) and sibling `0.9.33` codec revisions across all manifests.
 - ci: set `CARGO_NET_GIT_FETCH_WITH_CLI=true` in CI/Fuzz/WASM workflows and `[net] git-fetch-with-cli = true` in `.cargo/config.toml` so macOS runners fetch nested git submodules with system Git instead of Cargo's libgit2 (`SecureTransport`).
 - chore(deps): update lockfiles across all 6 workspaces (`almost-enough 0.4.5`, `enough 0.4.5`, `fast-ssim2 0.9.1`, `serde_json 1.0.154`, `thiserror 2.0.21`, `tokio 1.54.1`, `zenbench 0.1.11`, `zenutils-apidoc 0.1.1`, `zennode`, `imageflow`), and advance `zenextras` (`zentiff`, `zenpdf`, `zensvg`, `zenjp2`) to `dc37b3ec`.
 

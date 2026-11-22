@@ -420,9 +420,15 @@ fn warp_plane_v3(
                 zero: magetypes::simd::f32x8,
             ) -> magetypes::simd::f32x8 {
                 // Inner: ((a3*t + a2)*t)*t + a0
-                let inner = t.mul_add(a3, a2).mul_add(t, zero).mul_add(t, a0);
+                let inner = t
+                    .mul_add_relaxed(a3, a2)
+                    .mul_add_relaxed(t, zero)
+                    .mul_add_relaxed(t, a0);
                 // Outer: ((b3*t + b2)*t + b1)*t + b0
-                let outer = t.mul_add(b3, b2).mul_add(t, b1).mul_add(t, b0);
+                let outer = t
+                    .mul_add_relaxed(b3, b2)
+                    .mul_add_relaxed(t, b1)
+                    .mul_add_relaxed(t, b0);
                 let is_inner = t.simd_lt(one);
                 let is_valid = t.simd_lt(two);
                 magetypes::simd::f32x8::blend(
@@ -522,7 +528,10 @@ fn warp_plane_v3(
                 let s2 = magetypes::simd::f32x8::from_array_t(token, g2);
                 let s3 = magetypes::simd::f32x8::from_array_t(token, g3);
                 // Horizontal dot product: s0*wx0 + s1*wx1 + s2*wx2 + s3*wx3
-                s0.mul_add(wx0, s1.mul_add(wx1, s2.mul_add(wx2, s3 * wx3)))
+                s0.mul_add_relaxed(
+                    wx0,
+                    s1.mul_add_relaxed(wx1, s2.mul_add_relaxed(wx2, s3 * wx3)),
+                )
             }
 
             // Compute iy for each of the 4 rows
@@ -551,7 +560,10 @@ fn warp_plane_v3(
             );
 
             // Vertical accumulation
-            let mut result = row0.mul_add(wy0, row1.mul_add(wy1, row2.mul_add(wy2, row3 * wy3)));
+            let mut result = row0.mul_add_relaxed(
+                wy0,
+                row1.mul_add_relaxed(wy1, row2.mul_add_relaxed(wy2, row3 * wy3)),
+            );
 
             // Handle OOB pixels for color fill mode
             if is_color_bg {
@@ -829,8 +841,14 @@ fn warp_plane_rowgather_v3(
                 let tx = (offset_f - fx_v).abs();
                 let ty = (offset_f - fy_v).abs();
 
-                let inner_x = tx.mul_add(a3_v, a2_v).mul_add(tx, zero_v).mul_add(tx, a0_v);
-                let outer_x = tx.mul_add(b3_v, b2_v).mul_add(tx, b1_v).mul_add(tx, b0_v);
+                let inner_x = tx
+                    .mul_add_relaxed(a3_v, a2_v)
+                    .mul_add_relaxed(tx, zero_v)
+                    .mul_add_relaxed(tx, a0_v);
+                let outer_x = tx
+                    .mul_add_relaxed(b3_v, b2_v)
+                    .mul_add_relaxed(tx, b1_v)
+                    .mul_add_relaxed(tx, b0_v);
                 let is_inner_x = tx.simd_lt(one_v);
                 let is_valid_x = tx.simd_lt(two_v);
                 let kx = f32x8::blend(
@@ -839,8 +857,14 @@ fn warp_plane_rowgather_v3(
                     f32x8::blend(is_valid_x, outer_x, zero_v),
                 );
 
-                let inner_y = ty.mul_add(a3_v, a2_v).mul_add(ty, zero_v).mul_add(ty, a0_v);
-                let outer_y = ty.mul_add(b3_v, b2_v).mul_add(ty, b1_v).mul_add(ty, b0_v);
+                let inner_y = ty
+                    .mul_add_relaxed(a3_v, a2_v)
+                    .mul_add_relaxed(ty, zero_v)
+                    .mul_add_relaxed(ty, a0_v);
+                let outer_y = ty
+                    .mul_add_relaxed(b3_v, b2_v)
+                    .mul_add_relaxed(ty, b1_v)
+                    .mul_add_relaxed(ty, b0_v);
                 let is_inner_y = ty.simd_lt(one_v);
                 let is_valid_y = ty.simd_lt(two_v);
                 let ky = f32x8::blend(
@@ -914,10 +938,10 @@ fn warp_plane_rowgather_v3(
                     });
 
                     let src_v = f32x8::from_array_t(token, gathered);
-                    row_sum = src_v.mul_add(wx_i, row_sum);
+                    row_sum = src_v.mul_add_relaxed(wx_i, row_sum);
                 }
 
-                accum = row_sum.mul_add(wy_j, accum);
+                accum = row_sum.mul_add_relaxed(wy_j, accum);
             }
 
             // Handle OOB for color fill
@@ -1486,8 +1510,14 @@ fn warp_3plane_fused_inner(
     macro_rules! robidoux_v {
         ($t:expr) => {{
             let t = $t;
-            let inner = t.mul_add(a3_v, a2_v).mul_add(t, zero_v).mul_add(t, a0_v);
-            let outer = t.mul_add(b3_v, b2_v).mul_add(t, b1_v).mul_add(t, b0_v);
+            let inner = t
+                .mul_add_relaxed(a3_v, a2_v)
+                .mul_add_relaxed(t, zero_v)
+                .mul_add_relaxed(t, a0_v);
+            let outer = t
+                .mul_add_relaxed(b3_v, b2_v)
+                .mul_add_relaxed(t, b1_v)
+                .mul_add_relaxed(t, b0_v);
             let is_inner = t.simd_lt(one_v);
             let is_valid = t.simd_lt(two_v);
             f32x8::blend(is_inner, inner, f32x8::blend(is_valid, outer, zero_v))

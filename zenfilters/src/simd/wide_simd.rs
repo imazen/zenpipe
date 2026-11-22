@@ -158,7 +158,7 @@ pub(super) fn power_contrast_plane_simd(token: Token, plane: &mut [f32], exp: f3
     let (chunks, tail) = f32x8::partition_slice_mut_t(token, plane);
     for chunk in chunks {
         let v = f32x8::load_t(token, &*chunk);
-        let powered = v.max(zero_v).pow_lowp_unchecked(exp);
+        let powered = v.max(zero_v).pow_lowp_unchecked_compat(exp);
         (powered * scale_v).store(chunk);
     }
     for v in tail {
@@ -194,7 +194,7 @@ pub(super) fn sigmoid_tone_map_plane_simd(
 
         let x_safe = x.max(f32x8::splat_t(token, 1e-7));
         let ratio = (one_v - x_safe) / x_safe;
-        let powered = ratio.pow_lowp_unchecked(contrast);
+        let powered = ratio.pow_lowp_unchecked_compat(contrast);
         let result = one_v / (one_v + powered);
 
         let is_zero = x.simd_le(zero_v);
@@ -635,9 +635,9 @@ pub(super) fn scatter_oklab_simd(
         let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
         let ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
@@ -812,9 +812,9 @@ pub(super) fn scatter_srgb_u8_to_oklab_simd(
         let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         let ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
         let ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
@@ -1025,7 +1025,7 @@ pub(super) fn vibrance_simd(
         let bv = f32x8::load_t(token, &*bc);
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_max_chroma_v).min(one_v);
-        let pf = (one_v - normalized).pow_lowp_unchecked(protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(protection);
         let scale = amount_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
@@ -1240,7 +1240,7 @@ fn fused_adjust_l_generic<T: F32x8Backend + F32x8Convert + Copy>(
         let mut v = V::<T>::load_t(token, &*chunk);
         v = ((v - bp_v) * inv_range_v).max(zero_v);
         v *= wp_exp_v;
-        v = v.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
+        v = v.max(zero_v).pow_lowp_unchecked_compat(contrast_exp) * cs_v;
         let sm = (one_v - v * two_v).max(zero_v);
         v = (sm * sm).mul_add_compat(shadows_half, v);
         let hm = ((v - half_v) * two_v).max(zero_v).min(one_v);
@@ -1306,7 +1306,7 @@ fn fused_adjust_ab_generic<T: F32x8Backend + F32x8Convert + Copy>(
         bv *= sat_v;
         let chroma = (av * av + bv * bv).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(vib_protection);
         let scale = vib_v.mul_add_compat(pf, one_v);
         (av * scale).store(ac);
         (bv * scale).store(bc);
@@ -1497,9 +1497,9 @@ pub(super) fn fused_interleaved_adjust_simd(
         let lms_m = m1_10.mul_add_compat(r, m1_11.mul_add_compat(g, m1_12 * b));
         let lms_s = m1_20.mul_add_compat(r, m1_21.mul_add_compat(g, m1_22 * b));
 
-        let l_ = lms_l.cbrt_lowp();
-        let m_ = lms_m.cbrt_lowp();
-        let s_ = lms_s.cbrt_lowp();
+        let l_ = lms_l.cbrt_lowp_compat();
+        let m_ = lms_m.cbrt_lowp_compat();
+        let s_ = lms_s.cbrt_lowp_compat();
 
         let mut ok_l = m2_00.mul_add_compat(l_, m2_01.mul_add_compat(m_, m2_02 * s_));
         let mut ok_a = m2_10.mul_add_compat(l_, m2_11.mul_add_compat(m_, m2_12 * s_));
@@ -1507,7 +1507,7 @@ pub(super) fn fused_interleaved_adjust_simd(
 
         ok_l = ((ok_l - bp_v) * inv_range_v).max(zero_v);
         ok_l *= wp_exp_v;
-        ok_l = ok_l.max(zero_v).pow_lowp_unchecked(contrast_exp) * cs_v;
+        ok_l = ok_l.max(zero_v).pow_lowp_unchecked_compat(contrast_exp) * cs_v;
         let sm = (one_v - ok_l * two_v).max(zero_v);
         ok_l = (sm * sm).mul_add_compat(shadows_half, ok_l);
         let hm = ((ok_l - half_v) * two_v).max(zero_v).min(one_v);
@@ -1524,7 +1524,7 @@ pub(super) fn fused_interleaved_adjust_simd(
         ok_b *= sat_v;
         let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
         let normalized = (chroma * inv_mc).min(one_v);
-        let pf = (one_v - normalized).pow_lowp_unchecked(vib_protection);
+        let pf = (one_v - normalized).pow_lowp_unchecked_compat(vib_protection);
         let vib_scale = vib_v.mul_add_compat(pf, one_v);
         ok_a *= vib_scale;
         ok_b *= vib_scale;
