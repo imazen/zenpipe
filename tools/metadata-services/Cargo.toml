@@ -45,7 +45,7 @@ zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bd
 zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "3f4fd14feb9bdfed041e426aaa569b236a201158" }
 # Transitive source prerequisites: dependency patch tables do not propagate.
-zenflate = { git = "https://github.com/imazen/zenflate", rev = "7270e38faca9cdbae793938fa229d40ac4fe4c39" }
+zenflate = { git = "https://github.com/imazen/zenflate", rev = "f710674304d6f72318f0b1f64f460c022a8fa844" }
 tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5" }
 hayro-syntax = { git = "https://github.com/lilith/hayro", rev = "2ce50d0164878b8505e118f81dcb1d0367b26957" }
 # Optional borrowed Pulse JPEG source; consumer qualification remains unrun.
@@ -65,14 +65,14 @@ zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "1d14f0e092900aab84a4
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "c087fbd66d2db60de1c39bb401444f41b7435a54" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "e1c366b089b29511ef66f1b5af5d9e208dbff5d1" }
 # Optional borrowed Pulse WebP source; consumer qualification remains unrun.
-zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "eb96de80bc72eee823241970e03a25f6af50e61a" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "9ee8650770d617410236edba89483875fa63f4cf" }
 # Optional borrowed Pulse PNG source with its required zenflate source patch.
 # Consumer lock resolution and native qualification remain pending.
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "8605d8c4443e3bff6273cde438d3adfa0cbdb2b8" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
-zensim = { git = "https://github.com/imazen/zensimx", rev = "abec986d1000472c62334272aee165438e693028" }
-zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "abec986d1000472c62334272aee165438e693028" }
+zensim = { git = "https://github.com/imazen/zensimx", rev = "878f57688257349c90d08a015fe6444d0d6792bf" }
+zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "878f57688257349c90d08a015fe6444d0d6792bf" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
 imageflow_types = { git = "https://github.com/imazen/imageflow" }
@@ -85,12 +85,12 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "9db7cd7aad4ac4aa12d6
 # AVIF/parse/MP4 optional-control source, matching the direct parser edge.
 # Its rav1d-safe source stays b19aec65; orientation expectations are unchanged.
 # This consumer graph is unbuilt.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "4221a7c03c99ad72b21057da6fbed643dff4956f" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "706b90aad8507dbabfe00cd19f2817f688788a81" }
 # Application-root selection for zenravif's unpublished registry serializer.
-zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "4221a7c03c99ad72b21057da6fbed643dff4956f" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "706b90aad8507dbabfe00cd19f2817f688788a81" }
 # Retained RAW source still needs its owned-Pulse adapter migration.
 # Keep its full-profile/API feature and existing assertions enabled.
-zenraw = { git = "https://github.com/imazen/zenraw", rev = "dc501952c085c2996ac6361849a56efe06617273" }
+zenraw = { git = "https://github.com/imazen/zenraw", rev = "d1abe340364a5707301ec07844f04c4437477ac1" }
 # Optional-control PDF source with its matching hayro-syntax resource-limit fork.
 # Full consumer qualification remains pending.
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "dc37b3ecf6d174048978125b47eac4651fe135bc" }

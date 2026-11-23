@@ -818,7 +818,7 @@ checksum = "9f1218dedd5348c1b166ec3b8b3cbca49d2f527bd43b3fa072ea5123c523ed3f"
 dependencies = [
  "bytemuck",
  "foldhash",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "log",
  "peniko",
  "png",
@@ -878,9 +878,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+checksum = "735eaa21a6a5ffb2e84362faaeb90c05ba8e19797ca30428478cb6ea3a4921bc"
 dependencies = [
  "foldhash",
 ]
@@ -1112,7 +1112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
 ]
 
 [[package]]
@@ -2956,7 +2956,7 @@ checksum = "ed1fec424fbba6acf6cbc78bb526447eb77590d95f40419d598870fe37535212"
 dependencies = [
  "bytemuck",
  "glifo",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "png",
  "vello_common",
 ]
@@ -3248,7 +3248,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=4221a7c03c99ad72b21057da6fbed643dff4956f#4221a7c03c99ad72b21057da6fbed643dff4956f"
+source = "git+https://github.com/imazen/zenavif?rev=706b90aad8507dbabfe00cd19f2817f688788a81#706b90aad8507dbabfe00cd19f2817f688788a81"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -3274,7 +3274,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=4221a7c03c99ad72b21057da6fbed643dff4956f#4221a7c03c99ad72b21057da6fbed643dff4956f"
+source = "git+https://github.com/imazen/zenavif?rev=706b90aad8507dbabfe00cd19f2817f688788a81#706b90aad8507dbabfe00cd19f2817f688788a81"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -3290,7 +3290,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=4221a7c03c99ad72b21057da6fbed643dff4956f#4221a7c03c99ad72b21057da6fbed643dff4956f"
+source = "git+https://github.com/imazen/zenavif?rev=706b90aad8507dbabfe00cd19f2817f688788a81#706b90aad8507dbabfe00cd19f2817f688788a81"
 dependencies = [
  "arrayvec",
  "whereat",
@@ -3374,7 +3374,7 @@ dependencies = [
 [[package]]
 name = "zenflate"
 version = "0.4.1"
-source = "git+https://github.com/imazen/zenflate?rev=7270e38faca9cdbae793938fa229d40ac4fe4c39#7270e38faca9cdbae793938fa229d40ac4fe4c39"
+source = "git+https://github.com/imazen/zenflate?rev=f710674304d6f72318f0b1f64f460c022a8fa844#f710674304d6f72318f0b1f64f460c022a8fa844"
 dependencies = [
  "archmage",
  "enough",
@@ -3666,7 +3666,7 @@ dependencies = [
 [[package]]
 name = "zenraw"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenraw?rev=dc501952c085c2996ac6361849a56efe06617273#dc501952c085c2996ac6361849a56efe06617273"
+source = "git+https://github.com/imazen/zenraw?rev=d1abe340364a5707301ec07844f04c4437477ac1#d1abe340364a5707301ec07844f04c4437477ac1"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -3735,14 +3735,14 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenwebp?rev=eb96de80bc72eee823241970e03a25f6af50e61a#eb96de80bc72eee823241970e03a25f6af50e61a"
+source = "git+https://github.com/imazen/zenwebp?rev=9ee8650770d617410236edba89483875fa63f4cf#9ee8650770d617410236edba89483875fa63f4cf"
 dependencies = [
  "archmage",
  "bytemuck",
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "how-far",
  "libm",
  "linear-srgb",
@@ -3924,9 +3924,9 @@ source = "git+https://github.com/imazen/zensally#a8888d08c6d4bd1fe0969cdce40da6c
 [[patch.unused]]
 name = "zensim"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zensimx?rev=abec986d1000472c62334272aee165438e693028#abec986d1000472c62334272aee165438e693028"
+source = "git+https://github.com/imazen/zensimx?rev=878f57688257349c90d08a015fe6444d0d6792bf#878f57688257349c90d08a015fe6444d0d6792bf"
 
 [[patch.unused]]
 name = "zensim-regress"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zensimx?rev=abec986d1000472c62334272aee165438e693028#abec986d1000472c62334272aee165438e693028"
+source = "git+https://github.com/imazen/zensimx?rev=878f57688257349c90d08a015fe6444d0d6792bf#878f57688257349c90d08a015fe6444d0d6792bf"
