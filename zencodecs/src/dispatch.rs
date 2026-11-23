@@ -173,6 +173,141 @@ pub(crate) struct BuiltEncoder<'a> {
     feature = "bitmaps-hdr",
     feature = "tiff"
 ))]
+type OneShotEncodeTail<'a, 'b> =
+    dyn FnMut(EncodeParams<'a>, PixelSlice<'_>, Option<Metadata>) -> Result<EncodeOutput> + 'b;
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn run_one_shot_pipeline<'a>(
+    pixels: PixelSlice<'_>,
+    params: EncodeParams<'a>,
+    format: ImageFormat,
+    capabilities: &'static zencodec::encode::EncodeCapabilities,
+    supported: &'static [PixelDescriptor],
+    encode_tail: &mut OneShotEncodeTail<'a, '_>,
+) -> Result<EncodeOutput> {
+    // Re-encodes write upright pixels and orientation 1.
+    let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+    let strict = params
+        .encode_policy
+        .is_some_and(|p| p.resolve_strict(false));
+    // Check the original colour description before pixel negotiation
+    // can replace it with the converted samples' sRGB description.
+    if strict {
+        crate::color_fit::plan(upright.as_ref(), capabilities)
+            .check_strict(true)
+            .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
+    }
+    let oriented = crate::orient_fit::orient(&pixels, orientation);
+    let pixels = match &oriented {
+        Some(b) => b.as_slice(),
+        None => pixels,
+    };
+    crate::row_contract::check_dimensions(format, pixels.width(), pixels.rows())
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+    // HDR pixels into a target that carries neither HDR nor CICP are
+    // tone-mapped to sRGB first (see `crate::tonemap`); the fitting
+    // below then sees sRGB pixels.
+    #[cfg(feature = "tonemap")]
+    let toned = crate::tonemap::one_shot(
+        &pixels,
+        upright.as_ref(),
+        capabilities,
+        params.tone_map_policy,
+        strict,
+    )
+    .map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "tone mapping HDR for {format:?}: {e}"
+        )))
+    })?;
+    #[cfg(feature = "tonemap")]
+    let (pixels, upright) = match &toned {
+        Some((b, m)) => (b.as_slice(), m.clone()),
+        None => (pixels, upright),
+    };
+    // A pixel-format change that changes the colour space converts
+    // from the described colour and re-describes the result.
+    let fitted =
+        crate::color_fit::fit_to_supported(&pixels, upright.as_ref(), supported).map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "converting to a pixel format {format:?} accepts: {e}"
+            )))
+        })?;
+    let (pixels, upright) = match &fitted {
+        Some((b, m)) => (b.as_slice(), Some(m.clone())),
+        None => (pixels, upright),
+    };
+    // Fit the colour description to what this format carries,
+    // converting the pixels when it can't carry theirs.
+    let fit = crate::color_fit::plan(upright.as_ref(), capabilities)
+        .check_strict(strict)
+        .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
+    let (metadata, converted) = match fit {
+        crate::color_fit::ColorFit::Keep => (upright.clone(), None),
+        crate::color_fit::ColorFit::Metadata(m) | crate::color_fit::ColorFit::Dropped(m) => {
+            (Some(m), None)
+        }
+        crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
+            let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "converting to sRGB for {format:?}, which cannot carry the source colour: {e}"
+                )))
+            })?;
+            (Some(metadata), Some(buf))
+        }
+    };
+    let pixels = match &converted {
+        Some(b) => b.as_slice(),
+        None => pixels,
+    };
+    // Negotiate the cheapest pixel format the encoder accepts;
+    // zero-copy when it already accepts these pixels.
+    let bytes = pixels.contiguous_bytes();
+    let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        &bytes,
+        pixels.descriptor(),
+        pixels.width(),
+        pixels.rows(),
+        pixels.descriptor().aligned_stride(pixels.width()),
+        supported,
+    )
+    .map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "pixel format negotiation: {e}"
+        )))
+    })?;
+    encode_tail(params, adapted.as_slice(), metadata)
+}
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
 pub(crate) fn build_from_config<'a, C, F>(
     build_config: F,
     params: EncodeParams<'a>,
@@ -184,146 +319,59 @@ where
 {
     BuiltEncoder {
         encoder: Box::new(move |pixels| {
-            use zencodec::encode::{EncodeJob as _, Encoder as _};
-            let format = C::format();
-            // Re-encodes write upright pixels and orientation 1.
-            let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
-            let strict = params
-                .encode_policy
-                .is_some_and(|p| p.resolve_strict(false));
-            // Check the original colour description before pixel negotiation
-            // can replace it with the converted samples' sRGB description.
-            if strict {
-                crate::color_fit::plan(
-                    upright.as_ref(),
-                    <C as zencodec::encode::EncoderConfig>::capabilities(),
-                )
-                .check_strict(true)
-                .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
-            }
-            let oriented = crate::orient_fit::orient(&pixels, orientation);
-            let pixels = match &oriented {
-                Some(b) => b.as_slice(),
-                None => pixels,
-            };
-            crate::row_contract::check_dimensions(format, pixels.width(), pixels.rows())
-                .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-            // HDR pixels into a target that carries neither HDR nor CICP are
-            // tone-mapped to sRGB first (see `crate::tonemap`); the fitting
-            // below then sees sRGB pixels.
-            #[cfg(feature = "tonemap")]
-            let toned = crate::tonemap::one_shot(
-                &pixels,
-                upright.as_ref(),
+            let mut build_config = Some(build_config);
+            run_one_shot_pipeline(
+                pixels,
+                params,
+                C::format(),
                 <C as zencodec::encode::EncoderConfig>::capabilities(),
-                params.tone_map_policy,
-                strict,
-            )
-            .map_err(|e| {
-                at!(CodecError::InvalidInput(alloc::format!(
-                    "tone mapping HDR for {format:?}: {e}"
-                )))
-            })?;
-            #[cfg(feature = "tonemap")]
-            let (pixels, upright) = match &toned {
-                Some((b, m)) => (b.as_slice(), m.clone()),
-                None => (pixels, upright),
-            };
-            // A pixel-format change that changes the colour space converts
-            // from the described colour and re-describes the result.
-            let fitted = crate::color_fit::fit_to_supported(
-                &pixels,
-                upright.as_ref(),
                 C::supported_descriptors(),
-            )
-            .map_err(|e| {
-                at!(CodecError::InvalidInput(alloc::format!(
-                    "converting to a pixel format {format:?} accepts: {e}"
-                )))
-            })?;
-            let (pixels, upright) = match &fitted {
-                Some((b, m)) => (b.as_slice(), Some(m.clone())),
-                None => (pixels, upright),
-            };
-            // Fit the colour description to what this format carries,
-            // converting the pixels when it can't carry theirs.
-            let fit = crate::color_fit::plan(
-                upright.as_ref(),
-                <C as zencodec::encode::EncoderConfig>::capabilities(),
-            )
-            .check_strict(strict)
-            .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
-            let (metadata, converted) = match fit {
-                crate::color_fit::ColorFit::Keep => (upright.clone(), None),
-                crate::color_fit::ColorFit::Metadata(m)
-                | crate::color_fit::ColorFit::Dropped(m) => (Some(m), None),
-                crate::color_fit::ColorFit::ConvertToSrgb { from, metadata } => {
-                    let buf = crate::color_fit::convert_to_srgb(&pixels, &from).map_err(|e| {
-                        at!(CodecError::InvalidInput(alloc::format!(
-                            "converting to sRGB for {format:?}, which cannot carry the source colour: {e}"
+                &mut |params, pixels, metadata| {
+                    use zencodec::encode::{EncodeJob as _, Encoder as _};
+                    let format = C::format();
+                    let builder = build_config.take().ok_or_else(|| {
+                        at!(CodecError::InvalidInput(alloc::string::String::from(
+                            "encoder invoked more than once"
                         )))
                     })?;
-                    (Some(metadata), Some(buf))
-                }
-            };
-            let pixels = match &converted {
-                Some(b) => b.as_slice(),
-                None => pixels,
-            };
-            // Negotiate the cheapest pixel format the encoder accepts;
-            // zero-copy when it already accepts these pixels.
-            let bytes = pixels.contiguous_bytes();
-            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-                &bytes,
-                pixels.descriptor(),
-                pixels.width(),
-                pixels.rows(),
-                pixels.descriptor().aligned_stride(pixels.width()),
-                C::supported_descriptors(),
+                    let mut config = builder(&params);
+                    if params.prefer_streaming
+                        && !params
+                            .codec_config
+                            .is_some_and(|c| c.has_encode_override(format))
+                    {
+                        config = config.with_prefer_streaming(true);
+                    }
+                    let mut job = config.job();
+                    job = job.with_pulse(params.pulse);
+                    if let Some(lim) = params.limits {
+                        job = job.with_limits(crate::limits::to_resource_limits(lim));
+                    }
+                    if let Some(meta) = metadata {
+                        job = job.with_metadata_policy(
+                            crate::color_fit::exif_color_space(meta),
+                            params.metadata_policy,
+                        );
+                    }
+                    if let Some(mode) = params.orientation_mode {
+                        job.try_set_orientation_mode(mode)
+                            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+                    }
+                    if let Some(mut ep) = params.encode_policy {
+                        // Color-fit strictness was enforced above, before conversion.
+                        // Do not ask a carrier-free codec to re-admit that discharged
+                        // pipeline requirement. All native emission requirements remain.
+                        ep.strict = None;
+                        job.try_set_policy(ep)
+                            .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+                    }
+                    let enc = job
+                        .encoder()
+                        .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+                    enc.encode(pixels)
+                        .map_err(|e| at!(CodecError::from_codec(format, e)))
+                },
             )
-            .map_err(|e| {
-                at!(CodecError::InvalidInput(alloc::format!(
-                    "pixel format negotiation: {e}"
-                )))
-            })?;
-            let pixels = adapted.as_slice();
-            let mut config = build_config(&params);
-            if params.prefer_streaming
-                && !params
-                    .codec_config
-                    .is_some_and(|c| c.has_encode_override(C::format()))
-            {
-                config = config.with_prefer_streaming(true);
-            }
-            let mut job = config.job();
-            job = job.with_pulse(params.pulse);
-            if let Some(lim) = params.limits {
-                job = job.with_limits(crate::limits::to_resource_limits(lim));
-            }
-            if let Some(meta) = metadata {
-                job = job.with_metadata_policy(
-                    crate::color_fit::exif_color_space(meta),
-                    params.metadata_policy,
-                );
-            }
-            let format = C::format();
-            if let Some(mode) = params.orientation_mode {
-                job.try_set_orientation_mode(mode)
-                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
-            }
-            if let Some(mut ep) = params.encode_policy {
-                // Color-fit strictness was enforced above, before conversion.
-                // Do not ask a carrier-free codec to re-admit that discharged
-                // pipeline requirement. All native emission requirements remain.
-                ep.strict = None;
-                job.try_set_policy(ep)
-                    .map_err(|e| at!(CodecError::from_codec(format, e)))?;
-            }
-            let enc = job
-                .encoder()
-                .map_err(|e| at!(CodecError::from_codec(format, e)))?;
-            enc.encode(pixels)
-                .map_err(|e| at!(CodecError::from_codec(format, e)))
         }),
         supported: C::supported_descriptors(),
     }
@@ -525,29 +573,34 @@ pub struct StreamingEncoder {
     feature = "bitmaps-hdr",
     feature = "tiff"
 ))]
-pub(crate) fn build_streaming_from_config<C, F>(
-    build_config: F,
-    params: EncodeParams<'_>,
-) -> Result<StreamingEncoder>
-where
-    C: zencodec::encode::EncoderConfig + 'static,
-    F: FnOnce(&EncodeParams<'_>) -> C,
-    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
-{
-    use zencodec::encode::EncodeJob as _;
-    let mut config = build_config(&params);
-    if params.prefer_streaming
-        && !params
-            .codec_config
-            .is_some_and(|c| c.has_encode_override(C::format()))
-    {
-        config = config.with_prefer_streaming(true);
-    }
-    let mut job = config.job();
-    job = job.with_pulse(params.pulse);
-    if let Some(lim) = params.limits {
-        job = job.with_limits(crate::limits::to_resource_limits(lim));
-    }
+struct StreamingPlan {
+    orientation: zencodec::Orientation,
+    metadata: Option<Metadata>,
+    convert_from: Option<crate::color_fit::Source>,
+    #[cfg(feature = "tonemap")]
+    tone_map: Option<crate::tonemap::ToneMapPlan>,
+}
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+#[inline(never)]
+fn plan_streaming_encode(
+    params: &EncodeParams<'_>,
+    format: ImageFormat,
+    capabilities: &'static zencodec::encode::EncodeCapabilities,
+) -> Result<StreamingPlan> {
     // Re-encodes write upright pixels and orientation 1; rows are collected
     // and oriented at `finish` when a rotation or flip is needed.
     let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
@@ -555,14 +608,9 @@ where
         .encode_policy
         .is_some_and(|p| p.resolve_strict(false));
     if strict {
-        crate::color_fit::plan(upright.as_ref(), C::capabilities())
+        crate::color_fit::plan(upright.as_ref(), capabilities)
             .check_strict(true)
-            .map_err(|detail| {
-                at!(CodecError::UnsupportedOperation {
-                    format: C::format(),
-                    detail
-                })
-            })?;
+            .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
     }
     // HDR strips into a target that carries neither HDR nor CICP are
     // tone-mapped to sRGB (see `crate::tonemap`). A strip can't be measured
@@ -570,7 +618,7 @@ where
     #[cfg(feature = "tonemap")]
     let tone_map = crate::tonemap::plan(
         upright.as_ref(),
-        <C as zencodec::encode::EncoderConfig>::capabilities(),
+        capabilities,
         params.tone_map_policy,
         strict,
     );
@@ -581,17 +629,9 @@ where
     };
     // Fit the colour description to what this format carries; the pixels
     // are converted strip by strip when it can't carry theirs.
-    let fit = crate::color_fit::plan(
-        upright.as_ref(),
-        <C as zencodec::encode::EncoderConfig>::capabilities(),
-    )
-    .check_strict(strict)
-    .map_err(|detail| {
-        at!(CodecError::UnsupportedOperation {
-            format: C::format(),
-            detail
-        })
-    })?;
+    let fit = crate::color_fit::plan(upright.as_ref(), capabilities)
+        .check_strict(strict)
+        .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
     let (metadata, convert_from) = match fit {
         crate::color_fit::ColorFit::Keep => (upright.clone(), None),
         crate::color_fit::ColorFit::Metadata(m) | crate::color_fit::ColorFit::Dropped(m) => {
@@ -601,13 +641,136 @@ where
             (Some(metadata), Some(from))
         }
     };
-    if let Some(meta) = metadata {
+    Ok(StreamingPlan {
+        orientation,
+        metadata,
+        convert_from,
+        #[cfg(feature = "tonemap")]
+        tone_map,
+    })
+}
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+#[inline(never)]
+fn finish_streaming_encoder(
+    encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
+    format: ImageFormat,
+    capabilities: &'static zencodec::encode::EncodeCapabilities,
+    codec_supported: &'static [PixelDescriptor],
+    plan: StreamingPlan,
+    limits: Option<Limits>,
+) -> StreamingEncoder {
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match plan.convert_from {
+        Some(from) => Box::new(ColorConvertingEncoder {
+            inner: encoder,
+            from,
+        }),
+        None => encoder,
+    };
+    // A codec without row-level encode still streams its input: rows are
+    // collected and its one-shot encode runs at `finish`, so a streaming
+    // transcode gives the same bytes as the one-shot one.
+    // An orientation to apply needs the whole image, so it buffers too.
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
+        if plan.orientation != zencodec::Orientation::Identity {
+            Box::new(
+                BufferedRowEncoder::new(encoder, limits.unwrap_or_default())
+                    .with_orientation(plan.orientation),
+            )
+        } else if capabilities.push_rows() {
+            encoder
+        } else {
+            Box::new(BufferedRowEncoder::new(encoder, limits.unwrap_or_default()))
+        };
+    #[cfg(feature = "tonemap")]
+    let supported = if plan.tone_map.is_some() {
+        crate::tonemap::STREAMING_INPUTS
+    } else {
+        codec_supported
+    };
+    #[cfg(not(feature = "tonemap"))]
+    let supported = codec_supported;
+    #[cfg(feature = "tonemap")]
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match plan.tone_map {
+        Some(tone_plan) => Box::new(ToneMappingEncoder {
+            inner: encoder,
+            plan: tone_plan,
+            supported: codec_supported,
+        }),
+        None => encoder,
+    };
+    let encoder = Box::new(crate::row_contract::RowEncoder::new(
+        encoder,
+        format,
+        limits.unwrap_or_else(Limits::none),
+        plan.orientation,
+    ));
+    StreamingEncoder {
+        encoder,
+        supported,
+        format,
+    }
+}
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+pub(crate) fn build_streaming_from_config<C, F>(
+    build_config: F,
+    params: EncodeParams<'_>,
+) -> Result<StreamingEncoder>
+where
+    C: zencodec::encode::EncoderConfig + 'static,
+    F: FnOnce(&EncodeParams<'_>) -> C,
+    <C::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + Send,
+{
+    use zencodec::encode::EncodeJob as _;
+    let format = C::format();
+    let capabilities = <C as zencodec::encode::EncoderConfig>::capabilities();
+    let mut plan = plan_streaming_encode(&params, format, capabilities)?;
+    let mut config = build_config(&params);
+    if params.prefer_streaming
+        && !params
+            .codec_config
+            .is_some_and(|c| c.has_encode_override(format))
+    {
+        config = config.with_prefer_streaming(true);
+    }
+    let mut job = config.job();
+    job = job.with_pulse(params.pulse);
+    if let Some(lim) = params.limits {
+        job = job.with_limits(crate::limits::to_resource_limits(lim));
+    }
+    if let Some(meta) = plan.metadata.take() {
         job = job.with_metadata_policy(
             crate::color_fit::exif_color_space(meta),
             params.metadata_policy,
         );
     }
-    let format = C::format();
     if let Some(mode) = params.orientation_mode {
         job.try_set_orientation_mode(mode)
             .map_err(|e| at!(CodecError::from_codec(format, e)))?;
@@ -623,59 +786,14 @@ where
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
-    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match convert_from {
-        Some(from) => Box::new(ColorConvertingEncoder {
-            inner: encoder,
-            from,
-        }),
-        None => encoder,
-    };
-    // A codec without row-level encode still streams its input: rows are
-    // collected and its one-shot encode runs at `finish`, so a streaming
-    // transcode gives the same bytes as the one-shot one.
-    // An orientation to apply needs the whole image, so it buffers too.
-    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
-        if orientation != zencodec::Orientation::Identity {
-            Box::new(
-                BufferedRowEncoder::new(encoder, params.limits.copied().unwrap_or_default())
-                    .with_orientation(orientation),
-            )
-        } else if <C as zencodec::encode::EncoderConfig>::capabilities().push_rows() {
-            encoder
-        } else {
-            Box::new(BufferedRowEncoder::new(
-                encoder,
-                params.limits.copied().unwrap_or_default(),
-            ))
-        };
-    #[cfg(feature = "tonemap")]
-    let supported = if tone_map.is_some() {
-        crate::tonemap::STREAMING_INPUTS
-    } else {
-        C::supported_descriptors()
-    };
-    #[cfg(not(feature = "tonemap"))]
-    let supported = C::supported_descriptors();
-    #[cfg(feature = "tonemap")]
-    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match tone_map {
-        Some(plan) => Box::new(ToneMappingEncoder {
-            inner: encoder,
-            plan,
-            supported: C::supported_descriptors(),
-        }),
-        None => encoder,
-    };
-    let encoder = Box::new(crate::row_contract::RowEncoder::new(
+    Ok(finish_streaming_encoder(
         encoder,
         format,
-        params.limits.copied().unwrap_or_else(Limits::none),
-        orientation,
-    ));
-    Ok(StreamingEncoder {
-        encoder,
-        supported,
-        format,
-    })
+        capabilities,
+        C::supported_descriptors(),
+        plan,
+        params.limits.copied(),
+    ))
 }
 
 /// A configured encoder job, before any encoder exists.

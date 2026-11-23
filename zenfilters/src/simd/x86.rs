@@ -892,6 +892,66 @@ fn black_point_plane_rite(token: X64V3Token, plane: &mut [f32], bp: f32, inv_ran
     }
 }
 
+#[cold]
+#[inline(never)]
+fn hue_rotate_tail_scalar(a_tail: &mut [f32], b_tail: &mut [f32], cos_r: f32, sin_r: f32) {
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let a_orig = *a_val;
+        let b_orig = *b_val;
+        *a_val = a_orig * cos_r - b_orig * sin_r;
+        *b_val = a_orig * sin_r + b_orig * cos_r;
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn vibrance_tail_scalar(a_tail: &mut [f32], b_tail: &mut [f32], amount: f32, protection: f32) {
+    const MAX_CHROMA: f32 = 0.4;
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let av = *a_val;
+        let bv = *b_val;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(protection);
+        let scale = 1.0 + amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}
+
+#[cold]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn fused_adjust_ab_tail_scalar(
+    a_tail: &mut [f32],
+    b_tail: &mut [f32],
+    dehaze_chroma: f32,
+    exposure_chroma: f32,
+    temp_offset: f32,
+    tint_offset: f32,
+    sat: f32,
+    vib_amount: f32,
+    vib_protection: f32,
+) {
+    const MAX_CHROMA: f32 = 0.4;
+    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
+        let mut av = *a_val * exposure_chroma;
+        let mut bv = *b_val * exposure_chroma;
+        av *= dehaze_chroma;
+        bv *= dehaze_chroma;
+        bv += temp_offset;
+        av += tint_offset;
+        av *= sat;
+        bv *= sat;
+        let chroma = (av * av + bv * bv).sqrt();
+        let normalized = (chroma / MAX_CHROMA).min(1.0);
+        let pf = (1.0 - normalized).powf(vib_protection);
+        let scale = 1.0 + vib_amount * pf;
+        *a_val = av * scale;
+        *b_val = bv * scale;
+    }
+}
+
 #[arcane]
 pub(super) fn hue_rotate_impl_v3(
     token: X64V3Token,
@@ -919,11 +979,8 @@ fn hue_rotate_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], cos_r: f32, 
         cos_v.mul_add_compat(av, neg_sin_v * bv).store(ac);
         sin_v.mul_add_compat(av, cos_v * bv).store(bc);
     }
-    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
-        let a_orig = *a_val;
-        let b_orig = *b_val;
-        *a_val = a_orig * cos_r - b_orig * sin_r;
-        *b_val = a_orig * sin_r + b_orig * cos_r;
+    if !a_tail.is_empty() && !b_tail.is_empty() {
+        hue_rotate_tail_scalar(a_tail, b_tail, cos_r, sin_r);
     }
 }
 
@@ -1002,15 +1059,8 @@ fn vibrance_rite(token: X64V3Token, a: &mut [f32], b: &mut [f32], amount: f32, p
         (av * scale).store(ac);
         (bv * scale).store(bc);
     }
-    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
-        let av = *a_val;
-        let bv = *b_val;
-        let chroma = (av * av + bv * bv).sqrt();
-        let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = (1.0 - normalized).powf(protection);
-        let scale = 1.0 + amount * pf;
-        *a_val = av * scale;
-        *b_val = bv * scale;
+    if !a_tail.is_empty() && !b_tail.is_empty() {
+        vibrance_tail_scalar(a_tail, b_tail, amount, protection);
     }
 }
 
@@ -1175,21 +1225,18 @@ fn fused_adjust_ab_rite(
         (av * scale).store(ac);
         (bv * scale).store(bc);
     }
-    for (a_val, b_val) in a_tail.iter_mut().zip(b_tail.iter_mut()) {
-        let mut av = *a_val * exposure_chroma;
-        let mut bv = *b_val * exposure_chroma;
-        av *= dehaze_chroma;
-        bv *= dehaze_chroma;
-        bv += temp_offset;
-        av += tint_offset;
-        av *= sat;
-        bv *= sat;
-        let chroma = (av * av + bv * bv).sqrt();
-        let normalized = (chroma / MAX_CHROMA).min(1.0);
-        let pf = (1.0 - normalized).powf(vib_protection);
-        let scale = 1.0 + vib_amount * pf;
-        *a_val = av * scale;
-        *b_val = bv * scale;
+    if !a_tail.is_empty() && !b_tail.is_empty() {
+        fused_adjust_ab_tail_scalar(
+            a_tail,
+            b_tail,
+            dehaze_chroma,
+            exposure_chroma,
+            temp_offset,
+            tint_offset,
+            sat,
+            vib_amount,
+            vib_protection,
+        );
     }
 }
 
