@@ -224,3 +224,32 @@ if (directory / "cmyk-lossless.jxl").exists():
             if not (white_k > 0.95 and black_k < 0.05):
                 raise ValueError(f"{name} jxl-rs lossy Black channel unexpected: white_k={white_k}, black_k={black_k}")
             print(f"{name} djxl+jxl-rs verified lossy CMYK ICC ({len(expected_icc)} B) + Black K channel (white={white_k:.3f}, black={black_k:.3f})")
+
+# 5. Phase 2 artifacts: ZenFilters+SVG+zenresize, Masks (with znmk), ZenSR (dejpeg_rt24g)
+extra_cases = [
+    ("studio-rich.project", "studio-rich", (512, 340)),
+    ("studio-rich", "studio-rich", (512, 340)),
+    ("masked.project", "masked", (96, 64)),
+    ("masked", "masked", (96, 64)),
+    ("zensr.project", "zensr", (384, 256)),
+    ("zensr", "zensr", (384, 256)),
+]
+for name, expected, size in extra_cases:
+    source = directory / f"{name}.jxl"
+    if not source.exists():
+        continue
+    expected_pixels = (directory / f"{expected}.rgba").read_bytes()
+    for decoder, executable, threads in [
+        ("djxl", djxl, "--num_threads=1"),
+        ("jxl-rs", jxl_rs, "--num-threads=1"),
+    ]:
+        destination = directory / f"{name}.{decoder}.png"
+        subprocess.run([executable, str(source), str(destination), threads], check=True)
+        with Image.open(destination) as image:
+            if image.size != size:
+                raise ValueError(f"{name} {decoder} dimensions {image.size}, expected {size}")
+            actual = image.convert("RGBA").tobytes()
+        if actual != expected_pixels:
+            different = sum(left != right for left, right in zip(actual, expected_pixels, strict=True))
+            raise ValueError(f"{name} {decoder} has {different} differing RGBA bytes")
+        print(f"{name} {decoder} matched {len(actual)} RGBA bytes")

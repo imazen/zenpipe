@@ -7,6 +7,9 @@ const relaxedProbe = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0,
 let ready;
 let filters;
 let native;
+let zensr;
+const zensrWeightsCache = new Map();
+
 function initialize() {
   return ready ??= (async () => {
     const optimized = WebAssembly.validate(relaxedProbe);
@@ -17,6 +20,15 @@ function initialize() {
   })();
 }
 
+async function loadFilters(optimized) {
+  return filters ??= (async () => {
+    const module = optimized ? await import("./wasm/relaxed/jxl_editor_filters.js")
+      : await import("./wasm/baseline/jxl_editor_filters.js");
+    await module.default();
+    return module;
+  })();
+}
+
 async function loadNative(optimized) {
   return native ??= (async () => {
     const module = optimized ? await import("./wasm/relaxed/jxl_editor_native.js")
@@ -24,6 +36,35 @@ async function loadNative(optimized) {
     await module.default();
     return module;
   })();
+}
+
+async function loadZensr(optimized) {
+  return zensr ??= (async () => {
+    const module = optimized ? await import("./wasm/relaxed/jxl_editor_zensr.js")
+      : await import("./wasm/baseline/jxl_editor_zensr.js");
+    await module.default();
+    return module;
+  })();
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function fetchModelWeights(entry) {
+  if (zensrWeightsCache.has(entry.id)) return zensrWeightsCache.get(entry.id);
+  const res = await fetch(entry.weightsUrl);
+  if (!res.ok) throw new Error(`Failed to fetch ZenSR weights (${res.status}): ${entry.weightsUrl}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (entry.weightsSha256 && crypto?.subtle) {
+    const actual = await sha256Hex(bytes);
+    if (actual !== entry.weightsSha256) {
+      throw new Error(`ZenSR weights SHA-256 mismatch for ${entry.id}.`);
+    }
+  }
+  zensrWeightsCache.set(entry.id, bytes);
+  return bytes;
 }
 
 self.onmessage = async ({ data }) => {
@@ -78,16 +119,52 @@ self.onmessage = async ({ data }) => {
           frame.free();
         }
       }
-    } else if (method === "filter") {
-      const filterModule = await (filters ??= (async () => {
-        const module = optimized ? await import("./wasm/relaxed/jxl_editor_filters.js")
-          : await import("./wasm/baseline/jxl_editor_filters.js");
-        await module.default();
-        return module;
-      })());
-      const value = filterModule.filter_rgba(data.pixels, data.width, data.height,
-        data.exposure, data.contrast, data.saturation);
-      self.postMessage({ id, value }, [value.buffer]);
+    } else if (["filter", "filterCatalog", "applyZenFilters", "resizeKernels", "resizeRgba", "applyMask"].includes(method)) {
+      const filterModule = await loadFilters(optimized);
+      if (method === "filterCatalog") {
+        self.postMessage({ id, value: JSON.parse(filterModule.filter_catalog_json()) });
+      } else if (method === "resizeKernels") {
+        self.postMessage({ id, value: JSON.parse(filterModule.resize_kernels_json()) });
+      } else if (method === "filter") {
+        const value = filterModule.filter_rgba(data.pixels, data.width, data.height,
+          data.exposure, data.contrast, data.saturation);
+        self.postMessage({ id, value }, [value.buffer]);
+      } else if (method === "applyZenFilters") {
+        const value = filterModule.apply_zenfilters_rgba(
+          data.pixels, data.width, data.height, JSON.stringify(data.spec));
+        self.postMessage({ id, value }, [value.buffer]);
+      } else if (method === "resizeRgba") {
+        const value = filterModule.resize_rgba(
+          data.pixels, data.srcW, data.srcH, data.dstW, data.dstH,
+          data.kernel ?? "robidoux", data.linear !== false);
+        self.postMessage({ id, value }, [value.buffer]);
+      } else if (method === "applyMask") {
+        const value = filterModule.apply_layer_mask_rgba(
+          data.pixels, data.width, data.height, JSON.stringify(data.spec),
+          data.rasterMask ?? new Uint8Array(0), Boolean(data.overlayRuby));
+        self.postMessage({ id, value }, [value.buffer]);
+      }
+    } else if (["zensrCatalog", "zensrRun"].includes(method)) {
+      const zensrModule = await loadZensr(optimized);
+      if (method === "zensrCatalog") {
+        self.postMessage({ id, value: JSON.parse(zensrModule.zensr_catalog_json()) });
+      } else if (method === "zensrRun") {
+        let weights = data.weights;
+        if (!weights) {
+          const catalog = JSON.parse(zensrModule.zensr_catalog_json());
+          const entry = catalog.find(m => m.id === data.model) ?? catalog[0];
+          if (!entry) throw new Error(`Unknown ZenSR model '${data.model}'.`);
+          weights = await fetchModelWeights(entry);
+        }
+        const t0 = performance.now();
+        const result = zensrModule.zensr_run_rgba(
+          data.pixels, data.width, data.height, weights, JSON.stringify(data.config));
+        const width = result.width();
+        const height = result.height();
+        const pixels = result.into_pixels();
+        const elapsedMs = Math.round(performance.now() - t0);
+        self.postMessage({ id, value: { width, height, pixels, elapsedMs } }, [pixels.buffer]);
+      }
     } else if (method === "encode") {
       const value = codec.encode_jxl(data.pixels, data.width, data.height, data.stride);
       self.postMessage({ id, value }, [value.buffer]);

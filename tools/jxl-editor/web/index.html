@@ -16,6 +16,7 @@
     <div class="file-actions">
       <button id="open" type="button">Open image</button>
       <button id="add" type="button">Add layers</button>
+      <button id="open-gallery" type="button">Gallery</button>
       <button id="save" class="primary" type="button" disabled>Save project</button>
       <button id="export" type="button" disabled>Export JXL</button>
     </div>
@@ -23,6 +24,8 @@
     <input id="layer-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" multiple hidden>
     <input id="timeline-frame-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
     <input id="cmyk-icc-file" type="file" accept=".icc,.icm" hidden>
+    <input id="mask-import-file" type="file" accept=".png,.jpg,.jpeg,.webp,.avif,.svg" hidden>
+    <input id="zensr-weights-file" type="file" accept=".raw,.bin" hidden>
   </header>
   <main class="workspace">
     <section class="viewer" aria-label="Canvas workspace">
@@ -44,13 +47,23 @@
         <div id="empty" class="empty">
           <div class="empty-mark" aria-hidden="true">◇</div>
           <h1>Open a photo</h1>
-          <p>Open a photo or project, or drop several images to start with layers.</p>
-          <div class="empty-actions"><button id="empty-open" class="primary" type="button">Choose file</button><button id="sample" type="button">Try a sample</button></div>
+          <p>Open a photo or project, browse the built-in gallery, or drop images to start with layers.</p>
+          <div class="empty-actions">
+            <button id="empty-open" class="primary" type="button">Choose file</button>
+            <button id="sample" type="button">Try a sample</button>
+            <button id="empty-gallery" type="button">Browse gallery</button>
+          </div>
           <p class="credit">Sample photo by NPS / David Restivo.</p>
         </div>
         <div id="canvas-wrap" class="canvas-wrap" hidden>
           <canvas id="canvas" aria-label="Move the selected layer on the canvas" tabindex="0"></canvas>
-          <div id="outline" class="outline" hidden></div>
+          <div id="outline" class="outline" hidden>
+            <button type="button" class="handle handle-nw" data-handle="nw" aria-label="Resize from top-left corner"></button>
+            <button type="button" class="handle handle-ne" data-handle="ne" aria-label="Resize from top-right corner"></button>
+            <button type="button" class="handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
+            <button type="button" class="handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
+            <button type="button" class="handle handle-rotate" data-handle="rotate" aria-label="Rotate layer" title="Drag to rotate"></button>
+          </div>
           <svg id="spline-overlay" class="spline-overlay" hidden aria-hidden="true"></svg>
         </div>
       </div>
@@ -119,7 +132,14 @@
     </section>
     <aside class="inspector" aria-label="Layer inspector">
       <section class="layers">
-        <div class="section-heading"><h2>Layers</h2><button id="add-panel" type="button" aria-label="Add layers from the Layers panel">+ Add</button></div>
+        <div class="section-heading">
+          <h2>Layers</h2>
+          <div class="layer-head-actions">
+            <button id="add-gallery" type="button" title="Add from prefilled gallery">Gallery</button>
+            <button id="new-svg" type="button" title="Create new editable SVG layer">+ SVG</button>
+            <button id="add-panel" type="button" aria-label="Add layers from the Layers panel">+ Add</button>
+          </div>
+        </div>
         <ol id="layer-list" aria-label="Layers, top first"></ol>
         <div class="layer-actions">
           <button id="raise" type="button" title="Move layer up" disabled>Raise</button>
@@ -130,6 +150,8 @@
       <section class="properties">
         <div class="tabs" role="group" aria-label="Inspector view">
           <button id="properties-tab" type="button" aria-pressed="true">Adjustments</button>
+          <button id="mask-tab" type="button" aria-pressed="false" disabled>Mask</button>
+          <button id="zensr-tab" type="button" aria-pressed="false" disabled>ZenSR</button>
           <button id="coding-tab" type="button" aria-pressed="false" disabled>Coding</button>
           <button id="splines-tab" type="button" aria-pressed="false" disabled>Splines</button>
           <button id="history-tab" type="button" aria-pressed="false">History</button>
@@ -139,17 +161,132 @@
           <fieldset id="fields" disabled>
             <label class="name-field">Name <input id="layer-name" maxlength="255" type="text"></label>
             <div id="sliders"></div>
-            <h3>Transform</h3>
+            <div id="zenfilters-mount"></div>
+            <h3>Transform &amp; Resampling</h3>
             <div class="coordinates">
               <label>X <input id="position-x" type="number" min="-32768" max="32768" step="1"></label>
               <label>Y <input id="position-y" type="number" min="-32768" max="32768" step="1"></label>
             </div>
             <div id="transforms"></div>
+            <label class="name-field">Resampling kernel (zenresize)
+              <select id="resize-kernel"></select>
+            </label>
+            <label class="inline-check"><input id="resize-linear" type="checkbox" checked> Linear-light premultiplied scaling</label>
+            <p id="scaled-dimensions" class="muted-note"></p>
             <button id="edit-svg" type="button" hidden>Edit SVG source</button>
             <div class="asset-actions">
               <button id="reset" type="button">Reset adjustments</button>
               <button id="source-download" type="button">Download source</button>
             </div>
+          </fieldset>
+        </div>
+        <div id="mask-panel" class="subpanel" hidden>
+          <fieldset id="mask-fields" disabled>
+            <label class="inline-check"><input id="mask-enabled" type="checkbox"> Enable non-destructive mask</label>
+            <label class="inline-check"><input id="mask-ruby" type="checkbox"> Show ruby-red mask overlay</label>
+            <label class="inline-check"><input id="mask-invert" type="checkbox"> Invert mask</label>
+            <div class="coordinates">
+              <label>Mode
+                <select id="mask-mode">
+                  <option value="parametric">Parametric shape</option>
+                  <option value="raster">Painted raster</option>
+                  <option value="combined">Combined (shape × paint)</option>
+                </select>
+              </label>
+              <label>Shape
+                <select id="mask-shape">
+                  <option value="none">None</option>
+                  <option value="radial">Radial / Ellipse</option>
+                  <option value="linear">Linear Gradient</option>
+                  <option value="rounded_rect">Rounded Rectangle</option>
+                  <option value="luminance">Luminance Range</option>
+                </select>
+              </label>
+            </div>
+            <label class="adjustment"><span>Mask density <output id="mask-density-val">100%</output></span><input id="mask-density" type="range" min="0" max="1" step="0.02" value="1"></label>
+            <label class="adjustment"><span>Feather blur <output id="mask-feather-val">0.0 px</output></span><input id="mask-feather" type="range" min="0" max="40" step="0.5" value="0"></label>
+            <div id="mask-linear-opts" hidden>
+              <label class="adjustment"><span>Angle <output id="mask-angle-val">0°</output></span><input id="mask-angle" type="range" min="-180" max="180" step="1" value="0"></label>
+              <label class="adjustment"><span>Position <output id="mask-position-val">50%</output></span><input id="mask-position" type="range" min="0" max="1" step="0.02" value="0.5"></label>
+              <label class="adjustment"><span>Spread <output id="mask-spread-val">35%</output></span><input id="mask-spread" type="range" min="0.01" max="1" step="0.02" value="0.35"></label>
+            </div>
+            <div id="mask-radial-opts" hidden>
+              <label class="adjustment"><span>Center X <output id="mask-cx-val">50%</output></span><input id="mask-cx" type="range" min="0" max="1" step="0.02" value="0.5"></label>
+              <label class="adjustment"><span>Center Y <output id="mask-cy-val">50%</output></span><input id="mask-cy" type="range" min="0" max="1" step="0.02" value="0.5"></label>
+              <label class="adjustment"><span>Radius X <output id="mask-rx-val">38%</output></span><input id="mask-rx" type="range" min="0.02" max="1" step="0.02" value="0.38"></label>
+              <label class="adjustment"><span>Radius Y <output id="mask-ry-val">38%</output></span><input id="mask-ry" type="range" min="0.02" max="1" step="0.02" value="0.38"></label>
+              <label class="adjustment"><span>Edge softness <output id="mask-softness-val">30%</output></span><input id="mask-softness" type="range" min="0" max="0.98" step="0.02" value="0.3"></label>
+            </div>
+            <div id="mask-rect-opts" hidden>
+              <label class="adjustment"><span>Inset <output id="mask-inset-val">8%</output></span><input id="mask-inset" type="range" min="0" max="0.45" step="0.01" value="0.08"></label>
+              <label class="adjustment"><span>Corner radius <output id="mask-radius-val">12%</output></span><input id="mask-radius" type="range" min="0" max="0.45" step="0.01" value="0.12"></label>
+            </div>
+            <div id="mask-luma-opts" hidden>
+              <label class="adjustment"><span>Low L <output id="mask-luma-low-val">25%</output></span><input id="mask-luma-low" type="range" min="0" max="1" step="0.02" value="0.25"></label>
+              <label class="adjustment"><span>High L <output id="mask-luma-high-val">100%</output></span><input id="mask-luma-high" type="range" min="0" max="1" step="0.02" value="1"></label>
+            </div>
+            <h3>Mask Brush (Canvas Paint)</h3>
+            <div class="asset-actions">
+              <button id="mask-brush-reveal" type="button" aria-pressed="false">Paint (Reveal)</button>
+              <button id="mask-brush-erase" type="button" aria-pressed="false">Erase (Hide)</button>
+              <button id="mask-brush-stop" type="button" disabled>Done</button>
+            </div>
+            <label class="adjustment"><span>Brush size <output id="mask-brush-size-val">24 px</output></span><input id="mask-brush-size" type="range" min="4" max="200" step="2" value="24"></label>
+            <label class="adjustment"><span>Brush hardness <output id="mask-brush-hardness-val">60%</output></span><input id="mask-brush-hardness" type="range" min="0" max="1" step="0.05" value="0.6"></label>
+            <label class="adjustment"><span>Brush opacity <output id="mask-brush-opacity-val">100%</output></span><input id="mask-brush-opacity" type="range" min="0.1" max="1" step="0.05" value="1"></label>
+            <div class="asset-actions">
+              <button id="mask-fill-white" type="button">Fill White</button>
+              <button id="mask-fill-black" type="button">Fill Black</button>
+              <button id="mask-invert-paint" type="button">Invert Paint</button>
+              <button id="mask-clear-paint" type="button">Clear Paint</button>
+              <button id="mask-import-btn" type="button">Import Mask</button>
+            </div>
+            <p id="mask-raster-status" class="muted-note"></p>
+          </fieldset>
+        </div>
+        <div id="zensr-panel" class="subpanel" hidden>
+          <p id="zensr-svg-note" class="notice" hidden>Selected layer is a vector SVG — it re-rasterizes crisply at any scale without neural upscaling.</p>
+          <fieldset id="zensr-fields" disabled>
+            <label class="inline-check"><input id="zensr-enabled" type="checkbox"> Enable ZenSR neural restoration</label>
+            <label>ZenSR Model
+              <select id="zensr-model">
+                <option value="dejpeg_rt24g">ZenSR De-JPEG Realtime (rt24g · 1× · 84 KB f16)</option>
+                <option value="custom">Custom zensr-micro checkpoint (.raw f16/f32)</option>
+              </select>
+            </label>
+            <div id="zensr-strength-row">
+              <label class="adjustment"><span>Restoration strength <output id="zensr-strength-val">100%</output></span><input id="zensr-strength" type="range" min="0" max="1" step="0.05" value="1"></label>
+            </div>
+            <div id="zensr-custom-opts" hidden>
+              <div class="coordinates">
+                <label>Architecture
+                  <select id="zensr-custom-arch">
+                    <option value="compact">SRVGGNetCompact</option>
+                    <option value="span48">SPAN-48</option>
+                  </select>
+                </label>
+                <label>Scale
+                  <select id="zensr-custom-scale">
+                    <option value="1">1× (Restore)</option>
+                    <option value="2">2× (SR)</option>
+                    <option value="4">4× (SR)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="coordinates">
+                <label>Channels (nf) <input id="zensr-custom-nf" type="number" min="4" max="64" step="4" value="24"></label>
+                <label>Blocks (nc) <input id="zensr-custom-nc" type="number" min="1" max="32" step="1" value="8"></label>
+              </div>
+              <div class="asset-actions">
+                <button id="zensr-weights-btn" type="button">Load .raw weights</button>
+              </div>
+              <p id="zensr-weights-note" class="muted-note"></p>
+            </div>
+            <div class="asset-actions">
+              <button id="zensr-demo-jpeg" type="button">Add Low-Q JPEG test layer</button>
+            </div>
+            <p id="zensr-telemetry" class="muted-note"></p>
+            <p class="muted-note">Powered by <code>zensr-micro</code> (<code>imazen/zensr</code> @ <code>4a33019</code>, safe Rust WASM SIMD). Built-in <code>dejpeg_rt24g</code> weights are SHA-256 verified on load.</p>
           </fieldset>
         </div>
         <div id="coding-panel" class="subpanel" hidden>
@@ -412,14 +549,77 @@
       </section>
     </aside>
   </main>
-  <dialog id="svg-dialog">
+  <dialog id="svg-dialog" class="svg-studio-dialog">
     <form id="svg-form">
-      <h2>Edit SVG source</h2>
-      <label for="svg-source">SVG markup</label>
-      <textarea id="svg-source" rows="14" spellcheck="false" required></textarea>
-      <p id="svg-error" role="alert"></p>
+      <div class="dialog-head">
+        <h2>SVG Vector Studio</h2>
+        <div class="controls">
+          <button id="svg-add-text" type="button">+ Text</button>
+          <button id="svg-add-rect" type="button">+ Rect</button>
+          <button id="svg-add-circle" type="button">+ Circle</button>
+          <button id="svg-add-line" type="button">+ Line</button>
+        </div>
+      </div>
+      <div class="svg-studio-grid">
+        <div class="svg-visual-col">
+          <div class="svg-preview-box"><img id="svg-preview" alt="Live inert SVG preview"></div>
+          <div class="coordinates">
+            <label>Width <input id="svg-width" type="number" min="1" max="8192" step="1"></label>
+            <label>Height <input id="svg-height" type="number" min="1" max="8192" step="1"></label>
+          </div>
+          <div class="svg-el-bar">
+            <label>Element <select id="svg-el-select"></select></label>
+            <button id="svg-el-delete" type="button" disabled>Remove</button>
+          </div>
+          <fieldset id="svg-el-fields" class="svg-el-fields" disabled>
+            <div id="svg-el-text-row" class="coordinates" hidden>
+              <label>Text <input id="svg-el-text" type="text"></label>
+              <label>Font size <input id="svg-el-fontsize" type="number" min="4" max="400" step="1"></label>
+            </div>
+            <div class="coordinates">
+              <label>Fill <input id="svg-el-fill" type="color" value="#a7c5ff"></label>
+              <label>Stroke <input id="svg-el-stroke" type="color" value="#ffffff"></label>
+            </div>
+            <div class="coordinates">
+              <label class="inline-check"><input id="svg-el-fill-none" type="checkbox"> No fill</label>
+              <label class="inline-check"><input id="svg-el-stroke-none" type="checkbox"> No stroke</label>
+            </div>
+            <div class="coordinates">
+              <label>Stroke W <input id="svg-el-stroke-width" type="number" min="0" max="100" step="0.5"></label>
+              <label>Opacity <input id="svg-el-opacity" type="range" min="0" max="1" step="0.05" value="1"></label>
+            </div>
+            <div class="svg-geom-grid">
+              <label>X/CX <input id="svg-el-x" type="number" step="1"></label>
+              <label>Y/CY <input id="svg-el-y" type="number" step="1"></label>
+              <label>W/R <input id="svg-el-w" type="number" step="1"></label>
+              <label>H/RY <input id="svg-el-h" type="number" step="1"></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="svg-code-col">
+          <label for="svg-source">SVG markup</label>
+          <textarea id="svg-source" rows="16" spellcheck="false" required></textarea>
+          <p id="svg-error" role="alert"></p>
+        </div>
+      </div>
       <div class="dialog-actions"><button id="svg-cancel" type="button">Cancel</button><button id="svg-apply" class="primary" type="submit">Apply SVG</button></div>
     </form>
   </dialog>
+  <div id="gallery-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="gallery-title" hidden>
+    <div class="modal-card gallery-dialog">
+      <div class="dialog-head">
+        <h2 id="gallery-title">Starter Gallery</h2>
+        <div class="controls">
+          <button type="button" data-gallery-cat="all" aria-pressed="true">All</button>
+          <button type="button" data-gallery-cat="photos" aria-pressed="false">Photos &amp; Tests</button>
+          <button type="button" data-gallery-cat="vectors" aria-pressed="false">Vector SVG</button>
+          <button type="button" data-gallery-cat="overlays" aria-pressed="false">Overlays</button>
+        </div>
+        <button id="gallery-close" type="button">Close</button>
+      </div>
+      <p class="muted-note">Add editable SVG vector graphics, calibrated test charts, or sample photography directly as layers without browsing disk.</p>
+      <div id="gallery-grid" class="gallery-grid"></div>
+    </div>
+  </div>
 </body>
 </html>

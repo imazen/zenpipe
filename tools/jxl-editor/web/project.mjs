@@ -5,6 +5,7 @@ const MANIFEST = "zned";
 const SOURCE = "znas";
 const RENDITION = "znrv";
 const VECTOR_EDIT = "znvs";
+const MASK_BOX = "znmk";
 const CMYK_SAMPLES = "zncm";
 const CMYK_ICC = "znic";
 const encoder = new TextEncoder();
@@ -17,6 +18,10 @@ export const MAX_TIMELINE_FRAMES = 64;
 export const MAX_SPLINES = 64;
 export const MAX_SVG = 2 * 1024 * 1024;
 export const RASTER_TYPES = ["image/jxl", "image/jpeg", "image/png", "image/webp", "image/avif"];
+export const VALID_RESIZE_KERNELS = new Set([
+  "robidoux", "lanczos", "lanczos_sharp", "lanczos2", "ginseng", "ginseng_sharp",
+  "robidoux_sharp", "mitchell", "catmull_rom", "cubic_b_spline", "hermite", "linear", "box",
+]);
 
 export function checkDimensions(width, height) {
   if (!Number.isInteger(width) || !Number.isInteger(height) ||
@@ -77,7 +82,7 @@ function copyBox(entry) {
 
 const structural = new Set(["ftyp", "JXL ", "jxlc", "jxlp", "jxli", "jxll", "jbrd",
   "Exif", "xml ", "brob", "jhgm", "hdr ", "hCdR", "colr", "jumb",
-  MANIFEST, SOURCE, RENDITION, VECTOR_EDIT, CMYK_SAMPLES, CMYK_ICC]);
+  MANIFEST, SOURCE, RENDITION, VECTOR_EDIT, MASK_BOX, CMYK_SAMPLES, CMYK_ICC]);
 
 export function opaqueBoxes(bytes) {
   return jxlBoxes(bytes).filter(({ type, data }) => {
@@ -127,6 +132,10 @@ export function writeProject(flattened, manifest, assets, preserved = [], cmykDa
       parts.push(...box(RENDITION, id, asset.rendition));
       if (asset.svgEdit) parts.push(...box(VECTOR_EDIT, id, asset.svgEdit));
     }
+    if (asset.maskJxl?.length) {
+      if (!isJxl(asset.maskJxl)) throw new Error("A layer’s stored mask must be a valid JPEG XL.");
+      parts.push(...box(MASK_BOX, id, asset.maskJxl));
+    }
   }
   if (manifest.cmyk?.enabled) {
     if (!cmykData?.samples?.length || !cmykData?.icc?.length) {
@@ -143,13 +152,76 @@ function inRange(value, min, max) {
   return Number.isFinite(value) && value >= min && value <= max;
 }
 
+const FILTER_RANGES = {
+  highlights: [-1, 1], shadows: [-1, 1], whites: [-1, 1], blacks: [-1, 1],
+  brilliance: [-1, 1], blackPoint: [0, 0.25], whitePoint: [0.75, 1], localToneMap: [0, 1],
+  vibrance: [-1, 1], temperature: [-1, 1], tint: [-1, 1], hue: [-180, 180], dehaze: [-1, 1],
+  clarity: [-1, 1], texture: [-1, 1], sharpen: [0, 2], blur: [0, 20],
+  denoiseLuma: [0, 1], denoiseChroma: [0, 1], vignette: [-1, 1], bloom: [0, 1],
+  grain: [0, 1], sepia: [0, 1], solarize: [0, 0.95],
+  autoTone: [0, 1], autoWhiteBalance: [0, 1], autoExposure: [0, 1],
+  autoContrast: [0, 1], autoLevels: [0, 1], autoVibrance: [0, 1],
+  presetStrength: [0, 1], filmStrength: [0, 1],
+};
+
+function validateFilters(filters) {
+  if (filters === undefined || filters === null) return true;
+  if (typeof filters !== "object") return false;
+  for (const [key, [min, max]] of Object.entries(FILTER_RANGES)) {
+    if (filters[key] !== undefined && !inRange(filters[key], min, max)) return false;
+  }
+  if (filters.grayscale !== undefined && typeof filters.grayscale !== "boolean") return false;
+  if (filters.invert !== undefined && typeof filters.invert !== "boolean") return false;
+  if (filters.posterize !== undefined &&
+      (!Number.isInteger(filters.posterize) || (filters.posterize !== 0 && (filters.posterize < 2 || filters.posterize > 16)))) {
+    return false;
+  }
+  if (filters.preset !== undefined && filters.preset !== null &&
+      (typeof filters.preset !== "string" || filters.preset.length > 64)) return false;
+  if (filters.filmLook !== undefined && filters.filmLook !== null &&
+      (typeof filters.filmLook !== "string" || filters.filmLook.length > 64)) return false;
+  if (filters.filterMask !== undefined && filters.filterMask !== null) {
+    const fm = filters.filterMask;
+    if (typeof fm !== "object" || !["none", "linear", "radial", "luminance"].includes(fm.kind)) return false;
+    if (fm.invert !== undefined && typeof fm.invert !== "boolean") return false;
+  }
+  return true;
+}
+
+function validateMask(mask) {
+  if (mask === undefined || mask === null) return true;
+  if (typeof mask !== "object" || typeof mask.enabled !== "boolean") return false;
+  if (!["parametric", "raster", "combined"].includes(mask.mode)) return false;
+  if (!["none", "linear", "radial", "rounded_rect", "luminance"].includes(mask.shape)) return false;
+  if (mask.invert !== undefined && typeof mask.invert !== "boolean") return false;
+  if (mask.density !== undefined && !inRange(mask.density, 0, 1)) return false;
+  if (mask.feather !== undefined && !inRange(mask.feather, 0, 40)) return false;
+  if (mask.hasRaster !== undefined && typeof mask.hasRaster !== "boolean") return false;
+  return true;
+}
+
+function validateZensr(zensr) {
+  if (zensr === undefined || zensr === null) return true;
+  if (typeof zensr !== "object" || typeof zensr.enabled !== "boolean") return false;
+  if (typeof zensr.model !== "string" || zensr.model.length > 64) return false;
+  if (!["compact", "span48"].includes(zensr.arch)) return false;
+  if (!Number.isInteger(zensr.scale) || zensr.scale < 1 || zensr.scale > 4) return false;
+  if (!inRange(zensr.strength, 0, 1)) return false;
+  return true;
+}
+
 function validateLayerProps(props) {
   return props &&
     typeof props.visible === "boolean" &&
     inRange(props.opacity, 0, 1) && inRange(props.x, -32768, 32768) &&
     inRange(props.y, -32768, 32768) && inRange(props.scale, 0.05, 8) &&
     inRange(props.angle, -180, 180) && inRange(props.exposure, -2, 2) &&
-    inRange(props.contrast, 0, 2) && inRange(props.saturation, 0, 2);
+    inRange(props.contrast, 0, 2) && inRange(props.saturation, 0, 2) &&
+    validateFilters(props.filters) &&
+    (props.resizeKernel === undefined || VALID_RESIZE_KERNELS.has(props.resizeKernel)) &&
+    (props.resizeLinear === undefined || typeof props.resizeLinear === "boolean") &&
+    validateMask(props.mask) &&
+    validateZensr(props.zensr);
 }
 
 const VALID_BLENDS = new Set(["auto", "replace", "add", "blend", "alpha_weighted_add", "mul"]);
@@ -314,18 +386,22 @@ export function readProject(bytes) {
       cmykIcc = data;
       continue;
     }
-    if (type !== SOURCE && type !== RENDITION && type !== VECTOR_EDIT) continue;
+    if (type !== SOURCE && type !== RENDITION && type !== VECTOR_EDIT && type !== MASK_BOX) continue;
     const id = decoder.decode(data.subarray(0, 36));
     const asset = assets.get(id);
-    const field = type === SOURCE ? "source" : type === RENDITION ? "rendition" : "svgEdit";
+    const field = type === SOURCE ? "source"
+      : type === RENDITION ? "rendition"
+      : type === VECTOR_EDIT ? "svgEdit"
+      : "maskJxl";
     if (!asset || asset[field] || data.length <= 36) throw new Error("Invalid editor asset box.");
     asset[field] = data.subarray(36);
   }
   for (const layer of manifest.layers) {
-    const { source, rendition, svgEdit } = assets.get(layer.id);
+    const { source, rendition, svgEdit, maskJxl } = assets.get(layer.id);
     const vector = layer.mime === "image/svg+xml";
     if (!source || (vector && (source.length > MAX_SVG || !rendition || !isJxl(rendition) || svgEdit?.length > MAX_SVG)) ||
-        (!vector && (rendition || svgEdit)) || (layer.mime === "image/jxl" && !isJxl(source))) {
+        (!vector && (rendition || svgEdit)) || (layer.mime === "image/jxl" && !isJxl(source)) ||
+        (maskJxl && !isJxl(maskJxl)) || (layer.mask?.hasRaster && !maskJxl)) {
       throw new Error("The editor project has missing or invalid assets.");
     }
   }

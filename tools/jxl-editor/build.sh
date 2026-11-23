@@ -6,19 +6,30 @@ if [[ "$(wasm-bindgen --version)" != "wasm-bindgen 0.2.129" ]]; then
     echo "Install wasm-bindgen-cli 0.2.129 to match the locked Rust dependency." >&2
     exit 1
 fi
-mkdir -p dist
+mkdir -p dist dist/models
 cp web/* dist/
-# The sample is public-domain NPS photography. Pin the exact published JPEG.
+
+# Fetch pinned public-domain NPS sample photo.
 sample_url=https://npgallery.nps.gov/GetAsset/fbf8deda-a0c6-422e-b8ff-4275dd14f289/proxymdres.jpg
 sample_sha=5b289d44b16bbf92f90ac7ccc089253fe891a83ae68c415f382de81f6e2e5740
-sample_matches() {
-    [[ -f "$1" ]] && printf '%s  %s\n' "$sample_sha" "$1" | shasum -a 256 -c --status
+sha_matches() {
+    [[ -f "$2" ]] && printf '%s  %s\n' "$1" "$2" | shasum -a 256 -c --status
 }
-if ! sample_matches dist/sample.jpg; then
+if ! sha_matches "$sample_sha" dist/sample.jpg; then
     curl --fail --silent --show-error --location --retry 2 "$sample_url" -o dist/sample.jpg.partial
-    sample_matches dist/sample.jpg.partial
+    sha_matches "$sample_sha" dist/sample.jpg.partial
     mv dist/sample.jpg.partial dist/sample.jpg
 fi
+
+# Fetch pinned ZenSR dejpeg_rt24g f16 weights from imazen/zensr (84 KB, zero binary blobs in git).
+zensr_url=https://raw.githubusercontent.com/imazen/zensr/4a33019/models/adopted/dejpeg_rt24g/weights_f16.raw
+zensr_sha=0de929e1bee7bde444d1d8ab46a8fd0d0ff4fef47daf561095d1661008798b80
+if ! sha_matches "$zensr_sha" dist/models/dejpeg_rt24g.f16.raw; then
+    curl --fail --silent --show-error --location --retry 2 "$zensr_url" -o dist/models/dejpeg_rt24g.f16.raw.partial
+    sha_matches "$zensr_sha" dist/models/dejpeg_rt24g.f16.raw.partial
+    mv dist/models/dejpeg_rt24g.f16.raw.partial dist/models/dejpeg_rt24g.f16.raw
+fi
+
 if (( $# == 0 )); then set -- relaxed baseline; fi
 for mode in "$@"; do
     case "$mode" in
@@ -32,7 +43,9 @@ for mode in "$@"; do
         cargo build --locked --release --target wasm32-unknown-unknown --manifest-path filters-wasm/Cargo.toml
     RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
         cargo build --locked --release --target wasm32-unknown-unknown --manifest-path native-wasm/Cargo.toml
-    for module in codecs filters native; do
+    RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
+        cargo build --locked --release --target wasm32-unknown-unknown --manifest-path zensr-wasm/Cargo.toml
+    for module in codecs filters native zensr; do
         wasm-bindgen --target web --no-typescript --out-dir "dist/wasm/$mode" \
             "target/$mode/wasm32-unknown-unknown/release/jxl_editor_${module}.wasm"
     done

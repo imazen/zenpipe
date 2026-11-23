@@ -108,3 +108,55 @@ test("round-trips timeline, manual splines, coding options and CMYK raw samples"
   assert.deepEqual(reloaded.cmykData.icc, fakeIcc);
   assert.equal(reloaded.preserved.length, 0);
 });
+
+test("round-trips zenfilters, zenresize kernel, layer mask znmk box, and zensr settings", async () => {
+  const richLayer = {
+    ...layer,
+    filters: {
+      preset: "Golden Hour",
+      presetStrength: 0.85,
+      filmLook: "portra",
+      filmStrength: 0.7,
+      clarity: 0.35,
+      vignette: 0.2,
+      grayscale: false,
+      filterMask: { kind: "radial", cx: 0.5, cy: 0.5, innerRadius: 0.2, outerRadius: 0.55, invert: false },
+    },
+    resizeKernel: "lanczos",
+    resizeLinear: true,
+    mask: {
+      enabled: true,
+      mode: "combined",
+      shape: "radial",
+      invert: false,
+      density: 0.9,
+      feather: 2.5,
+      hasRaster: true,
+    },
+    zensr: {
+      enabled: true,
+      model: "dejpeg_rt24g",
+      arch: "compact",
+      nf: 24,
+      nc: 8,
+      scale: 1,
+      strength: 0.8,
+    },
+  };
+  const richManifest = { ...manifest, filterEngine: "zenfilters-v1", layers: [richLayer] };
+  const richAssets = new Map([[id, { source, svgEdit, rendition: bare, maskJxl: bare }]]);
+  const output = await bytes(writeProject(bare, richManifest, richAssets));
+  const reloaded = readProject(output);
+  assert.deepEqual(reloaded.manifest, richManifest);
+  assert.deepEqual(reloaded.assets.get(id).maskJxl, bare);
+  assert.equal(reloaded.preserved.length, 0);
+  assert.equal(jxlBoxes(output).filter(entry => entry.type === "znmk").length, 1);
+
+  // Reject unknown resize kernel or missing znmk box when hasRaster is true
+  assert.throws(
+    () => writeProject(bare, { ...richManifest, layers: [{ ...richLayer, resizeKernel: "bogus" }] }, richAssets),
+    /layer settings/i,
+  );
+  const missingMask = await bytes(writeProject(bare, richManifest, new Map([[id, { source, svgEdit, rendition: bare }]])));
+  assert.throws(() => readProject(missingMask), /missing or invalid assets/i);
+});

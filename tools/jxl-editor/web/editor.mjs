@@ -1,6 +1,14 @@
 import { codec } from "./codec.mjs";
 import { makeNativeInspector } from "./native-panel.mjs";
-import { ZEN_FILTERS, hasAdjustments, previewFilter, renderFilter } from "./filters.mjs";
+import {
+  ZEN_FILTERS, hasActiveMask, hasActiveZensr, hasAdjustments,
+  needsRasterPipeline, previewFilter, renderFilter,
+} from "./filters.mjs";
+import { makeZenFiltersPanel } from "./zenfilters-panel.mjs";
+import { makeGallery, makeSvgFileFromTemplate } from "./gallery.mjs";
+import { makeSvgEditor } from "./svg-editor.mjs";
+import { decodeMaskJxlToAlpha, encodeMaskAlphaToJxl, makeMasksPanel } from "./masks.mjs";
+import { makeZensrPanel } from "./zensr-panel.mjs";
 import {
   applyCmykOffsets, buildCodingPayload, createDefaultTimeline, defaultCoding,
   isDefaultModularCoding, makeAuthorPanels, resolveLayersForFrame,
@@ -21,6 +29,7 @@ const types = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "
 const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const utf8 = new TextEncoder();
 const clampPosition = value => Math.max(-32768, Math.min(32768, Math.round(value)));
+const clampScale = value => Math.max(0.05, Math.min(8, Math.round(value * 100) / 100));
 const MAX_ASSET_PIXELS = 2 * MAX_PIXELS;
 const MAX_HISTORY = 32;
 
@@ -238,6 +247,7 @@ function install(state, label, newTitle, alreadySaved) {
   timelineOpen = Boolean(state.manifest.timeline?.enabled);
   selectedSplineId = state.manifest.splines?.[0]?.id ?? null;
   splinePickMode = false;
+  masksPanel.stopBrush();
   splinePreviewCache = { key: null, canvas: null, pending: false, token: 0 };
   cmykPreviewCache = { key: null, canvas: null, token: 0 };
   showInspector("properties");
@@ -245,6 +255,7 @@ function install(state, label, newTitle, alreadySaved) {
   title = newTitle.replace(/\.(?:project\.jxl|jxl|jpg|jpeg|png|webp|svg|avif)$/i, "");
   saved = alreadySaved ? state : null;
   storeState(state, label);
+  zenFiltersPanel.loadCatalog();
 }
 
 async function importNativeTimeline(asset, sourceName) {
@@ -347,8 +358,9 @@ async function renderFlattenedCanvas(state, frameIndex = activeFrameIndex) {
   const rasters = new Map();
   if (state.manifest.filterEngine === ZEN_FILTERS) {
     for (const layer of layers) {
-      if (layer.visible && layer.opacity && hasAdjustments(layer)) {
-        rasters.set(layer.id, await renderFilter(state.assets.get(layer.id), layer));
+      const asset = state.assets.get(layer.id);
+      if (layer.visible && layer.opacity && needsRasterPipeline(layer, asset)) {
+        rasters.set(layer.id, await renderFilter(asset, layer, { rubyOverlay: false }));
       }
     }
   }
@@ -456,6 +468,10 @@ async function open(file) {
       if (layer.width !== asset.canvas.width || layer.height !== asset.canvas.height) {
         throw new Error("A layer’s stored dimensions do not match its image.");
       }
+      if (asset.maskJxl) {
+        asset.maskAlpha = await decodeMaskJxlToAlpha(asset.maskJxl, layer.width, layer.height);
+        asset.maskRev = 1;
+      }
     }
     install(project, "Reopened project", file.name, true);
     if (project.manifest.cmyk?.enabled) await refreshCmykPreview();
@@ -463,7 +479,6 @@ async function open(file) {
     return;
   }
 
-  // Check if a raw JXL is a multi-frame animation or CMYK image.
   if (isJxl(bytes)) {
     let info = null;
     try {
@@ -612,18 +627,28 @@ function patchState(state, id, patch) {
       frame.layerOverrides[id] = { ...base, ...propPatch };
     }
     if (Object.keys(metaPatch).length || activeFrameIndex === 0) {
-      nextManifest.layers = nextManifest.layers.map(l => l.id === id ? { ...l, ...metaPatch, ...(activeFrameIndex === 0 ? propPatch : {}) } : l);
+      nextManifest.layers = nextManifest.layers.map(l => {
+        if (l.id !== id) return l;
+        const merged = { ...l, ...metaPatch, ...(activeFrameIndex === 0 ? propPatch : {}) };
+        for (const [k, v] of Object.entries(metaPatch)) if (v === undefined) delete merged[k];
+        return merged;
+      });
     }
     return { ...state, manifest: nextManifest };
   }
-  const layers = state.manifest.layers.map(layer => layer.id === id ? { ...layer, ...patch } : layer);
+  const layers = state.manifest.layers.map(layer => {
+    if (layer.id !== id) return layer;
+    const merged = { ...layer, ...patch };
+    for (const [k, v] of Object.entries(patch)) if (v === undefined) delete merged[k];
+    return merged;
+  });
   return { ...state, manifest: { ...state.manifest, layers } };
 }
 
 function updateLayer(patch, label, id = selected) {
   if (busy || !current) return;
   const layer = currentLayers().find(entry => entry.id === id);
-  if (!layer || Object.entries(patch).every(([key, value]) => layer[key] === value)) return;
+  if (!layer || Object.entries(patch).every(([key, value]) => JSON.stringify(layer[key]) === JSON.stringify(value))) return;
   compare = false;
   storeState(patchState(current, id, patch), label);
 }
@@ -684,12 +709,11 @@ function drawLayer(context, layer, source, filterEngine) {
   context.save();
   context.translate(layer.x, layer.y);
   context.rotate(layer.angle * Math.PI / 180);
-  context.scale(layer.scale, layer.scale);
   context.globalAlpha = layer.opacity;
   if (filterEngine !== ZEN_FILTERS && hasCanvasFilters && hasAdjustments(layer)) {
     context.filter = `brightness(${2 ** layer.exposure}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
   }
-  context.drawImage(source, 0, 0);
+  context.drawImage(source, 0, 0, layer.width * layer.scale, layer.height * layer.scale);
   context.restore();
 }
 
@@ -755,7 +779,7 @@ function paint() {
   animation = null;
   if (!current) return;
   const { width, height } = current.manifest;
-  const padding = 40;
+  const padding = 52;
   const fit = Math.min((stage.clientWidth - padding) / width, (stage.clientHeight - padding) / height, 2);
   const scale = Math.max(0.02, zoom ?? fit);
   const rasterScale = Math.min(scale * window.devicePixelRatio, 1, 1800 / Math.max(width, height));
@@ -768,6 +792,7 @@ function paint() {
   preview.style.width = `${width * scale}px`;
   preview.style.height = `${height * scale}px`;
   preview.toggleAttribute("data-spline-pick", Boolean(splinePickMode && selectedSplineId));
+  preview.toggleAttribute("data-mask-brush", Boolean(masksPanel.getBrushMode()));
   $("fit").textContent = zoom === null ? `Fit · ${Math.round(scale * 100)}%` : `${Math.round(scale * 100)}%`;
   const state = gesture?.state ?? current;
   const layers = currentLayers(state);
@@ -775,15 +800,18 @@ function paint() {
   let pending = false;
   if (!compare && !comparingKey && !state.manifest.cmyk?.enabled && state.manifest.filterEngine === ZEN_FILTERS) {
     for (const layer of layers) {
-      if (!layer.visible || !layer.opacity || !hasAdjustments(layer)) continue;
-      const filtered = previewFilter(state.assets.get(layer.id), layer, requestPaint, report);
+      const asset = state.assets.get(layer.id);
+      const rubyOverlay = inspectorView === "mask" && masksPanel.isRubyOverlay() && layer.id === selected;
+      if (!layer.visible || !layer.opacity || !needsRasterPipeline(layer, asset, { rubyOverlay })) continue;
+      const filtered = previewFilter(asset, layer, requestPaint, report, { rubyOverlay }, () => {
+        if (inspectorView === "zensr") zensrPanel.updateUI();
+      });
       rasters.set(layer.id, filtered.canvas);
       pending ||= filtered.pending;
     }
   }
   drawLayers(ctx, state, w, h, compare || comparingKey, rasters);
 
-  // Render exact JXL spline preview onto canvas when splines are authored.
   const splines = state.manifest.splines ?? [];
   const splinesActive = !compare && !comparingKey && !state.manifest.cmyk?.enabled &&
     !state.manifest.timeline?.enabled && splines.length > 0;
@@ -821,8 +849,11 @@ function paint() {
 
   const layer = layers.find(entry => entry.id === selected);
   const outline = $("outline");
-  outline.hidden = !layer?.visible || compare || comparingKey || state.manifest.layers.length === 1 || state.manifest.cmyk?.enabled;
-  if (!outline.hidden) {
+  const showOutline = Boolean(layer?.visible) && !compare && !comparingKey && !state.manifest.cmyk?.enabled &&
+    !masksPanel.getBrushMode() && !splinePickMode &&
+    (state.manifest.layers.length > 1 || layer.scale !== 1 || layer.angle !== 0 || layer.x !== 0 || layer.y !== 0);
+  outline.hidden = !showOutline;
+  if (showOutline) {
     outline.style.width = `${layer.width * layer.scale * scale}px`;
     outline.style.height = `${layer.height * layer.scale * scale}px`;
     outline.style.transform = `translate(${layer.x * scale}px, ${layer.y * scale}px) rotate(${layer.angle}deg)`;
@@ -890,6 +921,85 @@ function visibilityIcon(visible) {
   return svg;
 }
 
+const zenFiltersPanel = makeZenFiltersPanel({
+  getLayer: activeLayer,
+  getBusy: () => busy,
+  previewPatch: patch => {
+    if (!current || busy) return;
+    compare = false;
+    gesture = { state: patchState(current, selected, patch) };
+    requestPaint();
+  },
+  commitPatch: (patch, label) => updateLayer(patch, label),
+  clearPreview: () => { gesture = null; },
+});
+
+const masksPanel = makeMasksPanel({
+  getState: () => current,
+  getLayer: activeLayer,
+  getBusy: () => busy,
+  storeState,
+  patchState,
+  requestPaint,
+  run,
+  status,
+  onBrushModeChange: mode => {
+    if (mode) splinePickMode = false;
+    requestPaint();
+  },
+});
+
+const zensrPanel = makeZensrPanel({
+  getState: () => current,
+  getLayer: activeLayer,
+  getBusy: () => busy,
+  storeState,
+  patchState,
+  addLayerFiles: addLayers,
+  openFile: open,
+  run,
+  status,
+});
+
+const gallery = makeGallery({
+  openFile: open,
+  addLayerFiles: addLayers,
+  hasDocument: () => Boolean(current),
+  getBusy: () => busy,
+  run,
+});
+
+const svgEditor = makeSvgEditor({
+  getActiveSvgMarkup: () => text.decode(svgSource(current.assets.get(selected))),
+  getBusy: () => busy,
+  async applySvgMarkup(markup, errorEl, dialog) {
+    const asset = current.assets.get(selected);
+    if (markup === text.decode(svgSource(asset)).replace(/\r\n?/g, "\n")) {
+      dialog.close();
+      return;
+    }
+    const source = utf8.encode(markup);
+    busy = true;
+    $("svg-apply").disabled = $("svg-cancel").disabled = true;
+    try {
+      const canvas = await decodeSource(source, "image/svg+xml");
+      const state = patchState(current, selected, { width: canvas.width, height: canvas.height });
+      state.assets = new Map(state.assets);
+      state.assets.set(selected, { ...asset, svgEdit: source, canvas, rendition: null });
+      checkAssets(state.manifest.layers, state.assets);
+      storeState(state, "Edited SVG source");
+      dialog.close();
+      status("SVG rendered");
+    } catch (error) {
+      errorEl.textContent = error.message;
+    } finally {
+      busy = false;
+      $("svg-apply").disabled = $("svg-cancel").disabled = false;
+      update();
+    }
+  },
+});
+
 const authorPanels = makeAuthorPanels({
   getState: () => current,
   getBusy: () => busy,
@@ -898,7 +1008,7 @@ const authorPanels = makeAuthorPanels({
   getSelectedSpline: () => selectedSplineId,
   setSelectedSpline: id => { selectedSplineId = id; update(); },
   getSplinePickMode: () => splinePickMode,
-  setSplinePickMode: v => { splinePickMode = v; update(); },
+  setSplinePickMode: v => { splinePickMode = v; if (v) masksPanel.stopBrush(); update(); },
   getTimelineOpen: () => timelineOpen,
   setTimelineOpen: v => { timelineOpen = v; update(); },
   newId,
@@ -926,8 +1036,12 @@ function update() {
   $("empty").hidden = hasDoc;
   $("canvas-wrap").hidden = !hasDoc;
   $("dimensions").textContent = hasDoc ? `${current.manifest.width} × ${current.manifest.height} px` : "";
-  for (const id of ["save", "export", "compare", "fit", "zoom-in", "zoom-out"]) $(id).disabled = !hasDoc || busy;
-  for (const id of ["open", "add", "add-panel", "empty-open", "sample"]) $(id).disabled = busy;
+  for (const id of ["save", "export", "compare", "fit", "zoom-in", "zoom-out", "mask-tab", "zensr-tab"]) {
+    $(id).disabled = !hasDoc || busy;
+  }
+  for (const id of ["open", "add", "add-panel", "add-gallery", "new-svg", "open-gallery", "empty-open", "sample", "empty-gallery"]) {
+    $(id).disabled = busy;
+  }
   $("undo").disabled = cursor < 1 || busy;
   $("redo").disabled = cursor >= history.length - 1 || busy;
   $("raise").disabled = !layer || index === layers.length - 1 || busy;
@@ -945,13 +1059,17 @@ function update() {
     input.disabled = current?.manifest.filterEngine !== ZEN_FILTERS && !hasCanvasFilters && ["exposure", "contrast", "saturation"].includes(key);
     $(`value-${key}`).value = format(value);
   }
+  zenFiltersPanel.sync(layer);
+  masksPanel.updateUI();
+  zensrPanel.updateUI();
+
   const nativeSource = layer?.mime === "image/jxl" ? layer : originalLayer();
   const nativeAsset = nativeSource?.mime === "image/jxl" && current.assets.get(nativeSource.id);
   $("native-tab").disabled = !nativeAsset;
   const sourceChanged = nativeInspector.setSource(nativeAsset || null, nativeSource?.name);
   nativeInspector.setBusy(busy);
   if (!nativeAsset && inspectorView === "native") showInspector("properties");
-  if (!hasDoc && ["coding", "splines"].includes(inspectorView)) showInspector("properties");
+  if (!hasDoc && ["mask", "zensr", "coding", "splines"].includes(inspectorView)) showInspector("properties");
   if (nativeAsset && sourceChanged && inspectorView === "native") queueMicrotask(nativeInspector.inspect);
 
   authorPanels.updateUI();
@@ -993,17 +1111,21 @@ function update() {
     pick.disabled = busy;
     const thumbnail = document.createElement("canvas");
     thumbnail.width = thumbnail.height = 32;
-    const scale = 32 / Math.max(entry.width, entry.height);
-    const thumbWidth = entry.width * scale;
-    const thumbHeight = entry.height * scale;
+    const s = 32 / Math.max(entry.width, entry.height);
+    const thumbWidth = entry.width * s;
+    const thumbHeight = entry.height * s;
     thumbnail.getContext("2d").drawImage(current.assets.get(entry.id).canvas,
       (32 - thumbWidth) / 2, (32 - thumbHeight) / 2, thumbWidth, thumbHeight);
     const name = document.createElement("span");
     name.textContent = entry.name;
     const detail = document.createElement("small");
-    detail.textContent = entry.mime === "image/svg+xml" ? "SVG"
-      : entry.nativeFrame !== undefined ? `Native JXL frame ${entry.nativeFrame + 1}`
-      : `${entry.width} × ${entry.height}`;
+    const tags = [];
+    if (entry.mime === "image/svg+xml") tags.push("SVG");
+    else if (entry.nativeFrame !== undefined) tags.push(`Native JXL frame ${entry.nativeFrame + 1}`);
+    else tags.push(`${entry.width} × ${entry.height}`);
+    if (hasActiveMask(entry, current.assets.get(entry.id))) tags.push("Mask");
+    if (hasActiveZensr(entry)) tags.push("ZenSR");
+    detail.textContent = tags.join(" · ");
     name.append(detail);
     pick.append(thumbnail, name);
     pick.addEventListener("click", () => { selected = entry.id; compare = false; update(); });
@@ -1056,6 +1178,8 @@ function originalPassthrough(state) {
   const { originalId, layers, width, height, timeline, splines, coding, cmyk } = state.manifest;
   if (timeline?.enabled || splines?.length || cmyk?.enabled || !isDefaultModularCoding(coding)) return false;
   const [layer] = layers;
+  const asset = state.assets.get(layer.id);
+  if (hasAdjustments(layer) || hasActiveMask(layer, asset) || hasActiveZensr(layer)) return false;
   return layers.length === 1 && layer.id === originalId && layer.mime === "image/jxl" &&
     width === layer.width && height === layer.height &&
     Object.entries(defaults).every(([key, value]) => layer[key] === value);
@@ -1064,7 +1188,6 @@ function originalPassthrough(state) {
 async function encodePresentation(state, includeLayers) {
   const { width, height, timeline, splines, coding, cmyk } = state.manifest;
 
-  // 1. Native CMYK (Level 10 lossless Cmyk8/16 or lossy ICC->XYB + Black)
   if (cmyk?.enabled) {
     const effective = applyCmykOffsets(state.cmykData.samples, cmyk.bitDepth, cmyk.channelOffsets);
     return codec("encodeCmyk", {
@@ -1077,7 +1200,6 @@ async function encodePresentation(state, includeLayers) {
     });
   }
 
-  // 2. Native multi-frame JXL animation timeline
   if (timeline?.enabled && timeline.frames?.length) {
     const frameBytes = width * height * 4;
     const total = frameBytes * timeline.frames.length;
@@ -1109,7 +1231,6 @@ async function encodePresentation(state, includeLayers) {
     return codec("encodeTimeline", { pixels, width, height, options }, [pixels.buffer]);
   }
 
-  // 3. Still image (configured Modular/VarDCT/Splines OR default cumulative native layers)
   const { canvas, rasters } = await renderFlattenedCanvas(state, 0);
   const context = canvas.getContext("2d");
   const { data: expected } = context.getImageData(0, 0, width, height);
@@ -1163,10 +1284,15 @@ async function saveProject(project) {
   if (project) {
     const assets = new Map(state.assets);
     for (const layer of state.manifest.layers) {
-      const asset = assets.get(layer.id);
+      let asset = assets.get(layer.id);
+      let updated = null;
       if (layer.mime === "image/svg+xml" && !asset.rendition) {
-        assets.set(layer.id, { ...asset, rendition: await encodeCanvas(asset.canvas) });
+        updated = { ...(updated ?? asset), rendition: await encodeCanvas(asset.canvas) };
       }
+      if (asset.maskAlpha && !asset.maskJxl) {
+        updated = { ...(updated ?? asset), maskJxl: await encodeMaskAlphaToJxl(asset.maskAlpha, layer.width, layer.height) };
+      }
+      if (updated) assets.set(layer.id, updated);
     }
     const cmykPayload = state.manifest.cmyk?.enabled ? state.cmykData : null;
     download(writeProject(flattened, state.manifest, assets, preserved, cmykPayload), `${title}.project.jxl`);
@@ -1190,6 +1316,15 @@ bindFile("open", "open-file", files => open(files[0]));
 bindFile("add", "layer-file", addLayers);
 $("add-panel").onclick = () => $("layer-file").click();
 $("empty-open").onclick = () => $("open-file").click();
+$("open-gallery").onclick = () => gallery.open("all");
+$("empty-gallery").onclick = () => gallery.open("all");
+$("add-gallery").onclick = () => gallery.open("all");
+$("new-svg").onclick = () => run("Creating SVG layer…", async () => {
+  const file = makeSvgFileFromTemplate("svg-title");
+  if (current) await addLayers([file]);
+  else await open(file);
+  svgEditor.open();
+});
 $("sample").onclick = () => run("Opening sample…", async () => {
   const response = await fetch("./sample.jpg");
   if (!response.ok) throw new Error("The sample photo is unavailable.");
@@ -1218,7 +1353,13 @@ function changeZoom(ratio) {
 }
 $("zoom-in").onclick = () => changeZoom(1.25);
 $("zoom-out").onclick = () => changeZoom(0.8);
-$("reset").onclick = () => updateLayer({ ...defaults, visible: activeLayer().visible }, "Reset adjustments");
+$("reset").onclick = () => updateLayer({
+  ...defaults,
+  visible: activeLayer().visible,
+  filters: undefined,
+  resizeKernel: undefined,
+  resizeLinear: undefined,
+}, "Reset adjustments");
 $("layer-name").onchange = event => updateLayer({ name: event.target.value.trim() || activeLayer().name }, "Renamed layer");
 for (const axis of ["x", "y"]) {
   $(`position-${axis}`).onchange = event => {
@@ -1231,12 +1372,15 @@ for (const axis of ["x", "y"]) {
 function showInspector(view) {
   inspectorView = view;
   if (view !== "splines") splinePickMode = false;
+  if (view !== "mask") masksPanel.stopBrush();
   $("history").hidden = view !== "history";
   $("properties").hidden = view !== "properties";
+  $("mask-panel").hidden = view !== "mask";
+  $("zensr-panel").hidden = view !== "zensr";
   $("coding-panel").hidden = view !== "coding";
   $("splines-panel").hidden = view !== "splines";
   $("native-panel").hidden = view !== "native";
-  for (const id of ["history", "properties", "coding", "splines", "native"]) {
+  for (const id of ["history", "properties", "mask", "zensr", "coding", "splines", "native"]) {
     $(`${id}-tab`).setAttribute("aria-pressed", String(view === id));
   }
   requestPaint();
@@ -1275,48 +1419,15 @@ const nativeInspector = makeNativeInspector({
 });
 $("history-tab").onclick = () => showInspector("history");
 $("properties-tab").onclick = () => showInspector("properties");
+$("mask-tab").onclick = () => showInspector("mask");
+$("zensr-tab").onclick = () => showInspector("zensr");
 $("coding-tab").onclick = () => showInspector("coding");
 $("splines-tab").onclick = () => showInspector("splines");
 $("native-tab").onclick = () => {
   showInspector("native");
   nativeInspector.inspect();
 };
-
-$("edit-svg").onclick = () => {
-  $("svg-error").textContent = "";
-  $("svg-source").value = text.decode(svgSource(current.assets.get(selected)));
-  $("svg-dialog").showModal();
-};
-$("svg-cancel").onclick = () => $("svg-dialog").close();
-$("svg-form").onsubmit = async event => {
-  event.preventDefault();
-  if (busy) return;
-  const asset = current.assets.get(selected);
-  if ($("svg-source").value === text.decode(svgSource(asset)).replace(/\r\n?/g, "\n")) {
-    $("svg-dialog").close();
-    return;
-  }
-  const source = utf8.encode($("svg-source").value);
-  busy = true;
-  $("svg-apply").disabled = $("svg-cancel").disabled = true;
-  try {
-    const canvas = await decodeSource(source, "image/svg+xml");
-    const state = patchState(current, selected, { width: canvas.width, height: canvas.height });
-    state.assets = new Map(state.assets);
-    state.assets.set(selected, { ...asset, svgEdit: source, canvas, rendition: null });
-    checkAssets(state.manifest.layers, state.assets);
-    storeState(state, "Edited SVG source");
-    $("svg-dialog").close();
-    status("SVG rendered");
-  } catch (error) {
-    $("svg-error").textContent = error.message;
-  } finally {
-    busy = false;
-    $("svg-apply").disabled = $("svg-cancel").disabled = false;
-    update();
-  }
-};
-$("svg-dialog").addEventListener("cancel", event => { if (busy) event.preventDefault(); });
+$("edit-svg").onclick = () => svgEditor.open();
 
 function canvasPoint(event) {
   const bounds = preview.getBoundingClientRect();
@@ -1333,9 +1444,105 @@ function hit(layer, x, y) {
   return layer.visible && layer.opacity > 0 && u >= 0 && v >= 0 && u < layer.width && v < layer.height;
 }
 
+// Direct on-canvas corner resize & rotation handles
+function layerPointToCanvas(layer, lx, ly) {
+  const rad = layer.angle * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const sx = lx * layer.scale;
+  const sy = ly * layer.scale;
+  return { x: layer.x + sx * cos - sy * sin, y: layer.y + sx * sin + sy * cos };
+}
+
+for (const handle of $("outline").querySelectorAll(".handle")) {
+  handle.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || busy || !current || compare || comparingKey || gesture) return;
+    event.stopPropagation();
+    const layer = activeLayer();
+    if (!layer) return;
+    const kind = handle.dataset.handle;
+    const pt = canvasPoint(event);
+    handle.setPointerCapture(event.pointerId);
+    if (kind === "rotate") {
+      const center = layerPointToCanvas(layer, layer.width / 2, layer.height / 2);
+      const startAngle = Math.atan2(pt.y - center.y, pt.x - center.x) * 180 / Math.PI;
+      gesture = { handle, pointer: event.pointerId, kind, layer, center, startAngle, state: current };
+    } else {
+      const anchorLocal = {
+        nw: [layer.width, layer.height],
+        ne: [0, layer.height],
+        se: [0, 0],
+        sw: [layer.width, 0],
+      }[kind];
+      const anchorWorld = layerPointToCanvas(layer, anchorLocal[0], anchorLocal[1]);
+      const startDist = Math.max(4, Math.hypot(pt.x - anchorWorld.x, pt.y - anchorWorld.y));
+      gesture = { handle, pointer: event.pointerId, kind, layer, anchorLocal, anchorWorld, startDist, state: current };
+    }
+  });
+  handle.addEventListener("pointermove", event => {
+    if (gesture?.handle !== handle || gesture?.pointer !== event.pointerId) return;
+    const pt = canvasPoint(event);
+    const { layer, kind } = gesture;
+    if (kind === "rotate") {
+      const curAngle = Math.atan2(pt.y - gesture.center.y, pt.x - gesture.center.x) * 180 / Math.PI;
+      let nextAngle = Math.round(layer.angle + (curAngle - gesture.startAngle));
+      while (nextAngle > 180) nextAngle -= 360;
+      while (nextAngle < -180) nextAngle += 360;
+      // Re-center around the visual midpoint while rotating
+      const rad = nextAngle * Math.PI / 180;
+      const hw = (layer.width * layer.scale) / 2;
+      const hh = (layer.height * layer.scale) / 2;
+      const nx = clampPosition(gesture.center.x - (hw * Math.cos(rad) - hh * Math.sin(rad)));
+      const ny = clampPosition(gesture.center.y - (hw * Math.sin(rad) + hh * Math.cos(rad)));
+      gesture.patch = { angle: nextAngle, x: nx, y: ny };
+      $("adjust-angle").value = nextAngle;
+      $("value-angle").value = `${nextAngle}°`;
+    } else {
+      const dist = Math.max(2, Math.hypot(pt.x - gesture.anchorWorld.x, pt.y - gesture.anchorWorld.y));
+      const nextScale = clampScale(layer.scale * (dist / gesture.startDist));
+      const rad = layer.angle * Math.PI / 180;
+      const ax = gesture.anchorLocal[0] * nextScale;
+      const ay = gesture.anchorLocal[1] * nextScale;
+      const nx = clampPosition(gesture.anchorWorld.x - (ax * Math.cos(rad) - ay * Math.sin(rad)));
+      const ny = clampPosition(gesture.anchorWorld.y - (ax * Math.sin(rad) + ay * Math.cos(rad)));
+      gesture.patch = { scale: nextScale, x: nx, y: ny };
+      $("adjust-scale").value = nextScale;
+      $("value-scale").value = `${Math.round(nextScale * 100)}%`;
+    }
+    $("position-x").value = gesture.patch.x;
+    $("position-y").value = gesture.patch.y;
+    gesture.state = patchState(current, selected, gesture.patch);
+    requestPaint();
+  });
+  handle.addEventListener("pointerup", event => {
+    if (gesture?.handle !== handle || gesture?.pointer !== event.pointerId) return;
+    const { patch, kind } = gesture;
+    gesture = null;
+    if (patch) updateLayer(patch, kind === "rotate" ? "Rotated layer" : "Resized layer");
+    requestPaint();
+  });
+  handle.addEventListener("lostpointercapture", () => {
+    if (gesture?.handle === handle) {
+      gesture = null;
+      update();
+    }
+  });
+}
+
 preview.addEventListener("pointerdown", event => {
   if (event.button !== 0 || busy || !current || compare || comparingKey || gesture) return;
   const point = canvasPoint(event);
+  if (masksPanel.getBrushMode()) {
+    const layer = activeLayer();
+    if (!layer) return;
+    const liveState = masksPanel.startStroke(layer, point);
+    if (liveState) {
+      gesture = { pointer: event.pointerId, maskBrush: true, layer, state: liveState };
+      preview.setPointerCapture(event.pointerId);
+      requestPaint();
+    }
+    return;
+  }
   if (splinePickMode && selectedSplineId) {
     const rx = Math.round(point.x);
     const ry = Math.round(point.y);
@@ -1359,8 +1566,16 @@ preview.addEventListener("pointerdown", event => {
   update();
 });
 preview.addEventListener("pointermove", event => {
-  if (gesture?.pointer !== event.pointerId) return;
+  if (gesture?.pointer !== event.pointerId || gesture?.handle) return;
   const point = canvasPoint(event);
+  if (gesture.maskBrush) {
+    const liveState = masksPanel.moveStroke(gesture.layer, point);
+    if (liveState) {
+      gesture.state = liveState;
+      requestPaint();
+    }
+    return;
+  }
   const { layer } = gesture;
   gesture.patch = { x: clampPosition(layer.x + point.x - gesture.point.x),
     y: clampPosition(layer.y + point.y - gesture.point.y) };
@@ -1370,14 +1585,21 @@ preview.addEventListener("pointermove", event => {
   requestPaint();
 });
 preview.addEventListener("pointerup", event => {
-  if (gesture?.pointer !== event.pointerId) return;
+  if (gesture?.pointer !== event.pointerId || gesture?.handle) return;
+  if (gesture.maskBrush) {
+    gesture = null;
+    masksPanel.endStroke();
+    requestPaint();
+    return;
+  }
   const { patch } = gesture;
   gesture = null;
   if (patch) updateLayer(patch, "Moved layer");
   requestPaint();
 });
 preview.addEventListener("lostpointercapture", () => {
-  if (gesture?.pointer !== undefined) {
+  if (gesture?.pointer !== undefined && !gesture?.handle) {
+    if (gesture.maskBrush) masksPanel.endStroke();
     gesture = null;
     update();
   }
@@ -1401,7 +1623,8 @@ stage.addEventListener("drop", event => {
 });
 
 window.addEventListener("keydown", event => {
-  if ($("svg-dialog").open || event.target instanceof Element && event.target.matches("input, textarea, select")) return;
+  if ($("svg-dialog").open || !$("gallery-dialog").hidden ||
+      (event.target instanceof Element && event.target.matches("input, textarea, select"))) return;
   const command = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
   if (command && key === "o") {
@@ -1443,6 +1666,7 @@ new ResizeObserver(requestPaint).observe(stage);
 
 codec("init").then(mode => {
   $("engine").textContent = mode;
+  zenFiltersPanel.loadCatalog();
   if (!current && !busy) status("Ready");
 }, report);
 update();

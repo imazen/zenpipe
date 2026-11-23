@@ -577,6 +577,269 @@ try {
     await cm.close();
   }
 
+  // ── Phase 2: Gallery, Rich SVG Studio, Crisp Vector Scaling, ZenFilters, ZenResize & On-Canvas Handles ──
+  {
+    const st = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const stErrors = [];
+    st.on("pageerror", error => stErrors.push(error.message));
+    await st.goto(baseUrl);
+    await st.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    async function waitReady(textMatch) {
+      if (textMatch) await st.locator("#status").filter({ hasText: textMatch }).waitFor();
+      await st.waitForFunction(() => !document.getElementById("save").disabled);
+    }
+
+    // 1. Open calibrated Sunset Color Chart from Prefilled Gallery (zero disk upload)
+    await st.getByRole("button", { name: "Browse gallery", exact: true }).click();
+    await st.locator("#gallery-dialog").waitFor({ state: "visible" });
+    await st.screenshot({ path: `${output}/gallery.png` });
+    await st.locator('[data-gallery-id="color-checker"] button[data-action="add"]').click();
+    await waitReady("Image opened");
+    assert.equal(await st.locator("#dimensions").textContent(), "512 × 340 px");
+
+    // 2. Add Hero Title Banner SVG from Prefilled Gallery
+    await st.locator("#add-gallery").click();
+    await st.locator('[data-gallery-cat="vectors"]').click();
+    await st.locator('[data-gallery-id="svg-title"] button[data-action="add"]').click();
+    await waitReady("Layer added");
+    assert.equal(await st.locator(".layer").count(), 2);
+
+    // 3. Edit SVG visually in SVG Vector Studio (live inert preview + text edit + add circle)
+    await st.getByRole("button", { name: "Edit SVG source", exact: true }).click();
+    await st.waitForFunction(() => {
+      const img = document.getElementById("svg-preview");
+      return img && img.complete && img.naturalWidth > 0;
+    });
+    // Select the first <text> element and edit its copy visually
+    const textOptValue = await st.locator("#svg-el-select option").evaluateAll(opts => {
+      const found = opts.find(o => o.textContent.includes("<text>"));
+      return found ? found.value : null;
+    });
+    assert.ok(textOptValue !== null, "expected <text> element in SVG inspector");
+    await st.locator("#svg-el-select").selectOption(textOptValue);
+    await st.locator("#svg-el-text").fill("ZEN STUDIO LIVE");
+    await st.locator("#svg-add-circle").click();
+    await st.screenshot({ path: `${output}/svg-studio.png` });
+    assert.ok((await st.locator("#svg-source").inputValue()).includes("ZEN STUDIO LIVE"));
+    assert.ok((await st.locator("#svg-source").inputValue()).includes("<circle"));
+    await st.getByRole("button", { name: "Apply SVG", exact: true }).click();
+    await waitReady("SVG rendered");
+
+    // 4. Drag SE corner resize handle directly on canvas to scale SVG crisply
+    const seHandle = st.locator("#outline .handle-se");
+    await seHandle.waitFor({ state: "visible" });
+    const hBox = await seHandle.boundingBox();
+    await st.mouse.move(hBox.x + hBox.width / 2, hBox.y + hBox.height / 2);
+    await st.mouse.down();
+    await st.mouse.move(hBox.x + hBox.width / 2 - 48, hBox.y + hBox.height / 2 - 14, { steps: 5 });
+    await st.mouse.up();
+    const svgScale = Number(await st.locator("#adjust-scale").inputValue());
+    assert.ok(svgScale !== 1, `expected SE handle drag to change scale, got ${svgScale}`);
+    assert.match(await st.locator("#scaled-dimensions").textContent(), /Vector SVG re-rasterized crisply/);
+
+    // 5. Select base raster layer, apply ZenFilters (Auto Tone + Preset + Film Look + Clarity + Vignette) + zenresize Lanczos
+    await st.locator(".layer-pick").last().click();
+    await st.waitForFunction(() => Boolean(document.getElementById("zf-preset")));
+    const readCanvas = () => st.locator("#canvas").evaluate(el =>
+      Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data));
+    await st.evaluate(() => new Promise(requestAnimationFrame));
+    await st.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    const beforeFilters = Buffer.from(await readCanvas());
+
+    await st.locator("#zf-autoTone").click();
+    await st.locator("#zf-preset").selectOption("Golden Hour");
+    await st.locator("#zf-film-look").selectOption("portra");
+    await st.locator('[data-zf-group="detail"] summary').click();
+    await st.locator("#zf-clarity").fill("0.4");
+    await st.locator("#zf-clarity").dispatchEvent("input");
+    await st.locator("#zf-clarity").dispatchEvent("change");
+    await st.locator("#resize-kernel").selectOption("lanczos");
+    await st.locator("#adjust-scale").fill("0.85");
+    await st.locator("#adjust-scale").dispatchEvent("input");
+    await st.locator("#adjust-scale").dispatchEvent("change");
+    assert.match(await st.locator("#scaled-dimensions").textContent(), /zenresize:.*lanczos, linear/);
+    await st.evaluate(() => new Promise(requestAnimationFrame));
+    await st.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    const afterFilters = Buffer.from(await readCanvas());
+    assert.notDeepEqual(afterFilters, beforeFilters, "ZenFilters + zenresize must visibly transform canvas");
+    await st.screenshot({ path: `${output}/zenfilters-svg.png` });
+
+    // Save project + verify round-trip + export flat JXL
+    await writeFile(`${output}/studio-rich.rgba`, afterFilters);
+    let dlEv = st.waitForEvent("download");
+    await st.getByRole("button", { name: "Save project", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/studio-rich.project.jxl`);
+    await waitReady("Project saved");
+    const richProj = await readFile(`${output}/studio-rich.project.jxl`);
+    assert.deepEqual(Buffer.from(decode_jxl(richProj).into_pixels()), afterFilters);
+    const parsedRich = readProject(richProj);
+    assert.equal(parsedRich.manifest.layers[0].filters.preset, "Golden Hour");
+    assert.equal(parsedRich.manifest.layers[0].filters.filmLook, "portra");
+    assert.equal(parsedRich.manifest.layers[0].resizeKernel, "lanczos");
+
+    await st.reload();
+    await st.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await st.locator("#open-file").setInputFiles({ name: "studio-rich.project.jxl", mimeType: "image/jxl", buffer: richProj });
+    await waitReady("Project reopened");
+    await st.evaluate(() => new Promise(requestAnimationFrame));
+    await st.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    assert.deepEqual(Buffer.from(await readCanvas()), afterFilters);
+    await st.locator(".layer-pick").last().click();
+    assert.equal(await st.locator("#zf-preset").inputValue(), "Golden Hour");
+    assert.equal(await st.locator("#zf-film-look").inputValue(), "portra");
+    assert.equal(await st.locator("#resize-kernel").inputValue(), "lanczos");
+
+    dlEv = st.waitForEvent("download");
+    await st.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/studio-rich.jxl`);
+    assert.deepEqual(Buffer.from(decode_jxl(await readFile(`${output}/studio-rich.jxl`)).into_pixels()), afterFilters);
+    assert.deepEqual(stErrors, []);
+    await st.close();
+  }
+
+  // ── Phase 2: Non-Destructive Layer Masks (Parametric + Paintable Brush + Ruby Overlay + znmk Round-Trip) ──
+  {
+    const mk = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const mkErrors = [];
+    mk.on("pageerror", error => mkErrors.push(error.message));
+    const basePx = rgba(96, 64, () => [20, 40, 180, 255]);
+    const topPx = rgba(96, 64, () => [240, 190, 30, 255]);
+    const baseJxl = encode_jxl(basePx, 96, 64, 96 * 4);
+    const topJxl = encode_jxl(topPx, 96, 64, 96 * 4);
+    await mk.goto(baseUrl);
+    await mk.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await mk.locator("#open-file").setInputFiles({ name: "mask-base.jxl", mimeType: "image/jxl", buffer: Buffer.from(baseJxl) });
+    await mk.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    const chooser = mk.waitForEvent("filechooser");
+    await mk.getByRole("button", { name: "Add layers", exact: true }).click();
+    await (await chooser).setFiles({ name: "mask-top.jxl", mimeType: "image/jxl", buffer: Buffer.from(topJxl) });
+    await mk.locator("#status").filter({ hasText: "Layer added" }).waitFor();
+
+    await mk.getByRole("button", { name: "Mask", exact: true }).click();
+    await mk.locator("#mask-enabled").check();
+    await mk.locator("#mask-shape").selectOption("radial");
+    await mk.evaluate(() => new Promise(requestAnimationFrame));
+    await mk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+
+    // Corner should be masked out (revealing blue base), center should remain yellow top
+    const samplePx = (x, y) => mk.locator("#canvas").evaluate((el, [px, py]) => {
+      const cx = Math.round(px * el.width / 96);
+      const cy = Math.round(py * el.height / 64);
+      return Array.from(el.getContext("2d").getImageData(cx, cy, 1, 1).data);
+    }, [x, y]);
+    const corner1 = await samplePx(2, 2);
+    const center1 = await samplePx(48, 32);
+    assert.ok(corner1[2] > 140 && corner1[0] < 60, `radial mask corner should reveal blue base, got ${corner1}`);
+    assert.ok(center1[0] > 200 && center1[1] > 160, `radial mask center should show yellow top, got ${center1}`);
+
+    // Paint erase stroke directly in the center of the canvas
+    await mk.locator("#mask-brush-erase").click();
+    const cBox = await mk.locator("#canvas").boundingBox();
+    await mk.mouse.move(cBox.x + cBox.width * 0.48, cBox.y + cBox.height * 0.5);
+    await mk.mouse.down();
+    await mk.mouse.move(cBox.x + cBox.width * 0.52, cBox.y + cBox.height * 0.5, { steps: 3 });
+    await mk.mouse.up();
+    await mk.locator("#mask-brush-stop").click();
+    await mk.evaluate(() => new Promise(requestAnimationFrame));
+    await mk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    const centerAfterErase = await samplePx(48, 32);
+    assert.ok(centerAfterErase[2] > 140 && centerAfterErase[0] < 60, `erased center should reveal blue base, got ${centerAfterErase}`);
+
+    // Verify ruby overlay visually works in preview, then turn off before saving
+    await mk.locator("#mask-ruby").check();
+    await mk.evaluate(() => new Promise(requestAnimationFrame));
+    await mk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    await mk.screenshot({ path: `${output}/masks.png` });
+    await mk.locator("#mask-ruby").uncheck();
+    await mk.evaluate(() => new Promise(requestAnimationFrame));
+    await mk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+
+    const expectedMasked = Buffer.from(await mk.locator("#canvas").evaluate(el =>
+      Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data)));
+    await writeFile(`${output}/masked.rgba`, expectedMasked);
+
+    let dlEv = mk.waitForEvent("download");
+    await mk.getByRole("button", { name: "Save project", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/masked.project.jxl`);
+    const maskedProj = await readFile(`${output}/masked.project.jxl`);
+    assert.equal(jxlBoxes(maskedProj).filter(b => b.type === "znmk").length, 1);
+    assert.equal(opaqueBoxes(maskedProj).length, 0);
+    assert.deepEqual(Buffer.from(decode_jxl(maskedProj).into_pixels()), expectedMasked);
+
+    // Reopen masked .project.jxl and confirm painted + parametric mask survives bit-for-bit
+    await mk.reload();
+    await mk.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await mk.locator("#open-file").setInputFiles({ name: "masked.project.jxl", mimeType: "image/jxl", buffer: maskedProj });
+    await mk.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await mk.evaluate(() => new Promise(requestAnimationFrame));
+    await mk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    const reopenedMasked = Buffer.from(await mk.locator("#canvas").evaluate(el =>
+      Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data)));
+    assert.deepEqual(reopenedMasked, expectedMasked);
+
+    dlEv = mk.waitForEvent("download");
+    await mk.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/masked.jxl`);
+    assert.deepEqual(Buffer.from(decode_jxl(await readFile(`${output}/masked.jxl`)).into_pixels()), expectedMasked);
+    assert.deepEqual(mkErrors, []);
+    await mk.close();
+  }
+
+  // ── Phase 2: ZenSR Neural JPEG Restoration (dejpeg_rt24g in Browser WASM SIMD + Non-Destructive Round-Trip) ──
+  {
+    const sr = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const srErrors = [];
+    sr.on("pageerror", error => srErrors.push(error.message));
+    await sr.goto(baseUrl);
+    await sr.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sr.getByRole("button", { name: "Browse gallery", exact: true }).click();
+    await sr.locator('[data-gallery-id="lowq-jpeg-demo"] button[data-action="add"]').click();
+    await sr.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+
+    const readSrCanvas = () => sr.locator("#canvas").evaluate(el =>
+      Array.from(el.getContext("2d").getImageData(0, 0, el.width, el.height).data));
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    const beforeSr = Buffer.from(await readSrCanvas());
+
+    await sr.getByRole("button", { name: "ZenSR", exact: true }).click();
+    await sr.locator("#zensr-enabled").check();
+    await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    await sr.locator("#zensr-telemetry").filter({ hasText: /ZenSR active \(dejpeg_rt24g, 1×\).*ms/ }).waitFor();
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    const afterSr = Buffer.from(await readSrCanvas());
+    assert.notDeepEqual(afterSr, beforeSr, "ZenSR dejpeg_rt24g must modify low-Q JPEG pixels");
+    await sr.screenshot({ path: `${output}/zensr.png` });
+    await writeFile(`${output}/zensr.rgba`, afterSr);
+
+    let dlEv = sr.waitForEvent("download");
+    await sr.getByRole("button", { name: "Save project", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/zensr.project.jxl`);
+    const zensrProj = await readFile(`${output}/zensr.project.jxl`);
+    const zParsed = readProject(zensrProj);
+    assert.equal(zParsed.manifest.layers[0].zensr.enabled, true);
+    assert.equal(zParsed.manifest.layers[0].zensr.model, "dejpeg_rt24g");
+    // Original JPEG bytes preserved untouched in znas
+    const origSrc = zParsed.assets.get(zParsed.manifest.layers[0].id).source;
+    assert.equal(origSrc[0], 0xff);
+    assert.equal(origSrc[1], 0xd8);
+    assert.deepEqual(Buffer.from(decode_jxl(zensrProj).into_pixels()), afterSr);
+
+    await sr.reload();
+    await sr.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sr.locator("#open-file").setInputFiles({ name: "zensr.project.jxl", mimeType: "image/jxl", buffer: zensrProj });
+    await sr.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    assert.deepEqual(Buffer.from(await readSrCanvas()), afterSr);
+
+    dlEv = sr.waitForEvent("download");
+    await sr.getByRole("button", { name: "Export JXL", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/zensr.jxl`);
+    assert.deepEqual(Buffer.from(decode_jxl(await readFile(`${output}/zensr.jxl`)).into_pixels()), afterSr);
+    assert.deepEqual(srErrors, []);
+    await sr.close();
+  }
+
   if (process.env.EDITOR_JPEG_CARRIER) {
     const resources = await browser.newPage({ acceptDownloads: true });
     await resources.goto(baseUrl);
@@ -607,13 +870,13 @@ try {
   // This avoids dependence on obsolete Chromium V8 switches or interception
   // of fetches that originate inside a dedicated worker.
   const names = { ".html": "text/html", ".mjs": "text/javascript", ".js": "text/javascript",
-    ".css": "text/css", ".wasm": "application/wasm" };
+    ".css": "text/css", ".wasm": "application/wasm", ".raw": "application/octet-stream", ".jpg": "image/jpeg" };
   const worker = await readFile(new URL("../dist/codec-worker.mjs", import.meta.url), "utf8");
   assert.ok(worker.includes("WebAssembly.validate(relaxedProbe)"));
   const fallbackServer = createServer(async (req, res) => {
     try {
       const pathname = req.url === "/" ? "/index.html" : req.url;
-      if (!/^\/[a-zA-Z0-9_/-]+\.[a-z]+$/.test(pathname) || !names[extname(pathname)]) {
+      if (!/^\/[a-zA-Z0-9_./-]+\.[a-z]+$/.test(pathname) || pathname.includes("..") || !names[extname(pathname)]) {
         res.writeHead(404).end();
         return;
       }
@@ -648,6 +911,11 @@ try {
     await baseline.getByRole("button", { name: "Native JXL", exact: true }).click();
     await baseline.getByText("1 native JPEG XL frame", { exact: true }).waitFor();
     await baseline.getByRole("button", { name: "Add frame as layer", exact: true }).waitFor();
+    // Also exercise ZenSR baseline WASM compatibility build (-simd128,-relaxed-simd)
+    await baseline.getByRole("button", { name: "ZenSR", exact: true }).click();
+    await baseline.locator("#zensr-enabled").check();
+    await baseline.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    await baseline.locator("#zensr-telemetry").filter({ hasText: /ZenSR active \(dejpeg_rt24g, 1×\).*ms/ }).waitFor();
     await baseline.close();
   } finally {
     fallbackServer.close();
