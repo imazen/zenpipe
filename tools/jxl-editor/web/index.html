@@ -17,6 +17,7 @@
       <button id="open" type="button">Open image</button>
       <button id="add" type="button">Add layers</button>
       <button id="open-gallery" type="button">Gallery</button>
+      <button id="check-decoding" type="button" title="Run zenjxl-decoder, jxl-rs, jxl-oxide, and libjxl in WebAssembly to compare decoded outputs and log bugs" disabled>Check decoding</button>
       <button id="save" class="primary" type="button" disabled>Save project</button>
       <button id="export" type="button" disabled>Export JXL</button>
     </div>
@@ -26,6 +27,7 @@
     <input id="cmyk-icc-file" type="file" accept=".icc,.icm" hidden>
     <input id="mask-import-file" type="file" accept=".png,.jpg,.jpeg,.webp,.avif,.svg" hidden>
     <input id="zensr-weights-file" type="file" accept=".raw,.bin" hidden>
+    <input id="dc-upload-file" type="file" accept="image/jxl,.jxl,.project.jxl" multiple hidden>
   </header>
   <main class="workspace">
     <nav class="studio-rail" aria-label="Studio tools">
@@ -56,6 +58,10 @@
       <button id="rail-structure" type="button" class="rail-btn" aria-pressed="false" title="JXL Native Document Structure Inspector & Property Editor">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h6v4H5zM13 10h6v4h-6zM13 16h6v4h-6zM8 9v9h5M8 12h5"/></svg>
         <span>Structure</span>
+      </button>
+      <button id="rail-decode" type="button" class="rail-btn" aria-pressed="false" title="Multi-Decoder Check & Compatibility Lab (zenjxl-decoder, jxl-rs, jxl-oxide, libjxl)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8.5 11l1.8 1.8 3.7-3.8"/></svg>
+        <span>Decode</span>
       </button>
       <button id="rail-vault" type="button" class="rail-btn" aria-pressed="false" title="Saved browser copies & version history">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="8"/></svg>
@@ -208,6 +214,7 @@
           <button id="mask-tab" type="button" aria-pressed="false" disabled>Mask</button>
           <button id="zensr-tab" type="button" aria-pressed="false" disabled>ZenSR</button>
           <button id="structure-tab" type="button" aria-pressed="false">Structure</button>
+          <button id="decode-tab" type="button" aria-pressed="false">Decode Lab</button>
           <button id="coding-tab" type="button" aria-pressed="false" disabled>Coding</button>
           <button id="splines-tab" type="button" aria-pressed="false" disabled>Splines</button>
           <button id="history-tab" type="button" aria-pressed="false">History</button>
@@ -605,6 +612,74 @@
           </div>
           <ol id="struct-tree" class="struct-tree" aria-label="JXL document structure tree"></ol>
           <div id="struct-props" class="struct-props" aria-label="Selected structure node properties"></div>
+        </div>
+        <div id="decode-panel" class="subpanel" hidden>
+          <p class="muted-note">Run four independent WebAssembly JPEG XL decoders side-by-side (<code>zenjxl-decoder</code>, <code>jxl-rs</code>, <code>jxl-oxide</code>, and <code>libjxl</code>) to surface decoder/encoder bugs, measure the feature compatibility surface, and export structured results for automated test loops.</p>
+          <label class="name-field">Target bitstream
+            <select id="dc-target">
+              <option value="plain-jxl">Plain JXL (.jxl export)</option>
+              <option value="project-jxl">Project JXL (.project.jxl container)</option>
+              <option value="raw-source" disabled>Raw source .jxl (active layer)</option>
+            </select>
+          </label>
+          <div class="asset-actions">
+            <button id="dc-run-btn" type="button" class="primary">Check decoding</button>
+            <button id="dc-sweep-btn" type="button" title="Run 10-case JXL feature matrix across all selected decoders">Run sweep (10 modes)</button>
+            <button id="dc-upload-btn" type="button">Test .jxl file</button>
+          </div>
+          <div class="dc-decoders-pick" role="group" aria-label="Decoders to run">
+            <label class="inline-check"><input id="dc-use-zenjxl-decoder" type="checkbox" checked> zenjxl-decoder</label>
+            <label class="inline-check"><input id="dc-use-jxl-rs" type="checkbox" checked> jxl-rs</label>
+            <label class="inline-check"><input id="dc-use-jxl-oxide" type="checkbox" checked> jxl-oxide</label>
+            <label class="inline-check"><input id="dc-use-libjxl" type="checkbox" checked> libjxl</label>
+          </div>
+          <div class="dc-opts-row">
+            <label class="inline-check"><input id="dc-probe-l5" type="checkbox" checked> Probe Level 5</label>
+            <label class="inline-check"><input id="dc-store-bytes" type="checkbox"> Keep .jxl bytes for all runs</label>
+          </div>
+          <p id="dc-progress" class="muted-note" hidden></p>
+          <div id="dc-latest" class="dc-latest"></div>
+          <details open>
+            <summary>Visual Pixel Diff Viewer</summary>
+            <div class="coordinates">
+              <label>Decoder A <select id="dc-diff-a"></select></label>
+              <label>Decoder B <select id="dc-diff-b"></select></label>
+            </div>
+            <label class="name-field">Diff visualization
+              <select id="dc-diff-mode">
+                <option value="x16">Amplified diff (×16)</option>
+                <option value="x64">Amplified diff (×64)</option>
+                <option value="x1">Raw abs diff (×1)</option>
+                <option value="mask0">Any diff mask (&gt; 0)</option>
+                <option value="mask2">Bug threshold mask (&gt; 2)</option>
+                <option value="view-a">View Decoder A</option>
+                <option value="view-b">View Decoder B</option>
+              </select>
+            </label>
+            <p id="dc-diff-info" class="muted-note"></p>
+            <canvas id="dc-diff-canvas" class="dc-diff-canvas" hidden></canvas>
+          </details>
+          <details open>
+            <summary>Compatibility Mode Surface (Feature × Decoder)</summary>
+            <div id="dc-surface"></div>
+          </details>
+          <details open>
+            <summary>Saved Runs &amp; Loop Export (IndexedDB)</summary>
+            <div class="pill-row" role="group" aria-label="Saved decode runs filter">
+              <button type="button" class="pill-btn" data-dc-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="pill-btn" data-dc-filter="bugs" aria-pressed="false">Bugs &amp; Diffs</button>
+              <button type="button" class="pill-btn" data-dc-filter="fails" aria-pressed="false">Failures</button>
+              <button type="button" class="pill-btn" data-dc-filter="exact" aria-pressed="false">Exact</button>
+            </div>
+            <div class="asset-actions">
+              <button id="dc-export-json" type="button">Export JSON</button>
+              <button id="dc-export-ndjson" type="button">Export NDJSON</button>
+              <button id="dc-export-md" type="button">Export Bug MD</button>
+              <button id="dc-clear-runs" type="button">Clear runs</button>
+            </div>
+            <p id="dc-history-summary" class="muted-note"></p>
+            <ol id="dc-history-list" class="dc-history-list" aria-label="Saved decode compatibility runs"></ol>
+          </details>
         </div>
         <ol id="history" hidden aria-label="Edit history"></ol>
         <div id="vault-panel" hidden>

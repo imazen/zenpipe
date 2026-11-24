@@ -2,6 +2,7 @@ import { codec } from "./codec.mjs";
 import { appLog, makeConsolePanel } from "./console-log.mjs";
 import { makeVaultPanel } from "./storage.mjs";
 import { makeStructureInspector } from "./structure-inspector.mjs";
+import { makeDecodeLab } from "./decode-check.mjs";
 import { makeNativeInspector } from "./native-panel.mjs";
 import {
   ZEN_FILTERS, effectiveLayerSize, hasActiveMask, hasActiveZensr, hasAdjustments,
@@ -54,6 +55,7 @@ let activeDocId = null;
 let title = "Untitled";
 let vaultPanel = null;
 let structureInspector = null;
+let decodeLab = null;
 let zoom = null;
 let lastPaintScale = 1;
 let compare = false;
@@ -1262,6 +1264,7 @@ function update() {
   masksPanel.updateUI();
   zensrPanel.updateUI();
   structureInspector?.render();
+  decodeLab?.updateButtons(hasDoc, busy);
 
   const nativeSource = layer?.mime === "image/jxl" ? layer : originalLayer();
   const nativeAsset = nativeSource?.mime === "image/jxl" && current.assets.get(nativeSource.id);
@@ -1496,6 +1499,26 @@ async function buildProjectBlobAndBytes(state, includeLayers = true) {
   return { blob, flattened, preserved };
 }
 
+async function buildPlainJxlBlob(state) {
+  let flattened;
+  let preserved = state.preserved;
+  if (originalPassthrough(state)) {
+    flattened = state.assets.get(state.manifest.originalId).source;
+    const sourceBoxes = safeOpaqueBoxes(flattened);
+    preserved = preserved.filter(entry => {
+      const index = sourceBoxes.findIndex(box =>
+        box.type === entry.type && box.data.length === entry.data.length &&
+        box.data.every((byte, offset) => byte === entry.data[offset]));
+      if (index < 0) return true;
+      sourceBoxes.splice(index, 1);
+      return false;
+    });
+  } else {
+    flattened = await encodePresentation(state, false);
+  }
+  return writeImage(flattened, preserved);
+}
+
 async function saveProject(project) {
   stopPlayback();
   const state = current;
@@ -1508,23 +1531,7 @@ async function saveProject(project) {
     vaultPanel?.recordExplicitVersion("save", `Saved ${title}.project.jxl`, projectBytes);
     status("Project saved · original assets embedded");
   } else {
-    let flattened;
-    let preserved = state.preserved;
-    if (originalPassthrough(state)) {
-      flattened = state.assets.get(state.manifest.originalId).source;
-      const sourceBoxes = safeOpaqueBoxes(flattened);
-      preserved = preserved.filter(entry => {
-        const index = sourceBoxes.findIndex(box =>
-          box.type === entry.type && box.data.length === entry.data.length &&
-          box.data.every((byte, offset) => byte === entry.data[offset]));
-        if (index < 0) return true;
-        sourceBoxes.splice(index, 1);
-        return false;
-      });
-    } else {
-      flattened = await encodePresentation(state, false);
-    }
-    const blob = writeImage(flattened, preserved);
+    const blob = await buildPlainJxlBlob(state);
     download(blob, `${title}.jxl`);
     appLog.info("export", `Exported "${title}.jxl" (${blob.size.toLocaleString()} B)`);
     status("JPEG XL exported");
@@ -1626,6 +1633,7 @@ $("rail-upscale").onclick = () => showInspector("zensr");
 $("rail-mask").onclick = () => showInspector("mask");
 $("rail-animate").onclick = () => $("timeline-toggle").click();
 $("rail-structure").onclick = () => showInspector("structure");
+$("rail-decode").onclick = () => showInspector("decode");
 $("rail-vault").onclick = () => showInspector("vault");
 
 $("raise").onclick = () => moveLayer(selected, current.manifest.layers.findIndex(l => l.id === selected) + 1);
@@ -1725,6 +1733,7 @@ function showInspector(view) {
   if (view !== "mask") masksPanel.stopBrush();
   $("history").hidden = view !== "history";
   $("structure-panel").hidden = view !== "structure";
+  $("decode-panel").hidden = view !== "decode";
   $("vault-panel").hidden = view !== "vault";
   $("log-panel").hidden = view !== "log";
   $("properties").hidden = view !== "properties";
@@ -1733,7 +1742,7 @@ function showInspector(view) {
   $("coding-panel").hidden = view !== "coding";
   $("splines-panel").hidden = view !== "splines";
   $("native-panel").hidden = view !== "native";
-  for (const id of ["history", "structure", "vault", "log", "properties", "mask", "zensr", "coding", "splines", "native"]) {
+  for (const id of ["history", "structure", "decode", "vault", "log", "properties", "mask", "zensr", "coding", "splines", "native"]) {
     $(`${id}-tab`)?.setAttribute("aria-pressed", String(view === id));
   }
   const isStruct = view === "structure";
@@ -1744,8 +1753,10 @@ function showInspector(view) {
   $("rail-upscale")?.setAttribute("aria-pressed", String(view === "zensr"));
   $("rail-mask")?.setAttribute("aria-pressed", String(view === "mask"));
   $("rail-structure")?.setAttribute("aria-pressed", String(isStruct));
+  $("rail-decode")?.setAttribute("aria-pressed", String(view === "decode"));
   $("rail-vault")?.setAttribute("aria-pressed", String(view === "vault"));
   if (view === "vault") vaultPanel?.refreshUI();
+  if (view === "decode") decodeLab?.refresh();
   if (isStruct) structureInspector?.render();
   requestPaint();
 }
@@ -1834,8 +1845,28 @@ structureInspector = makeStructureInspector({
   status,
   report,
 });
+decodeLab = makeDecodeLab({
+  getState: () => current,
+  getTitle: () => title,
+  getSelectedLayer: () => activeLayer(),
+  getBusy: () => busy,
+  buildPlainJxlBytes: async state => {
+    const blob = await buildPlainJxlBlob(state);
+    return new Uint8Array(await blob.arrayBuffer());
+  },
+  buildProjectJxlBytes: async state => {
+    const { blob } = await buildProjectBlobAndBytes(state, true);
+    return new Uint8Array(await blob.arrayBuffer());
+  },
+  renderFlattenedCanvas,
+  download,
+  newId,
+  status,
+  showDecodeTab: () => showInspector("decode"),
+});
 $("history-tab").onclick = () => showInspector("history");
 $("structure-tab").onclick = () => showInspector("structure");
+$("decode-tab").onclick = () => showInspector("decode");
 $("vault-tab").onclick = () => showInspector("vault");
 $("log-tab").onclick = () => showInspector("log");
 $("properties-tab").onclick = () => showInspector("properties");

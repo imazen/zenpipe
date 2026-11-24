@@ -51,8 +51,8 @@ done
 if (( $# == 0 )); then set -- relaxed baseline; fi
 for mode in "$@"; do
     case "$mode" in
-        relaxed) features=+simd128,+relaxed-simd ;;
-        baseline) features=-simd128,-relaxed-simd ;;
+        relaxed) features=+simd128,+relaxed-simd; dec_flags="--features simd128" ;;
+        baseline) features=-simd128,-relaxed-simd; dec_flags="--no-default-features" ;;
         *) echo "Unknown WebAssembly build mode: $mode" >&2; exit 1 ;;
     esac
     RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
@@ -63,8 +63,14 @@ for mode in "$@"; do
         cargo build --locked --release --target wasm32-unknown-unknown --manifest-path native-wasm/Cargo.toml
     RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
         cargo build --locked --release --target wasm32-unknown-unknown --manifest-path zensr-wasm/Cargo.toml
-    for module in codecs filters native zensr; do
+    RUSTFLAGS="-C target-feature=$features" CARGO_TARGET_DIR="target/$mode" \
+        cargo build --locked --release --target wasm32-unknown-unknown --manifest-path decoders-wasm/Cargo.toml $dec_flags
+    for module in codecs filters native zensr decoders; do
         wasm-bindgen --target web --no-typescript --out-dir "dist/wasm/$mode" \
             "target/$mode/wasm32-unknown-unknown/release/jxl_editor_${module}.wasm"
     done
 done
+
+if [[ ! -f dist/wasm/libjxl/libjxl_dec.wasm && "${BUILD_LIBJXL_WASM:-0}" == "1" ]]; then
+    bash libjxl-wasm/build.sh
+fi

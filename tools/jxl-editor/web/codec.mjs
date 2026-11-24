@@ -17,6 +17,11 @@ function summarizeResult(method, value) {
   if (method === "nativeTimeline") {
     return `${value.width}×${value.height} · ${value.info?.frames?.length ?? 0} frames`;
   }
+  if (method === "checkDecoders") {
+    const ok = (value.results ?? []).filter(r => r.ok).length;
+    const total = (value.results ?? []).length;
+    return `${ok}/${total} decoders OK (${value.jxlByteLength ?? 0} B)`;
+  }
   if (value instanceof Uint8Array) {
     return `${value.byteLength} B`;
   }

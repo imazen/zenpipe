@@ -1,11 +1,14 @@
 import { appLog } from "./console-log.mjs";
 
 const DB_NAME = "jxl-studio-vault-v1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_DOCS = "documents";
 const STORE_VERSIONS = "versions";
+const STORE_DECODE_RUNS = "decode_runs";
 const AUTOSAVE_PREF_KEY = "jxl-studio-autosave";
 const MAX_VERSIONS_PER_DOC = 20;
+const MAX_DECODE_RUNS = 250;
+const MAX_RUN_REPRO_BYTES = 8 * 1024 * 1024;
 
 let dbPromise = null;
 
@@ -24,6 +27,11 @@ function openDb() {
       if (!db.objectStoreNames.contains(STORE_VERSIONS)) {
         const vers = db.createObjectStore(STORE_VERSIONS, { keyPath: "versionId" });
         vers.createIndex("byDoc", "docId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_DECODE_RUNS)) {
+        const runs = db.createObjectStore(STORE_DECODE_RUNS, { keyPath: "runId" });
+        runs.createIndex("createdAt", "createdAt", { unique: false });
+        runs.createIndex("verdict", "verdict", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -187,6 +195,76 @@ export async function clearAllStored() {
   const tx = db.transaction([STORE_DOCS, STORE_VERSIONS], "readwrite");
   tx.objectStore(STORE_DOCS).clear();
   tx.objectStore(STORE_VERSIONS).clear();
+  await txPromise(tx);
+}
+
+export async function listDecodeRuns() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_DECODE_RUNS, "readonly");
+  const all = await reqPromise(tx.objectStore(STORE_DECODE_RUNS).getAll());
+  return all.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+}
+
+export async function getDecodeRun(runId) {
+  if (!runId) return null;
+  const db = await openDb();
+  const tx = db.transaction(STORE_DECODE_RUNS, "readonly");
+  return reqPromise(tx.objectStore(STORE_DECODE_RUNS).get(runId));
+}
+
+export async function saveDecodeRun(record) {
+  const db = await openDb();
+  const existing = await listDecodeRuns();
+  const entry = { ...record };
+  if (entry.jxlBytes && entry.jxlBytes.byteLength > MAX_RUN_REPRO_BYTES) {
+    entry.jxlBytes = null;
+    entry.bytesTruncated = true;
+  }
+  const tx = db.transaction(STORE_DECODE_RUNS, "readwrite");
+  const store = tx.objectStore(STORE_DECODE_RUNS);
+  store.put(entry);
+
+  const combined = [entry, ...existing.filter(r => r.runId !== entry.runId)];
+  if (combined.length > MAX_DECODE_RUNS) {
+    const excess = combined.length - MAX_DECODE_RUNS;
+    const candidates = [...existing]
+      .filter(r => r.runId !== entry.runId)
+      .sort((a, b) => {
+        const aBug = a.verdict === "all-exact" || a.verdict === "all-agree" ? 0 : 1;
+        const bBug = b.verdict === "all-exact" || b.verdict === "all-agree" ? 0 : 1;
+        if (aBug !== bBug) return aBug - bBug;
+        return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      })
+      .slice(0, excess);
+    for (const old of candidates) store.delete(old.runId);
+  }
+  await txPromise(tx);
+  return entry;
+}
+
+export async function updateDecodeRunNote(runId, note) {
+  const db = await openDb();
+  const existing = await getDecodeRun(runId);
+  if (!existing) return null;
+  existing.note = String(note ?? "");
+  existing.updatedAt = Date.now();
+  const tx = db.transaction(STORE_DECODE_RUNS, "readwrite");
+  tx.objectStore(STORE_DECODE_RUNS).put(existing);
+  await txPromise(tx);
+  return existing;
+}
+
+export async function deleteDecodeRun(runId) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_DECODE_RUNS, "readwrite");
+  tx.objectStore(STORE_DECODE_RUNS).delete(runId);
+  await txPromise(tx);
+}
+
+export async function clearDecodeRuns() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_DECODE_RUNS, "readwrite");
+  tx.objectStore(STORE_DECODE_RUNS).clear();
   await txPromise(tx);
 }
 

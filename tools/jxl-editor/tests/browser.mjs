@@ -1096,6 +1096,84 @@ try {
     await touchCtx.close();
   }
 
+  // ── Phase 3: Multi-Decoder Check & Compatibility Lab (zenjxl-decoder, jxl-rs, jxl-oxide, libjxl) ──
+  {
+    const dc = await browser.newPage({ acceptDownloads: true, viewport: { width: 1400, height: 940 } });
+    const dcErrors = [];
+    dc.on("pageerror", error => dcErrors.push(error.message));
+    await dc.goto(baseUrl);
+    await dc.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await dc.locator("#open-file").setInputFiles({ name: "gradient.jxl", mimeType: "image/jxl", buffer: source });
+    await dc.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+
+    // 1. Click topbar "Check decoding" button -> loads all 4 WASM decoders & verifies bit-exact match
+    await dc.locator("#check-decoding").click();
+    await dc.locator('#dc-latest [data-decoder="libjxl"]').waitFor({ timeout: 30000 });
+    for (const id of ["zenjxl-decoder", "jxl-rs", "jxl-oxide", "libjxl"]) {
+      const cardText = await dc.locator(`#dc-latest [data-decoder="${id}"]`).textContent();
+      assert.ok(cardText.includes("OK"), `${id} must decode gradient.jxl cleanly, got: ${cardText}`);
+    }
+    const verdictText = await dc.locator("#dc-latest .dc-verdict").textContent();
+    assert.ok(verdictText.includes("ALL EXACT"), `All 4 decoders must agree bit-for-bit on lossless gradient.jxl, got: ${verdictText}`);
+    assert.equal(await dc.locator("#dc-diff-canvas").isVisible(), true, "Diff canvas must render for passing decoders");
+
+    // 2. Run 10-mode Compatibility Sweep loop across all 4 decoders
+    await dc.locator("#dc-sweep-btn").click();
+    await dc.locator("#status").filter({ hasText: /Sweep complete: 10 cases/ }).waitFor({ timeout: 60000 });
+    const surfaceRows = await dc.locator("#dc-surface tbody tr").count();
+    assert.ok(surfaceRows >= 8, `Compatibility surface must list >= 8 JXL features, got ${surfaceRows}`);
+    const savedCount = await dc.locator("#dc-history-list .dc-run-item").count();
+    assert.ok(savedCount >= 11, `Expected >= 11 saved runs in IndexedDB (1 + 10 sweep), got ${savedCount}`);
+
+    // Log sweep summary so any real cross-decoder findings surface in test output!
+    const sweepPayload = await dc.evaluate(() => window.jxlStudioDecodeLab.buildExportPayload({ includeBytes: false }));
+    console.log("Decode Lab 10-mode sweep summary:", JSON.stringify(sweepPayload.summary));
+    if (sweepPayload.suspectedBugs.length) {
+      console.log("Decode Lab findings:", JSON.stringify(sweepPayload.suspectedBugs, null, 2));
+    }
+    await dc.screenshot({ path: `${output}/decode-lab.png` });
+
+    // 3. Verify IndexedDB persistence across reload
+    await dc.reload();
+    await dc.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await dc.locator("#decode-tab").click();
+    await dc.waitForFunction(() => document.querySelectorAll("#dc-history-list .dc-run-item").length >= 11);
+
+    // 4. Verify Export JSON, Export NDJSON, and Export Bug MD downloads
+    let dlEv = dc.waitForEvent("download");
+    await dc.locator("#dc-export-json").click();
+    const jsonDl = await dlEv;
+    assert.match(jsonDl.suggestedFilename(), /^jxl-decode-lab-.*\.json$/);
+    const jsonParsed = JSON.parse(await readFile(await jsonDl.path(), "utf8"));
+    assert.equal(jsonParsed.schemaVersion, 1);
+    assert.ok(jsonParsed.runs.length >= 11);
+    assert.ok(Array.isArray(jsonParsed.compatibilitySurface) && jsonParsed.compatibilitySurface.length >= 8);
+
+    dlEv = dc.waitForEvent("download");
+    await dc.locator("#dc-export-ndjson").click();
+    const ndDl = await dlEv;
+    const ndLines = (await readFile(await ndDl.path(), "utf8")).trim().split("\n");
+    assert.ok(ndLines.length >= 11);
+    assert.ok(JSON.parse(ndLines[0]).results.length === 4);
+
+    dlEv = dc.waitForEvent("download");
+    await dc.locator("#dc-export-md").click();
+    const mdDl = await dlEv;
+    const mdText = await readFile(await mdDl.path(), "utf8");
+    assert.ok(mdText.includes("| Feature | zenjxl-decoder | jxl-rs | jxl-oxide | libjxl |"));
+
+    // 5. Verify programmatic automation API (window.jxlStudioDecodeLab.checkBytes) catches a broken bitstream cleanly
+    const brokenRec = await dc.evaluate(async () => {
+      const broken = new Uint8Array([0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a, 0xff, 0x0a, 0x00]);
+      return window.jxlStudioDecodeLab.checkBytes(broken, { label: "broken-repro.jxl", sourceKind: "loop" });
+    });
+    assert.equal(brokenRec.verdict, "all-failed");
+    assert.equal(brokenRec.results.filter(r => !r.ok).length, 4, "All 4 decoders must reject broken bitstream without trapping");
+
+    assert.deepEqual(dcErrors, []);
+    await dc.close();
+  }
+
   if (process.env.EDITOR_JPEG_CARRIER) {
     const resources = await browser.newPage({ acceptDownloads: true });
     await resources.goto(baseUrl);
