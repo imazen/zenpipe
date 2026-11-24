@@ -19,10 +19,10 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-const MAX_PIXELS: u64 = 24_000_000;
-const MAX_SIDE: u32 = 8192;
+const MAX_PIXELS: u64 = 64_000_000;
+const MAX_SIDE: u32 = 16384;
 const MAX_INPUT: u64 = 128 * 1024 * 1024;
-const MAX_CODEC_MEMORY: u64 = 512 * 1024 * 1024;
+const MAX_CODEC_MEMORY: u64 = 1024 * 1024 * 1024;
 
 fn limits() -> ResourceLimits {
     ResourceLimits::none()
@@ -161,8 +161,12 @@ pub fn encode_layers(
 fn decoder_limits() -> JxlDecoderLimits {
     let mut decode_limits = JxlDecoderLimits::restrictive()
         .with_max_pixels(MAX_PIXELS as usize)
+        .with_max_extra_channels(256)
+        .with_max_tree_size(1 << 22)
         .with_max_reference_frames(4)
         .with_max_memory_bytes(MAX_CODEC_MEMORY);
+    decode_limits.max_patches = None;
+    decode_limits.max_spline_points = Some(1 << 20);
     decode_limits.max_codestream_level = JxlCodestreamLevel::Level10;
     decode_limits
 }
@@ -180,10 +184,20 @@ pub fn decode_jxl(bytes: &[u8]) -> Result<Raster, String> {
         .check_dimensions(width as u32, height as u32)
         .map_err(|e| e.to_string())?;
     let options = JxlDecoderOptions::default()
-        .with_limits(decode_limits)
+        .with_limits(decode_limits.clone())
         .with_cms(Box::new(MoxCms))
         .with_dither_u8(false);
-    let image = zenjxl_decoder::decode_with(bytes, options).map_err(|e| e.to_string())?;
+    let image = match zenjxl_decoder::decode_with(bytes, options) {
+        Ok(img) => img,
+        Err(cms_err) => {
+            // Fall back to decoding without CMS when an embedded ICC profile is
+            // unsupported or malformed so valid JXL files still open cleanly.
+            let fallback = JxlDecoderOptions::default()
+                .with_limits(decode_limits)
+                .with_dither_u8(false);
+            zenjxl_decoder::decode_with(bytes, fallback).map_err(|_| cms_err.to_string())?
+        }
+    };
     let mut pixels = if image.is_grayscale {
         let mut rgba = Vec::new();
         rgba.try_reserve_exact(image.data.len() * 2)

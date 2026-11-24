@@ -1,5 +1,5 @@
 import { codec } from "./codec.mjs";
-import { compactFilters, DEFAULT_FILTERS, targetScaledDimensions } from "./filters.mjs";
+import { compactFilters, DEFAULT_FILTERS, effectiveLayerSize, targetScaledDimensions } from "./filters.mjs";
 
 const AUTO_MODES = [
   ["autoTone", "Auto Tone"],
@@ -181,9 +181,10 @@ export function makeZenFiltersPanel({
       setFilterKey("presetStrength", presetStrengthInput.valueAsNumber, "Preset intensity", true);
     });
     presetStrengthInput.addEventListener("change", () => {
-      if (activeSlider !== "presetStrength") return;
+      if (!getLayer() || getBusy()) return;
       activeSlider = null;
       clearPreview();
+      presetStrengthOut.value = `${Math.round(presetStrengthInput.valueAsNumber * 100)}%`;
       setFilterKey("presetStrength", presetStrengthInput.valueAsNumber, "Preset intensity", false);
     });
     pStrWrap.append(pStrHead, presetStrengthInput);
@@ -236,9 +237,10 @@ export function makeZenFiltersPanel({
       setFilterKey("filmStrength", filmStrengthInput.valueAsNumber, "Film strength", true);
     });
     filmStrengthInput.addEventListener("change", () => {
-      if (activeSlider !== "filmStrength") return;
+      if (!getLayer() || getBusy()) return;
       activeSlider = null;
       clearPreview();
+      filmStrengthOut.value = `${Math.round(filmStrengthInput.valueAsNumber * 100)}%`;
       setFilterKey("filmStrength", filmStrengthInput.valueAsNumber, "Film strength", false);
     });
     fStrWrap.append(fStrHead, filmStrengthInput);
@@ -298,10 +300,11 @@ export function makeZenFiltersPanel({
             setFilterKey(ctrl.id, v, ctrl.label, true);
           });
           input.addEventListener("change", () => {
-            if (activeSlider !== ctrl.id) return;
+            if (!getLayer() || getBusy()) return;
             activeSlider = null;
             clearPreview();
             const v = coerce(input.valueAsNumber);
+            out.value = formatControlValue(ctrl, v);
             setFilterKey(ctrl.id, v, ctrl.label, false);
           });
           lbl.append(head, input);
@@ -409,10 +412,12 @@ export function makeZenFiltersPanel({
       const isSvg = layer.mime === "image/svg+xml";
       kernelSelect.disabled = isSvg;
       linearCheck.disabled = isSvg;
+      const eff = effectiveLayerSize(layer);
       const t = targetScaledDimensions(layer);
+      const srTag = eff.sr > 1 ? ` · ZenSR ${eff.sr}× (${eff.width}×${eff.height})` : "";
       scaledInfo.textContent = isSvg
         ? (t.scaled ? `Vector SVG re-rasterized crisply at ${t.width} × ${t.height} px` : `Vector SVG at native ${layer.width} × ${layer.height} px`)
-        : (t.scaled ? `zenresize: ${layer.width}×${layer.height} → ${t.width}×${t.height} px (${kernelSelect.value}${linearCheck.checked ? ", linear" : ""})` : `Native ${layer.width} × ${layer.height} px (100%)`);
+        : (t.scaled ? `zenresize: ${eff.width}×${eff.height} → ${t.width}×${t.height} px (${kernelSelect.value}${linearCheck.checked ? ", linear" : ""})${srTag}` : `Effective ${eff.width} × ${eff.height} px (100%)${srTag}`);
     } else {
       scaledInfo.textContent = "";
     }

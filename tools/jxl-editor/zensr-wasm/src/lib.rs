@@ -9,8 +9,8 @@ use zensr_micro::decode_all_f16;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-const MAX_OUTPUT_PIXELS: u64 = 24_000_000;
-const MAX_OUTPUT_DIM: u32 = 8192;
+const MAX_OUTPUT_PIXELS: u64 = 64_000_000;
+const MAX_OUTPUT_DIM: u32 = 16384;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct ZensrOutput {
@@ -75,18 +75,56 @@ struct ModelCatalogEntry {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn zensr_catalog_json() -> String {
-    let entries = [ModelCatalogEntry {
-        id: "dejpeg_rt24g",
-        label: "ZenSR De-JPEG Realtime (rt24g, 1×)",
-        description: "43k-param pure-Rust neural JPEG artifact restoration (f16, 84 KB).",
-        arch: "compact",
-        nf: 24,
-        nc: 8,
-        scale: 1,
-        weights_url: "./models/dejpeg_rt24g.f16.raw",
-        weights_sha256: "0de929e1bee7bde444d1d8ab46a8fd0d0ff4fef47daf561095d1661008798b80",
-        weights_bytes: 86_406,
-    }];
+    let entries = [
+        ModelCatalogEntry {
+            id: "dejpeg_rt24g",
+            label: "ZenSR De-JPEG Realtime (rt24g · 1× · 84 KB)",
+            description: "43k-param pure-Rust neural JPEG artifact restoration (1×, f16).",
+            arch: "compact",
+            nf: 24,
+            nc: 8,
+            scale: 1,
+            weights_url: "./models/dejpeg_rt24g.f16.raw",
+            weights_sha256: "0de929e1bee7bde444d1d8ab46a8fd0d0ff4fef47daf561095d1661008798b80",
+            weights_bytes: 86_406,
+        },
+        ModelCatalogEntry {
+            id: "rtc_distill_2x",
+            label: "ZenSR Realtime 2× Upscale (rtc24 · 2× · 88 KB)",
+            description: "45k-param distilled neural 2× super-resolution (fast in browser WASM SIMD).",
+            arch: "compact",
+            nf: 24,
+            nc: 8,
+            scale: 2,
+            weights_url: "./models/rtc_distill_2x.f16.raw",
+            weights_sha256: "2b5173ac26b6c1aab53b4b4d34320096421ee2588fa5021f1c9393f1120277b4",
+            weights_bytes: 90_312,
+        },
+        ModelCatalogEntry {
+            id: "nomosuni_span_2x",
+            label: "ZenSR Quality 2× Upscale (SPAN-48 · 2× · 802 KB)",
+            description: "410k-param SPAN-48 neural 2× super-resolution for photos & graphics.",
+            arch: "span48",
+            nf: 48,
+            nc: 6,
+            scale: 2,
+            weights_url: "./models/nomosuni_span_2x.f16.raw",
+            weights_sha256: "b1e56f5f20df3cbcd8c05416bd10802b3b86fcf67abb350ed92fa31319417481",
+            weights_bytes: 821_400,
+        },
+        ModelCatalogEntry {
+            id: "nomosuni_span_4x",
+            label: "ZenSR Quality 4× Upscale (SPAN-48 · 4× · 833 KB)",
+            description: "426k-param SPAN-48 neural 4× super-resolution for detail enlargement.",
+            arch: "span48",
+            nf: 48,
+            nc: 6,
+            scale: 4,
+            weights_url: "./models/nomosuni_span_4x.f16.raw",
+            weights_sha256: "5006aa39926af84bd7e019e1fd8cbf5eb05fefb614badcee53a32f9a8a349a93",
+            weights_bytes: 852_576,
+        },
+    ];
     serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
 }
 
@@ -268,7 +306,7 @@ pub fn zensr_run_rgba(
         || u64::from(out_w) * u64::from(out_h) > MAX_OUTPUT_PIXELS
     {
         return Err(format!(
-            "ZenSR output {out_w}×{out_h} exceeds the 8,192 px / 24 MP editor limit."
+            "ZenSR output {out_w}×{out_h} exceeds the 16,384 px / 64 MP editor limit."
         ));
     }
     if cfg.scale == 1 && cfg.strength <= 1e-5 {

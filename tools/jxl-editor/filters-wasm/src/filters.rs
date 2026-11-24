@@ -527,9 +527,9 @@ pub fn apply_zenfilters_rgba_impl(
 ) -> Result<Vec<u8>, String> {
     if width == 0
         || height == 0
-        || width > 8192
-        || height > 8192
-        || u64::from(width) * u64::from(height) > 24_000_000
+        || width > 16384
+        || height > 16384
+        || u64::from(width) * u64::from(height) > 64_000_000
         || pixels.len() != width as usize * height as usize * 4
     {
         return Err("Invalid RGBA dimensions for ZenFilters.".into());
@@ -599,9 +599,9 @@ pub fn filter_rgba_compat(
 ) -> Result<Vec<u8>, String> {
     if width == 0
         || height == 0
-        || width > 8192
-        || height > 8192
-        || u64::from(width) * u64::from(height) > 24_000_000
+        || width > 16384
+        || height > 16384
+        || u64::from(width) * u64::from(height) > 64_000_000
         || !(-2.0..=2.0).contains(&exposure)
         || !(0.0..=2.0).contains(&contrast)
         || !(0.0..=2.0).contains(&saturation)

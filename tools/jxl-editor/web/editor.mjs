@@ -1,7 +1,10 @@
 import { codec } from "./codec.mjs";
+import { appLog, makeConsolePanel } from "./console-log.mjs";
+import { makeVaultPanel } from "./storage.mjs";
+import { makeStructureInspector } from "./structure-inspector.mjs";
 import { makeNativeInspector } from "./native-panel.mjs";
 import {
-  ZEN_FILTERS, hasActiveMask, hasActiveZensr, hasAdjustments,
+  ZEN_FILTERS, effectiveLayerSize, hasActiveMask, hasActiveZensr, hasAdjustments,
   needsRasterPipeline, previewFilter, renderFilter,
 } from "./filters.mjs";
 import { makeZenFiltersPanel } from "./zenfilters-panel.mjs";
@@ -15,9 +18,12 @@ import {
   snapshotLayerOverrides, splineCompatibilityError,
 } from "./author-panels.mjs";
 import {
-  checkDimensions, isJxl, MAX_FILE, MAX_LAYERS, MAX_PIXELS, MAX_SVG,
+  checkDimensions, hasManifestBox, isJxl, jxlBoxes, MAX_FILE, MAX_LAYERS, MAX_PIXELS, MAX_SIDE, MAX_SVG,
   MAX_TIMELINE_FRAMES, opaqueBoxes, RASTER_TYPES, readProject, writeImage, writeProject,
 } from "./project.mjs";
+
+appLog.installGlobalHooks();
+appLog.info("app", "JPEG XL Photo Studio initialized");
 
 const $ = id => document.getElementById(id);
 const preview = $("canvas");
@@ -30,6 +36,12 @@ const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const utf8 = new TextEncoder();
 const clampPosition = value => Math.max(-32768, Math.min(32768, Math.round(value)));
 const clampScale = value => Math.max(0.05, Math.min(8, Math.round(value * 100) / 100));
+const normalizeAngle = deg => {
+  let a = Math.round(deg);
+  while (a > 180) a -= 360;
+  while (a < -180) a += 360;
+  return a === 0 ? 0 : a;
+};
 const MAX_ASSET_PIXELS = 2 * MAX_PIXELS;
 const MAX_HISTORY = 32;
 
@@ -38,8 +50,12 @@ let cursor = -1;
 let current;
 let saved;
 let selected;
+let activeDocId = null;
 let title = "Untitled";
+let vaultPanel = null;
+let structureInspector = null;
 let zoom = null;
+let lastPaintScale = 1;
 let compare = false;
 let comparingKey = false;
 let busy = false;
@@ -47,6 +63,8 @@ let animation;
 let gesture;
 let sliderKey;
 let dragged;
+const activeTouches = new Map();
+let pinchCooldown = false;
 let inspectorView = "properties";
 let activeFrameIndex = 0;
 let timelineOpen = false;
@@ -65,7 +83,33 @@ function status(message, error = false) {
 }
 
 function report(error) {
-  status(error instanceof Error ? error.message : String(error), true);
+  const msg = error instanceof Error ? error.message : String(error);
+  appLog.error("editor", msg, error instanceof Error ? error.stack : null);
+  status(msg, true);
+}
+
+function sniffMime(bytes) {
+  if (isJxl(bytes)) return "image/jxl";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  if (bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (brand === "avif" || brand === "avis" || brand === "mif1") return "image/avif";
+  }
+  const head = new TextDecoder("utf-8", { fatal: false }).decode(bytes.subarray(0, 256)).trimStart();
+  if (head.startsWith("<svg") || (head.startsWith("<?xml") && head.includes("<svg"))) return "image/svg+xml";
+  return null;
+}
+
+function safeOpaqueBoxes(bytes) {
+  try {
+    return opaqueBoxes(bytes);
+  } catch (err) {
+    appLog.warn("jxl", `Skipped container box preservation on non-standard JXL: ${err?.message ?? err}`);
+    return [];
+  }
 }
 
 function newId() {
@@ -124,8 +168,10 @@ async function makeLayer(file, source) {
     }
   }
   const extension = file.name.split(".").at(-1)?.toLowerCase();
-  const mime = isJxl(source) ? "image/jxl" : types[extension] ?? file.type;
-  if (![...RASTER_TYPES, "image/svg+xml"].includes(mime)) throw new Error("Unsupported image format.");
+  const mime = sniffMime(source) ?? types[extension] ?? file.type;
+  if (![...RASTER_TYPES, "image/svg+xml"].includes(mime)) {
+    throw new Error(`Unsupported image format (${file.name || "unnamed"}, type=${file.type || "unknown"}).`);
+  }
   const canvas = await decodeSource(source, mime);
   const layer = { id: newId(), name: file.name.slice(0, 255), mime,
     width: canvas.width, height: canvas.height, ...defaults };
@@ -218,6 +264,7 @@ function storeState(state, label) {
   history.push({ state, label });
   if (history.length > MAX_HISTORY) history.shift();
   goTo(history.length - 1);
+  if (history.length > 1) vaultPanel?.scheduleAutoSave(label);
 }
 
 function goTo(index) {
@@ -236,11 +283,16 @@ function goTo(index) {
   update();
 }
 
-function install(state, label, newTitle, alreadySaved) {
+function install(state, label, newTitle, alreadySaved, docIdOverride = null) {
   stopPlayback();
   history = [];
   cursor = -1;
   zoom = null;
+  lastPaintScale = 1;
+  gesture = null;
+  sliderKey = null;
+  activeTouches.clear();
+  pinchCooldown = false;
   compare = false;
   comparingKey = false;
   activeFrameIndex = 0;
@@ -250,12 +302,14 @@ function install(state, label, newTitle, alreadySaved) {
   masksPanel.stopBrush();
   splinePreviewCache = { key: null, canvas: null, pending: false, token: 0 };
   cmykPreviewCache = { key: null, canvas: null, token: 0 };
+  activeDocId = docIdOverride || newId();
   showInspector("properties");
   selected = state.manifest.layers.at(-1).id;
   title = newTitle.replace(/\.(?:project\.jxl|jxl|jpg|jpeg|png|webp|svg|avif)$/i, "");
   saved = alreadySaved ? state : null;
   storeState(state, label);
   zenFiltersPanel.loadCatalog();
+  vaultPanel?.refreshUI();
 }
 
 async function importNativeTimeline(asset, sourceName) {
@@ -275,6 +329,7 @@ async function importNativeTimeline(asset, sourceName) {
     const id = newId();
     const slice = pixels.subarray(i * frameBytes, (i + 1) * frameBytes);
     const canvas = canvasFrom({ width, height, pixels: slice });
+    const frameSource = await encodeCanvas(canvas);
     const layer = {
       id,
       name: (f.name || `Frame ${i + 1}`).slice(0, 255),
@@ -285,7 +340,7 @@ async function importNativeTimeline(asset, sourceName) {
       visible: i === 0,
     };
     layers.push(layer);
-    assets.set(id, { source: asset.source, canvas, rendition: null });
+    assets.set(id, { source: frameSource, canvas, rendition: null });
     tlFrames.push({
       id: newId(),
       name: (f.name || `Frame ${i + 1}`).slice(0, 1019),
@@ -322,7 +377,7 @@ async function importNativeTimeline(asset, sourceName) {
     },
     coding: defaultCoding(),
   };
-  install({ manifest, assets, preserved: opaqueBoxes(asset.source) }, "Imported native animation", sourceName, false);
+  install({ manifest, assets, preserved: safeOpaqueBoxes(asset.source) }, "Imported native animation", sourceName, false);
   timelineOpen = true;
   update();
   status(`Imported ${frames.length} animation frames to timeline`);
@@ -440,17 +495,38 @@ async function refreshCmykPreview() {
   }
 }
 
-async function open(file) {
-  if (current && current !== saved && !confirm("Replace the current document and discard unsaved edits?")) return;
-  if (file.size > MAX_FILE) throw new Error("The source exceeds 128 MiB.");
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const project = isJxl(bytes) ? readProject(bytes) : null;
+async function openBytes(bytes, filename, { existingDocId = null, skipConfirm = false, labelOverride = null } = {}) {
+  if (!skipConfirm && current && current !== saved && !confirm("Replace the current document and discard unsaved edits?")) return;
+  if (bytes.byteLength > MAX_FILE) throw new Error("The source exceeds 128 MiB.");
+  const headHex = Array.from(bytes.subarray(0, 12), b => b.toString(16).padStart(2, "0")).join(" ");
+  appLog.info("open", `Opening "${filename}" (${bytes.byteLength.toLocaleString()} B, head=${headHex})`);
+
+  let project = null;
+  if (isJxl(bytes)) {
+    const isProj = hasManifestBox(bytes);
+    if (isProj) {
+      project = readProject(bytes);
+    } else {
+      try {
+        project = readProject(bytes);
+      } catch (err) {
+        appLog.warn("jxl", `Non-standard container box table on "${filename}" — decoding codestream directly: ${err?.message ?? err}`);
+        project = null;
+      }
+    }
+  }
+
   if (project) {
     if (project.manifest.filterEngine !== ZEN_FILTERS && !hasCanvasFilters && project.manifest.layers.some(hasAdjustments)) {
       throw new Error("This browser cannot render the project’s exposure, contrast or saturation.");
     }
     checkAssets(project.manifest.layers, project.assets);
-    await codec("decode", { bytes: bytes.slice() });
+    try {
+      await codec("decode", { bytes: bytes.slice() });
+    } catch (err) {
+      appLog.warn("open", `Presentation codestream decode warning on "${filename}": ${err?.message ?? err}`);
+      if (!project.manifest.cmyk?.enabled) throw err;
+    }
     for (const layer of project.manifest.layers) {
       const asset = project.assets.get(layer.id);
       if (layer.mime === "image/svg+xml") {
@@ -466,75 +542,119 @@ async function open(file) {
         asset.canvas = await decodeSource(asset.rendition ?? asset.source, asset.rendition ? "image/jxl" : layer.mime);
       }
       if (layer.width !== asset.canvas.width || layer.height !== asset.canvas.height) {
-        throw new Error("A layer’s stored dimensions do not match its image.");
+        throw new Error(`Layer "${layer.name}" stored dimensions (${layer.width}×${layer.height}) do not match decoded image (${asset.canvas.width}×${asset.canvas.height}).`);
       }
       if (asset.maskJxl) {
         asset.maskAlpha = await decodeMaskJxlToAlpha(asset.maskJxl, layer.width, layer.height);
         asset.maskRev = 1;
       }
     }
-    install(project, "Reopened project", file.name, true);
+    install(project, labelOverride || "Reopened project", filename, true, existingDocId);
     if (project.manifest.cmyk?.enabled) await refreshCmykPreview();
+    appLog.info("open", `Reopened project "${filename}" (${project.manifest.width}×${project.manifest.height}, ${project.manifest.layers.length} layers)`);
     status("Project reopened · original assets restored");
     return;
   }
+
+  const file = new File([bytes], filename, { type: sniffMime(bytes) || "application/octet-stream" });
 
   if (isJxl(bytes)) {
     let info = null;
     try {
       info = await codec("nativeInfo", { bytes: bytes.slice() });
-    } catch {
+    } catch (err) {
+      appLog.warn("jxl", `nativeInfo skipped for "${filename}": ${err?.message ?? err}`);
       info = null;
     }
     const visibleAnimated = info?.animation &&
       info.frames.filter(f => f.durationTicks > 0).length >= 2 &&
       info.frames.length <= MAX_LAYERS;
     if (visibleAnimated) {
-      await importNativeTimeline({ source: bytes }, file.name);
-      saved = current;
-      status("Image opened");
-      return;
+      try {
+        await importNativeTimeline({ source: bytes }, filename);
+        saved = current;
+        appLog.info("open", `Opened animated JXL "${filename}" (${info.frames.length} frames)`);
+        status("Image opened");
+        return;
+      } catch (err) {
+        appLog.warn("jxl", `Timeline import failed on "${filename}", opening frame 1 instead: ${err?.message ?? err}`);
+      }
     }
     if (info?.profile?.cmyk) {
-      const { layer, asset } = await makeLayer(file, bytes);
-      const extracted = await codec("nativeCmyk", { bytes: bytes.slice() });
-      const manifest = {
-        version: 1,
-        filterEngine: ZEN_FILTERS,
-        width: layer.width,
-        height: layer.height,
-        originalId: layer.id,
-        layers: [layer],
-        cmyk: {
-          enabled: true,
-          bitDepth: extracted.bitDepth,
-          mode: extracted.usesOriginalProfile ? "modular" : "vardct",
-          distance: 1.0,
-          effort: extracted.usesOriginalProfile ? 3 : 4,
-          iccName: `${file.name.replace(/\.jxl$/i, "")}.icc`,
-          origin: "source",
-          channelOffsets: [0, 0, 0, 0],
-        },
-      };
-      const assets = new Map([[layer.id, asset]]);
-      install(
-        { manifest, assets, preserved: opaqueBoxes(bytes), cmykData: { samples: extracted.samples, icc: extracted.icc } },
-        "Opened CMYK image",
-        file.name,
-        true,
-      );
-      await refreshCmykPreview();
-      status("Image opened");
-      return;
+      try {
+        const extracted = await codec("nativeCmyk", { bytes: bytes.slice() });
+        let canvas;
+        try {
+          const decoded = await decodeSource(bytes, "image/jxl");
+          canvas = decoded;
+        } catch {
+          const rgba = await codec("previewCmyk", {
+            samples: extracted.samples.slice(),
+            width: extracted.width,
+            height: extracted.height,
+            bitDepth: extracted.bitDepth,
+            icc: extracted.icc.slice(),
+          });
+          canvas = canvasFrom({ width: extracted.width, height: extracted.height, pixels: rgba });
+        }
+        const layer = {
+          id: newId(),
+          name: filename.slice(0, 255),
+          mime: "image/jxl",
+          width: canvas.width,
+          height: canvas.height,
+          ...defaults,
+        };
+        const asset = { source: bytes, canvas, rendition: null };
+        const manifest = {
+          version: 1,
+          filterEngine: ZEN_FILTERS,
+          width: layer.width,
+          height: layer.height,
+          originalId: layer.id,
+          layers: [layer],
+          cmyk: {
+            enabled: true,
+            bitDepth: extracted.bitDepth,
+            mode: extracted.usesOriginalProfile ? "modular" : "vardct",
+            distance: 1.0,
+            effort: extracted.usesOriginalProfile ? 3 : 4,
+            iccName: `${filename.replace(/\.jxl$/i, "")}.icc`,
+            origin: "source",
+            channelOffsets: [0, 0, 0, 0],
+          },
+        };
+        const assets = new Map([[layer.id, asset]]);
+        install(
+          { manifest, assets, preserved: safeOpaqueBoxes(bytes), cmykData: { samples: extracted.samples, icc: extracted.icc } },
+          "Opened CMYK image",
+          filename,
+          true,
+          existingDocId,
+        );
+        await refreshCmykPreview();
+        appLog.info("open", `Opened CMYK JXL "${filename}" (${layer.width}×${layer.height}, ${extracted.bitDepth}-bit)`);
+        status("Image opened");
+        return;
+      } catch (err) {
+        appLog.warn("jxl", `CMYK native extraction failed on "${filename}", falling back to RGBA decode: ${err?.message ?? err}`);
+      }
     }
   }
 
   const { layer, asset } = await makeLayer(file, bytes);
   const manifest = { version: 1, filterEngine: ZEN_FILTERS, width: layer.width, height: layer.height, originalId: layer.id, layers: [layer] };
   const assets = new Map([[layer.id, asset]]);
-  install({ manifest, assets, preserved: layer.mime === "image/jxl" ? opaqueBoxes(bytes) : [] },
-    "Opened image", file.name, true);
+  install({ manifest, assets, preserved: layer.mime === "image/jxl" ? safeOpaqueBoxes(bytes) : [] },
+    "Opened image", filename, true, existingDocId);
+  appLog.info("open", `Opened "${filename}" (${layer.width}×${layer.height}, ${layer.mime})`);
   status("Image opened");
+}
+
+async function open(file) {
+  if (file.size > MAX_FILE) throw new Error("The source exceeds 128 MiB.");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return openBytes(bytes, file.name);
 }
 
 async function addLayers(files) {
@@ -706,6 +826,7 @@ function drawLayers(context, state, width, height, original = false, rasters = n
 }
 
 function drawLayer(context, layer, source, filterEngine) {
+  const eff = effectiveLayerSize(layer);
   context.save();
   context.translate(layer.x, layer.y);
   context.rotate(layer.angle * Math.PI / 180);
@@ -713,7 +834,7 @@ function drawLayer(context, layer, source, filterEngine) {
   if (filterEngine !== ZEN_FILTERS && hasCanvasFilters && hasAdjustments(layer)) {
     context.filter = `brightness(${2 ** layer.exposure}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
   }
-  context.drawImage(source, 0, 0, layer.width * layer.scale, layer.height * layer.scale);
+  context.drawImage(source, 0, 0, eff.width * layer.scale, eff.height * layer.scale);
   context.restore();
 }
 
@@ -779,9 +900,11 @@ function paint() {
   animation = null;
   if (!current) return;
   const { width, height } = current.manifest;
-  const padding = 52;
-  const fit = Math.min((stage.clientWidth - padding) / width, (stage.clientHeight - padding) / height, 2);
-  const scale = Math.max(0.02, zoom ?? fit);
+  const interactiveTransform = Boolean(gesture?.handle || gesture?.pinch);
+  const interactiveFilter = interactiveTransform || sliderKey === "scale" || sliderKey === "angle";
+  const fit = Math.min((stage.clientWidth - 56) / width, (stage.clientHeight - 72) / height, 2);
+  const scale = interactiveTransform && lastPaintScale ? lastPaintScale : Math.max(0.02, zoom ?? fit);
+  lastPaintScale = scale;
   const rasterScale = Math.min(scale * window.devicePixelRatio, 1, 1800 / Math.max(width, height));
   const w = Math.max(1, Math.round(width * rasterScale));
   const h = Math.max(1, Math.round(height * rasterScale));
@@ -802,8 +925,9 @@ function paint() {
     for (const layer of layers) {
       const asset = state.assets.get(layer.id);
       const rubyOverlay = inspectorView === "mask" && masksPanel.isRubyOverlay() && layer.id === selected;
-      if (!layer.visible || !layer.opacity || !needsRasterPipeline(layer, asset, { rubyOverlay })) continue;
-      const filtered = previewFilter(asset, layer, requestPaint, report, { rubyOverlay }, () => {
+      const filterOpts = { rubyOverlay, interactive: interactiveFilter && layer.id === selected };
+      if (!layer.visible || !layer.opacity || !needsRasterPipeline(layer, asset, filterOpts)) continue;
+      const filtered = previewFilter(asset, layer, requestPaint, report, filterOpts, () => {
         if (inspectorView === "zensr") zensrPanel.updateUI();
       });
       rasters.set(layer.id, filtered.canvas);
@@ -850,13 +974,26 @@ function paint() {
   const layer = layers.find(entry => entry.id === selected);
   const outline = $("outline");
   const showOutline = Boolean(layer?.visible) && !compare && !comparingKey && !state.manifest.cmyk?.enabled &&
-    !masksPanel.getBrushMode() && !splinePickMode &&
-    (state.manifest.layers.length > 1 || layer.scale !== 1 || layer.angle !== 0 || layer.x !== 0 || layer.y !== 0);
+    !masksPanel.getBrushMode() && !splinePickMode;
   outline.hidden = !showOutline;
+  const badge = $("transform-badge");
   if (showOutline) {
-    outline.style.width = `${layer.width * layer.scale * scale}px`;
-    outline.style.height = `${layer.height * layer.scale * scale}px`;
+    const eff = effectiveLayerSize(layer);
+    outline.style.width = `${eff.width * layer.scale * scale}px`;
+    outline.style.height = `${eff.height * layer.scale * scale}px`;
     outline.style.transform = `translate(${layer.x * scale}px, ${layer.y * scale}px) rotate(${layer.angle}deg)`;
+    if (interactiveTransform && gesture?.patch) {
+      badge.hidden = false;
+      const parts = [];
+      if (gesture.pinch || gesture.kind !== "rotate") parts.push(`${Math.round(layer.scale * 100)}%`);
+      if (gesture.pinch || gesture.kind === "rotate") parts.push(`${layer.angle}°`);
+      badge.textContent = parts.join(" · ");
+      badge.style.transform = `translate(-50%, -50%) rotate(${-layer.angle}deg)`;
+    } else {
+      badge.hidden = true;
+    }
+  } else {
+    badge.hidden = true;
   }
   renderSplineOverlay(state, scale);
   $("compare").setAttribute("aria-pressed", String(compare || comparingKey));
@@ -897,9 +1034,10 @@ for (const [key, label, min, max, step, format] of adjustments) {
     requestPaint();
   });
   input.addEventListener("change", () => {
-    if (sliderKey !== key) return;
+    if (!current || busy) return;
     gesture = null;
     sliderKey = null;
+    output.value = format(input.valueAsNumber);
     updateLayer({ [key]: input.valueAsNumber }, label);
     requestPaint();
   });
@@ -983,9 +1121,32 @@ const svgEditor = makeSvgEditor({
     $("svg-apply").disabled = $("svg-cancel").disabled = true;
     try {
       const canvas = await decodeSource(source, "image/svg+xml");
+      const prevLayer = activeLayer();
       const state = patchState(current, selected, { width: canvas.width, height: canvas.height });
       state.assets = new Map(state.assets);
-      state.assets.set(selected, { ...asset, svgEdit: source, canvas, rendition: null });
+      let nextMaskAlpha = asset.maskAlpha;
+      let nextMaskJxl = asset.maskJxl;
+      if (nextMaskAlpha && (prevLayer.width !== canvas.width || prevLayer.height !== canvas.height)) {
+        const resampled = new Uint8Array(canvas.width * canvas.height);
+        for (let y = 0; y < canvas.height; y++) {
+          const sy = Math.min(prevLayer.height - 1, Math.floor((y + 0.5) * prevLayer.height / canvas.height));
+          for (let x = 0; x < canvas.width; x++) {
+            const sx = Math.min(prevLayer.width - 1, Math.floor((x + 0.5) * prevLayer.width / canvas.width));
+            resampled[y * canvas.width + x] = nextMaskAlpha[sy * prevLayer.width + sx];
+          }
+        }
+        nextMaskAlpha = resampled;
+        nextMaskJxl = null;
+      }
+      state.assets.set(selected, {
+        ...asset,
+        svgEdit: source,
+        canvas,
+        rendition: null,
+        maskAlpha: nextMaskAlpha,
+        maskJxl: nextMaskJxl,
+        maskRev: (asset.maskRev ?? 0) + 1,
+      });
       checkAssets(state.manifest.layers, state.assets);
       storeState(state, "Edited SVG source");
       dialog.close();
@@ -1036,7 +1197,7 @@ function update() {
   $("empty").hidden = hasDoc;
   $("canvas-wrap").hidden = !hasDoc;
   $("dimensions").textContent = hasDoc ? `${current.manifest.width} × ${current.manifest.height} px` : "";
-  for (const id of ["save", "export", "compare", "fit", "zoom-in", "zoom-out", "mask-tab", "zensr-tab"]) {
+  for (const id of ["save", "export", "compare", "fit", "zoom-in", "zoom-out", "mask-tab", "zensr-tab", "vault-save-snapshot", "vault-save-copy"]) {
     $(id).disabled = !hasDoc || busy;
   }
   for (const id of ["open", "add", "add-panel", "add-gallery", "new-svg", "open-gallery", "empty-open", "sample", "empty-gallery"]) {
@@ -1046,8 +1207,46 @@ function update() {
   $("redo").disabled = cursor >= history.length - 1 || busy;
   $("raise").disabled = !layer || index === layers.length - 1 || busy;
   $("lower").disabled = index < 1 || busy;
+  if ($("duplicate-layer")) $("duplicate-layer").disabled = !layer || layers.length >= MAX_LAYERS || busy;
   $("remove").disabled = layers.length < 2 || busy;
   $("edit-svg").hidden = layer?.mime !== "image/svg+xml";
+
+  // Canva contextual bar above canvas
+  const ctxBar = $("context-bar");
+  if (ctxBar) {
+    ctxBar.hidden = !hasDoc || !layer;
+    if (hasDoc && layer) {
+      $("ctx-layer-name").textContent = layer.name;
+      $("ctx-edit-svg").hidden = layer.mime !== "image/svg+xml";
+      $("ctx-upscale").hidden = layer.mime === "image/svg+xml";
+      $("ctx-dup").disabled = layers.length >= MAX_LAYERS || busy;
+      const provBtn = $("ctx-prov");
+      const asset = current.assets.get(layer.id);
+      const isNativeLayer = originalPassthrough(current) || current.manifest.cmyk?.enabled || current.manifest.timeline?.enabled || Boolean(current.manifest.splines?.length);
+      const isSr = hasActiveZensr(layer);
+      const isFiltered = hasAdjustments(layer) || hasActiveMask(layer, asset);
+      if (isNativeLayer && !isFiltered && !isSr && layer.mime === "image/jxl") {
+        provBtn.textContent = current.manifest.cmyk?.enabled ? "NATIVE CMYK" : current.manifest.timeline?.enabled ? "NATIVE ANIM" : "NATIVE JXL";
+        provBtn.className = "prov-badge prov-native ctx-prov-btn";
+      } else if (layer.mime === "image/svg+xml") {
+        provBtn.textContent = "SVG → PRERENDERED";
+        provBtn.className = "prov-badge prov-prerendered ctx-prov-btn";
+      } else if (isSr) {
+        provBtn.textContent = `ZENSR ${layer.zensr.scale}× · PRERENDERED`;
+        provBtn.className = "prov-badge prov-prerendered ctx-prov-btn";
+      } else if (isFiltered || layer.scale !== 1 || layer.angle !== 0 || layers.length > 1) {
+        provBtn.textContent = "PRERENDERED + EDITOR";
+        provBtn.className = "prov-badge prov-prerendered ctx-prov-btn";
+      } else {
+        provBtn.textContent = "SOURCE + JXL";
+        provBtn.className = "prov-badge prov-native ctx-prov-btn";
+      }
+    }
+  }
+  if ($("rail-upscale")) $("rail-upscale").disabled = !hasDoc || busy;
+  if ($("rail-mask")) $("rail-mask").disabled = !hasDoc || busy;
+  if ($("rail-animate")) $("rail-animate").disabled = !hasDoc || busy;
+  if ($("rail-animate")) $("rail-animate").setAttribute("aria-pressed", String(Boolean(timelineOpen)));
   $("fields").disabled = !layer || busy;
   $("layer-name").value = layer?.name ?? "";
   $("position-x").value = layer?.x ?? "";
@@ -1062,6 +1261,7 @@ function update() {
   zenFiltersPanel.sync(layer);
   masksPanel.updateUI();
   zensrPanel.updateUI();
+  structureInspector?.render();
 
   const nativeSource = layer?.mime === "image/jxl" ? layer : originalLayer();
   const nativeAsset = nativeSource?.mime === "image/jxl" && current.assets.get(nativeSource.id);
@@ -1262,14 +1462,12 @@ async function encodePresentation(state, includeLayers) {
   return codec("encode", { width, height, stride: width * 4, pixels: expected }, [expected.buffer]);
 }
 
-async function saveProject(project) {
-  stopPlayback();
-  const state = current;
+async function buildProjectBlobAndBytes(state, includeLayers = true) {
   let flattened;
   let preserved = state.preserved;
   if (originalPassthrough(state)) {
     flattened = state.assets.get(state.manifest.originalId).source;
-    const sourceBoxes = opaqueBoxes(flattened);
+    const sourceBoxes = safeOpaqueBoxes(flattened);
     preserved = preserved.filter(entry => {
       const index = sourceBoxes.findIndex(box =>
         box.type === entry.type && box.data.length === entry.data.length &&
@@ -1279,27 +1477,56 @@ async function saveProject(project) {
       return false;
     });
   } else {
-    flattened = await encodePresentation(state, project);
+    flattened = await encodePresentation(state, includeLayers);
   }
-  if (project) {
-    const assets = new Map(state.assets);
-    for (const layer of state.manifest.layers) {
-      let asset = assets.get(layer.id);
-      let updated = null;
-      if (layer.mime === "image/svg+xml" && !asset.rendition) {
-        updated = { ...(updated ?? asset), rendition: await encodeCanvas(asset.canvas) };
-      }
-      if (asset.maskAlpha && !asset.maskJxl) {
-        updated = { ...(updated ?? asset), maskJxl: await encodeMaskAlphaToJxl(asset.maskAlpha, layer.width, layer.height) };
-      }
-      if (updated) assets.set(layer.id, updated);
+  const assets = new Map(state.assets);
+  for (const layer of state.manifest.layers) {
+    let asset = assets.get(layer.id);
+    let updated = null;
+    if (layer.mime === "image/svg+xml" && !asset.rendition) {
+      updated = { ...(updated ?? asset), rendition: await encodeCanvas(asset.canvas) };
     }
-    const cmykPayload = state.manifest.cmyk?.enabled ? state.cmykData : null;
-    download(writeProject(flattened, state.manifest, assets, preserved, cmykPayload), `${title}.project.jxl`);
+    if (asset.maskAlpha && !asset.maskJxl) {
+      updated = { ...(updated ?? asset), maskJxl: await encodeMaskAlphaToJxl(asset.maskAlpha, layer.width, layer.height) };
+    }
+    if (updated) assets.set(layer.id, updated);
+  }
+  const cmykPayload = state.manifest.cmyk?.enabled ? state.cmykData : null;
+  const blob = writeProject(flattened, state.manifest, assets, preserved, cmykPayload);
+  return { blob, flattened, preserved };
+}
+
+async function saveProject(project) {
+  stopPlayback();
+  const state = current;
+  if (project) {
+    const { blob } = await buildProjectBlobAndBytes(state, true);
+    const projectBytes = new Uint8Array(await blob.arrayBuffer());
+    download(blob, `${title}.project.jxl`);
     saved = state;
+    appLog.info("save", `Saved "${title}.project.jxl" (${projectBytes.byteLength.toLocaleString()} B)`);
+    vaultPanel?.recordExplicitVersion("save", `Saved ${title}.project.jxl`, projectBytes);
     status("Project saved · original assets embedded");
   } else {
-    download(writeImage(flattened, preserved), `${title}.jxl`);
+    let flattened;
+    let preserved = state.preserved;
+    if (originalPassthrough(state)) {
+      flattened = state.assets.get(state.manifest.originalId).source;
+      const sourceBoxes = safeOpaqueBoxes(flattened);
+      preserved = preserved.filter(entry => {
+        const index = sourceBoxes.findIndex(box =>
+          box.type === entry.type && box.data.length === entry.data.length &&
+          box.data.every((byte, offset) => byte === entry.data[offset]));
+        if (index < 0) return true;
+        sourceBoxes.splice(index, 1);
+        return false;
+      });
+    } else {
+      flattened = await encodePresentation(state, false);
+    }
+    const blob = writeImage(flattened, preserved);
+    download(blob, `${title}.jxl`);
+    appLog.info("export", `Exported "${title}.jxl" (${blob.size.toLocaleString()} B)`);
     status("JPEG XL exported");
   }
 }
@@ -1342,6 +1569,65 @@ $("source-download").onclick = () => {
 };
 $("undo").onclick = () => goTo(cursor - 1);
 $("redo").onclick = () => goTo(cursor + 1);
+function duplicateActiveLayer() {
+  const layer = activeLayer();
+  if (!layer || !current || busy) return;
+  if (current.manifest.layers.length >= MAX_LAYERS) {
+    report(new Error(`A project can hold up to ${MAX_LAYERS} layers.`));
+    return;
+  }
+  const nextManifest = structuredClone(current.manifest);
+  const copy = structuredClone(layer);
+  copy.id = newId();
+  copy.name = `${layer.name} copy`.slice(0, 255);
+  copy.x = clampPosition(layer.x + 16);
+  copy.y = clampPosition(layer.y + 16);
+  const idx = nextManifest.layers.findIndex(l => l.id === layer.id);
+  nextManifest.layers.splice(idx + 1, 0, copy);
+  if (nextManifest.timeline?.frames) {
+    for (const f of nextManifest.timeline.frames) {
+      if (!f.layerOverrides) f.layerOverrides = {};
+      f.layerOverrides[copy.id] = { ...defaults, x: copy.x, y: copy.y, scale: copy.scale, angle: copy.angle };
+    }
+  }
+  const srcAsset = current.assets.get(layer.id);
+  const assets = new Map(current.assets);
+  assets.set(copy.id, {
+    ...srcAsset,
+    maskAlpha: srcAsset.maskAlpha ? srcAsset.maskAlpha.slice() : null,
+  });
+  checkAssets(nextManifest.layers, assets);
+  selected = copy.id;
+  compare = false;
+  storeState({ ...current, manifest: nextManifest, assets }, "Duplicated layer");
+  status("Layer duplicated");
+}
+$("duplicate-layer").onclick = duplicateActiveLayer;
+$("ctx-dup").onclick = duplicateActiveLayer;
+$("ctx-edit-svg").onclick = () => svgEditor.open();
+$("ctx-rot-ccw").onclick = () => rotateActiveBy(-90);
+$("ctx-rot-cw").onclick = () => rotateActiveBy(90);
+$("ctx-fit").onclick = () => $("scale-fit").click();
+$("ctx-upscale").onclick = () => {
+  showInspector("zensr");
+  $("zensr-quick-2x-fast").click();
+};
+$("ctx-mask").onclick = () => showInspector("mask");
+$("ctx-prov").onclick = () => showInspector("structure");
+$("mode-studio").onclick = () => showInspector(inspectorView === "structure" ? "properties" : inspectorView);
+$("mode-structure").onclick = () => showInspector("structure");
+$("rail-gallery").onclick = () => gallery.open("all");
+$("rail-svg").onclick = () => {
+  if (activeLayer()?.mime === "image/svg+xml") svgEditor.open();
+  else $("new-svg").click();
+};
+$("rail-adjust").onclick = () => showInspector("properties");
+$("rail-upscale").onclick = () => showInspector("zensr");
+$("rail-mask").onclick = () => showInspector("mask");
+$("rail-animate").onclick = () => $("timeline-toggle").click();
+$("rail-structure").onclick = () => showInspector("structure");
+$("rail-vault").onclick = () => showInspector("vault");
+
 $("raise").onclick = () => moveLayer(selected, current.manifest.layers.findIndex(l => l.id === selected) + 1);
 $("lower").onclick = () => moveLayer(selected, current.manifest.layers.findIndex(l => l.id === selected) - 1);
 $("remove").onclick = removeLayer;
@@ -1360,6 +1646,70 @@ $("reset").onclick = () => updateLayer({
   resizeKernel: undefined,
   resizeLinear: undefined,
 }, "Reset adjustments");
+function rotateActiveBy(delta) {
+  const layer = activeLayer();
+  if (!layer || busy || !current) return;
+  const eff = effectiveLayerSize(layer);
+  const center = layerPointToCanvas(layer, eff.width / 2, eff.height / 2);
+  const nextAngle = normalizeAngle(layer.angle + delta);
+  const rad = nextAngle * Math.PI / 180;
+  const hw = (eff.width * layer.scale) / 2;
+  const hh = (eff.height * layer.scale) / 2;
+  const nx = clampPosition(center.x - (hw * Math.cos(rad) - hh * Math.sin(rad)));
+  const ny = clampPosition(center.y - (hw * Math.sin(rad) + hh * Math.cos(rad)));
+  updateLayer({ angle: nextAngle, x: nx, y: ny }, `Rotated ${delta > 0 ? "+" : ""}${delta}°`);
+}
+$("rotate-ccw").onclick = () => rotateActiveBy(-90);
+$("rotate-cw").onclick = () => rotateActiveBy(90);
+$("scale-fit").onclick = () => {
+  const layer = activeLayer();
+  if (!layer || busy || !current) return;
+  const eff = effectiveLayerSize(layer);
+  const { width: cw, height: ch } = current.manifest;
+  const nextScale = clampScale(Math.min(cw / eff.width, ch / eff.height));
+  const nx = clampPosition((cw - eff.width * nextScale) / 2);
+  const ny = clampPosition((ch - eff.height * nextScale) / 2);
+  updateLayer({ scale: nextScale, angle: 0, x: nx, y: ny }, "Fit layer to canvas");
+};
+$("scale-reset").onclick = () => {
+  const layer = activeLayer();
+  if (!layer || busy || !current) return;
+  const eff = effectiveLayerSize(layer);
+  const { width: cw, height: ch } = current.manifest;
+  const nx = clampPosition((cw - eff.width) / 2);
+  const ny = clampPosition((ch - eff.height) / 2);
+  updateLayer({ scale: 1, angle: 0, x: nx, y: ny }, "Reset layer transform");
+};
+$("canvas-upscale-2x").onclick = () => {
+  if (!current || busy) return;
+  const nextW = current.manifest.width * 2;
+  const nextH = current.manifest.height * 2;
+  if (nextW > MAX_SIDE || nextH > MAX_SIDE || nextW * nextH > MAX_PIXELS) {
+    report(new Error(`Upscaled canvas ${nextW}×${nextH} exceeds the 16,384 px / 64 MP limit.`));
+    return;
+  }
+  const nextManifest = structuredClone(current.manifest);
+  nextManifest.width = nextW;
+  nextManifest.height = nextH;
+  for (const l of nextManifest.layers) {
+    l.scale = clampScale(l.scale * 2);
+    l.x = clampPosition(l.x * 2);
+    l.y = clampPosition(l.y * 2);
+  }
+  if (nextManifest.timeline?.frames) {
+    for (const f of nextManifest.timeline.frames) {
+      if (!f.layerOverrides) continue;
+      for (const props of Object.values(f.layerOverrides)) {
+        props.scale = clampScale(props.scale * 2);
+        props.x = clampPosition(props.x * 2);
+        props.y = clampPosition(props.y * 2);
+      }
+    }
+  }
+  storeState({ ...current, manifest: nextManifest }, `Upscaled canvas 2× (${nextW}×${nextH})`);
+  appLog.info("transform", `Upscaled canvas 2× → ${nextW}×${nextH}`);
+  status(`Canvas upscaled 2× (${nextW} × ${nextH} px)`);
+};
 $("layer-name").onchange = event => updateLayer({ name: event.target.value.trim() || activeLayer().name }, "Renamed layer");
 for (const axis of ["x", "y"]) {
   $(`position-${axis}`).onchange = event => {
@@ -1374,15 +1724,29 @@ function showInspector(view) {
   if (view !== "splines") splinePickMode = false;
   if (view !== "mask") masksPanel.stopBrush();
   $("history").hidden = view !== "history";
+  $("structure-panel").hidden = view !== "structure";
+  $("vault-panel").hidden = view !== "vault";
+  $("log-panel").hidden = view !== "log";
   $("properties").hidden = view !== "properties";
   $("mask-panel").hidden = view !== "mask";
   $("zensr-panel").hidden = view !== "zensr";
   $("coding-panel").hidden = view !== "coding";
   $("splines-panel").hidden = view !== "splines";
   $("native-panel").hidden = view !== "native";
-  for (const id of ["history", "properties", "mask", "zensr", "coding", "splines", "native"]) {
-    $(`${id}-tab`).setAttribute("aria-pressed", String(view === id));
+  for (const id of ["history", "structure", "vault", "log", "properties", "mask", "zensr", "coding", "splines", "native"]) {
+    $(`${id}-tab`)?.setAttribute("aria-pressed", String(view === id));
   }
+  const isStruct = view === "structure";
+  document.body.classList.toggle("mode-structure", isStruct);
+  $("mode-studio")?.setAttribute("aria-pressed", String(!isStruct));
+  $("mode-structure")?.setAttribute("aria-pressed", String(isStruct));
+  $("rail-adjust")?.setAttribute("aria-pressed", String(view === "properties"));
+  $("rail-upscale")?.setAttribute("aria-pressed", String(view === "zensr"));
+  $("rail-mask")?.setAttribute("aria-pressed", String(view === "mask"));
+  $("rail-structure")?.setAttribute("aria-pressed", String(isStruct));
+  $("rail-vault")?.setAttribute("aria-pressed", String(view === "vault"));
+  if (view === "vault") vaultPanel?.refreshUI();
+  if (isStruct) structureInspector?.render();
   requestPaint();
 }
 
@@ -1417,7 +1781,63 @@ function addNativeLayer(asset, frame, index) {
 const nativeInspector = makeNativeInspector({
   run, download, canvasFrom, addNativeLayer, importNativeTimeline, loadNativeCmyk, report, status,
 });
+makeConsolePanel({
+  onOpenLog: () => showInspector("log"),
+  download,
+  status,
+});
+vaultPanel = makeVaultPanel({
+  getState: () => current,
+  getTitle: () => title,
+  getDocId: () => activeDocId,
+  setDocId: id => { activeDocId = id; },
+  getBusy: () => busy,
+  buildProjectBytes: async state => {
+    const { blob } = await buildProjectBlobAndBytes(state, false);
+    return new Uint8Array(await blob.arrayBuffer());
+  },
+  renderThumbDataUrl: state => {
+    try {
+      return renderFrameThumb(state, activeFrameIndex).toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  },
+  openStoredBytes: (bytes, filename, docId) => openBytes(bytes, filename, { existingDocId: docId, skipConfirm: true }),
+  downloadBytes: (bytes, filename) => download(new Blob([bytes], { type: "image/jxl" }), filename),
+  newId,
+  run,
+  status,
+  showVaultTab: () => showInspector("vault"),
+});
+structureInspector = makeStructureInspector({
+  getState: () => current,
+  getSelectedLayerId: () => selected,
+  selectLayer: id => {
+    if (selected === id) return;
+    selected = id;
+    compare = false;
+    update();
+  },
+  getTitle: () => title,
+  isPassthrough: originalPassthrough,
+  updateLayer,
+  mutateManifest: (mutator, label) => {
+    if (!current || busy) return;
+    const nextManifest = structuredClone(current.manifest);
+    mutator(nextManifest);
+    storeState({ ...current, manifest: nextManifest }, label);
+  },
+  openSvgEditor: () => svgEditor.open(),
+  downloadSource: () => $("source-download").click(),
+  download,
+  status,
+  report,
+});
 $("history-tab").onclick = () => showInspector("history");
+$("structure-tab").onclick = () => showInspector("structure");
+$("vault-tab").onclick = () => showInspector("vault");
+$("log-tab").onclick = () => showInspector("log");
 $("properties-tab").onclick = () => showInspector("properties");
 $("mask-tab").onclick = () => showInspector("mask");
 $("zensr-tab").onclick = () => showInspector("zensr");
@@ -1429,22 +1849,34 @@ $("native-tab").onclick = () => {
 };
 $("edit-svg").onclick = () => svgEditor.open();
 
-function canvasPoint(event) {
+function clientToCanvas(clientX, clientY) {
   const bounds = preview.getBoundingClientRect();
-  return { x: (event.clientX - bounds.left) * current.manifest.width / bounds.width,
-    y: (event.clientY - bounds.top) * current.manifest.height / bounds.height };
+  return { x: (clientX - bounds.left) * current.manifest.width / bounds.width,
+    y: (clientY - bounds.top) * current.manifest.height / bounds.height };
+}
+
+function canvasPoint(event) {
+  return clientToCanvas(event.clientX, event.clientY);
+}
+
+function canvasPointToLayer(layer, cx, cy) {
+  const theta = layer.angle * Math.PI / 180;
+  const dx = cx - layer.x;
+  const dy = cy - layer.y;
+  return {
+    x: (Math.cos(theta) * dx + Math.sin(theta) * dy) / layer.scale,
+    y: (-Math.sin(theta) * dx + Math.cos(theta) * dy) / layer.scale,
+  };
 }
 
 function hit(layer, x, y) {
-  const theta = layer.angle * Math.PI / 180;
-  const dx = x - layer.x;
-  const dy = y - layer.y;
-  const u = (Math.cos(theta) * dx + Math.sin(theta) * dy) / layer.scale;
-  const v = (-Math.sin(theta) * dx + Math.cos(theta) * dy) / layer.scale;
-  return layer.visible && layer.opacity > 0 && u >= 0 && v >= 0 && u < layer.width && v < layer.height;
+  if (!layer.visible || layer.opacity <= 0) return false;
+  const eff = effectiveLayerSize(layer);
+  const { x: u, y: v } = canvasPointToLayer(layer, x, y);
+  return u >= 0 && v >= 0 && u < eff.width && v < eff.height;
 }
 
-// Direct on-canvas corner resize & rotation handles
+// Direct on-canvas corner resize & rotation handles + 2-finger touch pinch/rotate
 function layerPointToCanvas(layer, lx, ly) {
   const rad = layer.angle * Math.PI / 180;
   const cos = Math.cos(rad);
@@ -1454,83 +1886,99 @@ function layerPointToCanvas(layer, lx, ly) {
   return { x: layer.x + sx * cos - sy * sin, y: layer.y + sx * sin + sy * cos };
 }
 
+function finishHandleGesture(commit) {
+  if (!gesture?.handle) return;
+  const { handle, patch, kind } = gesture;
+  handle.classList.remove("is-active");
+  gesture = null;
+  if (commit && patch) updateLayer(patch, kind === "rotate" ? "Rotated layer" : "Resized layer");
+  else update();
+  requestPaint();
+}
+
+function startPinch() {
+  const layer = activeLayer();
+  if (!layer || !layer.visible || busy || !current || compare || comparingKey ||
+      current.manifest.cmyk?.enabled || masksPanel.getBrushMode() || splinePickMode) return;
+  if (gesture?.handle) gesture.handle.classList.remove("is-active");
+  const [p1, p2] = [...activeTouches.values()];
+  const c1 = clientToCanvas(p1.clientX, p1.clientY);
+  const c2 = clientToCanvas(p2.clientX, p2.clientY);
+  const startMid = { x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 };
+  const startDist = Math.max(4, Math.hypot(c2.x - c1.x, c2.y - c1.y));
+  const startAngle = Math.atan2(c2.y - c1.y, c2.x - c1.x) * 180 / Math.PI;
+  const baseLayer = gesture?.patch ? { ...gesture.layer, ...gesture.patch } : layer;
+  const midLocal = canvasPointToLayer(baseLayer, startMid.x, startMid.y);
+  gesture = {
+    pinch: true,
+    layer: baseLayer,
+    midLocal,
+    startDist,
+    startAngle,
+    state: gesture?.state ?? current,
+    patch: gesture?.patch,
+  };
+  requestPaint();
+}
+
+// Capture all touch contacts over canvas + handles so a 2nd finger brushing a corner handle
+// still smoothly transitions into 2-finger pinch-to-resize & twist-to-rotate.
+$("canvas-wrap").addEventListener("pointerdown", event => {
+  if (event.pointerType !== "touch" || busy || !current || compare || comparingKey) return;
+  activeTouches.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+  if (activeTouches.size === 2 && !gesture?.maskBrush) {
+    event.preventDefault();
+    startPinch();
+  }
+}, { capture: true });
+
 for (const handle of $("outline").querySelectorAll(".handle")) {
+  handle.addEventListener("touchstart", event => { event.preventDefault(); }, { passive: false });
   handle.addEventListener("pointerdown", event => {
-    if (event.button !== 0 || busy || !current || compare || comparingKey || gesture) return;
+    if (event.pointerType === "touch" && activeTouches.size >= 2) return;
+    if ((event.pointerType === "mouse" && event.button !== 0) || !event.isPrimary) return;
+    if (busy || !current || compare || comparingKey || gesture) return;
+    event.preventDefault();
     event.stopPropagation();
     const layer = activeLayer();
     if (!layer) return;
+    const eff = effectiveLayerSize(layer);
     const kind = handle.dataset.handle;
     const pt = canvasPoint(event);
-    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("is-active");
+    try { handle.setPointerCapture(event.pointerId); } catch {}
     if (kind === "rotate") {
-      const center = layerPointToCanvas(layer, layer.width / 2, layer.height / 2);
+      const center = layerPointToCanvas(layer, eff.width / 2, eff.height / 2);
       const startAngle = Math.atan2(pt.y - center.y, pt.x - center.x) * 180 / Math.PI;
-      gesture = { handle, pointer: event.pointerId, kind, layer, center, startAngle, state: current };
+      gesture = { handle, pointer: event.pointerId, kind, layer, eff, center, startAngle, state: current };
     } else {
       const anchorLocal = {
-        nw: [layer.width, layer.height],
-        ne: [0, layer.height],
+        nw: [eff.width, eff.height],
+        ne: [0, eff.height],
         se: [0, 0],
-        sw: [layer.width, 0],
+        sw: [eff.width, 0],
       }[kind];
       const anchorWorld = layerPointToCanvas(layer, anchorLocal[0], anchorLocal[1]);
-      const startDist = Math.max(4, Math.hypot(pt.x - anchorWorld.x, pt.y - anchorWorld.y));
-      gesture = { handle, pointer: event.pointerId, kind, layer, anchorLocal, anchorWorld, startDist, state: current };
+      const startVec = { x: pt.x - anchorWorld.x, y: pt.y - anchorWorld.y };
+      const startDist = Math.max(4, Math.hypot(startVec.x, startVec.y));
+      gesture = { handle, pointer: event.pointerId, kind, layer, eff, anchorLocal, anchorWorld, startVec, startDist, state: current };
     }
   });
-  handle.addEventListener("pointermove", event => {
-    if (gesture?.handle !== handle || gesture?.pointer !== event.pointerId) return;
-    const pt = canvasPoint(event);
-    const { layer, kind } = gesture;
-    if (kind === "rotate") {
-      const curAngle = Math.atan2(pt.y - gesture.center.y, pt.x - gesture.center.x) * 180 / Math.PI;
-      let nextAngle = Math.round(layer.angle + (curAngle - gesture.startAngle));
-      while (nextAngle > 180) nextAngle -= 360;
-      while (nextAngle < -180) nextAngle += 360;
-      // Re-center around the visual midpoint while rotating
-      const rad = nextAngle * Math.PI / 180;
-      const hw = (layer.width * layer.scale) / 2;
-      const hh = (layer.height * layer.scale) / 2;
-      const nx = clampPosition(gesture.center.x - (hw * Math.cos(rad) - hh * Math.sin(rad)));
-      const ny = clampPosition(gesture.center.y - (hw * Math.sin(rad) + hh * Math.cos(rad)));
-      gesture.patch = { angle: nextAngle, x: nx, y: ny };
-      $("adjust-angle").value = nextAngle;
-      $("value-angle").value = `${nextAngle}°`;
-    } else {
-      const dist = Math.max(2, Math.hypot(pt.x - gesture.anchorWorld.x, pt.y - gesture.anchorWorld.y));
-      const nextScale = clampScale(layer.scale * (dist / gesture.startDist));
-      const rad = layer.angle * Math.PI / 180;
-      const ax = gesture.anchorLocal[0] * nextScale;
-      const ay = gesture.anchorLocal[1] * nextScale;
-      const nx = clampPosition(gesture.anchorWorld.x - (ax * Math.cos(rad) - ay * Math.sin(rad)));
-      const ny = clampPosition(gesture.anchorWorld.y - (ax * Math.sin(rad) + ay * Math.cos(rad)));
-      gesture.patch = { scale: nextScale, x: nx, y: ny };
-      $("adjust-scale").value = nextScale;
-      $("value-scale").value = `${Math.round(nextScale * 100)}%`;
-    }
-    $("position-x").value = gesture.patch.x;
-    $("position-y").value = gesture.patch.y;
-    gesture.state = patchState(current, selected, gesture.patch);
-    requestPaint();
-  });
-  handle.addEventListener("pointerup", event => {
-    if (gesture?.handle !== handle || gesture?.pointer !== event.pointerId) return;
-    const { patch, kind } = gesture;
-    gesture = null;
-    if (patch) updateLayer(patch, kind === "rotate" ? "Rotated layer" : "Resized layer");
-    requestPaint();
-  });
-  handle.addEventListener("lostpointercapture", () => {
-    if (gesture?.handle === handle) {
-      gesture = null;
-      update();
+  handle.addEventListener("lostpointercapture", event => {
+    if (gesture?.handle === handle && gesture?.pointer === event.pointerId) {
+      finishHandleGesture(true);
     }
   });
 }
 
 preview.addEventListener("pointerdown", event => {
-  if (event.button !== 0 || busy || !current || compare || comparingKey || gesture) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if (busy || !current || compare || comparingKey) return;
+  if (event.pointerType === "touch") {
+    event.preventDefault();
+    if (gesture?.pinch || activeTouches.size >= 2 || pinchCooldown) return;
+  }
+  if (gesture) return;
   const point = canvasPoint(event);
   if (masksPanel.getBrushMode()) {
     const layer = activeLayer();
@@ -1538,7 +1986,7 @@ preview.addEventListener("pointerdown", event => {
     const liveState = masksPanel.startStroke(layer, point);
     if (liveState) {
       gesture = { pointer: event.pointerId, maskBrush: true, layer, state: liveState };
-      preview.setPointerCapture(event.pointerId);
+      try { preview.setPointerCapture(event.pointerId); } catch {}
       requestPaint();
     }
     return;
@@ -1561,12 +2009,85 @@ preview.addEventListener("pointerdown", event => {
   const layer = layers.findLast(entry => hit(entry, point.x, point.y));
   if (!layer) return;
   selected = layer.id;
-  gesture = { pointer: event.pointerId, point, layer, state: current };
-  preview.setPointerCapture(event.pointerId);
+  gesture = {
+    pointer: event.pointerId,
+    pointerType: event.pointerType,
+    startClient: { x: event.clientX, y: event.clientY },
+    moved: event.pointerType !== "touch",
+    point,
+    layer,
+    state: current,
+  };
+  try { preview.setPointerCapture(event.pointerId); } catch {}
   update();
 });
-preview.addEventListener("pointermove", event => {
-  if (gesture?.pointer !== event.pointerId || gesture?.handle) return;
+
+window.addEventListener("pointermove", event => {
+  if (!current) return;
+  if (gesture?.handle && gesture.pointer === event.pointerId) {
+    const pt = canvasPoint(event);
+    const { layer, eff, kind } = gesture;
+    if (kind === "rotate") {
+      const curAngle = Math.atan2(pt.y - gesture.center.y, pt.x - gesture.center.x) * 180 / Math.PI;
+      const rawAngle = layer.angle + (curAngle - gesture.startAngle);
+      const nextAngle = normalizeAngle(event.shiftKey ? Math.round(rawAngle / 15) * 15 : rawAngle);
+      const rad = nextAngle * Math.PI / 180;
+      const hw = (eff.width * layer.scale) / 2;
+      const hh = (eff.height * layer.scale) / 2;
+      const nx = clampPosition(gesture.center.x - (hw * Math.cos(rad) - hh * Math.sin(rad)));
+      const ny = clampPosition(gesture.center.y - (hw * Math.sin(rad) + hh * Math.cos(rad)));
+      gesture.patch = { angle: nextAngle, x: nx, y: ny };
+      $("adjust-angle").value = nextAngle;
+      $("value-angle").value = `${nextAngle}°`;
+    } else {
+      const vx = pt.x - gesture.anchorWorld.x;
+      const vy = pt.y - gesture.anchorWorld.y;
+      const dot = vx * gesture.startVec.x + vy * gesture.startVec.y;
+      const nextScale = dot <= 0 ? 0.05 : clampScale(layer.scale * (Math.hypot(vx, vy) / gesture.startDist));
+      const rad = layer.angle * Math.PI / 180;
+      const ax = gesture.anchorLocal[0] * nextScale;
+      const ay = gesture.anchorLocal[1] * nextScale;
+      const nx = clampPosition(gesture.anchorWorld.x - (ax * Math.cos(rad) - ay * Math.sin(rad)));
+      const ny = clampPosition(gesture.anchorWorld.y - (ax * Math.sin(rad) + ay * Math.cos(rad)));
+      gesture.patch = { scale: nextScale, x: nx, y: ny };
+      $("adjust-scale").value = nextScale;
+      $("value-scale").value = `${Math.round(nextScale * 100)}%`;
+    }
+    $("position-x").value = gesture.patch.x;
+    $("position-y").value = gesture.patch.y;
+    gesture.state = patchState(current, selected, gesture.patch);
+    requestPaint();
+    return;
+  }
+  if (event.pointerType === "touch" && activeTouches.has(event.pointerId)) {
+    activeTouches.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+    if (gesture?.pinch && activeTouches.size >= 2) {
+      const [p1, p2] = [...activeTouches.values()];
+      const c1 = clientToCanvas(p1.clientX, p1.clientY);
+      const c2 = clientToCanvas(p2.clientX, p2.clientY);
+      const curMid = { x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 };
+      const curDist = Math.max(4, Math.hypot(c2.x - c1.x, c2.y - c1.y));
+      const curAngle = Math.atan2(c2.y - c1.y, c2.x - c1.x) * 180 / Math.PI;
+      const nextScale = clampScale(gesture.layer.scale * (curDist / gesture.startDist));
+      const nextAngle = normalizeAngle(gesture.layer.angle + (curAngle - gesture.startAngle));
+      const rad = nextAngle * Math.PI / 180;
+      const sx = gesture.midLocal.x * nextScale;
+      const sy = gesture.midLocal.y * nextScale;
+      const nx = clampPosition(curMid.x - (sx * Math.cos(rad) - sy * Math.sin(rad)));
+      const ny = clampPosition(curMid.y - (sx * Math.sin(rad) + sy * Math.cos(rad)));
+      gesture.patch = { scale: nextScale, angle: nextAngle, x: nx, y: ny };
+      $("adjust-scale").value = nextScale;
+      $("value-scale").value = `${Math.round(nextScale * 100)}%`;
+      $("adjust-angle").value = nextAngle;
+      $("value-angle").value = `${nextAngle}°`;
+      $("position-x").value = nx;
+      $("position-y").value = ny;
+      gesture.state = patchState(current, selected, gesture.patch);
+      requestPaint();
+      return;
+    }
+  }
+  if (gesture?.pointer !== event.pointerId || gesture.handle || gesture.pinch) return;
   const point = canvasPoint(event);
   if (gesture.maskBrush) {
     const liveState = masksPanel.moveStroke(gesture.layer, point);
@@ -1576,6 +2097,10 @@ preview.addEventListener("pointermove", event => {
     }
     return;
   }
+  if (!gesture.moved) {
+    if (Math.hypot(event.clientX - gesture.startClient.x, event.clientY - gesture.startClient.y) < 4) return;
+    gesture.moved = true;
+  }
   const { layer } = gesture;
   gesture.patch = { x: clampPosition(layer.x + point.x - gesture.point.x),
     y: clampPosition(layer.y + point.y - gesture.point.y) };
@@ -1584,24 +2109,50 @@ preview.addEventListener("pointermove", event => {
   $("position-y").value = gesture.patch.y;
   requestPaint();
 });
-preview.addEventListener("pointerup", event => {
-  if (gesture?.pointer !== event.pointerId || gesture?.handle) return;
-  if (gesture.maskBrush) {
-    gesture = null;
-    masksPanel.endStroke();
-    requestPaint();
+
+function endPointer(event) {
+  if (event.pointerType === "touch") {
+    activeTouches.delete(event.pointerId);
+    if (activeTouches.size === 0) pinchCooldown = false;
+  }
+  if (gesture?.handle && gesture.pointer === event.pointerId) {
+    finishHandleGesture(true);
     return;
   }
-  const { patch } = gesture;
-  gesture = null;
-  if (patch) updateLayer(patch, "Moved layer");
-  requestPaint();
-});
-preview.addEventListener("lostpointercapture", () => {
-  if (gesture?.pointer !== undefined && !gesture?.handle) {
-    if (gesture.maskBrush) masksPanel.endStroke();
+  if (gesture?.pinch) {
+    if (activeTouches.size < 2) {
+      const { patch } = gesture;
+      gesture = null;
+      pinchCooldown = activeTouches.size > 0;
+      if (patch) updateLayer(patch, "Transformed layer");
+      else update();
+      requestPaint();
+    }
+    return;
+  }
+  if (gesture?.pointer === event.pointerId && !gesture.handle) {
+    if (gesture.maskBrush) {
+      gesture = null;
+      masksPanel.endStroke();
+      requestPaint();
+      return;
+    }
+    const { patch } = gesture;
     gesture = null;
-    update();
+    if (patch) updateLayer(patch, "Moved layer");
+    requestPaint();
+  }
+}
+window.addEventListener("pointerup", endPointer);
+window.addEventListener("pointercancel", endPointer);
+
+preview.addEventListener("lostpointercapture", event => {
+  if (gesture?.pointer === event.pointerId && !gesture.handle && !gesture.pinch) {
+    if (gesture.maskBrush) masksPanel.endStroke();
+    const patch = gesture.maskBrush ? null : gesture.patch;
+    gesture = null;
+    if (patch) updateLayer(patch, "Moved layer");
+    else update();
   }
 });
 
@@ -1636,6 +2187,9 @@ window.addEventListener("keydown", event => {
   if (command && key === "s") {
     event.preventDefault();
     run("Saving project…", () => saveProject(true));
+  } else if (command && key === "d") {
+    event.preventDefault();
+    duplicateActiveLayer();
   } else if (command && (key === "z" || key === "y")) {
     event.preventDefault();
     goTo(cursor + (key === "y" || event.shiftKey ? 1 : -1));
@@ -1666,6 +2220,7 @@ new ResizeObserver(requestPaint).observe(stage);
 
 codec("init").then(mode => {
   $("engine").textContent = mode;
+  appLog.info("codec", `WASM worker ready (${mode})`);
   zenFiltersPanel.loadCatalog();
   if (!current && !busy) status("Ready");
 }, report);

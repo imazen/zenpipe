@@ -17,9 +17,9 @@ use zenjxl_decoder::api::{
 use wasm_bindgen::prelude::*;
 
 const MAX_NATIVE_FRAMES: usize = 128;
-const MAX_NATIVE_SAMPLES: usize = 16_000_000;
+const MAX_NATIVE_SAMPLES: usize = 32_000_000;
 const MAX_TIMELINE_DECODE_FRAMES: usize = 64;
-const MAX_TIMELINE_DECODE_BYTES: usize = 64_000_000;
+const MAX_TIMELINE_DECODE_BYTES: usize = 128_000_000;
 
 fn complete<T, U, E: Display>(step: Result<ProcessingResult<T, U>, E>) -> Result<T, String> {
     match step.map_err(|error| error.to_string())? {
@@ -30,10 +30,14 @@ fn complete<T, U, E: Display>(step: Result<ProcessingResult<T, U>, E>) -> Result
 
 fn source_limits() -> JxlDecoderLimits {
     let mut limits = JxlDecoderLimits::restrictive()
-        .with_max_pixels(24_000_000)
+        .with_max_pixels(64_000_000)
+        .with_max_extra_channels(256)
+        .with_max_tree_size(1 << 22)
         .with_max_reference_frames(4)
-        .with_max_memory_bytes(512 * 1024 * 1024)
+        .with_max_memory_bytes(1024 * 1024 * 1024)
         .with_max_frame_headers(MAX_NATIVE_FRAMES as u64);
+    limits.max_patches = None;
+    limits.max_spline_points = Some(1 << 20);
     limits.max_codestream_level = JxlCodestreamLevel::Level10;
     limits
 }
@@ -60,8 +64,10 @@ fn initialize(
 }
 
 fn check_dimensions(width: usize, height: usize) -> Result<(), String> {
-    if width == 0 || height == 0 || width > 8192 || height > 8192 || width * height > 24_000_000 {
-        return Err("The JPEG XL frame exceeds the browser canvas limit.".into());
+    if width == 0 || height == 0 || width > 16384 || height > 16384 || width * height > 64_000_000 {
+        return Err(
+            "The JPEG XL frame exceeds the browser canvas limit (16,384 px / 64 MP).".into(),
+        );
     }
     Ok(())
 }
@@ -287,20 +293,16 @@ impl NativeTimeline {
     }
 }
 
-/// Decode all visible coalesced animation frames into RGBA8 in display orientation,
-/// preserving exact animation clock, loop count, frame names, durations and timecodes.
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn native_jxl_timeline(bytes: &[u8]) -> Result<NativeTimeline, String> {
-    if bytes.len() > 128 * 1024 * 1024 {
-        return Err("The JPEG XL source exceeds 128 MiB.".into());
-    }
-    let options = JxlDecoderOptions::default()
+fn decode_timeline_inner(bytes: &[u8], use_cms: bool) -> Result<NativeTimeline, String> {
+    let mut options = JxlDecoderOptions::default()
         .with_limits(source_limits())
         .with_coalescing(true)
         .with_adjust_orientation(true)
         .with_skip_preview(true)
-        .with_cms(Box::new(MoxCms))
         .with_dither_u8(false);
+    if use_cms {
+        options = options.with_cms(Box::new(MoxCms));
+    }
     let mut input = bytes;
     let mut decoder = complete(JxlDecoder::new(options).process(&mut input))?;
     let info = decoder.basic_info().clone();
@@ -324,7 +326,7 @@ pub fn native_jxl_timeline(bytes: &[u8]) -> Result<NativeTimeline, String> {
             return Err("Animation exceeds the 64-frame timeline limit.".into());
         }
         if all_pixels.len().saturating_add(frame_bytes) > MAX_TIMELINE_DECODE_BYTES {
-            return Err("Animation exceeds the 64 MB decoded timeline budget.".into());
+            return Err("Animation exceeds the 128 MB decoded timeline budget.".into());
         }
         let frame = complete(decoder.process(&mut input))?;
         let hdr = frame.frame_header();
@@ -367,6 +369,16 @@ pub fn native_jxl_timeline(bytes: &[u8]) -> Result<NativeTimeline, String> {
         height: height as u32,
         pixels: all_pixels,
     })
+}
+
+/// Decode all visible coalesced animation frames into RGBA8 in display orientation,
+/// preserving exact animation clock, loop count, frame names, durations and timecodes.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn native_jxl_timeline(bytes: &[u8]) -> Result<NativeTimeline, String> {
+    if bytes.len() > 128 * 1024 * 1024 {
+        return Err("The JPEG XL source exceeds 128 MiB.".into());
+    }
+    decode_timeline_inner(bytes, true).or_else(|_| decode_timeline_inner(bytes, false))
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

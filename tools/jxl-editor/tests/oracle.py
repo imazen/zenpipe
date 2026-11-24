@@ -233,6 +233,7 @@ extra_cases = [
     ("masked", "masked", (96, 64)),
     ("zensr.project", "zensr", (384, 256)),
     ("zensr", "zensr", (384, 256)),
+    ("zensr-2x.project", "zensr-2x", (768, 512)),
 ]
 for name, expected, size in extra_cases:
     source = directory / f"{name}.jxl"

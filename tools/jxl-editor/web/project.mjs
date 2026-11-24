@@ -11,7 +11,8 @@ const CMYK_ICC = "znic";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-export const MAX_PIXELS = 24_000_000;
+export const MAX_PIXELS = 64_000_000;
+export const MAX_SIDE = 16384;
 export const MAX_FILE = 128 * 1024 * 1024;
 export const MAX_LAYERS = 32;
 export const MAX_TIMELINE_FRAMES = 64;
@@ -25,8 +26,16 @@ export const VALID_RESIZE_KERNELS = new Set([
 
 export function checkDimensions(width, height) {
   if (!Number.isInteger(width) || !Number.isInteger(height) ||
-      width < 1 || height < 1 || width > 8192 || height > 8192 || width * height > MAX_PIXELS) {
-    throw new Error("The image exceeds the editor’s 8,192 px / 24 MP canvas limit.");
+      width < 1 || height < 1 || width > MAX_SIDE || height > MAX_SIDE || width * height > MAX_PIXELS) {
+    throw new Error("The image exceeds the editor’s 16,384 px / 64 MP canvas limit.");
+  }
+}
+
+export function hasManifestBox(bytes) {
+  try {
+    return jxlBoxes(bytes).some(entry => entry.type === MANIFEST);
+  } catch {
+    return false;
   }
 }
 
@@ -149,7 +158,7 @@ export function writeProject(flattened, manifest, assets, preserved = [], cmykDa
 }
 
 function inRange(value, min, max) {
-  return Number.isFinite(value) && value >= min && value <= max;
+  return Number.isFinite(value) && value >= min - 1e-6 && value <= max + 1e-6;
 }
 
 const FILTER_RANGES = {

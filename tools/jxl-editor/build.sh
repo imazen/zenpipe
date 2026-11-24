@@ -30,6 +30,24 @@ if ! sha_matches "$zensr_sha" dist/models/dejpeg_rt24g.f16.raw; then
     mv dist/models/dejpeg_rt24g.f16.raw.partial dist/models/dejpeg_rt24g.f16.raw
 fi
 
+# Stage optional built-in ZenSR 2x/4x upscaling f16 checkpoints from local zensr checkout when present.
+ZENSR_MODELS_DIR="${ZENSR_MODELS_DIR:-$HOME/work/zen/zensr/models/adopted}"
+for pair in \
+    "rtc_distill_2x:2b5173ac26b6c1aab53b4b4d34320096421ee2588fa5021f1c9393f1120277b4" \
+    "nomosuni_span_2x:b1e56f5f20df3cbcd8c05416bd10802b3b86fcf67abb350ed92fa31319417481" \
+    "nomosuni_span_4x:5006aa39926af84bd7e019e1fd8cbf5eb05fefb614badcee53a32f9a8a349a93"
+do
+    m="${pair%%:*}"
+    s="${pair##*:}"
+    dst="dist/models/${m}.f16.raw"
+    src="${ZENSR_MODELS_DIR}/${m}/weights_f16.raw"
+    if ! sha_matches "$s" "$dst" && [[ -f "$src" ]]; then
+        cp "$src" "${dst}.partial"
+        sha_matches "$s" "${dst}.partial"
+        mv "${dst}.partial" "$dst"
+    fi
+done
+
 if (( $# == 0 )); then set -- relaxed baseline; fi
 for mode in "$@"; do
     case "$mode" in

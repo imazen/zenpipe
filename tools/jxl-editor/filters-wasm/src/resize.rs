@@ -121,12 +121,12 @@ pub fn resize_rgba_impl(
         || src_h == 0
         || dst_w == 0
         || dst_h == 0
-        || src_w > 8192
-        || src_h > 8192
-        || dst_w > 8192
-        || dst_h > 8192
-        || u64::from(src_w) * u64::from(src_h) > 24_000_000
-        || u64::from(dst_w) * u64::from(dst_h) > 24_000_000
+        || src_w > 16384
+        || src_h > 16384
+        || dst_w > 16384
+        || dst_h > 16384
+        || u64::from(src_w) * u64::from(src_h) > 64_000_000
+        || u64::from(dst_w) * u64::from(dst_h) > 64_000_000
         || pixels.len() != src_w as usize * src_h as usize * 4
     {
         return Err("Invalid dimensions or RGBA buffer for zenresize.".into());

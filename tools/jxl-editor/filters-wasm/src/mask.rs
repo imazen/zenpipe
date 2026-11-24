@@ -223,9 +223,9 @@ pub fn apply_layer_mask_rgba_impl(
 ) -> Result<Vec<u8>, String> {
     if width == 0
         || height == 0
-        || width > 8192
-        || height > 8192
-        || u64::from(width) * u64::from(height) > 24_000_000
+        || width > 16384
+        || height > 16384
+        || u64::from(width) * u64::from(height) > 64_000_000
         || pixels.len() != width as usize * height as usize * 4
     {
         return Err("Invalid dimensions or RGBA buffer for layer mask.".into());

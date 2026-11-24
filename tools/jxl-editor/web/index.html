@@ -20,14 +20,48 @@
       <button id="save" class="primary" type="button" disabled>Save project</button>
       <button id="export" type="button" disabled>Export JXL</button>
     </div>
-    <input id="open-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
-    <input id="layer-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" multiple hidden>
-    <input id="timeline-frame-file" type="file" accept=".jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
+    <input id="open-file" type="file" accept="image/*,image/jxl,.jxl,.project.jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
+    <input id="layer-file" type="file" accept="image/*,image/jxl,.jxl,.project.jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" multiple hidden>
+    <input id="timeline-frame-file" type="file" accept="image/*,image/jxl,.jxl,.jpg,.jpeg,.png,.webp,.avif,.svg" hidden>
     <input id="cmyk-icc-file" type="file" accept=".icc,.icm" hidden>
     <input id="mask-import-file" type="file" accept=".png,.jpg,.jpeg,.webp,.avif,.svg" hidden>
     <input id="zensr-weights-file" type="file" accept=".raw,.bin" hidden>
   </header>
   <main class="workspace">
+    <nav class="studio-rail" aria-label="Studio tools">
+      <button id="rail-gallery" type="button" class="rail-btn" title="Browse prefilled gallery">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-6 6-3-3-4 4"/></svg>
+        <span>Gallery</span>
+      </button>
+      <button id="rail-svg" type="button" class="rail-btn" title="Create or edit SVG vector">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h16v3M12 4v16M8 20h8"/></svg>
+        <span>Vector</span>
+      </button>
+      <button id="rail-adjust" type="button" class="rail-btn" aria-pressed="true" title="Adjustments and ZenFilters">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg>
+        <span>Adjust</span>
+      </button>
+      <button id="rail-upscale" type="button" class="rail-btn" aria-pressed="false" title="ZenSR 1× restoration and 2×/4× upscaling">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7"/></svg>
+        <span>Upscale</span>
+      </button>
+      <button id="rail-mask" type="button" class="rail-btn" aria-pressed="false" title="Non-destructive layer masks">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
+        <span>Masks</span>
+      </button>
+      <button id="rail-animate" type="button" class="rail-btn" aria-pressed="false" title="Native JPEG XL timeline">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3Z"/></svg>
+        <span>Animate</span>
+      </button>
+      <button id="rail-structure" type="button" class="rail-btn" aria-pressed="false" title="JXL Native Document Structure Inspector & Property Editor">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h6v4H5zM13 10h6v4h-6zM13 16h6v4h-6zM8 9v9h5M8 12h5"/></svg>
+        <span>Structure</span>
+      </button>
+      <button id="rail-vault" type="button" class="rail-btn" aria-pressed="false" title="Saved browser copies & version history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="8"/></svg>
+        <span>Saved</span>
+      </button>
+    </nav>
     <section class="viewer" aria-label="Canvas workspace">
       <div class="viewer-bar">
         <div class="controls">
@@ -35,12 +69,29 @@
           <button id="redo" type="button" title="Redo (Ctrl/⌘ Shift Z)" disabled>Redo</button>
           <button id="timeline-toggle" type="button" aria-pressed="false" disabled>Timeline</button>
         </div>
+        <div class="mode-switch" role="group" aria-label="Workspace view mode">
+          <button id="mode-studio" type="button" class="mode-btn" aria-pressed="true">Studio</button>
+          <button id="mode-structure" type="button" class="mode-btn" aria-pressed="false">JXL Structure</button>
+        </div>
         <span id="dimensions"></span>
         <div class="controls">
           <button id="compare" type="button" title="Show original (hold Space)" aria-pressed="false" disabled>Original</button>
           <button id="zoom-out" type="button" aria-label="Zoom out" disabled>−</button>
           <button id="fit" type="button" title="Fit canvas (0)" disabled>Fit</button>
           <button id="zoom-in" type="button" aria-label="Zoom in" disabled>+</button>
+        </div>
+      </div>
+      <div id="context-bar" class="context-bar" hidden aria-label="Selected layer quick actions">
+        <button id="ctx-prov" type="button" class="prov-badge prov-native ctx-prov-btn" title="Click to inspect JXL native vs prerendered structure">NATIVE JXL</button>
+        <span id="ctx-layer-name" class="ctx-name"></span>
+        <div class="ctx-actions">
+          <button id="ctx-edit-svg" type="button" class="pill-btn" aria-label="Quick edit SVG" hidden>Edit SVG</button>
+          <button id="ctx-rot-ccw" type="button" class="pill-btn" aria-label="Quick rotate left 90 degrees" title="Rotate −90°">↺ −90°</button>
+          <button id="ctx-rot-cw" type="button" class="pill-btn" aria-label="Quick rotate right 90 degrees" title="Rotate +90°">↻ +90°</button>
+          <button id="ctx-fit" type="button" class="pill-btn" aria-label="Quick fit layer">Fit</button>
+          <button id="ctx-upscale" type="button" class="pill-btn" aria-label="Quick neural upscale 2x">2× SR</button>
+          <button id="ctx-dup" type="button" class="pill-btn" aria-label="Duplicate selected layer" title="Duplicate layer (Ctrl/⌘ D)">Duplicate</button>
+          <button id="ctx-mask" type="button" class="pill-btn" aria-label="Quick mask layer">Mask…</button>
         </div>
       </div>
       <div id="stage" class="stage">
@@ -52,6 +103,8 @@
             <button id="empty-open" class="primary" type="button">Choose file</button>
             <button id="sample" type="button">Try a sample</button>
             <button id="empty-gallery" type="button">Browse gallery</button>
+            <button id="empty-resume" type="button" hidden>Resume last session</button>
+            <button id="empty-vault" type="button">Saved projects</button>
           </div>
           <p class="credit">Sample photo by NPS / David Restivo.</p>
         </div>
@@ -63,6 +116,7 @@
             <button type="button" class="handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
             <button type="button" class="handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
             <button type="button" class="handle handle-rotate" data-handle="rotate" aria-label="Rotate layer" title="Drag to rotate"></button>
+            <span id="transform-badge" class="transform-badge" hidden aria-hidden="true"></span>
           </div>
           <svg id="spline-overlay" class="spline-overlay" hidden aria-hidden="true"></svg>
         </div>
@@ -128,7 +182,7 @@
           <label class="inline-check"><input id="frame-ref-only" type="checkbox"> Reference only</label>
         </div>
       </section>
-      <footer class="statusbar"><span id="status" role="status" aria-live="polite">Starting codec…</span><span id="engine"></span></footer>
+      <footer class="statusbar"><span id="status" role="status" aria-live="polite">Starting codec…</span><div class="status-right"><button id="log-toggle" type="button" class="pill-btn status-log-btn">Log (0)</button><span id="engine"></span></div></footer>
     </section>
     <aside class="inspector" aria-label="Layer inspector">
       <section class="layers">
@@ -144,6 +198,7 @@
         <div class="layer-actions">
           <button id="raise" type="button" title="Move layer up" disabled>Raise</button>
           <button id="lower" type="button" title="Move layer down" disabled>Lower</button>
+          <button id="duplicate-layer" type="button" title="Duplicate layer (Ctrl/⌘ D)" disabled>Duplicate</button>
           <button id="remove" type="button" disabled>Delete</button>
         </div>
       </section>
@@ -152,9 +207,12 @@
           <button id="properties-tab" type="button" aria-pressed="true">Adjustments</button>
           <button id="mask-tab" type="button" aria-pressed="false" disabled>Mask</button>
           <button id="zensr-tab" type="button" aria-pressed="false" disabled>ZenSR</button>
+          <button id="structure-tab" type="button" aria-pressed="false">Structure</button>
           <button id="coding-tab" type="button" aria-pressed="false" disabled>Coding</button>
           <button id="splines-tab" type="button" aria-pressed="false" disabled>Splines</button>
           <button id="history-tab" type="button" aria-pressed="false">History</button>
+          <button id="vault-tab" type="button" aria-pressed="false">Versions</button>
+          <button id="log-tab" type="button" aria-pressed="false">Log</button>
           <button id="native-tab" type="button" aria-pressed="false" disabled>Native JXL</button>
         </div>
         <div id="properties">
@@ -168,6 +226,13 @@
               <label>Y <input id="position-y" type="number" min="-32768" max="32768" step="1"></label>
             </div>
             <div id="transforms"></div>
+            <div class="pill-row transform-actions">
+              <button id="rotate-ccw" type="button" class="pill-btn" title="Rotate 90° counter-clockwise">↺ −90°</button>
+              <button id="rotate-cw" type="button" class="pill-btn" title="Rotate 90° clockwise">↻ +90°</button>
+              <button id="scale-fit" type="button" class="pill-btn" title="Fit layer to canvas">Fit canvas</button>
+              <button id="scale-reset" type="button" class="pill-btn" title="Reset scale and rotation to 100% / 0°">100%</button>
+              <button id="canvas-upscale-2x" type="button" class="pill-btn" title="Upscale canvas and layers 2× using zenresize">Upscale 2×</button>
+            </div>
             <label class="name-field">Resampling kernel (zenresize)
               <select id="resize-kernel"></select>
             </label>
@@ -247,10 +312,21 @@
         <div id="zensr-panel" class="subpanel" hidden>
           <p id="zensr-svg-note" class="notice" hidden>Selected layer is a vector SVG — it re-rasterizes crisply at any scale without neural upscaling.</p>
           <fieldset id="zensr-fields" disabled>
-            <label class="inline-check"><input id="zensr-enabled" type="checkbox"> Enable ZenSR neural restoration</label>
+            <div class="pill-row">
+              <button id="zensr-quick-1x" type="button" class="pill-btn" aria-pressed="false">Restore 1×</button>
+              <button id="zensr-quick-2x-fast" type="button" class="pill-btn" aria-pressed="false">Upscale 2× Fast</button>
+              <button id="zensr-quick-2x-hq" type="button" class="pill-btn" aria-pressed="false">Upscale 2× HQ</button>
+              <button id="zensr-quick-4x-hq" type="button" class="pill-btn" aria-pressed="false">Upscale 4× HQ</button>
+              <button id="zensr-quick-off" type="button" class="pill-btn" aria-pressed="true">Off</button>
+            </div>
+            <label class="inline-check"><input id="zensr-enabled" type="checkbox"> Enable ZenSR restoration / upscaling</label>
+            <label class="inline-check"><input id="zensr-auto-canvas" type="checkbox" checked> Auto-resize canvas to upscaled dimensions</label>
             <label>ZenSR Model
               <select id="zensr-model">
                 <option value="dejpeg_rt24g">ZenSR De-JPEG Realtime (rt24g · 1× · 84 KB f16)</option>
+                <option value="rtc_distill_2x">ZenSR Realtime 2× Upscale (rtc24 · 2× · 88 KB f16)</option>
+                <option value="nomosuni_span_2x">ZenSR Quality 2× Upscale (SPAN-48 · 2× · 802 KB f16)</option>
+                <option value="nomosuni_span_4x">ZenSR Quality 4× Upscale (SPAN-48 · 4× · 833 KB f16)</option>
                 <option value="custom">Custom zensr-micro checkpoint (.raw f16/f32)</option>
               </select>
             </label>
@@ -283,10 +359,11 @@
               <p id="zensr-weights-note" class="muted-note"></p>
             </div>
             <div class="asset-actions">
+              <button id="zensr-fit-canvas" type="button" hidden>Match canvas to upscaled size</button>
               <button id="zensr-demo-jpeg" type="button">Add Low-Q JPEG test layer</button>
             </div>
             <p id="zensr-telemetry" class="muted-note"></p>
-            <p class="muted-note">Powered by <code>zensr-micro</code> (<code>imazen/zensr</code> @ <code>4a33019</code>, safe Rust WASM SIMD). Built-in <code>dejpeg_rt24g</code> weights are SHA-256 verified on load.</p>
+            <p class="muted-note">Powered by <code>zensr-micro</code> (<code>imazen/zensr</code> @ <code>4a33019</code>, safe Rust WASM SIMD). Built-in 1×, 2×, and 4× f16 weights are SHA-256 verified on load.</p>
           </fieldset>
         </div>
         <div id="coding-panel" class="subpanel" hidden>
@@ -517,7 +594,49 @@
             </details>
           </fieldset>
         </div>
+        <div id="structure-panel" hidden>
+          <div id="struct-summary" class="struct-summary"></div>
+          <div id="struct-filters" class="pill-row" role="group" aria-label="Document structure filter">
+            <button type="button" class="pill-btn" data-struct-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="pill-btn" data-struct-filter="plain" aria-pressed="false">Plain JXL</button>
+            <button type="button" class="pill-btn" data-struct-filter="native" aria-pressed="false">Native JXL</button>
+            <button type="button" class="pill-btn" data-struct-filter="prerendered" aria-pressed="false">Prerendered</button>
+            <button type="button" class="pill-btn" data-struct-filter="editor" aria-pressed="false">Editor Data</button>
+          </div>
+          <ol id="struct-tree" class="struct-tree" aria-label="JXL document structure tree"></ol>
+          <div id="struct-props" class="struct-props" aria-label="Selected structure node properties"></div>
+        </div>
         <ol id="history" hidden aria-label="Edit history"></ol>
+        <div id="vault-panel" hidden>
+          <p class="muted-note">Copies and version snapshots are saved locally in browser IndexedDB as lossless <code>.project.jxl</code> packages (survives reloads &amp; lets you restore or download any version).</p>
+          <label class="inline-check"><input id="vault-autosave" type="checkbox" checked> Auto-save working versions to browser storage</label>
+          <label class="name-field">Version / copy label (optional) <input id="vault-label" type="text" maxlength="120" placeholder="e.g. Before vignette, Warm grade…"></label>
+          <div class="asset-actions">
+            <button id="vault-save-snapshot" type="button" class="primary" disabled>Save version</button>
+            <button id="vault-save-copy" type="button" disabled>Save copy</button>
+            <button id="vault-clear-all" type="button" disabled>Clear storage</button>
+          </div>
+          <p id="vault-usage" class="muted-note"></p>
+          <h3>Versions of current project</h3>
+          <ol id="vault-versions-list" class="vault-list" aria-label="Saved versions of current project"></ol>
+          <h3>Saved copies &amp; projects</h3>
+          <ol id="vault-docs-list" class="vault-list" aria-label="Saved projects in browser storage"></ol>
+        </div>
+        <div id="log-panel" hidden>
+          <div id="log-filters" class="pill-row" role="group" aria-label="Log filter">
+            <button type="button" class="pill-btn" data-log-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="pill-btn" data-log-filter="errors" aria-pressed="false">Errors &amp; Warnings</button>
+            <button type="button" class="pill-btn" data-log-filter="codec" aria-pressed="false">Codec</button>
+            <button type="button" class="pill-btn" data-log-filter="storage" aria-pressed="false">Storage</button>
+          </div>
+          <div class="asset-actions">
+            <button id="log-copy" type="button">Copy log</button>
+            <button id="log-download" type="button">Download .txt</button>
+            <button id="log-clear" type="button">Clear</button>
+          </div>
+          <p id="log-summary" class="muted-note"></p>
+          <ol id="log-list" class="log-list" aria-label="Application console log"></ol>
+        </div>
         <div id="native-panel" hidden>
           <p id="native-source-name"></p>
           <div class="asset-actions">

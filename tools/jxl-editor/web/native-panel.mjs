@@ -193,7 +193,11 @@ export function makeNativeInspector({
       frame = null;
       channels = [];
       request++;
-      boxes = asset ? jxlBoxes(asset.source) : [];
+      try {
+        boxes = asset ? jxlBoxes(asset.source) : [];
+      } catch {
+        boxes = [];
+      }
       $("native-icc").hidden = true;
       $("native-import-timeline").hidden = true;
       $("native-load-cmyk").hidden = true;

@@ -50,7 +50,8 @@ export const DEFAULT_ZENSR = Object.freeze({
 });
 
 const cache = new WeakMap();
-const MAX_SCALED_DIM = 4096;
+const MAX_SCALED_DIM = 16384;
+const MAX_SCALED_PIXELS = 64_000_000;
 
 export function mergedFilterSpec(layer) {
   return {
@@ -104,22 +105,34 @@ export function hasActiveZensr(layer) {
   return layer.zensr.scale > 1 || (layer.zensr.strength ?? 1) > 1e-4;
 }
 
+export function effectiveLayerSize(layer) {
+  if (!layer) return { width: 0, height: 0, sr: 1 };
+  const sr = hasActiveZensr(layer) ? Math.max(1, layer.zensr.scale ?? 1) : 1;
+  return { width: layer.width * sr, height: layer.height * sr, sr };
+}
+
 export function targetScaledDimensions(layer) {
+  const eff = effectiveLayerSize(layer);
   const s = layer.scale ?? 1;
-  if (Math.abs(s - 1) < 1e-4) return { width: layer.width, height: layer.height, scaled: false };
-  let dstW = Math.max(1, Math.round(layer.width * s));
-  let dstH = Math.max(1, Math.round(layer.height * s));
+  if (Math.abs(s - 1) < 1e-4) return { width: eff.width, height: eff.height, scaled: false };
+  let dstW = Math.max(1, Math.round(eff.width * s));
+  let dstH = Math.max(1, Math.round(eff.height * s));
   const cap = Math.max(dstW, dstH);
   if (cap > MAX_SCALED_DIM) {
     const r = MAX_SCALED_DIM / cap;
     dstW = Math.max(1, Math.round(dstW * r));
     dstH = Math.max(1, Math.round(dstH * r));
   }
-  return { width: dstW, height: dstH, scaled: dstW !== layer.width || dstH !== layer.height };
+  if (dstW * dstH > MAX_SCALED_PIXELS) {
+    const r = Math.sqrt(MAX_SCALED_PIXELS / (dstW * dstH));
+    dstW = Math.max(1, Math.round(dstW * r));
+    dstH = Math.max(1, Math.round(dstH * r));
+  }
+  return { width: dstW, height: dstH, scaled: dstW !== eff.width || dstH !== eff.height };
 }
 
 export function needsRasterPipeline(layer, asset, opts = {}) {
-  const { scaled } = targetScaledDimensions(layer);
+  const { scaled } = opts.interactive ? { scaled: false } : targetScaledDimensions(layer);
   return hasAdjustments(layer) || hasActiveMask(layer, asset) || hasActiveZensr(layer) || scaled ||
     Boolean(opts.rubyOverlay && layer.mask?.enabled);
 }
@@ -171,6 +184,7 @@ function record(asset) {
       svg: { key: null, canvas: null },
       zensr: { key: null, canvas: null, elapsedMs: null },
       filter: { key: null, canvas: null },
+      mask: { key: null, canvas: null },
       final: { key: null, canvas: null },
       pending: null,
       failure: null,
@@ -181,7 +195,10 @@ function record(asset) {
 
 function pipelineKeys(asset, layer, opts) {
   const isSvg = layer.mime === "image/svg+xml";
-  const target = targetScaledDimensions(layer);
+  const eff = effectiveLayerSize(layer);
+  const target = opts.interactive
+    ? { width: eff.width, height: eff.height, scaled: false }
+    : targetScaledDimensions(layer);
   const svgRev = asset.svgEdit ? asset.svgEdit.byteLength : asset.source?.byteLength ?? 0;
   const svgKey = isSvg && target.scaled ? `svg:${svgRev}:${target.width}x${target.height}` : "base";
   const zensrKey = hasActiveZensr(layer)
@@ -261,21 +278,26 @@ async function runPipeline(asset, layer, opts, entry, onTiming) {
 
   // Stage 3: Non-destructive Layer Mask (parametric + raster + feather + optional ruby overlay)
   if (hasActiveMask(layer, asset) || keys.ruby) {
-    const { width, height } = curCanvas;
-    const { data } = curCanvas.getContext("2d").getImageData(0, 0, width, height);
-    let rasterMask = new Uint8Array(0);
-    if (asset.maskAlpha && (layer.mask.mode === "raster" || layer.mask.mode === "combined")) {
-      rasterMask = resampleMaskAlpha(asset.maskAlpha, layer.width, layer.height, width, height);
+    if (entry.mask.key === keys.maskKey && entry.mask.canvas) {
+      curCanvas = entry.mask.canvas;
+    } else {
+      const { width, height } = curCanvas;
+      const { data } = curCanvas.getContext("2d").getImageData(0, 0, width, height);
+      let rasterMask = new Uint8Array(0);
+      if (asset.maskAlpha && (layer.mask.mode === "raster" || layer.mask.mode === "combined")) {
+        rasterMask = resampleMaskAlpha(asset.maskAlpha, layer.width, layer.height, width, height);
+      }
+      const pixels = await codec("applyMask", {
+        pixels: data,
+        width,
+        height,
+        spec: { ...DEFAULT_MASK, ...layer.mask },
+        rasterMask,
+        overlayRuby: keys.ruby,
+      }, [data.buffer]);
+      curCanvas = canvasFromPixels(pixels, width, height);
+      entry.mask = { key: keys.maskKey, canvas: curCanvas };
     }
-    const pixels = await codec("applyMask", {
-      pixels: data,
-      width,
-      height,
-      spec: { ...DEFAULT_MASK, ...layer.mask },
-      rasterMask,
-      overlayRuby: keys.ruby,
-    }, [data.buffer]);
-    curCanvas = canvasFromPixels(pixels, width, height);
   }
 
   // Stage 4: High-quality zenresize resampling (skip for SVG already rendered crisply at target)
@@ -304,9 +326,25 @@ async function runPipeline(asset, layer, opts, entry, onTiming) {
 
 export function previewFilter(asset, layer, repaint, report, opts = {}, onTiming = null) {
   const entry = record(asset);
-  const { resizeKey: key } = pipelineKeys(asset, layer, opts);
+  const keys = pipelineKeys(asset, layer, opts);
+  const key = keys.resizeKey;
   if (entry.final.key === key && entry.final.canvas) {
     return { canvas: entry.final.canvas, pending: false };
+  }
+  if (opts.interactive) {
+    if (entry.mask.key === keys.maskKey && entry.mask.canvas) {
+      return { canvas: entry.mask.canvas, pending: false };
+    }
+    if (!hasActiveMask(layer, asset) && !keys.ruby && entry.filter.key === keys.filterKey && entry.filter.canvas) {
+      return { canvas: entry.filter.canvas, pending: false };
+    }
+    if (!hasActiveMask(layer, asset) && !keys.ruby && !hasAdjustments(layer) &&
+        entry.zensr.key === keys.zensrKey && entry.zensr.canvas) {
+      return { canvas: entry.zensr.canvas, pending: false };
+    }
+    if (entry.final.canvas) {
+      return { canvas: entry.final.canvas, pending: false };
+    }
   }
   if (entry.failure?.key === key) {
     return { canvas: entry.final.canvas ?? asset.canvas, pending: false };

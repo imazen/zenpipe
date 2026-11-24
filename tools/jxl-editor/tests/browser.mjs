@@ -18,6 +18,16 @@ await mkdir(output, { recursive: true });
 await init({ module_or_path: await readFile(new URL("../dist/wasm/relaxed/jxl_editor_codecs_bg.wasm", import.meta.url)) });
 await initNative({ module_or_path: await readFile(new URL("../dist/wasm/relaxed/jxl_editor_native_bg.wasm", import.meta.url)) });
 
+function assertBytesEqual(actual, expected, label = "buffer") {
+  if (actual.length === expected.length && Buffer.compare(actual, expected) === 0) return;
+  const n = Math.min(actual.length, expected.length);
+  let first = -1;
+  for (let i = 0; i < n; i++) {
+    if (actual[i] !== expected[i]) { first = i; break; }
+  }
+  assert.fail(`${label} mismatch: actual ${actual.length} B vs expected ${expected.length} B (first diff at byte ${first}: ${actual[first]} vs ${expected[first]})`);
+}
+
 function rgba(width, height, pixel) {
   const result = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
@@ -248,6 +258,11 @@ try {
   await photo.getByRole("button", { name: "Try a sample" }).click();
   await photo.locator("#status").filter({ hasText: "Image opened" }).waitFor();
   assert.equal(await photo.locator("#dimensions").textContent(), "1296 × 864 px");
+  // Single-layer photos must immediately display on-canvas resize & rotate handles.
+  await photo.locator("#outline .handle-se").waitFor({ state: "visible" });
+  await photo.locator("#outline .handle-rotate").waitFor({ state: "visible" });
+  assert.equal(await photo.locator("#outline .handle-se").evaluate(el => getComputedStyle(el).touchAction), "none");
+  assert.equal(await photo.locator("#outline .handle-rotate").evaluate(el => getComputedStyle(el).touchAction), "none");
   await photo.screenshot({ path: `${output}/photo.png` });
   // Regression guard: Auto Tone + Auto Contrast on 1296x864 (> 202-row strip_height)
   // must process the full frame without horizontal banding at strip boundaries.
@@ -841,16 +856,244 @@ try {
     await sr.getByText("Relaxed SIMD", { exact: true }).waitFor();
     await sr.locator("#open-file").setInputFiles({ name: "zensr.project.jxl", mimeType: "image/jxl", buffer: zensrProj });
     await sr.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
     await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
     await sr.evaluate(() => new Promise(requestAnimationFrame));
-    assert.deepEqual(Buffer.from(await readSrCanvas()), afterSr);
+    assertBytesEqual(Buffer.from(await readSrCanvas()), afterSr, "reopened zensr 1x");
 
     dlEv = sr.waitForEvent("download");
     await sr.getByRole("button", { name: "Export JXL", exact: true }).click();
     await (await dlEv).saveAs(`${output}/zensr.jxl`);
-    assert.deepEqual(Buffer.from(decode_jxl(await readFile(`${output}/zensr.jxl`)).into_pixels()), afterSr);
+    assertBytesEqual(Buffer.from(decode_jxl(await readFile(`${output}/zensr.jxl`)).into_pixels()), afterSr, "exported zensr 1x");
+    // ── Phase 2B: ZenSR 2× Neural Upscaling (rtc_distill_2x → true 2× canvas expansion + non-destructive .project.jxl round-trip) ──
+    await sr.getByRole("button", { name: "ZenSR", exact: true }).click();
+    await sr.locator("#zensr-quick-2x-fast").click();
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    await sr.locator("#zensr-telemetry").filter({ hasText: /ZenSR active \(rtc_distill_2x, 2×.*→ 768×512\).*ms/ }).waitFor();
+    assert.equal(await sr.locator("#dimensions").textContent(), "768 × 512 px",
+      "ZenSR 2× upscale must expand canvas dimensions from 384×256 to 768×512");
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    const afterSr2x = Buffer.from(await readSrCanvas());
+    assert.equal(afterSr2x.byteLength, 768 * 512 * 4);
+    await sr.screenshot({ path: `${output}/zensr-2x.png` });
+    await writeFile(`${output}/zensr-2x.rgba`, afterSr2x);
+
+    dlEv = sr.waitForEvent("download");
+    await sr.getByRole("button", { name: "Save project", exact: true }).click();
+    await (await dlEv).saveAs(`${output}/zensr-2x.project.jxl`);
+    const zensr2xProj = await readFile(`${output}/zensr-2x.project.jxl`);
+    const z2Parsed = readProject(zensr2xProj);
+    assert.equal(z2Parsed.manifest.width, 768);
+    assert.equal(z2Parsed.manifest.height, 512);
+    assert.equal(z2Parsed.manifest.layers[0].width, 384, "original layer asset width stays untouched");
+    assert.equal(z2Parsed.manifest.layers[0].zensr.model, "rtc_distill_2x");
+    assert.equal(z2Parsed.manifest.layers[0].zensr.scale, 2);
+    const dec2x = decode_jxl(zensr2xProj);
+    assert.deepEqual([dec2x.width(), dec2x.height()], [768, 512]);
+    assertBytesEqual(Buffer.from(dec2x.into_pixels()), afterSr2x, "saved zensr-2x presentation");
+
+    // Reopen 2× upscaled project and verify bit-for-bit restoration
+    await sr.reload();
+    await sr.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sr.locator("#open-file").setInputFiles({ name: "zensr-2x.project.jxl", mimeType: "image/jxl", buffer: zensr2xProj });
+    await sr.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    assert.equal(await sr.locator("#dimensions").textContent(), "768 × 512 px");
+    await sr.evaluate(() => new Promise(requestAnimationFrame));
+    assertBytesEqual(Buffer.from(await readSrCanvas()), afterSr2x, "reopened zensr-2x canvas");
+
+    // Verify Browser Storage (IndexedDB Versions & Copies) + In-App Console Log!
+    await sr.locator("#vault-tab").click();
+    await sr.locator("#vault-label").fill("Upscaled 2x Snapshot");
+    await sr.locator("#vault-save-snapshot").click();
+    await sr.locator("#status").filter({ hasText: /Version "Upscaled 2x Snapshot" saved/ }).waitFor();
+    await sr.locator("#vault-label").fill("Upscaled Copy");
+    await sr.locator("#vault-save-copy").click();
+    await sr.locator("#status").filter({ hasText: /Saved copy "Upscaled Copy"/ }).waitFor();
+
+    // Mutate exposure so we can prove Restore brings back the exact snapshot state
+    await sr.locator("#properties-tab").click();
+    await sr.locator("#adjust-exposure").fill("1.5");
+    await sr.locator("#adjust-exposure").dispatchEvent("input");
+    await sr.locator("#adjust-exposure").dispatchEvent("change");
+    assert.equal(Number(await sr.locator("#adjust-exposure").inputValue()), 1.5);
+
+    // Reload page completely and verify IndexedDB persists copies & versions across reload
+    await sr.reload();
+    await sr.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await sr.locator("#empty-resume").waitFor({ state: "visible" });
+    await sr.locator("#vault-tab").click();
+    await sr.locator("#vault-docs-list .vault-card").filter({ hasText: "Upscaled Copy" }).waitFor({ state: "visible" });
+    await sr.locator("#vault-docs-list .vault-card").filter({ hasText: "Upscaled Copy" }).getByRole("button", { name: "Open", exact: true }).click();
+    await sr.locator("#status").filter({ hasText: "Project reopened" }).waitFor();
+    await sr.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"), { timeout: 30000 });
+    assert.equal(Number(await sr.locator("#adjust-exposure").inputValue()), 0, "Restored copy must have original exposure 0");
+    assert.equal(await sr.locator("#dimensions").textContent(), "768 × 512 px");
+
+    // Verify In-App Console Log captures codec & storage entries and flags errors
+    await sr.locator("#log-toggle").click();
+    await sr.locator("#log-panel").waitFor({ state: "visible" });
+    const logCount = await sr.locator("#log-list .log-entry").count();
+    assert.ok(logCount >= 3, `expected console log entries, got ${logCount}`);
+    await sr.locator("#open-file").setInputFiles({ name: "broken.jxl", mimeType: "image/jxl", buffer: Buffer.from([255, 10, 0, 0, 0, 0]) });
+    await sr.locator("#log-toggle[data-has-error]").waitFor();
+    await sr.locator('#log-filters [data-log-filter="errors"]').click();
+    assert.ok(await sr.locator("#log-list .log-error").count() >= 1, "expected error entry in console log");
+    await sr.screenshot({ path: `${output}/vault-log.png` });
+
+    // Verify JXL Native Document Structure Inspector (Native vs Prerendered vs Editor Data + inline property editor + Plain JXL filter)
+    await sr.locator("#mode-structure").click();
+    await sr.locator("#structure-panel").waitFor({ state: "visible" });
+    assert.ok(await sr.locator("#struct-tree .prov-native").count() >= 1, "expected NATIVE JXL nodes in structure tree");
+    assert.ok(await sr.locator("#struct-tree .prov-prerendered").count() >= 1, "expected PRERENDERED nodes in structure tree");
+    assert.ok(await sr.locator("#struct-tree .prov-editor").count() >= 1, "expected EDITOR DATA nodes in structure tree");
+    // Plain JXL filter hides editor-only boxes
+    await sr.locator('#struct-filters [data-struct-filter="plain"]').click();
+    assert.equal(await sr.locator("#struct-tree .prov-editor").count(), 0, "Plain JXL filter must hide editor-only boxes");
+    await sr.locator('#struct-filters [data-struct-filter="all"]').click();
+    // Directly edit layer property via Structure Inspector property editor
+    await sr.locator('#struct-tree [data-node-id^="layer:"]').first().click();
+    const structRotInput = sr.locator("#struct-props input[type='number']").nth(3);
+    await structRotInput.fill("15");
+    await structRotInput.dispatchEvent("change");
+    assert.equal(Number(await sr.locator("#adjust-angle").inputValue()), 15, "Structure inspector direct edit must update live layer rotation");
+    // Inspect & validate live zned manifest JSON box
+    await sr.locator('#struct-tree [data-node-id="box:zned"]').click();
+    const manifestJson = JSON.parse(await sr.locator("#struct-manifest-json").inputValue());
+    assert.equal(manifestJson.width, 768);
+    assert.equal(manifestJson.layers[0].angle, 15);
+    await sr.screenshot({ path: `${output}/structure-inspector.png` });
+    await sr.locator("#mode-studio").click();
+
+    // Verify Canva contextual bar Duplicate layer button
+    await sr.locator("#ctx-dup").click();
+    assert.equal(await sr.locator(".layer").count(), 2, "Contextual Duplicate button must add a cloned layer");
+
+    // Clean up browser storage after test
+    await sr.locator("#vault-tab").click();
+    sr.once("dialog", d => d.accept());
+    await sr.locator("#vault-clear-all").click();
+
     assert.deepEqual(srErrors, []);
     await sr.close();
+  }
+
+  // ── Touch & Pointer Direct Resize / Rotate (1-layer handles, real CDP touch drag, 2-finger pinch+twist, quick-tap buttons) ──
+  {
+    const touchCtx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const tp = await touchCtx.newPage();
+    const tpErrors = [];
+    tp.on("pageerror", error => tpErrors.push(error.message));
+    await tp.goto(baseUrl);
+    await tp.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await tp.getByRole("button", { name: "Try a sample" }).click();
+    await tp.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    await tp.locator("#outline .handle-se").waitFor({ state: "visible" });
+    await tp.locator("#outline .handle-rotate").waitFor({ state: "visible" });
+    assert.equal(await tp.evaluate(() => document.documentElement.scrollWidth), 390);
+
+    const cdp = await touchCtx.newCDPSession(tp);
+    const sendTouch = (type, points) => cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: points.map(([id, x, y]) => ({ id, x: Math.round(x), y: Math.round(y), radiusX: 12, radiusY: 12, force: 1 })),
+    });
+
+    // 1. Real single-finger touch drag on SE corner handle to shrink 1-layer photo
+    const seBox = await tp.locator("#outline .handle-se").boundingBox();
+    const seX = seBox.x + seBox.width / 2;
+    const seY = seBox.y + seBox.height / 2;
+    await sendTouch("touchStart", [[1, seX, seY]]);
+    for (let i = 1; i <= 6; i++) {
+      await sendTouch("touchMove", [[1, seX - i * 14, seY - i * 9]]);
+    }
+    await sendTouch("touchEnd", []);
+    const afterTouchScale = Number(await tp.locator("#adjust-scale").inputValue());
+    assert.ok(afterTouchScale < 0.9, `touch drag on SE handle must shrink layer, got scale=${afterTouchScale}`);
+    assert.equal(Number(await tp.locator("#position-x").inputValue()), 0, "SE resize must keep NW corner pinned at x=0");
+    assert.equal(Number(await tp.locator("#position-y").inputValue()), 0, "SE resize must keep NW corner pinned at y=0");
+
+    // 2. Real single-finger touch drag on golden rotate handle to rotate layer around its center
+    const rotBox = await tp.locator("#outline .handle-rotate").boundingBox();
+    const rX = rotBox.x + rotBox.width / 2;
+    const rY = rotBox.y + rotBox.height / 2;
+    await sendTouch("touchStart", [[2, rX, rY]]);
+    for (let i = 1; i <= 6; i++) {
+      await sendTouch("touchMove", [[2, rX + i * 10, rY + i * 4]]);
+    }
+    await sendTouch("touchEnd", []);
+    const afterTouchAngle = Number(await tp.locator("#adjust-angle").inputValue());
+    assert.ok(afterTouchAngle > 10, `touch drag on rotate handle must rotate clockwise, got angle=${afterTouchAngle}`);
+    assert.equal(await tp.evaluate(() => document.documentElement.scrollWidth), 390,
+      "rotated outline on 390px mobile must not expand document scrollWidth");
+
+    // 3. Real 2-finger pinch + twist directly on #canvas
+    const cBox = await tp.locator("#canvas").boundingBox();
+    const cx = cBox.x + cBox.width / 2;
+    const cy = cBox.y + cBox.height / 2;
+    await sendTouch("touchStart", [[11, cx - 40, cy]]);
+    await sendTouch("touchStart", [[11, cx - 40, cy], [12, cx + 40, cy]]);
+    for (let i = 1; i <= 5; i++) {
+      const r = 40 + i * 6; // expand from 80px -> 140px span (+75% scale)
+      const rad = (-i * 5) * Math.PI / 180; // twist -25° counter-clockwise
+      await sendTouch("touchMove", [
+        [11, cx - r * Math.cos(rad), cy - r * Math.sin(rad)],
+        [12, cx + r * Math.cos(rad), cy + r * Math.sin(rad)],
+      ]);
+    }
+    await sendTouch("touchEnd", [[12, cx + 70, cy]]);
+    await sendTouch("touchEnd", []);
+    const afterPinchScale = Number(await tp.locator("#adjust-scale").inputValue());
+    const afterPinchAngle = Number(await tp.locator("#adjust-angle").inputValue());
+    assert.ok(afterPinchScale > afterTouchScale + 0.15,
+      `2-finger pinch out must increase scale (${afterTouchScale} -> ${afterPinchScale})`);
+    assert.ok(afterPinchAngle < afterTouchAngle - 10,
+      `2-finger twist CCW must decrease angle (${afterTouchAngle} -> ${afterPinchAngle})`);
+
+    // 4. Quick-tap transform buttons (+90°, -90°, 100%)
+    await tp.locator("#scale-reset").click();
+    assert.equal(Number(await tp.locator("#adjust-scale").inputValue()), 1);
+    assert.equal(Number(await tp.locator("#adjust-angle").inputValue()), 0);
+    await tp.locator("#rotate-cw").click();
+    assert.equal(Number(await tp.locator("#adjust-angle").inputValue()), 90);
+    await tp.locator("#rotate-ccw").click();
+    assert.equal(Number(await tp.locator("#adjust-angle").inputValue()), 0);
+
+    // 5. Desktop mouse rotate + NW corner resize verification + screenshot
+    const desk = await browser.newPage({ viewport: { width: 1400, height: 940 } });
+    const deskErrors = [];
+    desk.on("pageerror", error => deskErrors.push(error.message));
+    await desk.goto(baseUrl);
+    await desk.getByText("Relaxed SIMD", { exact: true }).waitFor();
+    await desk.getByRole("button", { name: "Try a sample" }).click();
+    await desk.locator("#status").filter({ hasText: "Image opened" }).waitFor();
+    const nwBox = await desk.locator("#outline .handle-nw").boundingBox();
+    await desk.mouse.move(nwBox.x + nwBox.width / 2, nwBox.y + nwBox.height / 2);
+    await desk.mouse.down();
+    await desk.mouse.move(nwBox.x + nwBox.width / 2 + 160, nwBox.y + nwBox.height / 2 + 105, { steps: 6 });
+    await desk.mouse.up();
+    const nwScale = Number(await desk.locator("#adjust-scale").inputValue());
+    assert.ok(nwScale < 0.88, `NW mouse drag must shrink layer, got ${nwScale}`);
+    const dRotBox = await desk.locator("#outline .handle-rotate").boundingBox();
+    await desk.mouse.move(dRotBox.x + dRotBox.width / 2, dRotBox.y + dRotBox.height / 2);
+    await desk.mouse.down();
+    await desk.mouse.move(dRotBox.x + dRotBox.width / 2 + 95, dRotBox.y + dRotBox.height / 2 + 30, { steps: 6 });
+    await desk.mouse.up();
+    const dAngle = Number(await desk.locator("#adjust-angle").inputValue());
+    assert.ok(dAngle > 10, `rotate handle mouse drag must rotate layer, got ${dAngle}`);
+    await desk.evaluate(() => new Promise(requestAnimationFrame));
+    await desk.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+    await desk.screenshot({ path: `${output}/photo-transform.png` });
+    assert.deepEqual(deskErrors, []);
+    await desk.close();
+
+    assert.deepEqual(tpErrors, []);
+    await touchCtx.close();
   }
 
   if (process.env.EDITOR_JPEG_CARRIER) {
