@@ -464,6 +464,7 @@ impl Pipeline {
     ) -> Result<(), At<PipelineError>> {
         let stop = pulse.unwrap_or(&how_far::NoPulse);
         stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
+        ctx.invalidate_analysis();
         let n = (width as usize) * (height as usize) * (channels as usize);
         if src.len() < n {
             return Err(at!(PipelineError::BufferSize {

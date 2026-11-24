@@ -43,6 +43,10 @@ impl Filter for HighlightRecovery {
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::HighlightRecovery
     }
+
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.strength < 1e-6 {
             return;

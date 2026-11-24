@@ -225,6 +225,10 @@ impl Filter for AutoLevels {
         crate::filter_compat::FilterTag::AutoLevels
     }
 
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.strength < 1e-6 {
             return;

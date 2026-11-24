@@ -704,6 +704,10 @@ impl Filter for Normalize {
         PlaneSemantics::Rgb
     }
 
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         let n = planes.l.len();
         if n == 0 {

@@ -54,6 +54,10 @@ impl Filter for WhitesBlacks {
     fn tag(&self) -> crate::filter_compat::FilterTag {
         crate::filter_compat::FilterTag::WhitesBlacks
     }
+
+    fn is_neighborhood(&self) -> bool {
+        self.auto_range
+    }
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         if self.is_identity() {
             return;

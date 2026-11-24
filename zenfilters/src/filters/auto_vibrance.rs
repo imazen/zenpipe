@@ -68,6 +68,10 @@ impl Filter for AutoVibrance {
         ChannelAccess::CHROMA_ONLY
     }
 
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, ctx: &mut FilterContext) {
         if self.strength < 1e-6 {
             return;

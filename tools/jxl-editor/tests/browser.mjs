@@ -249,6 +249,19 @@ try {
   await photo.locator("#status").filter({ hasText: "Image opened" }).waitFor();
   assert.equal(await photo.locator("#dimensions").textContent(), "1296 × 864 px");
   await photo.screenshot({ path: `${output}/photo.png` });
+  // Regression guard: Auto Tone + Auto Contrast on 1296x864 (> 202-row strip_height)
+  // must process the full frame without horizontal banding at strip boundaries.
+  await photo.waitForFunction(() => Boolean(document.getElementById("zf-autoTone")));
+  await photo.locator("#zf-autoTone").click();
+  await photo.locator("#zf-autoContrast").click();
+  await photo.evaluate(() => new Promise(requestAnimationFrame));
+  await photo.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
+  await photo.screenshot({ path: `${output}/photo-auto-tone.png` });
+  // Reset back to neutral before mobile screenshot
+  await photo.locator("#zf-autoTone").click();
+  await photo.locator("#zf-autoContrast").click();
+  await photo.evaluate(() => new Promise(requestAnimationFrame));
+  await photo.waitForFunction(() => !document.getElementById("canvas").hasAttribute("data-filter-pending"));
   await photo.setViewportSize({ width: 390, height: 844 });
   assert.equal(await photo.evaluate(() => document.documentElement.scrollWidth), 390);
   await photo.screenshot({ path: `${output}/mobile.png`, fullPage: true });

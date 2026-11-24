@@ -35,10 +35,14 @@ pub trait Filter: Send + Sync {
     /// Which planes this filter reads and writes.
     fn channel_access(&self) -> ChannelAccess;
 
-    /// Whether this filter needs neighborhood access (reads adjacent pixels).
+    /// Whether this filter requires full-frame access (neighborhood ops,
+    /// global image statistics, or global spatial coordinates).
     ///
-    /// Per-pixel filters return false. Neighborhood filters (clarity,
-    /// brilliance, bilateral) return true.
+    /// Pure per-pixel filters return false so the pipeline can process them
+    /// in L3-sized horizontal strips. Neighborhood filters (clarity, sharpen,
+    /// blur), auto/histogram filters (auto tone, auto contrast, auto levels),
+    /// and coordinate-dependent filters (vignette, grain, spatial masks)
+    /// return true.
     fn is_neighborhood(&self) -> bool {
         false
     }

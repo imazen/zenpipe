@@ -114,6 +114,10 @@ impl Filter for MaskedFilter {
 
     fn is_neighborhood(&self) -> bool {
         self.filter.is_neighborhood()
+            || matches!(
+                self.mask,
+                Mask::LinearGradient { .. } | Mask::RadialGradient { .. }
+            )
     }
 
     fn neighborhood_radius(&self, width: u32, height: u32) -> u32 {

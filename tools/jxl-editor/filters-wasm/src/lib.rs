@@ -238,4 +238,50 @@ mod tests {
             &ruby[0..4]
         );
     }
+
+    #[test]
+    fn multi_strip_image_auto_tone_auto_contrast_and_vignette_have_no_band_seams() {
+        // 1296x500 exceeds zenfilters' 202-row strip_height so any strip-slicing bug
+        // immediately produces a sharp discontinuity at row 202 / 404.
+        let (w, h) = (1296u32, 500u32);
+        let mut img = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            let t = y as f32 / (h - 1) as f32;
+            let base = (48.0 + 110.0 * (std::f32::consts::PI * t).sin()) as u8;
+            for _x in 0..w {
+                img.extend_from_slice(&[
+                    base.saturating_add(16),
+                    base,
+                    base.saturating_sub(12),
+                    255,
+                ]);
+            }
+        }
+        let x_mid = (w as usize / 2) * 4;
+        for spec in [
+            r#"{"autoTone":0.85}"#,
+            r#"{"autoContrast":0.85}"#,
+            r#"{"autoTone":0.85,"autoContrast":0.85}"#,
+            r#"{"vignette":0.6}"#,
+        ] {
+            let out = apply_zenfilters_rgba(img.clone(), w, h, spec).unwrap();
+            let mut max_jump = 0i32;
+            let mut jump_y = 0u32;
+            for y in 1..h {
+                let prev = (y as usize - 1) * w as usize * 4 + x_mid;
+                let cur = y as usize * w as usize * 4 + x_mid;
+                for c in 0..3 {
+                    let d = (out[cur + c] as i32 - out[prev + c] as i32).abs();
+                    if d > max_jump {
+                        max_jump = d;
+                        jump_y = y;
+                    }
+                }
+            }
+            assert!(
+                max_jump <= 4,
+                "spec {spec} produced a horizontal band seam of {max_jump} at y={jump_y}"
+            );
+        }
+    }
 }

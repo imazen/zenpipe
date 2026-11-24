@@ -186,10 +186,12 @@ pub fn apply_to_buffer(
         .map_err(|e| at!(e));
     }
 
+    ctx.invalidate_analysis();
+
     // Fast path: fused sRGB u8 roundtrip with L3-friendly strip processing.
-    // Scatter/filter/gather in horizontal strips so planar data stays in L3.
-    // Neighborhood filters are handled via overlapping halo rows per strip.
-    if use_fused && convert_back {
+    // Only safe for purely per-pixel filters; neighborhood, global-statistics,
+    // and full-frame coordinate filters fall through to the full-frame path.
+    if use_fused && convert_back && !pipeline.has_neighborhood_filter() {
         return apply_fused_stripped(
             pipeline,
             input,
@@ -824,5 +826,92 @@ mod tests {
             "expected a preserved whereat trace (frame_count >= 1), got {}",
             err.frame_count()
         );
+    }
+
+    /// Regression test: images taller than `strip_height()` (e.g. 1296x500 ->
+    /// strip_height=202) must NOT be strip-sliced when running global-stats or
+    /// coordinate-dependent filters (AutoTone, AutoContrast, AutoLevels,
+    /// AutoExposure, AutoWhiteBalance, Vignette). Strip-slicing caused visible
+    /// horizontal band seams at y=202 and caused AutoTone/AutoContrast to only
+    /// modify individual 202-row bands.
+    #[test]
+    fn full_frame_global_filters_have_no_strip_banding() {
+        let (w, h) = (1296u32, 500u32);
+        let strip_h = pipeline::strip_height(w, true, 0);
+        assert!(
+            strip_h < h as usize,
+            "test image height {h} must exceed strip_height {strip_h}"
+        );
+
+        // Smooth vertical luminance ramp (dark top -> bright mid -> dark bottom)
+        // with a warm tint so every auto filter has work to do and every adjacent
+        // row pair differs by at most 1 u8 code in the input.
+        let mut data = alloc::vec::Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            let t = y as f32 / (h - 1) as f32;
+            let base = (40.0 + 130.0 * (core::f32::consts::PI * t).sin()) as u8;
+            let r = base.saturating_add(18);
+            let g = base;
+            let b = base.saturating_sub(14);
+            for _x in 0..w {
+                data.extend_from_slice(&[r, g, b, 255]);
+            }
+        }
+        let input = PixelBuffer::from_vec(data, w, h, PixelDescriptor::RGBA8_SRGB).unwrap();
+
+        let make_cases = || -> alloc::vec::Vec<(&'static str, Box<dyn crate::Filter>)> {
+            let mut auto_tone = filters::AutoTone::default();
+            auto_tone.strength = 0.9;
+            auto_tone.preserve_intent = 0.0;
+            let mut auto_contrast = filters::AutoContrast::default();
+            auto_contrast.strength = 1.0;
+            let mut auto_levels = filters::AutoLevels::default();
+            auto_levels.strength = 1.0;
+            let mut auto_exp = filters::AutoExposure::default();
+            auto_exp.strength = 1.0;
+            let mut auto_wb = filters::AutoWhiteBalance::default();
+            auto_wb.strength = 1.0;
+            let mut vignette = filters::Vignette::default();
+            vignette.strength = 0.6;
+            alloc::vec![
+                ("auto_tone", Box::new(auto_tone)),
+                ("auto_contrast", Box::new(auto_contrast)),
+                ("auto_levels", Box::new(auto_levels)),
+                ("auto_exposure", Box::new(auto_exp)),
+                ("auto_white_balance", Box::new(auto_wb)),
+                ("vignette", Box::new(vignette)),
+            ]
+        };
+
+        let mut ctx = FilterContext::new();
+        for (name, filter) in make_cases() {
+            let mut pipe = Pipeline::new(PipelineConfig::default()).unwrap();
+            pipe.push(filter);
+            assert!(
+                pipe.has_neighborhood_filter(),
+                "{name} must disable strip-slicing"
+            );
+            let out = apply_to_buffer(&pipe, &input, true, &mut ctx).unwrap();
+            let slice = out.as_slice();
+            let x_mid = (w as usize / 2) * 4;
+            // Check continuity across every adjacent row (especially at strip_h boundary)
+            let mut max_jump = 0i32;
+            let mut jump_y = 0u32;
+            for y in 1..h {
+                let prev = slice.row(y - 1);
+                let cur = slice.row(y);
+                for c in 0..3 {
+                    let d = (cur[x_mid + c] as i32 - prev[x_mid + c] as i32).abs();
+                    if d > max_jump {
+                        max_jump = d;
+                        jump_y = y;
+                    }
+                }
+            }
+            assert!(
+                max_jump <= 4,
+                "{name} produced a horizontal band seam of {max_jump} u8 at y={jump_y} (strip_h={strip_h})"
+            );
+        }
     }
 }

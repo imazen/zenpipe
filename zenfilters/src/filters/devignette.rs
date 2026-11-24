@@ -42,6 +42,10 @@ impl Filter for Devignette {
         crate::filter::PlaneSemantics::Any
     }
 
+    fn is_neighborhood(&self) -> bool {
+        true
+    }
+
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         if self.strength.abs() < 1e-6 {
             return;
